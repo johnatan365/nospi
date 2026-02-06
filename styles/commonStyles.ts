@@ -1,89 +1,107 @@
-import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+
+import { StyleSheet } from 'react-native';
+import { nospiColors } from '@/constants/Colors';
 
 export const colors = {
-  primary: '#162456',    // Material Blue
-  secondary: '#193cb8',  // Darker Blue
-  accent: '#64B5F6',     // Light Blue
-  background: '#101824',  // Keeping dark background
-  backgroundAlt: '#162133',  // Keeping dark background
-  text: '#e3e3e3',       // Keeping light text
-  grey: '#90CAF9',       // Light Blue Grey
-  card: '#193cb8',       // Keeping dark card background
+  // Primary gradient colors
+  primary: nospiColors.purpleMid,
+  primaryDark: nospiColors.purpleDark,
+  primaryLight: nospiColors.purpleLight,
+  
+  // Accent
+  accent: nospiColors.accent,
+  accentLight: nospiColors.accentLight,
+  
+  // Text colors
+  text: nospiColors.gray900,
+  textLight: nospiColors.gray600,
+  textInverse: nospiColors.white,
+  
+  // Background colors
+  background: nospiColors.white,
+  backgroundSecondary: nospiColors.gray50,
+  
+  // Border colors
+  border: nospiColors.gray200,
+  borderLight: nospiColors.gray100,
+  
+  // Status colors
+  success: nospiColors.success,
+  error: nospiColors.error,
+  warning: nospiColors.warning,
+  info: nospiColors.info,
 };
 
-export const buttonStyles = StyleSheet.create({
-  instructionsButton: {
-    backgroundColor: colors.primary,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  backButton: {
-    backgroundColor: colors.backgroundAlt,
-    alignSelf: 'center',
-    width: '100%',
-  },
-});
-
 export const commonStyles = StyleSheet.create({
-  wrapper: {
-    backgroundColor: colors.background,
-    width: '100%',
-    height: '100%',
-  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  content: {
+  gradientBackground: {
     flex: 1,
-    alignItems: 'center',
+  },
+  centerContent: {
+    flex: 1,
     justifyContent: 'center',
-    maxWidth: 800,
-    width: '100%',
+    alignItems: 'center',
+    padding: 20,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    textAlign: 'center',
-    color: colors.text,
-    marginBottom: 10
-  },
-  text: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 28,
+    fontWeight: 'bold',
     color: colors.text,
     marginBottom: 8,
-    lineHeight: 24,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textLight,
     textAlign: 'center',
+    marginBottom: 32,
   },
-  section: {
-    width: '100%',
+  button: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    width: '100%',
+    marginVertical: 8,
   },
-  buttonContainer: {
+  buttonText: {
+    color: colors.textInverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  buttonSecondaryText: {
+    color: colors.primary,
+  },
+  input: {
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: colors.text,
     width: '100%',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+    marginVertical: 8,
   },
   card: {
-    backgroundColor: colors.backgroundAlt,
-    borderColor: colors.grey,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 20,
     marginVertical: 8,
-    width: '100%',
-    boxShadow: '0px 2px 3px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  icon: {
-    width: 60,
-    height: 60,
-    tintColor: "white",
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
 });
