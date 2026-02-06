@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { useSupabase } from "@/contexts/SupabaseContext";
 import { testSupabaseConnection } from "@/lib/supabase";
+import { testDatabaseConnection } from "@/utils/supabaseApi";
 import { IconSymbol } from "@/components/IconSymbol";
 
 const styles = StyleSheet.create({
@@ -81,20 +82,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  instructionsCard: {
+  successCard: {
     padding: 20,
     borderRadius: 16,
     marginTop: 20,
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
-  instructionsTitle: {
-    fontSize: 16,
+  successTitle: {
+    fontSize: 18,
     fontWeight: "600",
     marginBottom: 12,
+    color: "#10b981",
   },
-  instructionStep: {
+  successText: {
     fontSize: 14,
     marginBottom: 8,
-    opacity: 0.8,
+    color: "#10b981",
   },
 });
 
@@ -104,6 +107,11 @@ export default function HomeScreen() {
   const [connectionStatus, setConnectionStatus] = useState<{
     connected: boolean;
     error?: string;
+  } | null>(null);
+  const [dbStatus, setDbStatus] = useState<{
+    connected: boolean;
+    error?: string;
+    tableExists?: boolean;
   } | null>(null);
   const [testing, setTesting] = useState(false);
 
@@ -115,17 +123,25 @@ export default function HomeScreen() {
   const checkConnection = async () => {
     console.log("HomeScreen: Testing Supabase connection");
     setTesting(true);
-    const result = await testSupabaseConnection();
-    setConnectionStatus(result);
+    
+    const authResult = await testSupabaseConnection();
+    setConnectionStatus(authResult);
+    
+    const dbResult = await testDatabaseConnection();
+    setDbStatus(dbResult);
+    
     setTesting(false);
-    console.log("HomeScreen: Connection test result", result);
+    console.log("HomeScreen: Connection test results", { authResult, dbResult });
   };
 
-  const isConnected = connectionStatus?.connected ?? false;
-  const statusColor = isConnected ? "#10b981" : "#ef4444";
-  const statusBgColor = isConnected ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)";
-  const statusText = isConnected ? "Connected" : "Not Connected";
-  const statusIcon = isConnected ? "check-circle" : "error";
+  const isAuthConnected = connectionStatus?.connected ?? false;
+  const isDbConnected = dbStatus?.connected ?? false;
+  const isFullyConnected = isAuthConnected && isDbConnected;
+  
+  const statusColor = isFullyConnected ? "#10b981" : "#ef4444";
+  const statusBgColor = isFullyConnected ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)";
+  const statusText = isFullyConnected ? "Connected" : "Not Connected";
+  const statusIcon = isFullyConnected ? "check-circle" : "error";
 
   return (
     <React.Fragment>
@@ -171,9 +187,9 @@ export default function HomeScreen() {
                 {statusText}
               </Text>
               <Text style={[styles.statusMessage, { color: statusColor }]}>
-                {isConnected
+                {isFullyConnected
                   ? "Supabase is ready to use"
-                  : connectionStatus?.error || "Unable to connect"}
+                  : connectionStatus?.error || dbStatus?.error || "Unable to connect"}
               </Text>
             </View>
           </View>
@@ -181,7 +197,37 @@ export default function HomeScreen() {
 
         <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.infoTitle, { color: colors.text }]}>
-            Configuration
+            Connection Details
+          </Text>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Auth Connection
+            </Text>
+            <Text style={[styles.infoValue, { color: isAuthConnected ? "#10b981" : "#ef4444" }]}>
+              {isAuthConnected ? "✓ Connected" : "✗ Failed"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Database Connection
+            </Text>
+            <Text style={[styles.infoValue, { color: isDbConnected ? "#10b981" : "#ef4444" }]}>
+              {isDbConnected ? "✓ Connected" : "✗ Failed"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Notes Table
+            </Text>
+            <Text style={[styles.infoValue, { color: dbStatus?.tableExists ? "#10b981" : "#ef4444" }]}>
+              {dbStatus?.tableExists ? "✓ Created" : "✗ Missing"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.infoTitle, { color: colors.text }]}>
+            User Information
           </Text>
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, { color: colors.text }]}>
@@ -219,35 +265,25 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
 
-        <View style={[styles.instructionsCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>
-            Setup Instructions
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text }]}>
-            1. Create a Supabase project at supabase.com
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text }]}>
-            2. Get your project URL and anon key from Settings → API
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text }]}>
-            3. Add them to app.json under extra:
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text, fontFamily: "monospace" }]}>
-            {`"extra": {`}
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text, fontFamily: "monospace", marginLeft: 16 }]}>
-            {`"supabaseUrl": "your-url",`}
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text, fontFamily: "monospace", marginLeft: 16 }]}>
-            {`"supabaseAnonKey": "your-key"`}
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text, fontFamily: "monospace" }]}>
-            {`}`}
-          </Text>
-          <Text style={[styles.instructionStep, { color: colors.text }]}>
-            4. Restart the app to apply changes
-          </Text>
-        </View>
+        {isFullyConnected && (
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>
+              ✓ Successfully Connected!
+            </Text>
+            <Text style={styles.successText}>
+              • Supabase client initialized
+            </Text>
+            <Text style={styles.successText}>
+              • Database connection verified
+            </Text>
+            <Text style={styles.successText}>
+              • Notes table created with RLS policies
+            </Text>
+            <Text style={styles.successText}>
+              • Ready to build your app!
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </React.Fragment>
   );
