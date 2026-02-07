@@ -14,7 +14,6 @@ export default function AgeRangeScreen() {
   const handleContinue = async () => {
     console.log('User selected age range:', ageRange.min, '-', ageRange.max);
     
-    // Save age range to AsyncStorage
     await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: ageRange.min, max: ageRange.max }));
     
     router.push('/onboarding/location');
@@ -40,10 +39,10 @@ export default function AgeRangeScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -66,9 +65,9 @@ export default function AgeRangeScreen() {
                 step={1}
                 value={ageRange.min}
                 onValueChange={handleMinChange}
-                minimumTrackTintColor={nospiColors.white}
-                maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-                thumbTintColor={nospiColors.white}
+                minimumTrackTintColor={nospiColors.purpleDark}
+                maximumTrackTintColor="rgba(107, 33, 168, 0.2)"
+                thumbTintColor={nospiColors.purpleDark}
               />
             </View>
 
@@ -84,9 +83,9 @@ export default function AgeRangeScreen() {
                 step={1}
                 value={ageRange.max}
                 onValueChange={handleMaxChange}
-                minimumTrackTintColor={nospiColors.white}
-                maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-                thumbTintColor={nospiColors.white}
+                minimumTrackTintColor={nospiColors.purpleDark}
+                maximumTrackTintColor="rgba(107, 33, 168, 0.2)"
+                thumbTintColor={nospiColors.purpleDark}
               />
             </View>
           </View>
@@ -121,22 +120,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 40,
     textAlign: 'center',
   },
   rangeDisplay: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingVertical: 24,
     paddingHorizontal: 32,
     borderRadius: 20,
     alignItems: 'center',
     marginBottom: 40,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleLight,
   },
   rangeText: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
   },
   sliderSection: {
     marginBottom: 32,
@@ -152,12 +153,12 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontWeight: '600',
   },
   sliderValue: {
     fontSize: 20,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontWeight: 'bold',
   },
   slider: {
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   continueButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },

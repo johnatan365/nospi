@@ -19,13 +19,11 @@ export default function PhoneScreen() {
 
     console.log('User entered phone:', countryCode, phoneNumber);
     
-    // Save phone data to AsyncStorage
     await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
       countryCode,
       phoneNumber: countryCode + phoneNumber,
     }));
     
-    // Navigate to photo screen
     router.push('/onboarding/photo');
   };
 
@@ -33,10 +31,10 @@ export default function PhoneScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <KeyboardAvoidingView 
         style={styles.container}
@@ -51,7 +49,7 @@ export default function PhoneScreen() {
               value={countryCode}
               onChangeText={setCountryCode}
               placeholder="+57"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              placeholderTextColor="rgba(107, 33, 168, 0.4)"
               keyboardType="phone-pad"
               maxLength={4}
             />
@@ -61,7 +59,7 @@ export default function PhoneScreen() {
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="Número de celular"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              placeholderTextColor="rgba(107, 33, 168, 0.4)"
               keyboardType="phone-pad"
               maxLength={15}
             />
@@ -98,7 +96,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -108,30 +106,30 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   countryCodeInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: nospiColors.purpleLight,
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 16,
     fontSize: 18,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     width: 80,
     textAlign: 'center',
   },
   phoneInput: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: nospiColors.purpleLight,
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 20,
     fontSize: 18,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
   },
   continueButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -144,12 +142,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
   continueButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },

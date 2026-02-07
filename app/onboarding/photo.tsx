@@ -40,7 +40,6 @@ export default function PhotoScreen() {
 
     console.log('User continuing with photo:', photoUri);
     
-    // Save photo URI to AsyncStorage
     await AsyncStorage.setItem('onboarding_photo', photoUri);
     
     router.push('/onboarding/register');
@@ -49,19 +48,17 @@ export default function PhotoScreen() {
   const handleSkip = async () => {
     console.log('User skipped photo upload');
     
-    // Save empty photo to AsyncStorage
     await AsyncStorage.setItem('onboarding_photo', '');
     
-    // Continue without photo
     router.push('/onboarding/register');
   };
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -123,14 +120,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -140,9 +137,9 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     overflow: 'hidden',
     marginBottom: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 4,
-    borderColor: nospiColors.white,
+    borderColor: nospiColors.purpleLight,
   },
   photo: {
     width: '100%',
@@ -160,11 +157,11 @@ const styles = StyleSheet.create({
   },
   photoPlaceholderText: {
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontWeight: '600',
   },
   continueButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -178,12 +175,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
   continueButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -198,7 +195,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   skipButtonText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 16,
     fontWeight: '600',
     textDecorationLine: 'underline',

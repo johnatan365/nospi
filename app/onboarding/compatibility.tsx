@@ -19,7 +19,6 @@ export default function CompatibilityScreen() {
   const navigateToNext = useCallback(async () => {
     console.log('User compatibility:', percentage);
     
-    // Save compatibility percentage to AsyncStorage
     await AsyncStorage.setItem('onboarding_compatibility', percentage.toString());
     
     router.push('/onboarding/phone');
@@ -58,10 +57,10 @@ export default function CompatibilityScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -157,7 +156,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 60,
     textAlign: 'center',
   },
@@ -173,11 +172,11 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: nospiColors.white,
+    borderColor: nospiColors.purpleLight,
   },
   avatarEmoji: {
     fontSize: 28,
@@ -187,8 +186,8 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 90,
     borderWidth: 8,
-    borderColor: nospiColors.white,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: nospiColors.purpleDark,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -196,13 +195,13 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: 72,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     lineHeight: 72,
   },
   percentageSymbol: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginTop: -8,
   },
   checkmarkContainer: {
@@ -212,19 +211,19 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkmark: {
     fontSize: 32,
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontWeight: 'bold',
   },
   celebrationText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -234,16 +233,16 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 17,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     lineHeight: 26,
   },
   ctaText: {
     fontSize: 14,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     marginBottom: 24,
-    opacity: 0.9,
+    opacity: 0.8,
   },
   inscribeButton: {
     backgroundColor: nospiColors.purpleDark,

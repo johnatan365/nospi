@@ -42,7 +42,6 @@ export default function BirthdateScreen() {
 
     console.log('User entered birthdate:', date, 'Age:', age);
     
-    // Save birthdate and age to AsyncStorage
     await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
     await AsyncStorage.setItem('onboarding_age', age.toString());
     
@@ -59,10 +58,10 @@ export default function BirthdateScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -86,7 +85,7 @@ export default function BirthdateScreen() {
                 onChange={handleDateChange}
                 maximumDate={new Date()}
                 minimumDate={new Date(1940, 0, 1)}
-                textColor="#FFFFFF"
+                textColor={nospiColors.purpleDark}
                 style={styles.picker}
               />
               {Platform.OS === 'ios' && (
@@ -139,14 +138,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 32,
     textAlign: 'center',
   },
   dateDisplayContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderColor: nospiColors.purpleLight,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -154,18 +153,18 @@ const styles = StyleSheet.create({
   },
   dateDisplayLabel: {
     fontSize: 14,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 8,
   },
   dateDisplayValue: {
     fontSize: 22,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontWeight: '700',
   },
   pickerContainer: {
     marginBottom: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 16,
     overflow: 'hidden',
     paddingVertical: 8,
@@ -174,7 +173,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   doneButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 8,
@@ -183,7 +182,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   doneButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -195,29 +194,29 @@ const styles = StyleSheet.create({
   },
   ageLabel: {
     fontSize: 20,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginRight: 8,
   },
   ageValue: {
     fontSize: 40,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
   },
   ageYears: {
     fontSize: 20,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginLeft: 4,
   },
   note: {
     fontSize: 14,
-    color: nospiColors.white,
-    opacity: 0.8,
+    color: nospiColors.purpleDark,
+    opacity: 0.7,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 20,
   },
   continueButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -230,12 +229,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
   continueButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },

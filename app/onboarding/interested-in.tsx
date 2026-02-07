@@ -18,7 +18,6 @@ export default function InterestedInScreen() {
   const handleSelect = async (interest: string) => {
     console.log('User interested in:', interest);
     
-    // Save interested_in to AsyncStorage
     await AsyncStorage.setItem('onboarding_interested_in', interest);
     
     router.push('/onboarding/age-range');
@@ -26,10 +25,10 @@ export default function InterestedInScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -71,7 +70,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -79,7 +78,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   optionButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     paddingVertical: 24,
     paddingHorizontal: 32,
     borderRadius: 16,
