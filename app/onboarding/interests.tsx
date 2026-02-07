@@ -78,6 +78,7 @@ export default function InterestsScreen() {
     >
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <View style={styles.section}>
+          <Text style={styles.mainTitle}>Cuéntanos sobre ti</Text>
           <Text style={styles.title}>¿Cuáles son tus gustos?</Text>
           <Text style={styles.subtitle}>Selecciona al menos 3</Text>
           <Text style={styles.counter}>{interestsCount} seleccionados</Text>
@@ -151,6 +152,13 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 40,
+  },
+  mainTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.white,
+    marginBottom: 24,
+    textAlign: 'center',
   },
   title: {
     fontSize: 24,

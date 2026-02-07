@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -24,6 +24,7 @@ export default function EventDetailsScreen() {
   const { user } = useSupabase();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -67,23 +68,42 @@ export default function EventDetailsScreen() {
 
   const handleConfirm = async () => {
     console.log('User confirmed attendance for event:', id);
+    setConfirming(true);
     
-    // Check if user has active subscription
-    const { data: subscription, error: subError } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user?.id)
-      .eq('status', 'active')
-      .single();
-
-    if (subError || !subscription) {
-      console.log('User has no active subscription, redirecting to payment');
-      router.push('/subscription-plans');
-      return;
-    }
-
-    // Create appointment
     try {
+      // Check if user has active subscription
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('status', 'active')
+        .single();
+
+      if (subError || !subscription) {
+        console.log('User has no active subscription, redirecting to payment');
+        setConfirming(false);
+        router.push('/subscription-plans');
+        return;
+      }
+
+      console.log('User has active subscription, creating appointment');
+
+      // Check if user already has an appointment for this event
+      const { data: existingAppointment } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('event_id', id)
+        .single();
+
+      if (existingAppointment) {
+        console.log('User already has an appointment for this event');
+        setConfirming(false);
+        router.push('/(tabs)/appointments');
+        return;
+      }
+
+      // Create appointment
       const { error } = await supabase
         .from('appointments')
         .insert({
@@ -95,13 +115,16 @@ export default function EventDetailsScreen() {
 
       if (error) {
         console.error('Error creating appointment:', error);
+        setConfirming(false);
         return;
       }
 
       console.log('Appointment created successfully');
+      setConfirming(false);
       router.push('/(tabs)/appointments');
     } catch (error) {
       console.error('Failed to create appointment:', error);
+      setConfirming(false);
     }
   };
 
@@ -181,11 +204,16 @@ export default function EventDetailsScreen() {
           </Text>
 
           <TouchableOpacity
-            style={styles.confirmButton}
+            style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
             onPress={handleConfirm}
+            disabled={confirming}
             activeOpacity={0.8}
           >
-            <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
+            {confirming ? (
+              <ActivityIndicator color={nospiColors.white} />
+            ) : (
+              <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -290,6 +318,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: nospiColors.purpleMid,
+    opacity: 0.6,
   },
   confirmButtonText: {
     color: nospiColors.white,

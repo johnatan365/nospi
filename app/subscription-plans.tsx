@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
@@ -16,6 +16,8 @@ export default function SubscriptionPlansScreen() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('3_months');
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
 
   const plans = [
     {
@@ -81,6 +83,15 @@ export default function SubscriptionPlansScreen() {
     setSelectedPayment(method);
   };
 
+  const formatEndDate = (date: Date) => {
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('es-ES', options);
+  };
+
   const handleContinue = async () => {
     if (!selectedPayment) {
       console.log('No payment method selected');
@@ -120,16 +131,24 @@ export default function SubscriptionPlansScreen() {
 
       if (error) {
         console.error('Error creating subscription:', error);
+        setProcessing(false);
         return;
       }
 
       console.log('Subscription created successfully');
-      router.push('/(tabs)/profile');
+      setSubscriptionEndDate(formatEndDate(endDate));
+      setProcessing(false);
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Failed to create subscription:', error);
-    } finally {
       setProcessing(false);
     }
+  };
+
+  const handleSuccessClose = () => {
+    console.log('User closed success modal, navigating to profile');
+    setShowSuccessModal(false);
+    router.push('/(tabs)/profile');
   };
 
   const selectedPlanData = plans.find(p => p.type === selectedPlan);
@@ -210,7 +229,14 @@ export default function SubscriptionPlansScreen() {
               onPress={() => handlePaymentSelect('google_pay')}
               activeOpacity={0.8}
             >
-              <Text style={styles.paymentButtonText}>Google Pay</Text>
+              <View style={styles.paymentButtonContent}>
+                {selectedPayment === 'google_pay' && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+                <Text style={styles.paymentButtonText}>Google Pay</Text>
+              </View>
             </TouchableOpacity>
           )}
 
@@ -220,7 +246,14 @@ export default function SubscriptionPlansScreen() {
               onPress={() => handlePaymentSelect('apple_pay')}
               activeOpacity={0.8}
             >
-              <Text style={styles.paymentButtonText}>Apple Pay</Text>
+              <View style={styles.paymentButtonContent}>
+                {selectedPayment === 'apple_pay' && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+                <Text style={styles.paymentButtonText}>Apple Pay</Text>
+              </View>
             </TouchableOpacity>
           )}
 
@@ -229,7 +262,14 @@ export default function SubscriptionPlansScreen() {
             onPress={() => handlePaymentSelect('card')}
             activeOpacity={0.8}
           >
-            <Text style={styles.paymentButtonText}>Tarjeta de Crédito/Débito</Text>
+            <View style={styles.paymentButtonContent}>
+              {selectedPayment === 'card' && (
+                <View style={styles.checkmark}>
+                  <Text style={styles.checkmarkText}>✓</Text>
+                </View>
+              )}
+              <Text style={styles.paymentButtonText}>Tarjeta de Crédito/Débito</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -237,7 +277,14 @@ export default function SubscriptionPlansScreen() {
             onPress={() => handlePaymentSelect('pse')}
             activeOpacity={0.8}
           >
-            <Text style={styles.paymentButtonText}>PSE</Text>
+            <View style={styles.paymentButtonContent}>
+              {selectedPayment === 'pse' && (
+                <View style={styles.checkmark}>
+                  <Text style={styles.checkmarkText}>✓</Text>
+                </View>
+              )}
+              <Text style={styles.paymentButtonText}>PSE</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -255,11 +302,37 @@ export default function SubscriptionPlansScreen() {
           disabled={!selectedPayment || processing}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueButtonText}>
-            {processing ? 'Procesando...' : 'Continuar'}
-          </Text>
+          {processing ? (
+            <ActivityIndicator color={nospiColors.purpleDark} />
+          ) : (
+            <Text style={styles.continueButtonText}>Continuar</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSuccessClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.successIcon}>✓</Text>
+            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
+            <Text style={styles.successMessage}>
+              Tu plan está activo hasta el {subscriptionEndDate}
+            </Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={handleSuccessClose}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -406,12 +479,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 16,
     marginBottom: 12,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: 'transparent',
   },
   paymentButtonSelected: {
     borderColor: nospiColors.purpleDark,
     backgroundColor: nospiColors.white,
+  },
+  paymentButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: nospiColors.purpleDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  checkmarkText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   paymentButtonText: {
     fontSize: 16,
@@ -449,6 +541,53 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: nospiColors.purpleDark,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: nospiColors.white,
+    borderRadius: 24,
+    padding: 40,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  successIcon: {
+    fontSize: 80,
+    color: '#4CAF50',
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  successButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },
