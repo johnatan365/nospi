@@ -35,16 +35,41 @@ export default function WelcomeScreen() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      {/* Background Pattern */}
+      {/* Background Pattern - Romantic/Dating Theme from Image */}
       <View style={styles.patternContainer}>
-        <Text style={styles.patternEmoji}>💑</Text>
-        <Text style={[styles.patternEmoji, styles.pattern2]}>🍷</Text>
-        <Text style={[styles.patternEmoji, styles.pattern3]}>🌙</Text>
-        <Text style={[styles.patternEmoji, styles.pattern4]}>🍽️</Text>
-        <Text style={[styles.patternEmoji, styles.pattern5]}>💕</Text>
-        <Text style={[styles.patternEmoji, styles.pattern6]}>🥂</Text>
-        <Text style={[styles.patternEmoji, styles.pattern7]}>✨</Text>
-        <Text style={[styles.patternEmoji, styles.pattern8]}>🌃</Text>
+        {/* Couple dining */}
+        <Text style={[styles.patternEmoji, { top: '8%', left: '5%' }]}>👫</Text>
+        {/* Hearts */}
+        <Text style={[styles.patternEmoji, { top: '12%', right: '15%', fontSize: 28 }]}>💕</Text>
+        <Text style={[styles.patternEmoji, { top: '45%', left: '8%', fontSize: 32 }]}>❤️</Text>
+        <Text style={[styles.patternEmoji, { top: '72%', right: '10%', fontSize: 26 }]}>💗</Text>
+        {/* Drinks */}
+        <Text style={[styles.patternEmoji, { top: '18%', right: '8%', fontSize: 36 }]}>🍸</Text>
+        <Text style={[styles.patternEmoji, { top: '65%', left: '12%', fontSize: 34 }]}>🥂</Text>
+        <Text style={[styles.patternEmoji, { top: '82%', left: '25%', fontSize: 30 }]}>🍷</Text>
+        {/* Cityscape */}
+        <Text style={[styles.patternEmoji, { top: '28%', left: '50%', fontSize: 38 }]}>🏙️</Text>
+        {/* Moon and stars */}
+        <Text style={[styles.patternEmoji, { top: '15%', left: '20%', fontSize: 35 }]}>🌙</Text>
+        <Text style={[styles.patternEmoji, { top: '8%', right: '40%', fontSize: 20 }]}>✨</Text>
+        <Text style={[styles.patternEmoji, { top: '35%', right: '5%', fontSize: 22 }]}>⭐</Text>
+        <Text style={[styles.patternEmoji, { top: '88%', right: '30%', fontSize: 18 }]}>✨</Text>
+        {/* Dining */}
+        <Text style={[styles.patternEmoji, { top: '52%', right: '12%', fontSize: 36 }]}>🍽️</Text>
+        {/* Group of people */}
+        <Text style={[styles.patternEmoji, { top: '75%', left: '40%', fontSize: 38 }]}>👥</Text>
+        {/* Phone with heart */}
+        <Text style={[styles.patternEmoji, { top: '58%', right: '25%', fontSize: 32 }]}>📱</Text>
+        {/* Car */}
+        <Text style={[styles.patternEmoji, { top: '85%', left: '8%', fontSize: 34 }]}>🚗</Text>
+        {/* Champagne bottles */}
+        <Text style={[styles.patternEmoji, { top: '40%', left: '25%', fontSize: 32 }]}>🍾</Text>
+        {/* Party decorations */}
+        <Text style={[styles.patternEmoji, { top: '22%', left: '70%', fontSize: 28 }]}>🎉</Text>
+        {/* Palm trees */}
+        <Text style={[styles.patternEmoji, { top: '32%', right: '35%', fontSize: 30 }]}>🌴</Text>
+        {/* Movie clapper */}
+        <Text style={[styles.patternEmoji, { top: '68%', right: '40%', fontSize: 32 }]}>🎬</Text>
       </View>
 
       <View style={styles.container}>
@@ -103,41 +128,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     fontSize: 40,
     opacity: 0.15,
-  },
-  pattern2: {
-    top: '15%',
-    right: '10%',
-    fontSize: 35,
-  },
-  pattern3: {
-    top: '25%',
-    left: '8%',
-    fontSize: 45,
-  },
-  pattern4: {
-    top: '40%',
-    right: '15%',
-    fontSize: 38,
-  },
-  pattern5: {
-    top: '55%',
-    left: '12%',
-    fontSize: 42,
-  },
-  pattern6: {
-    top: '70%',
-    right: '8%',
-    fontSize: 36,
-  },
-  pattern7: {
-    top: '80%',
-    left: '20%',
-    fontSize: 30,
-  },
-  pattern8: {
-    top: '10%',
-    left: '85%',
-    fontSize: 40,
   },
   container: {
     flex: 1,

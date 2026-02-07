@@ -116,14 +116,33 @@ export default function LoginScreen() {
     >
       <Stack.Screen options={{ headerShown: true, title: 'Iniciar Sesión', headerBackTitle: 'Atrás' }} />
       
-      {/* Background Pattern */}
+      {/* Background Pattern - Romantic/Dating Theme from Image */}
       <View style={styles.patternContainer}>
-        <Text style={styles.patternEmoji}>💑</Text>
-        <Text style={[styles.patternEmoji, styles.pattern2]}>🍷</Text>
-        <Text style={[styles.patternEmoji, styles.pattern3]}>🌙</Text>
-        <Text style={[styles.patternEmoji, styles.pattern4]}>🍽️</Text>
-        <Text style={[styles.patternEmoji, styles.pattern5]}>💕</Text>
-        <Text style={[styles.patternEmoji, styles.pattern6]}>🥂</Text>
+        {/* Couple dining */}
+        <Text style={[styles.patternEmoji, { top: '10%', left: '8%' }]}>👫</Text>
+        {/* Hearts */}
+        <Text style={[styles.patternEmoji, { top: '15%', right: '12%', fontSize: 28 }]}>💕</Text>
+        <Text style={[styles.patternEmoji, { top: '48%', left: '10%', fontSize: 32 }]}>❤️</Text>
+        <Text style={[styles.patternEmoji, { top: '75%', right: '8%', fontSize: 26 }]}>💗</Text>
+        {/* Drinks */}
+        <Text style={[styles.patternEmoji, { top: '22%', right: '10%', fontSize: 36 }]}>🍸</Text>
+        <Text style={[styles.patternEmoji, { top: '68%', left: '15%', fontSize: 34 }]}>🥂</Text>
+        {/* Cityscape */}
+        <Text style={[styles.patternEmoji, { top: '32%', left: '45%', fontSize: 38 }]}>🏙️</Text>
+        {/* Moon and stars */}
+        <Text style={[styles.patternEmoji, { top: '18%', left: '25%', fontSize: 35 }]}>🌙</Text>
+        <Text style={[styles.patternEmoji, { top: '12%', right: '35%', fontSize: 20 }]}>✨</Text>
+        <Text style={[styles.patternEmoji, { top: '38%', right: '8%', fontSize: 22 }]}>⭐</Text>
+        {/* Dining */}
+        <Text style={[styles.patternEmoji, { top: '55%', right: '15%', fontSize: 36 }]}>🍽️</Text>
+        {/* Group of people */}
+        <Text style={[styles.patternEmoji, { top: '78%', left: '35%', fontSize: 38 }]}>👥</Text>
+        {/* Phone with heart */}
+        <Text style={[styles.patternEmoji, { top: '62%', right: '28%', fontSize: 32 }]}>📱</Text>
+        {/* Champagne bottles */}
+        <Text style={[styles.patternEmoji, { top: '42%', left: '22%', fontSize: 32 }]}>🍾</Text>
+        {/* Party decorations */}
+        <Text style={[styles.patternEmoji, { top: '25%', left: '65%', fontSize: 28 }]}>🎉</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
@@ -220,31 +239,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     fontSize: 40,
     opacity: 0.12,
-  },
-  pattern2: {
-    top: '20%',
-    right: '10%',
-    fontSize: 35,
-  },
-  pattern3: {
-    top: '35%',
-    left: '8%',
-    fontSize: 45,
-  },
-  pattern4: {
-    top: '50%',
-    right: '15%',
-    fontSize: 38,
-  },
-  pattern5: {
-    top: '65%',
-    left: '12%',
-    fontSize: 42,
-  },
-  pattern6: {
-    top: '80%',
-    right: '8%',
-    fontSize: 36,
   },
   container: {
     flexGrow: 1,

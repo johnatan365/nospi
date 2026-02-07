@@ -1,11 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 interface UserProfile {
   id: string;
@@ -51,6 +52,14 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCountry, setEditCountry] = useState('');
+  const [editCity, setEditCity] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -75,6 +84,10 @@ export default function ProfileScreen() {
 
       console.log('Profile loaded successfully');
       setProfile(data);
+      setEditName(data.name);
+      setEditPhone(data.phone);
+      setEditCountry(data.country);
+      setEditCity(data.city);
     } catch (error) {
       console.error('Failed to load profile:', error);
     } finally {
@@ -122,6 +135,128 @@ export default function ProfileScreen() {
   const handleNotificationPress = () => {
     console.log('User tapped notification preferences');
     setNotificationModalVisible(true);
+  };
+
+  const handleEditPress = () => {
+    console.log('User tapped edit profile');
+    setEditModalVisible(true);
+  };
+
+  const handlePhotoPress = async () => {
+    console.log('User tapped profile photo to edit');
+    
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadPhoto(result.assets[0].uri);
+    }
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    setUploadingPhoto(true);
+    try {
+      console.log('Uploading photo...');
+      
+      // Convert URI to blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      // Create file name
+      const fileExt = uri.split('.').pop();
+      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+      const filePath = `profile-photos/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, blob);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        Alert.alert('Error', 'No se pudo subir la foto');
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
+
+      const photoUrl = urlData.publicUrl;
+
+      // Update profile in database
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ profile_photo_url: photoUrl })
+        .eq('id', user?.id);
+
+      if (updateError) {
+        console.error('Update error:', updateError);
+        Alert.alert('Error', 'No se pudo actualizar el perfil');
+        return;
+      }
+
+      console.log('Photo uploaded successfully');
+      setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
+      Alert.alert('Éxito', 'Foto de perfil actualizada');
+    } catch (error) {
+      console.error('Failed to upload photo:', error);
+      Alert.alert('Error', 'No se pudo subir la foto');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim() || !editPhone.trim()) {
+      Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      return;
+    }
+
+    try {
+      console.log('Saving profile changes...');
+      const { error } = await supabase
+        .from('users')
+        .update({
+          name: editName,
+          phone: editPhone,
+          country: editCountry,
+          city: editCity,
+        })
+        .eq('id', user?.id);
+
+      if (error) {
+        console.error('Error updating profile:', error);
+        Alert.alert('Error', 'No se pudo actualizar el perfil');
+        return;
+      }
+
+      console.log('Profile updated successfully');
+      setProfile(prev => prev ? {
+        ...prev,
+        name: editName,
+        phone: editPhone,
+        country: editCountry,
+        city: editCity,
+      } : null);
+      setEditModalVisible(false);
+      Alert.alert('Éxito', 'Perfil actualizado correctamente');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      Alert.alert('Error', 'No se pudo actualizar el perfil');
+    }
   };
 
   const toggleNotification = async (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
@@ -212,17 +347,40 @@ export default function ProfileScreen() {
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
-          {profile.profile_photo_url ? (
-            <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
-          ) : (
-            <View style={styles.profilePhotoPlaceholder}>
-              <Text style={styles.profilePhotoPlaceholderText}>
-                {profile.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
+            {profile.profile_photo_url ? (
+              <View>
+                <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
+                {uploadingPhoto && (
+                  <View style={styles.photoOverlay}>
+                    <ActivityIndicator size="large" color={nospiColors.white} />
+                  </View>
+                )}
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.profilePhotoPlaceholder}>
+                <Text style={styles.profilePhotoPlaceholderText}>
+                  {profile.name.charAt(0).toUpperCase()}
+                </Text>
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.age}>{profile.age} años</Text>
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEditPress}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.editButtonText}>Editar Perfil</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -317,6 +475,74 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Editar Perfil</Text>
+
+            <Text style={styles.inputLabel}>Nombre</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Tu nombre"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.inputLabel}>Teléfono</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Tu teléfono"
+              placeholderTextColor="#999"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.inputLabel}>País</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editCountry}
+              onChangeText={setEditCountry}
+              placeholder="Tu país"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.inputLabel}>Ciudad</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editCity}
+              onChangeText={setEditCity}
+              placeholder="Tu ciudad"
+              placeholderTextColor="#999"
+            />
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveProfile}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setEditModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Notification Preferences Modal */}
       <Modal
         visible={notificationModalVisible}
         transparent
@@ -383,6 +609,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* Subscription Modal */}
       <Modal
         visible={subscriptionModalVisible}
         transparent
@@ -460,7 +687,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   loadingContainer: {
     flex: 1,
@@ -501,6 +728,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: nospiColors.white,
   },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editPhotoIcon: {
+    position: 'absolute',
+    bottom: 16,
+    right: 0,
+    backgroundColor: nospiColors.white,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: nospiColors.purpleDark,
+  },
+  editPhotoIconText: {
+    fontSize: 16,
+  },
   name: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -511,6 +765,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: nospiColors.white,
     opacity: 0.9,
+    marginBottom: 16,
+  },
+  editButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: nospiColors.white,
+  },
+  editButtonText: {
+    color: nospiColors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -610,6 +878,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 8,
+  },
+  saveButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   notificationOption: {
     flexDirection: 'row',
