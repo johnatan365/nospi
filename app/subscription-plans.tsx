@@ -6,6 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type PlanType = '1_month' | '3_months' | '6_months';
 type PaymentMethod = 'google_pay' | 'apple_pay' | 'card' | 'pse';
@@ -25,6 +26,7 @@ export default function SubscriptionPlansScreen() {
     // Reset selections to allow re-purchasing
     setSelectedPayment(null);
     setProcessing(false);
+    setShowSuccessModal(false);
   }, []);
 
   const plans = [
@@ -168,9 +170,36 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  const handleSuccessClose = () => {
-    console.log('User closed success modal, navigating to appointments');
+  const handleSuccessClose = async () => {
+    console.log('User closed success modal');
     setShowSuccessModal(false);
+    
+    // Check if there's a pending event confirmation
+    const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+    
+    if (pendingEventId) {
+      console.log('Found pending event confirmation:', pendingEventId);
+      // Clear the pending confirmation
+      await AsyncStorage.removeItem('pending_event_confirmation');
+      
+      // Create the appointment
+      const { error } = await supabase
+        .from('appointments')
+        .insert({
+          user_id: user?.id,
+          event_id: pendingEventId,
+          status: 'confirmada',
+          payment_status: 'completed',
+        });
+
+      if (error) {
+        console.error('Error creating appointment after payment:', error);
+      } else {
+        console.log('Appointment created successfully after payment');
+      }
+    }
+    
+    // Navigate to appointments tab
     router.push('/(tabs)/appointments');
   };
 
@@ -351,7 +380,7 @@ export default function SubscriptionPlansScreen() {
               onPress={handleSuccessClose}
               activeOpacity={0.8}
             >
-              <Text style={styles.successButtonText}>Continuar</Text>
+              <Text style={styles.successButtonText}>Aceptar</Text>
             </TouchableOpacity>
           </View>
         </View>

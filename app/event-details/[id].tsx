@@ -1,11 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Event {
   id: string;
@@ -68,6 +69,13 @@ export default function EventDetailsScreen() {
 
   const handleConfirm = async () => {
     console.log('User confirmed attendance for event:', id);
+    
+    if (!user) {
+      console.log('User not authenticated, redirecting to login');
+      router.push('/login');
+      return;
+    }
+
     setConfirming(true);
     
     try {
@@ -75,24 +83,26 @@ export default function EventDetailsScreen() {
       const { data: subscription, error: subError } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .eq('status', 'active')
         .single();
 
       if (subError || !subscription) {
         console.log('User has no active subscription, redirecting to payment');
         setConfirming(false);
+        // Store the event ID to confirm after payment
+        await AsyncStorage.setItem('pending_event_confirmation', id as string);
         router.push('/subscription-plans');
         return;
       }
 
-      console.log('User has active subscription, creating appointment');
+      console.log('User has active subscription, checking for existing appointment');
 
       // Check if user already has an appointment for this event
       const { data: existingAppointment } = await supabase
         .from('appointments')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .eq('event_id', id)
         .single();
 
@@ -104,10 +114,11 @@ export default function EventDetailsScreen() {
       }
 
       // Create appointment
+      console.log('Creating appointment for event:', id);
       const { error } = await supabase
         .from('appointments')
         .insert({
-          user_id: user?.id,
+          user_id: user.id,
           event_id: id,
           status: 'confirmada',
           payment_status: 'completed',
@@ -119,7 +130,7 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      console.log('Appointment created successfully');
+      console.log('Appointment created successfully, navigating to appointments tab');
       setConfirming(false);
       router.push('/(tabs)/appointments');
     } catch (error) {
