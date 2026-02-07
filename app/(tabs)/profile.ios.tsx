@@ -220,18 +220,15 @@ export default function ProfileScreen() {
     try {
       console.log('Uploading photo from URI:', uri);
       
-      // For React Native, we need to use fetch to get the file as a blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Create file name with timestamp to ensure uniqueness
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = fileName;
 
       console.log('Uploading to bucket: profile-photos, path:', filePath);
 
-      // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
@@ -248,7 +245,6 @@ export default function ProfileScreen() {
 
       console.log('Upload successful:', uploadData);
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('profile-photos')
         .getPublicUrl(filePath);
@@ -256,7 +252,6 @@ export default function ProfileScreen() {
       const photoUrl = urlData.publicUrl;
       console.log('Public URL:', photoUrl);
 
-      // Update profile in database
       const { error: updateError } = await supabase
         .from('users')
         .update({ profile_photo_url: photoUrl })
@@ -406,13 +401,13 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.white} />
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
       </LinearGradient>
     );
@@ -421,10 +416,10 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
@@ -444,25 +439,175 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Same content as Android version */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
+            {profile.profile_photo_url ? (
+              <View>
+                <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
+                {uploadingPhoto && (
+                  <View style={styles.photoOverlay}>
+                    <ActivityIndicator size="large" color={nospiColors.white} />
+                  </View>
+                )}
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.profilePhotoPlaceholder}>
+                <Text style={styles.profilePhotoPlaceholderText}>
+                  {profile.name.charAt(0).toUpperCase()}
+                </Text>
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.name}>{profile.name}</Text>
+          <Text style={styles.age}>{profile.age} años</Text>
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEditPress}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.editButtonText}>Editar Perfil</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Personal</Text>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Email:</Text>
+            <Text style={styles.infoValue}>{profile.email}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Teléfono:</Text>
+            <Text style={styles.infoValue}>{profile.phone}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Género:</Text>
+            <Text style={styles.infoValue}>{genderText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Interesado en:</Text>
+            <Text style={styles.infoValue}>{interestedInText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Rango de edad:</Text>
+            <Text style={styles.infoValue}>{ageRangeText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ubicación:</Text>
+            <Text style={styles.infoValue}>{locationText}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Intereses</Text>
+          <View style={styles.tagsContainer}>
+            {profile.interests.map((interest, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{interest}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personalidad</Text>
+          <View style={styles.tagsContainer}>
+            {profile.personality_traits.map((trait, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{trait}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.section}
+          onPress={handleNotificationPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
+          <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.section}
+          onPress={handleSubscriptionPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Suscripción y Pagos</Text>
+          {subscription ? (
+            <View>
+              <Text style={styles.subscriptionActive}>Plan Activo: {getPlanName(subscription.plan_type)}</Text>
+              <Text style={styles.subscriptionDetails}>
+                Válido hasta: {formatDate(subscription.end_date)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.subscriptionInactive}>Sin suscripción activa</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* All modals identical to Android version */}
+      {/* All modals - identical to Android version */}
     </LinearGradient>
   );
 }
 
-// Styles identical to Android version
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { fontSize: 16, color: nospiColors.white, textAlign: 'center' },
+  errorText: { fontSize: 16, color: nospiColors.purpleDark, textAlign: 'center' },
+  header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
+  profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: nospiColors.purpleLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: nospiColors.purpleDark },
+  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
+  editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: nospiColors.purpleDark },
+  editPhotoIconText: { fontSize: 16 },
+  name: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
+  age: { fontSize: 18, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 16 },
+  editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: nospiColors.purpleDark },
+  editButtonText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
+  section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
+  sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
+  infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { backgroundColor: nospiColors.purpleLight, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  tagText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
+  subscriptionActive: { fontSize: 16, color: '#4CAF50', fontWeight: '600', marginBottom: 4 },
+  subscriptionDetails: { fontSize: 14, color: '#666' },
+  subscriptionInactive: { fontSize: 14, color: '#666' },
+  signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
+  signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
 });

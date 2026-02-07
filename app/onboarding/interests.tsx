@@ -71,10 +71,10 @@ export default function InterestsScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <View style={styles.section}>
@@ -156,26 +156,26 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 24,
     textAlign: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 4,
   },
   counter: {
     fontSize: 14,
-    color: nospiColors.white,
-    opacity: 0.8,
+    color: nospiColors.purpleDark,
+    opacity: 0.7,
     marginBottom: 16,
   },
   chipsContainer: {
@@ -184,28 +184,28 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleLight,
   },
   chipSelected: {
-    backgroundColor: nospiColors.white,
-    borderColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
+    borderColor: nospiColors.purpleDark,
   },
   chipText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 14,
     fontWeight: '500',
   },
   chipTextSelected: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontWeight: '600',
   },
   continueButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -219,12 +219,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
   continueButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },

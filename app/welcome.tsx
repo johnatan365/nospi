@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: nospiColors.purpleDark,
+    borderColor: nospiColors.white,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '600',
   },
