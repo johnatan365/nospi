@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserProfile {
   id: string;
@@ -219,21 +220,22 @@ export default function ProfileScreen() {
     try {
       console.log('Uploading photo from URI:', uri);
       
-      // Convert URI to blob
+      // For React Native, we need to use fetch to get the file as a blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Create file name
-      const fileExt = uri.split('.').pop() || 'jpg';
+      // Create file name with timestamp to ensure uniqueness
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const filePath = fileName;
 
-      console.log('Uploading to path:', filePath);
+      console.log('Uploading to bucket: profile-photos, path:', filePath);
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
           cacheControl: '3600',
           upsert: true,
         });
@@ -266,7 +268,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('Photo uploaded successfully');
+      console.log('Photo uploaded and profile updated successfully');
       setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {

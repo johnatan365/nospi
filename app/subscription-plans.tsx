@@ -6,6 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type PlanType = '1_month' | '3_months' | '6_months';
 type PaymentMethod = 'google_pay' | 'apple_pay' | 'card' | 'pse';
@@ -179,6 +180,47 @@ export default function SubscriptionPlansScreen() {
       }
 
       console.log('Subscription processed successfully');
+
+      // Check if there's a pending event confirmation
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      console.log('Checking for pending event confirmation:', pendingEventId);
+
+      if (pendingEventId) {
+        console.log('Found pending event, creating appointment for event:', pendingEventId);
+        
+        // Check if appointment already exists
+        const { data: existingAppointment } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('user_id', user?.id)
+          .eq('event_id', pendingEventId)
+          .single();
+
+        if (!existingAppointment) {
+          // Create appointment for the pending event
+          const { error: appointmentError } = await supabase
+            .from('appointments')
+            .insert({
+              user_id: user?.id,
+              event_id: pendingEventId,
+              status: 'confirmada',
+              payment_status: 'completed',
+            });
+
+          if (appointmentError) {
+            console.error('Error creating appointment:', appointmentError);
+          } else {
+            console.log('Appointment created successfully for pending event');
+          }
+        } else {
+          console.log('Appointment already exists for this event');
+        }
+
+        // Remove the pending event from AsyncStorage
+        await AsyncStorage.removeItem('pending_event_confirmation');
+        console.log('Removed pending event from AsyncStorage');
+      }
+
       setSubscriptionEndDate(formatEndDate(endDate));
       setProcessing(false);
       setShowSuccessModal(true);
@@ -191,7 +233,7 @@ export default function SubscriptionPlansScreen() {
   const handleSuccessClose = () => {
     console.log('User closed success modal, navigating to appointments');
     setShowSuccessModal(false);
-    router.push('/(tabs)/appointments');
+    router.replace('/(tabs)/appointments');
   };
 
   const selectedPlanData = plans.find(p => p.type === selectedPlan);

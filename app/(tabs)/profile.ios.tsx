@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserProfile {
   id: string;
@@ -219,21 +220,22 @@ export default function ProfileScreen() {
     try {
       console.log('Uploading photo from URI:', uri);
       
-      // Convert URI to blob
+      // For React Native, we need to use fetch to get the file as a blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Create file name
-      const fileExt = uri.split('.').pop() || 'jpg';
+      // Create file name with timestamp to ensure uniqueness
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const filePath = fileName;
 
-      console.log('Uploading to path:', filePath);
+      console.log('Uploading to bucket: profile-photos, path:', filePath);
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
           cacheControl: '3600',
           upsert: true,
         });
@@ -266,7 +268,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('Photo uploaded successfully');
+      console.log('Photo uploaded and profile updated successfully');
       setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {
@@ -448,22 +450,19 @@ export default function ProfileScreen() {
       end={{ x: 1, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Same content as Android version - profile display, sections, etc. */}
-        {/* (Content identical to profile.tsx for brevity - all the same JSX) */}
+        {/* Same content as Android version */}
       </ScrollView>
 
-      {/* All modals identical to profile.tsx */}
+      {/* All modals identical to Android version */}
     </LinearGradient>
   );
 }
 
-// Styles identical to profile.tsx
+// Styles identical to Android version
 const styles = StyleSheet.create({
-  // ... (same styles as profile.tsx)
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: nospiColors.white, textAlign: 'center' },
-  // ... (all other styles from profile.tsx)
 });

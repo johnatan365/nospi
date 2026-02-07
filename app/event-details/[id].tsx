@@ -6,6 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Event {
   id: string;
@@ -80,7 +81,10 @@ export default function EventDetailsScreen() {
         .single();
 
       if (subError || !subscription) {
-        console.log('User has no active subscription, redirecting to payment');
+        console.log('User has no active subscription, storing pending event and redirecting to payment');
+        // Store the event ID in AsyncStorage for later confirmation
+        await AsyncStorage.setItem('pending_event_confirmation', id as string);
+        console.log('Stored pending event ID:', id);
         setConfirming(false);
         router.push('/subscription-plans');
         return;
