@@ -38,11 +38,17 @@ export default function LocationScreen() {
   const [city, setCity] = useState('Medellín');
 
   const handleCountryChange = (selectedCountry: string) => {
+    console.log('User selected country:', selectedCountry);
     setCountry(selectedCountry);
     const cities = CITIES_BY_COUNTRY[selectedCountry] || [];
     if (cities.length > 0) {
       setCity(cities[0]);
     }
+  };
+
+  const handleCityChange = (selectedCity: string) => {
+    console.log('User selected city:', selectedCity);
+    setCity(selectedCity);
   };
 
   const handleContinue = () => {
@@ -51,7 +57,7 @@ export default function LocationScreen() {
       return;
     }
 
-    console.log('User selected location:', country, city);
+    console.log('User location confirmed:', country, city);
     // TODO: Backend Integration - PUT /api/pre-registration with { country, city }
     router.push('/onboarding/compatibility');
   };
@@ -75,20 +81,21 @@ export default function LocationScreen() {
           
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>País</Text>
+            <View style={styles.selectedValueDisplay}>
+              <Text style={styles.selectedValueText}>{country}</Text>
+            </View>
             <View style={styles.pickerWrapper}>
               <Picker
                 selectedValue={country}
                 onValueChange={handleCountryChange}
                 style={styles.picker}
                 dropdownIconColor={nospiColors.white}
-                itemStyle={styles.pickerItem}
               >
                 {COUNTRIES.map((countryOption) => (
                   <Picker.Item 
                     key={countryOption} 
                     label={countryOption} 
                     value={countryOption}
-                    color={Platform.OS === 'ios' ? nospiColors.white : nospiColors.purpleDark}
                   />
                 ))}
               </Picker>
@@ -97,20 +104,21 @@ export default function LocationScreen() {
 
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>Ciudad</Text>
+            <View style={styles.selectedValueDisplay}>
+              <Text style={styles.selectedValueText}>{city}</Text>
+            </View>
             <View style={styles.pickerWrapper}>
               <Picker
                 selectedValue={city}
-                onValueChange={setCity}
+                onValueChange={handleCityChange}
                 style={styles.picker}
                 dropdownIconColor={nospiColors.white}
-                itemStyle={styles.pickerItem}
               >
                 {availableCities.map((cityOption) => (
                   <Picker.Item 
                     key={cityOption} 
                     label={cityOption} 
                     value={cityOption}
-                    color={Platform.OS === 'ios' ? nospiColors.white : nospiColors.purpleDark}
                   />
                 ))}
               </Picker>
@@ -161,10 +169,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: nospiColors.white,
     marginBottom: 8,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  selectedValueDisplay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  selectedValueText: {
+    fontSize: 20,
+    color: nospiColors.white,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   pickerWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 16,
@@ -173,10 +195,6 @@ const styles = StyleSheet.create({
   picker: {
     color: nospiColors.white,
     height: Platform.OS === 'ios' ? 180 : 50,
-  },
-  pickerItem: {
-    fontSize: 18,
-    color: nospiColors.white,
   },
   continueButton: {
     backgroundColor: nospiColors.white,

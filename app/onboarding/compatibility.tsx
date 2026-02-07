@@ -48,6 +48,9 @@ export default function CompatibilityScreen() {
   }, [rotateValues]);
 
   const percentageText = percentage.toString();
+  const line1 = 'Se encontraron 5 personas con un';
+  const line2 = `${percentageText}% compatibles contigo y listas`;
+  const line3 = 'para el encuentro.';
 
   return (
     <LinearGradient
@@ -110,10 +113,9 @@ export default function CompatibilityScreen() {
               <Text style={styles.celebrationText}>¡Excelente noticia!</Text>
               
               <View style={styles.messageContainer}>
-                <Text style={styles.messageText}>Se encontraron 5 personas con un</Text>
-                <Text style={styles.messageText}>{percentageText}%</Text>
-                <Text style={styles.messageText}>compatibles contigo y listas para el</Text>
-                <Text style={styles.messageText}>encuentro.</Text>
+                <Text style={styles.messageText}>{line1}</Text>
+                <Text style={styles.messageText}>{line2}</Text>
+                <Text style={styles.messageText}>{line3}</Text>
               </View>
               
               <Text style={styles.ctaText}>Inscríbete para programar el encuentro</Text>
@@ -227,10 +229,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 17,
     color: nospiColors.white,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 26,
   },
   ctaText: {
     fontSize: 14,

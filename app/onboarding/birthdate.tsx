@@ -29,6 +29,7 @@ export default function BirthdateScreen() {
     }
     if (selectedDate) {
       setDate(selectedDate);
+      console.log('User selected birthdate:', selectedDate);
     }
   };
 
@@ -45,6 +46,11 @@ export default function BirthdateScreen() {
 
   const canContinue = age >= 18;
   const ageText = age.toString();
+  const formattedDate = date.toLocaleDateString('es-ES', { 
+    day: '2-digit', 
+    month: 'long', 
+    year: 'numeric' 
+  });
 
   return (
     <LinearGradient
@@ -57,33 +63,39 @@ export default function BirthdateScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
           
-          {Platform.OS === 'android' && !showPicker && (
+          <View style={styles.dateDisplayContainer}>
+            <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
+            <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
+          </View>
+
+          {Platform.OS === 'android' && (
             <TouchableOpacity 
               style={styles.dateButton}
               onPress={() => setShowPicker(true)}
             >
-              <Text style={styles.dateButtonText}>
-                {date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-              </Text>
+              <Text style={styles.dateButtonText}>Cambiar fecha</Text>
             </TouchableOpacity>
           )}
 
           {showPicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-              minimumDate={new Date(1940, 0, 1)}
-              textColor={nospiColors.white}
-              style={styles.picker}
-            />
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                minimumDate={new Date(1940, 0, 1)}
+                textColor="#FFFFFF"
+                style={styles.picker}
+              />
+            </View>
           )}
 
           <View style={styles.ageContainer}>
             <Text style={styles.ageLabel}>Tu edad:</Text>
             <Text style={styles.ageValue}>{ageText}</Text>
+            <Text style={styles.ageYears}>años</Text>
           </View>
 
           <Text style={styles.note}>Tu perfil muestra tu edad, no tu fecha de nacimiento</Text>
@@ -121,24 +133,51 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: nospiColors.white,
     marginBottom: 32,
+    textAlign: 'center',
+  },
+  dateDisplayContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dateDisplayLabel: {
+    fontSize: 14,
+    color: nospiColors.white,
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+  dateDisplayValue: {
+    fontSize: 22,
+    color: nospiColors.white,
+    fontWeight: '700',
   },
   dateButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 16,
-    paddingVertical: 18,
+    paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'center',
     marginBottom: 24,
   },
   dateButtonText: {
-    fontSize: 20,
+    fontSize: 16,
     color: nospiColors.white,
     fontWeight: '600',
   },
-  picker: {
+  pickerContainer: {
     marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  picker: {
+    width: '100%',
   },
   ageContainer: {
     flexDirection: 'row',
@@ -152,9 +191,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   ageValue: {
-    fontSize: 32,
+    fontSize: 40,
     fontWeight: 'bold',
     color: nospiColors.white,
+  },
+  ageYears: {
+    fontSize: 20,
+    color: nospiColors.white,
+    marginLeft: 4,
   },
   note: {
     fontSize: 14,
@@ -162,6 +206,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     textAlign: 'center',
     marginBottom: 32,
+    lineHeight: 20,
   },
   continueButton: {
     backgroundColor: nospiColors.white,
