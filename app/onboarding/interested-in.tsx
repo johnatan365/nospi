@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const INTERESTS = [
   { value: 'hombres', label: 'Hombres', emoji: '👨' },
@@ -14,9 +15,12 @@ const INTERESTS = [
 export default function InterestedInScreen() {
   const router = useRouter();
 
-  const handleSelect = (interest: string) => {
+  const handleSelect = async (interest: string) => {
     console.log('User interested in:', interest);
-    // TODO: Backend Integration - PUT /api/pre-registration with { interestedIn }
+    
+    // Save interested_in to AsyncStorage
+    await AsyncStorage.setItem('onboarding_interested_in', interest);
+    
     router.push('/onboarding/age-range');
   };
 

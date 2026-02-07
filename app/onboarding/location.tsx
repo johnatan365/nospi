@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const COUNTRIES = [
   'Colombia',
@@ -53,14 +54,18 @@ export default function LocationScreen() {
     setCity(selectedCity);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!country || !city) {
       Alert.alert('Ubicación requerida', 'Por favor selecciona tu país y ciudad.');
       return;
     }
 
     console.log('User location confirmed:', country, city);
-    // TODO: Backend Integration - PUT /api/pre-registration with { country, city }
+    
+    // Save location to AsyncStorage
+    await AsyncStorage.setItem('onboarding_country', country);
+    await AsyncStorage.setItem('onboarding_city', city);
+    
     router.push('/onboarding/compatibility');
   };
 

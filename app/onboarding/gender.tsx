@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GENDERS = [
   { value: 'hombre', label: 'Hombre', emoji: '👨' },
@@ -14,9 +15,12 @@ const GENDERS = [
 export default function GenderScreen() {
   const router = useRouter();
 
-  const handleSelect = (gender: string) => {
+  const handleSelect = async (gender: string) => {
     console.log('User selected gender:', gender);
-    // TODO: Backend Integration - PUT /api/pre-registration with { gender }
+    
+    // Save gender to AsyncStorage
+    await AsyncStorage.setItem('onboarding_gender', gender);
+    
     router.push('/onboarding/interested-in');
   };
 

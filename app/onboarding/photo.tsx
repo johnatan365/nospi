@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PhotoScreen() {
   const router = useRouter();
@@ -31,19 +32,26 @@ export default function PhotoScreen() {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!photoUri) {
       Alert.alert('Foto requerida', 'Por favor selecciona una foto de perfil.');
       return;
     }
 
     console.log('User continuing with photo:', photoUri);
-    // TODO: Save photo URI to AsyncStorage for later upload
+    
+    // Save photo URI to AsyncStorage
+    await AsyncStorage.setItem('onboarding_photo', photoUri);
+    
     router.push('/onboarding/register');
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     console.log('User skipped photo upload');
+    
+    // Save empty photo to AsyncStorage
+    await AsyncStorage.setItem('onboarding_photo', '');
+    
     // Continue without photo
     router.push('/onboarding/register');
   };

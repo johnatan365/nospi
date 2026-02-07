@@ -4,22 +4,29 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PhoneScreen() {
   const router = useRouter();
   const [countryCode, setCountryCode] = useState('+57');
   const [phoneNumber, setPhoneNumber] = useState('');
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (phoneNumber.trim().length < 7) {
       Alert.alert('Número requerido', 'Por favor ingresa un número de teléfono válido.');
       return;
     }
 
     console.log('User entered phone:', countryCode, phoneNumber);
-    // TODO: Backend Integration - PUT /api/pre-registration with { phoneCountryCode, phoneNumber }
-    // Skip photo screen and go directly to register
-    router.push('/onboarding/register');
+    
+    // Save phone data to AsyncStorage
+    await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
+      countryCode,
+      phoneNumber: countryCode + phoneNumber,
+    }));
+    
+    // Navigate to photo screen
+    router.push('/onboarding/photo');
   };
 
   const canContinue = phoneNumber.trim().length >= 7;

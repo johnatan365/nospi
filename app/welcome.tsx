@@ -3,7 +3,6 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
 import { nospiColors } from '@/constants/Colors';
 
 const { width, height } = Dimensions.get('window');
@@ -21,6 +20,14 @@ export default function WelcomeScreen() {
     router.push('/login');
   };
 
+  const heartIcon = '♥';
+  const appName = 'Nospi';
+  const tagline1 = 'Tu dosis semanal';
+  const tagline2 = 'de conexión';
+  const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
+  const startButtonText = 'Empezar';
+  const loginButtonText = 'Ya tengo una cuenta';
+
   return (
     <LinearGradient
       colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
@@ -28,19 +35,45 @@ export default function WelcomeScreen() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
+      {/* Background Pattern */}
+      <View style={styles.patternContainer}>
+        <Text style={styles.patternEmoji}>💑</Text>
+        <Text style={[styles.patternEmoji, styles.pattern2]}>🍷</Text>
+        <Text style={[styles.patternEmoji, styles.pattern3]}>🌙</Text>
+        <Text style={[styles.patternEmoji, styles.pattern4]}>🍽️</Text>
+        <Text style={[styles.patternEmoji, styles.pattern5]}>💕</Text>
+        <Text style={[styles.patternEmoji, styles.pattern6]}>🥂</Text>
+        <Text style={[styles.patternEmoji, styles.pattern7]}>✨</Text>
+        <Text style={[styles.patternEmoji, styles.pattern8]}>🌃</Text>
+      </View>
+
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.logo}>Nospi</Text>
+          {/* Heart Icon */}
+          <View style={styles.heartContainer}>
+            <Text style={styles.heartIcon}>{heartIcon}</Text>
+          </View>
           
-          <Text style={styles.tagline}>Tu dosis semanal de conexión</Text>
+          {/* App Name */}
+          <Text style={styles.appName}>{appName}</Text>
           
+          {/* Tagline */}
+          <View style={styles.taglineContainer}>
+            <Text style={styles.tagline}>{tagline1}</Text>
+            <Text style={styles.tagline}>{tagline2}</Text>
+          </View>
+          
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>{subtitle}</Text>
+          
+          {/* Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.primaryButton}
               onPress={handleStart}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>Empezar</Text>
+              <Text style={styles.primaryButtonText}>{startButtonText}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -48,7 +81,7 @@ export default function WelcomeScreen() {
               onPress={handleLogin}
               activeOpacity={0.8}
             >
-              <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
+              <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -61,6 +94,51 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
+  patternContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  patternEmoji: {
+    position: 'absolute',
+    fontSize: 40,
+    opacity: 0.15,
+  },
+  pattern2: {
+    top: '15%',
+    right: '10%',
+    fontSize: 35,
+  },
+  pattern3: {
+    top: '25%',
+    left: '8%',
+    fontSize: 45,
+  },
+  pattern4: {
+    top: '40%',
+    right: '15%',
+    fontSize: 38,
+  },
+  pattern5: {
+    top: '55%',
+    left: '12%',
+    fontSize: 42,
+  },
+  pattern6: {
+    top: '70%',
+    right: '8%',
+    fontSize: 36,
+  },
+  pattern7: {
+    top: '80%',
+    left: '20%',
+    fontSize: 30,
+  },
+  pattern8: {
+    top: '10%',
+    left: '85%',
+    fontSize: 40,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -72,20 +150,46 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignItems: 'center',
   },
-  logo: {
-    fontSize: 64,
-    fontWeight: 'bold',
+  heartContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  heartIcon: {
+    fontSize: 48,
     color: nospiColors.white,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: nospiColors.white,
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  taglineContainer: {
+    alignItems: 'center',
     marginBottom: 16,
-    letterSpacing: 2,
   },
   tagline: {
-    fontSize: 20,
+    fontSize: 24,
+    fontWeight: 'bold',
     color: nospiColors.white,
     textAlign: 'center',
-    marginBottom: 80,
+    lineHeight: 32,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: nospiColors.white,
+    textAlign: 'center',
+    marginBottom: 60,
     opacity: 0.95,
-    fontWeight: '500',
+    fontWeight: '400',
+    lineHeight: 20,
+    paddingHorizontal: 20,
   },
   buttonContainer: {
     width: '100%',
@@ -95,7 +199,7 @@ const styles = StyleSheet.create({
     backgroundColor: nospiColors.white,
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: nospiColors.black,
@@ -115,7 +219,7 @@ const styles = StyleSheet.create({
     borderColor: nospiColors.white,
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },

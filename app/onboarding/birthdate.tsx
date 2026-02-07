@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function BirthdateScreen() {
   const router = useRouter();
@@ -33,14 +34,18 @@ export default function BirthdateScreen() {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (age < 18) {
       Alert.alert('Edad mínima', 'Debes tener al menos 18 años para usar Nospi.');
       return;
     }
 
     console.log('User entered birthdate:', date, 'Age:', age);
-    // TODO: Backend Integration - PUT /api/pre-registration with { dateOfBirth, age }
+    
+    // Save birthdate and age to AsyncStorage
+    await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
+    await AsyncStorage.setItem('onboarding_age', age.toString());
+    
     router.push('/onboarding/gender');
   };
 

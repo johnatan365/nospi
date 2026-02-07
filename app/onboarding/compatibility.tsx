@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AVATAR_EMOJIS = ['👨', '👩', '🧑', '👨‍💼', '👩‍💼', '👨‍🎓', '👩‍🎓', '🧑‍💻'];
 
@@ -15,9 +16,12 @@ export default function CompatibilityScreen() {
   const [percentage, setPercentage] = useState(0);
   const [showResult, setShowResult] = useState(false);
 
-  const navigateToNext = useCallback(() => {
+  const navigateToNext = useCallback(async () => {
     console.log('User compatibility:', percentage);
-    // TODO: Backend Integration - PUT /api/pre-registration with { compatibilityPercentage }
+    
+    // Save compatibility percentage to AsyncStorage
+    await AsyncStorage.setItem('onboarding_compatibility', percentage.toString());
+    
     router.push('/onboarding/phone');
   }, [percentage, router]);
 

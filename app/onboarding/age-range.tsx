@@ -5,15 +5,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AgeRangeScreen() {
   const router = useRouter();
   const [minAge, setMinAge] = useState(18);
   const [maxAge, setMaxAge] = useState(35);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     console.log('User selected age range:', minAge, '-', maxAge);
-    // TODO: Backend Integration - PUT /api/pre-registration with { ageRangeMin, ageRangeMax }
+    
+    // Save age range to AsyncStorage
+    await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: minAge, max: maxAge }));
+    
     router.push('/onboarding/location');
   };
 

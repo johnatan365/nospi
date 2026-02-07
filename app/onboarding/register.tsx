@@ -6,6 +6,9 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -16,14 +19,60 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleAppleSignUp = () => {
+  const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
-    // TODO: Implement Apple Sign In with OAuth
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: 'nospi://auth/callback',
+        },
+      });
+
+      if (error) {
+        console.error('Apple OAuth error:', error);
+        setError('Error al conectar con Apple');
+        return;
+      }
+
+      console.log('Apple OAuth initiated:', data);
+    } catch (error) {
+      console.error('Apple sign-up failed:', error);
+      setError('Error al registrarse con Apple');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogleSignUp = () => {
+  const handleGoogleSignUp = async () => {
     console.log('User tapped Sign up with Google');
-    // TODO: Implement Google Sign In with OAuth
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'nospi://auth/callback',
+        },
+      });
+
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError('Error al conectar con Google');
+        return;
+      }
+
+      console.log('Google OAuth initiated:', data);
+    } catch (error) {
+      console.error('Google sign-up failed:', error);
+      setError('Error al registrarse con Google');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEmailSignUp = () => {
@@ -67,6 +116,22 @@ export default function RegisterScreen() {
       const photoData = await AsyncStorage.getItem('onboarding_photo');
       const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
 
+      console.log('Retrieved onboarding data:', {
+        interests: interestsData,
+        personality: personalityData,
+        name: nameData,
+        birthdate: birthdateData,
+        age: ageData,
+        gender: genderData,
+        interestedIn: interestedInData,
+        ageRange: ageRangeData,
+        country: countryData,
+        city: cityData,
+        phone: phoneData,
+        photo: photoData,
+        compatibility: compatibilityData,
+      });
+
       const interests = interestsData ? JSON.parse(interestsData) : [];
       const personality = personalityData ? JSON.parse(personalityData) : [];
       const name = nameData || '';
@@ -77,7 +142,7 @@ export default function RegisterScreen() {
       const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
       const country = countryData || 'Colombia';
       const city = cityData || 'Medellín';
-      const phone = phoneData || '';
+      const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
       const photo = photoData || null;
       const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
 
@@ -89,17 +154,23 @@ export default function RegisterScreen() {
 
       if (authError) {
         console.error('Auth registration error:', authError);
-        setError(authError.message);
+        setError(`Error al crear la cuenta: ${authError.message}`);
         return;
       }
 
-      console.log('Auth user created:', authData.user?.id);
+      if (!authData.user) {
+        console.error('No user data returned from auth');
+        setError('Error al crear la cuenta');
+        return;
+      }
+
+      console.log('Auth user created:', authData.user.id);
 
       // Create user profile in users table
       const { error: profileError } = await supabase
         .from('users')
         .insert({
-          id: authData.user?.id,
+          id: authData.user.id,
           email,
           name,
           birthdate,
@@ -110,9 +181,9 @@ export default function RegisterScreen() {
           age_range_max: ageRange.max,
           country,
           city,
-          phone,
+          phone: phoneInfo.phoneNumber,
           profile_photo_url: photo,
-          interests,
+          interests: interests,
           personality_traits: personality,
           compatibility_percentage: compatibility,
           notification_preferences: {
@@ -125,7 +196,7 @@ export default function RegisterScreen() {
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
-        setError('Error al crear el perfil');
+        setError(`Error al crear el perfil: ${profileError.message}`);
         return;
       }
 
@@ -158,8 +229,9 @@ export default function RegisterScreen() {
     }
   };
 
-  const appleIcon = '\uF8FF';
-  const googleIcon = 'G';
+  const appleIconText = '';
+  const googleIconText = 'G';
+  const emailIconText = '✉';
 
   return (
     <LinearGradient
@@ -173,13 +245,18 @@ export default function RegisterScreen() {
           <Text style={styles.title}>¡Ya casi estás listo!</Text>
           <Text style={styles.subtitle}>Elige cómo quieres registrarte</Text>
           
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.buttonWhite}
               onPress={handleAppleSignUp}
               activeOpacity={0.8}
+              disabled={loading}
             >
-              <Text style={styles.appleIcon}>{appleIcon}</Text>
+              <View style={styles.appleIconContainer}>
+                <Text style={styles.appleIcon}>{appleIconText}</Text>
+              </View>
               <Text style={styles.buttonTextDark}>Regístrate con Apple</Text>
             </TouchableOpacity>
             
@@ -187,8 +264,11 @@ export default function RegisterScreen() {
               style={styles.buttonWhite}
               onPress={handleGoogleSignUp}
               activeOpacity={0.8}
+              disabled={loading}
             >
-              <Text style={styles.googleIcon}>{googleIcon}</Text>
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleIcon}>{googleIconText}</Text>
+              </View>
               <Text style={styles.buttonTextDark}>Regístrate con Google</Text>
             </TouchableOpacity>
             
@@ -196,10 +276,18 @@ export default function RegisterScreen() {
               style={styles.buttonDark}
               onPress={handleEmailSignUp}
               activeOpacity={0.8}
+              disabled={loading}
             >
+              <Text style={styles.emailIcon}>{emailIconText}</Text>
               <Text style={styles.buttonTextLight}>Inscribirse con el correo electrónico</Text>
             </TouchableOpacity>
           </View>
+
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={nospiColors.white} />
+            </View>
+          ) : null}
 
           <Text style={styles.termsText}>
             Al registrarte, aceptas nuestros Términos de Servicio y Política de Privacidad
@@ -217,7 +305,7 @@ export default function RegisterScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Registro con Email</Text>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={styles.errorTextModal}>{error}</Text> : null}
 
             <TextInput
               style={styles.input}
@@ -307,6 +395,15 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     textAlign: 'center',
   },
+  errorText: {
+    fontSize: 14,
+    color: '#FF6B6B',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
   buttonContainer: {
     gap: 16,
     marginBottom: 32,
@@ -339,17 +436,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  appleIcon: {
-    fontSize: 20,
+  appleIconContainer: {
+    width: 24,
+    height: 24,
     marginRight: 12,
-    color: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 12,
+  },
+  appleIcon: {
+    fontSize: 18,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   googleIcon: {
+    fontSize: 18,
+    color: '#4285F4',
+    fontWeight: 'bold',
+  },
+  emailIcon: {
     fontSize: 20,
     marginRight: 12,
-    color: '#000000',
-    fontWeight: 'bold',
+    color: nospiColors.white,
   },
   buttonTextDark: {
     color: '#000000',
@@ -360,6 +476,10 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    marginVertical: 20,
+    alignItems: 'center',
   },
   termsText: {
     fontSize: 12,
@@ -389,7 +509,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  errorText: {
+  errorTextModal: {
     fontSize: 14,
     color: '#F44336',
     backgroundColor: '#FFEBEE',

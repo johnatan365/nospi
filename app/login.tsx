@@ -5,6 +5,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -45,15 +48,64 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     console.log('User tapped Google login');
-    // TODO: Implement Google OAuth
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'nospi://auth/callback',
+        },
+      });
+
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError('Error al conectar con Google');
+        return;
+      }
+
+      console.log('Google OAuth initiated:', data);
+    } catch (error) {
+      console.error('Google login failed:', error);
+      setError('Error al iniciar sesión con Google');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAppleLogin = () => {
+  const handleAppleLogin = async () => {
     console.log('User tapped Apple login');
-    // TODO: Implement Apple OAuth
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: 'nospi://auth/callback',
+        },
+      });
+
+      if (error) {
+        console.error('Apple OAuth error:', error);
+        setError('Error al conectar con Apple');
+        return;
+      }
+
+      console.log('Apple OAuth initiated:', data);
+    } catch (error) {
+      console.error('Apple login failed:', error);
+      setError('Error al iniciar sesión con Apple');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const appleIconText = '';
+  const googleIconText = 'G';
 
   return (
     <LinearGradient
@@ -63,6 +115,17 @@ export default function LoginScreen() {
       end={{ x: 1, y: 1 }}
     >
       <Stack.Screen options={{ headerShown: true, title: 'Iniciar Sesión', headerBackTitle: 'Atrás' }} />
+      
+      {/* Background Pattern */}
+      <View style={styles.patternContainer}>
+        <Text style={styles.patternEmoji}>💑</Text>
+        <Text style={[styles.patternEmoji, styles.pattern2]}>🍷</Text>
+        <Text style={[styles.patternEmoji, styles.pattern3]}>🌙</Text>
+        <Text style={[styles.patternEmoji, styles.pattern4]}>🍽️</Text>
+        <Text style={[styles.patternEmoji, styles.pattern5]}>💕</Text>
+        <Text style={[styles.patternEmoji, styles.pattern6]}>🥂</Text>
+      </View>
+
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
           <Text style={styles.title}>Bienvenido de nuevo</Text>
@@ -74,7 +137,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Email"
-              placeholderTextColor="#999"
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -85,7 +148,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Contraseña"
-              placeholderTextColor="#999"
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -117,16 +180,24 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={styles.socialButton}
               onPress={handleGoogleLogin}
+              disabled={loading}
               activeOpacity={0.8}
             >
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleIcon}>{googleIconText}</Text>
+              </View>
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.socialButton}
               onPress={handleAppleLogin}
+              disabled={loading}
               activeOpacity={0.8}
             >
+              <View style={styles.appleIconContainer}>
+                <Text style={styles.appleIcon}>{appleIconText}</Text>
+              </View>
               <Text style={styles.socialButtonText}>Apple</Text>
             </TouchableOpacity>
           </View>
@@ -139,6 +210,41 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+  },
+  patternContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  patternEmoji: {
+    position: 'absolute',
+    fontSize: 40,
+    opacity: 0.12,
+  },
+  pattern2: {
+    top: '20%',
+    right: '10%',
+    fontSize: 35,
+  },
+  pattern3: {
+    top: '35%',
+    left: '8%',
+    fontSize: 45,
+  },
+  pattern4: {
+    top: '50%',
+    right: '15%',
+    fontSize: 38,
+  },
+  pattern5: {
+    top: '65%',
+    left: '12%',
+    fontSize: 42,
+  },
+  pattern6: {
+    top: '80%',
+    right: '8%',
+    fontSize: 36,
   },
   container: {
     flexGrow: 1,
@@ -177,12 +283,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
     fontSize: 16,
-    color: '#333',
+    color: nospiColors.white,
     marginBottom: 16,
   },
   loginButton: {
@@ -232,6 +340,33 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  googleIconContainer: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    fontSize: 16,
+    color: '#4285F4',
+    fontWeight: 'bold',
+  },
+  appleIconContainer: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 10,
+  },
+  appleIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   socialButtonText: {
     color: '#333',
