@@ -127,43 +127,63 @@ export default function SubscriptionPlansScreen() {
         endDate.setMonth(endDate.getMonth() + 6);
       }
 
-      // First, cancel any existing active subscriptions
-      const { error: cancelError } = await supabase
+      // Check if user already has a subscription record
+      const { data: existingSubscription } = await supabase
         .from('subscriptions')
-        .update({ status: 'cancelled' })
+        .select('id')
         .eq('user_id', user?.id)
-        .eq('status', 'active');
+        .maybeSingle();
 
-      if (cancelError) {
-        console.error('Error cancelling old subscription:', cancelError);
+      if (existingSubscription) {
+        // Update existing subscription
+        console.log('Updating existing subscription');
+        const { error } = await supabase
+          .from('subscriptions')
+          .update({
+            plan_type: selectedPlan,
+            price: selectedPlanData.price,
+            status: 'active',
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            payment_method: selectedPayment,
+            auto_renew: true,
+          })
+          .eq('user_id', user?.id);
+
+        if (error) {
+          console.error('Error updating subscription:', error);
+          setProcessing(false);
+          return;
+        }
+      } else {
+        // Create new subscription
+        console.log('Creating new subscription');
+        const { error } = await supabase
+          .from('subscriptions')
+          .insert({
+            user_id: user?.id,
+            plan_type: selectedPlan,
+            price: selectedPlanData.price,
+            status: 'active',
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            payment_method: selectedPayment,
+            auto_renew: true,
+          });
+
+        if (error) {
+          console.error('Error creating subscription:', error);
+          setProcessing(false);
+          return;
+        }
       }
 
-      // Create new subscription
-      const { error } = await supabase
-        .from('subscriptions')
-        .insert({
-          user_id: user?.id,
-          plan_type: selectedPlan,
-          price: selectedPlanData.price,
-          status: 'active',
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-          payment_method: selectedPayment,
-          auto_renew: true,
-        });
-
-      if (error) {
-        console.error('Error creating subscription:', error);
-        setProcessing(false);
-        return;
-      }
-
-      console.log('Subscription created successfully');
+      console.log('Subscription processed successfully');
       setSubscriptionEndDate(formatEndDate(endDate));
       setProcessing(false);
       setShowSuccessModal(true);
     } catch (error) {
-      console.error('Failed to create subscription:', error);
+      console.error('Failed to process subscription:', error);
       setProcessing(false);
     }
   };
