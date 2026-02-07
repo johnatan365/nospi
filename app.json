@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "Supabase Connect",
@@ -20,7 +19,9 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["nospi"]
+            "CFBundleURLSchemes": [
+              "nospi"
+            ]
           }
         ]
       }
@@ -42,7 +43,10 @@
               "host": "auth"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -55,7 +59,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "nospi",
+    "scheme": "Supabase Connect",
     "experiments": {
       "typedRoutes": true
     },
