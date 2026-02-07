@@ -135,14 +135,14 @@ export default function EventDetailsScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.white} />
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
       </LinearGradient>
     );
@@ -151,10 +151,10 @@ export default function EventDetailsScreen() {
   if (!event) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
         <View style={styles.loadingContainer}>
@@ -171,10 +171,10 @@ export default function EventDetailsScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
   },
   eventCard: {

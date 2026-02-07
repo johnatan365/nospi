@@ -68,13 +68,13 @@ export default function EventsScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.white} />
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
       </LinearGradient>
     );
@@ -82,10 +82,10 @@ export default function EventsScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.title}>Eventos Disponibles</Text>
@@ -148,14 +148,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     marginTop: 48,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 32,
   },
   eventCard: {
@@ -214,8 +214,8 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
-    opacity: 0.8,
+    opacity: 0.7,
   },
 });

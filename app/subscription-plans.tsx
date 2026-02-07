@@ -244,10 +244,10 @@ export default function SubscriptionPlansScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <Stack.Screen options={{ headerShown: true, title: 'Nuestros Planes', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -438,13 +438,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 32,
     lineHeight: 24,
   },
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   paymentTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 16,
   },
   paymentButton: {

@@ -230,41 +230,12 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <Stack.Screen options={{ headerShown: true, title: 'Iniciar Sesión', headerBackTitle: 'Atrás' }} />
-      
-      {/* Background Pattern - Romantic/Dating Theme from Image */}
-      <View style={styles.patternContainer}>
-        {/* Couple dining */}
-        <Text style={[styles.patternEmoji, { top: '10%', left: '8%' }]}>👫</Text>
-        {/* Hearts */}
-        <Text style={[styles.patternEmoji, { top: '15%', right: '12%', fontSize: 28 }]}>💕</Text>
-        <Text style={[styles.patternEmoji, { top: '48%', left: '10%', fontSize: 32 }]}>❤️</Text>
-        <Text style={[styles.patternEmoji, { top: '75%', right: '8%', fontSize: 26 }]}>💗</Text>
-        {/* Drinks */}
-        <Text style={[styles.patternEmoji, { top: '22%', right: '10%', fontSize: 36 }]}>🍸</Text>
-        <Text style={[styles.patternEmoji, { top: '68%', left: '15%', fontSize: 34 }]}>🥂</Text>
-        {/* Cityscape */}
-        <Text style={[styles.patternEmoji, { top: '32%', left: '45%', fontSize: 38 }]}>🏙️</Text>
-        {/* Moon and stars */}
-        <Text style={[styles.patternEmoji, { top: '18%', left: '25%', fontSize: 35 }]}>🌙</Text>
-        <Text style={[styles.patternEmoji, { top: '12%', right: '35%', fontSize: 20 }]}>✨</Text>
-        <Text style={[styles.patternEmoji, { top: '38%', right: '8%', fontSize: 22 }]}>⭐</Text>
-        {/* Dining */}
-        <Text style={[styles.patternEmoji, { top: '55%', right: '15%', fontSize: 36 }]}>🍽️</Text>
-        {/* Group of people */}
-        <Text style={[styles.patternEmoji, { top: '78%', left: '35%', fontSize: 38 }]}>👥</Text>
-        {/* Phone with heart */}
-        <Text style={[styles.patternEmoji, { top: '62%', right: '28%', fontSize: 32 }]}>📱</Text>
-        {/* Champagne bottles */}
-        <Text style={[styles.patternEmoji, { top: '42%', left: '22%', fontSize: 32 }]}>🍾</Text>
-        {/* Party decorations */}
-        <Text style={[styles.patternEmoji, { top: '25%', left: '65%', fontSize: 28 }]}>🎉</Text>
-      </View>
 
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
@@ -277,7 +248,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Email"
-              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              placeholderTextColor="rgba(107, 33, 168, 0.5)"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -288,7 +259,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Contraseña"
-              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              placeholderTextColor="rgba(107, 33, 168, 0.5)"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -303,7 +274,7 @@ export default function LoginScreen() {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color={nospiColors.purpleDark} />
+                <ActivityIndicator color={nospiColors.white} />
               ) : (
                 <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
               )}
@@ -344,7 +315,7 @@ export default function LoginScreen() {
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={nospiColors.white} />
+              <ActivityIndicator size="large" color={nospiColors.purpleDark} />
               <Text style={styles.loadingText}>Procesando...</Text>
             </View>
           ) : null}
@@ -357,16 +328,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-  },
-  patternContainer: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  patternEmoji: {
-    position: 'absolute',
-    fontSize: 40,
-    opacity: 0.12,
   },
   container: {
     flexGrow: 1,
@@ -381,14 +342,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 32,
     textAlign: 'center',
   },
@@ -405,18 +366,18 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: nospiColors.purpleLight,
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 16,
   },
   loginButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: 'center',
@@ -427,12 +388,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   loginButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: nospiColors.purpleMid,
     shadowOpacity: 0,
     elevation: 0,
   },
   loginButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -444,13 +405,13 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: nospiColors.purpleLight,
   },
   dividerText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 14,
     marginHorizontal: 16,
-    opacity: 0.8,
+    opacity: 0.7,
   },
   socialButtons: {
     flexDirection: 'row',
@@ -465,6 +426,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
+    borderWidth: 1,
+    borderColor: nospiColors.purpleLight,
   },
   googleIconContainer: {
     width: 20,
@@ -500,7 +463,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 16,
     marginTop: 12,
   },

@@ -263,13 +263,13 @@ export default function AppointmentsScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.white} />
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
       </LinearGradient>
     );
@@ -282,10 +282,10 @@ export default function AppointmentsScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.title}>Mis Citas</Text>
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 24,
     marginTop: 48,
   },
@@ -513,21 +513,21 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   filterButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(147, 51, 234, 0.2)',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
   },
   filterButtonActive: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
   },
   filterButtonText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 14,
     fontWeight: '600',
   },
   filterButtonTextActive: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
   },
   appointmentCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -603,9 +603,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
-    opacity: 0.8,
+    opacity: 0.7,
   },
   modalOverlay: {
     flex: 1,

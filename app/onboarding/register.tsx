@@ -407,10 +407,10 @@ export default function RegisterScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
@@ -457,7 +457,7 @@ export default function RegisterScreen() {
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={nospiColors.white} />
+              <ActivityIndicator size="large" color={nospiColors.purpleDark} />
               <Text style={styles.loadingText}>Procesando...</Text>
             </View>
           ) : null}
@@ -557,14 +557,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
-    color: nospiColors.white,
-    opacity: 0.9,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   buttonDark: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 24,
     borderRadius: 30,
@@ -655,14 +655,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 16,
     marginTop: 12,
   },
   termsText: {
     fontSize: 12,
-    color: nospiColors.white,
-    opacity: 0.8,
+    color: nospiColors.purpleDark,
+    opacity: 0.7,
     textAlign: 'center',
     lineHeight: 18,
   },

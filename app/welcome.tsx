@@ -21,7 +21,7 @@ export default function WelcomeScreen() {
   };
 
   const heartIcon = '♥';
-  const appName = 'Nospi';
+  const appName = 'Nospy';
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
   const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
@@ -30,48 +30,11 @@ export default function WelcomeScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
-      {/* Background Pattern - Romantic/Dating Theme from Image */}
-      <View style={styles.patternContainer}>
-        {/* Couple dining */}
-        <Text style={[styles.patternEmoji, { top: '8%', left: '5%' }]}>👫</Text>
-        {/* Hearts */}
-        <Text style={[styles.patternEmoji, { top: '12%', right: '15%', fontSize: 28 }]}>💕</Text>
-        <Text style={[styles.patternEmoji, { top: '45%', left: '8%', fontSize: 32 }]}>❤️</Text>
-        <Text style={[styles.patternEmoji, { top: '72%', right: '10%', fontSize: 26 }]}>💗</Text>
-        {/* Drinks */}
-        <Text style={[styles.patternEmoji, { top: '18%', right: '8%', fontSize: 36 }]}>🍸</Text>
-        <Text style={[styles.patternEmoji, { top: '65%', left: '12%', fontSize: 34 }]}>🥂</Text>
-        <Text style={[styles.patternEmoji, { top: '82%', left: '25%', fontSize: 30 }]}>🍷</Text>
-        {/* Cityscape */}
-        <Text style={[styles.patternEmoji, { top: '28%', left: '50%', fontSize: 38 }]}>🏙️</Text>
-        {/* Moon and stars */}
-        <Text style={[styles.patternEmoji, { top: '15%', left: '20%', fontSize: 35 }]}>🌙</Text>
-        <Text style={[styles.patternEmoji, { top: '8%', right: '40%', fontSize: 20 }]}>✨</Text>
-        <Text style={[styles.patternEmoji, { top: '35%', right: '5%', fontSize: 22 }]}>⭐</Text>
-        <Text style={[styles.patternEmoji, { top: '88%', right: '30%', fontSize: 18 }]}>✨</Text>
-        {/* Dining */}
-        <Text style={[styles.patternEmoji, { top: '52%', right: '12%', fontSize: 36 }]}>🍽️</Text>
-        {/* Group of people */}
-        <Text style={[styles.patternEmoji, { top: '75%', left: '40%', fontSize: 38 }]}>👥</Text>
-        {/* Phone with heart */}
-        <Text style={[styles.patternEmoji, { top: '58%', right: '25%', fontSize: 32 }]}>📱</Text>
-        {/* Car */}
-        <Text style={[styles.patternEmoji, { top: '85%', left: '8%', fontSize: 34 }]}>🚗</Text>
-        {/* Champagne bottles */}
-        <Text style={[styles.patternEmoji, { top: '40%', left: '25%', fontSize: 32 }]}>🍾</Text>
-        {/* Party decorations */}
-        <Text style={[styles.patternEmoji, { top: '22%', left: '70%', fontSize: 28 }]}>🎉</Text>
-        {/* Palm trees */}
-        <Text style={[styles.patternEmoji, { top: '32%', right: '35%', fontSize: 30 }]}>🌴</Text>
-        {/* Movie clapper */}
-        <Text style={[styles.patternEmoji, { top: '68%', right: '40%', fontSize: 32 }]}>🎬</Text>
-      </View>
-
       <View style={styles.container}>
         <View style={styles.content}>
           {/* Heart Icon */}
@@ -79,7 +42,7 @@ export default function WelcomeScreen() {
             <Text style={styles.heartIcon}>{heartIcon}</Text>
           </View>
           
-          {/* App Name */}
+          {/* App Name - Larger */}
           <Text style={styles.appName}>{appName}</Text>
           
           {/* Tagline */}
@@ -119,16 +82,6 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
-  patternContainer: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  patternEmoji: {
-    position: 'absolute',
-    fontSize: 40,
-    opacity: 0.15,
-  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -144,7 +97,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: nospiColors.purpleMid,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -154,9 +107,9 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
   },
   appName: {
-    fontSize: 28,
+    fontSize: 48,
     fontWeight: '700',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     letterSpacing: 1,
   },
@@ -167,16 +120,16 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     marginBottom: 60,
-    opacity: 0.95,
+    opacity: 0.8,
     fontWeight: '400',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -186,7 +139,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -199,14 +152,14 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   primaryButtonText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: nospiColors.white,
+    borderColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -214,7 +167,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 18,
     fontWeight: '600',
   },
