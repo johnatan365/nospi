@@ -1,27 +1,62 @@
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import { Picker } from '@react-native-picker/picker';
+
+const COUNTRIES = [
+  'Colombia',
+  'Argentina',
+  'Brasil',
+  'Chile',
+  'Ecuador',
+  'España',
+  'Estados Unidos',
+  'México',
+  'Perú',
+  'Venezuela',
+];
+
+const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
+  'Colombia': ['Medellín', 'Bogotá', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira', 'Santa Marta'],
+  'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata'],
+  'Brasil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza'],
+  'Chile': ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta'],
+  'Ecuador': ['Quito', 'Guayaquil', 'Cuenca', 'Santo Domingo', 'Machala'],
+  'España': ['Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Zaragoza'],
+  'Estados Unidos': ['Nueva York', 'Los Ángeles', 'Chicago', 'Houston', 'Miami'],
+  'México': ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana'],
+  'Perú': ['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Cusco'],
+  'Venezuela': ['Caracas', 'Maracaibo', 'Valencia', 'Barquisimeto', 'Maracay'],
+};
 
 export default function LocationScreen() {
   const router = useRouter();
   const [country, setCountry] = useState('Colombia');
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState('Medellín');
+
+  const handleCountryChange = (selectedCountry: string) => {
+    setCountry(selectedCountry);
+    const cities = CITIES_BY_COUNTRY[selectedCountry] || [];
+    if (cities.length > 0) {
+      setCity(cities[0]);
+    }
+  };
 
   const handleContinue = () => {
-    if (country.trim().length < 2 || city.trim().length < 2) {
-      Alert.alert('Ubicación requerida', 'Por favor ingresa tu país y ciudad.');
+    if (!country || !city) {
+      Alert.alert('Ubicación requerida', 'Por favor selecciona tu país y ciudad.');
       return;
     }
 
-    console.log('User entered location:', country, city);
+    console.log('User selected location:', country, city);
     // TODO: Backend Integration - PUT /api/pre-registration with { country, city }
     router.push('/onboarding/compatibility');
   };
 
-  const canContinue = country.trim().length >= 2 && city.trim().length >= 2;
+  const availableCities = CITIES_BY_COUNTRY[country] || [];
 
   return (
     <LinearGradient
@@ -30,47 +65,67 @@ export default function LocationScreen() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
           <Text style={styles.title}>¿En qué país y ciudad te encuentras?</Text>
           
-          <View style={styles.inputContainer}>
+          <View style={styles.pickerContainer}>
             <Text style={styles.label}>País</Text>
-            <TextInput
-              style={styles.input}
-              value={country}
-              onChangeText={setCountry}
-              placeholder="País"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              maxLength={50}
-            />
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={country}
+                onValueChange={handleCountryChange}
+                style={styles.picker}
+                dropdownIconColor={nospiColors.white}
+                itemStyle={styles.pickerItem}
+              >
+                {COUNTRIES.map((countryOption) => (
+                  <Picker.Item 
+                    key={countryOption} 
+                    label={countryOption} 
+                    value={countryOption}
+                    color={Platform.OS === 'ios' ? nospiColors.white : nospiColors.purpleDark}
+                  />
+                ))}
+              </Picker>
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
+          <View style={styles.pickerContainer}>
             <Text style={styles.label}>Ciudad</Text>
-            <TextInput
-              style={styles.input}
-              value={city}
-              onChangeText={setCity}
-              placeholder="Ciudad"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              maxLength={50}
-            />
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={city}
+                onValueChange={setCity}
+                style={styles.picker}
+                dropdownIconColor={nospiColors.white}
+                itemStyle={styles.pickerItem}
+              >
+                {availableCities.map((cityOption) => (
+                  <Picker.Item 
+                    key={cityOption} 
+                    label={cityOption} 
+                    value={cityOption}
+                    color={Platform.OS === 'ios' ? nospiColors.white : nospiColors.purpleDark}
+                  />
+                ))}
+              </Picker>
+            </View>
           </View>
 
           <TouchableOpacity
-            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            style={styles.continueButton}
             onPress={handleContinue}
-            disabled={!canContinue}
             activeOpacity={0.8}
           >
             <Text style={styles.continueButtonText}>Continuar</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -79,8 +134,11 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
-  container: {
+  scrollView: {
     flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
@@ -96,7 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     textAlign: 'center',
   },
-  inputContainer: {
+  pickerContainer: {
     marginBottom: 24,
   },
   label: {
@@ -105,13 +163,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
-  input: {
+  pickerWrapper: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  picker: {
+    color: nospiColors.white,
+    height: Platform.OS === 'ios' ? 180 : 50,
+  },
+  pickerItem: {
     fontSize: 18,
     color: nospiColors.white,
   },
@@ -128,11 +191,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
-  },
-  continueButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    shadowOpacity: 0,
-    elevation: 0,
   },
   continueButtonText: {
     color: nospiColors.purpleDark,
