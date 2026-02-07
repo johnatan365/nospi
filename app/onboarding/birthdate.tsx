@@ -9,7 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 export default function BirthdateScreen() {
   const router = useRouter();
   const [date, setDate] = useState(new Date(2000, 0, 1));
-  const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
+  const [showPicker, setShowPicker] = useState(false);
 
   const calculateAge = (birthDate: Date) => {
     const today = new Date();
@@ -63,19 +63,14 @@ export default function BirthdateScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
           
-          <View style={styles.dateDisplayContainer}>
+          <TouchableOpacity 
+            style={styles.dateDisplayContainer}
+            onPress={() => setShowPicker(true)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
             <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
-          </View>
-
-          {Platform.OS === 'android' && (
-            <TouchableOpacity 
-              style={styles.dateButton}
-              onPress={() => setShowPicker(true)}
-            >
-              <Text style={styles.dateButtonText}>Cambiar fecha</Text>
-            </TouchableOpacity>
-          )}
+          </TouchableOpacity>
 
           {showPicker && (
             <View style={styles.pickerContainer}>
@@ -89,6 +84,14 @@ export default function BirthdateScreen() {
                 textColor="#FFFFFF"
                 style={styles.picker}
               />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity 
+                  style={styles.doneButton}
+                  onPress={() => setShowPicker(false)}
+                >
+                  <Text style={styles.doneButtonText}>Listo</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   dateDisplayLabel: {
     fontSize: 14,
@@ -155,29 +158,29 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontWeight: '700',
   },
-  dateButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  dateButtonText: {
-    fontSize: 16,
-    color: nospiColors.white,
-    fontWeight: '600',
-  },
   pickerContainer: {
     marginBottom: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 16,
     overflow: 'hidden',
+    paddingVertical: 8,
   },
   picker: {
     width: '100%',
+  },
+  doneButton: {
+    backgroundColor: nospiColors.white,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    color: nospiColors.purpleDark,
+    fontSize: 16,
+    fontWeight: '600',
   },
   ageContainer: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -36,6 +36,8 @@ export default function LocationScreen() {
   const router = useRouter();
   const [country, setCountry] = useState('Colombia');
   const [city, setCity] = useState('Medellín');
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
 
   const handleCountryChange = (selectedCountry: string) => {
     console.log('User selected country:', selectedCountry);
@@ -81,48 +83,24 @@ export default function LocationScreen() {
           
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>País</Text>
-            <View style={styles.selectedValueDisplay}>
+            <TouchableOpacity 
+              style={styles.selectedValueDisplay}
+              onPress={() => setShowCountryPicker(true)}
+              activeOpacity={0.7}
+            >
               <Text style={styles.selectedValueText}>{country}</Text>
-            </View>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={country}
-                onValueChange={handleCountryChange}
-                style={styles.picker}
-                dropdownIconColor={nospiColors.white}
-              >
-                {COUNTRIES.map((countryOption) => (
-                  <Picker.Item 
-                    key={countryOption} 
-                    label={countryOption} 
-                    value={countryOption}
-                  />
-                ))}
-              </Picker>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>Ciudad</Text>
-            <View style={styles.selectedValueDisplay}>
+            <TouchableOpacity 
+              style={styles.selectedValueDisplay}
+              onPress={() => setShowCityPicker(true)}
+              activeOpacity={0.7}
+            >
               <Text style={styles.selectedValueText}>{city}</Text>
-            </View>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={city}
-                onValueChange={handleCityChange}
-                style={styles.picker}
-                dropdownIconColor={nospiColors.white}
-              >
-                {availableCities.map((cityOption) => (
-                  <Picker.Item 
-                    key={cityOption} 
-                    label={cityOption} 
-                    value={cityOption}
-                  />
-                ))}
-              </Picker>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -134,6 +112,86 @@ export default function LocationScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecciona tu país</Text>
+              <TouchableOpacity 
+                onPress={() => setShowCountryPicker(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={country}
+              onValueChange={(value) => {
+                handleCountryChange(value);
+                if (Platform.OS === 'android') {
+                  setShowCountryPicker(false);
+                }
+              }}
+              style={styles.modalPicker}
+            >
+              {COUNTRIES.map((countryOption) => (
+                <Picker.Item 
+                  key={countryOption} 
+                  label={countryOption} 
+                  value={countryOption}
+                />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecciona tu ciudad</Text>
+              <TouchableOpacity 
+                onPress={() => setShowCityPicker(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={city}
+              onValueChange={(value) => {
+                handleCityChange(value);
+                if (Platform.OS === 'android') {
+                  setShowCityPicker(false);
+                }
+              }}
+              style={styles.modalPicker}
+            >
+              {availableCities.map((cityOption) => (
+                <Picker.Item 
+                  key={cityOption} 
+                  label={cityOption} 
+                  value={cityOption}
+                />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -176,25 +234,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.4)',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    padding: 20,
+    alignItems: 'center',
   },
   selectedValueText: {
     fontSize: 20,
     color: nospiColors.white,
     fontWeight: '700',
     textAlign: 'center',
-  },
-  pickerWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  picker: {
-    color: nospiColors.white,
-    height: Platform.OS === 'ios' ? 180 : 50,
   },
   continueButton: {
     backgroundColor: nospiColors.white,
@@ -214,5 +261,43 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontSize: 18,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: nospiColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+  },
+  modalCloseButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
+  },
+  modalPicker: {
+    width: '100%',
+    height: Platform.OS === 'ios' ? 200 : 50,
   },
 });
