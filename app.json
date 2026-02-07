@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Supabase Connect",
@@ -16,7 +17,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.Natively",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["nospi"]
+          }
+        ]
       }
     },
     "android": {
@@ -25,7 +31,20 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.anonymous.Natively",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "nospi",
+              "host": "auth"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -36,7 +55,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "Supabase Connect",
+    "scheme": "nospi",
     "experiments": {
       "typedRoutes": true
     },
