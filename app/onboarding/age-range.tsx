@@ -9,20 +9,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AgeRangeScreen() {
   const router = useRouter();
-  const [minAge, setMinAge] = useState(18);
-  const [maxAge, setMaxAge] = useState(35);
+  const [ageRange, setAgeRange] = useState({ min: 18, max: 35 });
 
   const handleContinue = async () => {
-    console.log('User selected age range:', minAge, '-', maxAge);
+    console.log('User selected age range:', ageRange.min, '-', ageRange.max);
     
     // Save age range to AsyncStorage
-    await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: minAge, max: maxAge }));
+    await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: ageRange.min, max: ageRange.max }));
     
     router.push('/onboarding/location');
   };
 
-  const minAgeText = minAge.toString();
-  const maxAgeText = maxAge.toString();
+  const handleMinChange = (value: number) => {
+    const newMin = Math.round(value);
+    if (newMin < ageRange.max) {
+      setAgeRange({ ...ageRange, min: newMin });
+    }
+  };
+
+  const handleMaxChange = (value: number) => {
+    const newMax = Math.round(value);
+    if (newMax > ageRange.min) {
+      setAgeRange({ ...ageRange, max: newMax });
+    }
+  };
+
+  const minAgeText = ageRange.min.toString();
+  const maxAgeText = ageRange.max.toString();
+  const rangeText = `${minAgeText} - ${maxAgeText} años`;
 
   return (
     <LinearGradient
@@ -36,45 +50,45 @@ export default function AgeRangeScreen() {
           <Text style={styles.title}>¿Qué rango de edad te gustaría conocer en los encuentros grupales?</Text>
           
           <View style={styles.rangeDisplay}>
-            <View style={styles.ageBox}>
-              <Text style={styles.ageLabel}>Mínimo</Text>
-              <Text style={styles.ageValue}>{minAgeText}</Text>
-            </View>
-            <Text style={styles.separator}>-</Text>
-            <View style={styles.ageBox}>
-              <Text style={styles.ageLabel}>Máximo</Text>
-              <Text style={styles.ageValue}>{maxAgeText}</Text>
-            </View>
+            <Text style={styles.rangeText}>{rangeText}</Text>
           </View>
 
-          <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>Edad mínima</Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={18}
-              maximumValue={60}
-              step={1}
-              value={minAge}
-              onValueChange={setMinAge}
-              minimumTrackTintColor={nospiColors.white}
-              maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-              thumbTintColor={nospiColors.white}
-            />
-          </View>
+          <View style={styles.sliderSection}>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderLabelContainer}>
+                <Text style={styles.sliderLabel}>Mínimo</Text>
+                <Text style={styles.sliderValue}>{minAgeText}</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={18}
+                maximumValue={59}
+                step={1}
+                value={ageRange.min}
+                onValueChange={handleMinChange}
+                minimumTrackTintColor={nospiColors.white}
+                maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+                thumbTintColor={nospiColors.white}
+              />
+            </View>
 
-          <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>Edad máxima</Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={18}
-              maximumValue={60}
-              step={1}
-              value={maxAge}
-              onValueChange={setMaxAge}
-              minimumTrackTintColor={nospiColors.white}
-              maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-              thumbTintColor={nospiColors.white}
-            />
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderLabelContainer}>
+                <Text style={styles.sliderLabel}>Máximo</Text>
+                <Text style={styles.sliderValue}>{maxAgeText}</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={19}
+                maximumValue={60}
+                step={1}
+                value={ageRange.max}
+                onValueChange={handleMaxChange}
+                minimumTrackTintColor={nospiColors.white}
+                maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+                thumbTintColor={nospiColors.white}
+              />
+            </View>
           </View>
 
           <TouchableOpacity
@@ -112,42 +126,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rangeDisplay: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 24,
+    paddingHorizontal: 32,
+    borderRadius: 20,
     alignItems: 'center',
     marginBottom: 40,
   },
-  ageBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  ageLabel: {
-    fontSize: 14,
-    color: nospiColors.white,
-    opacity: 0.8,
-    marginBottom: 4,
-  },
-  ageValue: {
-    fontSize: 32,
+  rangeText: {
+    fontSize: 36,
     fontWeight: 'bold',
     color: nospiColors.white,
   },
-  separator: {
-    fontSize: 32,
-    color: nospiColors.white,
-    marginHorizontal: 16,
-  },
-  sliderContainer: {
+  sliderSection: {
     marginBottom: 32,
+  },
+  sliderRow: {
+    marginBottom: 24,
+  },
+  sliderLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   sliderLabel: {
     fontSize: 16,
     color: nospiColors.white,
-    marginBottom: 8,
+    fontWeight: '600',
+  },
+  sliderValue: {
+    fontSize: 20,
+    color: nospiColors.white,
+    fontWeight: 'bold',
   },
   slider: {
     width: '100%',

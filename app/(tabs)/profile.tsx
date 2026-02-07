@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
+import Slider from '@react-native-community/slider';
 
 interface UserProfile {
   id: string;
@@ -368,6 +369,20 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleMinAgeChange = (value: number) => {
+    const newMin = Math.round(value);
+    if (newMin < editAgeRangeMax) {
+      setEditAgeRangeMin(newMin);
+    }
+  };
+
+  const handleMaxAgeChange = (value: number) => {
+    const newMax = Math.round(value);
+    if (newMax > editAgeRangeMin) {
+      setEditAgeRangeMax(newMax);
+    }
+  };
+
   const getPlanName = (planType: string) => {
     switch (planType) {
       case '1_month':
@@ -421,6 +436,9 @@ export default function ProfileScreen() {
   const ageRangeText = `${profile.age_range_min} - ${profile.age_range_max} años`;
   const locationText = `${profile.city}, ${profile.country}`;
   const availableCities = CITIES_BY_COUNTRY[editCountry] || [];
+  const editAgeRangeText = `${editAgeRangeMin} - ${editAgeRangeMax} años`;
+  const editMinAgeText = editAgeRangeMin.toString();
+  const editMaxAgeText = editAgeRangeMax.toString();
 
   return (
     <LinearGradient
@@ -634,22 +652,37 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeMin} - {editAgeRangeMax} años</Text>
-              <View style={styles.ageRangeContainer}>
-                <TextInput
-                  style={styles.ageInput}
-                  value={String(editAgeRangeMin)}
-                  onChangeText={(text) => setEditAgeRangeMin(parseInt(text) || 18)}
-                  keyboardType="number-pad"
-                  placeholder="Min"
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
+              <View style={styles.ageSliderSection}>
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
+                  <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={18}
+                  maximumValue={59}
+                  step={1}
+                  value={editAgeRangeMin}
+                  onValueChange={handleMinAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
                 />
-                <Text style={styles.ageRangeSeparator}>-</Text>
-                <TextInput
-                  style={styles.ageInput}
-                  value={String(editAgeRangeMax)}
-                  onChangeText={(text) => setEditAgeRangeMax(parseInt(text) || 60)}
-                  keyboardType="number-pad"
-                  placeholder="Max"
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Máximo</Text>
+                  <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={19}
+                  maximumValue={60}
+                  step={1}
+                  value={editAgeRangeMax}
+                  onValueChange={handleMaxAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
                 />
               </View>
 
@@ -1166,28 +1199,32 @@ const styles = StyleSheet.create({
   optionButtonTextActive: {
     color: nospiColors.purpleDark,
   },
-  ageRangeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  ageSliderSection: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 8,
   },
-  ageInput: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
+  ageSliderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  ageRangeSeparator: {
-    fontSize: 18,
+  ageSliderLabel: {
+    fontSize: 14,
     color: '#666',
+    fontWeight: '600',
+  },
+  ageSliderValue: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
     fontWeight: 'bold',
+  },
+  ageSlider: {
+    width: '100%',
+    height: 40,
+    marginBottom: 12,
   },
   tagsEditContainer: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -18,6 +18,14 @@ export default function SubscriptionPlansScreen() {
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
+
+  // Reset state when screen is focused
+  useEffect(() => {
+    console.log('Subscription plans screen loaded');
+    // Reset selections to allow re-purchasing
+    setSelectedPayment(null);
+    setProcessing(false);
+  }, []);
 
   const plans = [
     {
@@ -103,7 +111,10 @@ export default function SubscriptionPlansScreen() {
 
     try {
       const selectedPlanData = plans.find(p => p.type === selectedPlan);
-      if (!selectedPlanData) return;
+      if (!selectedPlanData) {
+        setProcessing(false);
+        return;
+      }
 
       const startDate = new Date();
       const endDate = new Date();
@@ -116,6 +127,18 @@ export default function SubscriptionPlansScreen() {
         endDate.setMonth(endDate.getMonth() + 6);
       }
 
+      // First, cancel any existing active subscriptions
+      const { error: cancelError } = await supabase
+        .from('subscriptions')
+        .update({ status: 'cancelled' })
+        .eq('user_id', user?.id)
+        .eq('status', 'active');
+
+      if (cancelError) {
+        console.error('Error cancelling old subscription:', cancelError);
+      }
+
+      // Create new subscription
       const { error } = await supabase
         .from('subscriptions')
         .insert({
@@ -146,9 +169,9 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleSuccessClose = () => {
-    console.log('User closed success modal, navigating to profile');
+    console.log('User closed success modal, navigating to appointments');
     setShowSuccessModal(false);
-    router.push('/(tabs)/profile');
+    router.push('/(tabs)/appointments');
   };
 
   const selectedPlanData = plans.find(p => p.type === selectedPlan);
