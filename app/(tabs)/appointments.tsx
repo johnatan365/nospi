@@ -1,11 +1,12 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface Appointment {
   id: string;
@@ -38,43 +39,66 @@ export default function AppointmentsScreen() {
     push: true,
   });
 
+  // Check for first-time notification prompt when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        checkFirstTimeNotificationPrompt();
+      }
+    }, [user])
+  );
+
   useEffect(() => {
     if (user) {
       loadAppointments();
-      checkFirstTimeNotificationPrompt();
     }
   }, [user, filter]);
 
   const checkFirstTimeNotificationPrompt = async () => {
     try {
+      console.log('Checking if notification prompt should be shown');
       const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
-      if (!hasSeenPrompt) {
-        // Check if user has any confirmed appointments
-        const { data, error } = await supabase
-          .from('appointments')
-          .select('id')
-          .eq('user_id', user?.id)
-          .eq('status', 'confirmada')
-          .limit(1);
+      
+      if (hasSeenPrompt) {
+        console.log('User has already seen notification prompt');
+        return;
+      }
 
-        if (!error && data && data.length > 0) {
-          // User has confirmed appointments, show the prompt
-          console.log('First time showing notification preferences prompt');
-          
-          // Load current preferences
-          const { data: userData } = await supabase
-            .from('users')
-            .select('notification_preferences')
-            .eq('id', user?.id)
-            .single();
+      // Check if user has any confirmed appointments
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('status', 'confirmada')
+        .limit(1);
 
-          if (userData?.notification_preferences) {
-            setNotificationPreferences(userData.notification_preferences);
-          }
+      if (error) {
+        console.error('Error checking appointments for notification prompt:', error);
+        return;
+      }
 
-          setNotificationModalVisible(true);
-          await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+      if (data && data.length > 0) {
+        console.log('User has confirmed appointments, showing notification preferences prompt for first time');
+        
+        // Load current preferences from profile
+        const { data: userData } = await supabase
+          .from('users')
+          .select('notification_preferences')
+          .eq('id', user?.id)
+          .single();
+
+        if (userData?.notification_preferences) {
+          setNotificationPreferences(userData.notification_preferences);
         }
+
+        // Show the modal
+        setNotificationModalVisible(true);
+        
+        // Mark as seen
+        await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+        console.log('Marked notification prompt as seen');
+      } else {
+        console.log('User has no confirmed appointments yet');
       }
     } catch (error) {
       console.error('Error checking notification prompt:', error);
