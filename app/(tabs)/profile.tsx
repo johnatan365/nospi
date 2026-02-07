@@ -7,6 +7,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 
 interface UserProfile {
   id: string;
@@ -44,6 +45,42 @@ interface Subscription {
   auto_renew: boolean;
 }
 
+const COUNTRIES = [
+  'Colombia',
+  'Argentina',
+  'Brasil',
+  'Chile',
+  'Ecuador',
+  'España',
+  'Estados Unidos',
+  'México',
+  'Perú',
+  'Venezuela',
+];
+
+const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
+  'Colombia': ['Medellín', 'Bogotá', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira', 'Santa Marta'],
+  'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata'],
+  'Brasil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza'],
+  'Chile': ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta'],
+  'Ecuador': ['Quito', 'Guayaquil', 'Cuenca', 'Santo Domingo', 'Machala'],
+  'España': ['Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Zaragoza'],
+  'Estados Unidos': ['Nueva York', 'Los Ángeles', 'Chicago', 'Houston', 'Miami'],
+  'México': ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana'],
+  'Perú': ['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Cusco'],
+  'Venezuela': ['Caracas', 'Maracaibo', 'Valencia', 'Barquisimeto', 'Maracay'],
+};
+
+const AVAILABLE_INTERESTS = [
+  'Música', 'Deportes', 'Viajes', 'Cine', 'Arte', 'Lectura', 'Cocina', 
+  'Tecnología', 'Fotografía', 'Baile', 'Yoga', 'Fitness'
+];
+
+const AVAILABLE_PERSONALITY = [
+  'Extrovertido', 'Introvertido', 'Aventurero', 'Tranquilo', 'Creativo',
+  'Analítico', 'Empático', 'Optimista', 'Realista', 'Espontáneo'
+];
+
 export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
   const router = useRouter();
@@ -54,12 +91,19 @@ export default function ProfileScreen() {
   const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editCountry, setEditCountry] = useState('');
   const [editCity, setEditCity] = useState('');
+  const [editInterestedIn, setEditInterestedIn] = useState('');
+  const [editAgeRangeMin, setEditAgeRangeMin] = useState(18);
+  const [editAgeRangeMax, setEditAgeRangeMax] = useState(60);
+  const [editInterests, setEditInterests] = useState<string[]>([]);
+  const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -84,10 +128,15 @@ export default function ProfileScreen() {
 
       console.log('Profile loaded successfully');
       setProfile(data);
-      setEditName(data.name);
-      setEditPhone(data.phone);
-      setEditCountry(data.country);
-      setEditCity(data.city);
+      setEditName(data.name || '');
+      setEditPhone(data.phone || '');
+      setEditCountry(data.country || 'Colombia');
+      setEditCity(data.city || 'Medellín');
+      setEditInterestedIn(data.interested_in || 'ambos');
+      setEditAgeRangeMin(data.age_range_min || 18);
+      setEditAgeRangeMax(data.age_range_max || 60);
+      setEditInterests(data.interests || []);
+      setEditPersonality(data.personality_traits || []);
     } catch (error) {
       console.error('Failed to load profile:', error);
     } finally {
@@ -167,27 +216,34 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      console.log('Uploading photo...');
+      console.log('Uploading photo from URI:', uri);
       
       // Convert URI to blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
       // Create file name
-      const fileExt = uri.split('.').pop();
+      const fileExt = uri.split('.').pop() || 'jpg';
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `profile-photos/${fileName}`;
+      const filePath = `${fileName}`;
+
+      console.log('Uploading to path:', filePath);
 
       // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, blob);
+        .upload(filePath, blob, {
+          cacheControl: '3600',
+          upsert: true,
+        });
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        Alert.alert('Error', 'No se pudo subir la foto');
+        Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
         return;
       }
+
+      console.log('Upload successful:', uploadData);
 
       // Get public URL
       const { data: urlData } = supabase.storage
@@ -195,6 +251,7 @@ export default function ProfileScreen() {
         .getPublicUrl(filePath);
 
       const photoUrl = urlData.publicUrl;
+      console.log('Public URL:', photoUrl);
 
       // Update profile in database
       const { error: updateError } = await supabase
@@ -213,7 +270,7 @@ export default function ProfileScreen() {
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {
       console.error('Failed to upload photo:', error);
-      Alert.alert('Error', 'No se pudo subir la foto');
+      Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
     } finally {
       setUploadingPhoto(false);
     }
@@ -234,6 +291,11 @@ export default function ProfileScreen() {
           phone: editPhone,
           country: editCountry,
           city: editCity,
+          interested_in: editInterestedIn,
+          age_range_min: editAgeRangeMin,
+          age_range_max: editAgeRangeMax,
+          interests: editInterests,
+          personality_traits: editPersonality,
         })
         .eq('id', user?.id);
 
@@ -250,6 +312,11 @@ export default function ProfileScreen() {
         phone: editPhone,
         country: editCountry,
         city: editCity,
+        interested_in: editInterestedIn,
+        age_range_min: editAgeRangeMin,
+        age_range_max: editAgeRangeMax,
+        interests: editInterests,
+        personality_traits: editPersonality,
       } : null);
       setEditModalVisible(false);
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
@@ -282,6 +349,22 @@ export default function ProfileScreen() {
       setProfile({ ...profile, notification_preferences: newPreferences });
     } catch (error) {
       console.error('Failed to update preferences:', error);
+    }
+  };
+
+  const toggleInterest = (interest: string) => {
+    if (editInterests.includes(interest)) {
+      setEditInterests(editInterests.filter(i => i !== interest));
+    } else {
+      setEditInterests([...editInterests, interest]);
+    }
+  };
+
+  const togglePersonality = (trait: string) => {
+    if (editPersonality.includes(trait)) {
+      setEditPersonality(editPersonality.filter(t => t !== trait));
+    } else {
+      setEditPersonality([...editPersonality, trait]);
     }
   };
 
@@ -337,6 +420,7 @@ export default function ProfileScreen() {
   const interestedInText = profile.interested_in === 'hombres' ? 'Hombres' : profile.interested_in === 'mujeres' ? 'Mujeres' : 'Ambos';
   const ageRangeText = `${profile.age_range_min} - ${profile.age_range_max} años`;
   const locationText = `${profile.city}, ${profile.country}`;
+  const availableCities = CITIES_BY_COUNTRY[editCountry] || [];
 
   return (
     <LinearGradient
@@ -483,61 +567,200 @@ export default function ProfileScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar Perfil</Text>
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Editar Perfil</Text>
 
-            <Text style={styles.inputLabel}>Nombre</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Tu nombre"
-              placeholderTextColor="#999"
-            />
+              <Text style={styles.inputLabel}>Nombre</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Tu nombre"
+                placeholderTextColor="#999"
+              />
 
-            <Text style={styles.inputLabel}>Teléfono</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editPhone}
-              onChangeText={setEditPhone}
-              placeholder="Tu teléfono"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-            />
+              <Text style={styles.inputLabel}>Teléfono</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Tu teléfono"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+              />
 
-            <Text style={styles.inputLabel}>País</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editCountry}
-              onChangeText={setEditCountry}
-              placeholder="Tu país"
-              placeholderTextColor="#999"
-            />
+              <Text style={styles.inputLabel}>País</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCountryPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCountry}</Text>
+              </TouchableOpacity>
 
-            <Text style={styles.inputLabel}>Ciudad</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editCity}
-              onChangeText={setEditCity}
-              placeholder="Tu ciudad"
-              placeholderTextColor="#999"
-            />
+              <Text style={styles.inputLabel}>Ciudad</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCityPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCity}</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleSaveProfile}
-              activeOpacity={0.8}
+              <Text style={styles.inputLabel}>Interesado en</Text>
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'hombres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('hombres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'hombres' && styles.optionButtonTextActive]}>
+                    Hombres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'mujeres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('mujeres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'mujeres' && styles.optionButtonTextActive]}>
+                    Mujeres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'ambos' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('ambos')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'ambos' && styles.optionButtonTextActive]}>
+                    Ambos
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeMin} - {editAgeRangeMax} años</Text>
+              <View style={styles.ageRangeContainer}>
+                <TextInput
+                  style={styles.ageInput}
+                  value={String(editAgeRangeMin)}
+                  onChangeText={(text) => setEditAgeRangeMin(parseInt(text) || 18)}
+                  keyboardType="number-pad"
+                  placeholder="Min"
+                />
+                <Text style={styles.ageRangeSeparator}>-</Text>
+                <TextInput
+                  style={styles.ageInput}
+                  value={String(editAgeRangeMax)}
+                  onChangeText={(text) => setEditAgeRangeMax(parseInt(text) || 60)}
+                  keyboardType="number-pad"
+                  placeholder="Max"
+                />
+              </View>
+
+              <Text style={styles.inputLabel}>Intereses</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_INTERESTS.map((interest, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
+                    onPress={() => toggleInterest(interest)}
+                  >
+                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Personalidad</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_PERSONALITY.map((trait, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
+                    onPress={() => togglePersonality(trait)}
+                  >
+                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>
+                      {trait}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEditModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCountry}
+              onValueChange={(value) => {
+                setEditCountry(value);
+                const cities = CITIES_BY_COUNTRY[value] || [];
+                if (cities.length > 0) {
+                  setEditCity(cities[0]);
+                }
+              }}
+              style={styles.picker}
             >
-              <Text style={styles.saveButtonText}>Guardar Cambios</Text>
-            </TouchableOpacity>
+              {COUNTRIES.map((country) => (
+                <Picker.Item key={country} label={country} value={country} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
 
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setEditModalVisible(false)}
-              activeOpacity={0.8}
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCity}
+              onValueChange={(value) => setEditCity(value)}
+              style={styles.picker}
             >
-              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
-            </TouchableOpacity>
+              {availableCities.map((city) => (
+                <Picker.Item key={city} label={city} value={city} />
+              ))}
+            </Picker>
           </View>
         </View>
       </Modal>
@@ -639,7 +862,8 @@ export default function ProfileScreen() {
                   style={styles.cancelPlanButton}
                   onPress={() => {
                     console.log('User wants to cancel subscription');
-                    router.push('/subscription-cancel');
+                    setSubscriptionModalVisible(false);
+                    router.push('/subscription-cancel-confirm');
                   }}
                   activeOpacity={0.8}
                 >
@@ -655,6 +879,7 @@ export default function ProfileScreen() {
                   style={styles.subscribButton}
                   onPress={() => {
                     console.log('User wants to subscribe');
+                    setSubscriptionModalVisible(false);
                     router.push('/subscription-plans');
                   }}
                   activeOpacity={0.8}
@@ -861,12 +1086,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  modalScrollView: {
+    maxHeight: '90%',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
   modalContent: {
     backgroundColor: nospiColors.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 24,
@@ -896,6 +1126,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginBottom: 8,
+  },
+  pickerButton: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  optionButtonActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  optionButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  optionButtonTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  ageRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  ageInput: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  ageRangeSeparator: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  tagsEditContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  tagEdit: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  tagEditActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  tagEditText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tagEditTextActive: {
+    color: nospiColors.purpleDark,
   },
   saveButton: {
     backgroundColor: nospiColors.purpleDark,
@@ -990,5 +1308,39 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: nospiColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+  },
+  pickerModalClose: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
+  },
+  picker: {
+    width: '100%',
+    height: 200,
   },
 });

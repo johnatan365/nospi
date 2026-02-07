@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Appointment {
   id: string;
@@ -29,12 +30,56 @@ export default function AppointmentsScreen() {
   const [filter, setFilter] = useState<FilterType>('todas');
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [notificationModalVisible, setNotificationModalVisible] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    whatsapp: false,
+    email: true,
+    sms: false,
+    push: true,
+  });
 
   useEffect(() => {
     if (user) {
       loadAppointments();
+      checkFirstTimeNotificationPrompt();
     }
   }, [user, filter]);
+
+  const checkFirstTimeNotificationPrompt = async () => {
+    try {
+      const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
+      if (!hasSeenPrompt) {
+        // Check if user has any confirmed appointments
+        const { data, error } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('user_id', user?.id)
+          .eq('status', 'confirmada')
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          // User has confirmed appointments, show the prompt
+          console.log('First time showing notification preferences prompt');
+          
+          // Load current preferences
+          const { data: userData } = await supabase
+            .from('users')
+            .select('notification_preferences')
+            .eq('id', user?.id)
+            .single();
+
+          if (userData?.notification_preferences) {
+            setNotificationPreferences(userData.notification_preferences);
+          }
+
+          setNotificationModalVisible(true);
+          await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking notification prompt:', error);
+    }
+  };
 
   const loadAppointments = async () => {
     try {
@@ -120,6 +165,33 @@ export default function AppointmentsScreen() {
       loadAppointments();
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
+    }
+  };
+
+  const toggleNotification = (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
+    setNotificationPreferences(prev => ({
+      ...prev,
+      [type]: !prev[type],
+    }));
+  };
+
+  const saveNotificationPreferences = async () => {
+    try {
+      console.log('Saving notification preferences:', notificationPreferences);
+      const { error } = await supabase
+        .from('users')
+        .update({ notification_preferences: notificationPreferences })
+        .eq('id', user?.id);
+
+      if (error) {
+        console.error('Error saving preferences:', error);
+        return;
+      }
+
+      console.log('Notification preferences saved successfully');
+      setNotificationModalVisible(false);
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
     }
   };
 
@@ -265,6 +337,7 @@ export default function AppointmentsScreen() {
         )}
       </ScrollView>
 
+      {/* Cancel Appointment Modal */}
       <Modal
         visible={cancelModalVisible}
         transparent
@@ -295,6 +368,75 @@ export default function AppointmentsScreen() {
                 <Text style={styles.modalButtonConfirmText}>Sí, Cancelar</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* First-Time Notification Preferences Modal */}
+      <Modal
+        visible={notificationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNotificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.notificationModalContent}>
+            <Text style={styles.notificationModalTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.notificationModalSubtitle}>
+              ¿Cómo quieres que te recordemos tus citas?
+            </Text>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('whatsapp')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>WhatsApp</Text>
+              <View style={[styles.checkbox, notificationPreferences.whatsapp && styles.checkboxActive]}>
+                {notificationPreferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('email')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Correo Electrónico</Text>
+              <View style={[styles.checkbox, notificationPreferences.email && styles.checkboxActive]}>
+                {notificationPreferences.email && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('sms')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>SMS</Text>
+              <View style={[styles.checkbox, notificationPreferences.sms && styles.checkboxActive]}>
+                {notificationPreferences.sms && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('push')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Notificaciones Push</Text>
+              <View style={[styles.checkbox, notificationPreferences.push && styles.checkboxActive]}>
+                {notificationPreferences.push && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.savePreferencesButton}
+              onPress={saveNotificationPreferences}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.savePreferencesButtonText}>Guardar Preferencias</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -478,6 +620,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonConfirmText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  notificationModalContent: {
+    backgroundColor: nospiColors.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  notificationModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notificationModalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  notificationOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  notificationOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#CCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: nospiColors.purpleDark,
+    borderColor: nospiColors.purpleDark,
+  },
+  checkmark: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  savePreferencesButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  savePreferencesButtonText: {
     color: nospiColors.white,
     fontSize: 16,
     fontWeight: '600',
