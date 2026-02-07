@@ -4,19 +4,20 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NameScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (name.trim().length < 2) {
       Alert.alert('Nombre requerido', 'Por favor ingresa tu nombre.');
       return;
     }
 
     console.log('User entered name:', name);
-    // TODO: Backend Integration - PUT /api/pre-registration with { name }
+    await AsyncStorage.setItem('onboarding_name', name);
     router.push('/onboarding/birthdate');
   };
 

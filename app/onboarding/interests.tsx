@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Common interests similar to Tinder
 const INTERESTS = [
@@ -45,7 +46,7 @@ export default function InterestsScreen() {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedInterests.length < 3) {
       Alert.alert('Selecciona al menos 3 gustos', 'Necesitamos conocer tus intereses para encontrar personas compatibles.');
       return;
@@ -56,7 +57,11 @@ export default function InterestsScreen() {
     }
 
     console.log('User continuing with interests:', selectedInterests, 'and traits:', selectedTraits);
-    // TODO: Backend Integration - POST /api/pre-registration with { interests, personalityTraits }
+    
+    // Save to AsyncStorage
+    await AsyncStorage.setItem('onboarding_interests', JSON.stringify(selectedInterests));
+    await AsyncStorage.setItem('onboarding_personality', JSON.stringify(selectedTraits));
+    
     router.push('/onboarding/name');
   };
 

@@ -38,12 +38,15 @@ export default function PhotoScreen() {
     }
 
     console.log('User continuing with photo:', photoUri);
-    // TODO: Backend Integration - POST /api/upload/profile-photo with photo file
-    // TODO: Backend Integration - PUT /api/pre-registration with { profilePhotoUrl }
+    // TODO: Save photo URI to AsyncStorage for later upload
     router.push('/onboarding/register');
   };
 
-  const canContinue = photoUri !== null;
+  const handleSkip = () => {
+    console.log('User skipped photo upload');
+    // Continue without photo
+    router.push('/onboarding/register');
+  };
 
   return (
     <LinearGradient
@@ -73,12 +76,20 @@ export default function PhotoScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            style={[styles.continueButton, !photoUri && styles.continueButtonDisabled]}
             onPress={handleContinue}
-            disabled={!canContinue}
+            disabled={!photoUri}
             activeOpacity={0.8}
           >
             <Text style={styles.continueButtonText}>Continuar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkip}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.skipButtonText}>Ahora no</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -167,5 +178,21 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontSize: 18,
     fontWeight: '700',
+  },
+  skipButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: 12,
+  },
+  skipButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

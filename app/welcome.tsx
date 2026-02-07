@@ -18,7 +18,7 @@ export default function WelcomeScreen() {
 
   const handleLogin = () => {
     console.log('User tapped Ya tengo una cuenta button');
-    // TODO: Navigate to login screen when implemented
+    router.push('/login');
   };
 
   return (
