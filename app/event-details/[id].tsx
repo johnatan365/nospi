@@ -26,7 +26,6 @@ export default function EventDetailsScreen() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
-  const [showAlreadyConfirmedModal, setShowAlreadyConfirmedModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -91,7 +90,7 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      console.log('User has active subscription, checking for existing appointment');
+      console.log('User has active subscription, creating appointment');
 
       // Check if user already has an appointment for this event
       const { data: existingAppointment } = await supabase
@@ -99,48 +98,23 @@ export default function EventDetailsScreen() {
         .select('*')
         .eq('user_id', user?.id)
         .eq('event_id', id)
-        .maybeSingle();
+        .single();
 
       if (existingAppointment) {
-        if (existingAppointment.status === 'confirmada') {
-          console.log('User already has a confirmed appointment for this event');
-          setConfirming(false);
-          setShowAlreadyConfirmedModal(true);
-          return;
-        } else if (existingAppointment.status === 'cancelada') {
-          console.log('User has a canceled appointment, allowing rescheduling');
-          // Update the canceled appointment to confirmed
-          const { error: updateError } = await supabase
-            .from('appointments')
-            .update({ 
-              status: 'confirmada',
-              payment_status: 'paid',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingAppointment.id);
-
-          if (updateError) {
-            console.error('Error updating appointment:', updateError);
-            setConfirming(false);
-            return;
-          }
-
-          console.log('Appointment rescheduled successfully');
-          await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-          setConfirming(false);
-          router.replace('/(tabs)/appointments');
-          return;
-        }
+        console.log('User already has an appointment for this event');
+        setConfirming(false);
+        router.push('/(tabs)/appointments');
+        return;
       }
 
-      // Create new appointment
+      // Create appointment
       const { error } = await supabase
         .from('appointments')
         .insert({
           user_id: user?.id,
           event_id: id,
           status: 'confirmada',
-          payment_status: 'paid',
+          payment_status: 'completed',
         });
 
       if (error) {
@@ -150,9 +124,8 @@ export default function EventDetailsScreen() {
       }
 
       console.log('Appointment created successfully');
-      await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       setConfirming(false);
-      router.replace('/(tabs)/appointments');
+      router.push('/(tabs)/appointments');
     } catch (error) {
       console.error('Failed to create appointment:', error);
       setConfirming(false);
@@ -248,42 +221,6 @@ export default function EventDetailsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Already Confirmed Modal */}
-      <Modal
-        visible={showAlreadyConfirmedModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAlreadyConfirmedModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cita ya agendada</Text>
-            <Text style={styles.modalMessage}>
-              Ya tienes esta cita confirmada. Puedes verla en la pestaña de Citas.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => {
-                setShowAlreadyConfirmedModal(false);
-                router.replace('/(tabs)/appointments');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalButtonText}>Ver mis citas</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalButtonSecondary}
-              onPress={() => setShowAlreadyConfirmedModal(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalButtonSecondaryText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }
@@ -394,56 +331,5 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: nospiColors.white,
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  modalButton: {
-    backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalButtonText: {
-    color: nospiColors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#E0E0E0',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalButtonSecondaryText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
