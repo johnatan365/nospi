@@ -43,7 +43,12 @@ export default function AppointmentsScreen() {
   useFocusEffect(
     useCallback(() => {
       if (user) {
-        checkFirstTimeNotificationPrompt();
+        // Add a small delay to ensure database has committed any new appointments
+        const timer = setTimeout(() => {
+          checkFirstTimeNotificationPrompt();
+        }, 800);
+        
+        return () => clearTimeout(timer);
       }
     }, [user])
   );
@@ -57,17 +62,25 @@ export default function AppointmentsScreen() {
   const checkFirstTimeNotificationPrompt = async () => {
     try {
       console.log('Checking if notification prompt should be shown');
+      
+      // Check if we should force the check (set after payment)
+      const shouldCheck = await AsyncStorage.getItem('should_check_notification_prompt');
+      if (shouldCheck) {
+        console.log('Force check flag found, removing it');
+        await AsyncStorage.removeItem('should_check_notification_prompt');
+      }
+      
       const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
       
-      if (hasSeenPrompt) {
-        console.log('User has already seen notification prompt');
+      if (hasSeenPrompt && !shouldCheck) {
+        console.log('User has already seen notification prompt and no force check');
         return;
       }
 
-      // Check if user has any confirmed appointments
+      // Check if user has any confirmed appointments (status = 'confirmada')
       const { data, error } = await supabase
         .from('appointments')
-        .select('id')
+        .select('id, status')
         .eq('user_id', user?.id)
         .eq('status', 'confirmada')
         .limit(1);
@@ -76,6 +89,8 @@ export default function AppointmentsScreen() {
         console.error('Error checking appointments for notification prompt:', error);
         return;
       }
+
+      console.log('Confirmed appointments found:', data?.length || 0);
 
       if (data && data.length > 0) {
         console.log('User has confirmed appointments, showing notification preferences prompt for first time');

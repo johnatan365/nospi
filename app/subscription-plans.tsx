@@ -194,7 +194,7 @@ export default function SubscriptionPlansScreen() {
           .select('*')
           .eq('user_id', user?.id)
           .eq('event_id', pendingEventId)
-          .single();
+          .maybeSingle();
 
         if (!existingAppointment) {
           // Create appointment for the pending event
@@ -211,6 +211,8 @@ export default function SubscriptionPlansScreen() {
             console.error('Error creating appointment:', appointmentError);
           } else {
             console.log('Appointment created successfully for pending event');
+            // Set a flag to trigger notification prompt check
+            await AsyncStorage.setItem('should_check_notification_prompt', 'true');
           }
         } else {
           console.log('Appointment already exists for this event');
