@@ -450,19 +450,570 @@ export default function ProfileScreen() {
       end={{ x: 1, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Same content as Android version */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
+            {profile.profile_photo_url ? (
+              <View>
+                <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
+                {uploadingPhoto && (
+                  <View style={styles.photoOverlay}>
+                    <ActivityIndicator size="large" color={nospiColors.white} />
+                  </View>
+                )}
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.profilePhotoPlaceholder}>
+                <Text style={styles.profilePhotoPlaceholderText}>
+                  {profile.name.charAt(0).toUpperCase()}
+                </Text>
+                <View style={styles.editPhotoIcon}>
+                  <Text style={styles.editPhotoIconText}>✏️</Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.name}>{profile.name}</Text>
+          <Text style={styles.age}>{profile.age} años</Text>
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEditPress}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.editButtonText}>Editar Perfil</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Personal</Text>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Email:</Text>
+            <Text style={styles.infoValue}>{profile.email}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Teléfono:</Text>
+            <Text style={styles.infoValue}>{profile.phone}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Género:</Text>
+            <Text style={styles.infoValue}>{genderText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Interesado en:</Text>
+            <Text style={styles.infoValue}>{interestedInText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Rango de edad:</Text>
+            <Text style={styles.infoValue}>{ageRangeText}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ubicación:</Text>
+            <Text style={styles.infoValue}>{locationText}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Intereses</Text>
+          <View style={styles.tagsContainer}>
+            {profile.interests.map((interest, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{interest}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personalidad</Text>
+          <View style={styles.tagsContainer}>
+            {profile.personality_traits.map((trait, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{trait}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.section}
+          onPress={handleNotificationPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
+          <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.section}
+          onPress={handleSubscriptionPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Suscripción y Pagos</Text>
+          {subscription ? (
+            <View>
+              <Text style={styles.subscriptionActive}>Plan Activo: {getPlanName(subscription.plan_type)}</Text>
+              <Text style={styles.subscriptionDetails}>
+                Válido hasta: {formatDate(subscription.end_date)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.subscriptionInactive}>Sin suscripción activa</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* All modals identical to Android version */}
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Editar Perfil</Text>
+
+              <Text style={styles.inputLabel}>Nombre</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Tu nombre"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.inputLabel}>Teléfono</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Tu teléfono"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.inputLabel}>País</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCountryPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCountry}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Ciudad</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCityPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCity}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Interesado en</Text>
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'hombres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('hombres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'hombres' && styles.optionButtonTextActive]}>
+                    Hombres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'mujeres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('mujeres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'mujeres' && styles.optionButtonTextActive]}>
+                    Mujeres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'ambos' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('ambos')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'ambos' && styles.optionButtonTextActive]}>
+                    Ambos
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
+              <View style={styles.ageSliderSection}>
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
+                  <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={18}
+                  maximumValue={59}
+                  step={1}
+                  value={editAgeRangeMin}
+                  onValueChange={handleMinAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Máximo</Text>
+                  <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={19}
+                  maximumValue={60}
+                  step={1}
+                  value={editAgeRangeMax}
+                  onValueChange={handleMaxAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+              </View>
+
+              <Text style={styles.inputLabel}>Intereses</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_INTERESTS.map((interest, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
+                    onPress={() => toggleInterest(interest)}
+                  >
+                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Personalidad</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_PERSONALITY.map((trait, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
+                    onPress={() => togglePersonality(trait)}
+                  >
+                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>
+                      {trait}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEditModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCountry}
+              onValueChange={(value) => {
+                setEditCountry(value);
+                const cities = CITIES_BY_COUNTRY[value] || [];
+                if (cities.length > 0) {
+                  setEditCity(cities[0]);
+                }
+              }}
+              style={styles.picker}
+            >
+              {COUNTRIES.map((country) => (
+                <Picker.Item key={country} label={country} value={country} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCity}
+              onValueChange={(value) => setEditCity(value)}
+              style={styles.picker}
+            >
+              {availableCities.map((city) => (
+                <Picker.Item key={city} label={city} value={city} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Notification Preferences Modal */}
+      <Modal
+        visible={notificationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNotificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.modalSubtitle}>¿Cómo quieres que te recordemos las citas?</Text>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('whatsapp')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>WhatsApp</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.whatsapp && styles.checkboxActive]}>
+                {profile.notification_preferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('email')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Correo Electrónico</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.email && styles.checkboxActive]}>
+                {profile.notification_preferences.email && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('sms')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>SMS</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.sms && styles.checkboxActive]}>
+                {profile.notification_preferences.sms && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('push')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Notificaciones Push</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.push && styles.checkboxActive]}>
+                {profile.notification_preferences.push && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setNotificationModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Subscription Modal */}
+      <Modal
+        visible={subscriptionModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSubscriptionModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Suscripción y Pagos</Text>
+            
+            {subscription ? (
+              <View>
+                <Text style={styles.subscriptionModalActive}>
+                  Plan Activo: {getPlanName(subscription.plan_type)}
+                </Text>
+                <Text style={styles.subscriptionModalDetails}>
+                  Precio: ${subscription.price}
+                </Text>
+                <Text style={styles.subscriptionModalDetails}>
+                  Válido hasta: {formatDate(subscription.end_date)}
+                </Text>
+                <Text style={styles.subscriptionModalDetails}>
+                  Método de pago: {subscription.payment_method}
+                </Text>
+                
+                <TouchableOpacity
+                  style={styles.cancelPlanButton}
+                  onPress={() => {
+                    console.log('User wants to cancel subscription');
+                    setSubscriptionModalVisible(false);
+                    router.push('/subscription-cancel-confirm');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.cancelPlanButtonText}>Cancelar Plan</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.noSubscriptionText}>
+                  No tienes una suscripción activa
+                </Text>
+                <TouchableOpacity
+                  style={styles.subscribButton}
+                  onPress={() => {
+                    console.log('User wants to subscribe');
+                    setSubscriptionModalVisible(false);
+                    router.push('/subscription-plans');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.subscribButtonText}>Ver Planes</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setSubscriptionModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
 
-// Styles identical to Android version
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: nospiColors.white, textAlign: 'center' },
+  header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
+  profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255, 255, 255, 0.3)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: nospiColors.white },
+  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
+  editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: nospiColors.purpleDark },
+  editPhotoIconText: { fontSize: 16 },
+  name: { fontSize: 28, fontWeight: 'bold', color: nospiColors.white, marginBottom: 4 },
+  age: { fontSize: 18, color: nospiColors.white, opacity: 0.9, marginBottom: 16 },
+  editButton: { backgroundColor: 'rgba(255, 255, 255, 0.25)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: nospiColors.white },
+  editButtonText: { color: nospiColors.white, fontSize: 14, fontWeight: '600' },
+  section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
+  sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
+  infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { backgroundColor: nospiColors.purpleLight, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  tagText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
+  subscriptionActive: { fontSize: 16, color: '#4CAF50', fontWeight: '600', marginBottom: 4 },
+  subscriptionDetails: { fontSize: 14, color: '#666' },
+  subscriptionInactive: { fontSize: 14, color: '#666' },
+  signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
+  signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalScrollView: { maxHeight: '90%' },
+  modalScrollContent: { flexGrow: 1 },
+  modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
+  modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
+  modalInput: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: '#333', marginBottom: 8 },
+  pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8 },
+  pickerButtonText: { fontSize: 16, color: '#333' },
+  optionsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  optionButton: { flex: 1, backgroundColor: '#F5F5F5', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: '#E0E0E0' },
+  optionButtonActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  optionButtonText: { fontSize: 14, color: '#666', fontWeight: '600' },
+  optionButtonTextActive: { color: nospiColors.purpleDark },
+  ageSliderSection: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, marginBottom: 8 },
+  ageSliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  ageSliderLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
+  ageSliderValue: { fontSize: 18, color: nospiColors.purpleDark, fontWeight: 'bold' },
+  ageSlider: { width: '100%', height: 40, marginBottom: 12 },
+  tagsEditContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  tagEdit: { backgroundColor: '#F5F5F5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: '#E0E0E0' },
+  tagEditActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  tagEditText: { color: '#666', fontSize: 14, fontWeight: '600' },
+  tagEditTextActive: { color: nospiColors.purpleDark },
+  saveButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
+  saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  notificationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
+  notificationOptionText: { fontSize: 16, color: '#333' },
+  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
+  checkboxActive: { backgroundColor: nospiColors.purpleDark, borderColor: nospiColors.purpleDark },
+  checkmark: { color: nospiColors.white, fontSize: 16, fontWeight: 'bold' },
+  subscriptionModalActive: { fontSize: 18, color: '#4CAF50', fontWeight: 'bold', marginBottom: 12 },
+  subscriptionModalDetails: { fontSize: 16, color: '#666', marginBottom: 8 },
+  cancelPlanButton: { backgroundColor: '#F44336', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
+  cancelPlanButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  noSubscriptionText: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 24 },
+  subscribButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  subscribButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  modalCloseButton: { backgroundColor: '#E0E0E0', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  modalCloseButtonText: { color: '#333', fontSize: 16, fontWeight: '600' },
+  pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  pickerModalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 0, 0, 0.1)' },
+  pickerModalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
+  pickerModalClose: { fontSize: 16, fontWeight: '600', color: nospiColors.purpleMid },
+  picker: { width: '100%', height: 200 },
 });
