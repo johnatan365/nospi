@@ -23,6 +23,9 @@ export default function RegisterScreen() {
     // TODO: Navigate to email registration screen
   };
 
+  const appleIcon = '\uF8FF';
+  const googleIcon = 'G';
+
   return (
     <LinearGradient
       colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
@@ -37,30 +40,29 @@ export default function RegisterScreen() {
           
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
-              style={styles.button}
+              style={styles.buttonWhite}
               onPress={handleAppleSignUp}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonIcon}>🍎</Text>
-              <Text style={styles.buttonText}>Regístrate con Apple</Text>
+              <Text style={styles.appleIcon}>{appleIcon}</Text>
+              <Text style={styles.buttonTextDark}>Regístrate con Apple</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.button}
+              style={styles.buttonWhite}
               onPress={handleGoogleSignUp}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonIcon}>🔍</Text>
-              <Text style={styles.buttonText}>Regístrate con Google</Text>
+              <Text style={styles.googleIcon}>{googleIcon}</Text>
+              <Text style={styles.buttonTextDark}>Regístrate con Google</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.button}
+              style={styles.buttonDark}
               onPress={handleEmailSignUp}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonIcon}>✉️</Text>
-              <Text style={styles.buttonText}>Regístrate con correo electrónico</Text>
+              <Text style={styles.buttonTextLight}>Inscribirse con el correo electrónico</Text>
             </TouchableOpacity>
           </View>
 
@@ -105,11 +107,11 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 32,
   },
-  button: {
+  buttonWhite: {
     backgroundColor: nospiColors.white,
     paddingVertical: 18,
     paddingHorizontal: 24,
-    borderRadius: 16,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -119,14 +121,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  buttonIcon: {
-    fontSize: 24,
-    marginRight: 12,
+  buttonDark: {
+    backgroundColor: '#2C2C2E',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  buttonText: {
-    color: nospiColors.purpleDark,
+  appleIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  googleIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  buttonTextDark: {
+    color: '#000000',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  buttonTextLight: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   termsText: {
     fontSize: 12,

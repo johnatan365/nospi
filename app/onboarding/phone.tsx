@@ -18,7 +18,8 @@ export default function PhoneScreen() {
 
     console.log('User entered phone:', countryCode, phoneNumber);
     // TODO: Backend Integration - PUT /api/pre-registration with { phoneCountryCode, phoneNumber }
-    router.push('/onboarding/photo');
+    // Skip photo screen and go directly to register
+    router.push('/onboarding/register');
   };
 
   const canContinue = phoneNumber.trim().length >= 7;
