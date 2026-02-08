@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
@@ -405,31 +404,21 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   if (!profile) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -443,13 +432,8 @@ export default function ProfileScreen() {
   const editMaxAgeText = editAgeRangeMax.toString();
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
             {profile.profile_photo_url ? (
@@ -934,15 +918,16 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
+    flex: 1,
+    backgroundColor: nospiColors.purpleLight,
+  },
+  scrollView: {
     flex: 1,
   },
   contentContainer: {
@@ -976,7 +961,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: nospiColors.purpleMid,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -986,7 +971,7 @@ const styles = StyleSheet.create({
   profilePhotoPlaceholderText: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
   },
   photoOverlay: {
     position: 'absolute',
@@ -1079,13 +1064,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tag: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: nospiColors.purpleMid,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
   },
   tagText: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1190,7 +1175,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   optionButtonActive: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: nospiColors.purpleMid,
     borderColor: nospiColors.purpleDark,
   },
   optionButtonText: {
@@ -1199,7 +1184,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   optionButtonTextActive: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
   },
   ageSliderSection: {
     backgroundColor: '#F5F5F5',
@@ -1243,7 +1228,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   tagEditActive: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: nospiColors.purpleMid,
     borderColor: nospiColors.purpleDark,
   },
   tagEditText: {
@@ -1252,7 +1237,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tagEditTextActive: {
-    color: nospiColors.purpleDark,
+    color: nospiColors.white,
   },
   saveButton: {
     backgroundColor: nospiColors.purpleDark,

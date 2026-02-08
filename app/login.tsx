@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -229,15 +228,10 @@ export default function LoginScreen() {
   const googleIconText = 'G';
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Iniciar Sesión', headerBackTitle: 'Atrás' }} />
 
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
           <Text style={styles.title}>Bienvenido de nuevo</Text>
           <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
@@ -321,15 +315,16 @@ export default function LoginScreen() {
           ) : null}
         </View>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
+    flex: 1,
+    backgroundColor: nospiColors.purpleLight,
+  },
+  scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
@@ -368,7 +363,7 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(107, 33, 168, 0.3)',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
@@ -405,7 +400,7 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(107, 33, 168, 0.3)',
   },
   dividerText: {
     color: nospiColors.purpleDark,
@@ -427,7 +422,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(107, 33, 168, 0.3)',
   },
   googleIconContainer: {
     width: 20,

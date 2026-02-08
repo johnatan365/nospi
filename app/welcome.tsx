@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 
@@ -29,61 +28,52 @@ export default function WelcomeScreen() {
   const loginButtonText = 'Ya tengo una cuenta';
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
-      <View style={styles.container}>
-        <View style={styles.content}>
-          {/* Heart Icon */}
-          <View style={styles.heartContainer}>
-            <Text style={styles.heartIcon}>{heartIcon}</Text>
-          </View>
+    <View style={styles.container}>
+      <View style={styles.content}>
+        {/* Heart Icon */}
+        <View style={styles.heartContainer}>
+          <Text style={styles.heartIcon}>{heartIcon}</Text>
+        </View>
+        
+        {/* App Name - Larger */}
+        <Text style={styles.appName}>{appName}</Text>
+        
+        {/* Tagline */}
+        <View style={styles.taglineContainer}>
+          <Text style={styles.tagline}>{tagline1}</Text>
+          <Text style={styles.tagline}>{tagline2}</Text>
+        </View>
+        
+        {/* Subtitle */}
+        <Text style={styles.subtitle}>{subtitle}</Text>
+        
+        {/* Buttons */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={styles.primaryButton}
+            onPress={handleStart}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.primaryButtonText}>{startButtonText}</Text>
+          </TouchableOpacity>
           
-          {/* App Name - Larger */}
-          <Text style={styles.appName}>{appName}</Text>
-          
-          {/* Tagline */}
-          <View style={styles.taglineContainer}>
-            <Text style={styles.tagline}>{tagline1}</Text>
-            <Text style={styles.tagline}>{tagline2}</Text>
-          </View>
-          
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>{subtitle}</Text>
-          
-          {/* Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={styles.primaryButton}
-              onPress={handleStart}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryButtonText}>{startButtonText}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.secondaryButton}
-              onPress={handleLogin}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={styles.secondaryButton}
+            onPress={handleLogin}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
     flex: 1,
+    backgroundColor: nospiColors.purpleLight,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
