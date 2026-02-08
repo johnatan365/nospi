@@ -1,7 +1,8 @@
+
 {
   "expo": {
-    "name": "Supabase Connect",
-    "slug": "Supabase Connect",
+    "name": "Nospy",
+    "slug": "Nospy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-cml.png",
@@ -59,7 +60,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "Supabase Connect",
+    "scheme": "nospi",
     "experiments": {
       "typedRoutes": true
     },
