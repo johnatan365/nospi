@@ -1,15 +1,14 @@
-
 {
   "expo": {
     "name": "Nospi",
-    "slug": "nospi",
+    "slug": "Nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
+    "icon": "./assets/images/WhatsApp Image 2026-02-09 at 5.09.10 PM.jpeg",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
+      "image": "./assets/images/WhatsApp Image 2026-02-09 at 5.09.10 PM.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#E9D5FF"
     },
@@ -29,7 +28,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
+        "foregroundImage": "./assets/images/WhatsApp Image 2026-02-09 at 5.09.10 PM.jpeg",
         "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
@@ -60,7 +59,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "nospi",
+    "scheme": "Nospi",
     "experiments": {
       "typedRoutes": true
     },
