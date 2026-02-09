@@ -4,11 +4,11 @@
     "slug": "Nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/WhatsApp Image 2026-02-09 at 5.23.24 PM - Editado.png",
+    "icon": "./assets/images/Dise\u00f1o sin t\u00edtulo (25).png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/WhatsApp Image 2026-02-09 at 5.23.24 PM - Editado.png",
+      "image": "./assets/images/Dise\u00f1o sin t\u00edtulo (25).png",
       "resizeMode": "contain",
       "backgroundColor": "#E9D5FF"
     },
@@ -28,7 +28,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/WhatsApp Image 2026-02-09 at 5.23.24 PM - Editado.png",
+        "foregroundImage": "./assets/images/Dise\u00f1o sin t\u00edtulo (25).png",
         "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
