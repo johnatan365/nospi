@@ -1,11 +1,18 @@
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 
 const { width, height } = Dimensions.get('window');
+
+// Helper to resolve image sources (handles both local require() and remote URLs)
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -20,8 +27,8 @@ export default function WelcomeScreen() {
     router.push('/login');
   };
 
-  const heartIcon = '♥';
-  const appName = 'Nospy';
+  const logoSource = require('@/assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg');
+  const appName = 'Nospi';
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
   const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
@@ -37,12 +44,16 @@ export default function WelcomeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          {/* Heart Icon */}
-          <View style={styles.heartContainer}>
-            <Text style={styles.heartIcon}>{heartIcon}</Text>
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <Image 
+              source={resolveImageSource(logoSource)} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
           
-          {/* App Name - Larger */}
+          {/* App Name */}
           <Text style={styles.appName}>{appName}</Text>
           
           {/* Tagline */}
@@ -93,18 +104,16 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignItems: 'center',
   },
-  heartContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: nospiColors.purpleMid,
+  logoContainer: {
+    width: 160,
+    height: 160,
+    marginBottom: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
   },
-  heartIcon: {
-    fontSize: 48,
-    color: nospiColors.white,
+  logo: {
+    width: '100%',
+    height: '100%',
   },
   appName: {
     fontSize: 48,

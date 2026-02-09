@@ -1,20 +1,21 @@
+
 {
   "expo": {
-    "name": "Supabase Connect",
-    "slug": "Supabase Connect",
+    "name": "Nospi",
+    "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-icon-cml.png",
+    "icon": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/app-icon-cml.png",
+      "image": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#E9D5FF"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
@@ -28,11 +29,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-icon-cml.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
+        "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively",
+      "package": "com.anonymous.nospi",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -51,7 +52,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/final_quest_240x240.png",
+      "favicon": "./assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg",
       "bundler": "metro"
     },
     "plugins": [
@@ -59,7 +60,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "Supabase Connect",
+    "scheme": "nospi",
     "experiments": {
       "typedRoutes": true
     },
