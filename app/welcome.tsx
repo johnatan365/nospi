@@ -27,7 +27,7 @@ export default function WelcomeScreen() {
     router.push('/login');
   };
 
-  const logoSource = require('@/assets/images/71394643-3a81-4a15-a595-5e8519628df4.png');
+  const logoSource = require('@/assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png');
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
   const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
