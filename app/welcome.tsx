@@ -27,8 +27,7 @@ export default function WelcomeScreen() {
     router.push('/login');
   };
 
-  const logoSource = require('@/assets/images/b25abd6c-b8c1-4724-94f3-4ca5a96d72c9.jpeg');
-  const appName = 'Nospi';
+  const logoSource = require('@/assets/images/d0c4d52c-b6b0-4ee7-85d2-428121367fbc.png');
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
   const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
@@ -44,7 +43,7 @@ export default function WelcomeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          {/* Logo */}
+          {/* Logo - Más grande */}
           <View style={styles.logoContainer}>
             <Image 
               source={resolveImageSource(logoSource)} 
@@ -52,9 +51,6 @@ export default function WelcomeScreen() {
               resizeMode="contain"
             />
           </View>
-          
-          {/* App Name */}
-          <Text style={styles.appName}>{appName}</Text>
           
           {/* Tagline */}
           <View style={styles.taglineContainer}>
@@ -105,22 +101,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoContainer: {
-    width: 160,
-    height: 160,
-    marginBottom: 24,
+    width: 240,
+    height: 240,
+    marginBottom: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
     width: '100%',
     height: '100%',
-  },
-  appName: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-    letterSpacing: 1,
   },
   taglineContainer: {
     alignItems: 'center',
