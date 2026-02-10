@@ -36,10 +36,10 @@ export default function WelcomeScreen() {
 
   return (
     <LinearGradient
-      colors={['#9333EA', '#cc00ff', '#E946F5']}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
@@ -118,13 +118,13 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     marginBottom: 60,
     opacity: 0.9,
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -150,14 +150,14 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   primaryButtonText: {
-    color: '#cc00ff',
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: nospiColors.white,
+    borderColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     fontSize: 18,
     fontWeight: '600',
   },
