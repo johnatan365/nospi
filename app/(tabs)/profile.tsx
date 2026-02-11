@@ -101,12 +101,12 @@ export default function ProfileScreen() {
   }, [user]);
 
   const loadProfile = async () => {
+    setLoading(true);
     try {
       console.log('Loading user profile...');
       
       if (!user?.id) {
         console.log('No user ID available');
-        setLoading(false);
         return;
       }
 
@@ -114,25 +114,30 @@ export default function ProfileScreen() {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .limit(1);
 
       if (error) {
         console.error('Error loading profile:', error);
-        setLoading(false);
         return;
       }
 
+      if (!data || data.length === 0) {
+        console.log('No profile data found');
+        return;
+      }
+
+      const profileData = data[0];
       console.log('Profile loaded successfully');
-      setProfile(data);
-      setEditName(data.name || '');
-      setEditPhone(data.phone || '');
-      setEditCountry(data.country || 'Colombia');
-      setEditCity(data.city || 'Medellín');
-      setEditInterestedIn(data.interested_in || 'ambos');
-      setEditAgeRangeMin(data.age_range_min || 18);
-      setEditAgeRangeMax(data.age_range_max || 60);
-      setEditInterests(data.interests || []);
-      setEditPersonality(data.personality_traits || []);
+      setProfile(profileData);
+      setEditName(profileData.name || '');
+      setEditPhone(profileData.phone || '');
+      setEditCountry(profileData.country || 'Colombia');
+      setEditCity(profileData.city || 'Medellín');
+      setEditInterestedIn(profileData.interested_in || 'ambos');
+      setEditAgeRangeMin(profileData.age_range_min || 18);
+      setEditAgeRangeMax(profileData.age_range_max || 60);
+      setEditInterests(profileData.interests || []);
+      setEditPersonality(profileData.personality_traits || []);
     } catch (error) {
       console.error('Failed to load profile:', error);
     } finally {

@@ -165,10 +165,11 @@ export default function SubscriptionPlansScreen() {
                   </View>
                 )}
                 <Image 
-                  source={require('@/assets/images/5c84b8fa-f48b-4ce9-bd6d-401132a61271.png')} 
+                  source={require('@/assets/images/a1e488fd-eb8f-46c7-9f63-2509b2c9795f.png')} 
                   style={styles.paymentIcon}
                   resizeMode="contain"
                 />
+                <Text style={styles.paymentMethodLabel}>Google Pay</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -186,10 +187,11 @@ export default function SubscriptionPlansScreen() {
                   </View>
                 )}
                 <Image 
-                  source={require('@/assets/images/5c84b8fa-f48b-4ce9-bd6d-401132a61271.png')} 
+                  source={require('@/assets/images/ebb112d6-8a13-4a7a-9976-1e914bb86422.png')} 
                   style={styles.paymentIcon}
                   resizeMode="contain"
                 />
+                <Text style={styles.paymentMethodLabel}>Apple Pay</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -225,6 +227,7 @@ export default function SubscriptionPlansScreen() {
                 style={styles.paymentIconPSE}
                 resizeMode="contain"
               />
+              <Text style={styles.paymentMethodLabel}>PSE</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -403,12 +406,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   paymentIcon: {
-    width: 120,
-    height: 40,
+    width: 80,
+    height: 32,
+    marginRight: 12,
   },
   paymentIconPSE: {
-    width: 80,
-    height: 40,
+    width: 60,
+    height: 32,
+    marginRight: 12,
+  },
+  paymentMethodLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
