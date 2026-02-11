@@ -12,6 +12,11 @@ interface Event {
   date: string;
   time: string;
   location: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number | null;
+  start_time: string | null;
   max_participants: number;
   current_participants: number;
   status: string;
@@ -31,7 +36,7 @@ export default function EventsScreen() {
       console.log('Loading events...');
       const { data, error } = await supabase
         .from('events')
-        .select('*')
+        .select('id, type, date, time, location, address, latitude, longitude, radius_meters, start_time, max_participants, current_participants, status')
         .eq('status', 'active')
         .order('date', { ascending: true });
 
@@ -96,6 +101,7 @@ export default function EventsScreen() {
           const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
           const dateText = formatDate(event.date);
           const spotsText = `${event.current_participants}/${event.max_participants} personas`;
+          const locationText = event.address || event.location;
 
           return (
             <TouchableOpacity
@@ -113,7 +119,7 @@ export default function EventsScreen() {
               </View>
 
               <Text style={styles.eventDate}>{dateText}</Text>
-              <Text style={styles.eventLocation}>{event.location}</Text>
+              <Text style={styles.eventLocation}>{locationText}</Text>
               <Text style={styles.eventSpots}>{spotsText}</Text>
             </TouchableOpacity>
           );

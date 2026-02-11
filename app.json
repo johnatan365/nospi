@@ -17,6 +17,8 @@
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -33,6 +35,12 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.nospi",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "POST_NOTIFICATIONS"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -57,7 +65,21 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
+          "color": "#E9D5FF",
+          "sounds": []
+        }
+      ]
     ],
     "scheme": "Nospi",
     "experiments": {

@@ -14,6 +14,11 @@ interface Event {
   date: string;
   time: string;
   location: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number | null;
+  start_time: string | null;
   max_participants: number;
   current_participants: number;
   status: string;
@@ -194,6 +199,13 @@ export default function EventDetailsScreen() {
             <Text style={styles.detailLabel}>Lugar:</Text>
             <Text style={styles.detailValue}>{event.location}</Text>
           </View>
+
+          {event.address && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Dirección:</Text>
+              <Text style={styles.detailValue}>{event.address}</Text>
+            </View>
+          )}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Participantes:</Text>
