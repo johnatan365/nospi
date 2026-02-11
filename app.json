@@ -4,11 +4,11 @@
     "slug": "Nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/ffe32dbc-946e-4446-b3eb-2c9d2c908768.png",
+    "icon": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/ffe32dbc-946e-4446-b3eb-2c9d2c908768.png",
+      "image": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
       "resizeMode": "contain",
       "backgroundColor": "#E9D5FF"
     },
@@ -28,7 +28,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/ffe32dbc-946e-4446-b3eb-2c9d2c908768.png",
+        "foregroundImage": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
         "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
@@ -51,7 +51,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/ffe32dbc-946e-4446-b3eb-2c9d2c908768.png",
+      "favicon": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
       "bundler": "metro"
     },
     "plugins": [
