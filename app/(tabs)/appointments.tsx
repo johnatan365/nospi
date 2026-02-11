@@ -123,6 +123,14 @@ export default function AppointmentsScreen() {
   const loadAppointments = async () => {
     try {
       console.log('Loading appointments with filter:', filter);
+      
+      if (!user?.id) {
+        console.log('No user ID available');
+        setAppointments([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('appointments')
         .select(`
@@ -138,7 +146,7 @@ export default function AppointmentsScreen() {
             location
           )
         `)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (filter === 'confirmadas') {
@@ -153,6 +161,8 @@ export default function AppointmentsScreen() {
 
       if (error) {
         console.error('Error loading appointments:', error);
+        setAppointments([]);
+        setLoading(false);
         return;
       }
 
@@ -160,6 +170,7 @@ export default function AppointmentsScreen() {
       setAppointments(data || []);
     } catch (error) {
       console.error('Failed to load appointments:', error);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }

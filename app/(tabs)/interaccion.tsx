@@ -157,26 +157,32 @@ export default function InteraccionScreen() {
         .eq('status', 'confirmada')
         .eq('payment_status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (error) {
         console.error('Error loading appointment:', error);
         setAppointment(null);
-      } else if (data) {
-        console.log('Appointment loaded:', data);
-        setAppointment(data as any);
-        setLocationConfirmed(data.location_confirmed || false);
-        setExperienceStarted(data.experience_started || false);
-        setUserPresented(data.presented || false);
-        
-        if (data.event && data.event.start_time) {
-          checkIfEventDay(data.event.start_time);
-          scheduleNotifications(data.event.start_time);
-        }
-      } else {
+        setLoading(false);
+        return;
+      }
+      
+      if (!data || data.length === 0) {
         console.log('No confirmed appointment found');
         setAppointment(null);
+        setLoading(false);
+        return;
+      }
+
+      const appointmentData = data[0];
+      console.log('Appointment loaded:', appointmentData);
+      setAppointment(appointmentData as any);
+      setLocationConfirmed(appointmentData.location_confirmed || false);
+      setExperienceStarted(appointmentData.experience_started || false);
+      setUserPresented(appointmentData.presented || false);
+      
+      if (appointmentData.event && appointmentData.event.start_time) {
+        checkIfEventDay(appointmentData.event.start_time);
+        scheduleNotifications(appointmentData.event.start_time);
       }
     } catch (error) {
       console.error('Failed to load appointment:', error);

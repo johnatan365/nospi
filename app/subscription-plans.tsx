@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Modal, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
@@ -164,7 +164,11 @@ export default function SubscriptionPlansScreen() {
                     <Text style={styles.checkmarkText}>✓</Text>
                   </View>
                 )}
-                <Text style={styles.paymentButtonText}>Google Pay</Text>
+                <Image 
+                  source={require('@/assets/images/5c84b8fa-f48b-4ce9-bd6d-401132a61271.png')} 
+                  style={styles.paymentIcon}
+                  resizeMode="contain"
+                />
               </View>
             </TouchableOpacity>
           )}
@@ -181,7 +185,11 @@ export default function SubscriptionPlansScreen() {
                     <Text style={styles.checkmarkText}>✓</Text>
                   </View>
                 )}
-                <Text style={styles.paymentButtonText}>Apple Pay</Text>
+                <Image 
+                  source={require('@/assets/images/5c84b8fa-f48b-4ce9-bd6d-401132a61271.png')} 
+                  style={styles.paymentIcon}
+                  resizeMode="contain"
+                />
               </View>
             </TouchableOpacity>
           )}
@@ -197,7 +205,7 @@ export default function SubscriptionPlansScreen() {
                   <Text style={styles.checkmarkText}>✓</Text>
                 </View>
               )}
-              <Text style={styles.paymentButtonText}>Tarjeta de Crédito/Débito</Text>
+              <Text style={styles.paymentButtonText}>💳 Tarjeta de Crédito/Débito</Text>
             </View>
           </TouchableOpacity>
 
@@ -212,7 +220,11 @@ export default function SubscriptionPlansScreen() {
                   <Text style={styles.checkmarkText}>✓</Text>
                 </View>
               )}
-              <Text style={styles.paymentButtonText}>PSE</Text>
+              <Image 
+                source={require('@/assets/images/fe290afc-0bd7-49af-a400-0a591afcb6a2.png')} 
+                style={styles.paymentIconPSE}
+                resizeMode="contain"
+              />
             </View>
           </TouchableOpacity>
         </View>
@@ -389,6 +401,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     textAlign: 'center',
+  },
+  paymentIcon: {
+    width: 120,
+    height: 40,
+  },
+  paymentIconPSE: {
+    width: 80,
+    height: 40,
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

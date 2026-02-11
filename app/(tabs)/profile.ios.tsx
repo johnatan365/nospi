@@ -103,14 +103,22 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     try {
       console.log('Loading user profile...');
+      
+      if (!user?.id) {
+        console.log('No user ID available');
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
 
       if (error) {
         console.error('Error loading profile:', error);
+        setLoading(false);
         return;
       }
 
