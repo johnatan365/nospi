@@ -8,97 +8,24 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type PlanType = '1_month' | '3_months' | '6_months';
 type PaymentMethod = 'google_pay' | 'apple_pay' | 'card' | 'pse';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('3_months');
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
 
-  // Reset state when screen is focused
   useEffect(() => {
-    console.log('Subscription plans screen loaded');
-    // Reset selections to allow re-purchasing
+    console.log('Payment screen loaded - $5 per event');
     setSelectedPayment(null);
     setProcessing(false);
   }, []);
 
-  const plans = [
-    {
-      type: '1_month' as PlanType,
-      duration: '1 Mes',
-      price: 8.49,
-      pricePerWeek: 2.12,
-      savings: null,
-    },
-    {
-      type: '3_months' as PlanType,
-      duration: '3 Meses',
-      price: 19.99,
-      originalPrice: 25.47,
-      pricePerWeek: 1.67,
-      savings: '22%',
-    },
-    {
-      type: '6_months' as PlanType,
-      duration: '6 Meses',
-      price: 26.99,
-      originalPrice: 50.94,
-      pricePerWeek: 1.12,
-      savings: '47%',
-    },
-  ];
-
-  const benefits = [
-    {
-      icon: '✨',
-      title: 'Acceso ilimitado',
-      description: 'Conoce nuevas personas a través de cenas, bebidas y experiencias exclusivas de Nospi que ocurren cada semana. Tu ciudad se volvió mucho más social.',
-    },
-    {
-      icon: '🎉',
-      title: 'Siempre algo nuevo',
-      description: 'Lugares frescos, caras nuevas, nuevas vibras - cada semana se siente diferente.',
-    },
-    {
-      icon: '💜',
-      title: 'Conexiones reales',
-      description: 'Después de cada evento, conecta y mantente en contacto con personas con las que realmente conectaste.',
-    },
-    {
-      icon: '🔄',
-      title: 'Flexibilidad total',
-      description: 'Cancela en cualquier momento. Cambia tu plan u obtén un reembolso dentro de 14 días - sin ataduras.',
-    },
-    {
-      icon: '🚀',
-      title: 'Y apenas estamos comenzando',
-      description: 'Pronto: chats grupales, mapas, nuevos tipos de eventos y más formas de hacer que tu ciudad se sienta como en casa.',
-    },
-  ];
-
-  const handlePlanSelect = (planType: PlanType) => {
-    console.log('User selected plan:', planType);
-    setSelectedPlan(planType);
-  };
-
   const handlePaymentSelect = (method: PaymentMethod) => {
     console.log('User selected payment method:', method);
     setSelectedPayment(method);
-  };
-
-  const formatEndDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('es-ES', options);
   };
 
   const handleContinue = async () => {
@@ -108,87 +35,15 @@ export default function SubscriptionPlansScreen() {
     }
 
     setProcessing(true);
-    console.log('Processing payment for plan:', selectedPlan, 'with method:', selectedPayment);
+    console.log('Processing $5 payment for event with method:', selectedPayment);
 
     try {
-      const selectedPlanData = plans.find(p => p.type === selectedPlan);
-      if (!selectedPlanData) {
-        setProcessing(false);
-        return;
-      }
-
-      const startDate = new Date();
-      const endDate = new Date();
-      
-      if (selectedPlan === '1_month') {
-        endDate.setMonth(endDate.getMonth() + 1);
-      } else if (selectedPlan === '3_months') {
-        endDate.setMonth(endDate.getMonth() + 3);
-      } else if (selectedPlan === '6_months') {
-        endDate.setMonth(endDate.getMonth() + 6);
-      }
-
-      // Check if user already has a subscription record
-      const { data: existingSubscription } = await supabase
-        .from('subscriptions')
-        .select('id')
-        .eq('user_id', user?.id)
-        .maybeSingle();
-
-      if (existingSubscription) {
-        // Update existing subscription
-        console.log('Updating existing subscription');
-        const { error } = await supabase
-          .from('subscriptions')
-          .update({
-            plan_type: selectedPlan,
-            price: selectedPlanData.price,
-            status: 'active',
-            start_date: startDate.toISOString(),
-            end_date: endDate.toISOString(),
-            payment_method: selectedPayment,
-            auto_renew: true,
-          })
-          .eq('user_id', user?.id);
-
-        if (error) {
-          console.error('Error updating subscription:', error);
-          setProcessing(false);
-          return;
-        }
-      } else {
-        // Create new subscription
-        console.log('Creating new subscription');
-        const { error } = await supabase
-          .from('subscriptions')
-          .insert({
-            user_id: user?.id,
-            plan_type: selectedPlan,
-            price: selectedPlanData.price,
-            status: 'active',
-            start_date: startDate.toISOString(),
-            end_date: endDate.toISOString(),
-            payment_method: selectedPayment,
-            auto_renew: true,
-          });
-
-        if (error) {
-          console.error('Error creating subscription:', error);
-          setProcessing(false);
-          return;
-        }
-      }
-
-      console.log('Subscription processed successfully');
-
-      // Check if there's a pending event confirmation
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      console.log('Checking for pending event confirmation:', pendingEventId);
+      console.log('Processing payment for event:', pendingEventId);
 
       if (pendingEventId) {
-        console.log('Found pending event, creating appointment for event:', pendingEventId);
+        console.log('Creating appointment for event:', pendingEventId);
         
-        // Check if appointment already exists
         const { data: existingAppointment } = await supabase
           .from('appointments')
           .select('*')
@@ -197,37 +52,35 @@ export default function SubscriptionPlansScreen() {
           .maybeSingle();
 
         if (!existingAppointment) {
-          // Create appointment for the pending event
           const { error: appointmentError } = await supabase
             .from('appointments')
             .insert({
               user_id: user?.id,
               event_id: pendingEventId,
               status: 'confirmada',
-              payment_status: 'completed',
+              payment_status: 'paid',
             });
 
           if (appointmentError) {
             console.error('Error creating appointment:', appointmentError);
+            setProcessing(false);
+            return;
           } else {
-            console.log('Appointment created successfully for pending event');
-            // Set a flag to trigger notification prompt check
+            console.log('Appointment created successfully');
             await AsyncStorage.setItem('should_check_notification_prompt', 'true');
           }
         } else {
           console.log('Appointment already exists for this event');
         }
 
-        // Remove the pending event from AsyncStorage
         await AsyncStorage.removeItem('pending_event_confirmation');
         console.log('Removed pending event from AsyncStorage');
       }
 
-      setSubscriptionEndDate(formatEndDate(endDate));
       setProcessing(false);
       setShowSuccessModal(true);
     } catch (error) {
-      console.error('Failed to process subscription:', error);
+      console.error('Failed to process payment:', error);
       setProcessing(false);
     }
   };
@@ -238,7 +91,6 @@ export default function SubscriptionPlansScreen() {
     router.replace('/(tabs)/appointments');
   };
 
-  const selectedPlanData = plans.find(p => p.type === selectedPlan);
   const showGooglePay = Platform.OS === 'android' || Platform.OS === 'web';
   const showApplePay = Platform.OS === 'ios';
 
@@ -249,62 +101,51 @@ export default function SubscriptionPlansScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <Stack.Screen options={{ headerShown: true, title: 'Nuestros Planes', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Nuestros planes</Text>
+        <Text style={styles.title}>Pago del Evento</Text>
         <Text style={styles.subtitle}>
-          Los miembros tienen hasta un 93% más de probabilidades de encontrar conexiones duraderas
+          Paga $5 USD para confirmar tu asistencia a este evento
         </Text>
 
-        <View style={styles.plansContainer}>
-          {plans.map((plan) => {
-            const isSelected = selectedPlan === plan.type;
-            const pricePerWeekText = `$${plan.pricePerWeek}/semana`;
-            const priceText = `$${plan.price}`;
-            const originalPriceText = plan.originalPrice ? `$${plan.originalPrice}` : null;
-
-            return (
-              <TouchableOpacity
-                key={plan.type}
-                style={[styles.planCard, isSelected && styles.planCardSelected]}
-                onPress={() => handlePlanSelect(plan.type)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.planHeader}>
-                  <View style={styles.planRadio}>
-                    {isSelected && <View style={styles.planRadioInner} />}
-                  </View>
-                  <View style={styles.planInfo}>
-                    <Text style={styles.planDuration}>{plan.duration}</Text>
-                    {originalPriceText && (
-                      <Text style={styles.planOriginalPrice}>{originalPriceText}</Text>
-                    )}
-                    <Text style={styles.planPrice}>{priceText}</Text>
-                  </View>
-                  <View style={styles.planRight}>
-                    {plan.savings && (
-                      <View style={styles.savingsBadge}>
-                        <Text style={styles.savingsText}>Ahorra {plan.savings}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.planPricePerWeek}>{pricePerWeekText}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.priceCard}>
+          <Text style={styles.priceLabel}>Precio por evento</Text>
+          <Text style={styles.priceAmount}>$5.00 USD</Text>
+          <Text style={styles.priceDescription}>
+            Pago único por evento. Sin suscripciones ni cargos recurrentes.
+          </Text>
         </View>
 
         <View style={styles.benefitsContainer}>
-          {benefits.map((benefit, index) => (
-            <View key={index} style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>{benefit.icon}</Text>
-              <View style={styles.benefitText}>
-                <Text style={styles.benefitTitle}>{benefit.title}</Text>
-                <Text style={styles.benefitDescription}>{benefit.description}</Text>
-              </View>
+          <View style={styles.benefitItem}>
+            <Text style={styles.benefitIcon}>✨</Text>
+            <View style={styles.benefitText}>
+              <Text style={styles.benefitTitle}>Acceso al evento</Text>
+              <Text style={styles.benefitDescription}>
+                Confirma tu lugar en el evento seleccionado
+              </Text>
             </View>
-          ))}
+          </View>
+
+          <View style={styles.benefitItem}>
+            <Text style={styles.benefitIcon}>🎉</Text>
+            <View style={styles.benefitText}>
+              <Text style={styles.benefitTitle}>Conoce gente nueva</Text>
+              <Text style={styles.benefitDescription}>
+                Conecta con personas afines en un ambiente relajado
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.benefitItem}>
+            <Text style={styles.benefitIcon}>💜</Text>
+            <View style={styles.benefitText}>
+              <Text style={styles.benefitTitle}>Experiencia única</Text>
+              <Text style={styles.benefitDescription}>
+                Disfruta de una experiencia social inolvidable
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.paymentSection}>
@@ -375,13 +216,9 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         </View>
 
-        {selectedPlanData && (
-          <View style={styles.summaryContainer}>
-            <Text style={styles.summaryText}>
-              ${selectedPlanData.price} cada {selectedPlan === '1_month' ? 'mes' : selectedPlan === '3_months' ? '3 meses' : '6 meses'}
-            </Text>
-          </View>
-        )}
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryText}>Total a pagar: $5.00 USD</Text>
+        </View>
 
         <TouchableOpacity
           style={[styles.continueButton, (!selectedPayment || processing) && styles.continueButtonDisabled]}
@@ -392,7 +229,7 @@ export default function SubscriptionPlansScreen() {
           {processing ? (
             <ActivityIndicator color={nospiColors.purpleDark} />
           ) : (
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>Pagar $5.00</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -408,14 +245,14 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successIcon}>✓</Text>
             <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
             <Text style={styles.successMessage}>
-              Tu plan está activo hasta el {subscriptionEndDate}
+              Tu asistencia al evento ha sido confirmada
             </Text>
             <TouchableOpacity
               style={styles.successButton}
               onPress={handleSuccessClose}
               activeOpacity={0.8}
             >
-              <Text style={styles.successButtonText}>Continuar</Text>
+              <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -448,80 +285,34 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 24,
   },
-  plansContainer: {
-    marginBottom: 32,
-  },
-  planCard: {
+  priceCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  planCardSelected: {
-    borderColor: nospiColors.purpleDark,
-    backgroundColor: nospiColors.white,
-  },
-  planHeader: {
-    flexDirection: 'row',
+    padding: 32,
+    marginBottom: 24,
     alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  planRadio: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: nospiColors.purpleDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  planRadioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: nospiColors.purpleDark,
-  },
-  planInfo: {
-    flex: 1,
-  },
-  planDuration: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  planOriginalPrice: {
-    fontSize: 14,
-    color: '#999',
-    textDecorationLine: 'line-through',
-    marginBottom: 2,
-  },
-  planPrice: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  planRight: {
-    alignItems: 'flex-end',
-  },
-  savingsBadge: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+  priceLabel: {
+    fontSize: 16,
+    color: '#666',
     marginBottom: 8,
   },
-  savingsText: {
-    color: nospiColors.white,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  planPricePerWeek: {
-    fontSize: 18,
+  priceAmount: {
+    fontSize: 48,
     fontWeight: 'bold',
-    color: '#333',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  priceDescription: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   benefitsContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
