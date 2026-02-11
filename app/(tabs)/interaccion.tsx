@@ -8,6 +8,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
+import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 
 interface Event {
   id: string;
@@ -710,38 +711,7 @@ export default function InteraccionScreen() {
   }
 
   if (allPresented) {
-    return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>¡Listos para comenzar!</Text>
-          <Text style={styles.subtitle}>Todos se han presentado</Text>
-
-          <View style={styles.successCard}>
-            <Text style={styles.successIcon}>🎉</Text>
-            <Text style={styles.successTitle}>¡Excelente!</Text>
-            <Text style={styles.successMessage}>
-              Todos los participantes activos se han presentado. La dinámica del juego comenzará pronto.
-            </Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Participantes Activos: {activeParticipants.length}</Text>
-            <Text style={styles.infoCardText}>
-              Solo los participantes activos pueden:
-            </Text>
-            <Text style={styles.infoCardBullet}>• Aparecer en ruleta</Text>
-            <Text style={styles.infoCardBullet}>• Recibir preguntas</Text>
-            <Text style={styles.infoCardBullet}>• Ser puntuados</Text>
-            <Text style={styles.infoCardBullet}>• Competir por el premio</Text>
-          </View>
-        </ScrollView>
-      </LinearGradient>
-    );
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants} />;
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
