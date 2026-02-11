@@ -17,8 +17,8 @@
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -69,7 +69,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia."
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
         }
       ],
       [
