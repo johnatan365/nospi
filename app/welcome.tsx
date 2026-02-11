@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 
@@ -34,53 +35,62 @@ export default function WelcomeScreen() {
   const loginButtonText = 'Ya tengo una cuenta';
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        {/* Logo - Más grande */}
-        <View style={styles.logoContainer}>
-          <Image 
-            source={resolveImageSource(logoSource)} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-        
-        {/* Tagline */}
-        <View style={styles.taglineContainer}>
-          <Text style={styles.tagline}>{tagline1}</Text>
-          <Text style={styles.tagline}>{tagline2}</Text>
-        </View>
-        
-        {/* Subtitle */}
-        <Text style={styles.subtitle}>{subtitle}</Text>
-        
-        {/* Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.primaryButton}
-            onPress={handleStart}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryButtonText}>{startButtonText}</Text>
-          </TouchableOpacity>
+    <LinearGradient
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      style={styles.gradient}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
+      <View style={styles.container}>
+        <View style={styles.content}>
+          {/* Logo - Más grande */}
+          <View style={styles.logoContainer}>
+            <Image 
+              source={resolveImageSource(logoSource)} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
           
-          <TouchableOpacity 
-            style={styles.secondaryButton}
-            onPress={handleLogin}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
-          </TouchableOpacity>
+          {/* Tagline */}
+          <View style={styles.taglineContainer}>
+            <Text style={styles.tagline}>{tagline1}</Text>
+            <Text style={styles.tagline}>{tagline2}</Text>
+          </View>
+          
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>{subtitle}</Text>
+          
+          {/* Buttons */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.primaryButton}
+              onPress={handleStart}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>{startButtonText}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.secondaryButton}
+              onPress={handleLogin}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#cc00ff',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -108,16 +118,16 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
-    color: nospiColors.white,
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     marginBottom: 60,
-    opacity: 0.9,
+    opacity: 0.8,
     fontWeight: '400',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -127,7 +137,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: nospiColors.white,
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -140,7 +150,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   primaryButtonText: {
-    color: '#cc00ff',
+    color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
   },

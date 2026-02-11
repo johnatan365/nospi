@@ -1,12 +1,11 @@
 
-// Nospi Purple Theme - Updated with #cc00ff
+// Nospi Purple Gradient Theme
 export const nospiColors = {
-  // Primary purple colors
-  purplePrimary: '#cc00ff',     // Main brand purple
-  purpleDark: '#6B21A8',        // Deep purple
-  purpleMid: '#9333EA',         // Medium purple
-  purpleLight: '#C084FC',       // Light purple
-  purplePale: '#E9D5FF',        // Very light purple
+  // Primary purple gradient colors
+  purpleDark: '#6B21A8',    // Deep purple
+  purpleMid: '#9333EA',     // Medium purple
+  purpleLight: '#C084FC',   // Light purple
+  purplePale: '#E9D5FF',    // Very light purple
   
   // Accent colors
   accent: '#EC4899',        // Pink accent
