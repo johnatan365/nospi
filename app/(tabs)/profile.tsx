@@ -101,12 +101,13 @@ export default function ProfileScreen() {
   }, [user]);
 
   const loadProfile = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
       console.log('Loading user profile...');
       
       if (!user?.id) {
         console.log('No user ID available');
+        setLoading(false);
         return;
       }
 
@@ -118,11 +119,13 @@ export default function ProfileScreen() {
 
       if (error) {
         console.error('Error loading profile:', error);
+        setLoading(false);
         return;
       }
 
       if (!data || data.length === 0) {
         console.log('No profile data found');
+        setLoading(false);
         return;
       }
 

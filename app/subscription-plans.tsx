@@ -16,12 +16,20 @@ export default function SubscriptionPlansScreen() {
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [exchangeRate] = useState(4200); // USD to COP exchange rate
 
   useEffect(() => {
     console.log('Payment screen loaded - $5 per event');
     setSelectedPayment(null);
     setProcessing(false);
   }, []);
+
+  const priceUSD = 5.00;
+  const priceCOP = priceUSD * exchangeRate;
+  const priceUSDText = `$${priceUSD.toFixed(2)} USD`;
+  const priceCOPText = `$${priceCOP.toLocaleString('es-CO')} COP`;
+  const totalUSDText = `$${priceUSD.toFixed(2)} USD`;
+  const totalCOPText = `$${priceCOP.toLocaleString('es-CO')} COP`;
 
   const handlePaymentSelect = (method: PaymentMethod) => {
     console.log('User selected payment method:', method);
@@ -106,12 +114,13 @@ export default function SubscriptionPlansScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.title}>Pago del Evento</Text>
         <Text style={styles.subtitle}>
-          Paga $5 USD para confirmar tu asistencia a este evento
+          Paga {priceUSDText} ({priceCOPText}) para confirmar tu asistencia a este evento
         </Text>
 
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Precio por evento</Text>
-          <Text style={styles.priceAmount}>$5.00 USD</Text>
+          <Text style={styles.priceAmount}>{priceUSDText}</Text>
+          <Text style={styles.priceAmountCOP}>{priceCOPText}</Text>
           <Text style={styles.priceDescription}>
             Pago único por evento. Sin suscripciones ni cargos recurrentes.
           </Text>
@@ -233,7 +242,9 @@ export default function SubscriptionPlansScreen() {
         </View>
 
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryText}>Total a pagar: $5.00 USD</Text>
+          <Text style={styles.summaryText}>Total a pagar:</Text>
+          <Text style={styles.summaryAmount}>{totalUSDText}</Text>
+          <Text style={styles.summaryAmountCOP}>{totalCOPText}</Text>
         </View>
 
         <TouchableOpacity
@@ -245,7 +256,7 @@ export default function SubscriptionPlansScreen() {
           {processing ? (
             <ActivityIndicator color={nospiColors.purpleDark} />
           ) : (
-            <Text style={styles.continueButtonText}>Pagar $5.00</Text>
+            <Text style={styles.continueButtonText}>Pagar {totalUSDText}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -322,6 +333,12 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  priceAmountCOP: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
     marginBottom: 16,
   },
   priceDescription: {
@@ -428,9 +445,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryText: {
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  summaryAmount: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  summaryAmountCOP: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
   },
   continueButton: {
     backgroundColor: nospiColors.white,

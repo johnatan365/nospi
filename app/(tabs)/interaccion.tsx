@@ -127,6 +127,7 @@ export default function InteraccionScreen() {
     try {
       console.log('Loading confirmed appointment for user:', user.id);
       
+      // First, get all confirmed appointments with completed payment
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -156,25 +157,30 @@ export default function InteraccionScreen() {
         .eq('user_id', user.id)
         .eq('status', 'confirmada')
         .eq('payment_status', 'completed')
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error loading appointment:', error);
-        setAppointment(null);
-        setLoading(false);
         return;
       }
       
       if (!data || data.length === 0) {
         console.log('No confirmed appointment found');
         setAppointment(null);
-        setLoading(false);
         return;
       }
 
-      const appointmentData = data[0];
-      console.log('Appointment loaded:', appointmentData);
+      // Find the most recent upcoming or current event
+      const now = new Date();
+      const upcomingAppointment = data.find(apt => {
+        if (!apt.event?.start_time) return false;
+        const eventDate = new Date(apt.event.start_time);
+        // Include events from today onwards
+        return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      });
+
+      const appointmentData = upcomingAppointment || data[0];
+      console.log('Appointment loaded:', appointmentData.id);
       setAppointment(appointmentData as any);
       setLocationConfirmed(appointmentData.location_confirmed || false);
       setExperienceStarted(appointmentData.experience_started || false);
@@ -186,7 +192,6 @@ export default function InteraccionScreen() {
       }
     } catch (error) {
       console.error('Failed to load appointment:', error);
-      setAppointment(null);
     } finally {
       setLoading(false);
     }

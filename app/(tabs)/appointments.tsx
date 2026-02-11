@@ -122,6 +122,7 @@ export default function AppointmentsScreen() {
 
   const loadAppointments = async () => {
     try {
+      setLoading(true);
       console.log('Loading appointments with filter:', filter);
       
       if (!user?.id) {
@@ -162,7 +163,6 @@ export default function AppointmentsScreen() {
       if (error) {
         console.error('Error loading appointments:', error);
         setAppointments([]);
-        setLoading(false);
         return;
       }
 
