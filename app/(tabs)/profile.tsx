@@ -36,17 +36,6 @@ interface UserProfile {
   };
 }
 
-interface Subscription {
-  id: string;
-  plan_type: string;
-  price: number;
-  status: string;
-  start_date: string;
-  end_date: string;
-  payment_method: string;
-  auto_renew: boolean;
-}
-
 const COUNTRIES = [
   'Colombia',
   'Argentina',
@@ -87,10 +76,8 @@ export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
-  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -110,7 +97,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (user) {
       loadProfile();
-      loadSubscription();
     }
   }, [user]);
 
@@ -146,28 +132,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const loadSubscription = async () => {
-    try {
-      console.log('Loading subscription...');
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('status', 'active')
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading subscription:', error);
-        return;
-      }
-
-      console.log('Subscription loaded:', data ? 'Active' : 'None');
-      setSubscription(data);
-    } catch (error) {
-      console.error('Failed to load subscription:', error);
-    }
-  };
-
   const handleSignOut = async () => {
     try {
       console.log('User signing out...');
@@ -176,11 +140,6 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Sign out failed:', error);
     }
-  };
-
-  const handleSubscriptionPress = () => {
-    console.log('User tapped subscription section');
-    setSubscriptionModalVisible(true);
   };
 
   const handleNotificationPress = () => {
@@ -220,18 +179,15 @@ export default function ProfileScreen() {
     try {
       console.log('Uploading photo from URI:', uri);
       
-      // For React Native, we need to use fetch to get the file as a blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Create file name with timestamp to ensure uniqueness
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = fileName;
 
       console.log('Uploading to bucket: profile-photos, path:', filePath);
 
-      // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
@@ -248,7 +204,6 @@ export default function ProfileScreen() {
 
       console.log('Upload successful:', uploadData);
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('profile-photos')
         .getPublicUrl(filePath);
@@ -256,7 +211,6 @@ export default function ProfileScreen() {
       const photoUrl = urlData.publicUrl;
       console.log('Public URL:', photoUrl);
 
-      // Update profile in database
       const { error: updateError } = await supabase
         .from('users')
         .update({ profile_photo_url: photoUrl })
@@ -383,24 +337,6 @@ export default function ProfileScreen() {
     if (newMax > editAgeRangeMin) {
       setEditAgeRangeMax(newMax);
     }
-  };
-
-  const getPlanName = (planType: string) => {
-    switch (planType) {
-      case '1_month':
-        return '1 Mes';
-      case '3_months':
-        return '3 Meses';
-      case '6_months':
-        return '6 Meses';
-      default:
-        return planType;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   if (loading) {
@@ -550,24 +486,6 @@ export default function ProfileScreen() {
         >
           <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
           <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.section}
-          onPress={handleSubscriptionPress}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.sectionTitle}>Suscripción y Pagos</Text>
-          {subscription ? (
-            <View>
-              <Text style={styles.subscriptionActive}>Plan Activo: {getPlanName(subscription.plan_type)}</Text>
-              <Text style={styles.subscriptionDetails}>
-                Válido hasta: {formatDate(subscription.end_date)}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.subscriptionInactive}>Sin suscripción activa</Text>
-          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -866,74 +784,6 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Subscription Modal */}
-      <Modal
-        visible={subscriptionModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSubscriptionModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Suscripción y Pagos</Text>
-            
-            {subscription ? (
-              <View>
-                <Text style={styles.subscriptionModalActive}>
-                  Plan Activo: {getPlanName(subscription.plan_type)}
-                </Text>
-                <Text style={styles.subscriptionModalDetails}>
-                  Precio: ${subscription.price}
-                </Text>
-                <Text style={styles.subscriptionModalDetails}>
-                  Válido hasta: {formatDate(subscription.end_date)}
-                </Text>
-                <Text style={styles.subscriptionModalDetails}>
-                  Método de pago: {subscription.payment_method}
-                </Text>
-                
-                <TouchableOpacity
-                  style={styles.cancelPlanButton}
-                  onPress={() => {
-                    console.log('User wants to cancel subscription');
-                    setSubscriptionModalVisible(false);
-                    router.push('/subscription-cancel-confirm');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.cancelPlanButtonText}>Cancelar Plan</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View>
-                <Text style={styles.noSubscriptionText}>
-                  No tienes una suscripción activa
-                </Text>
-                <TouchableOpacity
-                  style={styles.subscribButton}
-                  onPress={() => {
-                    console.log('User wants to subscribe');
-                    setSubscriptionModalVisible(false);
-                    router.push('/subscription-plans');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.subscribButtonText}>Ver Planes</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setSubscriptionModalVisible(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }
@@ -1088,20 +938,6 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontSize: 14,
     fontWeight: '600',
-  },
-  subscriptionActive: {
-    fontSize: 16,
-    color: '#4CAF50',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  subscriptionDetails: {
-    fontSize: 14,
-    color: '#666',
-  },
-  subscriptionInactive: {
-    fontSize: 14,
-    color: '#666',
   },
   signOutButton: {
     backgroundColor: '#F44336',
@@ -1295,46 +1131,6 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  subscriptionModalActive: {
-    fontSize: 18,
-    color: '#4CAF50',
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  subscriptionModalDetails: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  cancelPlanButton: {
-    backgroundColor: '#F44336',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  cancelPlanButtonText: {
-    color: nospiColors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  noSubscriptionText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  subscribButton: {
-    backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  subscribButtonText: {
-    color: nospiColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
   modalCloseButton: {
     backgroundColor: '#E0E0E0',

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -31,10 +31,21 @@ interface Appointment {
   arrival_status: string;
   checked_in_at: string | null;
   location_confirmed: boolean;
+  experience_started: boolean;
+  presented: boolean;
   event: Event;
 }
 
-// Configure notification handler
+interface Participant {
+  id: string;
+  user_id: string;
+  name: string;
+  profile_photo_url: string | null;
+  occupation: string;
+  arrival_status: string;
+  presented: boolean;
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -57,6 +68,14 @@ export default function InteraccionScreen() {
   const [isLate, setIsLate] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [checkingLocation, setCheckingLocation] = useState(false);
+  
+  // New phase states
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [experienceStarted, setExperienceStarted] = useState(false);
+  const [showPresentationPhase, setShowPresentationPhase] = useState(false);
+  const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
+  const [userPresented, setUserPresented] = useState(false);
+  const [allPresented, setAllPresented] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,11 +105,16 @@ export default function InteraccionScreen() {
   }, [appointment, isEventDay, locationPermission]);
 
   useEffect(() => {
-    // Check if user can start experience
     const eventStarted = countdown === '¡Es hora!';
     const canStart = eventStarted && isWithinRadius && locationConfirmed && !isLate;
     setCanStartExperience(canStart);
   }, [countdown, isWithinRadius, locationConfirmed, isLate]);
+
+  useEffect(() => {
+    if (experienceStarted && appointment) {
+      loadActiveParticipants();
+    }
+  }, [experienceStarted, appointment]);
 
   const loadAppointment = async () => {
     if (!user) {
@@ -110,6 +134,8 @@ export default function InteraccionScreen() {
           arrival_status,
           checked_in_at,
           location_confirmed,
+          experience_started,
+          presented,
           event:events (
             id,
             type,
@@ -128,7 +154,7 @@ export default function InteraccionScreen() {
         `)
         .eq('user_id', user.id)
         .eq('status', 'confirmada')
-        .eq('payment_status', 'paid')
+        .eq('payment_status', 'completed')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -140,8 +166,9 @@ export default function InteraccionScreen() {
         console.log('Appointment loaded:', data);
         setAppointment(data as any);
         setLocationConfirmed(data.location_confirmed || false);
+        setExperienceStarted(data.experience_started || false);
+        setUserPresented(data.presented || false);
         
-        // Check if it's event day
         if (data.event && data.event.start_time) {
           checkIfEventDay(data.event.start_time);
           scheduleNotifications(data.event.start_time);
@@ -158,17 +185,64 @@ export default function InteraccionScreen() {
     }
   };
 
+  const loadActiveParticipants = async () => {
+    if (!appointment) return;
+
+    try {
+      console.log('Loading active participants for event:', appointment.event_id);
+      
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          user_id,
+          arrival_status,
+          presented,
+          users:user_id (
+            name,
+            profile_photo_url,
+            occupation
+          )
+        `)
+        .eq('event_id', appointment.event_id)
+        .eq('status', 'confirmada')
+        .eq('location_confirmed', true)
+        .eq('arrival_status', 'on_time');
+
+      if (error) {
+        console.error('Error loading participants:', error);
+        return;
+      }
+
+      const participants: Participant[] = (data || []).map((item: any) => ({
+        id: item.id,
+        user_id: item.user_id,
+        name: item.users?.name || 'Usuario',
+        profile_photo_url: item.users?.profile_photo_url || null,
+        occupation: item.users?.occupation || 'No especificado',
+        arrival_status: item.arrival_status,
+        presented: item.presented || false,
+      }));
+
+      console.log('Active participants loaded:', participants.length);
+      setActiveParticipants(participants);
+      
+      const allHavePresented = participants.every(p => p.presented);
+      setAllPresented(allHavePresented);
+    } catch (error) {
+      console.error('Failed to load participants:', error);
+    }
+  };
+
   const checkIfEventDay = (startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
     
-    // Check if it's the same day
     const isSameDay = 
       now.getFullYear() === eventDate.getFullYear() &&
       now.getMonth() === eventDate.getMonth() &&
       now.getDate() === eventDate.getDate();
     
-    // Check if it's 8am or later on event day
     const isAfter8AM = now.getHours() >= 8;
     
     const isToday = isSameDay && isAfter8AM;
@@ -184,7 +258,6 @@ export default function InteraccionScreen() {
     if (diff <= 0) {
       setCountdown('¡Es hora!');
       
-      // Check if user is late (more than 10 minutes after start)
       const minutesLate = Math.abs(diff) / (1000 * 60);
       if (minutesLate > 10 && !locationConfirmed) {
         setIsLate(true);
@@ -215,12 +288,9 @@ export default function InteraccionScreen() {
       const eventDate = new Date(startTime);
       const now = new Date();
 
-      // Cancel any existing notifications
       await Notifications.cancelAllScheduledNotificationsAsync();
 
-      // Schedule notifications if event is in the future
       if (eventDate > now) {
-        // 6 hours before
         const sixHoursBefore = new Date(eventDate.getTime() - 6 * 60 * 60 * 1000);
         if (sixHoursBefore > now) {
           await Notifications.scheduleNotificationAsync({
@@ -234,7 +304,6 @@ export default function InteraccionScreen() {
           console.log('Scheduled notification: 6 hours before');
         }
 
-        // 1 hour before
         const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
         if (oneHourBefore > now) {
           await Notifications.scheduleNotificationAsync({
@@ -248,7 +317,6 @@ export default function InteraccionScreen() {
           console.log('Scheduled notification: 1 hour before');
         }
 
-        // 10 minutes before
         const tenMinutesBefore = new Date(eventDate.getTime() - 10 * 60 * 1000);
         if (tenMinutesBefore > now) {
           await Notifications.scheduleNotificationAsync({
@@ -262,7 +330,6 @@ export default function InteraccionScreen() {
           console.log('Scheduled notification: 10 minutes before');
         }
 
-        // At start time
         if (eventDate > now) {
           await Notifications.scheduleNotificationAsync({
             content: {
@@ -320,7 +387,6 @@ export default function InteraccionScreen() {
       const userLon = location.coords.longitude;
       setUserLocation({ latitude: userLat, longitude: userLon });
 
-      // Calculate distance using Haversine formula
       const distance = calculateDistance(
         userLat,
         userLon,
@@ -346,7 +412,7 @@ export default function InteraccionScreen() {
   };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371e3; // Earth radius in meters
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -357,7 +423,7 @@ export default function InteraccionScreen() {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distance in meters
+    return R * c;
   };
 
   const handleCheckIn = async () => {
@@ -372,7 +438,6 @@ export default function InteraccionScreen() {
       const eventStart = new Date(appointment.event.start_time!);
       const minutesAfterStart = (now.getTime() - eventStart.getTime()) / (1000 * 60);
       
-      // Determine arrival status
       const arrivalStatus = minutesAfterStart > 10 ? 'late' : 'on_time';
       
       const { error } = await supabase
@@ -423,12 +488,67 @@ export default function InteraccionScreen() {
   };
 
   const handleStartExperience = () => {
-    console.log('User starting experience');
-    Alert.alert(
-      '¡Bienvenido!',
-      'Tu experiencia Nospi ha comenzado. ¡Disfruta y conecta con otros!',
-      [{ text: 'OK' }]
-    );
+    console.log('User starting experience - showing welcome modal');
+    setShowWelcomeModal(true);
+  };
+
+  const handleBeginExperience = async () => {
+    if (!appointment) return;
+
+    try {
+      console.log('User confirmed to begin experience');
+      
+      const { error } = await supabase
+        .from('appointments')
+        .update({ experience_started: true })
+        .eq('id', appointment.id);
+
+      if (error) {
+        console.error('Error updating experience_started:', error);
+        Alert.alert('Error', 'No se pudo iniciar la experiencia. Intenta de nuevo.');
+        return;
+      }
+
+      setShowWelcomeModal(false);
+      setExperienceStarted(true);
+      setShowPresentationPhase(true);
+      
+      console.log('Experience started, moving to presentation phase');
+    } catch (error) {
+      console.error('Error starting experience:', error);
+      Alert.alert('Error', 'Ocurrió un error al iniciar la experiencia.');
+    }
+  };
+
+  const handleUserPresented = async () => {
+    if (!appointment) return;
+
+    try {
+      console.log('User marked as presented');
+      
+      const { error } = await supabase
+        .from('appointments')
+        .update({ presented: true })
+        .eq('id', appointment.id);
+
+      if (error) {
+        console.error('Error updating presented status:', error);
+        Alert.alert('Error', 'No se pudo confirmar tu presentación. Intenta de nuevo.');
+        return;
+      }
+
+      setUserPresented(true);
+      loadActiveParticipants();
+      
+      Alert.alert(
+        '¡Gracias!',
+        'Has confirmado tu presentación. Esperando a que todos se presenten...',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error marking user as presented:', error);
+      Alert.alert('Error', 'Ocurrió un error al confirmar tu presentación.');
+    }
   };
 
   if (loading) {
@@ -509,7 +629,121 @@ export default function InteraccionScreen() {
     );
   }
 
-  // Event day UI
+  if (showPresentationPhase && !allPresented) {
+    const presentedCount = activeParticipants.filter(p => p.presented).length;
+    const totalCount = activeParticipants.length;
+    const progressText = `${presentedCount} de ${totalCount}`;
+
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Fase 2: Presentación Guiada</Text>
+          <Text style={styles.subtitle}>Antes de iniciar el juego</Text>
+
+          <View style={styles.phaseCard}>
+            <Text style={styles.phaseMessage}>
+              Antes de iniciar el juego, cada uno diga su nombre y a qué se dedica.
+            </Text>
+          </View>
+
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Progreso de presentaciones</Text>
+            <Text style={styles.progressText}>{progressText}</Text>
+          </View>
+
+          <View style={styles.participantsSection}>
+            <Text style={styles.participantsTitle}>Participantes Activos</Text>
+            {activeParticipants.map((participant, index) => (
+              <View key={index} style={styles.participantCard}>
+                <View style={styles.participantInfo}>
+                  {participant.profile_photo_url ? (
+                    <Image 
+                      source={{ uri: participant.profile_photo_url }} 
+                      style={styles.participantPhoto}
+                    />
+                  ) : (
+                    <View style={styles.participantPhotoPlaceholder}>
+                      <Text style={styles.participantPhotoPlaceholderText}>
+                        {participant.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.participantDetails}>
+                    <Text style={styles.participantName}>{participant.name}</Text>
+                    <Text style={styles.participantOccupation}>{participant.occupation}</Text>
+                  </View>
+                </View>
+                {participant.presented && (
+                  <View style={styles.presentedBadge}>
+                    <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+
+          {!userPresented && (
+            <TouchableOpacity
+              style={styles.presentedButton}
+              onPress={handleUserPresented}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.presentedButtonText}>Ya me presenté</Text>
+            </TouchableOpacity>
+          )}
+
+          {userPresented && (
+            <View style={styles.waitingCard}>
+              <Text style={styles.waitingText}>
+                ✓ Te has presentado. Esperando a que todos se presenten...
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  if (allPresented) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>¡Listos para comenzar!</Text>
+          <Text style={styles.subtitle}>Todos se han presentado</Text>
+
+          <View style={styles.successCard}>
+            <Text style={styles.successIcon}>🎉</Text>
+            <Text style={styles.successTitle}>¡Excelente!</Text>
+            <Text style={styles.successMessage}>
+              Todos los participantes activos se han presentado. La dinámica del juego comenzará pronto.
+            </Text>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>Participantes Activos: {activeParticipants.length}</Text>
+            <Text style={styles.infoCardText}>
+              Solo los participantes activos pueden:
+            </Text>
+            <Text style={styles.infoCardBullet}>• Aparecer en ruleta</Text>
+            <Text style={styles.infoCardBullet}>• Recibir preguntas</Text>
+            <Text style={styles.infoCardBullet}>• Ser puntuados</Text>
+            <Text style={styles.infoCardBullet}>• Competir por el premio</Text>
+          </View>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   const locationText = appointment.event.address || appointment.event.location;
@@ -525,13 +759,11 @@ export default function InteraccionScreen() {
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
-        {/* Countdown */}
         <View style={styles.countdownCard}>
           <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
           <Text style={styles.countdownTime}>{countdown}</Text>
         </View>
 
-        {/* Event Info */}
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
             <Text style={styles.eventIconLarge}>{eventIcon}</Text>
@@ -543,7 +775,6 @@ export default function InteraccionScreen() {
           <Text style={styles.eventLocation}>{locationText}</Text>
         </View>
 
-        {/* Location Check */}
         {!locationPermission ? (
           <TouchableOpacity
             style={styles.locationButton}
@@ -580,7 +811,6 @@ export default function InteraccionScreen() {
           </View>
         )}
 
-        {/* Check-in Button */}
         {locationPermission && isWithinRadius && !locationConfirmed && (
           <TouchableOpacity
             style={[styles.checkInButton, !isWithinRadius && styles.buttonDisabled]}
@@ -592,8 +822,7 @@ export default function InteraccionScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Start Experience Button */}
-        {locationConfirmed && (
+        {locationConfirmed && !experienceStarted && (
           <TouchableOpacity
             style={[styles.startButton, !canStartExperience && styles.buttonDisabled]}
             onPress={handleStartExperience}
@@ -606,7 +835,6 @@ export default function InteraccionScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Late Arrival Info */}
         {isLate && (
           <View style={styles.lateInfoCard}>
             <Text style={styles.lateInfoText}>
@@ -615,7 +843,6 @@ export default function InteraccionScreen() {
           </View>
         )}
 
-        {/* Instructions */}
         <View style={styles.instructionsCard}>
           <Text style={styles.instructionsTitle}>Instrucciones</Text>
           <Text style={styles.instructionsText}>
@@ -630,6 +857,34 @@ export default function InteraccionScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Welcome Modal - Phase 1 */}
+      <Modal
+        visible={showWelcomeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.welcomeModalContent}>
+            <Text style={styles.welcomeTitle}>Bienvenidos a la Experiencia Nospi</Text>
+            <Text style={styles.welcomeText}>
+              Nospi no es una cena común.{'\n\n'}
+              Esta dinámica está diseñada para romper el hielo, generar conexión real y evitar momentos incómodos.{'\n\n'}
+              Todos deben participar para que funcione.{'\n\n'}
+              Puedes pasar una pregunta, pero eso afectará tu puntaje.{'\n\n'}
+              Entre más participes, mejor será la energía de la mesa.
+            </Text>
+            <TouchableOpacity
+              style={styles.welcomeButton}
+              onPress={handleBeginExperience}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.welcomeButtonText}>Comenzar experiencia</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Permission Modal */}
       <Modal
@@ -972,6 +1227,197 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
+  phaseCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  phaseMessage: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  progressCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  progressText: {
+    fontSize: 32,
+    color: nospiColors.purpleDark,
+    fontWeight: 'bold',
+  },
+  participantsSection: {
+    marginBottom: 16,
+  },
+  participantsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  participantCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  participantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  participantPhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  participantPhotoPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantPhotoPlaceholderText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantDetails: {
+    flex: 1,
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  participantOccupation: {
+    fontSize: 14,
+    color: '#666',
+  },
+  presentedBadge: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  presentedBadgeText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  presentedButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  presentedButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  waitingCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  successCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  successIcon: {
+    fontSize: 80,
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  infoCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  infoCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  infoCardText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  infoCardBullet: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    marginLeft: 8,
+    marginBottom: 4,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1027,5 +1473,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: nospiColors.purpleDark,
+  },
+  welcomeModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 500,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  welcomeText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 26,
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  welcomeButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  welcomeButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

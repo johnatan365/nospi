@@ -36,17 +36,6 @@ interface UserProfile {
   };
 }
 
-interface Subscription {
-  id: string;
-  plan_type: string;
-  price: number;
-  status: string;
-  start_date: string;
-  end_date: string;
-  payment_method: string;
-  auto_renew: boolean;
-}
-
 const COUNTRIES = [
   'Colombia',
   'Argentina',
@@ -87,10 +76,8 @@ export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
-  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -110,7 +97,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (user) {
       loadProfile();
-      loadSubscription();
     }
   }, [user]);
 
@@ -146,28 +132,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const loadSubscription = async () => {
-    try {
-      console.log('Loading subscription...');
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('status', 'active')
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error loading subscription:', error);
-        return;
-      }
-
-      console.log('Subscription loaded:', data ? 'Active' : 'None');
-      setSubscription(data);
-    } catch (error) {
-      console.error('Failed to load subscription:', error);
-    }
-  };
-
   const handleSignOut = async () => {
     try {
       console.log('User signing out...');
@@ -176,11 +140,6 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Sign out failed:', error);
     }
-  };
-
-  const handleSubscriptionPress = () => {
-    console.log('User tapped subscription section');
-    setSubscriptionModalVisible(true);
   };
 
   const handleNotificationPress = () => {
@@ -380,24 +339,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const getPlanName = (planType: string) => {
-    switch (planType) {
-      case '1_month':
-        return '1 Mes';
-      case '3_months':
-        return '3 Meses';
-      case '6_months':
-        return '6 Meses';
-      default:
-        return planType;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-  };
-
   if (loading) {
     return (
       <LinearGradient
@@ -548,24 +489,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.section}
-          onPress={handleSubscriptionPress}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.sectionTitle}>Suscripción y Pagos</Text>
-          {subscription ? (
-            <View>
-              <Text style={styles.subscriptionActive}>Plan Activo: {getPlanName(subscription.plan_type)}</Text>
-              <Text style={styles.subscriptionDetails}>
-                Válido hasta: {formatDate(subscription.end_date)}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.subscriptionInactive}>Sin suscripción activa</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
           activeOpacity={0.8}
@@ -574,7 +497,72 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* All modals - identical to Android version */}
+      {/* Notification Preferences Modal */}
+      <Modal
+        visible={notificationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNotificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.modalSubtitle}>¿Cómo quieres que te recordemos las citas?</Text>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('whatsapp')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>WhatsApp</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.whatsapp && styles.checkboxActive]}>
+                {profile.notification_preferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('email')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Correo Electrónico</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.email && styles.checkboxActive]}>
+                {profile.notification_preferences.email && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('sms')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>SMS</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.sms && styles.checkboxActive]}>
+                {profile.notification_preferences.sms && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notificationOption}
+              onPress={() => toggleNotification('push')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.notificationOptionText}>Notificaciones Push</Text>
+              <View style={[styles.checkbox, profile.notification_preferences.push && styles.checkboxActive]}>
+                {profile.notification_preferences.push && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setNotificationModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -605,9 +593,17 @@ const styles = StyleSheet.create({
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { backgroundColor: nospiColors.purpleLight, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
   tagText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
-  subscriptionActive: { fontSize: 16, color: '#4CAF50', fontWeight: '600', marginBottom: 4 },
-  subscriptionDetails: { fontSize: 14, color: '#666' },
-  subscriptionInactive: { fontSize: 14, color: '#666' },
   signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
   signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
+  modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
+  notificationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
+  notificationOptionText: { fontSize: 16, color: '#333' },
+  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
+  checkboxActive: { backgroundColor: nospiColors.purpleDark, borderColor: nospiColors.purpleDark },
+  checkmark: { color: nospiColors.white, fontSize: 16, fontWeight: 'bold' },
+  modalCloseButton: { backgroundColor: '#E0E0E0', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  modalCloseButtonText: { color: '#333', fontSize: 16, fontWeight: '600' },
 });
