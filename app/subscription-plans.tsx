@@ -58,7 +58,7 @@ export default function SubscriptionPlansScreen() {
               user_id: user?.id,
               event_id: pendingEventId,
               status: 'confirmada',
-              payment_status: 'paid',
+              payment_status: 'completed',
             });
 
           if (appointmentError) {
@@ -67,6 +67,7 @@ export default function SubscriptionPlansScreen() {
             return;
           } else {
             console.log('Appointment created successfully');
+            // Set flag to show notification prompt after navigating to appointments
             await AsyncStorage.setItem('should_check_notification_prompt', 'true');
           }
         } else {
