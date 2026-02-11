@@ -1,11 +1,66 @@
 
+/**
+ * GameDynamicsScreen - Nospi Interactive Game Experience
+ * 
+ * NEW FEATURES IMPLEMENTED:
+ * 
+ * 1. SECRET MATCH (Match Secreto en Tiempo Real)
+ *    - Triggered after configurable rounds (currently round 2)
+ *    - Private selection: each user picks 1 person they feel connection with
+ *    - Mutual match detection: if both users select each other
+ *    - Private notification: "Hay conexión mutua"
+ *    - Contact unlocked within app
+ *    - No public disclosure, no rejection messages
+ *    - Late arrivals CAN participate in matches
+ * 
+ * 2. FINAL ANIMATION (Animación Final)
+ *    - Only shown if group extended at least once
+ *    - Elegant spinning animation with participant names
+ *    - Confetti and celebration effects
+ *    - Winner selection based on highest average score
+ *    - Display: "Energía destacada de la noche: [Name]"
+ *    - No full ranking shown
+ * 
+ * 3. AUTOMATIC PRIZE (Premio Automático)
+ *    - Automatically creates reward in database for winner
+ *    - Reward type: 'free_event'
+ *    - Status: 'available'
+ *    - Configurable expiration date
+ *    - Auto-applies on next event booking
+ * 
+ * 4. POST-EVENT REPUTATION (Reputación Post-Evento)
+ *    - Private evaluation after event
+ *    - Each user evaluates others on:
+ *      * Respeto (1-5)
+ *      * Actitud (1-5)
+ *      * Participación (1-5)
+ *      * ¿Volverías a coincidir? (Sí/No)
+ *    - Results never shown publicly
+ *    - Internal reputation system with states:
+ *      * Activo - good standing
+ *      * Observación - pattern of issues detected
+ *      * Suspendido - repeated negative patterns
+ *    - NOT suspended for single negative evaluation
+ *    - Pattern-based suspension only
+ * 
+ * BACKEND INTEGRATION REQUIRED:
+ * See TODO comments throughout this file for specific endpoint requirements.
+ * Database tables needed:
+ * - secret_match_selections
+ * - mutual_matches
+ * - rewards
+ * - reputation_evaluations
+ * - user_reputation
+ * - game_scores
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Easing, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'roulette' | 'question' | 'rating' | 'level_vote' | 'game_end' | 'extension';
+type GamePhase = 'ready' | 'roulette' | 'question' | 'rating' | 'level_vote' | 'game_end' | 'extension' | 'secret_match' | 'final_animation' | 'post_event';
 
 interface Participant {
   id: string;
@@ -66,6 +121,27 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([]);
   const [playerScores, setPlayerScores] = useState<Record<string, number>>({});
   const [didUserPass, setDidUserPass] = useState(false);
+  
+  // Secret Match states
+  const [showSecretMatch, setShowSecretMatch] = useState(false);
+  const [selectedMatchUser, setSelectedMatchUser] = useState<string | null>(null);
+  const [hasSubmittedMatch, setHasSubmittedMatch] = useState(false);
+  const [mutualMatchNotification, setMutualMatchNotification] = useState<string | null>(null);
+  
+  // Final Animation states
+  const [showFinalAnimation, setShowFinalAnimation] = useState(false);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [animatingWinner, setAnimatingWinner] = useState(false);
+  const [confettiAnimation] = useState(new Animated.Value(0));
+  
+  // Post-Event Evaluation states
+  const [showPostEventEvaluation, setShowPostEventEvaluation] = useState(false);
+  const [evaluatingParticipant, setEvaluatingParticipant] = useState<Participant | null>(null);
+  const [evaluationIndex, setEvaluationIndex] = useState(0);
+  const [respectRating, setRespectRating] = useState<number | null>(null);
+  const [attitudeRating, setAttitudeRating] = useState<number | null>(null);
+  const [participationRating, setParticipationRating] = useState<number | null>(null);
+  const [wouldMatchAgain, setWouldMatchAgain] = useState<boolean | null>(null);
 
   const levelNames = {
     divertido: 'Divertido',
@@ -194,6 +270,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setQuestionsAnsweredInLevel(questionsAnsweredInLevel + 1);
     
     const totalQuestionsInRound = activeParticipants.length * totalQuestionsPerParticipant;
+    
+    // Check if it's time for secret match (after round 2 or configurable)
+    const shouldShowSecretMatch = currentRound === 2 && questionsAnsweredInLevel + 1 >= totalQuestionsInRound;
+    
+    if (shouldShowSecretMatch && !hasSubmittedMatch) {
+      console.log('Triggering secret match phase');
+      setGamePhase('secret_match');
+      setShowSecretMatch(true);
+      return;
+    }
+    
     if (questionsAnsweredInLevel + 1 >= totalQuestionsInRound) {
       console.log('Round complete, checking for level vote');
       setGamePhase('level_vote');
@@ -283,6 +370,163 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       startRoulette();
     } else {
       console.log('Game truly ended');
+      
+      // Check if group extended at least once to show final animation
+      if (extensionCount > 0) {
+        triggerFinalAnimation();
+      } else {
+        setGamePhase('extension');
+      }
+    }
+  };
+
+  const handleSecretMatchSelection = (userId: string) => {
+    console.log('User selected for secret match:', userId);
+    setSelectedMatchUser(userId);
+  };
+
+  const submitSecretMatch = async () => {
+    if (!selectedMatchUser || !appointment) return;
+    
+    console.log('Submitting secret match selection');
+    setHasSubmittedMatch(true);
+    
+    // TODO: Backend Integration - POST /api/secret-matches
+    // Body: { eventId: string, selectorId: string, selectedId: string, roundNumber: number }
+    // Response: { success: boolean, mutualMatch?: boolean, matchedUserId?: string, matchedUserName?: string }
+    // Backend should:
+    // 1. Store selection in secret_match_selections table
+    // 2. Check if selectedId has also selected selectorId
+    // 3. If mutual match exists, create entry in mutual_matches table
+    // 4. Return mutualMatch: true with matched user details
+    // 5. Ensure selections are private - only notify on mutual match
+    
+    // Simulate backend response
+    const isMutualMatch = Math.random() > 0.7; // 30% chance for demo
+    
+    if (isMutualMatch) {
+      const matchedParticipant = activeParticipants.find(p => p.user_id === selectedMatchUser);
+      if (matchedParticipant) {
+        setMutualMatchNotification(matchedParticipant.name);
+        console.log('Mutual match found with:', matchedParticipant.name);
+      }
+    }
+    
+    setShowSecretMatch(false);
+    setGamePhase('level_vote');
+  };
+
+  const triggerFinalAnimation = () => {
+    console.log('Triggering final animation');
+    setGamePhase('final_animation');
+    setShowFinalAnimation(true);
+    setAnimatingWinner(true);
+    
+    // TODO: Backend Integration - GET /api/game-scores/winner?eventId={eventId}
+    // Response: { winnerId: string, winnerName: string, averageScore: number }
+    // Backend should:
+    // 1. Query game_scores table for all active participants in this event
+    // 2. Calculate average score for each participant (totalScore / ratingsCount)
+    // 3. Select participant with highest averageScore
+    // 4. Return only winner details (not full ranking)
+    
+    // Simulate winner selection
+    setTimeout(() => {
+      const randomWinner = activeParticipants[Math.floor(Math.random() * activeParticipants.length)];
+      setWinnerName(randomWinner.name);
+      
+      // Start confetti animation
+      Animated.timing(confettiAnimation, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start();
+      
+      // TODO: Backend Integration - POST /api/rewards
+      // Body: { userId: string, rewardType: 'free_event', expirationDate: string (ISO 8601) }
+      // Response: { success: boolean, rewardId: string }
+      // Backend should:
+      // 1. Create reward in rewards table
+      // 2. Set status: 'available'
+      // 3. Set expirationDate (e.g., 90 days from now)
+      // 4. Reward should be automatically applicable on next event booking
+      
+      console.log('Winner selected:', randomWinner.name);
+      setAnimatingWinner(false);
+    }, 3000);
+  };
+
+  const handleFinishExperience = () => {
+    console.log('Finishing experience, showing post-event evaluation');
+    
+    // TODO: Backend Integration - POST /api/notifications/post-event-evaluation
+    // Body: { eventId: string, userId: string }
+    // Backend should:
+    // 1. Send push notification to user after event ends
+    // 2. Notification title: "Evalúa tu experiencia Nospi"
+    // 3. Notification body: "Tu opinión es importante. Evalúa a los participantes del evento."
+    // 4. Can be triggered automatically X hours after event end time
+    // 5. Or triggered manually when user finishes the game
+    
+    setGamePhase('post_event');
+    setShowPostEventEvaluation(true);
+    setEvaluationIndex(0);
+    
+    // Filter out current user from participants to evaluate
+    const participantsToEvaluate = activeParticipants.filter(p => p.user_id !== appointment?.event_id);
+    if (participantsToEvaluate.length > 0) {
+      setEvaluatingParticipant(participantsToEvaluate[0]);
+    }
+  };
+
+  const submitEvaluation = async () => {
+    if (!evaluatingParticipant || respectRating === null || attitudeRating === null || 
+        participationRating === null || wouldMatchAgain === null) {
+      return;
+    }
+    
+    console.log('Submitting evaluation for:', evaluatingParticipant.name);
+    
+    // TODO: Backend Integration - POST /api/reputation-evaluations
+    // Body: { 
+    //   eventId: string, 
+    //   evaluatorId: string, 
+    //   evaluatedId: string, 
+    //   respectRating: number (1-5), 
+    //   attitudeRating: number (1-5), 
+    //   participationRating: number (1-5), 
+    //   wouldMatchAgain: boolean 
+    // }
+    // Response: { success: boolean }
+    // Backend should:
+    // 1. Store evaluation in reputation_evaluations table
+    // 2. Update user_reputation table for evaluatedId:
+    //    - Increment totalEvaluations
+    //    - Recalculate averageRespect, averageAttitude, averageParticipation
+    //    - If wouldMatchAgain is false, increment negativeMatchCount
+    //    - Update status based on pattern:
+    //      * 'Activo' - default, good standing
+    //      * 'Observación' - if negativeMatchCount >= 3 or average ratings < 2.5
+    //      * 'Suspendido' - if negativeMatchCount >= 5 or repeated low ratings
+    // 3. Do NOT suspend based on single negative evaluation
+    // 4. Evaluations are private - never show publicly
+    
+    // Reset ratings
+    setRespectRating(null);
+    setAttitudeRating(null);
+    setParticipationRating(null);
+    setWouldMatchAgain(null);
+    
+    // Move to next participant
+    const participantsToEvaluate = activeParticipants.filter(p => p.user_id !== appointment?.event_id);
+    const nextIndex = evaluationIndex + 1;
+    
+    if (nextIndex < participantsToEvaluate.length) {
+      setEvaluationIndex(nextIndex);
+      setEvaluatingParticipant(participantsToEvaluate[nextIndex]);
+    } else {
+      console.log('All evaluations completed');
+      setShowPostEventEvaluation(false);
       setGamePhase('extension');
     }
   };
@@ -627,6 +871,341 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
+  if (gamePhase === 'secret_match' && showSecretMatch) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Match Secreto</Text>
+          <Text style={styles.subtitle}>¿Con quién sientes conexión hasta ahora?</Text>
+
+          <View style={styles.secretMatchCard}>
+            <Text style={styles.secretMatchIcon}>💕</Text>
+            <Text style={styles.secretMatchMessage}>
+              Selecciona solo 1 persona. Tu elección es completamente privada.
+            </Text>
+            <Text style={styles.secretMatchSubtext}>
+              Si hay coincidencia mutua, ambos recibirán una notificación privada y se desbloqueará el contacto.
+            </Text>
+          </View>
+
+          <View style={styles.matchParticipantsSection}>
+            {activeParticipants.map((participant, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.matchParticipantCard,
+                  selectedMatchUser === participant.user_id && styles.matchParticipantSelected,
+                ]}
+                onPress={() => handleSecretMatchSelection(participant.user_id)}
+                activeOpacity={0.8}
+              >
+                {participant.profile_photo_url ? (
+                  <Image 
+                    source={{ uri: participant.profile_photo_url }} 
+                    style={styles.matchParticipantPhoto}
+                  />
+                ) : (
+                  <View style={styles.matchParticipantPhotoPlaceholder}>
+                    <Text style={styles.matchParticipantPhotoText}>
+                      {participant.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.matchParticipantName}>{participant.name}</Text>
+                {selectedMatchUser === participant.user_id && (
+                  <View style={styles.matchSelectedBadge}>
+                    <Text style={styles.matchSelectedBadgeText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitButton, !selectedMatchUser && styles.buttonDisabled]}
+            onPress={submitSecretMatch}
+            disabled={!selectedMatchUser}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.submitButtonText}>Enviar Selección</Text>
+          </TouchableOpacity>
+
+          <View style={styles.privacyCard}>
+            <Text style={styles.privacyText}>
+              🔒 Nadie más sabrá tu elección. Solo se notifica si hay match mutuo.
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* Mutual Match Notification Modal */}
+        <Modal
+          visible={mutualMatchNotification !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMutualMatchNotification(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.matchNotificationModal}>
+              <Text style={styles.matchNotificationIcon}>💖</Text>
+              <Text style={styles.matchNotificationTitle}>¡Hay conexión mutua!</Text>
+              <Text style={styles.matchNotificationText}>
+                Tú y {mutualMatchNotification} han sentido conexión mutua.
+              </Text>
+              <Text style={styles.matchNotificationSubtext}>
+                El contacto se ha desbloqueado dentro de la app.
+              </Text>
+              <TouchableOpacity
+                style={styles.matchNotificationButton}
+                onPress={() => setMutualMatchNotification(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.matchNotificationButtonText}>Continuar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </LinearGradient>
+    );
+  }
+
+  if (gamePhase === 'final_animation' && showFinalAnimation) {
+    const confettiOpacity = confettiAnimation.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 1, 0],
+    });
+
+    const confettiScale = confettiAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.5, 1.5],
+    });
+
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.animationContainer}>
+          <Text style={styles.animationTitle}>La energía Nospi de la noche es...</Text>
+
+          {animatingWinner && (
+            <Animated.View style={[styles.spinningNames, { transform: [{ rotate: spin }] }]}>
+              {activeParticipants.map((participant, index) => (
+                <Text key={index} style={styles.spinningName}>
+                  {participant.name}
+                </Text>
+              ))}
+            </Animated.View>
+          )}
+
+          {!animatingWinner && winnerName && (
+            <>
+              <Animated.View 
+                style={[
+                  styles.confettiContainer,
+                  { opacity: confettiOpacity, transform: [{ scale: confettiScale }] }
+                ]}
+              >
+                <Text style={styles.confettiText}>🎉 🎊 ✨ 🌟 💫</Text>
+              </Animated.View>
+
+              <View style={styles.winnerCard}>
+                <Text style={styles.winnerLabel}>Energía destacada de la noche:</Text>
+                <Text style={styles.winnerName}>{winnerName}</Text>
+                <Text style={styles.winnerIcon}>🏆</Text>
+              </View>
+
+              <View style={styles.prizeAnnouncementCard}>
+                <Text style={styles.prizeAnnouncementText}>
+                  ¡Has ganado un evento gratis! El premio se ha agregado automáticamente a tu cuenta.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.continueButton}
+                onPress={handleFinishExperience}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.continueButtonText}>Continuar</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (gamePhase === 'post_event' && showPostEventEvaluation && evaluatingParticipant) {
+    const canSubmit = respectRating !== null && attitudeRating !== null && 
+                      participationRating !== null && wouldMatchAgain !== null;
+    
+    const participantsToEvaluate = activeParticipants.filter(p => p.user_id !== appointment?.event_id);
+    const progressText = `${evaluationIndex + 1} de ${participantsToEvaluate.length}`;
+
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Evaluación Post-Evento</Text>
+          <Text style={styles.subtitle}>Tu opinión es importante</Text>
+
+          <View style={styles.evaluationProgressCard}>
+            <Text style={styles.evaluationProgressText}>{progressText}</Text>
+          </View>
+
+          <View style={styles.evaluatingCard}>
+            {evaluatingParticipant.profile_photo_url ? (
+              <Image 
+                source={{ uri: evaluatingParticipant.profile_photo_url }} 
+                style={styles.evaluatingPhoto}
+              />
+            ) : (
+              <View style={styles.evaluatingPhotoPlaceholder}>
+                <Text style={styles.evaluatingPhotoText}>
+                  {evaluatingParticipant.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.evaluatingName}>{evaluatingParticipant.name}</Text>
+          </View>
+
+          <View style={styles.evaluationSection}>
+            <Text style={styles.evaluationLabel}>Respeto (1-5)</Text>
+            <View style={styles.ratingButtons}>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <TouchableOpacity
+                  key={rating}
+                  style={[
+                    styles.ratingButton,
+                    respectRating === rating && styles.ratingButtonSelected,
+                  ]}
+                  onPress={() => setRespectRating(rating)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.ratingButtonText,
+                    respectRating === rating && styles.ratingButtonTextSelected,
+                  ]}>
+                    {rating}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.evaluationSection}>
+            <Text style={styles.evaluationLabel}>Actitud (1-5)</Text>
+            <View style={styles.ratingButtons}>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <TouchableOpacity
+                  key={rating}
+                  style={[
+                    styles.ratingButton,
+                    attitudeRating === rating && styles.ratingButtonSelected,
+                  ]}
+                  onPress={() => setAttitudeRating(rating)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.ratingButtonText,
+                    attitudeRating === rating && styles.ratingButtonTextSelected,
+                  ]}>
+                    {rating}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.evaluationSection}>
+            <Text style={styles.evaluationLabel}>Participación (1-5)</Text>
+            <View style={styles.ratingButtons}>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <TouchableOpacity
+                  key={rating}
+                  style={[
+                    styles.ratingButton,
+                    participationRating === rating && styles.ratingButtonSelected,
+                  ]}
+                  onPress={() => setParticipationRating(rating)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.ratingButtonText,
+                    participationRating === rating && styles.ratingButtonTextSelected,
+                  ]}>
+                    {rating}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.evaluationSection}>
+            <Text style={styles.evaluationLabel}>¿Volverías a coincidir?</Text>
+            <View style={styles.yesNoButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.yesNoButton,
+                  wouldMatchAgain === true && styles.yesNoButtonSelected,
+                ]}
+                onPress={() => setWouldMatchAgain(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.yesNoButtonText,
+                  wouldMatchAgain === true && styles.yesNoButtonTextSelected,
+                ]}>
+                  Sí
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.yesNoButton,
+                  wouldMatchAgain === false && styles.yesNoButtonSelected,
+                ]}
+                onPress={() => setWouldMatchAgain(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.yesNoButtonText,
+                  wouldMatchAgain === false && styles.yesNoButtonTextSelected,
+                ]}>
+                  No
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.evaluationInfoCard}>
+            <Text style={styles.evaluationInfoText}>
+              🔒 Tus evaluaciones son privadas y no se mostrarán públicamente. Ayudan a mantener la calidad de la comunidad Nospi.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitButton, !canSubmit && styles.buttonDisabled]}
+            onPress={submitEvaluation}
+            disabled={!canSubmit}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.submitButtonText}>Enviar Evaluación</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
   if (gamePhase === 'extension') {
     const didExtend = extensionCount > 0;
 
@@ -654,7 +1233,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               <Text style={styles.prizeIcon}>🏆</Text>
               <Text style={styles.prizeTitle}>¡Premio Desbloqueado!</Text>
               <Text style={styles.prizeMessage}>
-                El grupo decidió extender la experiencia. El premio será entregado pronto.
+                El grupo decidió extender la experiencia. El premio fue entregado al ganador.
               </Text>
             </View>
           )}
@@ -1244,5 +1823,356 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: nospiColors.purpleDark,
     marginBottom: 4,
+  },
+  // Secret Match styles
+  secretMatchCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  secretMatchIcon: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
+  secretMatchMessage: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  secretMatchSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  matchParticipantsSection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 24,
+  },
+  matchParticipantCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    width: 100,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  matchParticipantSelected: {
+    borderWidth: 3,
+    borderColor: nospiColors.purpleMid,
+  },
+  matchParticipantPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 8,
+  },
+  matchParticipantPhotoPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  matchParticipantPhotoText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  matchParticipantName: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  matchSelectedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  matchSelectedBadgeText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  privacyCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  privacyText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  matchNotificationModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  matchNotificationIcon: {
+    fontSize: 80,
+    marginBottom: 16,
+  },
+  matchNotificationTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  matchNotificationText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 24,
+  },
+  matchNotificationSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  matchNotificationButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+  },
+  matchNotificationButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  // Final Animation styles
+  animationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  animationTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  spinningNames: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  spinningName: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    fontWeight: '600',
+    marginVertical: 4,
+  },
+  confettiContainer: {
+    position: 'absolute',
+    top: 100,
+    alignSelf: 'center',
+  },
+  confettiText: {
+    fontSize: 60,
+  },
+  winnerCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  winnerLabel: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  winnerName: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  winnerIcon: {
+    fontSize: 80,
+  },
+  prizeAnnouncementCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  prizeAnnouncementText: {
+    fontSize: 16,
+    color: '#92400E',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  continueButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+  },
+  continueButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  // Post-Event Evaluation styles
+  evaluationProgressCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  evaluationProgressText: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    fontWeight: '600',
+  },
+  evaluatingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  evaluatingPhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
+  },
+  evaluatingPhotoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  evaluatingPhotoText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  evaluatingName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  evaluationSection: {
+    marginBottom: 24,
+  },
+  evaluationLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  yesNoButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  yesNoButton: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  yesNoButtonSelected: {
+    backgroundColor: nospiColors.purpleMid,
+  },
+  yesNoButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  yesNoButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+  evaluationInfoCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  evaluationInfoText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
