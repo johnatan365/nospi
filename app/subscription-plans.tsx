@@ -16,7 +16,7 @@ export default function SubscriptionPlansScreen() {
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [exchangeRate] = useState(4200); // USD to COP exchange rate
+  const [exchangeRate] = useState(3678); // USD to COP exchange rate (current rate)
 
   useEffect(() => {
     console.log('Payment screen loaded - $5 per event');
