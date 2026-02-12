@@ -92,7 +92,7 @@ export default function FloatingTabBar({
   const tabWidthPercent = ((100 / tabs.length) - 1).toFixed(2);
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = (containerWidth - 16) / tabs.length;
+    const tabWidth = (containerWidth - 24) / tabs.length;
     return {
       transform: [
         {
@@ -112,14 +112,14 @@ export default function FloatingTabBar({
       borderWidth: 0,
       ...Platform.select({
         ios: {
-          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
         },
         android: {
-          backgroundColor: 'rgba(255, 255, 255, 0.96)',
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
         },
         web: {
-          backgroundColor: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(24px)',
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(32px)',
         },
       }),
     },
@@ -128,7 +128,7 @@ export default function FloatingTabBar({
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: 'rgba(139, 92, 246, 0.15)',
+      backgroundColor: '#7C3AED',
       width: `${tabWidthPercent}%` as `${number}%`,
     },
   };
@@ -163,15 +163,15 @@ export default function FloatingTabBar({
                     <IconSymbol
                       android_material_icon_name={tab.icon}
                       ios_icon_name={tab.icon}
-                      size={28}
-                      color={isActive ? '#7C3AED' : '#9CA3AF'}
+                      size={26}
+                      color={isActive ? '#FFFFFF' : '#4B5563'}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: '#9CA3AF' },
+                        { color: '#4B5563' },
                         isActive && { 
-                          color: '#7C3AED',
+                          color: '#FFFFFF',
                           fontWeight: '700'
                         },
                       ]}
@@ -206,39 +206,44 @@ const styles = StyleSheet.create({
   blurContainer: {
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 16,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
   indicator: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    bottom: 8,
-    borderRadius: 20,
+    top: 10,
+    left: 12,
+    bottom: 10,
+    borderRadius: 22,
     width: `${(100 / 2) - 1}%`,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 72,
+    height: 76,
     alignItems: 'center',
-    paddingHorizontal: 8,
-    gap: 4,
+    paddingHorizontal: 12,
+    gap: 6,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 5,
   },
   tabLabel: {
     fontSize: 13,
