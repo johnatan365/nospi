@@ -29,7 +29,8 @@ interface Participant {
   name: string;
   profile_photo_url: string | null;
   occupation: string;
-  arrival_status: string;
+  confirmed: boolean;
+  check_in_time: string | null;
   presented: boolean;
 }
 

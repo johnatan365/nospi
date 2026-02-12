@@ -39,7 +39,8 @@ interface Participant {
   name: string;
   profile_photo_url: string | null;
   occupation: string;
-  arrival_status: string;
+  confirmed: boolean;
+  check_in_time: string | null;
   presented: boolean;
 }
 
@@ -97,39 +98,41 @@ export default function InteraccionScreen() {
     requestNotificationPermissions();
   }, []);
 
-  // Real-time polling for active participants when on check-in screen
+  // Supabase Realtime subscription for event_participants
   useEffect(() => {
-    if (appointment && checkInPhase === 'confirmed' && !experienceStarted) {
-      console.log('Starting real-time participant polling');
-      
-      // Load immediately
-      loadActiveParticipants();
-      
-      // Poll every 3 seconds to check for new confirmations
-      const pollInterval = setInterval(() => {
-        console.log('Polling for participant updates...');
-        loadActiveParticipants();
-      }, 3000);
+    if (!appointment) return;
 
-      return () => {
-        console.log('Stopping participant polling');
-        clearInterval(pollInterval);
-      };
-    }
-  }, [appointment, checkInPhase, experienceStarted]);
+    console.log('Setting up Realtime subscription for event:', appointment.event_id);
+    
+    // Load participants immediately
+    loadActiveParticipants();
 
-  useEffect(() => {
-    if (experienceStarted && appointment) {
-      loadActiveParticipants();
-      
-      // Continue polling during presentation phase
-      const pollInterval = setInterval(() => {
-        loadActiveParticipants();
-      }, 5000);
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel(`event_participants_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_participants',
+          filter: `event_id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          // Reload participants when any change occurs
+          loadActiveParticipants();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
-      return () => clearInterval(pollInterval);
-    }
-  }, [experienceStarted, appointment]);
+    return () => {
+      console.log('Cleaning up Realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [appointment]);
 
   const loadAppointment = async () => {
     if (!user) {
@@ -213,15 +216,16 @@ export default function InteraccionScreen() {
     if (!appointment) return;
 
     try {
-      console.log('Loading active participants (confirmed only) for event:', appointment.event_id);
+      console.log('Loading confirmed participants from event_participants for event:', appointment.event_id);
       
-      // Fixed query: properly join with users table
+      // Query event_participants table with user data
       const { data, error } = await supabase
-        .from('appointments')
+        .from('event_participants')
         .select(`
           id,
           user_id,
-          arrival_status,
+          confirmed,
+          check_in_time,
           presented,
           users!inner (
             id,
@@ -230,26 +234,27 @@ export default function InteraccionScreen() {
           )
         `)
         .eq('event_id', appointment.event_id)
-        .eq('status', 'confirmada')
-        .eq('location_confirmed', true);
+        .eq('confirmed', true);
 
       if (error) {
         console.error('Error loading participants:', error);
         return;
       }
 
-      console.log('Raw participants data:', JSON.stringify(data, null, 2));
+      console.log('Raw participants data from event_participants:', JSON.stringify(data, null, 2));
 
-      // Transform the data correctly
+      // Transform the data
       const participants: Participant[] = (data || []).map((item: any) => {
         const userName = item.users?.name || 'Usuario';
         const userPhoto = item.users?.profile_photo_url || null;
         
-        console.log('Processing participant:', {
+        console.log('Processing confirmed participant:', {
           id: item.id,
           user_id: item.user_id,
           name: userName,
-          photo: userPhoto
+          confirmed: item.confirmed,
+          check_in_time: item.check_in_time,
+          presented: item.presented
         });
 
         return {
@@ -258,13 +263,14 @@ export default function InteraccionScreen() {
           name: userName,
           profile_photo_url: userPhoto,
           occupation: 'Participante',
-          arrival_status: item.arrival_status,
+          confirmed: item.confirmed,
+          check_in_time: item.check_in_time,
           presented: item.presented || false,
         };
       });
 
-      console.log('Active participants loaded:', participants.length);
-      console.log('Participants:', participants.map(p => ({ name: p.name, user_id: p.user_id })));
+      console.log('Confirmed participants loaded:', participants.length);
+      console.log('Participants:', participants.map(p => ({ name: p.name, user_id: p.user_id, confirmed: p.confirmed })));
       setActiveParticipants(participants);
       
       const allHavePresented = participants.every(p => p.presented);
@@ -389,7 +395,7 @@ export default function InteraccionScreen() {
   };
 
   const handleCodeConfirmation = async () => {
-    if (!appointment) return;
+    if (!appointment || !user) return;
 
     const enteredCode = confirmationCode.trim();
     console.log('User entered code:', enteredCode, '| Expected code:', SECRET_CODE);
@@ -404,38 +410,56 @@ export default function InteraccionScreen() {
     setCodeError('');
 
     try {
-      const confirmedAt = new Date();
+      const confirmedAt = new Date().toISOString();
 
-      // Use 'on_time' instead of 'confirmed' to match database constraint
-      const { error: updateError } = await supabase
-        .from('appointments')
-        .update({
-          arrival_status: 'on_time',
-          checked_in_at: confirmedAt.toISOString(),
-          location_confirmed: true,
+      // Update event_participants table
+      const { data, error: updateError } = await supabase
+        .from('event_participants')
+        .upsert({
+          event_id: appointment.event_id,
+          user_id: user.id,
+          confirmed: true,
+          check_in_time: confirmedAt,
+        }, {
+          onConflict: 'event_id,user_id'
         })
-        .eq('id', appointment.id);
+        .select();
 
       if (updateError) {
-        console.error('Error updating arrival status:', updateError);
+        console.error('Error updating event_participants:', updateError);
         setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
         return;
       }
 
-      console.log('Check-in successful with code 1986');
+      if (!data || data.length === 0) {
+        console.error('No data returned from event_participants update');
+        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
+        return;
+      }
+
+      console.log('Check-in successful with code 1986, event_participants updated:', data);
+      
+      // Also update appointments table for backward compatibility
+      await supabase
+        .from('appointments')
+        .update({
+          arrival_status: 'on_time',
+          checked_in_at: confirmedAt,
+          location_confirmed: true,
+        })
+        .eq('id', appointment.id);
       
       setAppointment(prev => ({
         ...prev!,
         arrival_status: 'on_time',
-        checked_in_at: confirmedAt.toISOString(),
+        checked_in_at: confirmedAt,
         location_confirmed: true,
       }));
       
       setCheckInPhase('confirmed');
       setConfirmationCode('');
 
-      // Reload participants to update count
-      await loadActiveParticipants();
+      // Realtime will automatically update the participants list
     } catch (error) {
       console.error('Error during check-in:', error);
       setCodeError('Ocurrió un error. Intenta de nuevo.');
@@ -487,29 +511,37 @@ export default function InteraccionScreen() {
   };
 
   const handleUserPresented = async () => {
-    if (!appointment) return;
+    if (!appointment || !user) return;
 
     try {
       console.log('User marked as presented');
       
+      // Update event_participants table
       const { error } = await supabase
-        .from('appointments')
+        .from('event_participants')
         .update({ presented: true })
-        .eq('id', appointment.id);
+        .eq('event_id', appointment.event_id)
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error updating presented status:', error);
         return;
       }
 
+      // Also update appointments for backward compatibility
+      await supabase
+        .from('appointments')
+        .update({ presented: true })
+        .eq('id', appointment.id);
+
       setUserPresented(true);
-      loadActiveParticipants();
+      // Realtime will automatically update the participants list
     } catch (error) {
       console.error('Error marking user as presented:', error);
     }
   };
 
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 3;
 
   const ritualOpacity = ritualAnimation.interpolate({
     inputRange: [0, 1],
@@ -800,7 +832,7 @@ export default function InteraccionScreen() {
             {!canStartExperience && (
               <View style={styles.waitingInfoCard}>
                 <Text style={styles.waitingInfoText}>
-                  La experiencia comenzará cuando al menos 2 personas estén listas.
+                  La experiencia comenzará cuando al menos 3 personas estén confirmadas.
                 </Text>
               </View>
             )}
