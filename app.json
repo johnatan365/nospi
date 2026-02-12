@@ -60,7 +60,8 @@
     },
     "web": {
       "favicon": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
       "expo-font",
