@@ -16,13 +16,41 @@ export default function SubscriptionPlansScreen() {
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [exchangeRate] = useState(3678); // USD to COP exchange rate (current rate)
+  const [exchangeRate, setExchangeRate] = useState<number>(3678);
+  const [loadingRate, setLoadingRate] = useState(true);
 
   useEffect(() => {
     console.log('Payment screen loaded - $5 per event');
     setSelectedPayment(null);
     setProcessing(false);
+    fetchExchangeRate();
   }, []);
+
+  const fetchExchangeRate = async () => {
+    try {
+      console.log('Fetching current USD to COP exchange rate');
+      setLoadingRate(true);
+      
+      // Fetch from a reliable exchange rate API
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      const data = await response.json();
+      
+      if (data && data.rates && data.rates.COP) {
+        const rate = Math.round(data.rates.COP);
+        console.log('Current exchange rate: 1 USD =', rate, 'COP');
+        setExchangeRate(rate);
+      } else {
+        console.log('Using fallback exchange rate');
+        setExchangeRate(3678);
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rate:', error);
+      console.log('Using fallback exchange rate');
+      setExchangeRate(3678);
+    } finally {
+      setLoadingRate(false);
+    }
+  };
 
   const priceUSD = 5.00;
   const priceCOP = priceUSD * exchangeRate;
@@ -75,7 +103,6 @@ export default function SubscriptionPlansScreen() {
             return;
           } else {
             console.log('Appointment created successfully');
-            // Set flag to show notification prompt after navigating to appointments
             await AsyncStorage.setItem('should_check_notification_prompt', 'true');
           }
         } else {
@@ -120,10 +147,19 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Precio por evento</Text>
           <Text style={styles.priceAmount}>{priceUSDText}</Text>
-          <Text style={styles.priceAmountCOP}>{priceCOPText}</Text>
+          {loadingRate ? (
+            <ActivityIndicator size="small" color={nospiColors.purpleMid} style={{ marginVertical: 8 }} />
+          ) : (
+            <Text style={styles.priceAmountCOP}>{priceCOPText}</Text>
+          )}
           <Text style={styles.priceDescription}>
             Pago único por evento. Sin suscripciones ni cargos recurrentes.
           </Text>
+          {!loadingRate && (
+            <Text style={styles.exchangeRateNote}>
+              Tasa de cambio actual: 1 USD = {exchangeRate.toLocaleString('es-CO')} COP
+            </Text>
+          )}
         </View>
 
         <View style={styles.benefitsContainer}>
@@ -244,7 +280,9 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>Total a pagar:</Text>
           <Text style={styles.summaryAmount}>{totalUSDText}</Text>
-          <Text style={styles.summaryAmountCOP}>{totalCOPText}</Text>
+          {!loadingRate && (
+            <Text style={styles.summaryAmountCOP}>{totalCOPText}</Text>
+          )}
         </View>
 
         <TouchableOpacity
@@ -346,6 +384,13 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 8,
+  },
+  exchangeRateNote: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   benefitsContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

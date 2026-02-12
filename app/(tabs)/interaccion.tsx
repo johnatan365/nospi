@@ -1,11 +1,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
-import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
@@ -17,9 +16,6 @@ interface Event {
   time: string;
   location: string;
   address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  radius_meters: number | null;
   start_time: string | null;
   max_participants: number;
   current_participants: number;
@@ -47,6 +43,8 @@ interface Participant {
   presented: boolean;
 }
 
+type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -59,16 +57,12 @@ export default function InteraccionScreen() {
   const { user } = useSupabase();
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [countdown, setCountdown] = useState<string>('');
+  const [countdown, setCountdown] = useState<number>(0);
+  const [countdownDisplay, setCountdownDisplay] = useState<string>('');
   const [isEventDay, setIsEventDay] = useState(false);
-  const [locationPermission, setLocationPermission] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [isWithinRadius, setIsWithinRadius] = useState(false);
-  const [locationConfirmed, setLocationConfirmed] = useState(false);
-  const [canStartExperience, setCanStartExperience] = useState(false);
-  const [isLate, setIsLate] = useState(false);
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [checkingLocation, setCheckingLocation] = useState(false);
+  const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
+  const [confirmationCode, setConfirmationCode] = useState('');
+  const [codeError, setCodeError] = useState('');
   
   // New phase states
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -100,18 +94,6 @@ export default function InteraccionScreen() {
   }, []);
 
   useEffect(() => {
-    if (appointment && isEventDay && locationPermission) {
-      checkUserLocation();
-    }
-  }, [appointment, isEventDay, locationPermission]);
-
-  useEffect(() => {
-    const eventStarted = countdown === '¡Es hora!';
-    const canStart = eventStarted && isWithinRadius && locationConfirmed && !isLate;
-    setCanStartExperience(canStart);
-  }, [countdown, isWithinRadius, locationConfirmed, isLate]);
-
-  useEffect(() => {
     if (experienceStarted && appointment) {
       loadActiveParticipants();
     }
@@ -127,7 +109,6 @@ export default function InteraccionScreen() {
     try {
       console.log('Loading confirmed appointment for user:', user.id);
       
-      // First, get all confirmed appointments with completed payment
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -145,9 +126,6 @@ export default function InteraccionScreen() {
             time,
             location,
             address,
-            latitude,
-            longitude,
-            radius_meters,
             start_time,
             max_participants,
             current_participants,
@@ -170,19 +148,21 @@ export default function InteraccionScreen() {
         return;
       }
 
-      // Find the most recent upcoming or current event
       const now = new Date();
       const upcomingAppointment = data.find(apt => {
         if (!apt.event?.start_time) return false;
         const eventDate = new Date(apt.event.start_time);
-        // Include events from today onwards
         return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
       });
 
       const appointmentData = upcomingAppointment || data[0];
       console.log('Appointment loaded:', appointmentData.id);
       setAppointment(appointmentData as any);
-      setLocationConfirmed(appointmentData.location_confirmed || false);
+      
+      if (appointmentData.location_confirmed) {
+        setCheckInPhase('confirmed');
+      }
+      
       setExperienceStarted(appointmentData.experience_started || false);
       setUserPresented(appointmentData.presented || false);
       
@@ -201,7 +181,7 @@ export default function InteraccionScreen() {
     if (!appointment) return;
 
     try {
-      console.log('Loading active participants for event:', appointment.event_id);
+      console.log('Loading active participants (on_time only) for event:', appointment.event_id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -212,8 +192,7 @@ export default function InteraccionScreen() {
           presented,
           users:user_id (
             name,
-            profile_photo_url,
-            occupation
+            profile_photo_url
           )
         `)
         .eq('event_id', appointment.event_id)
@@ -231,12 +210,12 @@ export default function InteraccionScreen() {
         user_id: item.user_id,
         name: item.users?.name || 'Usuario',
         profile_photo_url: item.users?.profile_photo_url || null,
-        occupation: item.users?.occupation || 'No especificado',
+        occupation: 'Participante',
         arrival_status: item.arrival_status,
         presented: item.presented || false,
       }));
 
-      console.log('Active participants loaded:', participants.length);
+      console.log('Active participants (on_time) loaded:', participants.length);
       setActiveParticipants(participants);
       
       const allHavePresented = participants.every(p => p.presented);
@@ -267,13 +246,14 @@ export default function InteraccionScreen() {
     const eventDate = new Date(startTime);
     const diff = eventDate.getTime() - now.getTime();
 
+    setCountdown(diff);
+
     if (diff <= 0) {
-      setCountdown('¡Es hora!');
+      setCountdownDisplay('¡Es hora!');
       
-      const minutesLate = Math.abs(diff) / (1000 * 60);
-      if (minutesLate > 10 && !locationConfirmed) {
-        setIsLate(true);
-        updateArrivalStatus('late');
+      // Check if user should show code entry
+      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
+        setCheckInPhase('code_entry');
       }
       return;
     }
@@ -283,7 +263,7 @@ export default function InteraccionScreen() {
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    setCountdown(countdownText);
+    setCountdownDisplay(countdownText);
   };
 
   const requestNotificationPermissions = async () => {
@@ -359,144 +339,75 @@ export default function InteraccionScreen() {
     }
   };
 
-  const requestLocationPermission = async () => {
+  const handleCodeConfirmation = async () => {
+    if (!appointment) return;
+
+    console.log('User entered code:', confirmationCode);
+
+    if (confirmationCode.trim() !== '1986') {
+      console.log('Incorrect code entered');
+      setCodeError('Código incorrecto. Verifica el código del encuentro.');
+      return;
+    }
+
+    console.log('Correct code entered, processing check-in');
+    setCodeError('');
+
     try {
-      console.log('Requesting location permission');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      if (status === 'granted') {
-        console.log('Location permission granted');
-        setLocationPermission(true);
-        setShowPermissionModal(false);
-        checkUserLocation();
+      const confirmedAt = new Date();
+      const eventStartTime = new Date(appointment.event.start_time!);
+      const tenMinutesAfterStart = new Date(eventStartTime.getTime() + 10 * 60 * 1000);
+
+      let newArrivalStatus: 'on_time' | 'late' = 'late';
+      if (confirmedAt <= tenMinutesAfterStart) {
+        newArrivalStatus = 'on_time';
+        console.log('User is on time');
       } else {
-        console.log('Location permission denied');
-        Alert.alert(
-          'Permiso requerido',
-          'Necesitas activar la ubicación para participar en la experiencia Nospi.',
-          [{ text: 'OK' }]
-        );
+        console.log('User is late');
       }
-    } catch (error) {
-      console.error('Error requesting location permission:', error);
-    }
-  };
 
-  const checkUserLocation = async () => {
-    if (!appointment || !appointment.event.latitude || !appointment.event.longitude) {
-      console.log('No event location data available');
-      return;
-    }
-
-    setCheckingLocation(true);
-    try {
-      console.log('Getting user location');
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const userLat = location.coords.latitude;
-      const userLon = location.coords.longitude;
-      setUserLocation({ latitude: userLat, longitude: userLon });
-
-      const distance = calculateDistance(
-        userLat,
-        userLon,
-        appointment.event.latitude,
-        appointment.event.longitude
-      );
-
-      const radiusMeters = appointment.event.radius_meters || 100;
-      const withinRadius = distance <= radiusMeters;
-      
-      console.log(`User distance from event: ${distance.toFixed(2)}m (radius: ${radiusMeters}m)`);
-      setIsWithinRadius(withinRadius);
-    } catch (error) {
-      console.error('Error getting user location:', error);
-      Alert.alert(
-        'Error de ubicación',
-        'No se pudo obtener tu ubicación. Verifica que el GPS esté activado.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setCheckingLocation(false);
-    }
-  };
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
-  };
-
-  const handleCheckIn = async () => {
-    if (!appointment || !isWithinRadius) {
-      return;
-    }
-
-    try {
-      console.log('User checking in at location');
-      
-      const now = new Date();
-      const eventStart = new Date(appointment.event.start_time!);
-      const minutesAfterStart = (now.getTime() - eventStart.getTime()) / (1000 * 60);
-      
-      const arrivalStatus = minutesAfterStart > 10 ? 'late' : 'on_time';
-      
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('appointments')
         .update({
+          arrival_status: newArrivalStatus,
+          checked_in_at: confirmedAt.toISOString(),
           location_confirmed: true,
-          checked_in_at: now.toISOString(),
-          arrival_status: arrivalStatus,
         })
         .eq('id', appointment.id);
 
-      if (error) {
-        console.error('Error updating check-in:', error);
-        Alert.alert('Error', 'No se pudo confirmar tu presencia. Intenta de nuevo.');
+      if (updateError) {
+        console.error('Error updating arrival status:', updateError);
+        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
         return;
       }
 
-      console.log('Check-in successful, arrival status:', arrivalStatus);
-      setLocationConfirmed(true);
-      setIsLate(arrivalStatus === 'late');
+      console.log('Check-in successful, arrival status:', newArrivalStatus);
       
-      Alert.alert(
-        '¡Confirmado!',
-        arrivalStatus === 'on_time' 
-          ? 'Has confirmado tu presencia a tiempo. ¡Disfruta la experiencia!'
-          : 'Has confirmado tu presencia. Llegaste tarde, pero aún puedes participar en matches y evaluaciones.',
-        [{ text: 'OK' }]
-      );
+      setAppointment(prev => ({
+        ...prev!,
+        arrival_status: newArrivalStatus,
+        checked_in_at: confirmedAt.toISOString(),
+        location_confirmed: true,
+      }));
+      
+      setCheckInPhase('confirmed');
+      setConfirmationCode('');
+
+      // Show success modal
+      const successMessage = newArrivalStatus === 'on_time'
+        ? '¡Llegada confirmada! Estás a tiempo para participar completamente en la experiencia.'
+        : 'Llegada confirmada. Llegaste tarde, pero aún puedes participar en match secreto y evaluaciones.';
+      
+      showSuccessModal(successMessage);
     } catch (error) {
       console.error('Error during check-in:', error);
-      Alert.alert('Error', 'Ocurrió un error al confirmar tu presencia.');
+      setCodeError('Ocurrió un error. Intenta de nuevo.');
     }
   };
 
-  const updateArrivalStatus = async (status: 'on_time' | 'late') => {
-    if (!appointment) return;
-
-    try {
-      await supabase
-        .from('appointments')
-        .update({ arrival_status: status })
-        .eq('id', appointment.id);
-      
-      console.log('Arrival status updated to:', status);
-    } catch (error) {
-      console.error('Error updating arrival status:', error);
-    }
+  const showSuccessModal = (message: string) => {
+    // Using a simple modal approach
+    console.log('Check-in success:', message);
   };
 
   const handleStartExperience = () => {
@@ -517,7 +428,6 @@ export default function InteraccionScreen() {
 
       if (error) {
         console.error('Error updating experience_started:', error);
-        Alert.alert('Error', 'No se pudo iniciar la experiencia. Intenta de nuevo.');
         return;
       }
 
@@ -528,7 +438,6 @@ export default function InteraccionScreen() {
       console.log('Experience started, moving to presentation phase');
     } catch (error) {
       console.error('Error starting experience:', error);
-      Alert.alert('Error', 'Ocurrió un error al iniciar la experiencia.');
     }
   };
 
@@ -545,23 +454,17 @@ export default function InteraccionScreen() {
 
       if (error) {
         console.error('Error updating presented status:', error);
-        Alert.alert('Error', 'No se pudo confirmar tu presentación. Intenta de nuevo.');
         return;
       }
 
       setUserPresented(true);
       loadActiveParticipants();
-      
-      Alert.alert(
-        '¡Gracias!',
-        'Has confirmado tu presentación. Esperando a que todos se presenten...',
-        [{ text: 'OK' }]
-      );
     } catch (error) {
       console.error('Error marking user as presented:', error);
-      Alert.alert('Error', 'Ocurrió un error al confirmar tu presentación.');
     }
   };
+
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
     return (
@@ -728,6 +631,7 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   const locationText = appointment.event.address || appointment.event.location;
+  const isLate = appointment.arrival_status === 'late';
 
   return (
     <LinearGradient
@@ -742,7 +646,7 @@ export default function InteraccionScreen() {
 
         <View style={styles.countdownCard}>
           <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
-          <Text style={styles.countdownTime}>{countdown}</Text>
+          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
         </View>
 
         <View style={styles.eventCard}>
@@ -756,70 +660,82 @@ export default function InteraccionScreen() {
           <Text style={styles.eventLocation}>{locationText}</Text>
         </View>
 
-        {!locationPermission ? (
-          <TouchableOpacity
-            style={styles.locationButton}
-            onPress={() => setShowPermissionModal(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.locationButtonText}>📍 Activar Ubicación</Text>
-            <Text style={styles.locationButtonSubtext}>Requerido para participar</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.locationStatusCard}>
-            {checkingLocation ? (
-              <ActivityIndicator size="small" color={nospiColors.purpleDark} />
-            ) : isWithinRadius ? (
-              <>
-                <Text style={styles.locationStatusIcon}>✅</Text>
-                <Text style={styles.locationStatusText}>Estás en el lugar del evento</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.locationStatusIcon}>📍</Text>
-                <Text style={styles.locationStatusText}>
-                  Debes estar en el lugar del encuentro para iniciar la experiencia
-                </Text>
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={checkUserLocation}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.refreshButtonText}>Actualizar ubicación</Text>
-                </TouchableOpacity>
-              </>
-            )}
+        {checkInPhase === 'code_entry' && (
+          <View style={styles.codeEntryCard}>
+            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
+            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
+            
+            <TextInput
+              style={styles.codeInput}
+              value={confirmationCode}
+              onChangeText={(text) => {
+                setConfirmationCode(text);
+                setCodeError('');
+              }}
+              placeholder="Código"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              maxLength={4}
+              autoFocus
+            />
+
+            {codeError ? (
+              <Text style={styles.codeErrorText}>{codeError}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
+              onPress={handleCodeConfirmation}
+              disabled={!confirmationCode.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+            </TouchableOpacity>
+
+            <View style={styles.codeInfoCard}>
+              <Text style={styles.codeInfoText}>
+                💡 Ingresa el código dentro de los primeros 10 minutos para participar completamente en la experiencia
+              </Text>
+            </View>
           </View>
         )}
 
-        {locationPermission && isWithinRadius && !locationConfirmed && (
-          <TouchableOpacity
-            style={[styles.checkInButton, !isWithinRadius && styles.buttonDisabled]}
-            onPress={handleCheckIn}
-            disabled={!isWithinRadius}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.checkInButtonText}>✓ Estoy aquí</Text>
-          </TouchableOpacity>
+        {checkInPhase === 'confirmed' && !experienceStarted && (
+          <>
+            <View style={styles.confirmedCard}>
+              <Text style={styles.confirmedIcon}>✅</Text>
+              <Text style={styles.confirmedText}>
+                {isLate 
+                  ? 'Llegada confirmada. Llegaste tarde, pero puedes participar en match secreto y evaluaciones.'
+                  : '¡Llegada confirmada! Estás a tiempo para la experiencia completa.'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.startButton, !canStartExperience && styles.buttonDisabled]}
+              onPress={handleStartExperience}
+              disabled={!canStartExperience}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.startButtonText}>
+                {canStartExperience ? '🎉 Iniciar Experiencia' : '⏳ Esperando participantes...'}
+              </Text>
+            </TouchableOpacity>
+
+            {!canStartExperience && (
+              <View style={styles.waitingInfoCard}>
+                <Text style={styles.waitingInfoText}>
+                  Se necesitan mínimo 2 participantes puntuales para iniciar la experiencia
+                </Text>
+              </View>
+            )}
+          </>
         )}
 
-        {locationConfirmed && !experienceStarted && (
-          <TouchableOpacity
-            style={[styles.startButton, !canStartExperience && styles.buttonDisabled]}
-            onPress={handleStartExperience}
-            disabled={!canStartExperience}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.startButtonText}>
-              {canStartExperience ? '🎉 Iniciar Experiencia' : '⏳ Esperando inicio...'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {isLate && (
+        {isLate && checkInPhase === 'confirmed' && (
           <View style={styles.lateInfoCard}>
             <Text style={styles.lateInfoText}>
-              Has llegado después de la hora oficial. Aún puedes hacer match y evaluar, pero no participarás en la ruleta ni en puntos.
+              Has llegado después de los primeros 10 minutos. Aún puedes hacer match secreto y evaluar, pero no participarás en la ruleta ni en puntos.
             </Text>
           </View>
         )}
@@ -827,14 +743,14 @@ export default function InteraccionScreen() {
         <View style={styles.instructionsCard}>
           <Text style={styles.instructionsTitle}>Instrucciones</Text>
           <Text style={styles.instructionsText}>
-            1. Activa tu ubicación{'\n'}
-            2. Llega al lugar del evento{'\n'}
-            3. Confirma tu presencia con "Estoy aquí"{'\n'}
-            4. Espera a que inicie la experiencia{'\n'}
+            1. Espera a que el contador llegue a cero{'\n'}
+            2. Ingresa el código del encuentro: 1986{'\n'}
+            3. Confirma dentro de los primeros 10 minutos para participar completamente{'\n'}
+            4. Espera a que se reúnan mínimo 2 participantes puntuales{'\n'}
             5. ¡Disfruta y conecta!
           </Text>
           <Text style={styles.instructionsWarning}>
-            ⚠️ Debes confirmar tu presencia dentro de los primeros 10 minutos para participar completamente
+            ⚠️ Solo los participantes que confirmen dentro de los primeros 10 minutos podrán participar en la ruleta y competir por el premio
           </Text>
         </View>
       </ScrollView>
@@ -862,37 +778,6 @@ export default function InteraccionScreen() {
               activeOpacity={0.8}
             >
               <Text style={styles.welcomeButtonText}>Comenzar experiencia</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Permission Modal */}
-      <Modal
-        visible={showPermissionModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPermissionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Ubicación Requerida</Text>
-            <Text style={styles.modalText}>
-              Para participar en la experiencia Nospi, necesitas activar tu ubicación. Esto nos permite verificar que estás en el lugar del evento.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={requestLocationPermission}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalButtonText}>Activar Ubicación</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              onPress={() => setShowPermissionModal(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalCancelButtonText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1071,34 +956,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  locationButton: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  locationButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  locationButtonSubtext: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  locationStatusCard: {
+  codeEntryCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
+    borderRadius: 20,
+    padding: 24,
     marginBottom: 16,
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
@@ -1106,30 +967,38 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  locationStatusIcon: {
-    fontSize: 40,
-    marginBottom: 12,
-  },
-  locationStatusText: {
-    fontSize: 16,
+  codeEntryTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  codeEntrySubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  codeInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleLight,
+  },
+  codeErrorText: {
+    fontSize: 14,
+    color: '#EF4444',
     textAlign: 'center',
     marginBottom: 12,
   },
-  refreshButton: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  refreshButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
-  },
-  checkInButton: {
-    backgroundColor: '#10B981',
+  confirmCodeButton: {
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -1140,10 +1009,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  checkInButtonText: {
+  confirmCodeButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  codeInfoCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 12,
+    padding: 16,
+  },
+  codeInfoText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  confirmedCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  confirmedIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  confirmedText: {
+    fontSize: 16,
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
   },
   startButton: {
     backgroundColor: nospiColors.purpleDark,
@@ -1164,6 +1064,18 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  waitingInfoCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  waitingInfoText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   lateInfoCard: {
     backgroundColor: '#FEF3C7',
@@ -1348,112 +1260,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  successCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  successIcon: {
-    fontSize: 80,
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-  },
-  successMessage: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  infoCard: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  infoCardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  infoCardText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  infoCardBullet: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    marginLeft: 8,
-    marginBottom: 4,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  modalButton: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  modalCancelButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  modalCancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
   },
   welcomeModalContent: {
     backgroundColor: '#FFFFFF',
