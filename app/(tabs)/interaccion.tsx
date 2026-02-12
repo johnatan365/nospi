@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -45,6 +45,8 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
+const SECRET_CODE = '1986'; // Secret code known only by event host
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -66,11 +68,13 @@ export default function InteraccionScreen() {
   
   // New phase states
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showRitualModal, setShowRitualModal] = useState(false);
   const [experienceStarted, setExperienceStarted] = useState(false);
   const [showPresentationPhase, setShowPresentationPhase] = useState(false);
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
+  const [ritualAnimation] = useState(new Animated.Value(0));
 
   useFocusEffect(
     useCallback(() => {
@@ -181,7 +185,7 @@ export default function InteraccionScreen() {
     if (!appointment) return;
 
     try {
-      console.log('Loading active participants (on_time only) for event:', appointment.event_id);
+      console.log('Loading active participants (confirmed only) for event:', appointment.event_id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -197,8 +201,7 @@ export default function InteraccionScreen() {
         `)
         .eq('event_id', appointment.event_id)
         .eq('status', 'confirmada')
-        .eq('location_confirmed', true)
-        .eq('arrival_status', 'on_time');
+        .eq('location_confirmed', true);
 
       if (error) {
         console.error('Error loading participants:', error);
@@ -215,7 +218,7 @@ export default function InteraccionScreen() {
         presented: item.presented || false,
       }));
 
-      console.log('Active participants (on_time) loaded:', participants.length);
+      console.log('Active participants loaded:', participants.length);
       setActiveParticipants(participants);
       
       const allHavePresented = participants.every(p => p.presented);
@@ -344,7 +347,7 @@ export default function InteraccionScreen() {
 
     console.log('User entered code:', confirmationCode);
 
-    if (confirmationCode.trim() !== '1986') {
+    if (confirmationCode.trim() !== SECRET_CODE) {
       console.log('Incorrect code entered');
       setCodeError('Código incorrecto. Verifica el código del encuentro.');
       return;
@@ -355,21 +358,11 @@ export default function InteraccionScreen() {
 
     try {
       const confirmedAt = new Date();
-      const eventStartTime = new Date(appointment.event.start_time!);
-      const tenMinutesAfterStart = new Date(eventStartTime.getTime() + 10 * 60 * 1000);
-
-      let newArrivalStatus: 'on_time' | 'late' = 'late';
-      if (confirmedAt <= tenMinutesAfterStart) {
-        newArrivalStatus = 'on_time';
-        console.log('User is on time');
-      } else {
-        console.log('User is late');
-      }
 
       const { error: updateError } = await supabase
         .from('appointments')
         .update({
-          arrival_status: newArrivalStatus,
+          arrival_status: 'confirmed',
           checked_in_at: confirmedAt.toISOString(),
           location_confirmed: true,
         })
@@ -381,11 +374,11 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Check-in successful, arrival status:', newArrivalStatus);
+      console.log('Check-in successful');
       
       setAppointment(prev => ({
         ...prev!,
-        arrival_status: newArrivalStatus,
+        arrival_status: 'confirmed',
         checked_in_at: confirmedAt.toISOString(),
         location_confirmed: true,
       }));
@@ -393,26 +386,25 @@ export default function InteraccionScreen() {
       setCheckInPhase('confirmed');
       setConfirmationCode('');
 
-      // Show success modal
-      const successMessage = newArrivalStatus === 'on_time'
-        ? '¡Llegada confirmada! Estás a tiempo para participar completamente en la experiencia.'
-        : 'Llegada confirmada. Llegaste tarde, pero aún puedes participar en match secreto y evaluaciones.';
-      
-      showSuccessModal(successMessage);
+      // Reload participants to update count
+      await loadActiveParticipants();
     } catch (error) {
       console.error('Error during check-in:', error);
       setCodeError('Ocurrió un error. Intenta de nuevo.');
     }
   };
 
-  const showSuccessModal = (message: string) => {
-    // Using a simple modal approach
-    console.log('Check-in success:', message);
-  };
-
   const handleStartExperience = () => {
-    console.log('User starting experience - showing welcome modal');
-    setShowWelcomeModal(true);
+    console.log('User starting experience - showing ritual modal');
+    setShowRitualModal(true);
+    
+    // Start ritual animation
+    Animated.timing(ritualAnimation, {
+      toValue: 1,
+      duration: 2000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleBeginExperience = async () => {
@@ -431,14 +423,19 @@ export default function InteraccionScreen() {
         return;
       }
 
-      setShowWelcomeModal(false);
-      setExperienceStarted(true);
-      setShowPresentationPhase(true);
+      setShowRitualModal(false);
+      setShowWelcomeModal(true);
       
-      console.log('Experience started, moving to presentation phase');
+      console.log('Experience started, showing welcome modal');
     } catch (error) {
       console.error('Error starting experience:', error);
     }
+  };
+
+  const handleContinueToPresentation = () => {
+    setShowWelcomeModal(false);
+    setExperienceStarted(true);
+    setShowPresentationPhase(true);
   };
 
   const handleUserPresented = async () => {
@@ -465,6 +462,16 @@ export default function InteraccionScreen() {
   };
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+
+  const ritualOpacity = ritualAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const ritualScale = ritualAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
 
   if (loading) {
     return (
@@ -631,7 +638,6 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   const locationText = appointment.event.address || appointment.event.location;
-  const isLate = appointment.arrival_status === 'late';
 
   return (
     <LinearGradient
@@ -643,6 +649,19 @@ export default function InteraccionScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+
+        {/* Emotional Reminder */}
+        {countdown > 0 && (
+          <View style={styles.reminderCard}>
+            <Text style={styles.reminderIcon}>💫</Text>
+            <Text style={styles.reminderText}>
+              Los primeros minutos son clave para generar conexión.
+            </Text>
+            <Text style={styles.reminderSubtext}>
+              Llega a tiempo y aprovecha cada momento.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.countdownCard}>
           <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
@@ -691,12 +710,6 @@ export default function InteraccionScreen() {
             >
               <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
             </TouchableOpacity>
-
-            <View style={styles.codeInfoCard}>
-              <Text style={styles.codeInfoText}>
-                💡 Ingresa el código dentro de los primeros 10 minutos para participar completamente en la experiencia
-              </Text>
-            </View>
           </View>
         )}
 
@@ -705,55 +718,66 @@ export default function InteraccionScreen() {
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
               <Text style={styles.confirmedText}>
-                {isLate 
-                  ? 'Llegada confirmada. Llegaste tarde, pero puedes participar en match secreto y evaluaciones.'
-                  : '¡Llegada confirmada! Estás a tiempo para la experiencia completa.'}
+                ¡Llegada confirmada! Eres un Participante Activo.
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={[styles.startButton, !canStartExperience && styles.buttonDisabled]}
-              onPress={handleStartExperience}
-              disabled={!canStartExperience}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.startButtonText}>
-                {canStartExperience ? '🎉 Iniciar Experiencia' : '⏳ Esperando participantes...'}
-              </Text>
-            </TouchableOpacity>
 
             {!canStartExperience && (
               <View style={styles.waitingInfoCard}>
                 <Text style={styles.waitingInfoText}>
-                  Se necesitan mínimo 2 participantes puntuales para iniciar la experiencia
+                  La experiencia comenzará cuando al menos 2 personas estén listas.
+                </Text>
+                <Text style={styles.waitingCountText}>
+                  Participantes confirmados: {activeParticipants.length}
                 </Text>
               </View>
             )}
+
+            {canStartExperience && (
+              <TouchableOpacity
+                style={styles.startButton}
+                onPress={handleStartExperience}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.startButtonText}>🎉 Iniciar Experiencia</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
-
-        {isLate && checkInPhase === 'confirmed' && (
-          <View style={styles.lateInfoCard}>
-            <Text style={styles.lateInfoText}>
-              Has llegado después de los primeros 10 minutos. Aún puedes hacer match secreto y evaluar, pero no participarás en la ruleta ni en puntos.
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>Instrucciones</Text>
-          <Text style={styles.instructionsText}>
-            1. Espera a que el contador llegue a cero{'\n'}
-            2. Ingresa el código del encuentro: 1986{'\n'}
-            3. Confirma dentro de los primeros 10 minutos para participar completamente{'\n'}
-            4. Espera a que se reúnan mínimo 2 participantes puntuales{'\n'}
-            5. ¡Disfruta y conecta!
-          </Text>
-          <Text style={styles.instructionsWarning}>
-            ⚠️ Solo los participantes que confirmen dentro de los primeros 10 minutos podrán participar en la ruleta y competir por el premio
-          </Text>
-        </View>
       </ScrollView>
+
+      {/* Ritual de Inicio Oficial Modal */}
+      <Modal
+        visible={showRitualModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View 
+            style={[
+              styles.ritualModalContent,
+              { opacity: ritualOpacity, transform: [{ scale: ritualScale }] }
+            ]}
+          >
+            <Text style={styles.ritualIcon}>✨</Text>
+            <Text style={styles.ritualTitle}>La experiencia comienza ahora.</Text>
+            <Text style={styles.ritualText}>
+              Los primeros minutos son cruciales para crear una mejor experiencia con el resto del grupo.
+            </Text>
+            <Text style={styles.ritualSubtext}>
+              Participa desde el inicio y deja que la energía fluya.
+            </Text>
+            <TouchableOpacity
+              style={styles.ritualButton}
+              onPress={handleBeginExperience}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.ritualButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* Welcome Modal - Phase 1 */}
       <Modal
@@ -774,7 +798,7 @@ export default function InteraccionScreen() {
             </Text>
             <TouchableOpacity
               style={styles.welcomeButton}
-              onPress={handleBeginExperience}
+              onPress={handleContinueToPresentation}
               activeOpacity={0.8}
             >
               <Text style={styles.welcomeButtonText}>Comenzar experiencia</Text>
@@ -894,6 +918,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  reminderCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  reminderIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  reminderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  reminderSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
@@ -1002,7 +1054,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 16,
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1013,17 +1064,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  codeInfoCard: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 12,
-    padding: 16,
-  },
-  codeInfoText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   confirmedCard: {
     backgroundColor: '#D1FAE5',
@@ -1050,7 +1090,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 16,
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1068,57 +1107,22 @@ const styles = StyleSheet.create({
   waitingInfoCard: {
     backgroundColor: nospiColors.purpleLight,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  waitingInfoText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  lateInfoCard: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  lateInfoText: {
-    fontSize: 14,
-    color: '#92400E',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  instructionsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    alignItems: 'center',
   },
-  instructionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  waitingInfoText: {
+    fontSize: 16,
     color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  instructionsText: {
-    fontSize: 14,
-    color: '#333',
+    textAlign: 'center',
     lineHeight: 24,
+    fontWeight: '600',
     marginBottom: 12,
   },
-  instructionsWarning: {
-    fontSize: 13,
-    color: '#F59E0B',
-    lineHeight: 20,
-    fontWeight: '600',
+  waitingCountText: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
   },
   phaseCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1266,6 +1270,61 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  ritualModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 40,
+    width: '100%',
+    maxWidth: 500,
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  ritualIcon: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  ritualTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  ritualText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 26,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  ritualSubtext: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 26,
+    marginBottom: 32,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  ritualButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  ritualButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   welcomeModalContent: {
     backgroundColor: '#FFFFFF',

@@ -2,56 +2,17 @@
 /**
  * GameDynamicsScreen - Nospi Interactive Game Experience
  * 
- * NEW FEATURES IMPLEMENTED:
+ * SIMPLIFIED CONFIRMATION SYSTEM:
+ * - No late arrival penalties
+ * - All confirmed users are active participants
+ * - Late arrivals can join seamlessly without restrictions
+ * - No time-based blocking or restrictions
  * 
+ * FEATURES:
  * 1. SECRET MATCH (Match Secreto en Tiempo Real)
- *    - Triggered after configurable rounds (currently round 2)
- *    - Private selection: each user picks 1 person they feel connection with
- *    - Mutual match detection: if both users select each other
- *    - Private notification: "Hay conexión mutua"
- *    - Contact unlocked within app
- *    - No public disclosure, no rejection messages
- *    - Late arrivals CAN participate in matches
- * 
  * 2. FINAL ANIMATION (Animación Final)
- *    - Only shown if group extended at least once
- *    - Elegant spinning animation with participant names
- *    - Confetti and celebration effects
- *    - Winner selection based on highest average score
- *    - Display: "Energía destacada de la noche: [Name]"
- *    - No full ranking shown
- * 
  * 3. AUTOMATIC PRIZE (Premio Automático)
- *    - Automatically creates reward in database for winner
- *    - Reward type: 'free_event'
- *    - Status: 'available'
- *    - Configurable expiration date
- *    - Auto-applies on next event booking
- * 
  * 4. POST-EVENT REPUTATION (Reputación Post-Evento)
- *    - Private evaluation after event
- *    - Each user evaluates others on:
- *      * Respeto (1-5)
- *      * Actitud (1-5)
- *      * Participación (1-5)
- *      * ¿Volverías a coincidir? (Sí/No)
- *    - Results never shown publicly
- *    - Internal reputation system with states:
- *      * Activo - good standing
- *      * Observación - pattern of issues detected
- *      * Suspendido - repeated negative patterns
- *    - NOT suspended for single negative evaluation
- *    - Pattern-based suspension only
- * 
- * BACKEND INTEGRATION REQUIRED:
- * See TODO comments throughout this file for specific endpoint requirements.
- * Database tables needed:
- * - secret_match_selections
- * - mutual_matches
- * - rewards
- * - reputation_evaluations
- * - user_reputation
- * - game_scores
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -199,7 +160,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const loadQuestion = async () => {
     console.log('Loading question for level:', currentLevel);
     // TODO: Backend Integration - GET /api/questions?level={currentLevel}&exclude={usedQuestionIds} → { id, text, level }
-    // For now, use mock data
     const mockQuestions: Record<QuestionLevel, string[]> = {
       divertido: [
         '¿Cuál es tu comida favorita y por qué?',
@@ -318,7 +278,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('Level vote submitted');
     
     // TODO: Backend Integration - GET /api/level-votes/results?eventId={eventId} → { keepVotes, upVotes }
-    // For now, simulate majority vote
     const simulatedUpVotes = Math.floor(Math.random() * activeParticipants.length);
     const majority = simulatedUpVotes > activeParticipants.length / 2;
     
@@ -356,7 +315,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('Extension vote submitted');
     
     // TODO: Backend Integration - GET /api/extension-votes/results?eventId={eventId} → { freeVotes, moreVotes }
-    // For now, simulate vote
     const simulatedMoreVotes = Math.floor(Math.random() * activeParticipants.length);
     const wantMore = simulatedMoreVotes > activeParticipants.length / 2;
     
@@ -394,15 +352,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     // TODO: Backend Integration - POST /api/secret-matches
     // Body: { eventId: string, selectorId: string, selectedId: string, roundNumber: number }
     // Response: { success: boolean, mutualMatch?: boolean, matchedUserId?: string, matchedUserName?: string }
-    // Backend should:
-    // 1. Store selection in secret_match_selections table
-    // 2. Check if selectedId has also selected selectorId
-    // 3. If mutual match exists, create entry in mutual_matches table
-    // 4. Return mutualMatch: true with matched user details
-    // 5. Ensure selections are private - only notify on mutual match
     
     // Simulate backend response
-    const isMutualMatch = Math.random() > 0.7; // 30% chance for demo
+    const isMutualMatch = Math.random() > 0.7;
     
     if (isMutualMatch) {
       const matchedParticipant = activeParticipants.find(p => p.user_id === selectedMatchUser);
@@ -424,13 +376,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     // TODO: Backend Integration - GET /api/game-scores/winner?eventId={eventId}
     // Response: { winnerId: string, winnerName: string, averageScore: number }
-    // Backend should:
-    // 1. Query game_scores table for all active participants in this event
-    // 2. Calculate average score for each participant (totalScore / ratingsCount)
-    // 3. Select participant with highest averageScore
-    // 4. Return only winner details (not full ranking)
     
-    // Simulate winner selection
     setTimeout(() => {
       const randomWinner = activeParticipants[Math.floor(Math.random() * activeParticipants.length)];
       setWinnerName(randomWinner.name);
@@ -445,11 +391,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // TODO: Backend Integration - POST /api/rewards
       // Body: { userId: string, rewardType: 'free_event', expirationDate: string (ISO 8601) }
       // Response: { success: boolean, rewardId: string }
-      // Backend should:
-      // 1. Create reward in rewards table
-      // 2. Set status: 'available'
-      // 3. Set expirationDate (e.g., 90 days from now)
-      // 4. Reward should be automatically applicable on next event booking
       
       console.log('Winner selected:', randomWinner.name);
       setAnimatingWinner(false);
@@ -461,18 +402,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     // TODO: Backend Integration - POST /api/notifications/post-event-evaluation
     // Body: { eventId: string, userId: string }
-    // Backend should:
-    // 1. Send push notification to user after event ends
-    // 2. Notification title: "Evalúa tu experiencia Nospi"
-    // 3. Notification body: "Tu opinión es importante. Evalúa a los participantes del evento."
-    // 4. Can be triggered automatically X hours after event end time
-    // 5. Or triggered manually when user finishes the game
     
     setGamePhase('post_event');
     setShowPostEventEvaluation(true);
     setEvaluationIndex(0);
     
-    // Filter out current user from participants to evaluate
     const participantsToEvaluate = activeParticipants.filter(p => p.user_id !== appointment?.event_id);
     if (participantsToEvaluate.length > 0) {
       setEvaluatingParticipant(participantsToEvaluate[0]);
@@ -497,19 +431,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     //   participationRating: number (1-5), 
     //   wouldMatchAgain: boolean 
     // }
-    // Response: { success: boolean }
-    // Backend should:
-    // 1. Store evaluation in reputation_evaluations table
-    // 2. Update user_reputation table for evaluatedId:
-    //    - Increment totalEvaluations
-    //    - Recalculate averageRespect, averageAttitude, averageParticipation
-    //    - If wouldMatchAgain is false, increment negativeMatchCount
-    //    - Update status based on pattern:
-    //      * 'Activo' - default, good standing
-    //      * 'Observación' - if negativeMatchCount >= 3 or average ratings < 2.5
-    //      * 'Suspendido' - if negativeMatchCount >= 5 or repeated low ratings
-    // 3. Do NOT suspend based on single negative evaluation
-    // 4. Evaluations are private - never show publicly
     
     // Reset ratings
     setRespectRating(null);
@@ -558,11 +479,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           <View style={styles.infoCard}>
             <Text style={styles.infoCardTitle}>Participantes Activos: {activeParticipants.length}</Text>
-            <Text style={styles.infoCardText}>Solo los participantes activos pueden:</Text>
+            <Text style={styles.infoCardText}>Todos los participantes confirmados pueden:</Text>
             <Text style={styles.infoCardBullet}>• Aparecer en ruleta</Text>
             <Text style={styles.infoCardBullet}>• Recibir preguntas</Text>
             <Text style={styles.infoCardBullet}>• Ser puntuados</Text>
             <Text style={styles.infoCardBullet}>• Competir por el premio</Text>
+            <Text style={styles.infoCardBullet}>• Participar en match secreto</Text>
           </View>
 
           <View style={styles.levelCard}>
