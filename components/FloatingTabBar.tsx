@@ -40,8 +40,8 @@ interface FloatingTabBarProps {
 
 export default function FloatingTabBar({
   tabs,
-  containerWidth = screenWidth * 0.85, // Increased from 2.5 to 0.85 (85% of screen width)
-  borderRadius = 40, // Increased from 35 to 40
+  containerWidth = screenWidth * 0.92,
+  borderRadius = 28,
   bottomMargin
 }: FloatingTabBarProps) {
   const router = useRouter();
@@ -102,7 +102,7 @@ export default function FloatingTabBar({
   const tabWidthPercent = ((100 / tabs.length) - 1).toFixed(2);
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = (containerWidth - 12) / tabs.length; // Account for container padding (6px on each side)
+    const tabWidth = (containerWidth - 16) / tabs.length;
     return {
       transform: [
         {
@@ -120,24 +120,24 @@ export default function FloatingTabBar({
   const dynamicStyles = {
     blurContainer: {
       ...styles.blurContainer,
-      borderWidth: 1.2,
-      borderColor: 'rgba(255, 255, 255, 1)',
+      borderWidth: 1.5,
+      borderColor: theme.dark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
       ...Platform.select({
         ios: {
           backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.8)'
-            : 'rgba(255, 255, 255, 0.6)',
+            ? 'rgba(28, 28, 30, 0.85)'
+            : 'rgba(255, 255, 255, 0.85)',
         },
         android: {
           backgroundColor: theme.dark
             ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.6)',
+            : 'rgba(255, 255, 255, 0.95)',
         },
         web: {
           backgroundColor: theme.dark
             ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.6)',
-          backdropFilter: 'blur(10px)',
+            : 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
         },
       }),
     },
@@ -147,9 +147,9 @@ export default function FloatingTabBar({
     indicator: {
       ...styles.indicator,
       backgroundColor: theme.dark
-        ? 'rgba(255, 255, 255, 0.08)' // Subtle white overlay in dark mode
-        : 'rgba(0, 0, 0, 0.04)', // Subtle black overlay in light mode
-      width: `${tabWidthPercent}%` as `${number}%`, // Dynamic width based on number of tabs
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.06)',
+      width: `${tabWidthPercent}%` as `${number}%`,
     },
   };
 
@@ -159,11 +159,11 @@ export default function FloatingTabBar({
         styles.container,
         {
           width: containerWidth,
-          marginBottom: bottomMargin ?? 24 // Increased from 20 to 24
+          marginBottom: bottomMargin ?? 20
         }
       ]}>
         <BlurView
-          intensity={80}
+          intensity={Platform.OS === 'ios' ? 100 : 80}
           style={[dynamicStyles.blurContainer, { borderRadius }]}
         >
           <View style={dynamicStyles.background} />
@@ -184,14 +184,17 @@ export default function FloatingTabBar({
                     <IconSymbol
                       android_material_icon_name={tab.icon}
                       ios_icon_name={tab.icon}
-                      size={28} // Increased from 24 to 28
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
+                      size={26}
+                      color={isActive ? (theme.dark ? '#FFFFFF' : '#000000') : (theme.dark ? '#8E8E93' : '#8E8E93')}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: theme.dark ? '#98989D' : '#8E8E93' },
-                        isActive && { color: theme.colors.primary, fontWeight: '600' },
+                        { color: theme.dark ? '#8E8E93' : '#8E8E93' },
+                        isActive && { 
+                          color: theme.dark ? '#FFFFFF' : '#000000',
+                          fontWeight: '700'
+                        },
                       ]}
                     >
                       {tab.label}
@@ -218,44 +221,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     alignSelf: 'center',
   },
   blurContainer: {
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
   },
   indicator: {
     position: 'absolute',
-    top: 6, // Increased from 4 to 6
-    left: 4, // Increased from 2 to 4
-    bottom: 6, // Increased from 4 to 6
-    borderRadius: 32, // Increased from 27 to 32
+    top: 8,
+    left: 8,
+    bottom: 8,
+    borderRadius: 20,
     width: `${(100 / 2) - 1}%`,
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 72, // Increased from 60 to 72
+    height: 68,
     alignItems: 'center',
-    paddingHorizontal: 6, // Increased from 4 to 6
-    gap: 8, // Added gap for more separation between tabs
+    paddingHorizontal: 8,
+    gap: 4,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10, // Increased from 8 to 10
+    paddingVertical: 8,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4, // Increased from 2 to 4
+    gap: 4,
   },
   tabLabel: {
-    fontSize: 11, // Increased from 9 to 11
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     marginTop: 2,
   },
 });

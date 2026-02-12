@@ -360,10 +360,11 @@ export default function InteraccionScreen() {
     try {
       const confirmedAt = new Date();
 
+      // Use 'on_time' instead of 'confirmed' to match database constraint
       const { error: updateError } = await supabase
         .from('appointments')
         .update({
-          arrival_status: 'confirmed',
+          arrival_status: 'on_time',
           checked_in_at: confirmedAt.toISOString(),
           location_confirmed: true,
         })
@@ -379,7 +380,7 @@ export default function InteraccionScreen() {
       
       setAppointment(prev => ({
         ...prev!,
-        arrival_status: 'confirmed',
+        arrival_status: 'on_time',
         checked_in_at: confirmedAt.toISOString(),
         location_confirmed: true,
       }));
