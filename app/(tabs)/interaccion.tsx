@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -46,7 +46,7 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
-const SECRET_CODE = '1986'; // Secret code known only by event host
+const SECRET_CODE = '1986';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -67,7 +67,6 @@ export default function InteraccionScreen() {
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
   
-  // New phase states
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showRitualModal, setShowRitualModal] = useState(false);
   const [experienceStarted, setExperienceStarted] = useState(false);
@@ -76,6 +75,22 @@ export default function InteraccionScreen() {
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
+
+  // Toast notification states
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTranslateY = useRef(new Animated.Value(-50)).current;
+  
+  // Special animation for "La mesa está casi lista"
+  const [specialToastVisible, setSpecialToastVisible] = useState(false);
+  const [specialToastMessage, setSpecialToastMessage] = useState('');
+  const specialToastOpacity = useRef(new Animated.Value(0)).current;
+  const specialToastScale = useRef(new Animated.Value(0.8)).current;
+
+  // Track shown confirmations to prevent duplicates
+  const shownConfirmations = useRef(new Set<string>()).current;
+  const hasShownSpecialAnimation = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,14 +115,12 @@ export default function InteraccionScreen() {
 
   // Supabase Realtime subscription for event_participants
   useEffect(() => {
-    if (!appointment) return;
+    if (!appointment || !user) return;
 
     console.log('Setting up Realtime subscription for event:', appointment.event_id);
     
-    // Load participants immediately
     loadActiveParticipants();
 
-    // Subscribe to real-time changes
     const channel = supabase
       .channel(`event_participants_${appointment.event_id}`)
       .on(
@@ -120,7 +133,33 @@ export default function InteraccionScreen() {
         },
         (payload) => {
           console.log('Realtime update received:', payload);
-          // Reload participants when any change occurs
+          
+          // Handle new confirmations for visual feedback
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newParticipant = payload.new as any;
+            
+            // Only show animation if confirmed is true and it's not the current user
+            if (newParticipant.confirmed && newParticipant.user_id !== user.id) {
+              const confirmationKey = `${newParticipant.user_id}_${newParticipant.event_id}`;
+              
+              // Prevent duplicate animations
+              if (!shownConfirmations.has(confirmationKey)) {
+                shownConfirmations.add(confirmationKey);
+                
+                // Fetch user name for the toast
+                supabase
+                  .from('users')
+                  .select('name')
+                  .eq('id', newParticipant.user_id)
+                  .single()
+                  .then(({ data }) => {
+                    const userName = data?.name || 'Alguien';
+                    showToastNotification(`${userName} ya está listo.`);
+                  });
+              }
+            }
+          }
+          
           loadActiveParticipants();
         }
       )
@@ -132,7 +171,99 @@ export default function InteraccionScreen() {
       console.log('Cleaning up Realtime subscription');
       supabase.removeChannel(channel);
     };
-  }, [appointment]);
+  }, [appointment, user]);
+
+  const showToastNotification = (message: string) => {
+    console.log('Showing toast notification:', message);
+    setToastMessage(message);
+    setToastVisible(true);
+
+    // Reset animation values
+    toastOpacity.setValue(0);
+    toastTranslateY.setValue(-50);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 400,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.spring(toastTranslateY, {
+        toValue: 0,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Animate out after 2 seconds
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(toastTranslateY, {
+          toValue: -50,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setToastVisible(false);
+      });
+    }, 2000);
+  };
+
+  const showSpecialToastNotification = (message: string) => {
+    console.log('Showing special toast notification:', message);
+    setSpecialToastMessage(message);
+    setSpecialToastVisible(true);
+
+    // Reset animation values
+    specialToastOpacity.setValue(0);
+    specialToastScale.setValue(0.8);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(specialToastOpacity, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.spring(specialToastScale, {
+        toValue: 1,
+        tension: 40,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Animate out after 2.5 seconds
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(specialToastOpacity, {
+          toValue: 0,
+          duration: 400,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(specialToastScale, {
+          toValue: 0.8,
+          duration: 400,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setSpecialToastVisible(false);
+      });
+    }, 2500);
+  };
 
   const loadAppointment = async () => {
     if (!user) {
@@ -218,7 +349,6 @@ export default function InteraccionScreen() {
     try {
       console.log('Loading confirmed participants from event_participants for event:', appointment.event_id);
       
-      // Query event_participants table with user data
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -243,7 +373,6 @@ export default function InteraccionScreen() {
 
       console.log('Raw participants data from event_participants:', JSON.stringify(data, null, 2));
 
-      // Transform the data
       const participants: Participant[] = (data || []).map((item: any) => {
         const userName = item.users?.name || 'Usuario';
         const userPhoto = item.users?.profile_photo_url || null;
@@ -271,6 +400,13 @@ export default function InteraccionScreen() {
 
       console.log('Confirmed participants loaded:', participants.length);
       console.log('Participants:', participants.map(p => ({ name: p.name, user_id: p.user_id, confirmed: p.confirmed })));
+      
+      // Check if we should show the special "La mesa está casi lista" animation
+      if (participants.length >= 3 && !hasShownSpecialAnimation.current) {
+        hasShownSpecialAnimation.current = true;
+        showSpecialToastNotification('La mesa está casi lista.');
+      }
+      
       setActiveParticipants(participants);
       
       const allHavePresented = participants.every(p => p.presented);
@@ -306,7 +442,6 @@ export default function InteraccionScreen() {
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
       
-      // Check if user should show code entry
       if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
         setCheckInPhase('code_entry');
       }
@@ -412,7 +547,6 @@ export default function InteraccionScreen() {
     try {
       const confirmedAt = new Date().toISOString();
 
-      // Update event_participants table
       const { data, error: updateError } = await supabase
         .from('event_participants')
         .upsert({
@@ -439,7 +573,6 @@ export default function InteraccionScreen() {
 
       console.log('Check-in successful with code 1986, event_participants updated:', data);
       
-      // Also update appointments table for backward compatibility
       await supabase
         .from('appointments')
         .update({
@@ -458,8 +591,6 @@ export default function InteraccionScreen() {
       
       setCheckInPhase('confirmed');
       setConfirmationCode('');
-
-      // Realtime will automatically update the participants list
     } catch (error) {
       console.error('Error during check-in:', error);
       setCodeError('Ocurrió un error. Intenta de nuevo.');
@@ -470,7 +601,6 @@ export default function InteraccionScreen() {
     console.log('User starting experience - showing ritual modal');
     setShowRitualModal(true);
     
-    // Start ritual animation
     Animated.timing(ritualAnimation, {
       toValue: 1,
       duration: 2000,
@@ -516,7 +646,6 @@ export default function InteraccionScreen() {
     try {
       console.log('User marked as presented');
       
-      // Update event_participants table
       const { error } = await supabase
         .from('event_participants')
         .update({ presented: true })
@@ -528,14 +657,12 @@ export default function InteraccionScreen() {
         return;
       }
 
-      // Also update appointments for backward compatibility
       await supabase
         .from('appointments')
         .update({ presented: true })
         .eq('id', appointment.id);
 
       setUserPresented(true);
-      // Realtime will automatically update the participants list
     } catch (error) {
       console.error('Error marking user as presented:', error);
     }
@@ -661,7 +788,8 @@ export default function InteraccionScreen() {
           <View style={styles.participantsSection}>
             <Text style={styles.participantsTitle}>Participantes Activos</Text>
             {activeParticipants.map((participant, index) => (
-              <View key={index} style={styles.participantCard}>
+              <React.Fragment key={index}>
+              <View style={styles.participantCard}>
                 <View style={styles.participantInfo}>
                   {participant.profile_photo_url ? (
                     <Image 
@@ -686,6 +814,7 @@ export default function InteraccionScreen() {
                   </View>
                 )}
               </View>
+              </React.Fragment>
             ))}
           </View>
 
@@ -730,7 +859,6 @@ export default function InteraccionScreen() {
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
-        {/* Emotional Reminder */}
         {countdown > 0 && (
           <View style={styles.reminderCard}>
             <Text style={styles.reminderIcon}>💫</Text>
@@ -809,7 +937,8 @@ export default function InteraccionScreen() {
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => (
-                    <View key={index} style={styles.participantListItem}>
+                    <React.Fragment key={index}>
+                    <View style={styles.participantListItem}>
                       {participant.profile_photo_url ? (
                         <Image 
                           source={{ uri: participant.profile_photo_url }} 
@@ -824,6 +953,7 @@ export default function InteraccionScreen() {
                       )}
                       <Text style={styles.participantListName}>{participant.name}</Text>
                     </View>
+                    </React.Fragment>
                   ))}
                 </View>
               )}
@@ -850,7 +980,42 @@ export default function InteraccionScreen() {
         )}
       </ScrollView>
 
-      {/* Ritual de Inicio Oficial Modal */}
+      {/* Toast Notification - "[Nombre] ya está listo." */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastOpacity,
+              transform: [{ translateY: toastTranslateY }],
+            },
+          ]}
+        >
+          <View style={styles.toastContent}>
+            <Text style={styles.toastIcon}>✨</Text>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Special Toast Notification - "La mesa está casi lista." */}
+      {specialToastVisible && (
+        <Animated.View
+          style={[
+            styles.specialToastContainer,
+            {
+              opacity: specialToastOpacity,
+              transform: [{ scale: specialToastScale }],
+            },
+          ]}
+        >
+          <View style={styles.specialToastContent}>
+            <Text style={styles.specialToastIcon}>🎉</Text>
+            <Text style={styles.specialToastText}>{specialToastMessage}</Text>
+          </View>
+        </Animated.View>
+      )}
+
       <Modal
         visible={showRitualModal}
         transparent
@@ -883,7 +1048,6 @@ export default function InteraccionScreen() {
         </View>
       </Modal>
 
-      {/* Welcome Modal - Phase 1 */}
       <Modal
         visible={showWelcomeModal}
         transparent
@@ -1525,5 +1689,68 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    right: 20,
+    zIndex: 9999,
+  },
+  toastContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  toastIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  toastText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  specialToastContainer: {
+    position: 'absolute',
+    top: '40%',
+    left: 20,
+    right: 20,
+    zIndex: 9999,
+    alignItems: 'center',
+  },
+  specialToastContent: {
+    backgroundColor: 'rgba(139, 92, 246, 0.98)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    minWidth: 280,
+  },
+  specialToastIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  specialToastText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });
