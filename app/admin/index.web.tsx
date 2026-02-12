@@ -6,6 +6,8 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 
+console.log('Admin panel web module loaded');
+
 interface Event {
   id: string;
   name: string;

@@ -31,6 +31,7 @@ export default function RootLayout() {
   const { isConnected } = useNetworkState();
 
   useEffect(() => {
+    console.log('Root layout mounted');
     if (loaded) {
       SplashScreen.hideAsync();
     }
@@ -63,6 +64,7 @@ export default function RootLayout() {
             <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
             <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
+            <Stack.Screen name="admin" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="+not-found" />
           </Stack>
