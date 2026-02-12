@@ -8,18 +8,14 @@ import { supabase } from '@/lib/supabase';
 
 interface Event {
   id: string;
+  name: string;
+  city: string;
+  description: string;
   type: string;
   date: string;
   time: string;
-  location: string;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  radius_meters: number | null;
-  start_time: string | null;
   max_participants: number;
-  current_participants: number;
-  status: string;
+  event_status: 'draft' | 'published' | 'closed';
 }
 
 export default function EventsScreen() {
@@ -33,11 +29,11 @@ export default function EventsScreen() {
 
   const loadEvents = async () => {
     try {
-      console.log('Loading events...');
+      console.log('Loading published events...');
       const { data, error } = await supabase
         .from('events')
-        .select('id, type, date, time, location, address, latitude, longitude, radius_meters, start_time, max_participants, current_participants, status')
-        .eq('status', 'active')
+        .select('id, name, city, description, type, date, time, max_participants, event_status')
+        .eq('event_status', 'published')
         .order('date', { ascending: true });
 
       if (error) {
@@ -45,7 +41,7 @@ export default function EventsScreen() {
         return;
       }
 
-      console.log('Events loaded:', data?.length || 0);
+      console.log('Published events loaded:', data?.length || 0);
       setEvents(data || []);
     } catch (error) {
       console.error('Failed to load events:', error);
@@ -100,8 +96,7 @@ export default function EventsScreen() {
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
           const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
           const dateText = formatDate(event.date);
-          const spotsText = `${event.current_participants}/${event.max_participants} personas`;
-          const locationText = event.address || event.location;
+          const participantsText = `${event.max_participants} participantes`;
 
           return (
             <TouchableOpacity
@@ -113,14 +108,19 @@ export default function EventsScreen() {
               <View style={styles.eventHeader}>
                 <Text style={styles.eventIcon}>{eventIcon}</Text>
                 <View style={styles.eventHeaderText}>
+                  <Text style={styles.eventName}>{event.name}</Text>
                   <Text style={styles.eventType}>{eventTypeText}</Text>
-                  <Text style={styles.eventTime}>{event.time}</Text>
                 </View>
               </View>
 
               <Text style={styles.eventDate}>{dateText}</Text>
-              <Text style={styles.eventLocation}>{locationText}</Text>
-              <Text style={styles.eventSpots}>{spotsText}</Text>
+              <Text style={styles.eventTime}>{event.time}</Text>
+              <Text style={styles.eventCity}>📍 {event.city}</Text>
+              {event.description && (
+                <Text style={styles.eventDescription}>{event.description}</Text>
+              )}
+              <Text style={styles.eventParticipants}>{participantsText}</Text>
+              <Text style={styles.locationPlaceholder}>Ubicación se revelará próximamente.</Text>
             </TouchableOpacity>
           );
         })}
@@ -187,13 +187,13 @@ const styles = StyleSheet.create({
   eventHeaderText: {
     flex: 1,
   },
-  eventType: {
+  eventName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
-  eventTime: {
-    fontSize: 18,
+  eventType: {
+    fontSize: 16,
     color: nospiColors.purpleMid,
     fontWeight: '600',
     marginTop: 4,
@@ -201,18 +201,36 @@ const styles = StyleSheet.create({
   eventDate: {
     fontSize: 16,
     color: '#333',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  eventTime: {
+    fontSize: 16,
+    color: '#333',
     marginBottom: 8,
     fontWeight: '500',
   },
-  eventLocation: {
-    fontSize: 14,
+  eventCity: {
+    fontSize: 15,
     color: '#666',
     marginBottom: 8,
   },
-  eventSpots: {
+  eventDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  eventParticipants: {
     fontSize: 14,
     color: nospiColors.purpleMid,
     fontWeight: '600',
+    marginBottom: 8,
+  },
+  locationPlaceholder: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
   },
   emptyContainer: {
     padding: 40,

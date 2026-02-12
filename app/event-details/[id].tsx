@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -10,18 +10,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Event {
   id: string;
+  name: string;
+  city: string;
+  description: string;
   type: string;
   date: string;
   time: string;
-  location: string;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  radius_meters: number | null;
-  start_time: string | null;
+  location_name: string;
+  location_address: string;
+  maps_link: string;
+  is_location_revealed: boolean;
   max_participants: number;
-  current_participants: number;
-  status: string;
+  event_status: 'draft' | 'published' | 'closed';
 }
 
 export default function EventDetailsScreen() {
@@ -31,10 +31,12 @@ export default function EventDetailsScreen() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [isEnrolled, setIsEnrolled] = useState(false);
 
   useEffect(() => {
     if (id) {
       loadEvent();
+      checkEnrollment();
     }
   }, [id]);
 
@@ -61,6 +63,31 @@ export default function EventDetailsScreen() {
     }
   };
 
+  const checkEnrollment = async () => {
+    if (!user?.id) return;
+
+    try {
+      console.log('Checking if user is enrolled in event:', id);
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('event_id', id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking enrollment:', error);
+        return;
+      }
+
+      const enrolled = !!data;
+      console.log('User enrolled:', enrolled);
+      setIsEnrolled(enrolled);
+    } catch (error) {
+      console.error('Failed to check enrollment:', error);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const options: Intl.DateTimeFormatOptions = { 
@@ -70,6 +97,15 @@ export default function EventDetailsScreen() {
       day: 'numeric' 
     };
     return date.toLocaleDateString('es-ES', options);
+  };
+
+  const handleOpenMaps = () => {
+    if (!event?.maps_link) return;
+    
+    console.log('Opening maps link:', event.maps_link);
+    Linking.openURL(event.maps_link).catch(err => {
+      console.error('Failed to open maps link:', err);
+    });
   };
 
   const handleConfirm = async () => {
@@ -139,7 +175,8 @@ export default function EventDetailsScreen() {
   const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
   const dateText = formatDate(event.date);
-  const spotsText = `${event.current_participants}/${event.max_participants} personas confirmadas`;
+  const participantsText = `${event.max_participants} participantes`;
+  const showLocation = isEnrolled && event.is_location_revealed;
 
   return (
     <LinearGradient
@@ -152,8 +189,8 @@ export default function EventDetailsScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.eventCard}>
           <Text style={styles.eventIcon}>{eventIcon}</Text>
+          <Text style={styles.eventName}>{event.name}</Text>
           <Text style={styles.eventType}>{eventTypeText}</Text>
-          <Text style={styles.eventTime}>{event.time}</Text>
           
           <View style={styles.divider} />
           
@@ -163,41 +200,82 @@ export default function EventDetailsScreen() {
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Lugar:</Text>
-            <Text style={styles.detailValue}>{event.location}</Text>
+            <Text style={styles.detailLabel}>Hora:</Text>
+            <Text style={styles.detailValue}>{event.time}</Text>
           </View>
 
-          {event.address && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Ciudad:</Text>
+            <Text style={styles.detailValue}>{event.city}</Text>
+          </View>
+
+          {event.description && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Dirección:</Text>
-              <Text style={styles.detailValue}>{event.address}</Text>
+              <Text style={styles.detailLabel}>Descripción:</Text>
+              <Text style={styles.detailValue}>{event.description}</Text>
             </View>
           )}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Participantes:</Text>
-            <Text style={styles.detailValue}>{spotsText}</Text>
+            <Text style={styles.detailValue}>{participantsText}</Text>
           </View>
 
           <View style={styles.divider} />
 
-          <Text style={styles.question}>¿Deseas asistir a esta cita?</Text>
-          <Text style={styles.description}>
-            Al confirmar, te unirás a un grupo de 6 personas (3 hombres y 3 mujeres) para un encuentro en persona.
-          </Text>
-
-          <TouchableOpacity
-            style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
-            onPress={handleConfirm}
-            disabled={confirming}
-            activeOpacity={0.8}
-          >
-            {confirming ? (
-              <ActivityIndicator color={nospiColors.white} />
+          {/* Location Section */}
+          <View style={styles.locationSection}>
+            <Text style={styles.locationTitle}>📍 Ubicación</Text>
+            {showLocation ? (
+              <>
+                <Text style={styles.locationName}>{event.location_name}</Text>
+                <Text style={styles.locationAddress}>{event.location_address}</Text>
+                {event.maps_link && (
+                  <TouchableOpacity
+                    style={styles.mapsButton}
+                    onPress={handleOpenMaps}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             ) : (
-              <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
+              <Text style={styles.locationPlaceholder}>
+                Ubicación se revelará próximamente.
+              </Text>
             )}
-          </TouchableOpacity>
+          </View>
+
+          <View style={styles.divider} />
+
+          {!isEnrolled && (
+            <>
+              <Text style={styles.question}>¿Deseas asistir a esta cita?</Text>
+              <Text style={styles.description}>
+                Al confirmar, te unirás a un grupo de {event.max_participants} personas para un encuentro en persona.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
+                onPress={handleConfirm}
+                disabled={confirming}
+                activeOpacity={0.8}
+              >
+                {confirming ? (
+                  <ActivityIndicator color={nospiColors.white} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          {isEnrolled && (
+            <View style={styles.enrolledBadge}>
+              <Text style={styles.enrolledText}>✓ Ya estás inscrito en este evento</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -240,14 +318,15 @@ const styles = StyleSheet.create({
     fontSize: 80,
     marginBottom: 16,
   },
-  eventType: {
-    fontSize: 32,
+  eventName: {
+    fontSize: 28,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     marginBottom: 8,
+    textAlign: 'center',
   },
-  eventTime: {
-    fontSize: 24,
+  eventType: {
+    fontSize: 20,
     color: nospiColors.purpleMid,
     fontWeight: '600',
     marginBottom: 24,
@@ -260,20 +339,55 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 16,
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     fontWeight: '600',
+    marginBottom: 4,
   },
   detailValue: {
     fontSize: 16,
     color: '#333',
-    flex: 1,
-    textAlign: 'right',
+  },
+  locationSection: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  locationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  locationAddress: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 16,
+  },
+  locationPlaceholder: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  mapsButton: {
+    backgroundColor: '#4285F4',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  mapsButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   question: {
     fontSize: 20,
@@ -310,5 +424,18 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
+  },
+  enrolledBadge: {
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  enrolledText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

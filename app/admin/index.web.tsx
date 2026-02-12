@@ -8,15 +8,23 @@ import { Stack, useRouter } from 'expo-router';
 
 interface Event {
   id: string;
+  name: string;
+  city: string;
+  description: string;
   type: string;
   date: string;
   time: string;
   location: string;
+  location_name: string;
+  location_address: string;
+  maps_link: string;
+  is_location_revealed: boolean;
   address: string | null;
   start_time: string | null;
   max_participants: number;
   current_participants: number;
   status: string;
+  event_status: 'draft' | 'published' | 'closed';
 }
 
 interface User {
@@ -74,12 +82,18 @@ export default function AdminPanelScreen() {
   // Event creation modal
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
+    name: '',
+    city: '',
+    description: '',
     type: 'bar',
     date: '',
     time: '',
-    location: '',
-    address: '',
-    max_participants: 10,
+    location_name: '',
+    location_address: '',
+    maps_link: '',
+    max_participants: 6,
+    is_location_revealed: false,
+    event_status: 'draft' as 'draft' | 'published' | 'closed',
   });
 
   // Realtime monitoring
@@ -149,7 +163,7 @@ export default function AdminPanelScreen() {
       } else {
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
-        const activeCount = eventsData?.filter(e => e.status === 'active').length || 0;
+        const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
         setActiveEvents(activeCount);
       }
 
@@ -186,6 +200,8 @@ export default function AdminPanelScreen() {
           ),
           events!inner (
             id,
+            name,
+            city,
             type,
             date,
             time,
@@ -194,7 +210,8 @@ export default function AdminPanelScreen() {
             start_time,
             max_participants,
             current_participants,
-            status
+            status,
+            event_status
           )
         `)
         .order('created_at', { ascending: false });
@@ -254,21 +271,33 @@ export default function AdminPanelScreen() {
     try {
       console.log('Creating new event:', newEvent);
 
+      if (!newEvent.name || !newEvent.city || !newEvent.date || !newEvent.time) {
+        window.alert('Por favor completa todos los campos obligatorios (nombre, ciudad, fecha, hora)');
+        return;
+      }
+
       const startTimeISO = new Date(`${newEvent.date}T${newEvent.time}:00`).toISOString();
 
       const { data, error } = await supabase
         .from('events')
         .insert([
           {
+            name: newEvent.name,
+            city: newEvent.city,
+            description: newEvent.description,
             type: newEvent.type,
             date: newEvent.date,
             time: newEvent.time,
-            location: newEvent.location,
-            address: newEvent.address,
+            location: 'Se revelará próximamente',
+            location_name: newEvent.location_name,
+            location_address: newEvent.location_address,
+            maps_link: newEvent.maps_link,
             start_time: startTimeISO,
             max_participants: newEvent.max_participants,
             current_participants: 0,
             status: 'active',
+            is_location_revealed: newEvent.is_location_revealed,
+            event_status: newEvent.event_status,
           },
         ])
         .select();
@@ -283,12 +312,18 @@ export default function AdminPanelScreen() {
       window.alert('Evento creado exitosamente');
       setShowCreateEventModal(false);
       setNewEvent({
+        name: '',
+        city: '',
+        description: '',
         type: 'bar',
         date: '',
         time: '',
-        location: '',
-        address: '',
-        max_participants: 10,
+        location_name: '',
+        location_address: '',
+        maps_link: '',
+        max_participants: 6,
+        is_location_revealed: false,
+        event_status: 'draft',
       });
       loadDashboardData();
     } catch (error) {
@@ -321,37 +356,85 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const handleToggleEventStatus = async (eventId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    const statusText = newStatus === 'active' ? 'activar' : 'desactivar';
-    
-    const confirmed = window.confirm(`¿Estás seguro de que quieres ${statusText} este evento?`);
+  const handleRevealLocation = async (eventId: string) => {
+    const confirmed = window.confirm('¿Revelar la ubicación de este evento? Los usuarios inscritos podrán verla.');
     if (!confirmed) return;
 
     try {
-      console.log('Toggling event status:', eventId, newStatus);
+      console.log('Revealing location for event:', eventId);
       const { error } = await supabase
         .from('events')
-        .update({ status: newStatus })
+        .update({ is_location_revealed: true })
         .eq('id', eventId);
 
       if (error) {
-        console.error('Error updating event status:', error);
-        window.alert('Error al actualizar estado: ' + error.message);
+        console.error('Error revealing location:', error);
+        window.alert('Error al revelar ubicación: ' + error.message);
         return;
       }
 
-      console.log('Event status updated successfully');
+      console.log('Location revealed successfully');
+      window.alert('Ubicación revelada exitosamente');
       loadDashboardData();
     } catch (error) {
-      console.error('Failed to update event status:', error);
+      console.error('Failed to reveal location:', error);
+    }
+  };
+
+  const handleCloseEvent = async (eventId: string) => {
+    const confirmed = window.confirm('¿Cerrar este evento? Dejará de mostrarse públicamente pero seguirá visible para usuarios inscritos.');
+    if (!confirmed) return;
+
+    try {
+      console.log('Closing event:', eventId);
+      const { error } = await supabase
+        .from('events')
+        .update({ event_status: 'closed' })
+        .eq('id', eventId);
+
+      if (error) {
+        console.error('Error closing event:', error);
+        window.alert('Error al cerrar evento: ' + error.message);
+        return;
+      }
+
+      console.log('Event closed successfully');
+      window.alert('Evento cerrado exitosamente');
+      loadDashboardData();
+    } catch (error) {
+      console.error('Failed to close event:', error);
+    }
+  };
+
+  const handlePublishEvent = async (eventId: string) => {
+    const confirmed = window.confirm('¿Publicar este evento? Será visible para todos los usuarios.');
+    if (!confirmed) return;
+
+    try {
+      console.log('Publishing event:', eventId);
+      const { error } = await supabase
+        .from('events')
+        .update({ event_status: 'published' })
+        .eq('id', eventId);
+
+      if (error) {
+        console.error('Error publishing event:', error);
+        window.alert('Error al publicar evento: ' + error.message);
+        return;
+      }
+
+      console.log('Event published successfully');
+      window.alert('Evento publicado exitosamente');
+      loadDashboardData();
+    } catch (error) {
+      console.error('Failed to publish event:', error);
     }
   };
 
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
-      { label: 'Eventos Activos', value: activeEvents, color: nospiColors.purpleMid },
+      { label: 'Eventos Publicados', value: activeEvents, color: nospiColors.purpleMid },
       { label: 'Total Usuarios', value: totalUsers, color: nospiColors.purpleLight },
       { label: 'Total Citas', value: totalAppointments, color: '#8B5CF6' },
     ];
@@ -408,31 +491,56 @@ export default function AdminPanelScreen() {
 
         {events.map((event) => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
-          const statusText = event.status === 'active' ? 'Activo' : 'Inactivo';
-          const statusColor = event.status === 'active' ? '#10B981' : '#EF4444';
+          const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
+          const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
+          const locationRevealed = event.is_location_revealed ? 'Sí' : 'No';
 
           return (
             <View key={event.id} style={styles.listItem}>
               <View style={styles.listItemHeader}>
-                <Text style={styles.listItemTitle}>{eventTypeText} - {event.location}</Text>
+                <Text style={styles.listItemTitle}>{event.name || `${eventTypeText} - ${event.city}`}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                   <Text style={styles.statusBadgeText}>{statusText}</Text>
                 </View>
               </View>
+              <Text style={styles.listItemDetail}>Ciudad: {event.city}</Text>
               <Text style={styles.listItemDetail}>Fecha: {event.date} a las {event.time}</Text>
-              <Text style={styles.listItemDetail}>Dirección: {event.address || 'No especificada'}</Text>
+              <Text style={styles.listItemDetail}>Descripción: {event.description || 'Sin descripción'}</Text>
               <Text style={styles.listItemDetail}>
-                Participantes: {event.current_participants}/{event.max_participants}
+                Participantes configurados: {event.max_participants}
               </Text>
+              <Text style={styles.listItemDetail}>Ubicación revelada: {locationRevealed}</Text>
+              {event.location_name && (
+                <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
+              )}
+              {event.location_address && (
+                <Text style={styles.listItemDetail}>Dirección: {event.location_address}</Text>
+              )}
               <View style={styles.eventActions}>
-                <TouchableOpacity
-                  style={styles.toggleButton}
-                  onPress={() => handleToggleEventStatus(event.id, event.status)}
-                >
-                  <Text style={styles.toggleButtonText}>
-                    {event.status === 'active' ? 'Desactivar' : 'Activar'}
-                  </Text>
-                </TouchableOpacity>
+                {event.event_status === 'draft' && (
+                  <TouchableOpacity
+                    style={styles.publishButton}
+                    onPress={() => handlePublishEvent(event.id)}
+                  >
+                    <Text style={styles.publishButtonText}>Publicar</Text>
+                  </TouchableOpacity>
+                )}
+                {event.event_status === 'published' && !event.is_location_revealed && (
+                  <TouchableOpacity
+                    style={styles.revealButton}
+                    onPress={() => handleRevealLocation(event.id)}
+                  >
+                    <Text style={styles.revealButtonText}>Revelar Ubicación</Text>
+                  </TouchableOpacity>
+                )}
+                {event.event_status === 'published' && (
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => handleCloseEvent(event.id)}
+                  >
+                    <Text style={styles.closeButtonText}>Cerrar Evento</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.monitorButton}
                   onPress={() => {
@@ -498,7 +606,7 @@ export default function AdminPanelScreen() {
                 </View>
               </View>
               <Text style={styles.listItemDetail}>
-                Evento: {appointment.events.type} - {appointment.events.location}
+                Evento: {appointment.events.name || `${appointment.events.type} - ${appointment.events.city}`}
               </Text>
               <Text style={styles.listItemDetail}>
                 Fecha: {appointment.events.date} a las {appointment.events.time}
@@ -541,7 +649,7 @@ export default function AdminPanelScreen() {
             <View style={styles.realtimeHeader}>
               <View style={styles.realtimeEventInfo}>
                 <Text style={styles.realtimeEventTitle}>
-                  {selectedEvent?.type === 'bar' ? 'Bar' : 'Restaurante'} - {selectedEvent?.location}
+                  {selectedEvent?.name || `${selectedEvent?.type === 'bar' ? 'Bar' : 'Restaurante'} - ${selectedEvent?.city}`}
                 </Text>
                 <Text style={styles.realtimeEventDate}>
                   {selectedEvent?.date} a las {selectedEvent?.time}
@@ -740,103 +848,175 @@ export default function AdminPanelScreen() {
           onRequestClose={() => setShowCreateEventModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Crear Nuevo Evento</Text>
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Crear Nuevo Evento</Text>
 
-              <Text style={styles.inputLabel}>Tipo de Evento</Text>
-              <View style={styles.typeSelector}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    newEvent.type === 'bar' && styles.typeButtonActive,
-                  ]}
-                  onPress={() => setNewEvent({ ...newEvent, type: 'bar' })}
-                >
-                  <Text
+                <Text style={styles.inputLabel}>Nombre del Evento *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Encuentro de Solteros"
+                  value={newEvent.name}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, name: text })}
+                />
+
+                <Text style={styles.inputLabel}>Ciudad *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Bogotá"
+                  value={newEvent.city}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, city: text })}
+                />
+
+                <Text style={styles.inputLabel}>Descripción Breve</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Descripción del evento"
+                  value={newEvent.description}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <Text style={styles.inputLabel}>Tipo de Evento</Text>
+                <View style={styles.typeSelector}>
+                  <TouchableOpacity
                     style={[
-                      styles.typeButtonText,
-                      newEvent.type === 'bar' && styles.typeButtonTextActive,
+                      styles.typeButton,
+                      newEvent.type === 'bar' && styles.typeButtonActive,
                     ]}
+                    onPress={() => setNewEvent({ ...newEvent, type: 'bar' })}
                   >
-                    🍸 Bar
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    newEvent.type === 'restaurant' && styles.typeButtonActive,
-                  ]}
-                  onPress={() => setNewEvent({ ...newEvent, type: 'restaurant' })}
-                >
-                  <Text
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        newEvent.type === 'bar' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      🍸 Bar
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={[
-                      styles.typeButtonText,
-                      newEvent.type === 'restaurant' && styles.typeButtonTextActive,
+                      styles.typeButton,
+                      newEvent.type === 'restaurant' && styles.typeButtonActive,
                     ]}
+                    onPress={() => setNewEvent({ ...newEvent, type: 'restaurant' })}
                   >
-                    🍽️ Restaurante
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        newEvent.type === 'restaurant' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      🍽️ Restaurante
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="2024-02-15"
+                  value={newEvent.date}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, date: text })}
+                />
+
+                <Text style={styles.inputLabel}>Hora (HH:MM) *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="21:15"
+                  value={newEvent.time}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, time: text })}
+                />
+
+                <Text style={styles.inputLabel}>Número de Participantes (mostrado públicamente)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="6"
+                  keyboardType="numeric"
+                  value={String(newEvent.max_participants)}
+                  onChangeText={(text) =>
+                    setNewEvent({ ...newEvent, max_participants: parseInt(text) || 6 })
+                  }
+                />
+
+                <Text style={styles.inputLabel}>Nombre del Lugar (ubicación)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Bar El Encuentro"
+                  value={newEvent.location_name}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, location_name: text })}
+                />
+
+                <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Calle 85 #15-20"
+                  value={newEvent.location_address}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, location_address: text })}
+                />
+
+                <Text style={styles.inputLabel}>Enlace de Maps</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://maps.google.com/..."
+                  value={newEvent.maps_link}
+                  onChangeText={(text) => setNewEvent({ ...newEvent, maps_link: text })}
+                />
+
+                <Text style={styles.inputLabel}>Estado del Evento</Text>
+                <View style={styles.typeSelector}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      newEvent.event_status === 'draft' && styles.typeButtonActive,
+                    ]}
+                    onPress={() => setNewEvent({ ...newEvent, event_status: 'draft' })}
+                  >
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        newEvent.event_status === 'draft' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      📝 Borrador
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      newEvent.event_status === 'published' && styles.typeButtonActive,
+                    ]}
+                    onPress={() => setNewEvent({ ...newEvent, event_status: 'published' })}
+                  >
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        newEvent.event_status === 'published' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      ✅ Publicado
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonCancel]}
+                    onPress={() => setShowCreateEventModal(false)}
+                  >
+                    <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonConfirm]}
+                    onPress={handleCreateEvent}
+                  >
+                    <Text style={styles.modalButtonTextConfirm}>Crear Evento</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="2024-02-15"
-                value={newEvent.date}
-                onChangeText={(text) => setNewEvent({ ...newEvent, date: text })}
-              />
-
-              <Text style={styles.inputLabel}>Hora (HH:MM)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="21:15"
-                value={newEvent.time}
-                onChangeText={(text) => setNewEvent({ ...newEvent, time: text })}
-              />
-
-              <Text style={styles.inputLabel}>Lugar</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nombre del lugar"
-                value={newEvent.location}
-                onChangeText={(text) => setNewEvent({ ...newEvent, location: text })}
-              />
-
-              <Text style={styles.inputLabel}>Dirección</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Dirección completa"
-                value={newEvent.address}
-                onChangeText={(text) => setNewEvent({ ...newEvent, address: text })}
-              />
-
-              <Text style={styles.inputLabel}>Máximo de Participantes</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="10"
-                keyboardType="numeric"
-                value={String(newEvent.max_participants)}
-                onChangeText={(text) =>
-                  setNewEvent({ ...newEvent, max_participants: parseInt(text) || 10 })
-                }
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => setShowCreateEventModal(false)}
-                >
-                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonConfirm]}
-                  onPress={handleCreateEvent}
-                >
-                  <Text style={styles.modalButtonTextConfirm}>Crear Evento</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            </ScrollView>
           </View>
         </Modal>
       </LinearGradient>
@@ -1092,23 +1272,52 @@ const styles = StyleSheet.create({
   },
   eventActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
   },
-  toggleButton: {
+  publishButton: {
     flex: 1,
+    minWidth: 100,
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  publishButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  revealButton: {
+    flex: 1,
+    minWidth: 100,
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  revealButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    flex: 1,
+    minWidth: 100,
     backgroundColor: '#F59E0B',
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
   },
-  toggleButtonText: {
+  closeButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
   },
   monitorButton: {
     flex: 1,
+    minWidth: 100,
     backgroundColor: '#8B5CF6',
     borderRadius: 8,
     padding: 12,
@@ -1121,6 +1330,7 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     flex: 1,
+    minWidth: 100,
     backgroundColor: '#EF4444',
     borderRadius: 8,
     padding: 12,
@@ -1296,7 +1506,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalScrollContent: {
     padding: 24,
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: 'white',
@@ -1304,7 +1517,6 @@ const styles = StyleSheet.create({
     padding: 32,
     width: '100%',
     maxWidth: 600,
-    maxHeight: '90%',
   },
   modalTitle: {
     fontSize: 28,
@@ -1326,6 +1538,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   typeSelector: {
     flexDirection: 'row',
