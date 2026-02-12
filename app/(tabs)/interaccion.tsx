@@ -215,6 +215,7 @@ export default function InteraccionScreen() {
     try {
       console.log('Loading active participants (confirmed only) for event:', appointment.event_id);
       
+      // Fixed query: properly join with users table
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -222,7 +223,8 @@ export default function InteraccionScreen() {
           user_id,
           arrival_status,
           presented,
-          users:user_id (
+          users!inner (
+            id,
             name,
             profile_photo_url
           )
@@ -236,17 +238,33 @@ export default function InteraccionScreen() {
         return;
       }
 
-      const participants: Participant[] = (data || []).map((item: any) => ({
-        id: item.id,
-        user_id: item.user_id,
-        name: item.users?.name || 'Usuario',
-        profile_photo_url: item.users?.profile_photo_url || null,
-        occupation: 'Participante',
-        arrival_status: item.arrival_status,
-        presented: item.presented || false,
-      }));
+      console.log('Raw participants data:', JSON.stringify(data, null, 2));
+
+      // Transform the data correctly
+      const participants: Participant[] = (data || []).map((item: any) => {
+        const userName = item.users?.name || 'Usuario';
+        const userPhoto = item.users?.profile_photo_url || null;
+        
+        console.log('Processing participant:', {
+          id: item.id,
+          user_id: item.user_id,
+          name: userName,
+          photo: userPhoto
+        });
+
+        return {
+          id: item.id,
+          user_id: item.user_id,
+          name: userName,
+          profile_photo_url: userPhoto,
+          occupation: 'Participante',
+          arrival_status: item.arrival_status,
+          presented: item.presented || false,
+        };
+      });
 
       console.log('Active participants loaded:', participants.length);
+      console.log('Participants:', participants.map(p => ({ name: p.name, user_id: p.user_id })));
       setActiveParticipants(participants);
       
       const allHavePresented = participants.every(p => p.presented);
