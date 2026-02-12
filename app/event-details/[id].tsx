@@ -77,33 +77,13 @@ export default function EventDetailsScreen() {
     setConfirming(true);
     
     try {
-      // Check if user has active subscription
-      const { data: subscription, error: subError } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('status', 'active')
-        .single();
-
-      if (subError || !subscription) {
-        console.log('User has no active subscription, storing pending event and redirecting to payment');
-        // Store the event ID in AsyncStorage for later confirmation
-        await AsyncStorage.setItem('pending_event_confirmation', id as string);
-        console.log('Stored pending event ID:', id);
-        setConfirming(false);
-        router.push('/subscription-plans');
-        return;
-      }
-
-      console.log('User has active subscription, creating appointment');
-
       // Check if user already has an appointment for this event
       const { data: existingAppointment } = await supabase
         .from('appointments')
         .select('*')
         .eq('user_id', user?.id)
         .eq('event_id', id)
-        .single();
+        .maybeSingle();
 
       if (existingAppointment) {
         console.log('User already has an appointment for this event');
@@ -112,27 +92,14 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      // Create appointment
-      const { error } = await supabase
-        .from('appointments')
-        .insert({
-          user_id: user?.id,
-          event_id: id,
-          status: 'confirmada',
-          payment_status: 'completed',
-        });
-
-      if (error) {
-        console.error('Error creating appointment:', error);
-        setConfirming(false);
-        return;
-      }
-
-      console.log('Appointment created successfully');
+      // All users must pay per event - no subscription check
+      console.log('Storing pending event and redirecting to payment screen');
+      await AsyncStorage.setItem('pending_event_confirmation', id as string);
+      console.log('Stored pending event ID:', id);
       setConfirming(false);
-      router.push('/(tabs)/appointments');
+      router.push('/subscription-plans');
     } catch (error) {
-      console.error('Failed to create appointment:', error);
+      console.error('Failed to process confirmation:', error);
       setConfirming(false);
     }
   };

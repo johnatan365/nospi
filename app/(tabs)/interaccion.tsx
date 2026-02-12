@@ -345,15 +345,16 @@ export default function InteraccionScreen() {
   const handleCodeConfirmation = async () => {
     if (!appointment) return;
 
-    console.log('User entered code:', confirmationCode);
+    const enteredCode = confirmationCode.trim();
+    console.log('User entered code:', enteredCode, '| Expected code:', SECRET_CODE);
 
-    if (confirmationCode.trim() !== SECRET_CODE) {
-      console.log('Incorrect code entered');
+    if (enteredCode !== SECRET_CODE) {
+      console.log('Incorrect code entered. Expected:', SECRET_CODE, 'Got:', enteredCode);
       setCodeError('Código incorrecto. Verifica el código del encuentro.');
       return;
     }
 
-    console.log('Correct code entered, processing check-in');
+    console.log('Correct code entered (1986), processing check-in');
     setCodeError('');
 
     try {
@@ -374,7 +375,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Check-in successful');
+      console.log('Check-in successful with code 1986');
       
       setAppointment(prev => ({
         ...prev!,
