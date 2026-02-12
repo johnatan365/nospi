@@ -97,9 +97,37 @@ export default function InteraccionScreen() {
     requestNotificationPermissions();
   }, []);
 
+  // Real-time polling for active participants when on check-in screen
+  useEffect(() => {
+    if (appointment && checkInPhase === 'confirmed' && !experienceStarted) {
+      console.log('Starting real-time participant polling');
+      
+      // Load immediately
+      loadActiveParticipants();
+      
+      // Poll every 3 seconds to check for new confirmations
+      const pollInterval = setInterval(() => {
+        console.log('Polling for participant updates...');
+        loadActiveParticipants();
+      }, 3000);
+
+      return () => {
+        console.log('Stopping participant polling');
+        clearInterval(pollInterval);
+      };
+    }
+  }, [appointment, checkInPhase, experienceStarted]);
+
   useEffect(() => {
     if (experienceStarted && appointment) {
       loadActiveParticipants();
+      
+      // Continue polling during presentation phase
+      const pollInterval = setInterval(() => {
+        loadActiveParticipants();
+      }, 5000);
+
+      return () => clearInterval(pollInterval);
     }
   }, [experienceStarted, appointment]);
 
@@ -724,13 +752,37 @@ export default function InteraccionScreen() {
               </Text>
             </View>
 
+            <View style={styles.participantsListCard}>
+              <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+              <Text style={styles.participantsListCount}>{activeParticipants.length}</Text>
+              
+              {activeParticipants.length > 0 && (
+                <View style={styles.participantsList}>
+                  {activeParticipants.map((participant, index) => (
+                    <View key={index} style={styles.participantListItem}>
+                      {participant.profile_photo_url ? (
+                        <Image 
+                          source={{ uri: participant.profile_photo_url }} 
+                          style={styles.participantListPhoto}
+                        />
+                      ) : (
+                        <View style={styles.participantListPhotoPlaceholder}>
+                          <Text style={styles.participantListPhotoText}>
+                            {participant.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.participantListName}>{participant.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
             {!canStartExperience && (
               <View style={styles.waitingInfoCard}>
                 <Text style={styles.waitingInfoText}>
                   La experiencia comenzará cuando al menos 2 personas estén listas.
-                </Text>
-                <Text style={styles.waitingCountText}>
-                  Participantes confirmados: {activeParticipants.length}
                 </Text>
               </View>
             )}
@@ -1087,6 +1139,66 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '600',
   },
+  participantsListCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  participantsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  participantsListCount: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  participantsList: {
+    marginTop: 8,
+  },
+  participantListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  participantListPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  participantListPhotoPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantListPhotoText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantListName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
   startButton: {
     backgroundColor: nospiColors.purpleDark,
     borderRadius: 16,
@@ -1119,12 +1231,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     fontWeight: '600',
-    marginBottom: 12,
-  },
-  waitingCountText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
   },
   phaseCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
