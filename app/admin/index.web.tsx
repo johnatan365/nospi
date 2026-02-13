@@ -270,38 +270,46 @@ export default function AdminPanelScreen() {
   };
 
   const handleCreateEvent = async () => {
-    try {
-      console.log('Creating new event:', newEvent);
+    console.log('handleCreateEvent called - Button pressed!');
+    console.log('Current newEvent state:', newEvent);
 
+    try {
+      // Validation
       if (!newEvent.name || !newEvent.city || !newEvent.date || !newEvent.time) {
+        console.log('Validation failed - missing required fields');
         window.alert('Por favor completa todos los campos obligatorios (nombre, ciudad, fecha, hora)');
         return;
       }
 
+      console.log('Validation passed, creating event...');
+
       const startTimeISO = new Date(`${newEvent.date}T${newEvent.time}:00`).toISOString();
+      console.log('Start time ISO:', startTimeISO);
+
+      const eventData = {
+        name: newEvent.name,
+        city: newEvent.city,
+        description: newEvent.description,
+        type: newEvent.type,
+        date: newEvent.date,
+        time: newEvent.time,
+        location: 'Se revelará próximamente',
+        location_name: newEvent.location_name,
+        location_address: newEvent.location_address,
+        maps_link: newEvent.maps_link,
+        start_time: startTimeISO,
+        max_participants: newEvent.max_participants,
+        current_participants: 0,
+        status: 'active',
+        is_location_revealed: newEvent.is_location_revealed,
+        event_status: newEvent.event_status,
+      };
+
+      console.log('Inserting event data:', eventData);
 
       const { data, error } = await supabase
         .from('events')
-        .insert([
-          {
-            name: newEvent.name,
-            city: newEvent.city,
-            description: newEvent.description,
-            type: newEvent.type,
-            date: newEvent.date,
-            time: newEvent.time,
-            location: 'Se revelará próximamente',
-            location_name: newEvent.location_name,
-            location_address: newEvent.location_address,
-            maps_link: newEvent.maps_link,
-            start_time: startTimeISO,
-            max_participants: newEvent.max_participants,
-            current_participants: 0,
-            status: 'active',
-            is_location_revealed: newEvent.is_location_revealed,
-            event_status: newEvent.event_status,
-          },
-        ])
+        .insert([eventData])
         .select();
 
       if (error) {
@@ -329,7 +337,8 @@ export default function AdminPanelScreen() {
       });
       loadDashboardData();
     } catch (error) {
-      console.error('Failed to create event:', error);
+      console.error('Failed to create event - exception:', error);
+      window.alert('Error inesperado al crear evento: ' + String(error));
     }
   };
 
@@ -457,7 +466,10 @@ export default function AdminPanelScreen() {
           <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => setShowCreateEventModal(true)}
+            onPress={() => {
+              console.log('Opening create event modal from dashboard');
+              setShowCreateEventModal(true);
+            }}
           >
             <Text style={styles.actionButtonText}>+ Crear Nuevo Evento</Text>
           </TouchableOpacity>
@@ -485,7 +497,10 @@ export default function AdminPanelScreen() {
           <Text style={styles.sectionTitle}>Gestión de Eventos</Text>
           <TouchableOpacity
             style={styles.createButton}
-            onPress={() => setShowCreateEventModal(true)}
+            onPress={() => {
+              console.log('Opening create event modal from events list');
+              setShowCreateEventModal(true);
+            }}
           >
             <Text style={styles.createButtonText}>+ Crear Evento</Text>
           </TouchableOpacity>
@@ -847,7 +862,10 @@ export default function AdminPanelScreen() {
           visible={showCreateEventModal}
           transparent
           animationType="slide"
-          onRequestClose={() => setShowCreateEventModal(false)}
+          onRequestClose={() => {
+            console.log('Modal close requested');
+            setShowCreateEventModal(false);
+          }}
         >
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
@@ -859,7 +877,10 @@ export default function AdminPanelScreen() {
                   style={styles.input}
                   placeholder="Ej: Encuentro de Solteros"
                   value={newEvent.name}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, name: text })}
+                  onChangeText={(text) => {
+                    console.log('Name changed:', text);
+                    setNewEvent({ ...newEvent, name: text });
+                  }}
                 />
 
                 <Text style={styles.inputLabel}>Ciudad *</Text>
@@ -867,7 +888,10 @@ export default function AdminPanelScreen() {
                   style={styles.input}
                   placeholder="Ej: Bogotá"
                   value={newEvent.city}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, city: text })}
+                  onChangeText={(text) => {
+                    console.log('City changed:', text);
+                    setNewEvent({ ...newEvent, city: text });
+                  }}
                 />
 
                 <Text style={styles.inputLabel}>Descripción Breve</Text>
@@ -887,7 +911,10 @@ export default function AdminPanelScreen() {
                       styles.typeButton,
                       newEvent.type === 'bar' && styles.typeButtonActive,
                     ]}
-                    onPress={() => setNewEvent({ ...newEvent, type: 'bar' })}
+                    onPress={() => {
+                      console.log('Type changed to: bar');
+                      setNewEvent({ ...newEvent, type: 'bar' });
+                    }}
                   >
                     <Text
                       style={[
@@ -903,7 +930,10 @@ export default function AdminPanelScreen() {
                       styles.typeButton,
                       newEvent.type === 'restaurant' && styles.typeButtonActive,
                     ]}
-                    onPress={() => setNewEvent({ ...newEvent, type: 'restaurant' })}
+                    onPress={() => {
+                      console.log('Type changed to: restaurant');
+                      setNewEvent({ ...newEvent, type: 'restaurant' });
+                    }}
                   >
                     <Text
                       style={[
@@ -921,7 +951,10 @@ export default function AdminPanelScreen() {
                   style={styles.input}
                   placeholder="2024-02-15"
                   value={newEvent.date}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, date: text })}
+                  onChangeText={(text) => {
+                    console.log('Date changed:', text);
+                    setNewEvent({ ...newEvent, date: text });
+                  }}
                 />
 
                 <Text style={styles.inputLabel}>Hora (HH:MM) *</Text>
@@ -929,7 +962,10 @@ export default function AdminPanelScreen() {
                   style={styles.input}
                   placeholder="21:15"
                   value={newEvent.time}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, time: text })}
+                  onChangeText={(text) => {
+                    console.log('Time changed:', text);
+                    setNewEvent({ ...newEvent, time: text });
+                  }}
                 />
 
                 <Text style={styles.inputLabel}>Número de Participantes (mostrado públicamente)</Text>
@@ -974,7 +1010,10 @@ export default function AdminPanelScreen() {
                       styles.typeButton,
                       newEvent.event_status === 'draft' && styles.typeButtonActive,
                     ]}
-                    onPress={() => setNewEvent({ ...newEvent, event_status: 'draft' })}
+                    onPress={() => {
+                      console.log('Status changed to: draft');
+                      setNewEvent({ ...newEvent, event_status: 'draft' });
+                    }}
                   >
                     <Text
                       style={[
@@ -990,7 +1029,10 @@ export default function AdminPanelScreen() {
                       styles.typeButton,
                       newEvent.event_status === 'published' && styles.typeButtonActive,
                     ]}
-                    onPress={() => setNewEvent({ ...newEvent, event_status: 'published' })}
+                    onPress={() => {
+                      console.log('Status changed to: published');
+                      setNewEvent({ ...newEvent, event_status: 'published' });
+                    }}
                   >
                     <Text
                       style={[
@@ -1006,13 +1048,19 @@ export default function AdminPanelScreen() {
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonCancel]}
-                    onPress={() => setShowCreateEventModal(false)}
+                    onPress={() => {
+                      console.log('Cancel button pressed');
+                      setShowCreateEventModal(false);
+                    }}
                   >
                     <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonConfirm]}
-                    onPress={handleCreateEvent}
+                    onPress={() => {
+                      console.log('Create Event button pressed in modal');
+                      handleCreateEvent();
+                    }}
                   >
                     <Text style={styles.modalButtonTextConfirm}>Crear Evento</Text>
                   </TouchableOpacity>
