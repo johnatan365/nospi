@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -220,6 +220,13 @@ export default function AppointmentsScreen() {
     return statusTextMap[status] || status;
   };
 
+  const handleOpenMaps = (mapsLink: string) => {
+    console.log('Opening maps link:', mapsLink);
+    Linking.openURL(mapsLink).catch(err => {
+      console.error('Failed to open maps link:', err);
+    });
+  };
+
   if (loading) {
     return (
       <LinearGradient
@@ -288,6 +295,14 @@ export default function AppointmentsScreen() {
               ? appointment.event.location_name 
               : 'Ubicación se revelará próximamente';
             
+            const eventAddress = locationRevealed && appointment.event.location_address
+              ? appointment.event.location_address
+              : null;
+            
+            const mapsLink = locationRevealed && appointment.event.maps_link
+              ? appointment.event.maps_link
+              : null;
+            
             const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
             const statusColor = getStatusColor(appointment.status);
             const statusText = getStatusText(appointment.status);
@@ -310,8 +325,18 @@ export default function AppointmentsScreen() {
                 <Text style={styles.appointmentTime}>{eventTime}</Text>
                 <Text style={styles.appointmentLocation}>{eventLocation}</Text>
                 
-                {locationRevealed && appointment.event.location_address && (
-                  <Text style={styles.appointmentAddress}>{appointment.event.location_address}</Text>
+                {eventAddress && (
+                  <Text style={styles.appointmentAddress}>{eventAddress}</Text>
+                )}
+
+                {mapsLink && (
+                  <TouchableOpacity
+                    style={styles.mapsButton}
+                    onPress={() => handleOpenMaps(mapsLink)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                  </TouchableOpacity>
                 )}
 
                 {isConfirmed && (
@@ -555,6 +580,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
     marginBottom: 12,
+  },
+  mapsButton: {
+    backgroundColor: '#4285F4',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mapsButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   cancelButton: {
     backgroundColor: '#EF4444',

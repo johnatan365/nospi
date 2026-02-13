@@ -15,6 +15,10 @@ interface Event {
   date: string;
   time: string;
   location: string;
+  location_name: string;
+  location_address: string;
+  maps_link: string;
+  is_location_revealed: boolean;
   address: string | null;
   start_time: string | null;
   max_participants: number;
@@ -291,6 +295,10 @@ export default function InteraccionScreen() {
             date,
             time,
             location,
+            location_name,
+            location_address,
+            maps_link,
+            is_location_revealed,
             address,
             start_time,
             max_participants,
@@ -425,9 +433,10 @@ export default function InteraccionScreen() {
       now.getMonth() === eventDate.getMonth() &&
       now.getDate() === eventDate.getDate();
     
-    const isAfter8AM = now.getHours() >= 8;
+    // Changed from 8 AM to 12 AM (midnight)
+    const isAfterMidnight = now.getHours() >= 0;
     
-    const isToday = isSameDay && isAfter8AM;
+    const isToday = isSameDay && isAfterMidnight;
     console.log('Is event day:', isToday);
     setIsEventDay(isToday);
   };
@@ -745,11 +754,22 @@ export default function InteraccionScreen() {
             <Text style={styles.eventInfoTitle}>Evento confirmado</Text>
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
             <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
-            <Text style={styles.eventInfoLocation}>{appointment.event.location}</Text>
+            
+            {/* Show location if revealed */}
+            {appointment.event.is_location_revealed && appointment.event.location_name ? (
+              <>
+                <Text style={styles.eventInfoLocation}>{appointment.event.location_name}</Text>
+                {appointment.event.location_address && (
+                  <Text style={styles.eventInfoAddress}>{appointment.event.location_address}</Text>
+                )}
+              </>
+            ) : (
+              <Text style={styles.eventInfoLocationPlaceholder}>Ubicación se revelará próximamente</Text>
+            )}
             
             <View style={styles.infoBox}>
               <Text style={styles.infoBoxText}>
-                La experiencia interactiva estará disponible el día del evento desde las 8:00 AM
+                La experiencia interactiva estará disponible el día del evento desde las 12:00 AM
               </Text>
             </View>
           </View>
@@ -846,7 +866,11 @@ export default function InteraccionScreen() {
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
-  const locationText = appointment.event.address || appointment.event.location;
+  
+  // Show location if revealed
+  const locationText = appointment.event.is_location_revealed && appointment.event.location_name
+    ? appointment.event.location_name
+    : 'Ubicación se revelará próximamente';
 
   return (
     <LinearGradient
@@ -885,6 +909,9 @@ export default function InteraccionScreen() {
             </View>
           </View>
           <Text style={styles.eventLocation}>{locationText}</Text>
+          {appointment.event.is_location_revealed && appointment.event.location_address && (
+            <Text style={styles.eventLocationAddress}>{appointment.event.location_address}</Text>
+          )}
         </View>
 
         {checkInPhase === 'code_entry' && (
@@ -1169,9 +1196,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   eventInfoLocation: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  eventInfoAddress: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  eventInfoLocationPlaceholder: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
     marginBottom: 16,
   },
   infoBox: {
@@ -1275,6 +1316,11 @@ const styles = StyleSheet.create({
   eventLocation: {
     fontSize: 14,
     color: '#666',
+  },
+  eventLocationAddress: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
   },
   codeEntryCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
