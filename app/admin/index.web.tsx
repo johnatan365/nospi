@@ -81,9 +81,10 @@ export default function AdminPanelScreen() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
 
-  // Event creation modal
-  const [showCreateEventModal, setShowCreateEventModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({
+  // Event creation/edit modal
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [eventForm, setEventForm] = useState({
     name: '',
     city: '',
     description: '',
@@ -269,30 +270,71 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const handleCreateEvent = async () => {
-    console.log('handleCreateEvent called - Button pressed!');
-    console.log('Current newEvent state:', newEvent);
+  const openCreateEventModal = () => {
+    console.log('Opening create event modal');
+    setEditingEventId(null);
+    setEventForm({
+      name: '',
+      city: '',
+      description: '',
+      type: 'bar',
+      date: '',
+      time: '',
+      location_name: '',
+      location_address: '',
+      maps_link: '',
+      max_participants: 6,
+      is_location_revealed: false,
+      event_status: 'draft',
+    });
+    setShowEventModal(true);
+  };
+
+  const openEditEventModal = (event: Event) => {
+    console.log('Opening edit event modal for:', event.id);
+    setEditingEventId(event.id);
+    setEventForm({
+      name: event.name,
+      city: event.city,
+      description: event.description,
+      type: event.type,
+      date: event.date,
+      time: event.time,
+      location_name: event.location_name,
+      location_address: event.location_address,
+      maps_link: event.maps_link,
+      max_participants: event.max_participants,
+      is_location_revealed: event.is_location_revealed,
+      event_status: event.event_status,
+    });
+    setShowEventModal(true);
+  };
+
+  const handleSaveEvent = async () => {
+    console.log('handleSaveEvent called - Button pressed!');
+    console.log('Current eventForm state:', eventForm);
+    console.log('Editing event ID:', editingEventId);
 
     try {
       // Validate required fields
-      if (!newEvent.name || !newEvent.city) {
+      if (!eventForm.name || !eventForm.city) {
         console.log('Validation failed - missing name or city');
         window.alert('Por favor completa el nombre y la ciudad del evento');
         return;
       }
 
       // Validate date and time are defined
-      if (!newEvent.date || !newEvent.time) {
+      if (!eventForm.date || !eventForm.time) {
         console.log('Validation failed - missing date or time');
-        window.alert('Debes seleccionar fecha y hora válidas antes de crear el evento.');
+        window.alert('Debes seleccionar fecha y hora válidas antes de guardar el evento.');
         return;
       }
 
-      console.log('Date:', newEvent.date);
-      console.log('Time:', newEvent.time);
+      console.log('Date:', eventForm.date);
+      console.log('Time:', eventForm.time);
 
       // Combine date and time in ISO format
-      const combinedDateString = `${newEvent.date}T${newEvent.time}:00`;
+      const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       console.log('Combined date string:', combinedDateString);
 
       const combinedDate = new Date(combinedDateString);
@@ -310,41 +352,64 @@ export default function AdminPanelScreen() {
       console.log('ISO date generated successfully:', isoDate);
 
       const eventData = {
-        name: newEvent.name,
-        city: newEvent.city,
-        description: newEvent.description,
-        type: newEvent.type,
-        date: newEvent.date,
-        time: newEvent.time,
-        location: 'Se revelará próximamente',
-        location_name: newEvent.location_name,
-        location_address: newEvent.location_address,
-        maps_link: newEvent.maps_link,
+        name: eventForm.name,
+        city: eventForm.city,
+        description: eventForm.description,
+        type: eventForm.type,
+        date: eventForm.date,
+        time: eventForm.time,
+        location: eventForm.is_location_revealed && eventForm.location_name 
+          ? eventForm.location_name 
+          : 'Se revelará próximamente',
+        location_name: eventForm.location_name,
+        location_address: eventForm.location_address,
+        maps_link: eventForm.maps_link,
         start_time: isoDate,
-        max_participants: newEvent.max_participants,
+        max_participants: eventForm.max_participants,
         current_participants: 0,
         status: 'active',
-        is_location_revealed: newEvent.is_location_revealed,
-        event_status: newEvent.event_status,
+        is_location_revealed: eventForm.is_location_revealed,
+        event_status: eventForm.event_status,
       };
 
-      console.log('Inserting event data:', eventData);
+      if (editingEventId) {
+        // Update existing event
+        console.log('Updating event:', editingEventId, eventData);
+        const { data, error } = await supabase
+          .from('events')
+          .update(eventData)
+          .eq('id', editingEventId)
+          .select();
 
-      const { data, error } = await supabase
-        .from('events')
-        .insert([eventData])
-        .select();
+        if (error) {
+          console.error('Error updating event:', error);
+          window.alert('Error al actualizar evento: ' + error.message);
+          return;
+        }
 
-      if (error) {
-        console.error('Error creating event:', error);
-        window.alert('Error al crear evento: ' + error.message);
-        return;
+        console.log('Event updated successfully:', data);
+        window.alert('Evento actualizado exitosamente');
+      } else {
+        // Create new event
+        console.log('Inserting event data:', eventData);
+        const { data, error } = await supabase
+          .from('events')
+          .insert([eventData])
+          .select();
+
+        if (error) {
+          console.error('Error creating event:', error);
+          window.alert('Error al crear evento: ' + error.message);
+          return;
+        }
+
+        console.log('Event created successfully:', data);
+        window.alert('Evento creado exitosamente');
       }
 
-      console.log('Event created successfully:', data);
-      window.alert('Evento creado exitosamente');
-      setShowCreateEventModal(false);
-      setNewEvent({
+      setShowEventModal(false);
+      setEditingEventId(null);
+      setEventForm({
         name: '',
         city: '',
         description: '',
@@ -360,8 +425,8 @@ export default function AdminPanelScreen() {
       });
       loadDashboardData();
     } catch (error) {
-      console.error('Failed to create event - exception:', error);
-      window.alert('Error inesperado al crear evento: ' + String(error));
+      console.error('Failed to save event - exception:', error);
+      window.alert('Error inesperado al guardar evento: ' + String(error));
     }
   };
 
@@ -391,14 +456,32 @@ export default function AdminPanelScreen() {
   };
 
   const handleRevealLocation = async (eventId: string) => {
-    const confirmed = window.confirm('¿Revelar la ubicación de este evento? Los usuarios inscritos podrán verla.');
+    const confirmed = window.confirm('¿Revelar la ubicación de este evento? Los usuarios inscritos podrán verla en la app.');
     if (!confirmed) return;
 
     try {
       console.log('Revealing location for event:', eventId);
+      
+      // Get the event first to update the location field
+      const { data: eventData, error: fetchError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .single();
+
+      if (fetchError || !eventData) {
+        console.error('Error fetching event:', fetchError);
+        window.alert('Error al obtener datos del evento');
+        return;
+      }
+
+      // Update both is_location_revealed and location field
       const { error } = await supabase
         .from('events')
-        .update({ is_location_revealed: true })
+        .update({ 
+          is_location_revealed: true,
+          location: eventData.location_name || 'Ubicación revelada'
+        })
         .eq('id', eventId);
 
       if (error) {
@@ -408,7 +491,7 @@ export default function AdminPanelScreen() {
       }
 
       console.log('Location revealed successfully');
-      window.alert('Ubicación revelada exitosamente');
+      window.alert('Ubicación revelada exitosamente. Los usuarios inscritos ahora pueden ver la ubicación en sus citas.');
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);
@@ -489,10 +572,7 @@ export default function AdminPanelScreen() {
           <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => {
-              console.log('Opening create event modal from dashboard');
-              setShowCreateEventModal(true);
-            }}
+            onPress={openCreateEventModal}
           >
             <Text style={styles.actionButtonText}>+ Crear Nuevo Evento</Text>
           </TouchableOpacity>
@@ -520,10 +600,7 @@ export default function AdminPanelScreen() {
           <Text style={styles.sectionTitle}>Gestión de Eventos</Text>
           <TouchableOpacity
             style={styles.createButton}
-            onPress={() => {
-              console.log('Opening create event modal from events list');
-              setShowCreateEventModal(true);
-            }}
+            onPress={openCreateEventModal}
           >
             <Text style={styles.createButtonText}>+ Crear Evento</Text>
           </TouchableOpacity>
@@ -557,6 +634,12 @@ export default function AdminPanelScreen() {
                 <Text style={styles.listItemDetail}>Dirección: {event.location_address}</Text>
               )}
               <View style={styles.eventActions}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => openEditEventModal(event)}
+                >
+                  <Text style={styles.editButtonText}>✏️ Editar</Text>
+                </TouchableOpacity>
                 {event.event_status === 'draft' && (
                   <TouchableOpacity
                     style={styles.publishButton}
@@ -880,29 +963,31 @@ export default function AdminPanelScreen() {
           </ScrollView>
         </View>
 
-        {/* Create Event Modal */}
+        {/* Create/Edit Event Modal */}
         <Modal
-          visible={showCreateEventModal}
+          visible={showEventModal}
           transparent
           animationType="slide"
           onRequestClose={() => {
             console.log('Modal close requested');
-            setShowCreateEventModal(false);
+            setShowEventModal(false);
           }}
         >
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Crear Nuevo Evento</Text>
+                <Text style={styles.modalTitle}>
+                  {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
+                </Text>
 
                 <Text style={styles.inputLabel}>Nombre del Evento *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Ej: Encuentro de Solteros"
-                  value={newEvent.name}
+                  value={eventForm.name}
                   onChangeText={(text) => {
                     console.log('Name changed:', text);
-                    setNewEvent({ ...newEvent, name: text });
+                    setEventForm({ ...eventForm, name: text });
                   }}
                 />
 
@@ -910,10 +995,10 @@ export default function AdminPanelScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="Ej: Bogotá"
-                  value={newEvent.city}
+                  value={eventForm.city}
                   onChangeText={(text) => {
                     console.log('City changed:', text);
-                    setNewEvent({ ...newEvent, city: text });
+                    setEventForm({ ...eventForm, city: text });
                   }}
                 />
 
@@ -921,8 +1006,8 @@ export default function AdminPanelScreen() {
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Descripción del evento"
-                  value={newEvent.description}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
+                  value={eventForm.description}
+                  onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
                   multiline
                   numberOfLines={3}
                 />
@@ -932,17 +1017,17 @@ export default function AdminPanelScreen() {
                   <TouchableOpacity
                     style={[
                       styles.typeButton,
-                      newEvent.type === 'bar' && styles.typeButtonActive,
+                      eventForm.type === 'bar' && styles.typeButtonActive,
                     ]}
                     onPress={() => {
                       console.log('Type changed to: bar');
-                      setNewEvent({ ...newEvent, type: 'bar' });
+                      setEventForm({ ...eventForm, type: 'bar' });
                     }}
                   >
                     <Text
                       style={[
                         styles.typeButtonText,
-                        newEvent.type === 'bar' && styles.typeButtonTextActive,
+                        eventForm.type === 'bar' && styles.typeButtonTextActive,
                       ]}
                     >
                       🍸 Bar
@@ -951,17 +1036,17 @@ export default function AdminPanelScreen() {
                   <TouchableOpacity
                     style={[
                       styles.typeButton,
-                      newEvent.type === 'restaurant' && styles.typeButtonActive,
+                      eventForm.type === 'restaurant' && styles.typeButtonActive,
                     ]}
                     onPress={() => {
                       console.log('Type changed to: restaurant');
-                      setNewEvent({ ...newEvent, type: 'restaurant' });
+                      setEventForm({ ...eventForm, type: 'restaurant' });
                     }}
                   >
                     <Text
                       style={[
                         styles.typeButtonText,
-                        newEvent.type === 'restaurant' && styles.typeButtonTextActive,
+                        eventForm.type === 'restaurant' && styles.typeButtonTextActive,
                       ]}
                     >
                       🍽️ Restaurante
@@ -973,10 +1058,10 @@ export default function AdminPanelScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="2024-02-15"
-                  value={newEvent.date}
+                  value={eventForm.date}
                   onChangeText={(text) => {
                     console.log('Date changed:', text);
-                    setNewEvent({ ...newEvent, date: text });
+                    setEventForm({ ...eventForm, date: text });
                   }}
                 />
 
@@ -984,10 +1069,10 @@ export default function AdminPanelScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="21:15"
-                  value={newEvent.time}
+                  value={eventForm.time}
                   onChangeText={(text) => {
                     console.log('Time changed:', text);
-                    setNewEvent({ ...newEvent, time: text });
+                    setEventForm({ ...eventForm, time: text });
                   }}
                 />
 
@@ -996,9 +1081,9 @@ export default function AdminPanelScreen() {
                   style={styles.input}
                   placeholder="6"
                   keyboardType="numeric"
-                  value={String(newEvent.max_participants)}
+                  value={String(eventForm.max_participants)}
                   onChangeText={(text) =>
-                    setNewEvent({ ...newEvent, max_participants: parseInt(text) || 6 })
+                    setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })
                   }
                 />
 
@@ -1006,24 +1091,24 @@ export default function AdminPanelScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="Ej: Bar El Encuentro"
-                  value={newEvent.location_name}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, location_name: text })}
+                  value={eventForm.location_name}
+                  onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
                 />
 
                 <Text style={styles.inputLabel}>Dirección del Lugar</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Ej: Calle 85 #15-20"
-                  value={newEvent.location_address}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, location_address: text })}
+                  value={eventForm.location_address}
+                  onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
                 />
 
                 <Text style={styles.inputLabel}>Enlace de Maps</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="https://maps.google.com/..."
-                  value={newEvent.maps_link}
-                  onChangeText={(text) => setNewEvent({ ...newEvent, maps_link: text })}
+                  value={eventForm.maps_link}
+                  onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
                 />
 
                 <Text style={styles.inputLabel}>Estado del Evento</Text>
@@ -1031,17 +1116,17 @@ export default function AdminPanelScreen() {
                   <TouchableOpacity
                     style={[
                       styles.typeButton,
-                      newEvent.event_status === 'draft' && styles.typeButtonActive,
+                      eventForm.event_status === 'draft' && styles.typeButtonActive,
                     ]}
                     onPress={() => {
                       console.log('Status changed to: draft');
-                      setNewEvent({ ...newEvent, event_status: 'draft' });
+                      setEventForm({ ...eventForm, event_status: 'draft' });
                     }}
                   >
                     <Text
                       style={[
                         styles.typeButtonText,
-                        newEvent.event_status === 'draft' && styles.typeButtonTextActive,
+                        eventForm.event_status === 'draft' && styles.typeButtonTextActive,
                       ]}
                     >
                       📝 Borrador
@@ -1050,17 +1135,17 @@ export default function AdminPanelScreen() {
                   <TouchableOpacity
                     style={[
                       styles.typeButton,
-                      newEvent.event_status === 'published' && styles.typeButtonActive,
+                      eventForm.event_status === 'published' && styles.typeButtonActive,
                     ]}
                     onPress={() => {
                       console.log('Status changed to: published');
-                      setNewEvent({ ...newEvent, event_status: 'published' });
+                      setEventForm({ ...eventForm, event_status: 'published' });
                     }}
                   >
                     <Text
                       style={[
                         styles.typeButtonText,
-                        newEvent.event_status === 'published' && styles.typeButtonTextActive,
+                        eventForm.event_status === 'published' && styles.typeButtonTextActive,
                       ]}
                     >
                       ✅ Publicado
@@ -1073,7 +1158,7 @@ export default function AdminPanelScreen() {
                     style={[styles.modalButton, styles.modalButtonCancel]}
                     onPress={() => {
                       console.log('Cancel button pressed');
-                      setShowCreateEventModal(false);
+                      setShowEventModal(false);
                     }}
                   >
                     <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
@@ -1081,11 +1166,13 @@ export default function AdminPanelScreen() {
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonConfirm]}
                     onPress={() => {
-                      console.log('Create Event button pressed in modal');
-                      handleCreateEvent();
+                      console.log('Save Event button pressed in modal');
+                      handleSaveEvent();
                     }}
                   >
-                    <Text style={styles.modalButtonTextConfirm}>Crear Evento</Text>
+                    <Text style={styles.modalButtonTextConfirm}>
+                      {editingEventId ? 'Guardar Cambios' : 'Crear Evento'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1348,6 +1435,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
+  },
+  editButton: {
+    flex: 1,
+    minWidth: 100,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   publishButton: {
     flex: 1,

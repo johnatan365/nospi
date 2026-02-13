@@ -21,6 +21,10 @@ interface Appointment {
     date: string;
     time: string;
     location: string;
+    location_name: string;
+    location_address: string;
+    maps_link: string;
+    is_location_revealed: boolean;
     event_status: 'draft' | 'published' | 'closed';
   } | null;
 }
@@ -87,7 +91,7 @@ export default function AppointmentsScreen() {
           status,
           payment_status,
           created_at,
-          events (
+          events!inner (
             id,
             name,
             city,
@@ -95,6 +99,10 @@ export default function AppointmentsScreen() {
             date,
             time,
             location,
+            location_name,
+            location_address,
+            maps_link,
+            is_location_revealed,
             event_status
           )
         `)
@@ -110,11 +118,14 @@ export default function AppointmentsScreen() {
       console.log('Appointments loaded:', data?.length || 0);
       console.log('Raw appointments data:', JSON.stringify(data, null, 2));
       
-      // Filter out appointments without valid event data
-      const validAppointments = (data || []).filter(apt => apt.events && typeof apt.events === 'object');
-      console.log('Valid appointments with events:', validAppointments.length);
+      // Transform the data to match our interface (events -> event)
+      const transformedAppointments = (data || []).map(apt => ({
+        ...apt,
+        event: apt.events as any
+      }));
       
-      setAppointments(validAppointments as Appointment[]);
+      console.log('Transformed appointments:', transformedAppointments.length);
+      setAppointments(transformedAppointments as Appointment[]);
     } catch (error) {
       console.error('Failed to load appointments:', error);
     } finally {
@@ -270,7 +281,13 @@ export default function AppointmentsScreen() {
             const eventCity = appointment.event.city || '';
             const eventDate = appointment.event.date || '';
             const eventTime = appointment.event.time || '';
-            const eventLocation = appointment.event.location || '';
+            
+            // Show location if revealed
+            const locationRevealed = appointment.event.is_location_revealed || false;
+            const eventLocation = locationRevealed && appointment.event.location_name 
+              ? appointment.event.location_name 
+              : 'Ubicación se revelará próximamente';
+            
             const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
             const statusColor = getStatusColor(appointment.status);
             const statusText = getStatusText(appointment.status);
@@ -292,6 +309,10 @@ export default function AppointmentsScreen() {
                 <Text style={styles.appointmentDate}>{dateText}</Text>
                 <Text style={styles.appointmentTime}>{eventTime}</Text>
                 <Text style={styles.appointmentLocation}>{eventLocation}</Text>
+                
+                {locationRevealed && appointment.event.location_address && (
+                  <Text style={styles.appointmentAddress}>{appointment.event.location_address}</Text>
+                )}
 
                 {isConfirmed && (
                   <TouchableOpacity
@@ -528,6 +549,11 @@ const styles = StyleSheet.create({
   appointmentLocation: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 4,
+  },
+  appointmentAddress: {
+    fontSize: 13,
+    color: '#888',
     marginBottom: 12,
   },
   cancelButton: {
