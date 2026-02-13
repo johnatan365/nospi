@@ -27,6 +27,7 @@ interface Event {
   current_participants: number;
   status: string;
   event_status: 'draft' | 'published' | 'closed';
+  confirmation_code: string | null;
 }
 
 interface User {
@@ -97,6 +98,7 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
+    confirmation_code: '',
   });
 
   // Realtime monitoring
@@ -286,6 +288,7 @@ export default function AdminPanelScreen() {
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
+      confirmation_code: '',
     });
     setShowEventModal(true);
   };
@@ -306,6 +309,7 @@ export default function AdminPanelScreen() {
       max_participants: event.max_participants,
       is_location_revealed: event.is_location_revealed,
       event_status: event.event_status,
+      confirmation_code: event.confirmation_code || '',
     });
     setShowEventModal(true);
   };
@@ -327,6 +331,13 @@ export default function AdminPanelScreen() {
       if (!eventForm.date || !eventForm.time) {
         console.log('Validation failed - missing date or time');
         window.alert('Debes seleccionar fecha y hora válidas antes de guardar el evento.');
+        return;
+      }
+
+      // Validate confirmation code
+      if (!eventForm.confirmation_code || eventForm.confirmation_code.trim().length === 0) {
+        console.log('Validation failed - missing confirmation code');
+        window.alert('Debes asignar un código de confirmación para el evento (ej: 1986).');
         return;
       }
 
@@ -370,6 +381,7 @@ export default function AdminPanelScreen() {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
+        confirmation_code: eventForm.confirmation_code.trim(),
       };
 
       if (editingEventId) {
@@ -422,6 +434,7 @@ export default function AdminPanelScreen() {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
+        confirmation_code: '',
       });
       loadDashboardData();
     } catch (error) {
@@ -611,6 +624,7 @@ export default function AdminPanelScreen() {
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const locationRevealed = event.is_location_revealed ? 'Sí' : 'No';
+          const confirmationCode = event.confirmation_code || 'No asignado';
 
           return (
             <View key={event.id} style={styles.listItem}>
@@ -626,6 +640,7 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>
                 Participantes configurados: {event.max_participants}
               </Text>
+              <Text style={styles.listItemDetail}>Código de confirmación: {confirmationCode}</Text>
               <Text style={styles.listItemDetail}>Ubicación revelada: {locationRevealed}</Text>
               {event.location_name && (
                 <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
@@ -776,6 +791,9 @@ export default function AdminPanelScreen() {
                 </Text>
                 <Text style={styles.realtimeEventDate}>
                   {selectedEvent?.date} a las {selectedEvent?.time}
+                </Text>
+                <Text style={styles.realtimeEventCode}>
+                  Código: {selectedEvent?.confirmation_code || 'No asignado'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1073,6 +1091,17 @@ export default function AdminPanelScreen() {
                   onChangeText={(text) => {
                     console.log('Time changed:', text);
                     setEventForm({ ...eventForm, time: text });
+                  }}
+                />
+
+                <Text style={styles.inputLabel}>Código de Confirmación * (para que los participantes confirmen su llegada)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: 1986"
+                  value={eventForm.confirmation_code}
+                  onChangeText={(text) => {
+                    console.log('Confirmation code changed:', text);
+                    setEventForm({ ...eventForm, confirmation_code: text });
                   }}
                 />
 
@@ -1572,6 +1601,12 @@ const styles = StyleSheet.create({
   realtimeEventDate: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 4,
+  },
+  realtimeEventCode: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
   },
   refreshButton: {
     backgroundColor: nospiColors.purpleLight,

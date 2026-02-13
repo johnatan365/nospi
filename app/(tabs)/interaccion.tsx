@@ -24,6 +24,7 @@ interface Event {
   max_participants: number;
   current_participants: number;
   status: string;
+  confirmation_code: string | null;
 }
 
 interface Appointment {
@@ -49,8 +50,6 @@ interface Participant {
 }
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
-
-const SECRET_CODE = '1986';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -303,7 +302,8 @@ export default function InteraccionScreen() {
             start_time,
             max_participants,
             current_participants,
-            status
+            status,
+            confirmation_code
           )
         `)
         .eq('user_id', user.id)
@@ -331,6 +331,7 @@ export default function InteraccionScreen() {
 
       const appointmentData = upcomingAppointment || data[0];
       console.log('Appointment loaded:', appointmentData.id);
+      console.log('Event confirmation code:', appointmentData.event?.confirmation_code);
       setAppointment(appointmentData as any);
       
       if (appointmentData.location_confirmed) {
@@ -542,15 +543,17 @@ export default function InteraccionScreen() {
     if (!appointment || !user) return;
 
     const enteredCode = confirmationCode.trim();
-    console.log('User entered code:', enteredCode, '| Expected code:', SECRET_CODE);
+    const expectedCode = appointment.event.confirmation_code?.trim() || '';
+    
+    console.log('User entered code:', enteredCode, '| Expected code:', expectedCode);
 
-    if (enteredCode !== SECRET_CODE) {
-      console.log('Incorrect code entered. Expected:', SECRET_CODE, 'Got:', enteredCode);
+    if (enteredCode !== expectedCode) {
+      console.log('Incorrect code entered. Expected:', expectedCode, 'Got:', enteredCode);
       setCodeError('Código incorrecto. Verifica el código del encuentro.');
       return;
     }
 
-    console.log('Correct code entered (1986), processing check-in');
+    console.log('Correct code entered, processing check-in');
     setCodeError('');
 
     try {
@@ -580,7 +583,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Check-in successful with code 1986, event_participants updated:', data);
+      console.log('Check-in successful, event_participants updated:', data);
       
       await supabase
         .from('appointments')
@@ -928,8 +931,8 @@ export default function InteraccionScreen() {
               }}
               placeholder="Código"
               placeholderTextColor="#999"
-              keyboardType="number-pad"
-              maxLength={4}
+              keyboardType="default"
+              maxLength={10}
               autoFocus
             />
 
