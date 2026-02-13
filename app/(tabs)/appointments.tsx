@@ -22,7 +22,7 @@ interface Appointment {
     time: string;
     location: string;
     event_status: 'draft' | 'published' | 'closed';
-  };
+  } | null;
 }
 
 type FilterType = 'confirmadas' | 'anteriores';
@@ -87,7 +87,7 @@ export default function AppointmentsScreen() {
           status,
           payment_status,
           created_at,
-          events!inner (
+          events (
             id,
             name,
             city,
@@ -108,7 +108,13 @@ export default function AppointmentsScreen() {
       }
 
       console.log('Appointments loaded:', data?.length || 0);
-      setAppointments(data || []);
+      console.log('Raw appointments data:', JSON.stringify(data, null, 2));
+      
+      // Filter out appointments without valid event data
+      const validAppointments = (data || []).filter(apt => apt.events && typeof apt.events === 'object');
+      console.log('Valid appointments with events:', validAppointments.length);
+      
+      setAppointments(validAppointments as Appointment[]);
     } catch (error) {
       console.error('Failed to load appointments:', error);
     } finally {
@@ -250,19 +256,33 @@ export default function AppointmentsScreen() {
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
           {appointments.map((appointment) => {
-            const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
-            const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
-            const dateText = formatDate(appointment.event.date);
+            // ATOMIC JSX: Extract all logic and conditionals BEFORE the return
+            // Defensive check: Skip if event is null or undefined
+            if (!appointment.event) {
+              console.warn('Appointment missing event data:', appointment.id);
+              return null;
+            }
+
+            const eventType = appointment.event.type || 'restaurant';
+            const eventTypeText = eventType === 'bar' ? 'Bar' : 'Restaurante';
+            const eventIcon = eventType === 'bar' ? '🍸' : '🍽️';
+            const eventName = appointment.event.name || eventTypeText;
+            const eventCity = appointment.event.city || '';
+            const eventDate = appointment.event.date || '';
+            const eventTime = appointment.event.time || '';
+            const eventLocation = appointment.event.location || '';
+            const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
             const statusColor = getStatusColor(appointment.status);
             const statusText = getStatusText(appointment.status);
+            const isConfirmed = appointment.status === 'confirmada';
 
             return (
               <View key={appointment.id} style={styles.appointmentCard}>
                 <View style={styles.appointmentHeader}>
                   <Text style={styles.appointmentIcon}>{eventIcon}</Text>
                   <View style={styles.appointmentHeaderText}>
-                    <Text style={styles.appointmentName}>{appointment.event.name || eventTypeText}</Text>
-                    <Text style={styles.appointmentCity}>{appointment.event.city}</Text>
+                    <Text style={styles.appointmentName}>{eventName}</Text>
+                    <Text style={styles.appointmentCity}>{eventCity}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                     <Text style={styles.statusText}>{statusText}</Text>
@@ -270,10 +290,10 @@ export default function AppointmentsScreen() {
                 </View>
 
                 <Text style={styles.appointmentDate}>{dateText}</Text>
-                <Text style={styles.appointmentTime}>{appointment.event.time}</Text>
-                <Text style={styles.appointmentLocation}>{appointment.event.location}</Text>
+                <Text style={styles.appointmentTime}>{eventTime}</Text>
+                <Text style={styles.appointmentLocation}>{eventLocation}</Text>
 
-                {appointment.status === 'confirmada' && (
+                {isConfirmed && (
                   <TouchableOpacity
                     style={styles.cancelButton}
                     onPress={() => handleCancelPress(appointment)}
