@@ -434,11 +434,11 @@ export default function InteraccionScreen() {
       now.getMonth() === eventDate.getMonth() &&
       now.getDate() === eventDate.getDate();
     
-    // Changed from 8 AM to 12 AM (midnight)
+    // Event day starts at 12:00 AM (midnight)
     const isAfterMidnight = now.getHours() >= 0;
     
     const isToday = isSameDay && isAfterMidnight;
-    console.log('Is event day:', isToday);
+    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event time:', eventDate.toLocaleString());
     setIsEventDay(isToday);
   };
 
@@ -447,10 +447,12 @@ export default function InteraccionScreen() {
     const eventDate = new Date(startTime);
     const diff = eventDate.getTime() - now.getTime();
 
+    console.log('Countdown update - Time until event:', diff, 'ms');
     setCountdown(diff);
 
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
+      console.log('Event time reached - showing code entry phase');
       
       if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
         setCheckInPhase('code_entry');
