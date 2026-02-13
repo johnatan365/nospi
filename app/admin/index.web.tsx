@@ -274,17 +274,40 @@ export default function AdminPanelScreen() {
     console.log('Current newEvent state:', newEvent);
 
     try {
-      // Validation
-      if (!newEvent.name || !newEvent.city || !newEvent.date || !newEvent.time) {
-        console.log('Validation failed - missing required fields');
-        window.alert('Por favor completa todos los campos obligatorios (nombre, ciudad, fecha, hora)');
+      // Validate required fields
+      if (!newEvent.name || !newEvent.city) {
+        console.log('Validation failed - missing name or city');
+        window.alert('Por favor completa el nombre y la ciudad del evento');
         return;
       }
 
-      console.log('Validation passed, creating event...');
+      // Validate date and time are defined
+      if (!newEvent.date || !newEvent.time) {
+        console.log('Validation failed - missing date or time');
+        window.alert('Debes seleccionar fecha y hora válidas antes de crear el evento.');
+        return;
+      }
 
-      const startTimeISO = new Date(`${newEvent.date}T${newEvent.time}:00`).toISOString();
-      console.log('Start time ISO:', startTimeISO);
+      console.log('Date:', newEvent.date);
+      console.log('Time:', newEvent.time);
+
+      // Combine date and time in ISO format
+      const combinedDateString = `${newEvent.date}T${newEvent.time}:00`;
+      console.log('Combined date string:', combinedDateString);
+
+      const combinedDate = new Date(combinedDateString);
+      console.log('Combined date object:', combinedDate);
+
+      // Validate the date is valid
+      if (isNaN(combinedDate.getTime())) {
+        console.log('Validation failed - invalid date/time');
+        window.alert('Fecha u hora inválida. Asegúrate de que el formato sea correcto (Fecha: YYYY-MM-DD, Hora: HH:mm en formato 24 horas).');
+        return;
+      }
+
+      // Generate ISO string only after validation
+      const isoDate = combinedDate.toISOString();
+      console.log('ISO date generated successfully:', isoDate);
 
       const eventData = {
         name: newEvent.name,
@@ -297,7 +320,7 @@ export default function AdminPanelScreen() {
         location_name: newEvent.location_name,
         location_address: newEvent.location_address,
         maps_link: newEvent.maps_link,
-        start_time: startTimeISO,
+        start_time: isoDate,
         max_participants: newEvent.max_participants,
         current_participants: 0,
         status: 'active',
@@ -957,7 +980,7 @@ export default function AdminPanelScreen() {
                   }}
                 />
 
-                <Text style={styles.inputLabel}>Hora (HH:MM) *</Text>
+                <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="21:15"
