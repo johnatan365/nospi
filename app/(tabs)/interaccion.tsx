@@ -386,12 +386,18 @@ export default function InteraccionScreen() {
 
       if (error) {
         console.error('Error loading appointment:', error);
+        setLoading(false);
         return;
       }
       
+      console.log('=== APPOINTMENT QUERY RESULT ===');
+      console.log('Total appointments found:', data?.length || 0);
+      console.log('Raw appointment data:', JSON.stringify(data, null, 2));
+      
       if (!data || data.length === 0) {
-        console.log('No confirmed appointment found');
+        console.log('No confirmed appointment found for user');
         setAppointment(null);
+        setLoading(false);
         return;
       }
 
@@ -403,7 +409,7 @@ export default function InteraccionScreen() {
       });
 
       const appointmentData = upcomingAppointment || data[0];
-      console.log('Appointment loaded:', appointmentData.id);
+      console.log('Selected appointment:', appointmentData.id);
       console.log('Event ID:', appointmentData.event_id);
       console.log('Event confirmation_code from database:', appointmentData.event?.confirmation_code);
       console.log('Game state:', {
@@ -443,7 +449,7 @@ export default function InteraccionScreen() {
       console.log('=== LOADING PARTICIPANTS ===');
       console.log('Event ID:', eventId);
       
-      // FIXED QUERY: Explicit JOIN with users table to get full_name, email, phone, city
+      // FIXED QUERY: Explicit JOIN with users table to get name, email, phone, city
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -487,7 +493,7 @@ export default function InteraccionScreen() {
           id: item.id,
           user_id: item.user_id,
           event_id: item.event_id,
-          full_name: fullName,
+          name: fullName,
           email: email,
           phone: phone,
           city: city,
@@ -519,7 +525,7 @@ export default function InteraccionScreen() {
       console.log('=== FINAL PARTICIPANTS LIST ===');
       console.log('Participants loaded:', participants.length);
       console.log('Participants:', participants.map(p => ({ 
-        full_name: p.profiles?.name,
+        name: p.profiles?.name,
         email: p.profiles?.email,
         user_id: p.user_id, 
         confirmed: p.confirmed,
