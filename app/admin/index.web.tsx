@@ -388,6 +388,7 @@ export default function AdminPanelScreen() {
       };
 
       console.log('Event data to save:', eventData);
+      console.log('attendanceCode:', finalAttendanceCode);
 
       if (editingEventId) {
         // Update existing event
@@ -1134,7 +1135,7 @@ export default function AdminPanelScreen() {
                   onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
                 />
 
-                {/* ATTENDANCE CODE FIELD - POSITIONED BEFORE EVENT STATUS */}
+                {/* ATTENDANCE CODE FIELD - NOW POSITIONED BEFORE EVENT STATUS */}
                 <View style={styles.highlightedSection}>
                   <Text style={[styles.inputLabel, styles.requiredLabel]}>Código de confirmación *</Text>
                   <Text style={styles.inputHint}>
