@@ -373,19 +373,24 @@ export default function InteraccionScreen() {
     try {
       console.log('=== LOADING PARTICIPANTS ===');
       console.log('Event ID:', appointment.event_id);
-      console.log('Query: SELECT * FROM event_participants WHERE event_id =', appointment.event_id, 'AND confirmed = true');
+      console.log('Query: SELECT event_participants.*, users.name, users.email, users.phone, users.city FROM event_participants JOIN users ON event_participants.user_id = users.id WHERE event_participants.event_id =', appointment.event_id);
       
+      // Fixed query: Use proper join syntax
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
           id,
           user_id,
+          event_id,
           confirmed,
           check_in_time,
           presented,
-          users!inner (
+          users (
             id,
             name,
+            email,
+            phone,
+            city,
             profile_photo_url
           )
         `)
@@ -408,6 +413,7 @@ export default function InteraccionScreen() {
         console.log('Processing participant:', {
           id: item.id,
           user_id: item.user_id,
+          event_id: item.event_id,
           name: userName,
           confirmed: item.confirmed,
           check_in_time: item.check_in_time,

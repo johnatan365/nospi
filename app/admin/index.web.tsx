@@ -245,8 +245,9 @@ export default function AdminPanelScreen() {
     try {
       console.log('=== ADMIN LOADING PARTICIPANTS ===');
       console.log('Event ID:', eventId);
-      console.log('Query: SELECT * FROM event_participants WHERE event_id =', eventId);
+      console.log('Query: SELECT event_participants.*, users.name, users.email, users.phone, users.city FROM event_participants JOIN users ON event_participants.user_id = users.id WHERE event_participants.event_id =', eventId);
       
+      // Fixed query: Use proper join syntax
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -256,7 +257,7 @@ export default function AdminPanelScreen() {
           confirmed,
           check_in_time,
           presented,
-          users!inner (
+          users (
             id,
             name,
             email,
@@ -277,7 +278,7 @@ export default function AdminPanelScreen() {
       console.log('Total rows returned:', data?.length || 0);
       console.log('Raw data:', JSON.stringify(data, null, 2));
       console.log('Participants loaded:', data?.map(p => ({
-        name: p.users.name,
+        name: p.users?.name,
         user_id: p.user_id,
         confirmed: p.confirmed,
         check_in_time: p.check_in_time
@@ -875,8 +876,10 @@ export default function AdminPanelScreen() {
                   return (
                     <View key={participant.id} style={styles.participantItem}>
                       <View style={styles.participantInfo}>
-                        <Text style={styles.participantName}>{participant.users.name}</Text>
-                        <Text style={styles.participantEmail}>{participant.users.email}</Text>
+                        <Text style={styles.participantName}>{participant.users?.name || 'Usuario'}</Text>
+                        <Text style={styles.participantEmail}>{participant.users?.email || 'Sin email'}</Text>
+                        <Text style={styles.participantPhone}>{participant.users?.phone || 'Sin teléfono'}</Text>
+                        <Text style={styles.participantCity}>{participant.users?.city || 'Sin ciudad'}</Text>
                         <Text style={styles.participantCheckIn}>Check-in: {checkInTime}</Text>
                       </View>
                       <View style={styles.participantStatus}>
@@ -1761,6 +1764,16 @@ const styles = StyleSheet.create({
   participantEmail: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 2,
+  },
+  participantPhone: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+  participantCity: {
+    fontSize: 13,
+    color: '#9CA3AF',
     marginBottom: 2,
   },
   participantCheckIn: {
