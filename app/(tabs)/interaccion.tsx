@@ -331,7 +331,7 @@ export default function InteraccionScreen() {
 
       const appointmentData = upcomingAppointment || data[0];
       console.log('Appointment loaded:', appointmentData.id);
-      console.log('Event confirmation code:', appointmentData.event?.confirmation_code);
+      console.log('Event confirmation_code from database:', appointmentData.event?.confirmation_code);
       setAppointment(appointmentData as any);
       
       if (appointmentData.location_confirmed) {
@@ -547,18 +547,31 @@ export default function InteraccionScreen() {
   const handleCodeConfirmation = async () => {
     if (!appointment || !user) return;
 
+    // Get the entered code and trim whitespace
     const enteredCode = confirmationCode.trim();
-    const expectedCode = appointment.event.confirmation_code?.trim() || '';
     
-    console.log('User entered code:', enteredCode, '| Expected code:', expectedCode);
+    // Get the expected code from the event, defaulting to "1986" if null/undefined/empty
+    const eventCode = appointment.event.confirmation_code;
+    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
+      ? '1986' 
+      : eventCode.trim();
+    
+    console.log('=== CONFIRMATION CODE VALIDATION ===');
+    console.log('Event confirmation_code from database:', appointment.event.confirmation_code);
+    console.log('Expected code (after default logic):', expectedCode);
+    console.log('User entered code:', enteredCode);
+    console.log('Codes match:', enteredCode === expectedCode);
 
+    // Compare as strings
     if (enteredCode !== expectedCode) {
-      console.log('Incorrect code entered. Expected:', expectedCode, 'Got:', enteredCode);
+      console.log('❌ Incorrect code entered');
+      console.log('Expected:', expectedCode, '(type:', typeof expectedCode, ')');
+      console.log('Got:', enteredCode, '(type:', typeof enteredCode, ')');
       setCodeError('Código incorrecto. Verifica el código del encuentro.');
       return;
     }
 
-    console.log('Correct code entered, processing check-in');
+    console.log('✅ Correct code entered, processing check-in');
     setCodeError('');
 
     try {
