@@ -120,7 +120,9 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('Setting up Realtime subscription for event:', appointment.event_id);
+    console.log('=== REALTIME SUBSCRIPTION SETUP ===');
+    console.log('Event ID:', appointment.event_id);
+    console.log('User ID:', user.id);
     
     loadActiveParticipants();
 
@@ -135,11 +137,19 @@ export default function InteraccionScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
+          console.log('=== REALTIME UPDATE RECEIVED ===');
+          console.log('Payload:', JSON.stringify(payload, null, 2));
           
           // Handle new confirmations for visual feedback
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newParticipant = payload.new as any;
+            
+            console.log('New participant data:', {
+              user_id: newParticipant.user_id,
+              event_id: newParticipant.event_id,
+              confirmed: newParticipant.confirmed,
+              is_current_user: newParticipant.user_id === user.id
+            });
             
             // Only show animation if confirmed is true and it's not the current user
             if (newParticipant.confirmed && newParticipant.user_id !== user.id) {
@@ -157,6 +167,7 @@ export default function InteraccionScreen() {
                   .single()
                   .then(({ data }) => {
                     const userName = data?.name || 'Alguien';
+                    console.log('Showing toast for user:', userName);
                     showToastNotification(`${userName} ya está listo.`);
                   });
               }
@@ -331,6 +342,7 @@ export default function InteraccionScreen() {
 
       const appointmentData = upcomingAppointment || data[0];
       console.log('Appointment loaded:', appointmentData.id);
+      console.log('Event ID:', appointmentData.event_id);
       console.log('Event confirmation_code from database:', appointmentData.event?.confirmation_code);
       setAppointment(appointmentData as any);
       
@@ -353,10 +365,15 @@ export default function InteraccionScreen() {
   };
 
   const loadActiveParticipants = async () => {
-    if (!appointment) return;
+    if (!appointment) {
+      console.log('loadActiveParticipants: No appointment, skipping');
+      return;
+    }
 
     try {
-      console.log('Loading confirmed participants from event_participants for event:', appointment.event_id);
+      console.log('=== LOADING PARTICIPANTS ===');
+      console.log('Event ID:', appointment.event_id);
+      console.log('Query: SELECT * FROM event_participants WHERE event_id =', appointment.event_id, 'AND confirmed = true');
       
       const { data, error } = await supabase
         .from('event_participants')
@@ -380,13 +397,15 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Raw participants data from event_participants:', JSON.stringify(data, null, 2));
+      console.log('=== PARTICIPANTS QUERY RESULT ===');
+      console.log('Total rows returned:', data?.length || 0);
+      console.log('Raw data:', JSON.stringify(data, null, 2));
 
       const participants: Participant[] = (data || []).map((item: any) => {
         const userName = item.users?.name || 'Usuario';
         const userPhoto = item.users?.profile_photo_url || null;
         
-        console.log('Processing confirmed participant:', {
+        console.log('Processing participant:', {
           id: item.id,
           user_id: item.user_id,
           name: userName,
@@ -407,8 +426,13 @@ export default function InteraccionScreen() {
         };
       });
 
-      console.log('Confirmed participants loaded:', participants.length);
-      console.log('Participants:', participants.map(p => ({ name: p.name, user_id: p.user_id, confirmed: p.confirmed })));
+      console.log('=== FINAL PARTICIPANTS LIST ===');
+      console.log('Participants loaded:', participants.length);
+      console.log('Participants:', participants.map(p => ({ 
+        name: p.name, 
+        user_id: p.user_id, 
+        confirmed: p.confirmed 
+      })));
       
       // Check if we should show the special "La mesa está casi lista" animation
       if (participants.length >= 3 && !hasShownSpecialAnimation.current) {
@@ -577,6 +601,11 @@ export default function InteraccionScreen() {
     try {
       const confirmedAt = new Date().toISOString();
 
+      console.log('=== UPSERTING EVENT PARTICIPANT ===');
+      console.log('Event ID:', appointment.event_id);
+      console.log('User ID:', user.id);
+      console.log('Confirmed at:', confirmedAt);
+
       const { data, error: updateError } = await supabase
         .from('event_participants')
         .upsert({
@@ -601,7 +630,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Check-in successful, event_participants updated:', data);
+      console.log('✅ Check-in successful, event_participants updated:', data);
       
       await supabase
         .from('appointments')
@@ -621,6 +650,10 @@ export default function InteraccionScreen() {
       
       setCheckInPhase('confirmed');
       setConfirmationCode('');
+      
+      // Immediately reload participants to show the updated list
+      console.log('Reloading participants after check-in');
+      loadActiveParticipants();
     } catch (error) {
       console.error('Error during check-in:', error);
       setCodeError('Ocurrió un error. Intenta de nuevo.');

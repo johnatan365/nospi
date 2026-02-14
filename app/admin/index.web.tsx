@@ -116,7 +116,8 @@ export default function AdminPanelScreen() {
   useEffect(() => {
     if (!isAuthenticated || !selectedEventForMonitoring) return;
 
-    console.log('Setting up realtime subscription for event:', selectedEventForMonitoring);
+    console.log('=== ADMIN REALTIME SUBSCRIPTION SETUP ===');
+    console.log('Monitoring event ID:', selectedEventForMonitoring);
 
     const channel = supabase
       .channel(`admin_event_${selectedEventForMonitoring}`)
@@ -129,14 +130,17 @@ export default function AdminPanelScreen() {
           filter: `event_id=eq.${selectedEventForMonitoring}`,
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
+          console.log('=== ADMIN REALTIME UPDATE RECEIVED ===');
+          console.log('Payload:', JSON.stringify(payload, null, 2));
           loadEventParticipants(selectedEventForMonitoring);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Admin realtime subscription status:', status);
+      });
 
     return () => {
-      console.log('Cleaning up realtime subscription');
+      console.log('Cleaning up admin realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [isAuthenticated, selectedEventForMonitoring]);
@@ -239,7 +243,10 @@ export default function AdminPanelScreen() {
 
   const loadEventParticipants = async (eventId: string) => {
     try {
-      console.log('Loading participants for event:', eventId);
+      console.log('=== ADMIN LOADING PARTICIPANTS ===');
+      console.log('Event ID:', eventId);
+      console.log('Query: SELECT * FROM event_participants WHERE event_id =', eventId);
+      
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -266,7 +273,16 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      console.log('Event participants loaded:', data?.length || 0);
+      console.log('=== ADMIN PARTICIPANTS QUERY RESULT ===');
+      console.log('Total rows returned:', data?.length || 0);
+      console.log('Raw data:', JSON.stringify(data, null, 2));
+      console.log('Participants loaded:', data?.map(p => ({
+        name: p.users.name,
+        user_id: p.user_id,
+        confirmed: p.confirmed,
+        check_in_time: p.check_in_time
+      })));
+      
       setEventParticipants(data || []);
     } catch (error) {
       console.error('Failed to load event participants:', error);
