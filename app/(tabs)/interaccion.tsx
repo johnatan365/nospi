@@ -25,6 +25,9 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
+  game_phase: 'intro' | 'roulette' | 'playing' | 'finished';
+  current_turn_index: number;
+  current_round: number;
 }
 
 interface Appointment {
@@ -41,12 +44,16 @@ interface Appointment {
 interface Participant {
   id: string;
   user_id: string;
-  name: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  city: string;
   profile_photo_url: string | null;
   occupation: string;
   confirmed: boolean;
   check_in_time: string | null;
-  presented: boolean;
+  is_presented: boolean;
+  presented_at: string | null;
 }
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
@@ -124,7 +131,7 @@ export default function InteraccionScreen() {
     console.log('Event ID:', appointment.event_id);
     console.log('User ID:', user.id);
     
-    loadActiveParticipants();
+    loadActiveParticipants(appointment.event_id);
 
     const channel = supabase
       .channel(`event_participants_${appointment.event_id}`)
@@ -174,7 +181,7 @@ export default function InteraccionScreen() {
             }
           }
           
-          loadActiveParticipants();
+          loadActiveParticipants(appointment.event_id);
         }
       )
       .subscribe((status) => {
@@ -186,6 +193,41 @@ export default function InteraccionScreen() {
       supabase.removeChannel(channel);
     };
   }, [appointment, user]);
+
+  // Realtime subscription for events table (game state)
+  useEffect(() => {
+    if (!appointment) return;
+
+    console.log('=== GAME STATE REALTIME SUBSCRIPTION SETUP ===');
+    console.log('Event ID:', appointment.event_id);
+
+    const channel = supabase
+      .channel(`event_game_state_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('=== GAME STATE UPDATE RECEIVED ===');
+          console.log('Payload:', JSON.stringify(payload, null, 2));
+          
+          // Reload appointment to get updated game state
+          loadAppointment();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Game state realtime subscription status:', status);
+      });
+
+    return () => {
+      console.log('Cleaning up game state realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [appointment]);
 
   const showToastNotification = (message: string) => {
     console.log('Showing toast notification:', message);
@@ -314,7 +356,10 @@ export default function InteraccionScreen() {
             max_participants,
             current_participants,
             status,
-            confirmation_code
+            confirmation_code,
+            game_phase,
+            current_turn_index,
+            current_round
           )
         `)
         .eq('user_id', user.id)
@@ -344,6 +389,11 @@ export default function InteraccionScreen() {
       console.log('Appointment loaded:', appointmentData.id);
       console.log('Event ID:', appointmentData.event_id);
       console.log('Event confirmation_code from database:', appointmentData.event?.confirmation_code);
+      console.log('Game state:', {
+        game_phase: appointmentData.event?.game_phase,
+        current_turn_index: appointmentData.event?.current_turn_index,
+        current_round: appointmentData.event?.current_round
+      });
       setAppointment(appointmentData as any);
       
       if (appointmentData.location_confirmed) {
@@ -364,18 +414,12 @@ export default function InteraccionScreen() {
     }
   };
 
-  const loadActiveParticipants = async () => {
-    if (!appointment) {
-      console.log('loadActiveParticipants: No appointment, skipping');
-      return;
-    }
-
+  const loadActiveParticipants = async (eventId: string) => {
     try {
       console.log('=== LOADING PARTICIPANTS ===');
-      console.log('Event ID:', appointment.event_id);
-      console.log('Query: SELECT event_participants.*, users.name, users.email, users.phone, users.city FROM event_participants JOIN users ON event_participants.user_id = users.id WHERE event_participants.event_id =', appointment.event_id);
+      console.log('Event ID:', eventId);
       
-      // Fixed query: Use proper join syntax
+      // FIXED QUERY: Explicit JOIN with users table to get full_name, email, phone, city
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -384,7 +428,8 @@ export default function InteraccionScreen() {
           event_id,
           confirmed,
           check_in_time,
-          presented,
+          is_presented,
+          presented_at,
           users (
             id,
             name,
@@ -394,7 +439,7 @@ export default function InteraccionScreen() {
             profile_photo_url
           )
         `)
-        .eq('event_id', appointment.event_id)
+        .eq('event_id', eventId)
         .eq('confirmed', true);
 
       if (error) {
@@ -407,37 +452,51 @@ export default function InteraccionScreen() {
       console.log('Raw data:', JSON.stringify(data, null, 2));
 
       const participants: Participant[] = (data || []).map((item: any) => {
-        const userName = item.users?.name || 'Usuario';
+        // NO FALLBACK - Use actual data from JOIN
+        const fullName = item.users?.name || '';
+        const email = item.users?.email || '';
+        const phone = item.users?.phone || '';
+        const city = item.users?.city || '';
         const userPhoto = item.users?.profile_photo_url || null;
         
         console.log('Processing participant:', {
           id: item.id,
           user_id: item.user_id,
           event_id: item.event_id,
-          name: userName,
+          full_name: fullName,
+          email: email,
+          phone: phone,
+          city: city,
           confirmed: item.confirmed,
           check_in_time: item.check_in_time,
-          presented: item.presented
+          is_presented: item.is_presented,
+          presented_at: item.presented_at
         });
 
         return {
           id: item.id,
           user_id: item.user_id,
-          name: userName,
+          full_name: fullName,
+          email: email,
+          phone: phone,
+          city: city,
           profile_photo_url: userPhoto,
           occupation: 'Participante',
           confirmed: item.confirmed,
           check_in_time: item.check_in_time,
-          presented: item.presented || false,
+          is_presented: item.is_presented || false,
+          presented_at: item.presented_at || null,
         };
       });
 
       console.log('=== FINAL PARTICIPANTS LIST ===');
       console.log('Participants loaded:', participants.length);
       console.log('Participants:', participants.map(p => ({ 
-        name: p.name, 
+        full_name: p.full_name,
+        email: p.email,
         user_id: p.user_id, 
-        confirmed: p.confirmed 
+        confirmed: p.confirmed,
+        is_presented: p.is_presented
       })));
       
       // Check if we should show the special "La mesa está casi lista" animation
@@ -448,7 +507,7 @@ export default function InteraccionScreen() {
       
       setActiveParticipants(participants);
       
-      const allHavePresented = participants.every(p => p.presented);
+      const allHavePresented = participants.every(p => p.is_presented);
       setAllPresented(allHavePresented);
     } catch (error) {
       console.error('Failed to load participants:', error);
@@ -659,7 +718,7 @@ export default function InteraccionScreen() {
       
       // Immediately reload participants to show the updated list
       console.log('Reloading participants after check-in');
-      loadActiveParticipants();
+      loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error during check-in:', error);
       setCodeError('Ocurrió un error. Intenta de nuevo.');
@@ -715,9 +774,15 @@ export default function InteraccionScreen() {
     try {
       console.log('User marked as presented');
       
+      const presentedAt = new Date().toISOString();
+      
+      // Update event_participants with is_presented and presented_at
       const { error } = await supabase
         .from('event_participants')
-        .update({ presented: true })
+        .update({ 
+          is_presented: true,
+          presented_at: presentedAt
+        })
         .eq('event_id', appointment.event_id)
         .eq('user_id', user.id);
 
@@ -732,11 +797,15 @@ export default function InteraccionScreen() {
         .eq('id', appointment.id);
 
       setUserPresented(true);
+      
+      // Reload participants to update the list
+      loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error marking user as presented:', error);
     }
   };
 
+  // Validation: Check total confirmed participants by event_id (not by user)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 3;
 
   const ritualOpacity = ritualAnimation.interpolate({
@@ -839,7 +908,7 @@ export default function InteraccionScreen() {
   }
 
   if (showPresentationPhase && !allPresented) {
-    const presentedCount = activeParticipants.filter(p => p.presented).length;
+    const presentedCount = activeParticipants.filter(p => p.is_presented).length;
     const totalCount = activeParticipants.length;
     const progressText = `${presentedCount} de ${totalCount}`;
 
@@ -872,35 +941,39 @@ export default function InteraccionScreen() {
                 <Text style={styles.emptyParticipantsText}>No hay participantes confirmados aún</Text>
               </View>
             ) : (
-              activeParticipants.map((participant, index) => (
-                <React.Fragment key={index}>
-                <View style={styles.participantCard}>
-                  <View style={styles.participantInfo}>
-                    {participant.profile_photo_url ? (
-                      <Image 
-                        source={{ uri: participant.profile_photo_url }} 
-                        style={styles.participantPhoto}
-                      />
-                    ) : (
-                      <View style={styles.participantPhotoPlaceholder}>
-                        <Text style={styles.participantPhotoPlaceholderText}>
-                          {participant.name.charAt(0).toUpperCase()}
-                        </Text>
+              activeParticipants.map((participant, index) => {
+                const displayName = participant.full_name;
+                
+                return (
+                  <React.Fragment key={index}>
+                  <View style={styles.participantCard}>
+                    <View style={styles.participantInfo}>
+                      {participant.profile_photo_url ? (
+                        <Image 
+                          source={{ uri: participant.profile_photo_url }} 
+                          style={styles.participantPhoto}
+                        />
+                      ) : (
+                        <View style={styles.participantPhotoPlaceholder}>
+                          <Text style={styles.participantPhotoPlaceholderText}>
+                            {displayName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.participantDetails}>
+                        <Text style={styles.participantName}>{displayName}</Text>
+                        <Text style={styles.participantOccupation}>{participant.occupation}</Text>
+                      </View>
+                    </View>
+                    {participant.is_presented && (
+                      <View style={styles.presentedBadge}>
+                        <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
                       </View>
                     )}
-                    <View style={styles.participantDetails}>
-                      <Text style={styles.participantName}>{participant.name}</Text>
-                      <Text style={styles.participantOccupation}>{participant.occupation}</Text>
-                    </View>
                   </View>
-                  {participant.presented && (
-                    <View style={styles.presentedBadge}>
-                      <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
-                    </View>
-                  )}
-                </View>
-                </React.Fragment>
-              ))
+                  </React.Fragment>
+                );
+              })
             )}
           </View>
 
@@ -1029,25 +1102,29 @@ export default function InteraccionScreen() {
               
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
-                  {activeParticipants.map((participant, index) => (
-                    <React.Fragment key={index}>
-                    <View style={styles.participantListItem}>
-                      {participant.profile_photo_url ? (
-                        <Image 
-                          source={{ uri: participant.profile_photo_url }} 
-                          style={styles.participantListPhoto}
-                        />
-                      ) : (
-                        <View style={styles.participantListPhotoPlaceholder}>
-                          <Text style={styles.participantListPhotoText}>
-                            {participant.name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <Text style={styles.participantListName}>{participant.name}</Text>
-                    </View>
-                    </React.Fragment>
-                  ))}
+                  {activeParticipants.map((participant, index) => {
+                    const displayName = participant.full_name;
+                    
+                    return (
+                      <React.Fragment key={index}>
+                      <View style={styles.participantListItem}>
+                        {participant.profile_photo_url ? (
+                          <Image 
+                            source={{ uri: participant.profile_photo_url }} 
+                            style={styles.participantListPhoto}
+                          />
+                        ) : (
+                          <View style={styles.participantListPhotoPlaceholder}>
+                            <Text style={styles.participantListPhotoText}>
+                              {displayName.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.participantListName}>{displayName}</Text>
+                      </View>
+                      </React.Fragment>
+                    );
+                  })}
                 </View>
               )}
             </View>
