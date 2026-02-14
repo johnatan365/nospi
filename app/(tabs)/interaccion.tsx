@@ -429,16 +429,19 @@ export default function InteraccionScreen() {
     const now = new Date();
     const eventDate = new Date(startTime);
     
+    // Create date at midnight (00:00) local time for event day
+    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
+    
+    // Check if current time is on or after event day midnight
     const isSameDay = 
       now.getFullYear() === eventDate.getFullYear() &&
       now.getMonth() === eventDate.getMonth() &&
       now.getDate() === eventDate.getDate();
     
-    // Event day starts at 12:00 AM (midnight)
-    const isAfterMidnight = now.getHours() >= 0;
+    const isAfterMidnight = now >= eventDayStart;
     
     const isToday = isSameDay && isAfterMidnight;
-    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event time:', eventDate.toLocaleString());
+    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event day start:', eventDayStart.toLocaleString(), '| Event time:', eventDate.toLocaleString());
     setIsEventDay(isToday);
   };
 
@@ -812,35 +815,41 @@ export default function InteraccionScreen() {
 
           <View style={styles.participantsSection}>
             <Text style={styles.participantsTitle}>Participantes Activos</Text>
-            {activeParticipants.map((participant, index) => (
-              <React.Fragment key={index}>
-              <View style={styles.participantCard}>
-                <View style={styles.participantInfo}>
-                  {participant.profile_photo_url ? (
-                    <Image 
-                      source={{ uri: participant.profile_photo_url }} 
-                      style={styles.participantPhoto}
-                    />
-                  ) : (
-                    <View style={styles.participantPhotoPlaceholder}>
-                      <Text style={styles.participantPhotoPlaceholderText}>
-                        {participant.name.charAt(0).toUpperCase()}
-                      </Text>
+            {activeParticipants.length === 0 ? (
+              <View style={styles.emptyParticipants}>
+                <Text style={styles.emptyParticipantsText}>No hay participantes confirmados aún</Text>
+              </View>
+            ) : (
+              activeParticipants.map((participant, index) => (
+                <React.Fragment key={index}>
+                <View style={styles.participantCard}>
+                  <View style={styles.participantInfo}>
+                    {participant.profile_photo_url ? (
+                      <Image 
+                        source={{ uri: participant.profile_photo_url }} 
+                        style={styles.participantPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantPhotoPlaceholder}>
+                        <Text style={styles.participantPhotoPlaceholderText}>
+                          {participant.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.participantDetails}>
+                      <Text style={styles.participantName}>{participant.name}</Text>
+                      <Text style={styles.participantOccupation}>{participant.occupation}</Text>
+                    </View>
+                  </View>
+                  {participant.presented && (
+                    <View style={styles.presentedBadge}>
+                      <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
                     </View>
                   )}
-                  <View style={styles.participantDetails}>
-                    <Text style={styles.participantName}>{participant.name}</Text>
-                    <Text style={styles.participantOccupation}>{participant.occupation}</Text>
-                  </View>
                 </View>
-                {participant.presented && (
-                  <View style={styles.presentedBadge}>
-                    <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
-                  </View>
-                )}
-              </View>
-              </React.Fragment>
-            ))}
+                </React.Fragment>
+              ))
+            )}
           </View>
 
           {!userPresented && (
@@ -865,7 +874,7 @@ export default function InteraccionScreen() {
     );
   }
 
-  if (allPresented) {
+  if (allPresented && activeParticipants.length > 0) {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants} />;
   }
 
@@ -1541,6 +1550,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     marginBottom: 12,
+  },
+  emptyParticipants: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyParticipantsText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
   },
   participantCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

@@ -99,7 +99,7 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
-    attendance_code: '1986',
+    confirmation_code: '1986',
   });
 
   // Realtime monitoring
@@ -289,7 +289,7 @@ export default function AdminPanelScreen() {
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
-      attendance_code: '1986',
+      confirmation_code: '1986',
     });
     setShowEventModal(true);
   };
@@ -297,20 +297,36 @@ export default function AdminPanelScreen() {
   const openEditEventModal = (event: Event) => {
     console.log('Opening edit event modal for:', event.id);
     setEditingEventId(event.id);
+    
+    // Extract date and time from start_time if available
+    let dateValue = '';
+    let timeValue = '';
+    
+    if (event.start_time) {
+      const startDate = new Date(event.start_time);
+      dateValue = startDate.toISOString().split('T')[0];
+      const hours = startDate.getHours().toString().padStart(2, '0');
+      const minutes = startDate.getMinutes().toString().padStart(2, '0');
+      timeValue = `${hours}:${minutes}`;
+    } else if (event.date && event.time) {
+      dateValue = event.date;
+      timeValue = event.time;
+    }
+    
     setEventForm({
-      name: event.name,
-      city: event.city,
-      description: event.description,
-      type: event.type,
-      date: event.date,
-      time: event.time,
-      location_name: event.location_name,
-      location_address: event.location_address,
-      maps_link: event.maps_link,
-      max_participants: event.max_participants,
-      is_location_revealed: event.is_location_revealed,
-      event_status: event.event_status,
-      attendance_code: event.attendance_code || event.confirmation_code || '1986',
+      name: event.name || '',
+      city: event.city || '',
+      description: event.description || '',
+      type: event.type || 'bar',
+      date: dateValue,
+      time: timeValue,
+      location_name: event.location_name || '',
+      location_address: event.location_address || '',
+      maps_link: event.maps_link || '',
+      max_participants: event.max_participants || 6,
+      is_location_revealed: event.is_location_revealed || false,
+      event_status: event.event_status || 'draft',
+      confirmation_code: event.confirmation_code || '1986',
     });
     setShowEventModal(true);
   };
@@ -335,18 +351,18 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // Validate and set default attendance code
-      let finalAttendanceCode = eventForm.attendance_code.trim();
-      if (!finalAttendanceCode) {
-        console.log('Attendance code empty, using default: 1986');
-        finalAttendanceCode = '1986';
+      // Validate and set default confirmation code
+      let finalConfirmationCode = eventForm.confirmation_code.trim();
+      if (!finalConfirmationCode) {
+        console.log('Confirmation code empty, using default: 1986');
+        finalConfirmationCode = '1986';
       }
 
       console.log('Date:', eventForm.date);
       console.log('Time:', eventForm.time);
-      console.log('Attendance Code:', finalAttendanceCode);
+      console.log('Confirmation Code:', finalConfirmationCode);
 
-      // Combine date and time in ISO format
+      // Combine date and time in ISO format with timezone handling
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       console.log('Combined date string:', combinedDateString);
 
@@ -383,12 +399,11 @@ export default function AdminPanelScreen() {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
-        attendance_code: finalAttendanceCode,
-        confirmation_code: finalAttendanceCode,
+        confirmation_code: finalConfirmationCode,
       };
 
       console.log('Event data to save:', eventData);
-      console.log('attendanceCode:', finalAttendanceCode);
+      console.log('confirmationCode:', finalConfirmationCode);
 
       if (editingEventId) {
         // Update existing event
@@ -440,7 +455,7 @@ export default function AdminPanelScreen() {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
-        attendance_code: '1986',
+        confirmation_code: '1986',
       });
       loadDashboardData();
     } catch (error) {
@@ -630,7 +645,7 @@ export default function AdminPanelScreen() {
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const locationRevealed = event.is_location_revealed ? 'Sí' : 'No';
-          const attendanceCode = event.attendance_code || event.confirmation_code || '1986';
+          const confirmationCode = event.confirmation_code || '1986';
 
           return (
             <View key={event.id} style={styles.listItem}>
@@ -646,7 +661,10 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>
                 Participantes configurados: {event.max_participants}
               </Text>
-              <Text style={styles.listItemDetail}>Código de confirmación: {attendanceCode}</Text>
+              <View style={styles.codeHighlight}>
+                <Text style={styles.codeLabel}>🔑 Código de confirmación:</Text>
+                <Text style={styles.codeValue}>{confirmationCode}</Text>
+              </View>
               <Text style={styles.listItemDetail}>Ubicación revelada: {locationRevealed}</Text>
               {event.location_name && (
                 <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
@@ -798,9 +816,10 @@ export default function AdminPanelScreen() {
                 <Text style={styles.realtimeEventDate}>
                   {selectedEvent?.date} a las {selectedEvent?.time}
                 </Text>
-                <Text style={styles.realtimeEventCode}>
-                  Código: {selectedEvent?.attendance_code || selectedEvent?.confirmation_code || '1986'}
-                </Text>
+                <View style={styles.codeHighlight}>
+                  <Text style={styles.codeLabel}>🔑 Código:</Text>
+                  <Text style={styles.codeValue}>{selectedEvent?.confirmation_code || '1986'}</Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.refreshButton}
@@ -827,38 +846,44 @@ export default function AdminPanelScreen() {
 
             <View style={styles.participantsList}>
               <Text style={styles.participantsListTitle}>Participantes</Text>
-              {eventParticipants.map((participant) => {
-                const checkInTime = participant.check_in_time 
-                  ? new Date(participant.check_in_time).toLocaleTimeString('es-ES')
-                  : 'No confirmado';
+              {eventParticipants.length === 0 ? (
+                <View style={styles.emptyParticipants}>
+                  <Text style={styles.emptyParticipantsText}>No hay participantes confirmados aún</Text>
+                </View>
+              ) : (
+                eventParticipants.map((participant) => {
+                  const checkInTime = participant.check_in_time 
+                    ? new Date(participant.check_in_time).toLocaleTimeString('es-ES')
+                    : 'No confirmado';
 
-                return (
-                  <View key={participant.id} style={styles.participantItem}>
-                    <View style={styles.participantInfo}>
-                      <Text style={styles.participantName}>{participant.users.name}</Text>
-                      <Text style={styles.participantEmail}>{participant.users.email}</Text>
-                      <Text style={styles.participantCheckIn}>Check-in: {checkInTime}</Text>
+                  return (
+                    <View key={participant.id} style={styles.participantItem}>
+                      <View style={styles.participantInfo}>
+                        <Text style={styles.participantName}>{participant.users.name}</Text>
+                        <Text style={styles.participantEmail}>{participant.users.email}</Text>
+                        <Text style={styles.participantCheckIn}>Check-in: {checkInTime}</Text>
+                      </View>
+                      <View style={styles.participantStatus}>
+                        {participant.confirmed && (
+                          <View style={[styles.statusBadge, { backgroundColor: '#10B981' }]}>
+                            <Text style={styles.statusBadgeText}>✓ Confirmado</Text>
+                          </View>
+                        )}
+                        {participant.presented && (
+                          <View style={[styles.statusBadge, { backgroundColor: '#8B5CF6', marginTop: 4 }]}>
+                            <Text style={styles.statusBadgeText}>★ Presentado</Text>
+                          </View>
+                        )}
+                        {!participant.confirmed && (
+                          <View style={[styles.statusBadge, { backgroundColor: '#9CA3AF' }]}>
+                            <Text style={styles.statusBadgeText}>Pendiente</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                    <View style={styles.participantStatus}>
-                      {participant.confirmed && (
-                        <View style={[styles.statusBadge, { backgroundColor: '#10B981' }]}>
-                          <Text style={styles.statusBadgeText}>✓ Confirmado</Text>
-                        </View>
-                      )}
-                      {participant.presented && (
-                        <View style={[styles.statusBadge, { backgroundColor: '#8B5CF6', marginTop: 4 }]}>
-                          <Text style={styles.statusBadgeText}>★ Presentado</Text>
-                        </View>
-                      )}
-                      {!participant.confirmed && (
-                        <View style={[styles.statusBadge, { backgroundColor: '#9CA3AF' }]}>
-                          <Text style={styles.statusBadgeText}>Pendiente</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
+                  );
+                })
+              )}
             </View>
           </>
         )}
@@ -1135,21 +1160,22 @@ export default function AdminPanelScreen() {
                   onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
                 />
 
-                {/* ATTENDANCE CODE FIELD - NOW POSITIONED BEFORE EVENT STATUS */}
+                {/* CONFIRMATION CODE FIELD - HIGHLY VISIBLE */}
                 <View style={styles.highlightedSection}>
-                  <Text style={[styles.inputLabel, styles.requiredLabel]}>Código de confirmación *</Text>
+                  <Text style={[styles.inputLabel, styles.requiredLabel]}>🔑 Código de confirmación *</Text>
                   <Text style={styles.inputHint}>
                     Los participantes deberán ingresar este código para confirmar su asistencia en el lugar
                   </Text>
                   <TextInput
                     style={[styles.input, styles.highlightedInput]}
                     placeholder="Ej: 1986"
-                    value={eventForm.attendance_code}
+                    value={eventForm.confirmation_code}
                     onChangeText={(text) => {
-                      console.log('Attendance code changed:', text);
-                      setEventForm({ ...eventForm, attendance_code: text });
+                      console.log('Confirmation code changed:', text);
+                      setEventForm({ ...eventForm, confirmation_code: text });
                     }}
                   />
+                  <Text style={styles.defaultHint}>Por defecto: 1986</Text>
                 </View>
 
                 <Text style={styles.inputLabel}>Estado del Evento</Text>
@@ -1461,6 +1487,26 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 6,
   },
+  codeHighlight: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  codeLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  codeValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#92400E',
+    letterSpacing: 2,
+  },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1613,12 +1659,7 @@ const styles = StyleSheet.create({
   realtimeEventDate: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 4,
-  },
-  realtimeEventCode: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
+    marginBottom: 8,
   },
   refreshButton: {
     backgroundColor: nospiColors.purpleLight,
@@ -1674,6 +1715,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     marginBottom: 16,
+  },
+  emptyParticipants: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyParticipantsText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
   },
   participantItem: {
     flexDirection: 'row',
@@ -1752,7 +1802,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   requiredLabel: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
@@ -1760,6 +1810,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  defaultHint: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 4,
     fontStyle: 'italic',
   },
   input: {
@@ -1776,15 +1832,17 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 20,
     marginBottom: 12,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#F59E0B',
   },
   highlightedInput: {
     backgroundColor: 'white',
     borderWidth: 2,
     borderColor: nospiColors.purpleMid,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 2,
   },
   textArea: {
     minHeight: 80,
