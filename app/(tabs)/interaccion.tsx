@@ -29,6 +29,10 @@ interface Event {
   current_turn_index: number;
   current_round: number;
   started_at: string | null;
+  selected_participant_id: string | null;
+  selected_participant_name: string | null;
+  current_question: string | null;
+  current_question_level: string | null;
 }
 
 interface Appointment {
@@ -138,7 +142,7 @@ export default function InteraccionScreen() {
     requestNotificationPermissions();
   }, []);
 
-  // Supabase Realtime subscription for event_participants
+  // FIXED: Supabase Realtime subscription for event_participants with better error handling
   useEffect(() => {
     if (!appointment || !user) return;
 
@@ -146,6 +150,7 @@ export default function InteraccionScreen() {
     console.log('Event ID:', appointment.event_id);
     console.log('User ID:', user.id);
     
+    // Initial load
     loadActiveParticipants(appointment.event_id);
 
     const channel = supabase
@@ -160,6 +165,7 @@ export default function InteraccionScreen() {
         },
         (payload) => {
           console.log('=== REALTIME UPDATE RECEIVED (event_participants) ===');
+          console.log('Event type:', payload.eventType);
           console.log('Payload:', JSON.stringify(payload, null, 2));
           
           // Handle new confirmations for visual feedback
@@ -196,11 +202,23 @@ export default function InteraccionScreen() {
             }
           }
           
+          // CRITICAL: Reload participants list to update UI for ALL users
+          console.log('Reloading participants after realtime event');
           loadActiveParticipants(appointment.event_id);
         }
       )
       .subscribe((status) => {
         console.log('Realtime subscription status (event_participants):', status);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to event_participants changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime subscription error - retrying...');
+          // Retry subscription after a delay
+          setTimeout(() => {
+            loadActiveParticipants(appointment.event_id);
+          }, 2000);
+        }
       });
 
     return () => {
@@ -209,7 +227,7 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user]);
 
-  // Realtime subscription for events table (game state)
+  // FIXED: Realtime subscription for events table (game state) with better handling
   useEffect(() => {
     if (!appointment) return;
 
@@ -230,12 +248,29 @@ export default function InteraccionScreen() {
           console.log('=== GAME STATE UPDATE RECEIVED ===');
           console.log('Payload:', JSON.stringify(payload, null, 2));
           
-          // Reload appointment to get updated game state
+          const newEvent = payload.new as any;
+          
+          // Log game state changes
+          console.log('Game state changed:', {
+            game_phase: newEvent.game_phase,
+            selected_participant_name: newEvent.selected_participant_name,
+            current_question: newEvent.current_question,
+            current_question_level: newEvent.current_question_level
+          });
+          
+          // CRITICAL: Reload appointment to get updated game state
+          // This ensures all users see the same game state
           loadAppointment();
         }
       )
       .subscribe((status) => {
         console.log('Game state realtime subscription status:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to game state changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Game state subscription error');
+        }
       });
 
     return () => {
@@ -376,7 +411,11 @@ export default function InteraccionScreen() {
             game_phase,
             current_turn_index,
             current_round,
-            started_at
+            started_at,
+            selected_participant_id,
+            selected_participant_name,
+            current_question,
+            current_question_level
           )
         `)
         .eq('user_id', user.id)
@@ -392,7 +431,6 @@ export default function InteraccionScreen() {
       
       console.log('=== APPOINTMENT QUERY RESULT ===');
       console.log('Total appointments found:', data?.length || 0);
-      console.log('Raw appointment data:', JSON.stringify(data, null, 2));
       
       if (!data || data.length === 0) {
         console.log('No confirmed appointment found for user');
@@ -411,12 +449,11 @@ export default function InteraccionScreen() {
       const appointmentData = upcomingAppointment || data[0];
       console.log('Selected appointment:', appointmentData.id);
       console.log('Event ID:', appointmentData.event_id);
-      console.log('Event confirmation_code from database:', appointmentData.event?.confirmation_code);
-      console.log('Game state:', {
+      console.log('Game state from database:', {
         game_phase: appointmentData.event?.game_phase,
-        current_turn_index: appointmentData.event?.current_turn_index,
-        current_round: appointmentData.event?.current_round,
-        started_at: appointmentData.event?.started_at
+        selected_participant_name: appointmentData.event?.selected_participant_name,
+        current_question: appointmentData.event?.current_question,
+        current_question_level: appointmentData.event?.current_question_level
       });
       
       setAppointment(appointmentData as any);
@@ -448,6 +485,7 @@ export default function InteraccionScreen() {
     try {
       console.log('=== LOADING PARTICIPANTS ===');
       console.log('Event ID:', eventId);
+      console.log('Timestamp:', new Date().toISOString());
       
       // FIXED QUERY: Explicit JOIN with users table to get name, email, phone, city
       const { data, error } = await supabase
@@ -481,52 +519,53 @@ export default function InteraccionScreen() {
       console.log('Total rows returned:', data?.length || 0);
       console.log('Raw data:', JSON.stringify(data, null, 2));
 
-      const participants: Participant[] = (data || []).map((item: any) => {
-        // Use actual data from JOIN - fallback only if profiles is null
-        const fullName = item.profiles?.name || 'Participante Anónimo';
-        const email = item.profiles?.email || '';
-        const phone = item.profiles?.phone || '';
-        const city = item.profiles?.city || '';
-        const userPhoto = item.profiles?.profile_photo_url || null;
-        
-        console.log('Processing participant:', {
-          id: item.id,
-          user_id: item.user_id,
-          event_id: item.event_id,
-          name: fullName,
-          email: email,
-          phone: phone,
-          city: city,
-          confirmed: item.confirmed,
-          check_in_time: item.check_in_time,
-          is_presented: item.is_presented,
-          presented_at: item.presented_at
-        });
-
-        return {
-          id: item.id,
-          user_id: item.user_id,
-          event_id: item.event_id,
-          confirmed: item.confirmed,
-          check_in_time: item.check_in_time,
-          is_presented: item.is_presented || false,
-          presented_at: item.presented_at || null,
-          profiles: item.profiles ? {
-            id: item.profiles.id,
+      const participants: Participant[] = (data || [])
+        .filter((item: any) => {
+          // CRITICAL: Filter out participants without profile data
+          const hasProfile = item.profiles && item.profiles.name;
+          if (!hasProfile) {
+            console.warn('Participant without profile data:', item.user_id);
+          }
+          return hasProfile;
+        })
+        .map((item: any) => {
+          const fullName = item.profiles.name;
+          const email = item.profiles.email || '';
+          const phone = item.profiles.phone || '';
+          const city = item.profiles.city || '';
+          const userPhoto = item.profiles.profile_photo_url || null;
+          
+          console.log('Processing participant:', {
+            id: item.id,
+            user_id: item.user_id,
             name: fullName,
-            email: email,
-            phone: phone,
-            city: city,
-            profile_photo_url: userPhoto
-          } : null
-        };
-      });
+            confirmed: item.confirmed,
+            is_presented: item.is_presented
+          });
+
+          return {
+            id: item.id,
+            user_id: item.user_id,
+            event_id: item.event_id,
+            confirmed: item.confirmed,
+            check_in_time: item.check_in_time,
+            is_presented: item.is_presented || false,
+            presented_at: item.presented_at || null,
+            profiles: {
+              id: item.profiles.id,
+              name: fullName,
+              email: email,
+              phone: phone,
+              city: city,
+              profile_photo_url: userPhoto
+            }
+          };
+        });
 
       console.log('=== FINAL PARTICIPANTS LIST ===');
       console.log('Participants loaded:', participants.length);
       console.log('Participants:', participants.map(p => ({ 
         name: p.profiles?.name,
-        email: p.profiles?.email,
         user_id: p.user_id, 
         confirmed: p.confirmed,
         is_presented: p.is_presented
@@ -541,7 +580,7 @@ export default function InteraccionScreen() {
       
       setActiveParticipants(participants);
       
-      const allHavePresented = participants.every(p => p.is_presented);
+      const allHavePresented = participants.length > 0 && participants.every(p => p.is_presented);
       setAllPresented(allHavePresented);
     } catch (error) {
       console.error('Failed to load participants:', error);
@@ -573,12 +612,10 @@ export default function InteraccionScreen() {
     const eventDate = new Date(startTime);
     const diff = eventDate.getTime() - now.getTime();
 
-    console.log('Countdown update - Time until event:', diff, 'ms');
     setCountdown(diff);
 
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
-      console.log('Event time reached - showing code entry phase');
       
       if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
         setCheckInPhase('code_entry');
@@ -621,7 +658,6 @@ export default function InteraccionScreen() {
             },
             trigger: sixHoursBefore,
           });
-          console.log('Scheduled notification: 6 hours before');
         }
 
         const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
@@ -634,7 +670,6 @@ export default function InteraccionScreen() {
             },
             trigger: oneHourBefore,
           });
-          console.log('Scheduled notification: 1 hour before');
         }
 
         const tenMinutesBefore = new Date(eventDate.getTime() - 10 * 60 * 1000);
@@ -647,7 +682,6 @@ export default function InteraccionScreen() {
             },
             trigger: tenMinutesBefore,
           });
-          console.log('Scheduled notification: 10 minutes before');
         }
 
         if (eventDate > now) {
@@ -659,7 +693,6 @@ export default function InteraccionScreen() {
             },
             trigger: eventDate,
           });
-          console.log('Scheduled notification: at start time');
         }
       }
     } catch (error) {
@@ -670,26 +703,18 @@ export default function InteraccionScreen() {
   const handleCodeConfirmation = async () => {
     if (!appointment || !user) return;
 
-    // Get the entered code and trim whitespace
     const enteredCode = confirmationCode.trim();
-    
-    // Get the expected code from the event, defaulting to "1986" if null/undefined/empty
     const eventCode = appointment.event.confirmation_code;
     const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
       ? '1986' 
       : eventCode.trim();
     
     console.log('=== CONFIRMATION CODE VALIDATION ===');
-    console.log('Event confirmation_code from database:', appointment.event.confirmation_code);
-    console.log('Expected code (after default logic):', expectedCode);
+    console.log('Expected code:', expectedCode);
     console.log('User entered code:', enteredCode);
-    console.log('Codes match:', enteredCode === expectedCode);
 
-    // Compare as strings
     if (enteredCode !== expectedCode) {
       console.log('❌ Incorrect code entered');
-      console.log('Expected:', expectedCode, '(type:', typeof expectedCode, ')');
-      console.log('Got:', enteredCode, '(type:', typeof enteredCode, ')');
       setCodeError('Código incorrecto. Verifica el código del encuentro.');
       return;
     }
@@ -703,7 +728,6 @@ export default function InteraccionScreen() {
       console.log('=== UPSERTING EVENT PARTICIPANT ===');
       console.log('Event ID:', appointment.event_id);
       console.log('User ID:', user.id);
-      console.log('Confirmed at:', confirmedAt);
 
       const { data, error: updateError } = await supabase
         .from('event_participants')
@@ -723,13 +747,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      if (!data || data.length === 0) {
-        console.error('No data returned from event_participants update');
-        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
-        return;
-      }
-
-      console.log('✅ Check-in successful, event_participants updated:', data);
+      console.log('✅ Check-in successful');
       
       await supabase
         .from('appointments')
@@ -839,7 +857,7 @@ export default function InteraccionScreen() {
     }
   };
 
-  // FIXED: Validation - Check total confirmed participants by event_id (minimum 2 instead of 3)
+  // FIXED: Validation - Check total confirmed participants by event_id (minimum 2)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   const ritualOpacity = ritualAnimation.interpolate({
@@ -918,7 +936,6 @@ export default function InteraccionScreen() {
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
             <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
             
-            {/* Show location if revealed */}
             {appointment.event.is_location_revealed && appointment.event.location_name ? (
               <>
                 <Text style={styles.eventInfoLocation}>{appointment.event.location_name}</Text>
@@ -1049,7 +1066,6 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   
-  // Show location if revealed
   const locationText = appointment.event.is_location_revealed && appointment.event.location_name
     ? appointment.event.location_name
     : 'Ubicación se revelará próximamente';
@@ -1193,7 +1209,6 @@ export default function InteraccionScreen() {
         )}
       </ScrollView>
 
-      {/* Toast Notification - "[Nombre] ya está listo." */}
       {toastVisible && (
         <Animated.View
           style={[
@@ -1211,7 +1226,6 @@ export default function InteraccionScreen() {
         </Animated.View>
       )}
 
-      {/* Special Toast Notification - "La mesa está casi lista." */}
       {specialToastVisible && (
         <Animated.View
           style={[

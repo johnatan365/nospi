@@ -7,6 +7,7 @@
  * - All clients receive the same round data via Realtime
  * - No local question generation - everything is server-driven
  * - Single source of truth: events table in Supabase
+ * - Game state persists across tab changes and page reloads
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -93,6 +94,58 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     atrevido: '#EF4444',
   };
 
+  // CRITICAL: Reconstruct game state from database on mount
+  useEffect(() => {
+    console.log('=== RECONSTRUCTING GAME STATE FROM DATABASE ===');
+    console.log('Event game_phase:', appointment.event.game_phase);
+    console.log('Selected participant:', appointment.event.selected_participant_name);
+    console.log('Current question:', appointment.event.current_question);
+    console.log('Question level:', appointment.event.current_question_level);
+
+    // Reconstruct game state from database
+    if (appointment.event.game_phase === 'question' && appointment.event.current_question) {
+      console.log('Reconstructing question phase from database');
+      
+      // Find the selected participant
+      const participant = activeParticipants.find(
+        p => p.user_id === appointment.event.selected_participant_id
+      );
+
+      if (participant) {
+        setSelectedParticipant(participant);
+      } else if (appointment.event.selected_participant_name) {
+        // Fallback: create minimal participant object
+        setSelectedParticipant({
+          id: appointment.event.selected_participant_id || '',
+          user_id: appointment.event.selected_participant_id || '',
+          name: appointment.event.selected_participant_name,
+          profile_photo_url: null,
+          occupation: 'Participante',
+          confirmed: true,
+          check_in_time: null,
+          presented: true,
+        });
+      }
+
+      setCurrentQuestion({
+        id: `${appointment.event.current_question_level}-${Date.now()}`,
+        text: appointment.event.current_question,
+        level: (appointment.event.current_question_level as QuestionLevel) || 'divertido',
+      });
+
+      setCurrentLevel((appointment.event.current_question_level as QuestionLevel) || 'divertido');
+      setGamePhase('question');
+      setShowRoulette(false);
+    } else if (appointment.event.game_phase === 'roulette') {
+      console.log('Reconstructing roulette phase from database');
+      setGamePhase('roulette');
+      setShowRoulette(true);
+    } else {
+      console.log('Game in ready state');
+      setGamePhase('ready');
+    }
+  }, [appointment.event.game_phase, appointment.event.current_question, activeParticipants]);
+
   // Subscribe to real-time updates on the events table
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -170,6 +223,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       )
       .subscribe((status) => {
         console.log('Game state subscription status:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to game state updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Game state subscription error');
+        }
       });
 
     return () => {
@@ -407,6 +466,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.infoCardBullet}>• Misma pregunta para todos</Text>
             <Text style={styles.infoCardBullet}>• Mismo participante elegido</Text>
             <Text style={styles.infoCardBullet}>• Sincronización automática</Text>
+            <Text style={styles.infoCardBullet}>• Estado persistente (no se pierde al cambiar de pestaña)</Text>
           </View>
 
           <View style={styles.levelCard}>
