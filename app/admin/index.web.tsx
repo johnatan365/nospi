@@ -38,6 +38,7 @@ interface User {
   phone: string;
   city: string;
   country: string;
+  interested_in: string;
 }
 
 interface Appointment {
@@ -180,7 +181,7 @@ export default function AdminPanelScreen() {
       // Load users
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, name, email, phone, city, country')
+        .select('id, name, email, phone, city, country, interested_in')
         .order('name', { ascending: true });
 
       if (usersError) {
@@ -754,15 +755,21 @@ export default function AdminPanelScreen() {
             <Text style={[styles.tableHeaderText, { flex: 2 }]}>Email</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Teléfono</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Ciudad</Text>
+            <Text style={[styles.tableHeaderText, { flex: 1 }]}>Interesado en</Text>
           </View>
-          {users.map((user) => (
-            <View key={user.id} style={styles.tableRow}>
-              <Text style={[styles.tableCell, { flex: 2 }]}>{user.name}</Text>
-              <Text style={[styles.tableCell, { flex: 2 }]}>{user.email}</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>{user.phone}</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>{user.city}</Text>
-            </View>
-          ))}
+          {users.map((user) => {
+            const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+            
+            return (
+              <View key={user.id} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{user.name}</Text>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{user.email}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{user.phone}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{user.city}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{interestedInText}</Text>
+              </View>
+            );
+          })}
         </View>
       </View>
     );
