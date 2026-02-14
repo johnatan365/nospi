@@ -28,6 +28,7 @@ interface Event {
   game_phase: 'intro' | 'roulette' | 'playing' | 'finished';
   current_turn_index: number;
   current_round: number;
+  started_at: string | null;
 }
 
 interface Appointment {
@@ -41,19 +42,24 @@ interface Appointment {
   event: Event;
 }
 
-interface Participant {
+interface Profile {
   id: string;
-  user_id: string;
-  full_name: string;
+  name: string;
   email: string;
   phone: string;
   city: string;
   profile_photo_url: string | null;
-  occupation: string;
+}
+
+interface Participant {
+  id: string;
+  user_id: string;
+  event_id: string;
   confirmed: boolean;
   check_in_time: string | null;
   is_presented: boolean;
   presented_at: string | null;
+  profiles: Profile | null;
 }
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
@@ -102,10 +108,19 @@ export default function InteraccionScreen() {
   const shownConfirmations = useRef(new Set<string>()).current;
   const hasShownSpecialAnimation = useRef(false);
 
+  // CRITICAL: Reload appointment and participants when screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('Interacción screen focused - loading appointment');
-      loadAppointment();
+      console.log('=== INTERACCIÓN SCREEN FOCUSED ===');
+      console.log('User ID:', user?.id);
+      
+      if (user) {
+        loadAppointment();
+      }
+      
+      return () => {
+        console.log('Interacción screen unfocused');
+      };
     }, [user])
   );
 
@@ -127,7 +142,7 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('=== REALTIME SUBSCRIPTION SETUP ===');
+    console.log('=== REALTIME SUBSCRIPTION SETUP (event_participants) ===');
     console.log('Event ID:', appointment.event_id);
     console.log('User ID:', user.id);
     
@@ -144,7 +159,7 @@ export default function InteraccionScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('=== REALTIME UPDATE RECEIVED ===');
+          console.log('=== REALTIME UPDATE RECEIVED (event_participants) ===');
           console.log('Payload:', JSON.stringify(payload, null, 2));
           
           // Handle new confirmations for visual feedback
@@ -185,11 +200,11 @@ export default function InteraccionScreen() {
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
+        console.log('Realtime subscription status (event_participants):', status);
       });
 
     return () => {
-      console.log('Cleaning up Realtime subscription');
+      console.log('Cleaning up Realtime subscription (event_participants)');
       supabase.removeChannel(channel);
     };
   }, [appointment, user]);
@@ -329,7 +344,8 @@ export default function InteraccionScreen() {
     }
 
     try {
-      console.log('Loading confirmed appointment for user:', user.id);
+      console.log('=== LOADING APPOINTMENT ===');
+      console.log('User ID:', user.id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -359,7 +375,8 @@ export default function InteraccionScreen() {
             confirmation_code,
             game_phase,
             current_turn_index,
-            current_round
+            current_round,
+            started_at
           )
         `)
         .eq('user_id', user.id)
@@ -392,8 +409,10 @@ export default function InteraccionScreen() {
       console.log('Game state:', {
         game_phase: appointmentData.event?.game_phase,
         current_turn_index: appointmentData.event?.current_turn_index,
-        current_round: appointmentData.event?.current_round
+        current_round: appointmentData.event?.current_round,
+        started_at: appointmentData.event?.started_at
       });
+      
       setAppointment(appointmentData as any);
       
       if (appointmentData.location_confirmed) {
@@ -406,6 +425,11 @@ export default function InteraccionScreen() {
       if (appointmentData.event && appointmentData.event.start_time) {
         checkIfEventDay(appointmentData.event.start_time);
         scheduleNotifications(appointmentData.event.start_time);
+      }
+      
+      // Load participants after loading appointment
+      if (appointmentData.event_id) {
+        loadActiveParticipants(appointmentData.event_id);
       }
     } catch (error) {
       console.error('Failed to load appointment:', error);
@@ -430,7 +454,7 @@ export default function InteraccionScreen() {
           check_in_time,
           is_presented,
           presented_at,
-          users (
+          profiles:users (
             id,
             name,
             email,
@@ -452,12 +476,12 @@ export default function InteraccionScreen() {
       console.log('Raw data:', JSON.stringify(data, null, 2));
 
       const participants: Participant[] = (data || []).map((item: any) => {
-        // NO FALLBACK - Use actual data from JOIN
-        const fullName = item.users?.name || '';
-        const email = item.users?.email || '';
-        const phone = item.users?.phone || '';
-        const city = item.users?.city || '';
-        const userPhoto = item.users?.profile_photo_url || null;
+        // Use actual data from JOIN - fallback only if profiles is null
+        const fullName = item.profiles?.name || 'Participante Anónimo';
+        const email = item.profiles?.email || '';
+        const phone = item.profiles?.phone || '';
+        const city = item.profiles?.city || '';
+        const userPhoto = item.profiles?.profile_photo_url || null;
         
         console.log('Processing participant:', {
           id: item.id,
@@ -476,31 +500,35 @@ export default function InteraccionScreen() {
         return {
           id: item.id,
           user_id: item.user_id,
-          full_name: fullName,
-          email: email,
-          phone: phone,
-          city: city,
-          profile_photo_url: userPhoto,
-          occupation: 'Participante',
+          event_id: item.event_id,
           confirmed: item.confirmed,
           check_in_time: item.check_in_time,
           is_presented: item.is_presented || false,
           presented_at: item.presented_at || null,
+          profiles: item.profiles ? {
+            id: item.profiles.id,
+            name: fullName,
+            email: email,
+            phone: phone,
+            city: city,
+            profile_photo_url: userPhoto
+          } : null
         };
       });
 
       console.log('=== FINAL PARTICIPANTS LIST ===');
       console.log('Participants loaded:', participants.length);
       console.log('Participants:', participants.map(p => ({ 
-        full_name: p.full_name,
-        email: p.email,
+        full_name: p.profiles?.name,
+        email: p.profiles?.email,
         user_id: p.user_id, 
         confirmed: p.confirmed,
         is_presented: p.is_presented
       })));
       
       // Check if we should show the special "La mesa está casi lista" animation
-      if (participants.length >= 3 && !hasShownSpecialAnimation.current) {
+      // FIXED: Minimum 2 participants instead of 3
+      if (participants.length >= 2 && !hasShownSpecialAnimation.current) {
         hasShownSpecialAnimation.current = true;
         showSpecialToastNotification('La mesa está casi lista.');
       }
@@ -805,8 +833,8 @@ export default function InteraccionScreen() {
     }
   };
 
-  // Validation: Check total confirmed participants by event_id (not by user)
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 3;
+  // FIXED: Validation - Check total confirmed participants by event_id (minimum 2 instead of 3)
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   const ritualOpacity = ritualAnimation.interpolate({
     inputRange: [0, 1],
@@ -942,15 +970,15 @@ export default function InteraccionScreen() {
               </View>
             ) : (
               activeParticipants.map((participant, index) => {
-                const displayName = participant.full_name;
+                const displayName = participant.profiles?.name || 'Participante Anónimo';
                 
                 return (
                   <React.Fragment key={index}>
                   <View style={styles.participantCard}>
                     <View style={styles.participantInfo}>
-                      {participant.profile_photo_url ? (
+                      {participant.profiles?.profile_photo_url ? (
                         <Image 
-                          source={{ uri: participant.profile_photo_url }} 
+                          source={{ uri: participant.profiles.profile_photo_url }} 
                           style={styles.participantPhoto}
                         />
                       ) : (
@@ -962,7 +990,7 @@ export default function InteraccionScreen() {
                       )}
                       <View style={styles.participantDetails}>
                         <Text style={styles.participantName}>{displayName}</Text>
-                        <Text style={styles.participantOccupation}>{participant.occupation}</Text>
+                        <Text style={styles.participantOccupation}>Participante</Text>
                       </View>
                     </View>
                     {participant.is_presented && (
@@ -1000,7 +1028,16 @@ export default function InteraccionScreen() {
   }
 
   if (allPresented && activeParticipants.length > 0) {
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants} />;
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
+      id: p.id,
+      user_id: p.user_id,
+      name: p.profiles?.name || 'Participante Anónimo',
+      profile_photo_url: p.profiles?.profile_photo_url || null,
+      occupation: 'Participante',
+      confirmed: p.confirmed,
+      check_in_time: p.check_in_time,
+      presented: p.is_presented
+    }))} />;
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
@@ -1103,14 +1140,14 @@ export default function InteraccionScreen() {
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => {
-                    const displayName = participant.full_name;
+                    const displayName = participant.profiles?.name || 'Participante Anónimo';
                     
                     return (
                       <React.Fragment key={index}>
                       <View style={styles.participantListItem}>
-                        {participant.profile_photo_url ? (
+                        {participant.profiles?.profile_photo_url ? (
                           <Image 
-                            source={{ uri: participant.profile_photo_url }} 
+                            source={{ uri: participant.profiles.profile_photo_url }} 
                             style={styles.participantListPhoto}
                           />
                         ) : (
@@ -1132,7 +1169,7 @@ export default function InteraccionScreen() {
             {!canStartExperience && (
               <View style={styles.waitingInfoCard}>
                 <Text style={styles.waitingInfoText}>
-                  La experiencia comenzará cuando al menos 3 personas estén confirmadas.
+                  La experiencia comenzará cuando al menos 2 personas estén confirmadas.
                 </Text>
               </View>
             )}

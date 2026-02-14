@@ -58,7 +58,8 @@ interface EventParticipant {
   user_id: string;
   confirmed: boolean;
   check_in_time: string | null;
-  presented: boolean;
+  is_presented: boolean;
+  presented_at: string | null;
   users: User;
 }
 
@@ -248,7 +249,7 @@ export default function AdminPanelScreen() {
       console.log('Event ID:', eventId);
       console.log('Query: SELECT event_participants.*, users.name, users.email, users.phone, users.city FROM event_participants JOIN users ON event_participants.user_id = users.id WHERE event_participants.event_id =', eventId);
       
-      // Fixed query: Use proper join syntax
+      // FIXED QUERY: Use proper join syntax with users table
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -257,7 +258,8 @@ export default function AdminPanelScreen() {
           user_id,
           confirmed,
           check_in_time,
-          presented,
+          is_presented,
+          presented_at,
           users (
             id,
             name,
@@ -282,6 +284,7 @@ export default function AdminPanelScreen() {
         name: p.users?.name,
         user_id: p.user_id,
         confirmed: p.confirmed,
+        is_presented: p.is_presented,
         check_in_time: p.check_in_time
       })));
       
@@ -814,7 +817,7 @@ export default function AdminPanelScreen() {
   const renderRealtime = () => {
     const selectedEvent = events.find(e => e.id === selectedEventForMonitoring);
     const confirmedCount = eventParticipants.filter(p => p.confirmed).length;
-    const presentedCount = eventParticipants.filter(p => p.presented).length;
+    const presentedCount = eventParticipants.filter(p => p.is_presented).length;
 
     return (
       <View style={styles.listContainer}>
@@ -895,7 +898,7 @@ export default function AdminPanelScreen() {
                             <Text style={styles.statusBadgeText}>✓ Confirmado</Text>
                           </View>
                         )}
-                        {participant.presented && (
+                        {participant.is_presented && (
                           <View style={[styles.statusBadge, { backgroundColor: '#8B5CF6', marginTop: 4 }]}>
                             <Text style={styles.statusBadgeText}>★ Presentado</Text>
                           </View>
