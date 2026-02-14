@@ -28,6 +28,7 @@ interface Event {
   status: string;
   event_status: 'draft' | 'published' | 'closed';
   confirmation_code: string | null;
+  attendance_code: string | null;
 }
 
 interface User {
@@ -98,7 +99,7 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
-    confirmation_code: '',
+    attendance_code: '1986',
   });
 
   // Realtime monitoring
@@ -288,7 +289,7 @@ export default function AdminPanelScreen() {
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
-      confirmation_code: '',
+      attendance_code: '1986',
     });
     setShowEventModal(true);
   };
@@ -309,7 +310,7 @@ export default function AdminPanelScreen() {
       max_participants: event.max_participants,
       is_location_revealed: event.is_location_revealed,
       event_status: event.event_status,
-      confirmation_code: event.confirmation_code || '',
+      attendance_code: event.attendance_code || event.confirmation_code || '1986',
     });
     setShowEventModal(true);
   };
@@ -334,15 +335,16 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // Validate confirmation code
-      if (!eventForm.confirmation_code || eventForm.confirmation_code.trim().length === 0) {
-        console.log('Validation failed - missing confirmation code');
-        window.alert('Debes asignar un código de confirmación para el evento (ej: 1986).');
-        return;
+      // Validate and set default attendance code
+      let finalAttendanceCode = eventForm.attendance_code.trim();
+      if (!finalAttendanceCode) {
+        console.log('Attendance code empty, using default: 1986');
+        finalAttendanceCode = '1986';
       }
 
       console.log('Date:', eventForm.date);
       console.log('Time:', eventForm.time);
+      console.log('Attendance Code:', finalAttendanceCode);
 
       // Combine date and time in ISO format
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
@@ -381,8 +383,11 @@ export default function AdminPanelScreen() {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
-        confirmation_code: eventForm.confirmation_code.trim(),
+        attendance_code: finalAttendanceCode,
+        confirmation_code: finalAttendanceCode,
       };
+
+      console.log('Event data to save:', eventData);
 
       if (editingEventId) {
         // Update existing event
@@ -434,7 +439,7 @@ export default function AdminPanelScreen() {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
-        confirmation_code: '',
+        attendance_code: '1986',
       });
       loadDashboardData();
     } catch (error) {
@@ -624,7 +629,7 @@ export default function AdminPanelScreen() {
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const locationRevealed = event.is_location_revealed ? 'Sí' : 'No';
-          const confirmationCode = event.confirmation_code || 'No asignado';
+          const attendanceCode = event.attendance_code || event.confirmation_code || '1986';
 
           return (
             <View key={event.id} style={styles.listItem}>
@@ -640,7 +645,7 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>
                 Participantes configurados: {event.max_participants}
               </Text>
-              <Text style={styles.listItemDetail}>Código de confirmación: {confirmationCode}</Text>
+              <Text style={styles.listItemDetail}>Código de confirmación: {attendanceCode}</Text>
               <Text style={styles.listItemDetail}>Ubicación revelada: {locationRevealed}</Text>
               {event.location_name && (
                 <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
@@ -793,7 +798,7 @@ export default function AdminPanelScreen() {
                   {selectedEvent?.date} a las {selectedEvent?.time}
                 </Text>
                 <Text style={styles.realtimeEventCode}>
-                  Código: {selectedEvent?.confirmation_code || 'No asignado'}
+                  Código: {selectedEvent?.attendance_code || selectedEvent?.confirmation_code || '1986'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1094,17 +1099,6 @@ export default function AdminPanelScreen() {
                   }}
                 />
 
-                <Text style={styles.inputLabel}>Código de Confirmación * (para que los participantes confirmen su llegada)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: 1986"
-                  value={eventForm.confirmation_code}
-                  onChangeText={(text) => {
-                    console.log('Confirmation code changed:', text);
-                    setEventForm({ ...eventForm, confirmation_code: text });
-                  }}
-                />
-
                 <Text style={styles.inputLabel}>Número de Participantes (mostrado públicamente)</Text>
                 <TextInput
                   style={styles.input}
@@ -1139,6 +1133,23 @@ export default function AdminPanelScreen() {
                   value={eventForm.maps_link}
                   onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
                 />
+
+                {/* ATTENDANCE CODE FIELD - POSITIONED BEFORE EVENT STATUS */}
+                <View style={styles.highlightedSection}>
+                  <Text style={[styles.inputLabel, styles.requiredLabel]}>Código de confirmación *</Text>
+                  <Text style={styles.inputHint}>
+                    Los participantes deberán ingresar este código para confirmar su asistencia en el lugar
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.highlightedInput]}
+                    placeholder="Ej: 1986"
+                    value={eventForm.attendance_code}
+                    onChangeText={(text) => {
+                      console.log('Attendance code changed:', text);
+                      setEventForm({ ...eventForm, attendance_code: text });
+                    }}
+                  />
+                </View>
 
                 <Text style={styles.inputLabel}>Estado del Evento</Text>
                 <View style={styles.typeSelector}>
@@ -1739,6 +1750,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 12,
   },
+  requiredLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  inputHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
   input: {
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
@@ -1746,6 +1768,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  highlightedSection: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  highlightedInput: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   textArea: {
     minHeight: 80,

@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
+import { Asset } from 'expo-asset';
 
 const { width, height } = Dimensions.get('window');
 
@@ -16,6 +17,27 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const [logoLoaded, setLogoLoaded] = useState(false);
+
+  const logoSource = require('@/assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png');
+
+  // Preload logo image to prevent delay
+  useEffect(() => {
+    console.log('Preloading logo image...');
+    const preloadLogo = async () => {
+      try {
+        await Asset.fromModule(logoSource).downloadAsync();
+        console.log('Logo preloaded successfully');
+        setLogoLoaded(true);
+      } catch (error) {
+        console.error('Error preloading logo:', error);
+        // Still set loaded to true to show the screen
+        setLogoLoaded(true);
+      }
+    };
+
+    preloadLogo();
+  }, []);
 
   const handleStart = () => {
     console.log('User tapped Empezar button');
@@ -27,7 +49,6 @@ export default function WelcomeScreen() {
     router.push('/login');
   };
 
-  const logoSource = require('@/assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png');
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
   const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
@@ -43,12 +64,13 @@ export default function WelcomeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          {/* Logo - Más grande */}
+          {/* Logo - Más grande con preload */}
           <View style={styles.logoContainer}>
             <Image 
               source={resolveImageSource(logoSource)} 
-              style={styles.logo}
+              style={[styles.logo, { opacity: logoLoaded ? 1 : 0 }]}
               resizeMode="contain"
+              fadeDuration={0}
             />
           </View>
           
