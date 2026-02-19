@@ -275,11 +275,15 @@ export default function AdminPanelScreen() {
   };
 
   const handleCreateEvent = async () => {
+    console.log('=== handleCreateEvent CALLED ===');
+    console.log('Button pressed - starting event creation');
+    
     try {
       console.log('Creating new event:', newEvent);
 
       // Validate required fields
       if (!newEvent.name || !newEvent.city || !newEvent.date || !newEvent.time) {
+        console.log('❌ Validation failed - missing required fields');
         Alert.alert('Error', 'Por favor completa todos los campos requeridos (nombre, ciudad, fecha, hora)');
         return;
       }
@@ -888,7 +892,10 @@ export default function AdminPanelScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonConfirm]}
-                    onPress={handleCreateEvent}
+                    onPress={() => {
+                      console.log('Create Event button pressed');
+                      handleCreateEvent();
+                    }}
                   >
                     <Text style={styles.modalButtonTextConfirm}>Crear Evento</Text>
                   </TouchableOpacity>

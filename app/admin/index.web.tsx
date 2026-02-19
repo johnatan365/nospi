@@ -463,15 +463,19 @@ export default function AdminPanelScreen() {
   };
 
   const handleSaveEvent = async () => {
-    console.log('handleSaveEvent called');
+    console.log('=== handleSaveEvent CALLED ===');
+    console.log('Button pressed - starting event save');
+    console.log('Event form data:', eventForm);
 
     try {
       if (!eventForm.name || !eventForm.city) {
+        console.log('❌ Validation failed - missing name or city');
         window.alert('Por favor completa el nombre y la ciudad del evento');
         return;
       }
 
       if (!eventForm.date || !eventForm.time) {
+        console.log('❌ Validation failed - missing date or time');
         window.alert('Debes seleccionar fecha y hora válidas antes de guardar el evento.');
         return;
       }
@@ -1119,8 +1123,291 @@ export default function AdminPanelScreen() {
         </ScrollView>
       </View>
 
-      {/* Modals remain the same as original file */}
-      {/* ... (Event Modal and Attendees Modal code from original file) */}
+      {/* Create/Edit Event Modal */}
+      <Modal
+        visible={showEventModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEventModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
+              </Text>
+
+              <Text style={styles.inputLabel}>Nombre del Evento *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Encuentro de Solteros"
+                value={eventForm.name}
+                onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Ciudad *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bogotá"
+                value={eventForm.city}
+                onChangeText={(text) => setEventForm({ ...eventForm, city: text })}
+              />
+
+              <Text style={styles.inputLabel}>Descripción</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Descripción del evento"
+                value={eventForm.description}
+                onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.inputLabel}>Tipo de Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'bar' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'bar' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.type === 'bar' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    🍸 Bar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'restaurant' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'restaurant' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.type === 'restaurant' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    🍽️ Restaurante
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="2024-02-15"
+                value={eventForm.date}
+                onChangeText={(text) => setEventForm({ ...eventForm, date: text })}
+              />
+
+              <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="21:15"
+                value={eventForm.time}
+                onChangeText={(text) => setEventForm({ ...eventForm, time: text })}
+              />
+
+              <Text style={styles.inputLabel}>Máximo de Participantes</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="6"
+                keyboardType="numeric"
+                value={String(eventForm.max_participants)}
+                onChangeText={(text) =>
+                  setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })
+                }
+              />
+
+              <Text style={styles.inputLabel}>Nombre del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bar El Encuentro"
+                value={eventForm.location_name}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Calle 85 #15-20"
+                value={eventForm.location_address}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
+              />
+
+              <Text style={styles.inputLabel}>Enlace de Maps</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://maps.google.com/..."
+                value={eventForm.maps_link}
+                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+              />
+
+              <View style={styles.highlightedSection}>
+                <Text style={[styles.inputLabel, styles.requiredLabel]}>🔑 Código de confirmación *</Text>
+                <Text style={styles.inputHint}>
+                  Los participantes deberán ingresar este código para confirmar su asistencia
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.highlightedInput]}
+                  placeholder="Ej: 1986"
+                  value={eventForm.confirmation_code}
+                  onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
+                />
+                <Text style={styles.defaultHint}>Por defecto: 1986</Text>
+              </View>
+
+              <Text style={styles.inputLabel}>Estado del Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'draft' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'draft' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'draft' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    📝 Borrador
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'published' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'published' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'published' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    ✅ Publicado
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowEventModal(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonConfirm]}
+                  onPress={() => {
+                    console.log('Save Event button pressed');
+                    handleSaveEvent();
+                  }}
+                >
+                  <Text style={styles.modalButtonTextConfirm}>
+                    {editingEventId ? 'Guardar Cambios' : 'Crear Evento'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Attendees Modal */}
+      <Modal
+        visible={showAttendeesModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAttendeesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.attendeesModalContent}>
+            <View style={styles.attendeesModalHeader}>
+              <Text style={styles.attendeesModalTitle}>
+                Asistentes del Evento
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAttendeesModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedEventForAttendees && (
+              <View style={styles.eventInfoSection}>
+                <Text style={styles.eventInfoTitle}>
+                  {selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}
+                </Text>
+                <Text style={styles.eventInfoDetail}>
+                  Fecha: {selectedEventForAttendees.date} a las {selectedEventForAttendees.time}
+                </Text>
+                <Text style={styles.eventInfoDetail}>
+                  Total registrados: {eventAttendees.length}
+                </Text>
+              </View>
+            )}
+
+            {loadingAttendees ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando asistentes...</Text>
+              </View>
+            ) : eventAttendees.length === 0 ? (
+              <View style={styles.emptyAttendeesContainer}>
+                <Text style={styles.emptyAttendeesText}>
+                  No hay usuarios registrados en este evento aún
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.attendeesList}>
+                {eventAttendees.map((attendee, index) => {
+                  const statusColor = attendee.status === 'confirmed' ? '#10B981' : '#F59E0B';
+                  const paymentColor = attendee.payment_status === 'paid' ? '#10B981' : '#EF4444';
+                  const interestedInText = attendee.users.interested_in === 'hombres' ? 'Hombres' : attendee.users.interested_in === 'mujeres' ? 'Mujeres' : attendee.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+                  const genderText = attendee.users.gender === 'hombre' ? 'Hombre' : attendee.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
+                  
+                  return (
+                    <View key={attendee.id} style={styles.attendeeItem}>
+                      <View style={styles.attendeeHeader}>
+                        <Text style={styles.attendeeNumber}>#{index + 1}</Text>
+                        <Text style={styles.attendeeName}>{attendee.users.name}</Text>
+                      </View>
+                      <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
+                      <Text style={styles.attendeeDetail}>📱 {attendee.users.phone}</Text>
+                      <Text style={styles.attendeeDetail}>📍 {attendee.users.city}, {attendee.users.country}</Text>
+                      <Text style={styles.attendeeDetail}>👤 Género: {genderText}</Text>
+                      <Text style={styles.attendeeDetail}>💝 Interesado en: {interestedInText}</Text>
+                      {attendee.users.age && <Text style={styles.attendeeDetail}>🎂 Edad: {attendee.users.age} años</Text>}
+                      <View style={styles.attendeeStatusRow}>
+                        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                          <Text style={styles.statusBadgeText}>{attendee.status}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: paymentColor }]}>
+                          <Text style={styles.statusBadgeText}>
+                            {attendee.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1676,5 +1963,232 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  // ... (rest of styles remain the same)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalScrollContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 600,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  requiredLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  inputHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  defaultHint: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  input: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  highlightedSection: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+  },
+  highlightedInput: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  typeButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  typeButtonActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  typeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  typeButtonTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalButtonConfirm: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  modalButtonTextCancel: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalButtonTextConfirm: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  attendeesModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 800,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  attendeesModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  attendeesModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  closeModalButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  eventInfoSection: {
+    padding: 20,
+    backgroundColor: nospiColors.purpleLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  eventInfoDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  emptyAttendeesContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyAttendeesText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  attendeesList: {
+    flex: 1,
+    padding: 20,
+  },
+  attendeeItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attendeeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  attendeeNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginRight: 8,
+  },
+  attendeeName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  attendeeDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  attendeeStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
 });

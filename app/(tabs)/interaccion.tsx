@@ -1483,9 +1483,10 @@ const styles = StyleSheet.create({
   },
   countdownTime: {
     fontSize: 48,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    letterSpacing: 2,
   },
   eventCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
