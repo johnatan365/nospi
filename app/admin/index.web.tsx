@@ -409,7 +409,7 @@ export default function AdminPanelScreen() {
         city: eventForm.city,
         description: eventForm.description,
         type: eventForm.type,
-        date: eventForm.date,
+        date: isoDate,
         time: eventForm.time,
         location: eventForm.is_location_revealed && eventForm.location_name 
           ? eventForm.location_name 
@@ -439,12 +439,21 @@ export default function AdminPanelScreen() {
           .select();
 
         if (error) {
-          console.error('Error updating event:', error);
-          window.alert('Error al actualizar evento: ' + error.message);
+          console.error('Supabase error updating event:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+          window.alert('Error al actualizar evento: ' + error.message + ' (Código: ' + error.code + ')');
           return;
         }
 
-        console.log('Event updated successfully:', data);
+        // CRITICAL: Check if data was actually returned
+        if (!data || data.length === 0) {
+          console.error('⚠️ UPDATE RETURNED NO DATA - Event may not have been updated!');
+          console.error('This could indicate an RLS policy issue or the event does not exist');
+          window.alert('⚠️ Advertencia: La actualización reportó éxito pero no devolvió datos. Por favor verifica manualmente que el evento se haya actualizado.');
+          return;
+        }
+
+        console.log('✅ Event updated successfully:', data);
         window.alert('Evento actualizado exitosamente');
       } else {
         // Create new event
@@ -455,12 +464,23 @@ export default function AdminPanelScreen() {
           .select();
 
         if (error) {
-          console.error('Error creating event:', error);
-          window.alert('Error al crear evento: ' + error.message);
+          console.error('Supabase error creating event:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+          window.alert('Error al crear evento: ' + error.message + ' (Código: ' + error.code + ')');
           return;
         }
 
-        console.log('Event created successfully:', data);
+        // CRITICAL: Check if data was actually returned
+        if (!data || data.length === 0) {
+          console.error('⚠️ INSERT RETURNED NO DATA - Event was NOT created!');
+          console.error('This could indicate an RLS policy issue, a database constraint violation, or a silent failure');
+          console.error('Event data that failed to insert:', eventData);
+          window.alert('⚠️ Error: El evento NO fue creado. La operación no devolvió datos. Por favor verifica las políticas RLS y los logs de la base de datos.');
+          return;
+        }
+
+        console.log('✅ Event created successfully:', data);
+        console.log('Created event ID:', data[0].id);
         window.alert('Evento creado exitosamente');
       }
 
