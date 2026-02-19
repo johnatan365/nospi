@@ -164,22 +164,23 @@ export default function AdminPanelScreen() {
       setLoading(true);
       console.log('Loading admin dashboard data...');
 
-      // Load events
+      // Load events - EXPLICITLY including confirmation_code
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select('*')
+        .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, address, start_time, max_participants, current_participants, status, event_status, confirmation_code, attendance_code')
         .order('date', { ascending: false });
 
       if (eventsError) {
         console.error('Error loading events:', eventsError);
       } else {
+        console.log('Events loaded with confirmation_code:', eventsData?.map(e => ({ id: e.id, name: e.name, confirmation_code: e.confirmation_code })));
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
         const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
         setActiveEvents(activeCount);
       }
 
-      // Load users
+      // Load users - EXPLICITLY including interested_in
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('id, name, email, phone, city, country, interested_in')
@@ -188,11 +189,12 @@ export default function AdminPanelScreen() {
       if (usersError) {
         console.error('Error loading users:', usersError);
       } else {
+        console.log('Users loaded with interested_in:', usersData?.map(u => ({ id: u.id, name: u.name, interested_in: u.interested_in })));
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
       }
 
-      // Load appointments
+      // Load appointments - EXPLICITLY including interested_in in users join
       const { data: appointmentsData, error: appointmentsError } = await supabase
         .from('appointments')
         .select(`
@@ -208,7 +210,8 @@ export default function AdminPanelScreen() {
             email,
             phone,
             city,
-            country
+            country,
+            interested_in
           ),
           events!inner (
             id,
@@ -223,7 +226,8 @@ export default function AdminPanelScreen() {
             max_participants,
             current_participants,
             status,
-            event_status
+            event_status,
+            confirmation_code
           )
         `)
         .order('created_at', { ascending: false });
@@ -231,6 +235,7 @@ export default function AdminPanelScreen() {
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
+        console.log('Appointments loaded with confirmation_code:', appointmentsData?.map(a => ({ id: a.id, event_confirmation_code: a.events.confirmation_code })));
         setAppointments(appointmentsData || []);
         setTotalAppointments(appointmentsData?.length || 0);
       }
@@ -247,9 +252,8 @@ export default function AdminPanelScreen() {
     try {
       console.log('=== ADMIN LOADING PARTICIPANTS ===');
       console.log('Event ID:', eventId);
-      console.log('Query: SELECT event_participants.*, users.name, users.email, users.phone, users.city FROM event_participants JOIN users ON event_participants.user_id = users.id WHERE event_participants.event_id =', eventId);
       
-      // FIXED QUERY: Use proper join syntax with users table
+      // EXPLICITLY including interested_in in users join
       const { data, error } = await supabase
         .from('event_participants')
         .select(`
@@ -266,7 +270,8 @@ export default function AdminPanelScreen() {
             email,
             phone,
             city,
-            country
+            country,
+            interested_in
           )
         `)
         .eq('event_id', eventId)
@@ -279,13 +284,11 @@ export default function AdminPanelScreen() {
 
       console.log('=== ADMIN PARTICIPANTS QUERY RESULT ===');
       console.log('Total rows returned:', data?.length || 0);
-      console.log('Raw data:', JSON.stringify(data, null, 2));
-      console.log('Participants loaded:', data?.map(p => ({
+      console.log('Participants with interested_in:', data?.map(p => ({
         name: p.users?.name,
-        user_id: p.user_id,
+        interested_in: p.users?.interested_in,
         confirmed: p.confirmed,
-        is_presented: p.is_presented,
-        check_in_time: p.check_in_time
+        is_presented: p.is_presented
       })));
       
       setEventParticipants(data || []);
@@ -785,6 +788,8 @@ export default function AdminPanelScreen() {
         {appointments.map((appointment) => {
           const statusColor = appointment.status === 'confirmed' ? '#10B981' : '#F59E0B';
           const paymentColor = appointment.payment_status === 'paid' ? '#10B981' : '#EF4444';
+          const confirmationCode = appointment.events.confirmation_code || '1986';
+          const interestedInText = appointment.users.interested_in === 'hombres' ? 'Hombres' : appointment.users.interested_in === 'mujeres' ? 'Mujeres' : appointment.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
 
           return (
             <View key={appointment.id} style={styles.listItem}>
@@ -800,8 +805,13 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>
                 Fecha: {appointment.events.date} a las {appointment.events.time}
               </Text>
+              <View style={styles.codeHighlight}>
+                <Text style={styles.codeLabel}>🔑 Código del evento:</Text>
+                <Text style={styles.codeValue}>{confirmationCode}</Text>
+              </View>
               <Text style={styles.listItemDetail}>Email: {appointment.users.email}</Text>
               <Text style={styles.listItemDetail}>Teléfono: {appointment.users.phone}</Text>
+              <Text style={styles.listItemDetail}>Interesado en: {interestedInText}</Text>
               <View style={[styles.statusBadge, { backgroundColor: paymentColor, marginTop: 8 }]}>
                 <Text style={styles.statusBadgeText}>
                   Pago: {appointment.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
@@ -882,6 +892,7 @@ export default function AdminPanelScreen() {
                   const checkInTime = participant.check_in_time 
                     ? new Date(participant.check_in_time).toLocaleTimeString('es-ES')
                     : 'No confirmado';
+                  const interestedInText = participant.users?.interested_in === 'hombres' ? 'Hombres' : participant.users?.interested_in === 'mujeres' ? 'Mujeres' : participant.users?.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
 
                   return (
                     <View key={participant.id} style={styles.participantItem}>
@@ -890,6 +901,7 @@ export default function AdminPanelScreen() {
                         <Text style={styles.participantEmail}>{participant.users?.email || 'Sin email'}</Text>
                         <Text style={styles.participantPhone}>{participant.users?.phone || 'Sin teléfono'}</Text>
                         <Text style={styles.participantCity}>{participant.users?.city || 'Sin ciudad'}</Text>
+                        <Text style={styles.participantInterest}>Interesado en: {interestedInText}</Text>
                         <Text style={styles.participantCheckIn}>Check-in: {checkInTime}</Text>
                       </View>
                       <View style={styles.participantStatus}>
@@ -1782,6 +1794,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   participantCity: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+  participantInterest: {
     fontSize: 13,
     color: '#9CA3AF',
     marginBottom: 2,
