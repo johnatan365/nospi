@@ -508,7 +508,8 @@ export default function InteraccionScreen() {
           )
         `)
         .eq('event_id', eventId)
-        .eq('confirmed', true);
+        .eq('confirmed', true)
+        .order('check_in_time', { ascending: true });
 
       if (error) {
         console.error('Error loading participants:', error);
@@ -1069,6 +1070,9 @@ export default function InteraccionScreen() {
   const locationText = appointment.event.is_location_revealed && appointment.event.location_name
     ? appointment.event.location_name
     : 'Ubicación se revelará próximamente';
+  
+  // CRITICAL: Calculate participant count for display
+  const participantCountText = activeParticipants.length.toString();
 
   return (
     <LinearGradient
@@ -1156,8 +1160,12 @@ export default function InteraccionScreen() {
             </View>
 
             <View style={styles.participantsListCard}>
-              <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
-              <Text style={styles.participantsListCount}>{activeParticipants.length}</Text>
+              <View style={styles.participantsListHeader}>
+                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+                <View style={styles.participantCountBadge}>
+                  <Text style={styles.participantCountText}>{participantCountText}</Text>
+                </View>
+              </View>
               
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
@@ -1610,19 +1618,31 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  participantsListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   participantsListTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 8,
+    flex: 1,
   },
-  participantsListCount: {
-    fontSize: 48,
+  participantCountBadge: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  participantCountText: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#FFFFFF',
   },
   participantsList: {
     marginTop: 8,
