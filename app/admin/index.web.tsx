@@ -38,6 +38,8 @@ interface User {
   city: string;
   country: string;
   interested_in: string;
+  gender?: string;
+  age?: number;
 }
 
 interface Appointment {
@@ -62,6 +64,16 @@ interface EventParticipant {
   users: User;
 }
 
+interface EventAttendee {
+  id: string;
+  user_id: string;
+  event_id: string;
+  status: string;
+  payment_status: string;
+  created_at: string;
+  users: User;
+}
+
 type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime';
 
 export default function AdminPanelScreen() {
@@ -83,6 +95,12 @@ export default function AdminPanelScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
+
+  // Event attendees modal
+  const [showAttendeesModal, setShowAttendeesModal] = useState(false);
+  const [selectedEventForAttendees, setSelectedEventForAttendees] = useState<Event | null>(null);
+  const [eventAttendees, setEventAttendees] = useState<EventAttendee[]>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
 
   // Event creation/edit modal
   const [showEventModal, setShowEventModal] = useState(false);
@@ -223,7 +241,7 @@ export default function AdminPanelScreen() {
       // Load users - EXPLICITLY including interested_in
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, name, email, phone, city, country, interested_in')
+        .select('id, name, email, phone, city, country, interested_in, gender, age')
         .order('name', { ascending: true });
 
       if (usersError) {
@@ -251,7 +269,9 @@ export default function AdminPanelScreen() {
             phone,
             city,
             country,
-            interested_in
+            interested_in,
+            gender,
+            age
           ),
           events!inner (
             id,
@@ -311,7 +331,9 @@ export default function AdminPanelScreen() {
             phone,
             city,
             country,
-            interested_in
+            interested_in,
+            gender,
+            age
           )
         `)
         .eq('event_id', eventId)
@@ -326,6 +348,54 @@ export default function AdminPanelScreen() {
       setEventParticipants(data || []);
     } catch (error) {
       console.error('Failed to load event participants:', error);
+    }
+  };
+
+  const handleViewAttendees = async (event: Event) => {
+    console.log('Loading attendees for event:', event.id);
+    setSelectedEventForAttendees(event);
+    setLoadingAttendees(true);
+    setShowAttendeesModal(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          user_id,
+          event_id,
+          status,
+          payment_status,
+          created_at,
+          users!inner (
+            id,
+            name,
+            email,
+            phone,
+            city,
+            country,
+            interested_in,
+            gender,
+            age
+          )
+        `)
+        .eq('event_id', event.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading event attendees:', error);
+        window.alert('No se pudieron cargar los asistentes: ' + error.message);
+        setEventAttendees([]);
+      } else {
+        console.log('✅ Attendees loaded:', data?.length || 0);
+        setEventAttendees(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load attendees:', error);
+      window.alert('Error inesperado al cargar asistentes');
+      setEventAttendees([]);
+    } finally {
+      setLoadingAttendees(false);
     }
   };
 
@@ -701,6 +771,8 @@ export default function AdminPanelScreen() {
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const locationRevealed = event.is_location_revealed ? 'Sí' : 'No';
           const confirmationCode = event.confirmation_code || '1986';
+          
+          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
           return (
             <View key={event.id} style={styles.listItem}>
@@ -716,6 +788,9 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>
                 Participantes configurados: {event.max_participants}
               </Text>
+              <Text style={styles.listItemDetail}>
+                Usuarios registrados: {eventAppointmentsCount}
+              </Text>
               <View style={styles.codeHighlight}>
                 <Text style={styles.codeLabel}>🔑 Código de confirmación:</Text>
                 <Text style={styles.codeValue}>{confirmationCode}</Text>
@@ -728,6 +803,12 @@ export default function AdminPanelScreen() {
                 <Text style={styles.listItemDetail}>Dirección: {event.location_address}</Text>
               )}
               <View style={styles.eventActions}>
+                <TouchableOpacity
+                  style={styles.viewAttendeesButton}
+                  onPress={() => handleViewAttendees(event)}
+                >
+                  <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.editButton}
                   onPress={() => openEditEventModal(event)}
@@ -792,10 +873,12 @@ export default function AdminPanelScreen() {
             <Text style={[styles.tableHeaderText, { flex: 2 }]}>Email</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Teléfono</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Ciudad</Text>
+            <Text style={[styles.tableHeaderText, { flex: 1 }]}>Género</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Interesado en</Text>
           </View>
           {users.map((user) => {
             const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+            const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
             
             return (
               <View key={user.id} style={styles.tableRow}>
@@ -803,6 +886,7 @@ export default function AdminPanelScreen() {
                 <Text style={[styles.tableCell, { flex: 2 }]}>{user.email}</Text>
                 <Text style={[styles.tableCell, { flex: 1 }]}>{user.phone}</Text>
                 <Text style={[styles.tableCell, { flex: 1 }]}>{user.city}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{genderText}</Text>
                 <Text style={[styles.tableCell, { flex: 1 }]}>{interestedInText}</Text>
               </View>
             );
@@ -821,6 +905,7 @@ export default function AdminPanelScreen() {
           const paymentColor = appointment.payment_status === 'paid' ? '#10B981' : '#EF4444';
           const confirmationCode = appointment.events.confirmation_code || '1986';
           const interestedInText = appointment.users.interested_in === 'hombres' ? 'Hombres' : appointment.users.interested_in === 'mujeres' ? 'Mujeres' : appointment.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+          const genderText = appointment.users.gender === 'hombre' ? 'Hombre' : appointment.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
 
           return (
             <View key={appointment.id} style={styles.listItem}>
@@ -842,7 +927,9 @@ export default function AdminPanelScreen() {
               </View>
               <Text style={styles.listItemDetail}>Email: {appointment.users.email}</Text>
               <Text style={styles.listItemDetail}>Teléfono: {appointment.users.phone}</Text>
+              <Text style={styles.listItemDetail}>Género: {genderText}</Text>
               <Text style={styles.listItemDetail}>Interesado en: {interestedInText}</Text>
+              {appointment.users.age && <Text style={styles.listItemDetail}>Edad: {appointment.users.age} años</Text>}
               <View style={[styles.statusBadge, { backgroundColor: paymentColor, marginTop: 8 }]}>
                 <Text style={styles.statusBadgeText}>
                   Pago: {appointment.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
@@ -924,6 +1011,7 @@ export default function AdminPanelScreen() {
                     ? new Date(participant.check_in_time).toLocaleTimeString('es-ES')
                     : 'No confirmado';
                   const interestedInText = participant.users?.interested_in === 'hombres' ? 'Hombres' : participant.users?.interested_in === 'mujeres' ? 'Mujeres' : participant.users?.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+                  const genderText = participant.users?.gender === 'hombre' ? 'Hombre' : participant.users?.gender === 'mujer' ? 'Mujer' : 'No especificado';
 
                   return (
                     <View key={participant.id} style={styles.participantItem}>
@@ -932,7 +1020,9 @@ export default function AdminPanelScreen() {
                         <Text style={styles.participantEmail}>{participant.users?.email || 'Sin email'}</Text>
                         <Text style={styles.participantPhone}>{participant.users?.phone || 'Sin teléfono'}</Text>
                         <Text style={styles.participantCity}>{participant.users?.city || 'Sin ciudad'}</Text>
+                        <Text style={styles.participantInterest}>Género: {genderText}</Text>
                         <Text style={styles.participantInterest}>Interesado en: {interestedInText}</Text>
+                        {participant.users?.age && <Text style={styles.participantInterest}>Edad: {participant.users.age} años</Text>}
                         <Text style={styles.participantCheckIn}>Check-in: {checkInTime}</Text>
                       </View>
                       <View style={styles.participantStatus}>
@@ -1266,6 +1356,83 @@ export default function AdminPanelScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Attendees Modal */}
+      <Modal
+        visible={showAttendeesModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAttendeesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.attendeesModalContent}>
+            <View style={styles.attendeesModalHeader}>
+              <Text style={styles.attendeesModalTitle}>
+                Asistentes del Evento
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAttendeesModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedEventForAttendees && (
+              <View style={styles.eventInfoSection}>
+                <Text style={styles.eventInfoTitle}>{selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}</Text>
+                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {selectedEventForAttendees.time}</Text>
+                <Text style={styles.eventInfoDetail}>Total registrados: {eventAttendees.length}</Text>
+              </View>
+            )}
+
+            {loadingAttendees ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando asistentes...</Text>
+              </View>
+            ) : eventAttendees.length === 0 ? (
+              <View style={styles.emptyAttendeesContainer}>
+                <Text style={styles.emptyAttendeesText}>No hay usuarios registrados en este evento aún</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.attendeesList}>
+                {eventAttendees.map((attendee, index) => {
+                  const statusColor = attendee.status === 'confirmed' ? '#10B981' : '#F59E0B';
+                  const paymentColor = attendee.payment_status === 'paid' ? '#10B981' : '#EF4444';
+                  const interestedInText = attendee.users.interested_in === 'hombres' ? 'Hombres' : attendee.users.interested_in === 'mujeres' ? 'Mujeres' : attendee.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+                  const genderText = attendee.users.gender === 'hombre' ? 'Hombre' : attendee.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
+                  
+                  return (
+                    <View key={attendee.id} style={styles.attendeeItem}>
+                      <View style={styles.attendeeHeader}>
+                        <Text style={styles.attendeeNumber}>#{index + 1}</Text>
+                        <Text style={styles.attendeeName}>{attendee.users.name}</Text>
+                      </View>
+                      <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
+                      <Text style={styles.attendeeDetail}>📱 {attendee.users.phone}</Text>
+                      <Text style={styles.attendeeDetail}>📍 {attendee.users.city}, {attendee.users.country}</Text>
+                      <Text style={styles.attendeeDetail}>👤 Género: {genderText}</Text>
+                      <Text style={styles.attendeeDetail}>💝 Interesado en: {interestedInText}</Text>
+                      {attendee.users.age && <Text style={styles.attendeeDetail}>🎂 Edad: {attendee.users.age} años</Text>}
+                      <View style={styles.attendeeStatusRow}>
+                        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                          <Text style={styles.statusBadgeText}>{attendee.status}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: paymentColor }]}>
+                          <Text style={styles.statusBadgeText}>
+                            {attendee.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1285,6 +1452,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 40,
   },
   loadingText: {
     marginTop: 16,
@@ -1545,6 +1713,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
+  },
+  viewAttendeesButton: {
+    flex: 1,
+    minWidth: 150,
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  viewAttendeesButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   editButton: {
     flex: 1,
@@ -1937,5 +2118,104 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  attendeesModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 800,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  attendeesModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  attendeesModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  closeModalButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  eventInfoSection: {
+    padding: 20,
+    backgroundColor: nospiColors.purpleLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  eventInfoDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  emptyAttendeesContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyAttendeesText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  attendeesList: {
+    flex: 1,
+    padding: 20,
+  },
+  attendeeItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attendeeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  attendeeNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginRight: 8,
+  },
+  attendeeName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  attendeeDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  attendeeStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
   },
 });
