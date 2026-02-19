@@ -10,8 +10,8 @@
  * - Game state persists across tab changes and page reloads
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Easing, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Easing, Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +63,16 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const WHEEL_SIZE = Math.min(SCREEN_WIDTH - 48, 360);
+
+// Vibrant colors for wheel segments (TV-style)
+const SEGMENT_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+  '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788',
+  '#FF8FAB', '#6C5CE7', '#00B894', '#FDCB6E', '#E17055',
+];
+
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
@@ -72,8 +82,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [questionsAnsweredInLevel, setQuestionsAnsweredInLevel] = useState(0);
   const [totalQuestionsPerParticipant] = useState(3);
   const [showRoulette, setShowRoulette] = useState(false);
-  const [rouletteAnimation] = useState(new Animated.Value(0));
-  const [arrowRotation] = useState(new Animated.Value(0));
+  const wheelRotation = useRef(new Animated.Value(0)).current;
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hasRated, setHasRated] = useState(false);
   const [userVote, setUserVote] = useState<'keep' | 'up' | null>(null);
@@ -262,18 +271,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
 
     setIsStartingRound(true);
-    console.log('Starting roulette animation');
+    console.log('Starting TV-style roulette animation');
     setShowRoulette(true);
     setHasRated(false);
     setUserRating(null);
     
-    // Start arrow rotation animation (spins multiple times)
-    arrowRotation.setValue(0);
+    // Calculate target participant index
+    const targetIndex = Math.floor(Math.random() * activeParticipants.length);
+    const degreesPerSegment = 360 / activeParticipants.length;
     
-    Animated.timing(arrowRotation, {
-      toValue: 1,
-      duration: 3000,
-      easing: Easing.out(Easing.cubic),
+    // Calculate rotation: multiple full spins + target position
+    // We want the arrow (pointing up) to land on the target segment
+    const extraSpins = 5 + Math.floor(Math.random() * 3); // 5-7 full spins
+    const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
+    
+    // Reset wheel rotation
+    wheelRotation.setValue(0);
+    
+    // Start TV-style animation: fast start, slow suspenseful stop
+    Animated.timing(wheelRotation, {
+      toValue: targetRotation,
+      duration: 6000, // 6 seconds for dramatic effect
+      easing: Easing.out(Easing.cubic), // Starts fast, slows down dramatically
       useNativeDriver: true,
     }).start();
 
@@ -325,7 +344,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // We just need to wait for the animation to finish
       setTimeout(() => {
         setIsStartingRound(false);
-      }, 3000);
+      }, 6000);
 
     } catch (error) {
       console.error('Error starting round:', error);
@@ -435,10 +454,80 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   };
 
-  const arrowRotate = arrowRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '1800deg'], // 5 full rotations
+  const wheelRotate = wheelRotation.interpolate({
+    inputRange: [0, 360],
+    outputRange: ['0deg', '360deg'],
   });
+
+  const renderTVStyleWheel = () => {
+    const participantCount = activeParticipants.length;
+    const degreesPerSegment = 360 / participantCount;
+
+    return (
+      <View style={styles.tvWheelContainer}>
+        {/* Animated Wheel */}
+        <Animated.View
+          style={[
+            styles.tvWheel,
+            {
+              transform: [{ rotate: wheelRotate }],
+            },
+          ]}
+        >
+          {/* Render colored segments */}
+          {activeParticipants.map((participant, index) => {
+            const startAngle = index * degreesPerSegment;
+            const segmentColor = SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+
+            return (
+              <View
+                key={participant.id}
+                style={[
+                  styles.wheelSegment,
+                  {
+                    transform: [
+                      { rotate: `${startAngle}deg` },
+                    ],
+                  },
+                ]}
+              >
+                <View style={[styles.segmentInner, { backgroundColor: segmentColor }]}>
+                  {/* Participant photo */}
+                  {participant.profile_photo_url ? (
+                    <Image
+                      source={{ uri: participant.profile_photo_url }}
+                      style={styles.participantPhoto}
+                    />
+                  ) : (
+                    <View style={styles.participantPhotoPlaceholder}>
+                      <Text style={styles.participantInitial}>
+                        {participant.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Participant name */}
+                  <Text style={styles.segmentName} numberOfLines={1}>
+                    {participant.name}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Center circle */}
+          <View style={styles.centerCircle}>
+            <Text style={styles.centerText}>NOSPI</Text>
+          </View>
+        </Animated.View>
+
+        {/* Fixed arrow pointing up */}
+        <View style={styles.fixedArrowContainer}>
+          <View style={styles.arrowTriangle} />
+        </View>
+      </View>
+    );
+  };
 
   if (gamePhase === 'ready') {
     return (
@@ -480,66 +569,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }
 
   if (gamePhase === 'roulette' || showRoulette) {
-    const displayName = selectedParticipant?.name || '';
-    const participantCount = activeParticipants.length;
-    const anglePerParticipant = 360 / participantCount;
-
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a1a2e', '#16213e', '#0f3460']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.rouletteContainer}>
-          <Text style={styles.rouletteTitle}>Ronda {currentRound}</Text>
-          <Text style={styles.rouletteSubtitle}>Girando la ruleta...</Text>
+          <Text style={styles.rouletteTitle}>🎰 Ronda {currentRound}</Text>
+          <Text style={styles.rouletteSubtitle}>¡Girando la ruleta!</Text>
 
-          <View style={styles.rouletteWheelContainer}>
-            {/* Wheel with participant names */}
-            <View style={styles.rouletteWheel}>
-              {activeParticipants.map((participant, index) => {
-                const angle = index * anglePerParticipant;
-                const radius = 100;
-                const x = Math.cos((angle - 90) * Math.PI / 180) * radius;
-                const y = Math.sin((angle - 90) * Math.PI / 180) * radius;
-                
-                return (
-                  <View
-                    key={index}
-                    style={[
-                      styles.participantNameOnWheel,
-                      {
-                        transform: [
-                          { translateX: x },
-                          { translateY: y },
-                        ],
-                      },
-                    ]}
-                  >
-                    <Text style={styles.participantNameText}>{participant.name}</Text>
-                  </View>
-                );
-              })}
-            </View>
+          {renderTVStyleWheel()}
 
-            {/* Center arrow that rotates */}
-            <Animated.View 
-              style={[
-                styles.arrowContainer,
-                { transform: [{ rotate: arrowRotate }] }
-              ]}
-            >
-              <Text style={styles.arrowIcon}>➤</Text>
-            </Animated.View>
+          <View style={styles.suspenseCard}>
+            <Text style={styles.suspenseText}>✨ Generando suspenso... ✨</Text>
           </View>
-
-          {selectedParticipant && !showRoulette && displayName && (
-            <View style={styles.selectedCard}>
-              <Text style={styles.selectedTitle}>La ruleta eligió a</Text>
-              <Text style={styles.selectedName}>{displayName}</Text>
-            </View>
-          )}
         </View>
       </LinearGradient>
     );
@@ -954,89 +999,148 @@ const styles = StyleSheet.create({
   rouletteTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
   rouletteSubtitle: {
     fontSize: 18,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 40,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
-  rouletteWheelContainer: {
-    width: 280,
-    height: 280,
+  tvWheelContainer: {
+    width: WHEEL_SIZE,
+    height: WHEEL_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
   },
-  rouletteWheel: {
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  tvWheel: {
+    width: WHEEL_SIZE,
+    height: WHEEL_SIZE,
+    borderRadius: WHEEL_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 4,
-    borderColor: nospiColors.purpleMid,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  participantNameOnWheel: {
+  wheelSegment: {
     position: 'absolute',
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 2,
-    borderColor: nospiColors.purpleMid,
+    width: WHEEL_SIZE,
+    height: WHEEL_SIZE / 2,
+    top: 0,
+    left: 0,
+    transformOrigin: 'center bottom',
   },
-  participantNameText: {
-    fontSize: 14,
+  segmentInner: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    paddingTop: 20,
+    borderTopLeftRadius: WHEEL_SIZE / 2,
+    borderTopRightRadius: WHEEL_SIZE / 2,
+  },
+  participantPhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    marginBottom: 8,
+  },
+  participantPhotoPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    marginBottom: 8,
+  },
+  participantInitial: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
-  arrowContainer: {
+  segmentName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+    paddingHorizontal: 4,
+  },
+  centerCircle: {
     position: 'absolute',
     width: 80,
     height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 40,
-    shadowColor: nospiColors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
+    borderWidth: 4,
+    borderColor: '#FFD700',
   },
-  arrowIcon: {
-    fontSize: 40,
-    color: '#FFFFFF',
-  },
-  selectedCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 40,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  selectedTitle: {
-    fontSize: 18,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  selectedName: {
-    fontSize: 32,
+  centerText: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: nospiColors.purpleMid,
+    color: nospiColors.purpleDark,
+  },
+  fixedArrowContainer: {
+    position: 'absolute',
+    top: -20,
+    width: 0,
+    height: 0,
+    zIndex: 10,
+  },
+  arrowTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 20,
+    borderRightWidth: 20,
+    borderBottomWidth: 40,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#FFD700',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  suspenseCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 20,
+  },
+  suspenseText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   selectedParticipantCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
