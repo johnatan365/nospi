@@ -841,10 +841,16 @@ export default function AdminPanelScreen() {
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Ciudad</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Género</Text>
             <Text style={[styles.tableHeaderText, { flex: 1 }]}>Interesado en</Text>
+            <Text style={[styles.tableHeaderText, { flex: 1 }]}>Rango de Edad</Text>
           </View>
           {users.map((user) => {
             const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
             const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
+            
+            // Calculate age range preference display
+            const ageRangeMin = (user as any).age_range_min || 18;
+            const ageRangeMax = (user as any).age_range_max || 99;
+            const ageRangeText = `${ageRangeMin}-${ageRangeMax}`;
             
             return (
               <View key={user.id} style={styles.tableRow}>
@@ -854,6 +860,7 @@ export default function AdminPanelScreen() {
                 <Text style={[styles.tableCell, { flex: 1 }]}>{user.city}</Text>
                 <Text style={[styles.tableCell, { flex: 1 }]}>{genderText}</Text>
                 <Text style={[styles.tableCell, { flex: 1 }]}>{interestedInText}</Text>
+                <Text style={[styles.tableCell, { flex: 1, fontWeight: 'bold', color: nospiColors.purpleDark }]}>{ageRangeText}</Text>
               </View>
             );
           })}

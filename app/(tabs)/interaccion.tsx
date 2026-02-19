@@ -487,29 +487,9 @@ export default function InteraccionScreen() {
       console.log('Event ID:', eventId);
       console.log('Timestamp:', new Date().toISOString());
       
-      // FIXED QUERY: Explicit JOIN with users table to get name, email, phone, city
+      // CRITICAL FIX: Use RPC function to bypass RLS and get ALL confirmed participants
       const { data, error } = await supabase
-        .from('event_participants')
-        .select(`
-          id,
-          user_id,
-          event_id,
-          confirmed,
-          check_in_time,
-          is_presented,
-          presented_at,
-          profiles:users (
-            id,
-            name,
-            email,
-            phone,
-            city,
-            profile_photo_url
-          )
-        `)
-        .eq('event_id', eventId)
-        .eq('confirmed', true)
-        .order('check_in_time', { ascending: true });
+        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
         console.error('Error loading participants:', error);
@@ -523,18 +503,18 @@ export default function InteraccionScreen() {
       const participants: Participant[] = (data || [])
         .filter((item: any) => {
           // CRITICAL: Filter out participants without profile data
-          const hasProfile = item.profiles && item.profiles.name;
+          const hasProfile = item.user_name;
           if (!hasProfile) {
             console.warn('Participant without profile data:', item.user_id);
           }
           return hasProfile;
         })
         .map((item: any) => {
-          const fullName = item.profiles.name;
-          const email = item.profiles.email || '';
-          const phone = item.profiles.phone || '';
-          const city = item.profiles.city || '';
-          const userPhoto = item.profiles.profile_photo_url || null;
+          const fullName = item.user_name;
+          const email = item.user_email || '';
+          const phone = item.user_phone || '';
+          const city = item.user_city || '';
+          const userPhoto = item.user_profile_photo_url || null;
           
           console.log('Processing participant:', {
             id: item.id,
@@ -553,7 +533,7 @@ export default function InteraccionScreen() {
             is_presented: item.is_presented || false,
             presented_at: item.presented_at || null,
             profiles: {
-              id: item.profiles.id,
+              id: item.user_id,
               name: fullName,
               email: email,
               phone: phone,

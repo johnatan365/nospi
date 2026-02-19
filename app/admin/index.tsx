@@ -535,6 +535,11 @@ export default function AdminPanelScreen() {
           const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
           const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
           
+          // Calculate age range preference display
+          const ageRangeMin = (user as any).age_range_min || 18;
+          const ageRangeMax = (user as any).age_range_max || 99;
+          const ageRangeText = `${ageRangeMin} - ${ageRangeMax} años`;
+          
           return (
             <View key={user.id} style={styles.listItem}>
               <Text style={styles.listItemTitle}>{user.name}</Text>
@@ -546,6 +551,10 @@ export default function AdminPanelScreen() {
               <Text style={styles.listItemDetail}>Género: {genderText}</Text>
               <Text style={styles.listItemDetail}>Interesado en: {interestedInText}</Text>
               {user.age && <Text style={styles.listItemDetail}>Edad: {user.age} años</Text>}
+              <View style={styles.ageRangeHighlight}>
+                <Text style={styles.ageRangeLabel}>🎯 Rango de edad preferido:</Text>
+                <Text style={styles.ageRangeValue}>{ageRangeText}</Text>
+              </View>
             </View>
           );
         })}
@@ -1230,6 +1239,25 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#92400E',
     letterSpacing: 2,
+  },
+  ageRangeHighlight: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: '#6366F1',
+  },
+  ageRangeLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#3730A3',
+    marginBottom: 4,
+  },
+  ageRangeValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#3730A3',
   },
   statusBadge: {
     paddingHorizontal: 12,
