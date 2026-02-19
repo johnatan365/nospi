@@ -130,7 +130,7 @@ export default function AdminPanelScreen() {
       setLoading(true);
       console.log('Loading admin dashboard data...');
 
-      // Load events - FIXED: Removed attendance_code which doesn't exist
+      // Load events
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, address, start_time, max_participants, current_participants, status, event_status, confirmation_code')
@@ -140,76 +140,86 @@ export default function AdminPanelScreen() {
         console.error('Error loading events:', eventsError);
       } else {
         console.log('✅ Events loaded successfully:', eventsData?.length || 0);
-        console.log('Events with status:', eventsData?.map(e => ({ id: e.id, name: e.name, event_status: e.event_status })));
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
         const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
         setActiveEvents(activeCount);
       }
 
-      // Load users
+      // Load users using the secure admin function
+      console.log('Loading users via admin function...');
       const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('id, name, email, phone, city, country, interested_in, gender, age')
-        .order('name', { ascending: true });
+        .rpc('get_all_users_for_admin');
 
       if (usersError) {
         console.error('Error loading users:', usersError);
+        Alert.alert('Error', 'No se pudieron cargar los usuarios: ' + usersError.message);
       } else {
+        console.log('✅ Users loaded successfully:', usersData?.length || 0);
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
       }
 
-      // Load appointments
-      const { data: appointmentsData, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          user_id,
-          event_id,
-          status,
-          payment_status,
-          created_at,
-          users!inner (
-            id,
-            name,
-            email,
-            phone,
-            city,
-            country,
-            interested_in,
-            gender,
-            age
-          ),
-          events!inner (
-            id,
-            name,
-            city,
-            type,
-            date,
-            time,
-            location,
-            address,
-            start_time,
-            max_participants,
-            current_participants,
-            status,
-            event_status,
-            confirmation_code
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Load appointments using the secure admin function
+      console.log('Loading appointments via admin function...');
+      const { data: appointmentsRawData, error: appointmentsError } = await supabase
+        .rpc('get_all_appointments_for_admin');
 
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
-        setAppointments(appointmentsData || []);
-        setTotalAppointments(appointmentsData?.length || 0);
+        console.log('✅ Appointments loaded successfully:', appointmentsRawData?.length || 0);
+        
+        // Transform the flat data structure into the nested structure expected by the UI
+        const transformedAppointments = appointmentsRawData?.map((apt: any) => ({
+          id: apt.id,
+          user_id: apt.user_id,
+          event_id: apt.event_id,
+          status: apt.status,
+          payment_status: apt.payment_status,
+          created_at: apt.created_at,
+          users: {
+            id: apt.user_id,
+            name: apt.user_name,
+            email: apt.user_email,
+            phone: apt.user_phone,
+            city: apt.user_city,
+            country: apt.user_country,
+            interested_in: apt.user_interested_in,
+            gender: apt.user_gender,
+            age: apt.user_age,
+          },
+          events: {
+            id: apt.event_id,
+            name: apt.event_name,
+            city: apt.event_city,
+            type: apt.event_type,
+            date: apt.event_date,
+            time: apt.event_time,
+            confirmation_code: apt.event_confirmation_code,
+            location: '',
+            location_name: '',
+            location_address: '',
+            maps_link: '',
+            is_location_revealed: false,
+            address: null,
+            start_time: null,
+            max_participants: 0,
+            current_participants: 0,
+            status: '',
+            event_status: 'published' as 'draft' | 'published' | 'closed',
+            description: '',
+          },
+        })) || [];
+        
+        setAppointments(transformedAppointments);
+        setTotalAppointments(transformedAppointments.length);
       }
 
       console.log('Dashboard data loaded successfully');
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      Alert.alert('Error', 'Error inesperado al cargar datos: ' + String(error));
     } finally {
       setLoading(false);
     }
@@ -223,28 +233,7 @@ export default function AdminPanelScreen() {
 
     try {
       const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          user_id,
-          event_id,
-          status,
-          payment_status,
-          created_at,
-          users!inner (
-            id,
-            name,
-            email,
-            phone,
-            city,
-            country,
-            interested_in,
-            gender,
-            age
-          )
-        `)
-        .eq('event_id', event.id)
-        .order('created_at', { ascending: false });
+        .rpc('get_event_attendees_for_admin', { p_event_id: event.id });
 
       if (error) {
         console.error('Error loading event attendees:', error);
@@ -252,7 +241,29 @@ export default function AdminPanelScreen() {
         setEventAttendees([]);
       } else {
         console.log('✅ Attendees loaded:', data?.length || 0);
-        setEventAttendees(data || []);
+        
+        // Transform the flat data structure into the nested structure
+        const transformedAttendees = data?.map((att: any) => ({
+          id: att.id,
+          user_id: att.user_id,
+          event_id: att.event_id,
+          status: att.status,
+          payment_status: att.payment_status,
+          created_at: att.created_at,
+          users: {
+            id: att.user_id,
+            name: att.user_name,
+            email: att.user_email,
+            phone: att.user_phone,
+            city: att.user_city,
+            country: att.user_country,
+            interested_in: att.user_interested_in,
+            gender: att.user_gender,
+            age: att.user_age,
+          },
+        })) || [];
+        
+        setEventAttendees(transformedAttendees);
       }
     } catch (error) {
       console.error('Failed to load attendees:', error);
@@ -327,7 +338,6 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // CRITICAL: Check if data was actually returned
       if (!data || data.length === 0) {
         console.error('⚠️ INSERT RETURNED NO DATA - Event was NOT created!');
         Alert.alert('Error', 'El evento NO fue creado. Por favor verifica las políticas RLS y los logs de la base de datos.');
@@ -335,7 +345,6 @@ export default function AdminPanelScreen() {
       }
 
       console.log('✅ Event created successfully:', data);
-      console.log('Created event ID:', data[0].id);
       Alert.alert('Éxito', 'Evento creado exitosamente');
       setShowCreateEventModal(false);
       setNewEvent({
@@ -517,7 +526,7 @@ export default function AdminPanelScreen() {
   const renderUsers = () => {
     return (
       <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Usuarios Registrados</Text>
+        <Text style={styles.sectionTitle}>Usuarios Registrados ({users.length})</Text>
         {users.map((user) => {
           const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
           const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
