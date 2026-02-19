@@ -114,6 +114,40 @@ export default function AdminPanelScreen() {
     }
   }, [isAuthenticated, currentView]);
 
+  // Realtime subscription for events table (to auto-refresh when events are created/updated)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    console.log('=== ADMIN EVENTS REALTIME SUBSCRIPTION SETUP ===');
+
+    const eventsChannel = supabase
+      .channel('admin_events_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'events',
+        },
+        (payload) => {
+          console.log('=== ADMIN EVENTS REALTIME UPDATE RECEIVED ===');
+          console.log('Event:', payload.eventType);
+          console.log('Payload:', JSON.stringify(payload, null, 2));
+          
+          // Reload dashboard data when events change
+          loadDashboardData();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Admin events realtime subscription status:', status);
+      });
+
+    return () => {
+      console.log('Cleaning up admin events realtime subscription');
+      supabase.removeChannel(eventsChannel);
+    };
+  }, [isAuthenticated]);
+
   // Realtime subscription for event participants
   useEffect(() => {
     if (!isAuthenticated || !selectedEventForMonitoring) return;
