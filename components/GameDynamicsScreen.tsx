@@ -225,6 +225,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               setHasRated(false);
               setUserRating(null);
             } else if (newEvent.game_phase === 'roulette') {
+              console.log('Roulette phase activated by server');
               setGamePhase('roulette');
               setShowRoulette(true);
             }
@@ -248,9 +249,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment?.event_id, activeParticipants]);
 
   const startGame = async () => {
+    console.log('=== USER CLICKED INICIAR DINÁMICA ===');
     console.log('Starting game - Round 1');
     setCurrentRound(1);
+    
+    // CRITICAL FIX: Set game phase to roulette IMMEDIATELY to prevent unmounting
     setGamePhase('roulette');
+    setShowRoulette(true);
+    
+    // Then start the roulette animation and backend call
     await startRoulette();
   };
 
@@ -272,7 +279,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     setIsStartingRound(true);
     console.log('Starting TV-style roulette animation');
+    
+    // CRITICAL: Ensure roulette is visible
     setShowRoulette(true);
+    setGamePhase('roulette');
     setHasRated(false);
     setUserRating(null);
     
@@ -294,7 +304,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       duration: 6000, // 6 seconds for dramatic effect
       easing: Easing.out(Easing.cubic), // Starts fast, slows down dramatically
       useNativeDriver: true,
-    }).start();
+    }).start(({ finished }) => {
+      console.log('Roulette animation finished:', finished);
+      // Animation completed - the Realtime subscription will handle the UI update
+    });
 
     try {
       // Call Edge Function to select participant and question
@@ -308,7 +321,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (!accessToken) {
         console.error('No access token available');
         setIsStartingRound(false);
-        setShowRoulette(false);
         return;
       }
 
@@ -331,7 +343,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const errorData = await response.json();
         console.error('Edge Function error:', errorData);
         setIsStartingRound(false);
-        setShowRoulette(false);
         return;
       }
 
@@ -349,7 +360,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } catch (error) {
       console.error('Error starting round:', error);
       setIsStartingRound(false);
-      setShowRoulette(false);
     }
   };
 
@@ -529,6 +539,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   };
 
+  // CRITICAL FIX: Always render based on current gamePhase state, not conditional logic
+  // This prevents the component from unmounting during state transitions
+  
   if (gamePhase === 'ready') {
     return (
       <LinearGradient
@@ -568,6 +581,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
+  // CRITICAL: Render roulette when gamePhase is 'roulette' OR showRoulette is true
   if (gamePhase === 'roulette' || showRoulette) {
     return (
       <LinearGradient
