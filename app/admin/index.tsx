@@ -111,7 +111,7 @@ export default function AdminPanelScreen() {
       setLoading(true);
       console.log('Loading admin dashboard data...');
 
-      // Load events - EXPLICITLY including all fields
+      // Load events - FIXED: Removed attendance_code which doesn't exist
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, address, start_time, max_participants, current_participants, status, event_status, confirmation_code')
@@ -120,7 +120,7 @@ export default function AdminPanelScreen() {
       if (eventsError) {
         console.error('Error loading events:', eventsError);
       } else {
-        console.log('Events loaded:', eventsData?.length || 0);
+        console.log('✅ Events loaded successfully:', eventsData?.length || 0);
         console.log('Events with status:', eventsData?.map(e => ({ id: e.id, name: e.name, event_status: e.event_status })));
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
