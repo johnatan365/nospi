@@ -73,6 +73,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [totalQuestionsPerParticipant] = useState(3);
   const [showRoulette, setShowRoulette] = useState(false);
   const [rouletteAnimation] = useState(new Animated.Value(0));
+  const [arrowRotation] = useState(new Animated.Value(0));
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hasRated, setHasRated] = useState(false);
   const [userVote, setUserVote] = useState<'keep' | 'up' | null>(null);
@@ -266,12 +267,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setHasRated(false);
     setUserRating(null);
     
-    // Start roulette animation
-    rouletteAnimation.setValue(0);
+    // Start arrow rotation animation (spins multiple times)
+    arrowRotation.setValue(0);
     
-    Animated.timing(rouletteAnimation, {
+    Animated.timing(arrowRotation, {
       toValue: 1,
-      duration: 2500,
+      duration: 3000,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -324,7 +325,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // We just need to wait for the animation to finish
       setTimeout(() => {
         setIsStartingRound(false);
-      }, 2500);
+      }, 3000);
 
     } catch (error) {
       console.error('Error starting round:', error);
@@ -434,9 +435,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   };
 
-  const spin = rouletteAnimation.interpolate({
+  const arrowRotate = arrowRotation.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '1440deg'],
+    outputRange: ['0deg', '1800deg'], // 5 full rotations
   });
 
   if (gamePhase === 'ready') {
@@ -457,16 +458,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.successMessage}>
               Todos los participantes activos se han presentado. La dinámica del juego está lista para comenzar.
             </Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Participantes Activos: {activeParticipants.length}</Text>
-            <Text style={styles.infoCardText}>El juego está sincronizado en tiempo real:</Text>
-            <Text style={styles.infoCardBullet}>• Una sola ronda activa para todos</Text>
-            <Text style={styles.infoCardBullet}>• Misma pregunta para todos</Text>
-            <Text style={styles.infoCardBullet}>• Mismo participante elegido</Text>
-            <Text style={styles.infoCardBullet}>• Sincronización automática</Text>
-            <Text style={styles.infoCardBullet}>• Estado persistente (no se pierde al cambiar de pestaña)</Text>
           </View>
 
           <View style={styles.levelCard}>
@@ -490,6 +481,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   if (gamePhase === 'roulette' || showRoulette) {
     const displayName = selectedParticipant?.name || '';
+    const participantCount = activeParticipants.length;
+    const anglePerParticipant = 360 / participantCount;
 
     return (
       <LinearGradient
@@ -502,20 +495,43 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <Text style={styles.rouletteTitle}>Ronda {currentRound}</Text>
           <Text style={styles.rouletteSubtitle}>Girando la ruleta...</Text>
 
-          <Animated.View style={[styles.rouletteWheel, { transform: [{ rotate: spin }] }]}>
-            <View style={styles.rouletteCenter}>
-              <Text style={styles.rouletteCenterText}>🎯</Text>
+          <View style={styles.rouletteWheelContainer}>
+            {/* Wheel with participant names */}
+            <View style={styles.rouletteWheel}>
+              {activeParticipants.map((participant, index) => {
+                const angle = index * anglePerParticipant;
+                const radius = 100;
+                const x = Math.cos((angle - 90) * Math.PI / 180) * radius;
+                const y = Math.sin((angle - 90) * Math.PI / 180) * radius;
+                
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.participantNameOnWheel,
+                      {
+                        transform: [
+                          { translateX: x },
+                          { translateY: y },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text style={styles.participantNameText}>{participant.name}</Text>
+                  </View>
+                );
+              })}
             </View>
-          </Animated.View>
 
-          <View style={styles.participantsList}>
-            {activeParticipants.map((participant, index) => (
-              <React.Fragment key={index}>
-                <View style={styles.rouletteParticipant}>
-                  <Text style={styles.rouletteParticipantName}>{participant.name}</Text>
-                </View>
-              </React.Fragment>
-            ))}
+            {/* Center arrow that rotates */}
+            <Animated.View 
+              style={[
+                styles.arrowContainer,
+                { transform: [{ rotate: arrowRotate }] }
+              ]}
+            >
+              <Text style={styles.arrowIcon}>➤</Text>
+            </Animated.View>
           </View>
 
           {selectedParticipant && !showRoulette && displayName && (
@@ -885,29 +901,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  infoCard: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  infoCardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  infoCardText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  infoCardBullet: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    marginLeft: 8,
-    marginBottom: 4,
-  },
   levelCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
@@ -969,10 +962,17 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     marginBottom: 40,
   },
+  rouletteWheelContainer: {
+    width: 280,
+    height: 280,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
   rouletteWheel: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -981,35 +981,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
-    marginBottom: 40,
+    borderWidth: 4,
+    borderColor: nospiColors.purpleMid,
   },
-  rouletteCenter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: nospiColors.purpleMid,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rouletteCenterText: {
-    fontSize: 60,
-  },
-  participantsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  rouletteParticipant: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  participantNameOnWheel: {
+    position: 'absolute',
+    backgroundColor: nospiColors.purpleLight,
     borderRadius: 12,
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
   },
-  rouletteParticipantName: {
+  participantNameText: {
     fontSize: 14,
+    fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    fontWeight: '600',
+  },
+  arrowContainer: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 40,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  arrowIcon: {
+    fontSize: 40,
+    color: '#FFFFFF',
   },
   selectedCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
