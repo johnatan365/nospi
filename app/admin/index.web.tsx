@@ -67,7 +67,7 @@ type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime';
 
 export default function AdminPanelScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
@@ -108,8 +108,14 @@ export default function AdminPanelScreen() {
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('Admin panel loaded (Web version)');
+    console.log('Admin panel component mounted');
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('showPasswordModal:', showPasswordModal);
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) {
+      console.log('User authenticated, loading dashboard data');
       loadDashboardData();
     }
   }, [isAuthenticated, currentView]);
@@ -207,7 +213,7 @@ export default function AdminPanelScreen() {
       if (eventsError) {
         console.error('Error loading events:', eventsError);
       } else {
-        console.log('Events loaded with confirmation_code:', eventsData?.map(e => ({ id: e.id, name: e.name, confirmation_code: e.confirmation_code })));
+        console.log('Events loaded:', eventsData?.length);
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
         const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
@@ -223,7 +229,7 @@ export default function AdminPanelScreen() {
       if (usersError) {
         console.error('Error loading users:', usersError);
       } else {
-        console.log('Users loaded with interested_in:', usersData?.map(u => ({ id: u.id, name: u.name, interested_in: u.interested_in })));
+        console.log('Users loaded:', usersData?.length);
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
       }
@@ -269,7 +275,7 @@ export default function AdminPanelScreen() {
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
-        console.log('Appointments loaded with confirmation_code:', appointmentsData?.map(a => ({ id: a.id, event_confirmation_code: a.events.confirmation_code })));
+        console.log('Appointments loaded:', appointmentsData?.length);
         setAppointments(appointmentsData || []);
         setTotalAppointments(appointmentsData?.length || 0);
       }
@@ -316,15 +322,7 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      console.log('=== ADMIN PARTICIPANTS QUERY RESULT ===');
-      console.log('Total rows returned:', data?.length || 0);
-      console.log('Participants with interested_in:', data?.map(p => ({
-        name: p.users?.name,
-        interested_in: p.users?.interested_in,
-        confirmed: p.confirmed,
-        is_presented: p.is_presented
-      })));
-      
+      console.log('Participants loaded:', data?.length);
       setEventParticipants(data || []);
     } catch (error) {
       console.error('Failed to load event participants:', error);
@@ -390,9 +388,8 @@ export default function AdminPanelScreen() {
   };
 
   const handleSaveEvent = async () => {
-    console.log('handleSaveEvent called - Button pressed!');
+    console.log('handleSaveEvent called');
     console.log('Current eventForm state:', eventForm);
-    console.log('Editing event ID:', editingEventId);
 
     try {
       // Validate required fields
@@ -416,27 +413,18 @@ export default function AdminPanelScreen() {
         finalConfirmationCode = '1986';
       }
 
-      console.log('Date:', eventForm.date);
-      console.log('Time:', eventForm.time);
-      console.log('Confirmation Code:', finalConfirmationCode);
-
-      // Combine date and time in ISO format with timezone handling
+      // Combine date and time in ISO format
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
-      console.log('Combined date string:', combinedDateString);
-
       const combinedDate = new Date(combinedDateString);
-      console.log('Combined date object:', combinedDate);
 
       // Validate the date is valid
       if (isNaN(combinedDate.getTime())) {
         console.log('Validation failed - invalid date/time');
-        window.alert('Fecha u hora inválida. Asegúrate de que el formato sea correcto (Fecha: YYYY-MM-DD, Hora: HH:mm en formato 24 horas).');
+        window.alert('Fecha u hora inválida.');
         return;
       }
 
-      // Generate ISO string only after validation
       const isoDate = combinedDate.toISOString();
-      console.log('ISO date generated successfully:', isoDate);
 
       const eventData = {
         name: eventForm.name,
@@ -461,11 +449,10 @@ export default function AdminPanelScreen() {
       };
 
       console.log('Event data to save:', eventData);
-      console.log('confirmationCode:', finalConfirmationCode);
 
       if (editingEventId) {
         // Update existing event
-        console.log('Updating event:', editingEventId, eventData);
+        console.log('Updating event:', editingEventId);
         const { data, error } = await supabase
           .from('events')
           .update(eventData)
@@ -473,48 +460,40 @@ export default function AdminPanelScreen() {
           .select();
 
         if (error) {
-          console.error('Supabase error updating event:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          window.alert('Error al actualizar evento: ' + error.message + ' (Código: ' + error.code + ')');
+          console.error('Error updating event:', error);
+          window.alert('Error al actualizar evento: ' + error.message);
           return;
         }
 
-        // CRITICAL: Check if data was actually returned
         if (!data || data.length === 0) {
-          console.error('⚠️ UPDATE RETURNED NO DATA - Event may not have been updated!');
-          console.error('This could indicate an RLS policy issue or the event does not exist');
-          window.alert('⚠️ Advertencia: La actualización reportó éxito pero no devolvió datos. Por favor verifica manualmente que el evento se haya actualizado.');
+          console.error('Update returned no data');
+          window.alert('Advertencia: La actualización no devolvió datos.');
           return;
         }
 
-        console.log('✅ Event updated successfully:', data);
+        console.log('Event updated successfully');
         window.alert('Evento actualizado exitosamente');
       } else {
         // Create new event
-        console.log('Inserting event data:', eventData);
+        console.log('Creating new event');
         const { data, error } = await supabase
           .from('events')
           .insert([eventData])
           .select();
 
         if (error) {
-          console.error('Supabase error creating event:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          window.alert('Error al crear evento: ' + error.message + ' (Código: ' + error.code + ')');
+          console.error('Error creating event:', error);
+          window.alert('Error al crear evento: ' + error.message);
           return;
         }
 
-        // CRITICAL: Check if data was actually returned
         if (!data || data.length === 0) {
-          console.error('⚠️ INSERT RETURNED NO DATA - Event was NOT created!');
-          console.error('This could indicate an RLS policy issue, a database constraint violation, or a silent failure');
-          console.error('Event data that failed to insert:', eventData);
-          window.alert('⚠️ Error: El evento NO fue creado. La operación no devolvió datos. Por favor verifica las políticas RLS y los logs de la base de datos.');
+          console.error('Insert returned no data');
+          window.alert('Error: El evento NO fue creado.');
           return;
         }
 
-        console.log('✅ Event created successfully:', data);
-        console.log('Created event ID:', data[0].id);
+        console.log('Event created successfully');
         window.alert('Evento creado exitosamente');
       }
 
@@ -537,8 +516,8 @@ export default function AdminPanelScreen() {
       });
       loadDashboardData();
     } catch (error) {
-      console.error('Failed to save event - exception:', error);
-      window.alert('Error inesperado al guardar evento: ' + String(error));
+      console.error('Failed to save event:', error);
+      window.alert('Error inesperado: ' + String(error));
     }
   };
 
@@ -568,13 +547,12 @@ export default function AdminPanelScreen() {
   };
 
   const handleRevealLocation = async (eventId: string) => {
-    const confirmed = window.confirm('¿Revelar la ubicación de este evento? Los usuarios inscritos podrán verla en la app.');
+    const confirmed = window.confirm('¿Revelar la ubicación de este evento?');
     if (!confirmed) return;
 
     try {
       console.log('Revealing location for event:', eventId);
       
-      // Get the event first to update the location field
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
         .select('*')
@@ -587,7 +565,6 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // Update both is_location_revealed and location field
       const { error } = await supabase
         .from('events')
         .update({ 
@@ -603,7 +580,7 @@ export default function AdminPanelScreen() {
       }
 
       console.log('Location revealed successfully');
-      window.alert('Ubicación revelada exitosamente. Los usuarios inscritos ahora pueden ver la ubicación en sus citas.');
+      window.alert('Ubicación revelada exitosamente');
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);
@@ -611,7 +588,7 @@ export default function AdminPanelScreen() {
   };
 
   const handleCloseEvent = async (eventId: string) => {
-    const confirmed = window.confirm('¿Cerrar este evento? Dejará de mostrarse públicamente pero seguirá visible para usuarios inscritos.');
+    const confirmed = window.confirm('¿Cerrar este evento?');
     if (!confirmed) return;
 
     try {
@@ -636,7 +613,7 @@ export default function AdminPanelScreen() {
   };
 
   const handlePublishEvent = async (eventId: string) => {
-    const confirmed = window.confirm('¿Publicar este evento? Será visible para todos los usuarios.');
+    const confirmed = window.confirm('¿Publicar este evento?');
     if (!confirmed) return;
 
     try {
@@ -986,367 +963,318 @@ export default function AdminPanelScreen() {
     );
   };
 
+  console.log('Rendering admin panel, showPasswordModal:', showPasswordModal, 'isAuthenticated:', isAuthenticated);
+
   if (showPasswordModal) {
     return (
-      <>
+      <View style={styles.fullScreenContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LinearGradient
-          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-          style={styles.gradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
-          <View style={styles.passwordContainer}>
-            <Text style={styles.passwordTitle}>🔐 Panel de Administración</Text>
-            <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Contraseña"
-              secureTextEntry
-              value={adminPassword}
-              onChangeText={setAdminPassword}
-              autoCapitalize="none"
-              onSubmitEditing={handlePasswordSubmit}
-            />
-            <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
-              <Text style={styles.passwordButtonText}>Acceder</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.backButtonText}>← Volver</Text>
-            </TouchableOpacity>
-            <Text style={styles.passwordHint}>Contraseña por defecto: nospi2024</Text>
-          </View>
-        </LinearGradient>
-      </>
+        <View style={styles.passwordContainer}>
+          <Text style={styles.passwordTitle}>🔐 Panel de Administración</Text>
+          <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Contraseña"
+            secureTextEntry
+            value={adminPassword}
+            onChangeText={setAdminPassword}
+            autoCapitalize="none"
+            onSubmitEditing={handlePasswordSubmit}
+          />
+          <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
+            <Text style={styles.passwordButtonText}>Acceder</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>← Volver</Text>
+          </TouchableOpacity>
+          <Text style={styles.passwordHint}>Contraseña por defecto: nospi2024</Text>
+        </View>
+      </View>
     );
   }
 
   if (loading) {
     return (
-      <>
+      <View style={styles.fullScreenContainer}>
         <Stack.Screen options={{ title: 'Panel de Administración' }} />
-        <LinearGradient
-          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-          style={styles.gradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-            <Text style={styles.loadingText}>Cargando datos...</Text>
-          </View>
-        </LinearGradient>
-      </>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={styles.loadingText}>Cargando datos...</Text>
+        </View>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.fullScreenContainer}>
       <Stack.Screen options={{ title: 'Panel de Administración - Nospi' }} />
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.container}>
-          {/* Navigation Tabs */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'dashboard' && styles.tabActive]}
-              onPress={() => setCurrentView('dashboard')}
-            >
-              <Text style={[styles.tabText, currentView === 'dashboard' && styles.tabTextActive]}>
-                📊 Dashboard
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'events' && styles.tabActive]}
-              onPress={() => setCurrentView('events')}
-            >
-              <Text style={[styles.tabText, currentView === 'events' && styles.tabTextActive]}>
-                🎉 Eventos
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'users' && styles.tabActive]}
-              onPress={() => setCurrentView('users')}
-            >
-              <Text style={[styles.tabText, currentView === 'users' && styles.tabTextActive]}>
-                👥 Usuarios
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'appointments' && styles.tabActive]}
-              onPress={() => setCurrentView('appointments')}
-            >
-              <Text style={[styles.tabText, currentView === 'appointments' && styles.tabTextActive]}>
-                📅 Citas
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'realtime' && styles.tabActive]}
-              onPress={() => setCurrentView('realtime')}
-            >
-              <Text style={[styles.tabText, currentView === 'realtime' && styles.tabTextActive]}>
-                🔴 En Vivo
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Content */}
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-            {currentView === 'dashboard' && renderDashboard()}
-            {currentView === 'events' && renderEvents()}
-            {currentView === 'users' && renderUsers()}
-            {currentView === 'appointments' && renderAppointments()}
-            {currentView === 'realtime' && renderRealtime()}
-          </ScrollView>
+      <View style={styles.container}>
+        {/* Navigation Tabs */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'dashboard' && styles.tabActive]}
+            onPress={() => setCurrentView('dashboard')}
+          >
+            <Text style={[styles.tabText, currentView === 'dashboard' && styles.tabTextActive]}>
+              📊 Dashboard
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'events' && styles.tabActive]}
+            onPress={() => setCurrentView('events')}
+          >
+            <Text style={[styles.tabText, currentView === 'events' && styles.tabTextActive]}>
+              🎉 Eventos
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'users' && styles.tabActive]}
+            onPress={() => setCurrentView('users')}
+          >
+            <Text style={[styles.tabText, currentView === 'users' && styles.tabTextActive]}>
+              👥 Usuarios
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'appointments' && styles.tabActive]}
+            onPress={() => setCurrentView('appointments')}
+          >
+            <Text style={[styles.tabText, currentView === 'appointments' && styles.tabTextActive]}>
+              📅 Citas
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'realtime' && styles.tabActive]}
+            onPress={() => setCurrentView('realtime')}
+          >
+            <Text style={[styles.tabText, currentView === 'realtime' && styles.tabTextActive]}>
+              🔴 En Vivo
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Create/Edit Event Modal */}
-        <Modal
-          visible={showEventModal}
-          transparent
-          animationType="slide"
-          onRequestClose={() => {
-            console.log('Modal close requested');
-            setShowEventModal(false);
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <ScrollView contentContainerStyle={styles.modalScrollContent}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>
-                  {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
-                </Text>
+        {/* Content */}
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          {currentView === 'dashboard' && renderDashboard()}
+          {currentView === 'events' && renderEvents()}
+          {currentView === 'users' && renderUsers()}
+          {currentView === 'appointments' && renderAppointments()}
+          {currentView === 'realtime' && renderRealtime()}
+        </ScrollView>
+      </View>
 
-                <Text style={styles.inputLabel}>Nombre del Evento *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: Encuentro de Solteros"
-                  value={eventForm.name}
-                  onChangeText={(text) => {
-                    console.log('Name changed:', text);
-                    setEventForm({ ...eventForm, name: text });
-                  }}
-                />
+      {/* Create/Edit Event Modal */}
+      <Modal
+        visible={showEventModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('Modal close requested');
+          setShowEventModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
+              </Text>
 
-                <Text style={styles.inputLabel}>Ciudad *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: Bogotá"
-                  value={eventForm.city}
-                  onChangeText={(text) => {
-                    console.log('City changed:', text);
-                    setEventForm({ ...eventForm, city: text });
-                  }}
-                />
+              <Text style={styles.inputLabel}>Nombre del Evento *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Encuentro de Solteros"
+                value={eventForm.name}
+                onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
+              />
 
-                <Text style={styles.inputLabel}>Descripción Breve</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Descripción del evento"
-                  value={eventForm.description}
-                  onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
-                  multiline
-                  numberOfLines={3}
-                />
+              <Text style={styles.inputLabel}>Ciudad *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bogotá"
+                value={eventForm.city}
+                onChangeText={(text) => setEventForm({ ...eventForm, city: text })}
+              />
 
-                <Text style={styles.inputLabel}>Tipo de Evento</Text>
-                <View style={styles.typeSelector}>
-                  <TouchableOpacity
+              <Text style={styles.inputLabel}>Descripción Breve</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Descripción del evento"
+                value={eventForm.description}
+                onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.inputLabel}>Tipo de Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'bar' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'bar' })}
+                >
+                  <Text
                     style={[
-                      styles.typeButton,
-                      eventForm.type === 'bar' && styles.typeButtonActive,
+                      styles.typeButtonText,
+                      eventForm.type === 'bar' && styles.typeButtonTextActive,
                     ]}
-                    onPress={() => {
-                      console.log('Type changed to: bar');
-                      setEventForm({ ...eventForm, type: 'bar' });
-                    }}
                   >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        eventForm.type === 'bar' && styles.typeButtonTextActive,
-                      ]}
-                    >
-                      🍸 Bar
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      eventForm.type === 'restaurant' && styles.typeButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('Type changed to: restaurant');
-                      setEventForm({ ...eventForm, type: 'restaurant' });
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        eventForm.type === 'restaurant' && styles.typeButtonTextActive,
-                      ]}
-                    >
-                      🍽️ Restaurante
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="2024-02-15"
-                  value={eventForm.date}
-                  onChangeText={(text) => {
-                    console.log('Date changed:', text);
-                    setEventForm({ ...eventForm, date: text });
-                  }}
-                />
-
-                <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="21:15"
-                  value={eventForm.time}
-                  onChangeText={(text) => {
-                    console.log('Time changed:', text);
-                    setEventForm({ ...eventForm, time: text });
-                  }}
-                />
-
-                <Text style={styles.inputLabel}>Número de Participantes (mostrado públicamente)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="6"
-                  keyboardType="numeric"
-                  value={String(eventForm.max_participants)}
-                  onChangeText={(text) =>
-                    setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })
-                  }
-                />
-
-                <Text style={styles.inputLabel}>Nombre del Lugar (ubicación)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: Bar El Encuentro"
-                  value={eventForm.location_name}
-                  onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
-                />
-
-                <Text style={styles.inputLabel}>Dirección del Lugar</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: Calle 85 #15-20"
-                  value={eventForm.location_address}
-                  onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
-                />
-
-                <Text style={styles.inputLabel}>Enlace de Maps</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://maps.google.com/..."
-                  value={eventForm.maps_link}
-                  onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
-                />
-
-                {/* CONFIRMATION CODE FIELD - HIGHLY VISIBLE */}
-                <View style={styles.highlightedSection}>
-                  <Text style={[styles.inputLabel, styles.requiredLabel]}>🔑 Código de confirmación *</Text>
-                  <Text style={styles.inputHint}>
-                    Los participantes deberán ingresar este código para confirmar su asistencia en el lugar
+                    🍸 Bar
                   </Text>
-                  <TextInput
-                    style={[styles.input, styles.highlightedInput]}
-                    placeholder="Ej: 1986"
-                    value={eventForm.confirmation_code}
-                    onChangeText={(text) => {
-                      console.log('Confirmation code changed:', text);
-                      setEventForm({ ...eventForm, confirmation_code: text });
-                    }}
-                  />
-                  <Text style={styles.defaultHint}>Por defecto: 1986</Text>
-                </View>
-
-                <Text style={styles.inputLabel}>Estado del Evento</Text>
-                <View style={styles.typeSelector}>
-                  <TouchableOpacity
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'restaurant' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'restaurant' })}
+                >
+                  <Text
                     style={[
-                      styles.typeButton,
-                      eventForm.event_status === 'draft' && styles.typeButtonActive,
+                      styles.typeButtonText,
+                      eventForm.type === 'restaurant' && styles.typeButtonTextActive,
                     ]}
-                    onPress={() => {
-                      console.log('Status changed to: draft');
-                      setEventForm({ ...eventForm, event_status: 'draft' });
-                    }}
                   >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        eventForm.event_status === 'draft' && styles.typeButtonTextActive,
-                      ]}
-                    >
-                      📝 Borrador
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      eventForm.event_status === 'published' && styles.typeButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('Status changed to: published');
-                      setEventForm({ ...eventForm, event_status: 'published' });
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        eventForm.event_status === 'published' && styles.typeButtonTextActive,
-                      ]}
-                    >
-                      ✅ Publicado
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonCancel]}
-                    onPress={() => {
-                      console.log('Cancel button pressed');
-                      setShowEventModal(false);
-                    }}
-                  >
-                    <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonConfirm]}
-                    onPress={() => {
-                      console.log('Save Event button pressed in modal');
-                      handleSaveEvent();
-                    }}
-                  >
-                    <Text style={styles.modalButtonTextConfirm}>
-                      {editingEventId ? 'Guardar Cambios' : 'Crear Evento'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    🍽️ Restaurante
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </ScrollView>
-          </View>
-        </Modal>
-      </LinearGradient>
-    </>
+
+              <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="2024-02-15"
+                value={eventForm.date}
+                onChangeText={(text) => setEventForm({ ...eventForm, date: text })}
+              />
+
+              <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="21:15"
+                value={eventForm.time}
+                onChangeText={(text) => setEventForm({ ...eventForm, time: text })}
+              />
+
+              <Text style={styles.inputLabel}>Número de Participantes</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="6"
+                keyboardType="numeric"
+                value={String(eventForm.max_participants)}
+                onChangeText={(text) =>
+                  setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })
+                }
+              />
+
+              <Text style={styles.inputLabel}>Nombre del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bar El Encuentro"
+                value={eventForm.location_name}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Calle 85 #15-20"
+                value={eventForm.location_address}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
+              />
+
+              <Text style={styles.inputLabel}>Enlace de Maps</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://maps.google.com/..."
+                value={eventForm.maps_link}
+                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+              />
+
+              <View style={styles.highlightedSection}>
+                <Text style={[styles.inputLabel, styles.requiredLabel]}>🔑 Código de confirmación *</Text>
+                <Text style={styles.inputHint}>
+                  Los participantes deberán ingresar este código para confirmar su asistencia
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.highlightedInput]}
+                  placeholder="Ej: 1986"
+                  value={eventForm.confirmation_code}
+                  onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
+                />
+                <Text style={styles.defaultHint}>Por defecto: 1986</Text>
+              </View>
+
+              <Text style={styles.inputLabel}>Estado del Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'draft' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'draft' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'draft' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    📝 Borrador
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'published' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'published' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'published' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    ✅ Publicado
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowEventModal(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonConfirm]}
+                  onPress={handleSaveEvent}
+                >
+                  <Text style={styles.modalButtonTextConfirm}>
+                    {editingEventId ? 'Guardar Cambios' : 'Crear Evento'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#F3E8FF',
+  },
   gradient: {
     flex: 1,
   },
