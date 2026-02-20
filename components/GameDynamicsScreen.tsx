@@ -409,10 +409,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               style={styles.triangleGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-            >
-              {/* Inner triangle shape for depth */}
-              <View style={styles.triangleInner} />
-            </LinearGradient>
+            />
             
             {/* Glass highlight effect */}
             <View style={styles.triangleHighlight} />
@@ -901,20 +898,6 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     borderTopColor: '#C0C0C0',
-  },
-  triangleInner: {
-    position: 'absolute',
-    top: -46,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 22,
-    borderRightWidth: 22,
-    borderTopWidth: 44,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#A8A8A8',
   },
   triangleHighlight: {
     position: 'absolute',
