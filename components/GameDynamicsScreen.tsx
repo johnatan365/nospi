@@ -3,7 +3,8 @@
  * GameDynamicsScreen - Nospi Interactive Game Experience
  * 
  * CLEAN STABLE ARCHITECTURE:
- * - Backend controls participant selection via RPC
+ * - Client-side participant selection with direct table updates
+ * - NO RPC functions or Edge Functions
  * - All clients sync via Realtime subscriptions
  * - No automatic phase rollback
  * - Forward-only phase transitions
@@ -198,26 +199,72 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
 
   const handleStartRoulette = useCallback(async () => {
-    if (!appointment?.event_id || isSpinning) return;
+    if (!appointment?.event_id || isSpinning || activeParticipants.length === 0) return;
 
     console.log('=== USUARIO PRESIONÓ INICIAR RULETA ===');
     
     try {
-      const { data, error } = await supabase.rpc('start_roulette_spin', {
-        event_id: appointment.event_id,
-      });
+      // Obtener el evento actual para leer level_queue y current_turn_index
+      const { data: eventData, error: fetchError } = await supabase
+        .from('events')
+        .select('level_queue, current_turn_index, game_phase')
+        .eq('id', appointment.event_id)
+        .single();
 
-      if (error) {
-        console.error('Error RPC:', error);
+      if (fetchError) {
+        console.error('Error al obtener el evento:', fetchError);
         return;
       }
 
-      console.log('RPC exitoso:', data);
+      if (eventData.game_phase !== 'waiting_for_spin') {
+        console.warn('El evento no está en fase waiting_for_spin');
+        return;
+      }
+
+      // Lógica del lado del cliente para seleccionar el siguiente participante
+      const levelQueue = eventData.level_queue || [];
+      const currentTurnIndex = eventData.current_turn_index || 0;
+
+      if (levelQueue.length === 0) {
+        console.error('Error: La cola de participantes está vacía');
+        return;
+      }
+
+      // Seleccionar el siguiente participante
+      const nextParticipantId = levelQueue[currentTurnIndex];
+      if (!nextParticipantId) {
+        console.error('Error: No se pudo encontrar un participante en el índice actual');
+        return;
+      }
+
+      // Calcular el nuevo índice (loop back al inicio si es necesario)
+      const newIndex = (currentTurnIndex + 1) % levelQueue.length;
+
+      console.log('Seleccionando participante:', nextParticipantId);
+      console.log('Nuevo índice de turno:', newIndex);
+
+      // Actualización directa de la tabla events
+      const { error: updateError } = await supabase
+        .from('events')
+        .update({
+          selected_participant_id: nextParticipantId,
+          current_turn_index: newIndex,
+          game_phase: 'show_result',
+        })
+        .eq('id', appointment.event_id)
+        .eq('game_phase', 'waiting_for_spin'); // Optimistic locking
+
+      if (updateError) {
+        console.error('Error al actualizar el evento para el giro de la ruleta:', updateError);
+        return;
+      }
+
+      console.log('Giro de ruleta iniciado exitosamente mediante actualización directa');
       // La animación se activará mediante la suscripción Realtime
     } catch (error) {
-      console.error('Error al iniciar la ruleta:', error);
+      console.error('Error inesperado al iniciar la ruleta:', error);
     }
-  }, [appointment?.event_id, isSpinning]);
+  }, [appointment?.event_id, isSpinning, activeParticipants.length]);
 
   const wheelRotate = wheelRotation.interpolate({
     inputRange: [0, 360],
