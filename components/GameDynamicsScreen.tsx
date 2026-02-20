@@ -322,62 +322,147 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     });
 
     try {
-      // Call Edge Function to select participant and question
-      console.log('Calling Edge Function to start round');
-      console.log('Event ID:', appointment.event_id);
-      console.log('Current Level:', currentLevel);
-
-      // Get fresh session with proper error handling
+      // CRITICAL FIX: Get fresh session with proper validation
+      console.log('=== VALIDATING USER SESSION ===');
+      
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.error('Session error:', sessionError);
+        console.error('❌ Session error:', sessionError.message);
+        console.error('Session error details:', JSON.stringify(sessionError, null, 2));
         setIsStartingRound(false);
         return;
       }
 
-      const accessToken = sessionData?.session?.access_token;
+      if (!sessionData || !sessionData.session) {
+        console.error('❌ No active session found');
+        console.log('Session data:', sessionData);
+        // Force re-authentication
+        console.warn('User needs to re-authenticate');
+        setIsStartingRound(false);
+        return;
+      }
+
+      const accessToken = sessionData.session.access_token;
 
       if (!accessToken) {
-        console.error('No access token available - user may not be authenticated');
-        console.log('Session data:', sessionData);
+        console.error('❌ Access token is null or undefined');
+        console.log('Session:', sessionData.session);
         setIsStartingRound(false);
         return;
       }
 
-      console.log('Access token obtained, calling Edge Function');
+      console.log('✅ Access token obtained successfully');
       console.log('Token length:', accessToken.length);
+      console.log('Token preview:', accessToken.substring(0, 20) + '...');
+      console.log('Session expires at:', sessionData.session.expires_at);
 
-      const supabaseUrl = supabase.supabaseUrl || '';
+      // Check if token is expired
+      const expiresAt = sessionData.session.expires_at;
+      if (expiresAt) {
+        const expiryDate = new Date(expiresAt * 1000);
+        const now = new Date();
+        if (expiryDate <= now) {
+          console.error('❌ Token has expired');
+          console.log('Expired at:', expiryDate.toISOString());
+          console.log('Current time:', now.toISOString());
+          
+          // Try to refresh the session
+          console.log('Attempting to refresh session...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError || !refreshData.session) {
+            console.error('❌ Failed to refresh session:', refreshError);
+            setIsStartingRound(false);
+            return;
+          }
+          
+          console.log('✅ Session refreshed successfully');
+          // Use the new token
+          const newAccessToken = refreshData.session.access_token;
+          console.log('New token length:', newAccessToken.length);
+          
+          // Continue with the new token
+          await callEdgeFunction(newAccessToken);
+        } else {
+          console.log('✅ Token is valid until:', expiryDate.toISOString());
+          await callEdgeFunction(accessToken);
+        }
+      } else {
+        console.log('⚠️ No expiry time found, proceeding with token');
+        await callEdgeFunction(accessToken);
+      }
+
+    } catch (error) {
+      console.error('❌ Error starting round:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      setIsStartingRound(false);
+    }
+  };
+
+  // Helper function to call the Edge Function
+  const callEdgeFunction = async (accessToken: string) => {
+    try {
+      console.log('=== CALLING EDGE FUNCTION ===');
+      console.log('Event ID:', appointment.event_id);
+      console.log('Current Level:', currentLevel);
+
+      const supabaseUrl = (supabase as any).supabaseUrl || '';
+      const supabaseKey = (supabase as any).supabaseKey || '';
+      
+      if (!supabaseUrl || !supabaseKey) {
+        console.error('❌ Supabase URL or Key not found');
+        setIsStartingRound(false);
+        return;
+      }
+
       const functionUrl = `${supabaseUrl}/functions/v1/start-game-round`;
       
       console.log('Function URL:', functionUrl);
+      console.log('Supabase URL:', supabaseUrl);
+      console.log('Anon Key length:', supabaseKey.length);
+
+      const requestBody = {
+        eventId: appointment.event_id,
+        currentLevel: currentLevel,
+      };
+
+      console.log('Request body:', JSON.stringify(requestBody, null, 2));
+      console.log('Authorization header:', `Bearer ${accessToken.substring(0, 20)}...`);
+      console.log('API Key header:', `${supabaseKey.substring(0, 20)}...`);
 
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
-          'apikey': supabase.supabaseKey || '',
+          'apikey': supabaseKey,
         },
-        body: JSON.stringify({
-          eventId: appointment.event_id,
-          currentLevel: currentLevel,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('Response status:', response.status);
-      console.log('Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+      console.log('Response status text:', response.statusText);
+      console.log('Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Edge Function error response:', errorText);
+        console.error('❌ Edge Function error response:', errorText);
         
         try {
           const errorData = JSON.parse(errorText);
-          console.error('Edge Function error (parsed):', errorData);
+          console.error('Edge Function error (parsed):', JSON.stringify(errorData, null, 2));
         } catch (e) {
           console.error('Could not parse error response as JSON');
+        }
+        
+        if (response.status === 401) {
+          console.error('❌ INVALID JWT - Authentication failed');
+          console.error('This means the token is not valid or has expired');
+          console.error('User may need to re-authenticate');
         }
         
         setIsStartingRound(false);
@@ -385,7 +470,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       const result = await response.json();
-      console.log('Edge Function response:', result);
+      console.log('✅ Edge Function response:', JSON.stringify(result, null, 2));
       console.log('Selected participant:', result.selectedParticipantName);
       console.log('Question:', result.question);
 
@@ -396,7 +481,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }, 6000);
 
     } catch (error) {
-      console.error('Error starting round:', error);
+      console.error('❌ Error calling Edge Function:', error);
       if (error instanceof Error) {
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
