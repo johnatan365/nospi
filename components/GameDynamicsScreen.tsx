@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, Image, Dimensions, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -64,6 +64,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   
   const wheelRotation = useRef(new Animated.Value(0)).current;
   const glowAnimation = useRef(new Animated.Value(0)).current;
@@ -201,13 +202,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleStartRoulette = useCallback(async () => {
     if (!appointment?.event_id || isSpinning || activeParticipants.length === 0) {
       console.warn('No se puede iniciar la ruleta: condiciones no cumplidas');
+      console.log('event_id:', appointment?.event_id);
+      console.log('isSpinning:', isSpinning);
+      console.log('activeParticipants.length:', activeParticipants.length);
       return;
     }
 
     console.log('=== USUARIO PRESIONÓ INICIAR RULETA ===');
+    setIsSpinning(true);
+    setLoadingMessage('Iniciando ruleta...');
     
     try {
       // Obtener el evento actual para leer level_queue y current_turn_index
+      console.log('Obteniendo estado actual del evento...');
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
         .select('level_queue, current_turn_index, game_phase')
@@ -216,16 +223,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (fetchError) {
         console.error('Error al obtener el evento:', fetchError);
+        Alert.alert('Error', 'No se pudo obtener el estado del evento.');
+        setIsSpinning(false);
+        setLoadingMessage('');
         return;
       }
 
       console.log('Estado actual del evento:', eventData);
 
       // Permitir iniciar desde 'ready', 'intro', o 'waiting_for_spin'
-      if (eventData.game_phase !== 'waiting_for_spin' && 
-          eventData.game_phase !== 'ready' && 
-          eventData.game_phase !== 'intro') {
+      const validStartPhases = ['intro', 'ready', 'waiting_for_spin'];
+      if (!validStartPhases.includes(eventData.game_phase)) {
         console.warn('El evento no está en una fase válida para iniciar la ruleta:', eventData.game_phase);
+        Alert.alert('Error', `La ruleta no puede iniciar en la fase actual: ${eventData.game_phase}`);
+        setIsSpinning(false);
+        setLoadingMessage('');
         return;
       }
 
@@ -236,6 +248,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // Si level_queue está vacío, inicializarlo con los participantes confirmados
       if (!levelQueue || levelQueue.length === 0) {
         console.log('=== INICIALIZANDO LEVEL_QUEUE ===');
+        setLoadingMessage('Preparando participantes...');
         
         // Obtener participantes confirmados
         const { data: participants, error: participantsError } = await supabase
@@ -246,11 +259,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (participantsError) {
           console.error('Error al obtener participantes confirmados:', participantsError);
+          Alert.alert('Error', 'No se pudieron obtener los participantes.');
+          setIsSpinning(false);
+          setLoadingMessage('');
           return;
         }
 
         if (!participants || participants.length === 0) {
           console.error('Error: No hay participantes confirmados para inicializar la cola');
+          Alert.alert('Error', 'No hay participantes confirmados para la ruleta.');
+          setIsSpinning(false);
+          setLoadingMessage('');
           return;
         }
 
@@ -279,6 +298,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (updateQueueError) {
           console.error('Error al inicializar level_queue:', updateQueueError);
+          Alert.alert('Error', 'No se pudo guardar la lista de participantes.');
+          setIsSpinning(false);
+          setLoadingMessage('');
           return;
         }
 
@@ -288,6 +310,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // Verificar que la cola no esté vacía después de la inicialización
       if (levelQueue.length === 0) {
         console.error('Error: La cola de participantes está vacía después del intento de inicialización');
+        Alert.alert('Error', 'No hay participantes en la cola para seleccionar.');
+        setIsSpinning(false);
+        setLoadingMessage('');
         return;
       }
 
@@ -295,6 +320,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const nextParticipantId = levelQueue[currentTurnIndex];
       if (!nextParticipantId) {
         console.error('Error: No se pudo encontrar un participante en el índice actual');
+        Alert.alert('Error', 'No se pudo seleccionar un participante.');
+        setIsSpinning(false);
+        setLoadingMessage('');
         return;
       }
 
@@ -306,6 +334,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       // Actualización directa de la tabla events
       // NO usar optimistic locking para permitir iniciar desde cualquier fase
+      setLoadingMessage('Girando la ruleta...');
       const { error: updateError } = await supabase
         .from('events')
         .update({
@@ -317,13 +346,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (updateError) {
         console.error('Error al actualizar el evento para el giro de la ruleta:', updateError);
+        Alert.alert('Error', 'No se pudo actualizar el evento para la ruleta.');
+        setIsSpinning(false);
+        setLoadingMessage('');
         return;
       }
 
       console.log('✅ Giro de ruleta iniciado exitosamente mediante actualización directa');
       // La animación se activará mediante la suscripción Realtime
-    } catch (error) {
+      // No resetear isSpinning aquí, se hará cuando la animación termine
+    } catch (error: any) {
       console.error('Error inesperado al iniciar la ruleta:', error);
+      Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
+      setIsSpinning(false);
+      setLoadingMessage('');
     }
   }, [appointment?.event_id, isSpinning, activeParticipants.length]);
 
@@ -469,6 +505,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </View>
 
+          {loadingMessage ? (
+            <View style={styles.loadingCard}>
+              <Text style={styles.loadingText}>{loadingMessage}</Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity
             style={[styles.startButton, isSpinning && styles.buttonDisabled]}
             onPress={handleStartRoulette}
@@ -594,6 +636,19 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  loadingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   startButton: {
     backgroundColor: '#FFD700',
