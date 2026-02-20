@@ -251,14 +251,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const startGame = async () => {
     console.log('=== USER CLICKED INICIAR DINÁMICA ===');
     console.log('Starting game - Round 1');
+    console.log('Current participants:', activeParticipants.length);
     setCurrentRound(1);
     
     // CRITICAL FIX: Set game phase to roulette IMMEDIATELY to prevent unmounting
+    console.log('Setting gamePhase to roulette and showRoulette to true');
     setGamePhase('roulette');
     setShowRoulette(true);
     
-    // Then start the roulette animation and backend call
-    await startRoulette();
+    // Small delay to ensure state is updated before starting animation
+    setTimeout(() => {
+      console.log('Starting roulette animation after state update');
+      startRoulette();
+    }, 100);
   };
 
   const handleReadyToStart = () => {
@@ -283,9 +288,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
 
     setIsStartingRound(true);
-    console.log('Starting TV-style roulette animation');
+    console.log('=== STARTING ROULETTE ===');
+    console.log('Event ID:', appointment.event_id);
+    console.log('Active participants:', activeParticipants.length);
+    console.log('Current level:', currentLevel);
     
-    // CRITICAL: Ensure roulette is visible
+    // CRITICAL: Ensure roulette is visible and game phase is set
+    console.log('Setting showRoulette=true and gamePhase=roulette');
     setShowRoulette(true);
     setGamePhase('roulette');
     setHasRated(false);
@@ -546,6 +555,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // CRITICAL FIX: Always render based on current gamePhase state, not conditional logic
   // This prevents the component from unmounting during state transitions
+  
+  console.log('=== RENDERING GAME DYNAMICS SCREEN ===');
+  console.log('Current gamePhase:', gamePhase);
+  console.log('showRoulette:', showRoulette);
+  console.log('Active participants:', activeParticipants.length);
+  console.log('Selected participant:', selectedParticipant?.name);
+  console.log('Current question:', currentQuestion?.text);
   
   if (gamePhase === 'ready') {
     const confirmedParticipants = activeParticipants.filter(p => p.confirmed);

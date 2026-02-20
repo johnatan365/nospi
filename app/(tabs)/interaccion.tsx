@@ -96,6 +96,7 @@ export default function InteraccionScreen() {
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
   const [userReady, setUserReady] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false); // CRITICAL: Track if game has started to prevent unmounting
 
   // Toast notification states
   const [toastVisible, setToastVisible] = useState(false);
@@ -457,6 +458,14 @@ export default function InteraccionScreen() {
         current_question_level: appointmentData.event?.current_question_level
       });
       
+      // CRITICAL: Check if game has already started (roulette or question phase)
+      if (appointmentData.event?.game_phase === 'roulette' || 
+          appointmentData.event?.game_phase === 'question' ||
+          appointmentData.event?.game_phase === 'playing') {
+        console.log('Game already in progress, setting gameStarted to true');
+        setGameStarted(true);
+      }
+      
       setAppointment(appointmentData as any);
       
       if (appointmentData.location_confirmed) {
@@ -761,6 +770,8 @@ export default function InteraccionScreen() {
 
   const handleStartExperience = () => {
     console.log('User starting experience - showing ritual modal');
+    console.log('Setting gameStarted to true to prevent unmounting');
+    setGameStarted(true); // CRITICAL: Mark game as started before showing modal
     setShowRitualModal(true);
     
     Animated.timing(ritualAnimation, {
@@ -1062,7 +1073,10 @@ export default function InteraccionScreen() {
     );
   }
 
-  if (allPresented && activeParticipants.length > 0) {
+  // CRITICAL FIX: Once game starts, keep GameDynamicsScreen mounted regardless of state changes
+  // This prevents the component from unmounting when the roulette starts spinning
+  if ((allPresented && activeParticipants.length > 0) || gameStarted) {
+    console.log('Rendering GameDynamicsScreen - gameStarted:', gameStarted, 'allPresented:', allPresented);
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
