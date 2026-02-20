@@ -252,18 +252,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('=== USER CLICKED INICIAR DINÁMICA ===');
     console.log('Starting game - Round 1');
     console.log('Current participants:', activeParticipants.length);
-    setCurrentRound(1);
     
-    // CRITICAL FIX: Set game phase to roulette IMMEDIATELY to prevent unmounting
-    console.log('Setting gamePhase to roulette and showRoulette to true');
+    // CRITICAL FIX: Set ALL game state IMMEDIATELY to prevent unmounting
+    console.log('Setting gamePhase to roulette and showRoulette to true IMMEDIATELY');
+    setCurrentRound(1);
     setGamePhase('roulette');
     setShowRoulette(true);
     
-    // Small delay to ensure state is updated before starting animation
-    setTimeout(() => {
-      console.log('Starting roulette animation after state update');
-      startRoulette();
-    }, 100);
+    // Start roulette animation immediately (no delay needed)
+    console.log('Starting roulette animation');
+    startRoulette();
   };
 
   const handleReadyToStart = () => {

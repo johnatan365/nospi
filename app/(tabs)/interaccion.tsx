@@ -260,6 +260,14 @@ export default function InteraccionScreen() {
             current_question_level: newEvent.current_question_level
           });
           
+          // CRITICAL: If game is in active phase, ensure gameStarted is true
+          if (newEvent.game_phase === 'roulette' || 
+              newEvent.game_phase === 'question' || 
+              newEvent.game_phase === 'playing') {
+            console.log('Game is active, setting gameStarted to true');
+            setGameStarted(true);
+          }
+          
           // CRITICAL: Reload appointment to get updated game state
           // This ensures all users see the same game state
           loadAppointment();
@@ -770,8 +778,9 @@ export default function InteraccionScreen() {
 
   const handleStartExperience = () => {
     console.log('User starting experience - showing ritual modal');
-    console.log('Setting gameStarted to true to prevent unmounting');
-    setGameStarted(true); // CRITICAL: Mark game as started before showing modal
+    console.log('Setting gameStarted to true IMMEDIATELY to prevent unmounting');
+    // CRITICAL FIX: Set gameStarted FIRST, before any other state changes
+    setGameStarted(true);
     setShowRitualModal(true);
     
     Animated.timing(ritualAnimation, {
@@ -787,6 +796,8 @@ export default function InteraccionScreen() {
 
     try {
       console.log('User confirmed to begin experience');
+      // CRITICAL: Ensure gameStarted remains true
+      setGameStarted(true);
       
       const { error } = await supabase
         .from('appointments')
@@ -808,6 +819,9 @@ export default function InteraccionScreen() {
   };
 
   const handleContinueToPresentation = () => {
+    console.log('Continuing to presentation phase');
+    // CRITICAL: Ensure gameStarted remains true
+    setGameStarted(true);
     setShowWelcomeModal(false);
     setExperienceStarted(true);
     setShowPresentationPhase(true);
@@ -1075,8 +1089,14 @@ export default function InteraccionScreen() {
 
   // CRITICAL FIX: Once game starts, keep GameDynamicsScreen mounted regardless of state changes
   // This prevents the component from unmounting when the roulette starts spinning
+  // The gameStarted flag acts as a "lock" - once true, the GameDynamicsScreen stays mounted
   if ((allPresented && activeParticipants.length > 0) || gameStarted) {
-    console.log('Rendering GameDynamicsScreen - gameStarted:', gameStarted, 'allPresented:', allPresented);
+    console.log('=== RENDERING GAME DYNAMICS SCREEN ===');
+    console.log('gameStarted:', gameStarted);
+    console.log('allPresented:', allPresented);
+    console.log('activeParticipants:', activeParticipants.length);
+    console.log('game_phase from DB:', appointment.event.game_phase);
+    
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
