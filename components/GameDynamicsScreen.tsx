@@ -59,7 +59,7 @@ const SEGMENT_COLORS = [
 ];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('Rendering GameDynamicsScreen');
+  console.log('🎮 Rendering GameDynamicsScreen');
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
   const [currentLevel] = useState<QuestionLevel>('divertido');
@@ -482,6 +482,43 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment?.event_id, isSpinning, activeParticipants.length, gamePhase]);
 
+  const handleContinueGame = useCallback(async () => {
+    console.log('🎮 === CONTINUANDO EL JUEGO ===');
+    
+    if (!appointment?.event_id) {
+      console.error('❌ No hay event_id');
+      return;
+    }
+
+    try {
+      // Reset to waiting_for_spin to allow another spin
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'waiting_for_spin',
+          current_question: null,
+          current_question_level: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error al continuar el juego:', error);
+        Alert.alert('Error', 'No se pudo continuar el juego.');
+        return;
+      }
+
+      console.log('✅ Juego continuado - volviendo a waiting_for_spin');
+      setGamePhase('waiting_for_spin');
+      setCurrentQuestion(null);
+      setSelectedParticipant(null);
+      setHasTriggeredAnimation(false);
+    } catch (error: any) {
+      console.error('❌ Error inesperado al continuar:', error);
+      Alert.alert('Error', error.message || 'Ocurrió un error.');
+    }
+  }, [appointment?.event_id]);
+
   const wheelRotate = wheelRotation.interpolate({
     inputRange: [0, 360],
     outputRange: ['0deg', '360deg'],
@@ -683,6 +720,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               🔄 Todos los participantes ven la misma pregunta en tiempo real
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinueGame}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>Continuar con el juego</Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     );
@@ -1058,6 +1103,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#3B82F6',
+    marginBottom: 24,
   },
   infoText: {
     fontSize: 14,
@@ -1065,5 +1111,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontWeight: '600',
+  },
+  continueButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  continueButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });
