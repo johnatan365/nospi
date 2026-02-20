@@ -213,11 +213,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    // Don't set isSpinning here - let the animation callback handle it
+    if (isSpinning) {
+      console.log('Ya está girando, ignorando clic');
+      return;
+    }
+
     setLoadingMessage('Iniciando ruleta...');
     
     try {
-      // Obtener el evento actual para leer level_queue y current_turn_index
+      // 1. LOG CURRENT GAME_PHASE
       console.log('Obteniendo estado actual del evento...');
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
@@ -226,19 +230,31 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         .single();
 
       if (fetchError) {
-        console.error('Error al obtener el evento:', fetchError);
+        console.error('❌ Error al obtener el evento:', fetchError);
         Alert.alert('Error', 'No se pudo obtener el estado del evento.');
         setLoadingMessage('');
         return;
       }
 
-      console.log('Estado actual del evento:', eventData);
+      console.log('✅ Estado actual del evento:', eventData);
+      console.log('📊 Current game_phase:', eventData.game_phase);
+      console.log('📊 Level_queue length:', eventData.level_queue?.length || 0);
+
+      // 2. ENSURE UPDATE CONDITION MATCHES ACTUAL PHASE
+      // Allow spin from 'intro', 'ready', 'waiting_for_spin', OR 'show_result'
+      const allowedPhases = ['intro', 'ready', 'waiting_for_spin', 'show_result'];
+      if (!eventData.game_phase || !allowedPhases.includes(eventData.game_phase)) {
+        console.error('❌ Fase no válida para girar:', eventData.game_phase);
+        Alert.alert('Error', `No se puede girar desde la fase: ${eventData.game_phase}`);
+        setLoadingMessage('');
+        return;
+      }
 
       // Lógica del lado del cliente para seleccionar el siguiente participante
       let levelQueue = eventData.level_queue || [];
       let currentTurnIndex = eventData.current_turn_index || 0;
 
-      // Si level_queue está vacío, inicializarlo con los participantes confirmados
+      // 5. ENSURE LEVEL_QUEUE IS INITIALIZED IF EMPTY
       if (!levelQueue || levelQueue.length === 0) {
         console.log('=== INICIALIZANDO LEVEL_QUEUE ===');
         setLoadingMessage('Preparando participantes...');
@@ -251,14 +267,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           .eq('confirmed', true);
 
         if (participantsError) {
-          console.error('Error al obtener participantes confirmados:', participantsError);
+          console.error('❌ Error al obtener participantes confirmados:', participantsError);
           Alert.alert('Error', 'No se pudieron obtener los participantes.');
           setLoadingMessage('');
           return;
         }
 
         if (!participants || participants.length === 0) {
-          console.error('Error: No hay participantes confirmados para inicializar la cola');
+          console.error('❌ Error: No hay participantes confirmados para inicializar la cola');
           Alert.alert('Error', 'No hay participantes confirmados para la ruleta.');
           setLoadingMessage('');
           return;
@@ -276,7 +292,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         levelQueue = participantIds;
         currentTurnIndex = 0;
 
-        console.log('Cola de participantes inicializada:', levelQueue);
+        console.log('✅ Cola de participantes inicializada:', levelQueue);
+        console.log('📊 Level_queue length after init:', levelQueue.length);
 
         // Actualizar el evento con la nueva level_queue
         const { error: updateQueueError } = await supabase
@@ -288,27 +305,27 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           .eq('id', appointment.event_id);
 
         if (updateQueueError) {
-          console.error('Error al inicializar level_queue:', updateQueueError);
+          console.error('❌ Error al inicializar level_queue:', updateQueueError);
           Alert.alert('Error', 'No se pudo guardar la lista de participantes.');
           setLoadingMessage('');
           return;
         }
 
-        console.log('Level_queue guardada en la base de datos');
+        console.log('✅ Level_queue guardada en la base de datos');
       }
 
       // Verificar que la cola no esté vacía después de la inicialización
       if (levelQueue.length === 0) {
-        console.error('Error: La cola de participantes está vacía después del intento de inicialización');
+        console.error('❌ Error: La cola de participantes está vacía después del intento de inicialización');
         Alert.alert('Error', 'No hay participantes en la cola para seleccionar.');
         setLoadingMessage('');
         return;
       }
 
-      // Seleccionar el siguiente participante
+      // 6. ENSURE SELECTED_PARTICIPANT_ID IS CALCULATED CORRECTLY
       const nextParticipantId = levelQueue[currentTurnIndex];
       if (!nextParticipantId) {
-        console.error('Error: No se pudo encontrar un participante en el índice actual');
+        console.error('❌ Error: No se pudo encontrar un participante en el índice actual');
         Alert.alert('Error', 'No se pudo seleccionar un participante.');
         setLoadingMessage('');
         return;
@@ -317,34 +334,48 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       // Calcular el nuevo índice (loop back al inicio si es necesario)
       const newIndex = (currentTurnIndex + 1) % levelQueue.length;
 
-      console.log('Seleccionando participante:', nextParticipantId);
-      console.log('Nuevo índice de turno:', newIndex);
+      console.log('✅ Seleccionando participante:', nextParticipantId);
+      console.log('✅ Nuevo índice de turno:', newIndex);
 
       // Actualización directa de la tabla events
-      // NO usar optimistic locking para permitir iniciar desde cualquier fase
       setLoadingMessage('Girando la ruleta...');
-      const { error: updateError } = await supabase
+      
+      // 4. AFTER UPDATE, CHECK ROWS AFFECTED
+      const { data, error: updateError } = await supabase
         .from('events')
         .update({
           selected_participant_id: nextParticipantId,
           current_turn_index: newIndex,
           game_phase: 'show_result',
         })
-        .eq('id', appointment.event_id);
+        .eq('id', appointment.event_id)
+        .select();
 
       if (updateError) {
-        console.error('Error al actualizar el evento para el giro de la ruleta:', updateError);
+        console.error('❌ Error al actualizar el evento para el giro de la ruleta:', updateError);
         Alert.alert('Error', 'No se pudo actualizar el evento para la ruleta.');
         setLoadingMessage('');
         return;
       }
 
-      console.log('✅ Giro de ruleta iniciado exitosamente mediante actualización directa');
+      // CHECK ROWS AFFECTED
+      if (!data || data.length === 0) {
+        console.error('❌ NO ROWS UPDATED - Possible race condition or invalid state');
+        console.error('❌ This means the update query did not match any rows');
+        Alert.alert('Error', 'No se pudo iniciar la ruleta. Inténtalo de nuevo.');
+        setLoadingMessage('');
+        return;
+      }
+
+      console.log('✅ Giro de ruleta iniciado exitosamente');
+      console.log('📊 Rows updated:', data.length);
+      console.log('📊 New game_phase:', data[0].game_phase);
+      
       // La animación se activará mediante la suscripción Realtime
       // Clear loading message after a short delay
       setTimeout(() => setLoadingMessage(''), 500);
     } catch (error: any) {
-      console.error('Error inesperado al iniciar la ruleta:', error);
+      console.error('❌ Error inesperado al iniciar la ruleta:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
       setLoadingMessage('');
     }
@@ -366,24 +397,24 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Triangular indicator pointing downward - positioned to overlap wheel edge */}
+        {/* Single modern metallic/glass style triangular pointer pointing downward */}
         <View style={styles.indicatorContainer}>
           {/* Shadow layer */}
           <View style={styles.indicatorShadow} />
           
-          {/* Main triangle with gradient */}
+          {/* Main triangle with metallic gradient */}
           <View style={styles.triangleContainer}>
             <LinearGradient
-              colors={['#FFD700', '#FFC700', '#FFB700', '#FFA500']}
+              colors={['#E8E8E8', '#C0C0C0', '#A8A8A8', '#909090']}
               style={styles.triangleGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             >
-              {/* Inner triangle shape */}
+              {/* Inner triangle shape for depth */}
               <View style={styles.triangleInner} />
             </LinearGradient>
             
-            {/* Highlight effect */}
+            {/* Glass highlight effect */}
             <View style={styles.triangleHighlight} />
           </View>
         </View>
@@ -533,7 +564,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           {renderProfessionalWheel()}
 
-          {/* Replace suspense text with button */}
           {loadingMessage ? (
             <View style={styles.loadingCard}>
               <Text style={styles.loadingText}>{loadingMessage}</Text>
@@ -828,7 +858,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  // Triangular indicator pointing downward - positioned to overlap wheel edge
+  // Single modern metallic/glass style triangular pointer pointing downward
   indicatorContainer: {
     position: 'absolute',
     top: -10,
@@ -870,7 +900,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 50,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#FFD700',
+    borderTopColor: '#C0C0C0',
   },
   triangleInner: {
     position: 'absolute',
@@ -884,7 +914,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 44,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#FFA500',
+    borderTopColor: '#A8A8A8',
   },
   triangleHighlight: {
     position: 'absolute',
@@ -899,7 +929,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 12,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: 'rgba(255, 255, 255, 0.4)',
+    borderTopColor: 'rgba(255, 255, 255, 0.6)',
   },
   spinButton: {
     backgroundColor: '#FFD700',
