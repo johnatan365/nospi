@@ -222,11 +222,64 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       // Lógica del lado del cliente para seleccionar el siguiente participante
-      const levelQueue = eventData.level_queue || [];
-      const currentTurnIndex = eventData.current_turn_index || 0;
+      let levelQueue = eventData.level_queue || [];
+      let currentTurnIndex = eventData.current_turn_index || 0;
 
+      // Si level_queue está vacío, inicializarlo con los participantes confirmados
+      if (!levelQueue || levelQueue.length === 0) {
+        console.log('=== INICIALIZANDO LEVEL_QUEUE ===');
+        
+        // Obtener participantes confirmados
+        const { data: participants, error: participantsError } = await supabase
+          .from('event_participants')
+          .select('user_id')
+          .eq('event_id', appointment.event_id)
+          .eq('confirmed', true);
+
+        if (participantsError) {
+          console.error('Error al obtener participantes confirmados:', participantsError);
+          return;
+        }
+
+        if (!participants || participants.length === 0) {
+          console.error('Error: No hay participantes confirmados para inicializar la cola');
+          return;
+        }
+
+        // Extraer los user_ids
+        const participantIds = participants.map(p => p.user_id);
+        
+        // Mezclar los IDs (algoritmo Fisher-Yates)
+        for (let i = participantIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
+        }
+
+        levelQueue = participantIds;
+        currentTurnIndex = 0;
+
+        console.log('Cola de participantes inicializada:', levelQueue);
+
+        // Actualizar el evento con la nueva level_queue
+        const { error: updateQueueError } = await supabase
+          .from('events')
+          .update({
+            level_queue: levelQueue,
+            current_turn_index: currentTurnIndex,
+          })
+          .eq('id', appointment.event_id);
+
+        if (updateQueueError) {
+          console.error('Error al inicializar level_queue:', updateQueueError);
+          return;
+        }
+
+        console.log('Level_queue guardada en la base de datos');
+      }
+
+      // Verificar que la cola no esté vacía después de la inicialización
       if (levelQueue.length === 0) {
-        console.error('Error: La cola de participantes está vacía');
+        console.error('Error: La cola de participantes está vacía después del intento de inicialización');
         return;
       }
 
