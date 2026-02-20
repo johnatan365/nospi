@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -33,14 +33,7 @@ export default function EventDetailsScreen() {
   const [confirming, setConfirming] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      loadEvent();
-      checkEnrollment();
-    }
-  }, [id, loadEvent, checkEnrollment]);
-
-  const loadEvent = async () => {
+  const loadEvent = useCallback(async () => {
     try {
       console.log('Loading event details:', id);
       const { data, error } = await supabase
@@ -61,9 +54,9 @@ export default function EventDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const checkEnrollment = async () => {
+  const checkEnrollment = useCallback(async () => {
     if (!user?.id) return;
 
     try {
@@ -86,7 +79,14 @@ export default function EventDetailsScreen() {
     } catch (error) {
       console.error('Failed to check enrollment:', error);
     }
-  };
+  }, [user?.id, id]);
+
+  useEffect(() => {
+    if (id) {
+      loadEvent();
+      checkEnrollment();
+    }
+  }, [id, loadEvent, checkEnrollment]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

@@ -46,21 +46,7 @@ export default function AppointmentsScreen() {
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Appointments screen focused, loading appointments');
-      loadAppointments();
-    }, [loadAppointments])
-  );
-
-  useEffect(() => {
-    if (user) {
-      loadAppointments();
-      checkFirstTimeNotificationPrompt();
-    }
-  }, [user, filter, loadAppointments]);
-
-  const checkFirstTimeNotificationPrompt = async () => {
+  const checkFirstTimeNotificationPrompt = useCallback(async () => {
     try {
       const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
       if (!hasSeenPrompt) {
@@ -70,9 +56,9 @@ export default function AppointmentsScreen() {
     } catch (error) {
       console.error('Error checking notification prompt:', error);
     }
-  };
+  }, []);
 
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     if (!user?.id) {
       console.log('No user ID, skipping appointment load');
       return;
@@ -131,7 +117,21 @@ export default function AppointmentsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, filter]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Appointments screen focused, loading appointments');
+      loadAppointments();
+    }, [loadAppointments])
+  );
+
+  useEffect(() => {
+    if (user) {
+      loadAppointments();
+      checkFirstTimeNotificationPrompt();
+    }
+  }, [user, filter, loadAppointments, checkFirstTimeNotificationPrompt]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

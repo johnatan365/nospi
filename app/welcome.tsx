@@ -15,11 +15,11 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+const logoSource = require('@/assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png');
+
 export default function WelcomeScreen() {
   const router = useRouter();
   const [logoLoaded, setLogoLoaded] = useState(false);
-
-  const logoSource = require('@/assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png');
 
   // Preload logo image to prevent delay
   useEffect(() => {
