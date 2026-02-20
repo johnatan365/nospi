@@ -419,6 +419,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
+      // Extract and verify project ref
+      const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'unknown';
+      console.log('🔍 Frontend Project Ref:', projectRef);
+      console.log('🔍 Expected Project Ref: wjdiraurfbawotlcndmk');
+      console.log('🔍 Project Refs Match:', projectRef === 'wjdiraurfbawotlcndmk');
+
       const functionUrl = `${supabaseUrl}/functions/v1/start-game-round`;
       
       console.log('Function URL:', functionUrl);
@@ -473,6 +479,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Edge Function response:', JSON.stringify(result, null, 2));
       console.log('Selected participant:', result.selectedParticipantName);
       console.log('Question:', result.question);
+      console.log('✅ Edge Function Project Ref:', result.projectRef);
+      
+      // Verify project refs match
+      if (result.projectRef && result.projectRef !== 'wjdiraurfbawotlcndmk') {
+        console.error('⚠️ WARNING: Edge Function is running on different project!');
+        console.error('Expected: wjdiraurfbawotlcndmk');
+        console.error('Got:', result.projectRef);
+      } else if (result.projectRef === 'wjdiraurfbawotlcndmk') {
+        console.log('✅ Project refs match - Edge Function is on correct project');
+      }
 
       // The Realtime subscription will handle updating the UI
       // We just need to wait for the animation to finish
