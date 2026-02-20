@@ -115,6 +115,620 @@ export default function InteraccionScreen() {
   const shownConfirmations = useRef(new Set<string>()).current;
   const hasShownSpecialAnimation = useRef(false);
 
+  // CRITICAL FIX: Define all functions with useCallback BEFORE they are used in useEffect
+  // This prevents "Cannot access before initialization" errors
+  
+  const showToastNotification = useCallback((message: string) => {
+    console.log('Showing toast notification:', message);
+    setToastMessage(message);
+    setToastVisible(true);
+
+    // Reset animation values
+    toastOpacity.setValue(0);
+    toastTranslateY.setValue(-50);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 400,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.spring(toastTranslateY, {
+        toValue: 0,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Animate out after 2 seconds
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(toastTranslateY, {
+          toValue: -50,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setToastVisible(false);
+      });
+    }, 2000);
+  }, [toastOpacity, toastTranslateY]);
+
+  const showSpecialToastNotification = useCallback((message: string) => {
+    console.log('Showing special toast notification:', message);
+    setSpecialToastMessage(message);
+    setSpecialToastVisible(true);
+
+    // Reset animation values
+    specialToastOpacity.setValue(0);
+    specialToastScale.setValue(0.8);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(specialToastOpacity, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.spring(specialToastScale, {
+        toValue: 1,
+        tension: 40,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Animate out after 2.5 seconds
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(specialToastOpacity, {
+          toValue: 0,
+          duration: 400,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(specialToastScale, {
+          toValue: 0.8,
+          duration: 400,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setSpecialToastVisible(false);
+      });
+    }, 2500);
+  }, [specialToastOpacity, specialToastScale]);
+
+  const checkIfEventDay = useCallback((startTime: string) => {
+    const now = new Date();
+    const eventDate = new Date(startTime);
+    
+    // Create date at midnight (00:00) local time for event day
+    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
+    
+    // Check if current time is on or after event day midnight
+    const isSameDay = 
+      now.getFullYear() === eventDate.getFullYear() &&
+      now.getMonth() === eventDate.getMonth() &&
+      now.getDate() === eventDate.getDate();
+    
+    const isAfterMidnight = now >= eventDayStart;
+    
+    const isToday = isSameDay && isAfterMidnight;
+    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event day start:', eventDayStart.toLocaleString(), '| Event time:', eventDate.toLocaleString());
+    setIsEventDay(isToday);
+  }, []);
+
+  const updateCountdown = useCallback((startTime: string) => {
+    const now = new Date();
+    const eventDate = new Date(startTime);
+    const diff = eventDate.getTime() - now.getTime();
+
+    setCountdown(diff);
+
+    if (diff <= 0) {
+      setCountdownDisplay('¡Es hora!');
+      
+      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
+        setCheckInPhase('code_entry');
+      }
+      return;
+    }
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    setCountdownDisplay(countdownText);
+  }, [appointment, checkInPhase]);
+
+  const requestNotificationPermissions = useCallback(async () => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission status:', status);
+    } catch (error) {
+      console.error('Error requesting notification permissions:', error);
+    }
+  }, []);
+
+  const scheduleNotifications = useCallback(async (startTime: string) => {
+    try {
+      const eventDate = new Date(startTime);
+      const now = new Date();
+
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
+      if (eventDate > now) {
+        const sixHoursBefore = new Date(eventDate.getTime() - 6 * 60 * 60 * 1000);
+        if (sixHoursBefore > now) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Tu experiencia Nospi está cerca',
+              body: 'Faltan 6 horas para tu evento. ¡Prepárate!',
+              sound: true,
+            },
+            trigger: sixHoursBefore,
+          });
+        }
+
+        const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
+        if (oneHourBefore > now) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Tu experiencia Nospi comienza pronto',
+              body: 'Falta 1 hora. La experiencia inicia puntual.',
+              sound: true,
+            },
+            trigger: oneHourBefore,
+          });
+        }
+
+        const tenMinutesBefore = new Date(eventDate.getTime() - 10 * 60 * 1000);
+        if (tenMinutesBefore > now) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: '¡Últimos 10 minutos!',
+              body: 'Tu experiencia Nospi comienza en 10 minutos. ¡Es hora de dirigirte al lugar!',
+              sound: true,
+            },
+            trigger: tenMinutesBefore,
+          });
+        }
+
+        if (eventDate > now) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: '¡Tu experiencia Nospi comienza ahora!',
+              body: 'La experiencia inicia puntual. ¡Disfruta!',
+              sound: true,
+            },
+            trigger: eventDate,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error scheduling notifications:', error);
+    }
+  }, []);
+
+  const loadActiveParticipants = useCallback(async (eventId: string) => {
+    try {
+      console.log('=== LOADING PARTICIPANTS ===');
+      console.log('Event ID:', eventId);
+      console.log('Timestamp:', new Date().toISOString());
+      
+      // CRITICAL FIX: Use RPC function to bypass RLS and get ALL confirmed participants
+      const { data, error } = await supabase
+        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
+
+      if (error) {
+        console.error('Error loading participants:', error);
+        return;
+      }
+
+      console.log('=== PARTICIPANTS QUERY RESULT ===');
+      console.log('Total rows returned:', data?.length || 0);
+      console.log('Raw data:', JSON.stringify(data, null, 2));
+
+      const participants: Participant[] = (data || [])
+        .filter((item: any) => {
+          // CRITICAL: Filter out participants without profile data
+          const hasProfile = item.user_name;
+          if (!hasProfile) {
+            console.warn('Participant without profile data:', item.user_id);
+          }
+          return hasProfile;
+        })
+        .map((item: any) => {
+          const fullName = item.user_name;
+          const email = item.user_email || '';
+          const phone = item.user_phone || '';
+          const city = item.user_city || '';
+          const interestedIn = item.user_interested_in || '';
+          const userPhoto = item.user_profile_photo_url || null;
+          
+          console.log('Processing participant:', {
+            id: item.id,
+            user_id: item.user_id,
+            name: fullName,
+            city: city,
+            interested_in: interestedIn,
+            confirmed: item.confirmed,
+            is_presented: item.is_presented
+          });
+
+          return {
+            id: item.id,
+            user_id: item.user_id,
+            event_id: item.event_id,
+            confirmed: item.confirmed,
+            check_in_time: item.check_in_time,
+            is_presented: item.is_presented || false,
+            presented_at: item.presented_at || null,
+            profiles: {
+              id: item.user_id,
+              name: fullName,
+              email: email,
+              phone: phone,
+              city: city,
+              profile_photo_url: userPhoto,
+              interested_in: interestedIn
+            }
+          };
+        });
+
+      console.log('=== FINAL PARTICIPANTS LIST ===');
+      console.log('Participants loaded:', participants.length);
+      console.log('Participants:', participants.map(p => ({ 
+        name: p.profiles?.name,
+        user_id: p.user_id, 
+        city: p.profiles?.city,
+        interested_in: p.profiles?.interested_in,
+        confirmed: p.confirmed,
+        is_presented: p.is_presented
+      })));
+      
+      // Check if we should show the special "La mesa está casi lista" animation
+      // FIXED: Minimum 2 participants instead of 3
+      if (participants.length >= 2 && !hasShownSpecialAnimation.current) {
+        hasShownSpecialAnimation.current = true;
+        showSpecialToastNotification('La mesa está casi lista.');
+      }
+      
+      setActiveParticipants(participants);
+      
+      const allHavePresented = participants.length > 0 && participants.every(p => p.is_presented);
+      setAllPresented(allHavePresented);
+    } catch (error) {
+      console.error('Failed to load participants:', error);
+    }
+  }, [showSpecialToastNotification]);
+
+  const loadAppointment = useCallback(async () => {
+    if (!user) {
+      console.log('No user logged in');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('=== LOADING APPOINTMENT ===');
+      console.log('User ID:', user.id);
+      
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          event_id,
+          arrival_status,
+          checked_in_at,
+          location_confirmed,
+          experience_started,
+          presented,
+          event:events (
+            id,
+            type,
+            date,
+            time,
+            location,
+            location_name,
+            location_address,
+            maps_link,
+            is_location_revealed,
+            address,
+            start_time,
+            max_participants,
+            current_participants,
+            status,
+            confirmation_code,
+            game_phase,
+            current_turn_index,
+            current_round,
+            started_at,
+            selected_participant_id,
+            selected_participant_name,
+            current_question,
+            current_question_level
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'confirmada')
+        .eq('payment_status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading appointment:', error);
+        setLoading(false);
+        return;
+      }
+      
+      console.log('=== APPOINTMENT QUERY RESULT ===');
+      console.log('Total appointments found:', data?.length || 0);
+      
+      if (!data || data.length === 0) {
+        console.log('No confirmed appointment found for user');
+        setAppointment(null);
+        setLoading(false);
+        return;
+      }
+
+      const now = new Date();
+      const upcomingAppointment = data.find(apt => {
+        if (!apt.event?.start_time) return false;
+        const eventDate = new Date(apt.event.start_time);
+        return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      });
+
+      const appointmentData = upcomingAppointment || data[0];
+      console.log('Selected appointment:', appointmentData.id);
+      console.log('Event ID:', appointmentData.event_id);
+      console.log('Game state from database:', {
+        game_phase: appointmentData.event?.game_phase,
+        selected_participant_name: appointmentData.event?.selected_participant_name,
+        current_question: appointmentData.event?.current_question,
+        current_question_level: appointmentData.event?.current_question_level
+      });
+      
+      // CRITICAL: Check if game has already started (roulette or question phase)
+      if (appointmentData.event?.game_phase === 'roulette' || 
+          appointmentData.event?.game_phase === 'question' ||
+          appointmentData.event?.game_phase === 'playing') {
+        console.log('Game already in progress, setting gameStarted to true');
+        setGameStarted(true);
+      }
+      
+      setAppointment(appointmentData as any);
+      
+      if (appointmentData.location_confirmed) {
+        setCheckInPhase('confirmed');
+      }
+      
+      setExperienceStarted(appointmentData.experience_started || false);
+      setUserPresented(appointmentData.presented || false);
+      
+      if (appointmentData.event && appointmentData.event.start_time) {
+        checkIfEventDay(appointmentData.event.start_time);
+        scheduleNotifications(appointmentData.event.start_time);
+      }
+      
+      // Load participants after loading appointment
+      if (appointmentData.event_id) {
+        loadActiveParticipants(appointmentData.event_id);
+      }
+    } catch (error) {
+      console.error('Failed to load appointment:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
+
+  const handleCodeConfirmation = useCallback(async () => {
+    if (!appointment || !user) return;
+
+    const enteredCode = confirmationCode.trim();
+    const eventCode = appointment.event.confirmation_code;
+    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
+      ? '1986' 
+      : eventCode.trim();
+    
+    console.log('=== CONFIRMATION CODE VALIDATION ===');
+    console.log('Expected code:', expectedCode);
+    console.log('User entered code:', enteredCode);
+
+    if (enteredCode !== expectedCode) {
+      console.log('❌ Incorrect code entered');
+      setCodeError('Código incorrecto. Verifica el código del encuentro.');
+      return;
+    }
+
+    console.log('✅ Correct code entered, processing check-in');
+    setCodeError('');
+
+    try {
+      const confirmedAt = new Date().toISOString();
+
+      console.log('=== UPSERTING EVENT PARTICIPANT ===');
+      console.log('Event ID:', appointment.event_id);
+      console.log('User ID:', user.id);
+
+      const { data, error: updateError } = await supabase
+        .from('event_participants')
+        .upsert({
+          event_id: appointment.event_id,
+          user_id: user.id,
+          confirmed: true,
+          check_in_time: confirmedAt,
+        }, {
+          onConflict: 'event_id,user_id'
+        })
+        .select();
+
+      if (updateError) {
+        console.error('Error updating event_participants:', updateError);
+        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
+        return;
+      }
+
+      console.log('✅ Check-in successful');
+      
+      await supabase
+        .from('appointments')
+        .update({
+          arrival_status: 'on_time',
+          checked_in_at: confirmedAt,
+          location_confirmed: true,
+        })
+        .eq('id', appointment.id);
+      
+      setAppointment(prev => ({
+        ...prev!,
+        arrival_status: 'on_time',
+        checked_in_at: confirmedAt,
+        location_confirmed: true,
+      }));
+      
+      setCheckInPhase('confirmed');
+      setConfirmationCode('');
+      
+      // Immediately reload participants to show the updated list
+      console.log('Reloading participants after check-in');
+      loadActiveParticipants(appointment.event_id);
+    } catch (error) {
+      console.error('Error during check-in:', error);
+      setCodeError('Ocurrió un error. Intenta de nuevo.');
+    }
+  }, [appointment, user, confirmationCode, loadActiveParticipants]);
+
+  const handleStartExperience = useCallback(() => {
+    console.log('User starting experience - showing ritual modal');
+    console.log('Setting gameStarted to true IMMEDIATELY to prevent unmounting');
+    // CRITICAL FIX: Set gameStarted FIRST, before any other state changes
+    setGameStarted(true);
+    setShowRitualModal(true);
+    
+    Animated.timing(ritualAnimation, {
+      toValue: 1,
+      duration: 2000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [ritualAnimation]);
+
+  const handleBeginExperience = useCallback(async () => {
+    if (!appointment) return;
+
+    try {
+      console.log('User confirmed to begin experience');
+      // CRITICAL: Ensure gameStarted remains true
+      setGameStarted(true);
+      
+      const { error } = await supabase
+        .from('appointments')
+        .update({ experience_started: true })
+        .eq('id', appointment.id);
+
+      if (error) {
+        console.error('Error updating experience_started:', error);
+        return;
+      }
+
+      setShowRitualModal(false);
+      setShowWelcomeModal(true);
+      
+      console.log('Experience started, showing welcome modal');
+    } catch (error) {
+      console.error('Error starting experience:', error);
+    }
+  }, [appointment]);
+
+  const handleContinueToPresentation = useCallback(() => {
+    console.log('Continuing to presentation phase');
+    // CRITICAL: Ensure gameStarted remains true
+    setGameStarted(true);
+    setShowWelcomeModal(false);
+    setExperienceStarted(true);
+    setShowPresentationPhase(true);
+  }, []);
+
+  const handleUserPresented = useCallback(async () => {
+    if (!appointment || !user) return;
+
+    try {
+      console.log('User marked as presented');
+      
+      const presentedAt = new Date().toISOString();
+      
+      // Update event_participants with is_presented and presented_at
+      const { error } = await supabase
+        .from('event_participants')
+        .update({ 
+          is_presented: true,
+          presented_at: presentedAt
+        })
+        .eq('event_id', appointment.event_id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating presented status:', error);
+        return;
+      }
+
+      await supabase
+        .from('appointments')
+        .update({ presented: true })
+        .eq('id', appointment.id);
+
+      setUserPresented(true);
+      
+      // Reload participants to update the list
+      loadActiveParticipants(appointment.event_id);
+    } catch (error) {
+      console.error('Error marking user as presented:', error);
+    }
+  }, [appointment, user, loadActiveParticipants]);
+
+  const handleUserReady = useCallback(async () => {
+    if (!appointment || !user) return;
+
+    try {
+      console.log('User clicked Ya estoy listo');
+      
+      // Update event_participants to mark user as ready/confirmed
+      const { error } = await supabase
+        .from('event_participants')
+        .update({ 
+          confirmed: true,
+          check_in_time: new Date().toISOString()
+        })
+        .eq('event_id', appointment.event_id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating ready status:', error);
+        return;
+      }
+
+      setUserReady(true);
+      
+      // Reload participants to update the list
+      loadActiveParticipants(appointment.event_id);
+    } catch (error) {
+      console.error('Error marking user as ready:', error);
+    }
+  }, [appointment, user, loadActiveParticipants]);
+
   // CRITICAL: Reload appointment and participants when screen is focused
   useFocusEffect(
     useCallback(() => {
@@ -143,7 +757,7 @@ export default function InteraccionScreen() {
 
   useEffect(() => {
     requestNotificationPermissions();
-  }, []);
+  }, [requestNotificationPermissions]);
 
   // FIXED: Supabase Realtime subscription for event_participants with better error handling
   useEffect(() => {
@@ -289,617 +903,6 @@ export default function InteraccionScreen() {
       supabase.removeChannel(channel);
     };
   }, [appointment, loadAppointment]);
-
-  const showToastNotification = (message: string) => {
-    console.log('Showing toast notification:', message);
-    setToastMessage(message);
-    setToastVisible(true);
-
-    // Reset animation values
-    toastOpacity.setValue(0);
-    toastTranslateY.setValue(-50);
-
-    // Animate in
-    Animated.parallel([
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.spring(toastTranslateY, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Animate out after 2 seconds
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(toastOpacity, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(toastTranslateY, {
-          toValue: -50,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setToastVisible(false);
-      });
-    }, 2000);
-  };
-
-  const showSpecialToastNotification = (message: string) => {
-    console.log('Showing special toast notification:', message);
-    setSpecialToastMessage(message);
-    setSpecialToastVisible(true);
-
-    // Reset animation values
-    specialToastOpacity.setValue(0);
-    specialToastScale.setValue(0.8);
-
-    // Animate in
-    Animated.parallel([
-      Animated.timing(specialToastOpacity, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.spring(specialToastScale, {
-        toValue: 1,
-        tension: 40,
-        friction: 6,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Animate out after 2.5 seconds
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(specialToastOpacity, {
-          toValue: 0,
-          duration: 400,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(specialToastScale, {
-          toValue: 0.8,
-          duration: 400,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setSpecialToastVisible(false);
-      });
-    }, 2500);
-  };
-
-  const loadAppointment = async () => {
-    if (!user) {
-      console.log('No user logged in');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      console.log('=== LOADING APPOINTMENT ===');
-      console.log('User ID:', user.id);
-      
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          event_id,
-          arrival_status,
-          checked_in_at,
-          location_confirmed,
-          experience_started,
-          presented,
-          event:events (
-            id,
-            type,
-            date,
-            time,
-            location,
-            location_name,
-            location_address,
-            maps_link,
-            is_location_revealed,
-            address,
-            start_time,
-            max_participants,
-            current_participants,
-            status,
-            confirmation_code,
-            game_phase,
-            current_turn_index,
-            current_round,
-            started_at,
-            selected_participant_id,
-            selected_participant_name,
-            current_question,
-            current_question_level
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'confirmada')
-        .eq('payment_status', 'completed')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading appointment:', error);
-        setLoading(false);
-        return;
-      }
-      
-      console.log('=== APPOINTMENT QUERY RESULT ===');
-      console.log('Total appointments found:', data?.length || 0);
-      
-      if (!data || data.length === 0) {
-        console.log('No confirmed appointment found for user');
-        setAppointment(null);
-        setLoading(false);
-        return;
-      }
-
-      const now = new Date();
-      const upcomingAppointment = data.find(apt => {
-        if (!apt.event?.start_time) return false;
-        const eventDate = new Date(apt.event.start_time);
-        return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      });
-
-      const appointmentData = upcomingAppointment || data[0];
-      console.log('Selected appointment:', appointmentData.id);
-      console.log('Event ID:', appointmentData.event_id);
-      console.log('Game state from database:', {
-        game_phase: appointmentData.event?.game_phase,
-        selected_participant_name: appointmentData.event?.selected_participant_name,
-        current_question: appointmentData.event?.current_question,
-        current_question_level: appointmentData.event?.current_question_level
-      });
-      
-      // CRITICAL: Check if game has already started (roulette or question phase)
-      if (appointmentData.event?.game_phase === 'roulette' || 
-          appointmentData.event?.game_phase === 'question' ||
-          appointmentData.event?.game_phase === 'playing') {
-        console.log('Game already in progress, setting gameStarted to true');
-        setGameStarted(true);
-      }
-      
-      setAppointment(appointmentData as any);
-      
-      if (appointmentData.location_confirmed) {
-        setCheckInPhase('confirmed');
-      }
-      
-      setExperienceStarted(appointmentData.experience_started || false);
-      setUserPresented(appointmentData.presented || false);
-      
-      if (appointmentData.event && appointmentData.event.start_time) {
-        checkIfEventDay(appointmentData.event.start_time);
-        scheduleNotifications(appointmentData.event.start_time);
-      }
-      
-      // Load participants after loading appointment
-      if (appointmentData.event_id) {
-        loadActiveParticipants(appointmentData.event_id);
-      }
-    } catch (error) {
-      console.error('Failed to load appointment:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadActiveParticipants = async (eventId: string) => {
-    try {
-      console.log('=== LOADING PARTICIPANTS ===');
-      console.log('Event ID:', eventId);
-      console.log('Timestamp:', new Date().toISOString());
-      
-      // CRITICAL FIX: Use RPC function to bypass RLS and get ALL confirmed participants
-      const { data, error } = await supabase
-        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
-
-      if (error) {
-        console.error('Error loading participants:', error);
-        return;
-      }
-
-      console.log('=== PARTICIPANTS QUERY RESULT ===');
-      console.log('Total rows returned:', data?.length || 0);
-      console.log('Raw data:', JSON.stringify(data, null, 2));
-
-      const participants: Participant[] = (data || [])
-        .filter((item: any) => {
-          // CRITICAL: Filter out participants without profile data
-          const hasProfile = item.user_name;
-          if (!hasProfile) {
-            console.warn('Participant without profile data:', item.user_id);
-          }
-          return hasProfile;
-        })
-        .map((item: any) => {
-          const fullName = item.user_name;
-          const email = item.user_email || '';
-          const phone = item.user_phone || '';
-          const city = item.user_city || '';
-          const interestedIn = item.user_interested_in || '';
-          const userPhoto = item.user_profile_photo_url || null;
-          
-          console.log('Processing participant:', {
-            id: item.id,
-            user_id: item.user_id,
-            name: fullName,
-            city: city,
-            interested_in: interestedIn,
-            confirmed: item.confirmed,
-            is_presented: item.is_presented
-          });
-
-          return {
-            id: item.id,
-            user_id: item.user_id,
-            event_id: item.event_id,
-            confirmed: item.confirmed,
-            check_in_time: item.check_in_time,
-            is_presented: item.is_presented || false,
-            presented_at: item.presented_at || null,
-            profiles: {
-              id: item.user_id,
-              name: fullName,
-              email: email,
-              phone: phone,
-              city: city,
-              profile_photo_url: userPhoto,
-              interested_in: interestedIn
-            }
-          };
-        });
-
-      console.log('=== FINAL PARTICIPANTS LIST ===');
-      console.log('Participants loaded:', participants.length);
-      console.log('Participants:', participants.map(p => ({ 
-        name: p.profiles?.name,
-        user_id: p.user_id, 
-        city: p.profiles?.city,
-        interested_in: p.profiles?.interested_in,
-        confirmed: p.confirmed,
-        is_presented: p.is_presented
-      })));
-      
-      // Check if we should show the special "La mesa está casi lista" animation
-      // FIXED: Minimum 2 participants instead of 3
-      if (participants.length >= 2 && !hasShownSpecialAnimation.current) {
-        hasShownSpecialAnimation.current = true;
-        showSpecialToastNotification('La mesa está casi lista.');
-      }
-      
-      setActiveParticipants(participants);
-      
-      const allHavePresented = participants.length > 0 && participants.every(p => p.is_presented);
-      setAllPresented(allHavePresented);
-    } catch (error) {
-      console.error('Failed to load participants:', error);
-    }
-  };
-
-  const checkIfEventDay = (startTime: string) => {
-    const now = new Date();
-    const eventDate = new Date(startTime);
-    
-    // Create date at midnight (00:00) local time for event day
-    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
-    
-    // Check if current time is on or after event day midnight
-    const isSameDay = 
-      now.getFullYear() === eventDate.getFullYear() &&
-      now.getMonth() === eventDate.getMonth() &&
-      now.getDate() === eventDate.getDate();
-    
-    const isAfterMidnight = now >= eventDayStart;
-    
-    const isToday = isSameDay && isAfterMidnight;
-    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event day start:', eventDayStart.toLocaleString(), '| Event time:', eventDate.toLocaleString());
-    setIsEventDay(isToday);
-  };
-
-  const updateCountdown = (startTime: string) => {
-    const now = new Date();
-    const eventDate = new Date(startTime);
-    const diff = eventDate.getTime() - now.getTime();
-
-    setCountdown(diff);
-
-    if (diff <= 0) {
-      setCountdownDisplay('¡Es hora!');
-      
-      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
-        setCheckInPhase('code_entry');
-      }
-      return;
-    }
-
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    setCountdownDisplay(countdownText);
-  };
-
-  const requestNotificationPermissions = async () => {
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission status:', status);
-    } catch (error) {
-      console.error('Error requesting notification permissions:', error);
-    }
-  };
-
-  const scheduleNotifications = async (startTime: string) => {
-    try {
-      const eventDate = new Date(startTime);
-      const now = new Date();
-
-      await Notifications.cancelAllScheduledNotificationsAsync();
-
-      if (eventDate > now) {
-        const sixHoursBefore = new Date(eventDate.getTime() - 6 * 60 * 60 * 1000);
-        if (sixHoursBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Tu experiencia Nospi está cerca',
-              body: 'Faltan 6 horas para tu evento. ¡Prepárate!',
-              sound: true,
-            },
-            trigger: sixHoursBefore,
-          });
-        }
-
-        const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
-        if (oneHourBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Tu experiencia Nospi comienza pronto',
-              body: 'Falta 1 hora. La experiencia inicia puntual.',
-              sound: true,
-            },
-            trigger: oneHourBefore,
-          });
-        }
-
-        const tenMinutesBefore = new Date(eventDate.getTime() - 10 * 60 * 1000);
-        if (tenMinutesBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: '¡Últimos 10 minutos!',
-              body: 'Tu experiencia Nospi comienza en 10 minutos. ¡Es hora de dirigirte al lugar!',
-              sound: true,
-            },
-            trigger: tenMinutesBefore,
-          });
-        }
-
-        if (eventDate > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: '¡Tu experiencia Nospi comienza ahora!',
-              body: 'La experiencia inicia puntual. ¡Disfruta!',
-              sound: true,
-            },
-            trigger: eventDate,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error scheduling notifications:', error);
-    }
-  };
-
-  const handleCodeConfirmation = async () => {
-    if (!appointment || !user) return;
-
-    const enteredCode = confirmationCode.trim();
-    const eventCode = appointment.event.confirmation_code;
-    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
-      ? '1986' 
-      : eventCode.trim();
-    
-    console.log('=== CONFIRMATION CODE VALIDATION ===');
-    console.log('Expected code:', expectedCode);
-    console.log('User entered code:', enteredCode);
-
-    if (enteredCode !== expectedCode) {
-      console.log('❌ Incorrect code entered');
-      setCodeError('Código incorrecto. Verifica el código del encuentro.');
-      return;
-    }
-
-    console.log('✅ Correct code entered, processing check-in');
-    setCodeError('');
-
-    try {
-      const confirmedAt = new Date().toISOString();
-
-      console.log('=== UPSERTING EVENT PARTICIPANT ===');
-      console.log('Event ID:', appointment.event_id);
-      console.log('User ID:', user.id);
-
-      const { data, error: updateError } = await supabase
-        .from('event_participants')
-        .upsert({
-          event_id: appointment.event_id,
-          user_id: user.id,
-          confirmed: true,
-          check_in_time: confirmedAt,
-        }, {
-          onConflict: 'event_id,user_id'
-        })
-        .select();
-
-      if (updateError) {
-        console.error('Error updating event_participants:', updateError);
-        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
-        return;
-      }
-
-      console.log('✅ Check-in successful');
-      
-      await supabase
-        .from('appointments')
-        .update({
-          arrival_status: 'on_time',
-          checked_in_at: confirmedAt,
-          location_confirmed: true,
-        })
-        .eq('id', appointment.id);
-      
-      setAppointment(prev => ({
-        ...prev!,
-        arrival_status: 'on_time',
-        checked_in_at: confirmedAt,
-        location_confirmed: true,
-      }));
-      
-      setCheckInPhase('confirmed');
-      setConfirmationCode('');
-      
-      // Immediately reload participants to show the updated list
-      console.log('Reloading participants after check-in');
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error during check-in:', error);
-      setCodeError('Ocurrió un error. Intenta de nuevo.');
-    }
-  };
-
-  const handleStartExperience = () => {
-    console.log('User starting experience - showing ritual modal');
-    console.log('Setting gameStarted to true IMMEDIATELY to prevent unmounting');
-    // CRITICAL FIX: Set gameStarted FIRST, before any other state changes
-    setGameStarted(true);
-    setShowRitualModal(true);
-    
-    Animated.timing(ritualAnimation, {
-      toValue: 1,
-      duration: 2000,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleBeginExperience = async () => {
-    if (!appointment) return;
-
-    try {
-      console.log('User confirmed to begin experience');
-      // CRITICAL: Ensure gameStarted remains true
-      setGameStarted(true);
-      
-      const { error } = await supabase
-        .from('appointments')
-        .update({ experience_started: true })
-        .eq('id', appointment.id);
-
-      if (error) {
-        console.error('Error updating experience_started:', error);
-        return;
-      }
-
-      setShowRitualModal(false);
-      setShowWelcomeModal(true);
-      
-      console.log('Experience started, showing welcome modal');
-    } catch (error) {
-      console.error('Error starting experience:', error);
-    }
-  };
-
-  const handleContinueToPresentation = () => {
-    console.log('Continuing to presentation phase');
-    // CRITICAL: Ensure gameStarted remains true
-    setGameStarted(true);
-    setShowWelcomeModal(false);
-    setExperienceStarted(true);
-    setShowPresentationPhase(true);
-  };
-
-  const handleUserPresented = async () => {
-    if (!appointment || !user) return;
-
-    try {
-      console.log('User marked as presented');
-      
-      const presentedAt = new Date().toISOString();
-      
-      // Update event_participants with is_presented and presented_at
-      const { error } = await supabase
-        .from('event_participants')
-        .update({ 
-          is_presented: true,
-          presented_at: presentedAt
-        })
-        .eq('event_id', appointment.event_id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating presented status:', error);
-        return;
-      }
-
-      await supabase
-        .from('appointments')
-        .update({ presented: true })
-        .eq('id', appointment.id);
-
-      setUserPresented(true);
-      
-      // Reload participants to update the list
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error marking user as presented:', error);
-    }
-  };
-
-  const handleUserReady = async () => {
-    if (!appointment || !user) return;
-
-    try {
-      console.log('User clicked Ya estoy listo');
-      
-      // Update event_participants to mark user as ready/confirmed
-      const { error } = await supabase
-        .from('event_participants')
-        .update({ 
-          confirmed: true,
-          check_in_time: new Date().toISOString()
-        })
-        .eq('event_id', appointment.event_id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating ready status:', error);
-        return;
-      }
-
-      setUserReady(true);
-      
-      // Reload participants to update the list
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error marking user as ready:', error);
-    }
-  };
 
   // FIXED: Validation - Check total confirmed participants by event_id (minimum 2)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
