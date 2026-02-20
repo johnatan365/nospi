@@ -397,21 +397,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Single modern metallic/glass style triangular pointer pointing downward */}
+        {/* Single modern metallic/glass style triangular pointer pointing downward - ELEGANT */}
         <View style={styles.indicatorContainer}>
-          {/* Shadow layer */}
+          {/* Enhanced shadow layer for depth */}
           <View style={styles.indicatorShadow} />
           
-          {/* Main triangle with metallic gradient */}
+          {/* Main triangle with refined metallic gradient */}
           <View style={styles.triangleContainer}>
-            <LinearGradient
-              colors={['#E8E8E8', '#C0C0C0', '#A8A8A8', '#909090']}
-              style={styles.triangleGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
+            <View style={styles.triangleGradient} />
             
-            {/* Glass highlight effect */}
+            {/* Enhanced glass highlight effect for sophistication */}
             <View style={styles.triangleHighlight} />
           </View>
         </View>
@@ -855,34 +850,35 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  // Single modern metallic/glass style triangular pointer pointing downward
+  // Single modern metallic/glass style triangular pointer pointing downward - ELEGANT VERSION
   indicatorContainer: {
     position: 'absolute',
-    top: -10,
+    top: -18,
     left: '50%',
-    marginLeft: -25,
-    width: 50,
-    height: 60,
+    marginLeft: -22,
+    width: 44,
+    height: 70,
     zIndex: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   indicatorShadow: {
     position: 'absolute',
-    top: 8,
+    top: 10,
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 25,
-    borderRightWidth: 25,
-    borderTopWidth: 50,
+    borderLeftWidth: 22,
+    borderRightWidth: 22,
+    borderTopWidth: 55,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: 'rgba(0, 0, 0, 0.3)',
+    borderTopColor: 'rgba(0, 0, 0, 0.4)',
   },
   triangleContainer: {
-    width: 50,
-    height: 60,
+    width: 44,
+    height: 70,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -892,27 +888,27 @@ const styles = StyleSheet.create({
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 25,
-    borderRightWidth: 25,
-    borderTopWidth: 50,
+    borderLeftWidth: 22,
+    borderRightWidth: 22,
+    borderTopWidth: 55,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#C0C0C0',
+    borderTopColor: '#B8B8B8',
   },
   triangleHighlight: {
     position: 'absolute',
-    top: 4,
-    left: 12,
+    top: 6,
+    left: 10,
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 12,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 18,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: 'rgba(255, 255, 255, 0.6)',
+    borderTopColor: 'rgba(255, 255, 255, 0.75)',
   },
   spinButton: {
     backgroundColor: '#FFD700',
