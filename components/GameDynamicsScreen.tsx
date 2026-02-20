@@ -70,13 +70,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // Sync game state from database
   useEffect(() => {
-    console.log('=== SYNCING GAME STATE FROM DATABASE ===');
-    console.log('Event game_phase:', appointment.event.game_phase);
+    console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
+    console.log('Fase del evento:', appointment.event.game_phase);
     
     const dbPhase = appointment.event.game_phase;
     
     if (dbPhase === 'show_result' || dbPhase === 'question') {
-      // Find selected participant
+      // Encontrar participante seleccionado
       const participant = activeParticipants.find(
         p => p.user_id === appointment.event.selected_participant_id
       );
@@ -105,7 +105,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('=== SUBSCRIBING TO GAME STATE ===');
+    console.log('=== SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
     
     const channel = supabase
       .channel(`game_${appointment.event_id}`)
@@ -118,12 +118,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('=== GAME STATE UPDATE ===');
+          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO ===');
           const newEvent = payload.new as any;
           
-          // When game_phase becomes 'show_result', trigger animation
+          // Cuando game_phase se convierte en 'show_result', activar animación
           if (newEvent.game_phase === 'show_result' && !isSpinning) {
-            console.log('Starting roulette animation');
+            console.log('Iniciando animación de la ruleta');
             startRouletteAnimation();
           }
         }
@@ -133,23 +133,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, isSpinning]);
+  }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
 
   const startRouletteAnimation = useCallback(() => {
+    console.log('=== INICIANDO ANIMACIÓN DE LA RULETA ===');
     setIsSpinning(true);
     setGamePhase('show_result');
     
-    // Reset animations
+    // Reiniciar animaciones
     wheelRotation.setValue(0);
     glowAnimation.setValue(0);
     
-    // Calculate target rotation
+    // Calcular rotación objetivo
     const targetIndex = Math.floor(Math.random() * activeParticipants.length);
     const degreesPerSegment = 360 / activeParticipants.length;
     const extraSpins = 5 + Math.floor(Math.random() * 2);
     const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
     
-    // Start glow animation
+    console.log('Rotación objetivo:', targetRotation, 'grados');
+    
+    // Iniciar animación de brillo
     Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnimation, {
@@ -167,17 +170,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       ])
     ).start();
     
-    // Main wheel animation - 4.2 seconds with smooth deceleration
+    // Animación principal de la rueda - 4.2 segundos con desaceleración suave
     Animated.timing(wheelRotation, {
       toValue: targetRotation,
       duration: 4200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
-      console.log('Animation complete');
+      console.log('Animación completada');
       setIsSpinning(false);
       
-      // Pulse selected segment
+      // Pulso del segmento seleccionado
       Animated.sequence([
         Animated.timing(selectedPulse, {
           toValue: 1.1,
@@ -196,22 +199,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleStartRoulette = useCallback(async () => {
     if (!appointment?.event_id || isSpinning) return;
 
-    console.log('=== USER PRESSED START ROULETTE ===');
+    console.log('=== USUARIO PRESIONÓ INICIAR RULETA ===');
     
     try {
       const { data, error } = await supabase.rpc('start_roulette_spin', {
-        p_event_id: appointment.event_id,
+        event_id: appointment.event_id,
       });
 
       if (error) {
-        console.error('RPC error:', error);
+        console.error('Error RPC:', error);
         return;
       }
 
-      console.log('RPC success:', data);
-      // Animation will be triggered by Realtime subscription
+      console.log('RPC exitoso:', data);
+      // La animación se activará mediante la suscripción Realtime
     } catch (error) {
-      console.error('Error starting roulette:', error);
+      console.error('Error al iniciar la ruleta:', error);
     }
   }, [appointment?.event_id, isSpinning]);
 
@@ -231,14 +234,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Metallic pointer at top */}
-        <View style={styles.pointerContainer}>
+        {/* Premium metallic indicator at top */}
+        <View style={styles.indicatorContainer}>
+          <View style={styles.indicatorShadow} />
           <LinearGradient
-            colors={['#FFD700', '#FFA500', '#FFD700']}
-            style={styles.pointer}
+            colors={['#FFD700', '#FFC700', '#FFB700', '#FFA500']}
+            style={styles.indicatorGradient}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
+            end={{ x: 0, y: 1 }}
+          >
+            <View style={styles.indicatorInner}>
+              <View style={styles.indicatorTriangle} />
+            </View>
+          </LinearGradient>
+          <View style={styles.indicatorHighlight} />
         </View>
 
         {/* Animated glow during spin */}
@@ -340,14 +349,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Ready to Begin</Text>
-          <Text style={styles.subtitleWhite}>All participants have presented</Text>
+          <Text style={styles.titleWhite}>Listos para Comenzar</Text>
+          <Text style={styles.subtitleWhite}>Todos los participantes se han presentado</Text>
 
           <View style={styles.readyCard}>
             <Text style={styles.readyIcon}>✨</Text>
-            <Text style={styles.readyTitle}>Let's Start!</Text>
+            <Text style={styles.readyTitle}>¡Empecemos!</Text>
             <Text style={styles.readyMessage}>
-              Everyone is ready. Press the button below to spin the roulette.
+              Todos están listos. Presiona el botón para girar la ruleta.
             </Text>
           </View>
 
@@ -356,7 +365,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             onPress={handleStartRoulette}
             activeOpacity={0.8}
           >
-            <Text style={styles.startButtonText}>🎰 Start Roulette</Text>
+            <Text style={styles.startButtonText}>🎰 Iniciar Ruleta</Text>
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
@@ -372,13 +381,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.rouletteContainer}>
-          <Text style={styles.rouletteTitleWhite}>Spinning the Roulette</Text>
-          <Text style={styles.rouletteSubtitleWhite}>Who will be chosen?</Text>
+          <Text style={styles.rouletteTitleWhite}>Girando la Ruleta</Text>
+          <Text style={styles.rouletteSubtitleWhite}>¿Quién será elegido?</Text>
 
           {renderProfessionalWheel()}
 
           <View style={styles.suspenseCard}>
-            <Text style={styles.suspenseText}>✨ Building suspense... ✨</Text>
+            <Text style={styles.suspenseText}>✨ Creando suspenso... ✨</Text>
           </View>
         </View>
       </LinearGradient>
@@ -397,7 +406,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <View style={styles.selectedCard}>
-            <Text style={styles.selectedLabel}>The roulette chose</Text>
+            <Text style={styles.selectedLabel}>La ruleta eligió a</Text>
             <Text style={styles.selectedName}>{participantName}</Text>
           </View>
 
@@ -409,7 +418,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              🔄 All participants see the same question in real-time
+              🔄 Todos los participantes ven la misma pregunta en tiempo real
             </Text>
           </View>
         </ScrollView>
@@ -642,30 +651,66 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  pointerContainer: {
+  indicatorContainer: {
     position: 'absolute',
-    top: -40,
+    top: -50,
     left: '50%',
-    marginLeft: -20,
+    marginLeft: -25,
+    width: 50,
+    height: 60,
+    zIndex: 10,
+    alignItems: 'center',
+  },
+  indicatorShadow: {
+    position: 'absolute',
+    top: 8,
+    width: 46,
+    height: 56,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 8,
+    transform: [{ scaleY: 0.5 }],
+  },
+  indicatorGradient: {
+    width: 46,
+    height: 56,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  indicatorInner: {
     width: 40,
     height: 50,
-    zIndex: 10,
+    backgroundColor: '#FFF8DC',
+    borderRadius: 6,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 4,
   },
-  pointer: {
+  indicatorTriangle: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 20,
-    borderRightWidth: 20,
-    borderTopWidth: 50,
+    borderLeftWidth: 12,
+    borderRightWidth: 12,
+    borderTopWidth: 18,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 12,
+    borderTopColor: '#FFA500',
+  },
+  indicatorHighlight: {
+    position: 'absolute',
+    top: 4,
+    left: 8,
+    width: 12,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 6,
   },
   suspenseCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
