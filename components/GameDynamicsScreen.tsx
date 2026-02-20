@@ -186,8 +186,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const newEvent = payload.new as any;
           
           // Cuando game_phase se convierte en 'show_result', activar animación
-          if (newEvent.game_phase === 'show_result' && !isSpinning) {
-            console.log('Iniciando animación de la ruleta');
+          // REMOVED the !isSpinning check - always trigger animation when phase changes
+          if (newEvent.game_phase === 'show_result') {
+            console.log('Iniciando animación de la ruleta desde Realtime');
             startRouletteAnimation();
           }
         }
@@ -197,7 +198,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
+  }, [appointment?.event_id, startRouletteAnimation]);
 
   const handleStartRoulette = useCallback(async () => {
     console.log('=== USUARIO PRESIONÓ GIRAR RULETA ===');
@@ -212,8 +213,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    // Allow starting even if currently in show_result phase
-    setIsSpinning(true);
+    // Don't set isSpinning here - let the animation callback handle it
     setLoadingMessage('Iniciando ruleta...');
     
     try {
@@ -228,7 +228,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (fetchError) {
         console.error('Error al obtener el evento:', fetchError);
         Alert.alert('Error', 'No se pudo obtener el estado del evento.');
-        setIsSpinning(false);
         setLoadingMessage('');
         return;
       }
@@ -254,7 +253,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         if (participantsError) {
           console.error('Error al obtener participantes confirmados:', participantsError);
           Alert.alert('Error', 'No se pudieron obtener los participantes.');
-          setIsSpinning(false);
           setLoadingMessage('');
           return;
         }
@@ -262,7 +260,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         if (!participants || participants.length === 0) {
           console.error('Error: No hay participantes confirmados para inicializar la cola');
           Alert.alert('Error', 'No hay participantes confirmados para la ruleta.');
-          setIsSpinning(false);
           setLoadingMessage('');
           return;
         }
@@ -293,7 +290,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         if (updateQueueError) {
           console.error('Error al inicializar level_queue:', updateQueueError);
           Alert.alert('Error', 'No se pudo guardar la lista de participantes.');
-          setIsSpinning(false);
           setLoadingMessage('');
           return;
         }
@@ -305,7 +301,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (levelQueue.length === 0) {
         console.error('Error: La cola de participantes está vacía después del intento de inicialización');
         Alert.alert('Error', 'No hay participantes en la cola para seleccionar.');
-        setIsSpinning(false);
         setLoadingMessage('');
         return;
       }
@@ -315,7 +310,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (!nextParticipantId) {
         console.error('Error: No se pudo encontrar un participante en el índice actual');
         Alert.alert('Error', 'No se pudo seleccionar un participante.');
-        setIsSpinning(false);
         setLoadingMessage('');
         return;
       }
@@ -341,18 +335,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (updateError) {
         console.error('Error al actualizar el evento para el giro de la ruleta:', updateError);
         Alert.alert('Error', 'No se pudo actualizar el evento para la ruleta.');
-        setIsSpinning(false);
         setLoadingMessage('');
         return;
       }
 
       console.log('✅ Giro de ruleta iniciado exitosamente mediante actualización directa');
       // La animación se activará mediante la suscripción Realtime
-      // No resetear isSpinning aquí, se hará cuando la animación termine
+      // Clear loading message after a short delay
+      setTimeout(() => setLoadingMessage(''), 500);
     } catch (error: any) {
       console.error('Error inesperado al iniciar la ruleta:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
-      setIsSpinning(false);
       setLoadingMessage('');
     }
   }, [appointment?.event_id, isSpinning, activeParticipants.length, gamePhase]);
@@ -373,20 +366,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Premium metallic indicator - positioned to overlap wheel edge */}
+        {/* Triangular indicator pointing downward - positioned to overlap wheel edge */}
         <View style={styles.indicatorContainer}>
+          {/* Shadow layer */}
           <View style={styles.indicatorShadow} />
-          <LinearGradient
-            colors={['#FFD700', '#FFC700', '#FFB700', '#FFA500']}
-            style={styles.indicatorGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          >
-            <View style={styles.indicatorInner}>
-              <View style={styles.indicatorTriangle} />
-            </View>
-          </LinearGradient>
-          <View style={styles.indicatorHighlight} />
+          
+          {/* Main triangle with gradient */}
+          <View style={styles.triangleContainer}>
+            <LinearGradient
+              colors={['#FFD700', '#FFC700', '#FFB700', '#FFA500']}
+              style={styles.triangleGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            >
+              {/* Inner triangle shape */}
+              <View style={styles.triangleInner} />
+            </LinearGradient>
+            
+            {/* Highlight effect */}
+            <View style={styles.triangleHighlight} />
+          </View>
         </View>
 
         {/* Animated glow during spin */}
@@ -829,75 +828,78 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  // Arrow indicator positioned to overlap the wheel edge (like the image)
+  // Triangular indicator pointing downward - positioned to overlap wheel edge
   indicatorContainer: {
     position: 'absolute',
-    top: -20, // Moved down so it overlaps the wheel
+    top: -10,
     left: '50%',
-    marginLeft: -30,
-    width: 60,
-    height: 70,
+    marginLeft: -25,
+    width: 50,
+    height: 60,
     zIndex: 10,
     alignItems: 'center',
   },
   indicatorShadow: {
     position: 'absolute',
     top: 8,
-    width: 56,
-    height: 66,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 10,
-    transform: [{ scaleY: 0.5 }],
-  },
-  indicatorGradient: {
-    width: 56,
-    height: 66,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: '#FFA500',
-  },
-  indicatorInner: {
-    width: 48,
-    height: 58,
-    backgroundColor: '#FFF8DC',
-    borderRadius: 8,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  indicatorTriangle: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 14,
-    borderRightWidth: 14,
-    borderTopWidth: 22,
+    borderLeftWidth: 25,
+    borderRightWidth: 25,
+    borderTopWidth: 50,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#FF8C00',
-    shadowColor: '#FF8C00',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
+    borderTopColor: 'rgba(0, 0, 0, 0.3)',
   },
-  indicatorHighlight: {
+  triangleContainer: {
+    width: 50,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  triangleGradient: {
     position: 'absolute',
-    top: 6,
-    left: 10,
-    width: 14,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    borderRadius: 7,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 25,
+    borderRightWidth: 25,
+    borderTopWidth: 50,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFD700',
+  },
+  triangleInner: {
+    position: 'absolute',
+    top: -46,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 22,
+    borderRightWidth: 22,
+    borderTopWidth: 44,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFA500',
+  },
+  triangleHighlight: {
+    position: 'absolute',
+    top: 4,
+    left: 12,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: 'rgba(255, 255, 255, 0.4)',
   },
   spinButton: {
     backgroundColor: '#FFD700',
