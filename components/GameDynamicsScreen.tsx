@@ -59,6 +59,8 @@ const SEGMENT_COLORS = [
 ];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
+  console.log('Rendering GameDynamicsScreen');
+  
   const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
   const [currentLevel] = useState<QuestionLevel>('divertido');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -73,7 +75,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // DECLARE startRouletteAnimation BEFORE the useEffect that uses it
   const startRouletteAnimation = useCallback(() => {
-    console.log('=== INICIANDO ANIMACIÓN DE LA RULETA ===');
+    console.log('🎯 === INICIANDO ANIMACIÓN DE LA RULETA ===');
     setIsSpinning(true);
     setGamePhase('show_result');
     setHasTriggeredAnimation(true);
@@ -88,7 +90,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const extraSpins = 5 + Math.floor(Math.random() * 2);
     const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
     
-    console.log('Rotación objetivo:', targetRotation, 'grados');
+    console.log('🎯 Rotación objetivo:', targetRotation, 'grados');
+    console.log('🎯 Participantes en la ruleta:', activeParticipants.length);
     
     // Iniciar animación de brillo
     Animated.loop(
@@ -115,7 +118,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
-      console.log('Animación completada');
+      console.log('✅ Animación completada');
       setIsSpinning(false);
       
       // Pulso del segmento seleccionado
@@ -134,6 +137,46 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     });
   }, [activeParticipants.length, wheelRotation, glowAnimation, selectedPulse]);
 
+  // Realtime subscription for game state updates - MUST BE BEFORE OTHER EFFECTS
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+
+    console.log('📡 === SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
+    console.log('📡 Event ID:', appointment.event_id);
+    
+    const channel = supabase
+      .channel(`game_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('📡 === ACTUALIZACIÓN DEL ESTADO DEL JUEGO VIA REALTIME ===');
+          const newEvent = payload.new as any;
+          console.log('📡 Nueva fase:', newEvent.game_phase);
+          console.log('📡 Participante seleccionado:', newEvent.selected_participant_id);
+          
+          // Cuando game_phase se convierte en 'show_result', activar animación
+          if (newEvent.game_phase === 'show_result' && !hasTriggeredAnimation) {
+            console.log('🚀 Iniciando animación de la ruleta desde Realtime');
+            startRouletteAnimation();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Estado de suscripción:', status);
+      });
+
+    return () => {
+      console.log('📡 Cancelando suscripción');
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id, startRouletteAnimation, hasTriggeredAnimation]);
+
   // Sync game state from database AND trigger animation if needed
   useEffect(() => {
     console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
@@ -148,6 +191,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       );
       
       if (participant) {
+        console.log('✅ Participante seleccionado encontrado:', participant.name);
         setSelectedParticipant(participant);
       }
       
@@ -245,56 +289,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
 
-  // Realtime subscription for game state updates
-  useEffect(() => {
-    if (!appointment?.event_id) return;
-
-    console.log('=== SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
-    
-    const channel = supabase
-      .channel(`game_${appointment.event_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
-        },
-        (payload) => {
-          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO VIA REALTIME ===');
-          const newEvent = payload.new as any;
-          
-          // Cuando game_phase se convierte en 'show_result', activar animación
-          if (newEvent.game_phase === 'show_result') {
-            console.log('🚀 Iniciando animación de la ruleta desde Realtime');
-            setHasTriggeredAnimation(false); // Reset flag for next spin
-            startRouletteAnimation();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [appointment?.event_id, startRouletteAnimation]);
-
   const handleStartRoulette = useCallback(async () => {
-    console.log('=== USUARIO PRESIONÓ GIRAR RULETA ===');
-    console.log('Estado actual - isSpinning:', isSpinning);
-    console.log('Estado actual - gamePhase:', gamePhase);
-    console.log('Participantes activos:', activeParticipants.length);
+    console.log('🎰 === USUARIO PRESIONÓ GIRAR RULETA ===');
+    console.log('🎰 Estado actual - isSpinning:', isSpinning);
+    console.log('🎰 Estado actual - gamePhase:', gamePhase);
+    console.log('🎰 Participantes activos:', activeParticipants.length);
     
     if (!appointment?.event_id || activeParticipants.length === 0) {
-      console.warn('No se puede iniciar la ruleta: condiciones no cumplidas');
+      console.warn('⚠️ No se puede iniciar la ruleta: condiciones no cumplidas');
       console.log('event_id:', appointment?.event_id);
       console.log('activeParticipants.length:', activeParticipants.length);
       return;
     }
 
     if (isSpinning) {
-      console.log('Ya está girando, ignorando clic');
+      console.log('⚠️ Ya está girando, ignorando clic');
       return;
     }
 
@@ -302,7 +311,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     try {
       // 1. LOG CURRENT GAME_PHASE
-      console.log('Obteniendo estado actual del evento...');
+      console.log('📊 Obteniendo estado actual del evento...');
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
         .select('level_queue, current_turn_index, game_phase')
@@ -336,7 +345,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       // 5. ENSURE LEVEL_QUEUE IS INITIALIZED IF EMPTY
       if (!levelQueue || levelQueue.length === 0) {
-        console.log('=== INICIALIZANDO LEVEL_QUEUE ===');
+        console.log('🔄 === INICIALIZANDO LEVEL_QUEUE ===');
         setLoadingMessage('Preparando participantes...');
         
         // Obtener participantes confirmados
@@ -418,11 +427,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Nuevo índice de turno:', newIndex);
 
       // Reset animation flag before updating database
+      console.log('🔄 Reseteando flag de animación');
       setHasTriggeredAnimation(false);
 
       // Actualización directa de la tabla events
       setLoadingMessage('Girando la ruleta...');
       
+      console.log('📤 Actualizando evento a show_result...');
       // 4. AFTER UPDATE, CHECK ROWS AFFECTED
       const { data, error: updateError } = await supabase
         .from('events')
@@ -430,6 +441,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           selected_participant_id: nextParticipantId,
           current_turn_index: newIndex,
           game_phase: 'show_result',
+          updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id)
         .select();
@@ -450,9 +462,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
-      console.log('✅ Giro de ruleta iniciado exitosamente');
-      console.log('📊 Rows updated:', data.length);
-      console.log('📊 New game_phase:', data[0].game_phase);
+      console.log('✅ Evento actualizado a show_result. Rows affected:', data.length);
+      console.log('✅ Nueva fase:', data[0].game_phase);
+      console.log('✅ Participante seleccionado:', data[0].selected_participant_id);
       
       // La animación se activará mediante la suscripción Realtime
       // Clear loading message after a short delay
