@@ -61,7 +61,7 @@ const SEGMENT_COLORS = [
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   console.log('🎮 Rendering GameDynamicsScreen');
   
-  const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('waiting_for_spin');
   const [currentLevel] = useState<QuestionLevel>('divertido');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
@@ -184,27 +184,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     const dbPhase = appointment.event.game_phase;
     
-    // Auto-transition from 'intro' or 'ready' to 'waiting_for_spin' immediately
-    if (dbPhase === 'ready' || dbPhase === 'intro') {
-      console.log('⚙️ Auto-transicionando de', dbPhase, 'a waiting_for_spin...');
-      supabase
-        .from('events')
-        .update({ 
-          game_phase: 'waiting_for_spin',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', appointment.event_id)
-        .then(({ error }) => {
-          if (error) {
-            console.error('❌ Error al auto-transicionar:', error);
-          } else {
-            console.log('✅ Auto-transición exitosa a waiting_for_spin');
-          }
-        });
-      setGamePhase('waiting_for_spin');
-      return;
-    }
-    
+    // Map database phases to local game phases
     if (dbPhase === 'show_result' || dbPhase === 'question') {
       // Encontrar participante seleccionado
       const participant = activeParticipants.find(
@@ -231,10 +211,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           startRouletteAnimation();
         }
       }
-    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin') {
-      setGamePhase('waiting_for_spin');
     } else {
-      // Default to waiting_for_spin for any unknown phase
+      // For any other phase (intro, ready, waiting_for_spin, roulette, etc.), show the spin button
       setGamePhase('waiting_for_spin');
     }
   }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
@@ -273,6 +251,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               game_phase: 'question',
               current_question: randomQuestion,
               current_question_level: currentLevel,
+              updated_at: new Date().toISOString(),
             })
             .eq('id', appointment.event_id);
           
@@ -305,6 +284,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.warn('⚠️ No se puede iniciar la ruleta: condiciones no cumplidas');
       console.log('event_id:', appointment?.event_id);
       console.log('activeParticipants.length:', activeParticipants.length);
+      Alert.alert('Error', 'No hay participantes para girar la ruleta.');
       return;
     }
 
@@ -316,7 +296,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setLoadingMessage('Iniciando ruleta...');
     
     try {
-      // 1. LOG CURRENT GAME_PHASE
+      // 1. Get current event state
       console.log('📊 Obteniendo estado actual del evento...');
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
@@ -335,21 +315,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('📊 Current game_phase:', eventData.game_phase);
       console.log('📊 Level_queue length:', eventData.level_queue?.length || 0);
 
-      // 2. ENSURE UPDATE CONDITION MATCHES ACTUAL PHASE
-      // Allow spin from 'intro', 'ready', 'waiting_for_spin', OR 'show_result'
-      const allowedPhases = ['intro', 'ready', 'waiting_for_spin', 'show_result'];
-      if (!eventData.game_phase || !allowedPhases.includes(eventData.game_phase)) {
-        console.error('❌ Fase no válida para girar:', eventData.game_phase);
-        Alert.alert('Error', `No se puede girar desde la fase: ${eventData.game_phase}`);
-        setLoadingMessage('');
-        return;
-      }
-
       // Lógica del lado del cliente para seleccionar el siguiente participante
       let levelQueue = eventData.level_queue || [];
       let currentTurnIndex = eventData.current_turn_index || 0;
 
-      // 5. ENSURE LEVEL_QUEUE IS INITIALIZED IF EMPTY
+      // Initialize level_queue if empty
       if (!levelQueue || levelQueue.length === 0) {
         console.log('🔄 === INICIALIZANDO LEVEL_QUEUE ===');
         setLoadingMessage('Preparando participantes...');
@@ -396,6 +366,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           .update({
             level_queue: levelQueue,
             current_turn_index: currentTurnIndex,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
 
@@ -417,7 +388,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
-      // 6. ENSURE SELECTED_PARTICIPANT_ID IS CALCULATED CORRECTLY
+      // Select next participant
       const nextParticipantId = levelQueue[currentTurnIndex];
       if (!nextParticipantId) {
         console.error('❌ Error: No se pudo encontrar un participante en el índice actual');
@@ -436,11 +407,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🔄 Reseteando flag de animación');
       setHasTriggeredAnimation(false);
 
-      // Actualización directa de la tabla events
+      // Update event to show_result phase
       setLoadingMessage('Girando la ruleta...');
       
       console.log('📤 Actualizando evento a show_result...');
-      // 4. AFTER UPDATE, CHECK ROWS AFFECTED
+      
+      // 🚨 FIX: Remove the phase check - just update directly
       const { data, error: updateError } = await supabase
         .from('events')
         .update({
@@ -459,10 +431,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
-      // CHECK ROWS AFFECTED
+      // Check if update was successful
       if (!data || data.length === 0) {
-        console.error('❌ NO ROWS UPDATED - Possible race condition or invalid state');
-        console.error('❌ This means the update query did not match any rows');
+        console.error('❌ NO ROWS UPDATED - La actualización no afectó ninguna fila');
         Alert.alert('Error', 'No se pudo iniciar la ruleta. Inténtalo de nuevo.');
         setLoadingMessage('');
         return;
@@ -638,9 +609,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       </View>
     );
   };
-
-  // Skip the "ready" phase and go directly to roulette
-  // This phase is now handled by auto-transitioning to waiting_for_spin
 
   if (gamePhase === 'waiting_for_spin' || gamePhase === 'show_result') {
     return (
