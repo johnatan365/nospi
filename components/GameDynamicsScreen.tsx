@@ -68,6 +68,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [isSpinning, setIsSpinning] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [hasTriggeredAnimation, setHasTriggeredAnimation] = useState(false);
+  const [isTransitioningToQuestion, setIsTransitioningToQuestion] = useState(false);
   
   const wheelRotation = useRef(new Animated.Value(0)).current;
   const glowAnimation = useRef(new Animated.Value(0)).current;
@@ -181,8 +182,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
     console.log('Fase del evento:', appointment.event.game_phase);
+    console.log('isTransitioningToQuestion:', isTransitioningToQuestion);
     
     const dbPhase = appointment.event.game_phase;
+    
+    // If we're transitioning to question, don't override with database state
+    if (isTransitioningToQuestion) {
+      console.log('⏭️ Transición a pregunta en progreso, ignorando actualización de DB');
+      return;
+    }
     
     // Map database phases to local game phases
     if (dbPhase === 'question') {
@@ -205,6 +213,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
       
       setGamePhase('question');
+      setIsTransitioningToQuestion(false);
     } else if (dbPhase === 'show_result') {
       // SHOW_RESULT PHASE - Show the roulette animation
       console.log('🎯 Fase show_result detectada');
@@ -231,34 +240,39 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('⏳ Fase waiting_for_spin o inicial');
       setGamePhase('waiting_for_spin');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id, isTransitioningToQuestion]);
 
   // Auto-transition to question phase after animation completes
   useEffect(() => {
-    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant) {
-      console.log('=== ANIMACIÓN COMPLETADA - TRANSICIONANDO A PREGUNTA ===');
+    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant && !isTransitioningToQuestion) {
+      console.log('=== ANIMACIÓN COMPLETADA - PREPARANDO TRANSICIÓN A PREGUNTA ===');
       console.log('Participante seleccionado:', selectedParticipant.name);
+      
+      // Set flag to prevent database sync from overriding
+      setIsTransitioningToQuestion(true);
       
       // Wait 2 seconds after animation completes to show the result, then transition to question
       const transitionTimer = setTimeout(async () => {
-        console.log('Transicionando a fase de pregunta...');
+        console.log('🔄 Transicionando a fase de pregunta...');
         
         try {
           // Generate a random question (you can customize this logic)
           const questions = [
-            'te gusta bailar?',
-            'cuál es tu mayor sueño?',
-            'qué te hace feliz?',
-            'cuál es tu mayor miedo?',
-            'qué harías si ganaras la lotería?',
-            'cuál es tu película favorita?',
-            'prefieres el mar o la montaña?',
-            'qué superpoder te gustaría tener?',
-            'cuál es tu comida favorita?',
-            'qué te hace reír?'
+            '¿te gusta bailar?',
+            '¿cuál es tu mayor sueño?',
+            '¿qué te hace feliz?',
+            '¿cuál es tu mayor miedo?',
+            '¿qué harías si ganaras la lotería?',
+            '¿cuál es tu película favorita?',
+            '¿prefieres el mar o la montaña?',
+            '¿qué superpoder te gustaría tener?',
+            '¿cuál es tu comida favorita?',
+            '¿qué te hace reír?'
           ];
           
           const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+          
+          console.log('📝 Pregunta seleccionada:', randomQuestion);
           
           // Update the event to question phase with the selected question
           const { error: updateError } = await supabase
@@ -274,21 +288,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           if (updateError) {
             console.error('❌ Error al actualizar a fase de pregunta:', updateError);
             Alert.alert('Error', 'No se pudo pasar a la pregunta.');
+            setIsTransitioningToQuestion(false);
             return;
           }
           
-          console.log('✅ Transición a pregunta exitosa');
+          console.log('✅ Transición a pregunta exitosa en la base de datos');
+          
+          // Update local state immediately for responsive UI
           setCurrentQuestion(randomQuestion);
           setGamePhase('question');
+          setIsTransitioningToQuestion(false);
         } catch (error: any) {
           console.error('❌ Error inesperado al transicionar a pregunta:', error);
           Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
+          setIsTransitioningToQuestion(false);
         }
       }, 2000); // 2 seconds delay after animation completes
       
       return () => clearTimeout(transitionTimer);
     }
-  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
+  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel, isTransitioningToQuestion]);
 
   const handleStartRoulette = useCallback(async () => {
     console.log('🎰 === USUARIO PRESIONÓ GIRAR RULETA ===');
@@ -428,7 +447,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       
       console.log('📤 Actualizando evento a show_result...');
       
-      // 🚨 FIX: Remove the phase check - just update directly
       const { data, error: updateError } = await supabase
         .from('events')
         .update({
@@ -500,6 +518,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setCurrentQuestion(null);
       setSelectedParticipant(null);
       setHasTriggeredAnimation(false);
+      setIsTransitioningToQuestion(false);
     } catch (error: any) {
       console.error('❌ Error inesperado al continuar:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error.');
