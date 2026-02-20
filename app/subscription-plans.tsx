@@ -214,7 +214,6 @@ export default function SubscriptionPlansScreen() {
                   style={styles.paymentIcon}
                   resizeMode="contain"
                 />
-                <Text style={styles.paymentMethodLabel}>Google Pay</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -236,7 +235,6 @@ export default function SubscriptionPlansScreen() {
                   style={styles.paymentIcon}
                   resizeMode="contain"
                 />
-                <Text style={styles.paymentMethodLabel}>Apple Pay</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -272,7 +270,6 @@ export default function SubscriptionPlansScreen() {
                 style={styles.paymentIconPSE}
                 resizeMode="contain"
               />
-              <Text style={styles.paymentMethodLabel}>PSE</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -470,17 +467,10 @@ const styles = StyleSheet.create({
   paymentIcon: {
     width: 80,
     height: 32,
-    marginRight: 12,
   },
   paymentIconPSE: {
     width: 60,
     height: 32,
-    marginRight: 12,
-  },
-  paymentMethodLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

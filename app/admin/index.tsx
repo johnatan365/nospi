@@ -307,11 +307,12 @@ export default function AdminPanelScreen() {
 
       const startTimeISO = combinedDate.toISOString();
 
+      // FIX: Use 'restaurante' instead of 'restaurant' to match the database constraint
       const eventData = {
         name: newEvent.name,
         city: newEvent.city,
         description: newEvent.description,
-        type: newEvent.type,
+        type: newEvent.type === 'restaurant' ? 'restaurante' : newEvent.type,
         date: startTimeISO,
         time: newEvent.time,
         location: newEvent.event_status === 'published' && newEvent.location_name 
