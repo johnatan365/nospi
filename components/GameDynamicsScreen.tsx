@@ -17,7 +17,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'roulette' | 'question' | 'rating' | 'level_vote' | 'game_end' | 'extension' | 'secret_match' | 'final_animation' | 'post_event';
+type GamePhase = 'waiting_confirmation' | 'ready' | 'roulette' | 'question' | 'rating' | 'level_vote' | 'game_end' | 'extension' | 'secret_match' | 'final_animation' | 'post_event';
 
 interface Participant {
   id: string;
@@ -74,7 +74,7 @@ const SEGMENT_COLORS = [
 ];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('waiting_confirmation');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentRound, setCurrentRound] = useState(0);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -91,6 +91,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [showExtensionVote, setShowExtensionVote] = useState(false);
   const [extensionVoteChoice, setExtensionVoteChoice] = useState<'free' | 'more' | null>(null);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [userConfirmed, setUserConfirmed] = useState(false);
 
   const levelNames = {
     divertido: 'Divertido',
@@ -151,8 +152,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setGamePhase('roulette');
       setShowRoulette(true);
     } else {
-      console.log('Game in ready state');
-      setGamePhase('ready');
+      console.log('Game in waiting_confirmation state');
+      setGamePhase('waiting_confirmation');
     }
   }, [appointment.event.game_phase, appointment.event.current_question, activeParticipants]);
 
@@ -248,6 +249,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, activeParticipants]);
 
+  const handleUserReady = async () => {
+    console.log('=== USER CLICKED YA ESTOY LISTO ===');
+    setUserConfirmed(true);
+    
+    // TODO: Update user's confirmation status in database
+    // This would be a backend call to mark this user as ready
+    
+    // Check if all participants are ready
+    const allReady = activeParticipants.every(p => p.confirmed);
+    
+    if (allReady) {
+      console.log('All participants confirmed - moving to ready state');
+      setGamePhase('ready');
+    }
+  };
+
   const startGame = async () => {
     console.log('=== USER CLICKED INICIAR DINÁMICA ===');
     console.log('Starting game - Round 1');
@@ -259,11 +276,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     // Then start the roulette animation and backend call
     await startRoulette();
-  };
-
-  const handleReadyToStart = () => {
-    console.log('User clicked Ya estoy listo');
-    setGamePhase('ready');
   };
 
   const startRoulette = async () => {
@@ -526,10 +538,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                     </View>
                   )}
                   
-                  {/* Participant name - LARGER SIZE */}
-                  <Text style={styles.segmentName} numberOfLines={2}>
-                    {participant.name}
-                  </Text>
+                  {/* CRITICAL FIX: Participant name - HORIZONTAL, counter-rotating */}
+                  <View
+                    style={[
+                      styles.nameContainer,
+                      {
+                        transform: [{ rotate: `-${startAngle}deg` }],
+                      },
+                    ]}
+                  >
+                    <Text style={styles.segmentName} numberOfLines={2}>
+                      {participant.name}
+                    </Text>
+                  </View>
                 </View>
               </View>
             );
@@ -544,8 +565,97 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   };
 
-  // CRITICAL FIX: Always render based on current gamePhase state, not conditional logic
-  // This prevents the component from unmounting during state transitions
+  // CRITICAL FIX: Show waiting_confirmation screen FIRST
+  if (gamePhase === 'waiting_confirmation') {
+    const confirmedCount = activeParticipants.filter(p => p.confirmed).length + (userConfirmed ? 1 : 0);
+    const totalCount = activeParticipants.length;
+    const allReady = confirmedCount >= totalCount && totalCount >= 2;
+
+    return (
+      <LinearGradient
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.titleWhite}>¡Bienvenidos a la Ruleta!</Text>
+          <Text style={styles.subtitleWhite}>Confirma que estás listo para comenzar</Text>
+
+          <View style={styles.successCard}>
+            <Text style={styles.successIcon}>🎰</Text>
+            <Text style={styles.successTitle}>Ruleta de Participantes</Text>
+            <Text style={styles.successMessage}>
+              Todos los participantes deben confirmar que están listos antes de girar la ruleta.
+            </Text>
+          </View>
+
+          <View style={styles.participantsReadyCard}>
+            <Text style={styles.participantsReadyTitle}>
+              Participantes listos: {confirmedCount} / {totalCount}
+            </Text>
+            <View style={styles.participantsReadyList}>
+              {activeParticipants.map((participant, index) => {
+                const displayName = participant.name;
+                const isReady = participant.confirmed;
+                
+                return (
+                  <View key={index} style={styles.participantReadyItem}>
+                    {participant.profile_photo_url ? (
+                      <Image
+                        source={{ uri: participant.profile_photo_url }}
+                        style={styles.participantReadyPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantReadyPhotoPlaceholder}>
+                        <Text style={styles.participantReadyPhotoText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.participantReadyName}>{displayName}</Text>
+                    {isReady ? (
+                      <View style={styles.readyBadge}>
+                        <Text style={styles.readyBadgeText}>✓ Listo</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.waitingBadge}>
+                        <Text style={styles.waitingBadgeText}>⏳ Esperando</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {!userConfirmed ? (
+            <TouchableOpacity
+              style={styles.confirmReadyButton}
+              onPress={handleUserReady}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.confirmReadyButtonText}>✓ Ya Estoy Listo</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.waitingForOthersCard}>
+              <Text style={styles.waitingForOthersText}>
+                ✓ Has confirmado. Esperando a los demás participantes...
+              </Text>
+            </View>
+          )}
+
+          {allReady && (
+            <View style={styles.allReadyCard}>
+              <Text style={styles.allReadyText}>
+                🎉 ¡Todos están listos! El administrador puede iniciar la dinámica.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
   
   if (gamePhase === 'ready') {
     const confirmedParticipants = activeParticipants.filter(p => p.confirmed);
@@ -560,13 +670,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>¡Listos para comenzar!</Text>
-          <Text style={styles.subtitleWhite}>Todos se han presentado</Text>
+          <Text style={styles.subtitleWhite}>Todos se han confirmado</Text>
 
           <View style={styles.successCard}>
             <Text style={styles.successIcon}>🎉</Text>
             <Text style={styles.successTitle}>¡Excelente!</Text>
             <Text style={styles.successMessage}>
-              Todos los participantes activos se han presentado. La dinámica del juego está lista para comenzar.
+              Todos los participantes activos han confirmado. La dinámica del juego está lista para comenzar.
             </Text>
           </View>
 
@@ -1066,6 +1176,50 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  confirmReadyButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  confirmReadyButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  waitingForOthersCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  waitingForOthersText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  allReadyCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  allReadyText: {
+    fontSize: 16,
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
+  },
   rouletteContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1160,16 +1314,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
+  nameContainer: {
+    width: WHEEL_SIZE * 0.4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   segmentName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    paddingHorizontal: 8,
-    lineHeight: 20,
+    paddingHorizontal: 4,
+    lineHeight: 22,
   },
   centerCircle: {
     position: 'absolute',
@@ -1691,6 +1850,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   readyBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  waitingBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  waitingBadgeText: {
     fontSize: 12,
     fontWeight: 'bold',
     color: '#FFFFFF',
