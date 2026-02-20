@@ -186,16 +186,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     const dbPhase = appointment.event.game_phase;
     
-    // If we're transitioning to question, don't override with database state
-    if (isTransitioningToQuestion) {
-      console.log('⏭️ Transición a pregunta en progreso, ignorando actualización de DB');
-      return;
-    }
-    
     // Map database phases to local game phases
     if (dbPhase === 'question') {
       // QUESTION PHASE - Show the question screen
       console.log('📝 Fase de pregunta detectada');
+      
+      // Clear the transition flag when we reach question phase
+      setIsTransitioningToQuestion(false);
       
       // Encontrar participante seleccionado
       const participant = activeParticipants.find(
@@ -213,10 +210,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
       
       setGamePhase('question');
-      setIsTransitioningToQuestion(false);
     } else if (dbPhase === 'show_result') {
       // SHOW_RESULT PHASE - Show the roulette animation
       console.log('🎯 Fase show_result detectada');
+      
+      // Clear the transition flag - we're back to show_result
+      setIsTransitioningToQuestion(false);
       
       // Encontrar participante seleccionado
       const participant = activeParticipants.find(
@@ -238,9 +237,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } else {
       // For any other phase (intro, ready, waiting_for_spin, roulette, etc.), show the spin button
       console.log('⏳ Fase waiting_for_spin o inicial');
+      
+      // Clear the transition flag
+      setIsTransitioningToQuestion(false);
+      
       setGamePhase('waiting_for_spin');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id, isTransitioningToQuestion]);
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
 
   // Auto-transition to question phase after animation completes
   useEffect(() => {
@@ -248,7 +251,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('=== ANIMACIÓN COMPLETADA - PREPARANDO TRANSICIÓN A PREGUNTA ===');
       console.log('Participante seleccionado:', selectedParticipant.name);
       
-      // Set flag to prevent database sync from overriding
+      // Set flag to prevent multiple transitions
       setIsTransitioningToQuestion(true);
       
       // Wait 2 seconds after animation completes to show the result, then transition to question
@@ -297,7 +300,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           // Update local state immediately for responsive UI
           setCurrentQuestion(randomQuestion);
           setGamePhase('question');
-          setIsTransitioningToQuestion(false);
+          // Don't clear isTransitioningToQuestion here - let the sync effect do it
         } catch (error: any) {
           console.error('❌ Error inesperado al transicionar a pregunta:', error);
           Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
@@ -439,8 +442,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Nuevo índice de turno:', newIndex);
 
       // Reset animation flag before updating database
-      console.log('🔄 Reseteando flag de animación');
+      console.log('🔄 Reseteando flags de animación y transición');
       setHasTriggeredAnimation(false);
+      setIsTransitioningToQuestion(false);
 
       // Update event to show_result phase
       setLoadingMessage('Girando la ruleta...');
