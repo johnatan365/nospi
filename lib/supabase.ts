@@ -25,6 +25,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Expose the supabase URL and key for Edge Function calls
+(supabase as any).supabaseUrl = supabaseUrl;
+(supabase as any).supabaseKey = supabaseAnonKey;
+
 // Helper to check connection
 export async function testSupabaseConnection(): Promise<{
   connected: boolean;

@@ -327,33 +327,59 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('Event ID:', appointment.event_id);
       console.log('Current Level:', currentLevel);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      if (!accessToken) {
-        console.error('No access token available');
+      // Get fresh session with proper error handling
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
         setIsStartingRound(false);
         return;
       }
 
-      const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/start-game-round`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            eventId: appointment.event_id,
-            currentLevel: currentLevel,
-          }),
-        }
-      );
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        console.error('No access token available - user may not be authenticated');
+        console.log('Session data:', sessionData);
+        setIsStartingRound(false);
+        return;
+      }
+
+      console.log('Access token obtained, calling Edge Function');
+      console.log('Token length:', accessToken.length);
+
+      const supabaseUrl = supabase.supabaseUrl || '';
+      const functionUrl = `${supabaseUrl}/functions/v1/start-game-round`;
+      
+      console.log('Function URL:', functionUrl);
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': supabase.supabaseKey || '',
+        },
+        body: JSON.stringify({
+          eventId: appointment.event_id,
+          currentLevel: currentLevel,
+        }),
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Edge Function error:', errorData);
+        const errorText = await response.text();
+        console.error('Edge Function error response:', errorText);
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error('Edge Function error (parsed):', errorData);
+        } catch (e) {
+          console.error('Could not parse error response as JSON');
+        }
+        
         setIsStartingRound(false);
         return;
       }
@@ -371,6 +397,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     } catch (error) {
       console.error('Error starting round:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       setIsStartingRound(false);
     }
   };
