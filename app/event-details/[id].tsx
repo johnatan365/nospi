@@ -38,7 +38,7 @@ export default function EventDetailsScreen() {
       loadEvent();
       checkEnrollment();
     }
-  }, [id]);
+  }, [id, loadEvent, checkEnrollment]);
 
   const loadEvent = async () => {
     try {

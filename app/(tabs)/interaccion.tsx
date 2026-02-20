@@ -128,7 +128,7 @@ export default function InteraccionScreen() {
       return () => {
         console.log('Interacción screen unfocused');
       };
-    }, [user])
+    }, [user, loadAppointment])
   );
 
   useEffect(() => {
@@ -139,7 +139,7 @@ export default function InteraccionScreen() {
 
       return () => clearInterval(interval);
     }
-  }, [appointment]);
+  }, [appointment, updateCountdown]);
 
   useEffect(() => {
     requestNotificationPermissions();
@@ -179,27 +179,27 @@ export default function InteraccionScreen() {
               user_id: newParticipant.user_id,
               event_id: newParticipant.event_id,
               confirmed: newParticipant.confirmed,
+              is_presented: newParticipant.is_presented,
               is_current_user: newParticipant.user_id === user.id
             });
             
-            // Only show animation if confirmed is true and it's not the current user
-            if (newParticipant.confirmed && newParticipant.user_id !== user.id) {
-              const confirmationKey = `${newParticipant.user_id}_${newParticipant.event_id}`;
+            // Show toast for presentation updates (not the current user)
+            if (newParticipant.is_presented && newParticipant.user_id !== user.id) {
+              const presentationKey = `presented_${newParticipant.user_id}_${newParticipant.event_id}`;
               
-              // Prevent duplicate animations
-              if (!shownConfirmations.has(confirmationKey)) {
-                shownConfirmations.add(confirmationKey);
+              if (!shownConfirmations.has(presentationKey)) {
+                shownConfirmations.add(presentationKey);
                 
                 // Fetch user name for the toast
                 supabase
-                  .from('users')
+                  .from('profiles')
                   .select('name')
                   .eq('id', newParticipant.user_id)
                   .single()
                   .then(({ data }) => {
                     const userName = data?.name || 'Alguien';
-                    console.log('Showing toast for user:', userName);
-                    showToastNotification(`${userName} ya está listo.`);
+                    console.log('Showing presentation toast for user:', userName);
+                    showToastNotification(`${userName} se ha presentado.`);
                   });
               }
             }
@@ -228,7 +228,7 @@ export default function InteraccionScreen() {
       console.log('Cleaning up Realtime subscription (event_participants)');
       supabase.removeChannel(channel);
     };
-  }, [appointment, user]);
+  }, [appointment, user, loadActiveParticipants, showToastNotification, shownConfirmations]);
 
   // FIXED: Realtime subscription for events table (game state) with better handling
   useEffect(() => {
@@ -288,7 +288,7 @@ export default function InteraccionScreen() {
       console.log('Cleaning up game state realtime subscription');
       supabase.removeChannel(channel);
     };
-  }, [appointment]);
+  }, [appointment, loadAppointment]);
 
   const showToastNotification = (message: string) => {
     console.log('Showing toast notification:', message);
@@ -1002,7 +1002,9 @@ export default function InteraccionScreen() {
     );
   }
 
-  if (showPresentationPhase && !allPresented) {
+  // CRITICAL FIX: Show presentation phase when experience has started AND not all have presented
+  // This ensures the "Ya me presenté" button is visible
+  if (experienceStarted && !allPresented && !gameStarted) {
     const presentedCount = activeParticipants.filter(p => p.is_presented).length;
     const totalCount = activeParticipants.length;
     const progressText = `${presentedCount} de ${totalCount}`;
@@ -1085,10 +1087,18 @@ export default function InteraccionScreen() {
             </TouchableOpacity>
           )}
 
-          {userPresented && (
+          {userPresented && !allPresented && (
             <View style={styles.waitingCard}>
               <Text style={styles.waitingText}>
                 ✓ Te has presentado. Esperando a que todos se presenten...
+              </Text>
+            </View>
+          )}
+
+          {allPresented && (
+            <View style={styles.allPresentedCard}>
+              <Text style={styles.allPresentedText}>
+                ✅ ¡Todos se han presentado! La dinámica del juego comenzará pronto.
               </Text>
             </View>
           )}
@@ -1097,10 +1107,9 @@ export default function InteraccionScreen() {
     );
   }
 
-  // CRITICAL FIX: Once game starts, keep GameDynamicsScreen mounted regardless of state changes
-  // This prevents the component from unmounting when the roulette starts spinning
-  // The gameStarted flag acts as a "lock" - once true, the GameDynamicsScreen stays mounted
-  if ((allPresented && activeParticipants.length > 0) || gameStarted) {
+  // CRITICAL FIX: Once game starts OR all presented, keep GameDynamicsScreen mounted
+  // This prevents the component from unmounting during state transitions
+  if (allPresented || gameStarted) {
     console.log('=== RENDERING GAME DYNAMICS SCREEN ===');
     console.log('gameStarted:', gameStarted);
     console.log('allPresented:', allPresented);
@@ -1940,6 +1949,21 @@ const styles = StyleSheet.create({
     color: '#065F46',
     textAlign: 'center',
     lineHeight: 20,
+    fontWeight: '600',
+  },
+  allPresentedCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  allPresentedText: {
+    fontSize: 16,
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 24,
     fontWeight: '600',
   },
   modalOverlay: {

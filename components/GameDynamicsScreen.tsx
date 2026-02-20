@@ -154,7 +154,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('Game in ready state');
       setGamePhase('ready');
     }
-  }, [appointment.event.game_phase, appointment.event.current_question, activeParticipants]);
+  }, [appointment.event.game_phase, appointment.event.current_question, appointment.event.current_question_level, appointment.event.selected_participant_id, appointment.event.selected_participant_name, activeParticipants]);
 
   // Subscribe to real-time updates on the events table
   useEffect(() => {

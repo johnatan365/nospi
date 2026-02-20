@@ -50,7 +50,7 @@ export default function AppointmentsScreen() {
     useCallback(() => {
       console.log('Appointments screen focused, loading appointments');
       loadAppointments();
-    }, [user, filter])
+    }, [loadAppointments])
   );
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function AppointmentsScreen() {
       loadAppointments();
       checkFirstTimeNotificationPrompt();
     }
-  }, [user, filter]);
+  }, [user, filter, loadAppointments]);
 
   const checkFirstTimeNotificationPrompt = async () => {
     try {

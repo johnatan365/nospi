@@ -98,7 +98,7 @@ export default function ProfileScreen() {
     if (user) {
       loadProfile();
     }
-  }, [user]);
+  }, [user, loadProfile]);
 
   const loadProfile = async () => {
     try {
