@@ -184,6 +184,27 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     const dbPhase = appointment.event.game_phase;
     
+    // Auto-transition from 'intro' or 'ready' to 'waiting_for_spin' immediately
+    if (dbPhase === 'ready' || dbPhase === 'intro') {
+      console.log('⚙️ Auto-transicionando de', dbPhase, 'a waiting_for_spin...');
+      supabase
+        .from('events')
+        .update({ 
+          game_phase: 'waiting_for_spin',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', appointment.event_id)
+        .then(({ error }) => {
+          if (error) {
+            console.error('❌ Error al auto-transicionar:', error);
+          } else {
+            console.log('✅ Auto-transición exitosa a waiting_for_spin');
+          }
+        });
+      setGamePhase('waiting_for_spin');
+      return;
+    }
+    
     if (dbPhase === 'show_result' || dbPhase === 'question') {
       // Encontrar participante seleccionado
       const participant = activeParticipants.find(
@@ -210,25 +231,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           startRouletteAnimation();
         }
       }
-    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin' || dbPhase === 'ready' || dbPhase === 'intro') {
-      // Auto-transition from 'intro' or 'ready' to 'waiting_for_spin' to skip the "Listos para Comenzar" screen
-      if (dbPhase === 'ready' || dbPhase === 'intro') {
-        console.log('⚙️ Auto-transicionando de', dbPhase, 'a waiting_for_spin...');
-        supabase
-          .from('events')
-          .update({ game_phase: 'waiting_for_spin' })
-          .eq('id', appointment.event_id)
-          .then(({ error }) => {
-            if (error) {
-              console.error('❌ Error al auto-transicionar:', error);
-            } else {
-              console.log('✅ Auto-transición exitosa a waiting_for_spin');
-            }
-          });
-      }
+    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin') {
       setGamePhase('waiting_for_spin');
     } else {
-      // Default to waiting_for_spin instead of ready
+      // Default to waiting_for_spin for any unknown phase
       setGamePhase('waiting_for_spin');
     }
   }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
