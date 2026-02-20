@@ -185,7 +185,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const dbPhase = appointment.event.game_phase;
     
     // Map database phases to local game phases
-    if (dbPhase === 'show_result' || dbPhase === 'question') {
+    if (dbPhase === 'question') {
+      // QUESTION PHASE - Show the question screen
+      console.log('📝 Fase de pregunta detectada');
+      
       // Encontrar participante seleccionado
       const participant = activeParticipants.find(
         p => p.user_id === appointment.event.selected_participant_id
@@ -197,22 +200,35 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
       
       if (appointment.event.current_question) {
+        console.log('✅ Pregunta actual:', appointment.event.current_question);
         setCurrentQuestion(appointment.event.current_question);
       }
       
-      if (dbPhase === 'question') {
-        setGamePhase('question');
-      } else {
-        setGamePhase('show_result');
-        
-        // 🚨 FIX: Trigger animation if we're in show_result and haven't animated yet
-        if (!hasTriggeredAnimation && !isSpinning) {
-          console.log('🎯 Fase show_result detectada - Iniciando animación');
-          startRouletteAnimation();
-        }
+      setGamePhase('question');
+    } else if (dbPhase === 'show_result') {
+      // SHOW_RESULT PHASE - Show the roulette animation
+      console.log('🎯 Fase show_result detectada');
+      
+      // Encontrar participante seleccionado
+      const participant = activeParticipants.find(
+        p => p.user_id === appointment.event.selected_participant_id
+      );
+      
+      if (participant) {
+        console.log('✅ Participante seleccionado encontrado:', participant.name);
+        setSelectedParticipant(participant);
+      }
+      
+      setGamePhase('show_result');
+      
+      // Trigger animation if we're in show_result and haven't animated yet
+      if (!hasTriggeredAnimation && !isSpinning) {
+        console.log('🚀 Iniciando animación de la ruleta');
+        startRouletteAnimation();
       }
     } else {
       // For any other phase (intro, ready, waiting_for_spin, roulette, etc.), show the spin button
+      console.log('⏳ Fase waiting_for_spin o inicial');
       setGamePhase('waiting_for_spin');
     }
   }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
