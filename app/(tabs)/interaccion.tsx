@@ -658,6 +658,33 @@ export default function InteraccionScreen() {
     outputRange: [0.8, 1],
   });
 
+  // Auto-transition to game when all presented
+  useEffect(() => {
+    if (allPresented && appointment && !gameStarted) {
+      console.log('✅ Todos se han presentado - Auto-transicionando a la ruleta');
+      
+      const autoStartGame = async () => {
+        try {
+          const { error } = await supabase
+            .from('events')
+            .update({ game_phase: 'waiting_for_spin' })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error al auto-transicionar a la ruleta:', error);
+          } else {
+            console.log('✅ Auto-transición exitosa a waiting_for_spin');
+            setGameStarted(true);
+          }
+        } catch (error) {
+          console.error('❌ Error inesperado al auto-transicionar:', error);
+        }
+      };
+
+      autoStartGame();
+    }
+  }, [allPresented, appointment, gameStarted]);
+
   if (loading) {
     return (
       <LinearGradient

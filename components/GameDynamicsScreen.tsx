@@ -166,12 +166,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           startRouletteAnimation();
         }
       }
-    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin') {
+    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin' || dbPhase === 'ready' || dbPhase === 'intro') {
+      // Auto-transition from 'intro' or 'ready' to 'waiting_for_spin' to skip the "Listos para Comenzar" screen
+      if (dbPhase === 'ready' || dbPhase === 'intro') {
+        console.log('⚙️ Auto-transicionando de', dbPhase, 'a waiting_for_spin...');
+        supabase
+          .from('events')
+          .update({ game_phase: 'waiting_for_spin' })
+          .eq('id', appointment.event_id)
+          .then(({ error }) => {
+            if (error) {
+              console.error('❌ Error al auto-transicionar:', error);
+            } else {
+              console.log('✅ Auto-transición exitosa a waiting_for_spin');
+            }
+          });
+      }
       setGamePhase('waiting_for_spin');
     } else {
-      setGamePhase('ready');
+      // Default to waiting_for_spin instead of ready
+      setGamePhase('waiting_for_spin');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation]);
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
 
   // Auto-transition to question phase after animation completes
   useEffect(() => {
@@ -568,46 +584,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   };
 
-  if (gamePhase === 'ready') {
-    return (
-      <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Listos para Comenzar</Text>
-          <Text style={styles.subtitleWhite}>Todos los participantes se han presentado</Text>
-
-          <View style={styles.readyCard}>
-            <Text style={styles.readyIcon}>✨</Text>
-            <Text style={styles.readyTitle}>¡Empecemos!</Text>
-            <Text style={styles.readyMessage}>
-              Todos están listos. Presiona el botón para girar la ruleta.
-            </Text>
-          </View>
-
-          {loadingMessage ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>{loadingMessage}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.startButton, isSpinning && styles.buttonDisabled]}
-            onPress={handleStartRoulette}
-            disabled={isSpinning}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.startButtonText}>
-              {isSpinning ? '⏳ Iniciando...' : '🎰 Girar Ruleta'}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </LinearGradient>
-    );
-  }
+  // Skip the "ready" phase and go directly to roulette
+  // This phase is now handled by auto-transitioning to waiting_for_spin
 
   if (gamePhase === 'waiting_for_spin' || gamePhase === 'show_result') {
     return (
@@ -721,34 +699,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  readyCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  readyIcon: {
-    fontSize: 80,
-    marginBottom: 16,
-  },
-  readyTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-  },
-  readyMessage: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
+
   loadingCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 16,
@@ -762,22 +713,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
   },
-  startButton: {
-    backgroundColor: '#FFD700',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  startButtonText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1a0b2e',
-  },
+
   buttonDisabled: {
     opacity: 0.6,
   },
