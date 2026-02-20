@@ -25,7 +25,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'presentation' | 'ready' | 'roulette' | 'question' | 'playing' | 'finished';
+  game_phase: 'intro' | 'ready' | 'waiting_for_spin' | 'show_result' | 'question' | 'playing' | 'finished';
   current_turn_index: number;
   current_round: number;
   started_at: string | null;
@@ -95,7 +95,7 @@ export default function InteraccionScreen() {
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
-  const [gameStarted, setGameStarted] = useState(false); // CRITICAL: Track if game has started to prevent unmounting
+  const [gameStarted, setGameStarted] = useState(false);
 
   // Toast notification states
   const [toastVisible, setToastVisible] = useState(false);
@@ -103,29 +103,16 @@ export default function InteraccionScreen() {
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTranslateY = useRef(new Animated.Value(-50)).current;
   
-  // Special animation for "La mesa está casi lista"
-  const [specialToastVisible, setSpecialToastVisible] = useState(false);
-  const [specialToastMessage, setSpecialToastMessage] = useState('');
-  const specialToastOpacity = useRef(new Animated.Value(0)).current;
-  const specialToastScale = useRef(new Animated.Value(0.8)).current;
-
-  // Track shown confirmations to prevent duplicates
   const shownConfirmations = useRef(new Set<string>()).current;
-  const hasShownSpecialAnimation = useRef(false);
 
-  // CRITICAL FIX: Define all functions with useCallback BEFORE they are used in useEffect
-  // This prevents "Cannot access before initialization" errors
-  
   const showToastNotification = useCallback((message: string) => {
-    console.log('Showing toast notification:', message);
+    console.log('Toast:', message);
     setToastMessage(message);
     setToastVisible(true);
 
-    // Reset animation values
     toastOpacity.setValue(0);
     toastTranslateY.setValue(-50);
 
-    // Animate in
     Animated.parallel([
       Animated.timing(toastOpacity, {
         toValue: 1,
@@ -141,7 +128,6 @@ export default function InteraccionScreen() {
       }),
     ]).start();
 
-    // Animate out after 2 seconds
     setTimeout(() => {
       Animated.parallel([
         Animated.timing(toastOpacity, {
@@ -162,60 +148,12 @@ export default function InteraccionScreen() {
     }, 2000);
   }, [toastOpacity, toastTranslateY]);
 
-  const showSpecialToastNotification = useCallback((message: string) => {
-    console.log('Showing special toast notification:', message);
-    setSpecialToastMessage(message);
-    setSpecialToastVisible(true);
-
-    // Reset animation values
-    specialToastOpacity.setValue(0);
-    specialToastScale.setValue(0.8);
-
-    // Animate in
-    Animated.parallel([
-      Animated.timing(specialToastOpacity, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.spring(specialToastScale, {
-        toValue: 1,
-        tension: 40,
-        friction: 6,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Animate out after 2.5 seconds
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(specialToastOpacity, {
-          toValue: 0,
-          duration: 400,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(specialToastScale, {
-          toValue: 0.8,
-          duration: 400,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setSpecialToastVisible(false);
-      });
-    }, 2500);
-  }, [specialToastOpacity, specialToastScale]);
-
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
     
-    // Create date at midnight (00:00) local time for event day
     const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
     
-    // Check if current time is on or after event day midnight
     const isSameDay = 
       now.getFullYear() === eventDate.getFullYear() &&
       now.getMonth() === eventDate.getMonth() &&
@@ -224,7 +162,6 @@ export default function InteraccionScreen() {
     const isAfterMidnight = now >= eventDayStart;
     
     const isToday = isSameDay && isAfterMidnight;
-    console.log('Is event day:', isToday, '| Current time:', now.toLocaleString(), '| Event day start:', eventDayStart.toLocaleString(), '| Event time:', eventDate.toLocaleString());
     setIsEventDay(isToday);
   }, []);
 
@@ -255,7 +192,7 @@ export default function InteraccionScreen() {
   const requestNotificationPermissions = useCallback(async () => {
     try {
       const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission status:', status);
+      console.log('Notification permission:', status);
     } catch (error) {
       console.error('Error requesting notification permissions:', error);
     }
@@ -286,33 +223,10 @@ export default function InteraccionScreen() {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: 'Tu experiencia Nospi comienza pronto',
-              body: 'Falta 1 hora. La experiencia inicia puntual.',
+              body: 'Falta 1 hora.',
               sound: true,
             },
             trigger: oneHourBefore,
-          });
-        }
-
-        const tenMinutesBefore = new Date(eventDate.getTime() - 10 * 60 * 1000);
-        if (tenMinutesBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: '¡Últimos 10 minutos!',
-              body: 'Tu experiencia Nospi comienza en 10 minutos. ¡Es hora de dirigirte al lugar!',
-              sound: true,
-            },
-            trigger: tenMinutesBefore,
-          });
-        }
-
-        if (eventDate > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: '¡Tu experiencia Nospi comienza ahora!',
-              body: 'La experiencia inicia puntual. ¡Disfruta!',
-              sound: true,
-            },
-            trigger: eventDate,
           });
         }
       }
@@ -323,11 +237,8 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('=== LOADING PARTICIPANTS ===');
-      console.log('Event ID:', eventId);
-      console.log('Timestamp:', new Date().toISOString());
+      console.log('Loading participants for event:', eventId);
       
-      // CRITICAL FIX: Use RPC function to bypass RLS and get ALL confirmed participants
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
@@ -336,74 +247,28 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('=== PARTICIPANTS QUERY RESULT ===');
-      console.log('Total rows returned:', data?.length || 0);
-      console.log('Raw data:', JSON.stringify(data, null, 2));
-
       const participants: Participant[] = (data || [])
-        .filter((item: any) => {
-          // CRITICAL: Filter out participants without profile data
-          const hasProfile = item.user_name;
-          if (!hasProfile) {
-            console.warn('Participant without profile data:', item.user_id);
+        .filter((item: any) => item.user_name)
+        .map((item: any) => ({
+          id: item.id,
+          user_id: item.user_id,
+          event_id: item.event_id,
+          confirmed: item.confirmed,
+          check_in_time: item.check_in_time,
+          is_presented: item.is_presented || false,
+          presented_at: item.presented_at || null,
+          profiles: {
+            id: item.user_id,
+            name: item.user_name,
+            email: item.user_email || '',
+            phone: item.user_phone || '',
+            city: item.user_city || '',
+            profile_photo_url: item.user_profile_photo_url || null,
+            interested_in: item.user_interested_in || ''
           }
-          return hasProfile;
-        })
-        .map((item: any) => {
-          const fullName = item.user_name;
-          const email = item.user_email || '';
-          const phone = item.user_phone || '';
-          const city = item.user_city || '';
-          const interestedIn = item.user_interested_in || '';
-          const userPhoto = item.user_profile_photo_url || null;
-          
-          console.log('Processing participant:', {
-            id: item.id,
-            user_id: item.user_id,
-            name: fullName,
-            city: city,
-            interested_in: interestedIn,
-            confirmed: item.confirmed,
-            is_presented: item.is_presented
-          });
+        }));
 
-          return {
-            id: item.id,
-            user_id: item.user_id,
-            event_id: item.event_id,
-            confirmed: item.confirmed,
-            check_in_time: item.check_in_time,
-            is_presented: item.is_presented || false,
-            presented_at: item.presented_at || null,
-            profiles: {
-              id: item.user_id,
-              name: fullName,
-              email: email,
-              phone: phone,
-              city: city,
-              profile_photo_url: userPhoto,
-              interested_in: interestedIn
-            }
-          };
-        });
-
-      console.log('=== FINAL PARTICIPANTS LIST ===');
       console.log('Participants loaded:', participants.length);
-      console.log('Participants:', participants.map(p => ({ 
-        name: p.profiles?.name,
-        user_id: p.user_id, 
-        city: p.profiles?.city,
-        interested_in: p.profiles?.interested_in,
-        confirmed: p.confirmed,
-        is_presented: p.is_presented
-      })));
-      
-      // Check if we should show the special "La mesa está casi lista" animation
-      // FIXED: Minimum 2 participants instead of 3
-      if (participants.length >= 2 && !hasShownSpecialAnimation.current) {
-        hasShownSpecialAnimation.current = true;
-        showSpecialToastNotification('La mesa está casi lista.');
-      }
       
       setActiveParticipants(participants);
       
@@ -412,18 +277,16 @@ export default function InteraccionScreen() {
     } catch (error) {
       console.error('Failed to load participants:', error);
     }
-  }, [showSpecialToastNotification]);
+  }, []);
 
   const loadAppointment = useCallback(async () => {
     if (!user) {
-      console.log('No user logged in');
       setLoading(false);
       return;
     }
 
     try {
-      console.log('=== LOADING APPOINTMENT ===');
-      console.log('User ID:', user.id);
+      console.log('Loading appointment for user:', user.id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -472,11 +335,7 @@ export default function InteraccionScreen() {
         return;
       }
       
-      console.log('=== APPOINTMENT QUERY RESULT ===');
-      console.log('Total appointments found:', data?.length || 0);
-      
       if (!data || data.length === 0) {
-        console.log('No confirmed appointment found for user');
         setAppointment(null);
         setLoading(false);
         return;
@@ -490,20 +349,14 @@ export default function InteraccionScreen() {
       });
 
       const appointmentData = upcomingAppointment || data[0];
-      console.log('Selected appointment:', appointmentData.id);
-      console.log('Event ID:', appointmentData.event_id);
-      console.log('Game state from database:', {
-        game_phase: appointmentData.event?.game_phase,
-        selected_participant_name: appointmentData.event?.selected_participant_name,
-        current_question: appointmentData.event?.current_question,
-        current_question_level: appointmentData.event?.current_question_level
-      });
+      console.log('Appointment loaded:', appointmentData.id);
+      console.log('Game phase:', appointmentData.event?.game_phase);
       
-      // CRITICAL: Check if game has already started (roulette or question phase)
-      if (appointmentData.event?.game_phase === 'roulette' || 
-          appointmentData.event?.game_phase === 'question' ||
-          appointmentData.event?.game_phase === 'playing') {
-        console.log('Game already in progress, setting gameStarted to true');
+      // Check if game is active
+      if (appointmentData.event?.game_phase === 'waiting_for_spin' || 
+          appointmentData.event?.game_phase === 'show_result' ||
+          appointmentData.event?.game_phase === 'question') {
+        console.log('Game is active');
         setGameStarted(true);
       }
       
@@ -521,7 +374,6 @@ export default function InteraccionScreen() {
         scheduleNotifications(appointmentData.event.start_time);
       }
       
-      // Load participants after loading appointment
       if (appointmentData.event_id) {
         loadActiveParticipants(appointmentData.event_id);
       }
@@ -541,27 +393,19 @@ export default function InteraccionScreen() {
       ? '1986' 
       : eventCode.trim();
     
-    console.log('=== CONFIRMATION CODE VALIDATION ===');
-    console.log('Expected code:', expectedCode);
-    console.log('User entered code:', enteredCode);
+    console.log('Code validation - Expected:', expectedCode, 'Entered:', enteredCode);
 
     if (enteredCode !== expectedCode) {
-      console.log('❌ Incorrect code entered');
-      setCodeError('Código incorrecto. Verifica el código del encuentro.');
+      setCodeError('Código incorrecto.');
       return;
     }
 
-    console.log('✅ Correct code entered, processing check-in');
     setCodeError('');
 
     try {
       const confirmedAt = new Date().toISOString();
 
-      console.log('=== UPSERTING EVENT PARTICIPANT ===');
-      console.log('Event ID:', appointment.event_id);
-      console.log('User ID:', user.id);
-
-      const { data, error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from('event_participants')
         .upsert({
           event_id: appointment.event_id,
@@ -570,16 +414,15 @@ export default function InteraccionScreen() {
           check_in_time: confirmedAt,
         }, {
           onConflict: 'event_id,user_id'
-        })
-        .select();
+        });
 
       if (updateError) {
         console.error('Error updating event_participants:', updateError);
-        setCodeError('No se pudo registrar tu llegada. Intenta de nuevo.');
+        setCodeError('No se pudo registrar tu llegada.');
         return;
       }
 
-      console.log('✅ Check-in successful');
+      console.log('Check-in successful');
       
       await supabase
         .from('appointments')
@@ -600,19 +443,15 @@ export default function InteraccionScreen() {
       setCheckInPhase('confirmed');
       setConfirmationCode('');
       
-      // Immediately reload participants to show the updated list
-      console.log('Reloading participants after check-in');
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error during check-in:', error);
-      setCodeError('Ocurrió un error. Intenta de nuevo.');
+      setCodeError('Ocurrió un error.');
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(() => {
-    console.log('User starting experience - showing ritual modal');
-    console.log('Setting gameStarted to true IMMEDIATELY to prevent unmounting');
-    // CRITICAL FIX: Set gameStarted FIRST, before any other state changes
+    console.log('Starting experience');
     setGameStarted(true);
     setShowRitualModal(true);
     
@@ -628,8 +467,7 @@ export default function InteraccionScreen() {
     if (!appointment) return;
 
     try {
-      console.log('User confirmed to begin experience');
-      // CRITICAL: Ensure gameStarted remains true
+      console.log('Begin experience');
       setGameStarted(true);
       
       const { error } = await supabase
@@ -644,16 +482,13 @@ export default function InteraccionScreen() {
 
       setShowRitualModal(false);
       setShowWelcomeModal(true);
-      
-      console.log('Experience started, showing welcome modal');
     } catch (error) {
       console.error('Error starting experience:', error);
     }
   }, [appointment]);
 
   const handleContinueToPresentation = useCallback(() => {
-    console.log('Continuing to presentation phase');
-    // CRITICAL: Ensure gameStarted remains true
+    console.log('Continue to presentation');
     setGameStarted(true);
     setShowWelcomeModal(false);
     setExperienceStarted(true);
@@ -667,7 +502,6 @@ export default function InteraccionScreen() {
       
       const presentedAt = new Date().toISOString();
       
-      // Update event_participants with is_presented and presented_at
       const { error } = await supabase
         .from('event_participants')
         .update({ 
@@ -689,25 +523,22 @@ export default function InteraccionScreen() {
 
       setUserPresented(true);
       
-      // Reload participants to update the list
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error marking user as presented:', error);
     }
   }, [appointment, user, loadActiveParticipants]);
 
-  // CRITICAL: Reload appointment and participants when screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('=== INTERACCIÓN SCREEN FOCUSED ===');
-      console.log('User ID:', user?.id);
+      console.log('Screen focused');
       
       if (user) {
         loadAppointment();
       }
       
       return () => {
-        console.log('Interacción screen unfocused');
+        console.log('Screen unfocused');
       };
     }, [user, loadAppointment])
   );
@@ -726,19 +557,15 @@ export default function InteraccionScreen() {
     requestNotificationPermissions();
   }, [requestNotificationPermissions]);
 
-  // FIXED: Supabase Realtime subscription for event_participants with better error handling
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('=== REALTIME SUBSCRIPTION SETUP (event_participants) ===');
-    console.log('Event ID:', appointment.event_id);
-    console.log('User ID:', user.id);
+    console.log('Setting up Realtime subscription');
     
-    // Initial load
     loadActiveParticipants(appointment.event_id);
 
     const channel = supabase
-      .channel(`event_participants_${appointment.event_id}`)
+      .channel(`participants_${appointment.event_id}`)
       .on(
         'postgres_changes',
         {
@@ -748,78 +575,47 @@ export default function InteraccionScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('=== REALTIME UPDATE RECEIVED (event_participants) ===');
-          console.log('Event type:', payload.eventType);
-          console.log('Payload:', JSON.stringify(payload, null, 2));
+          console.log('Participant update:', payload.eventType);
           
-          // Handle new confirmations for visual feedback
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newParticipant = payload.new as any;
             
-            console.log('New participant data:', {
-              user_id: newParticipant.user_id,
-              event_id: newParticipant.event_id,
-              confirmed: newParticipant.confirmed,
-              is_presented: newParticipant.is_presented,
-              is_current_user: newParticipant.user_id === user.id
-            });
-            
-            // Show toast for presentation updates (not the current user)
             if (newParticipant.is_presented && newParticipant.user_id !== user.id) {
               const presentationKey = `presented_${newParticipant.user_id}_${newParticipant.event_id}`;
               
               if (!shownConfirmations.has(presentationKey)) {
                 shownConfirmations.add(presentationKey);
                 
-                // Fetch user name for the toast
                 supabase
-                  .from('profiles')
+                  .from('users')
                   .select('name')
                   .eq('id', newParticipant.user_id)
                   .single()
                   .then(({ data }) => {
                     const userName = data?.name || 'Alguien';
-                    console.log('Showing presentation toast for user:', userName);
                     showToastNotification(`${userName} se ha presentado.`);
                   });
               }
             }
           }
           
-          // CRITICAL: Reload participants list to update UI for ALL users
-          console.log('Reloading participants after realtime event');
           loadActiveParticipants(appointment.event_id);
         }
       )
-      .subscribe((status) => {
-        console.log('Realtime subscription status (event_participants):', status);
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to event_participants changes');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime subscription error - retrying...');
-          // Retry subscription after a delay
-          setTimeout(() => {
-            loadActiveParticipants(appointment.event_id);
-          }, 2000);
-        }
-      });
+      .subscribe();
 
     return () => {
-      console.log('Cleaning up Realtime subscription (event_participants)');
       supabase.removeChannel(channel);
     };
   }, [appointment, user, loadActiveParticipants, showToastNotification, shownConfirmations]);
 
-  // FIXED: Realtime subscription for events table (game state) with better handling
   useEffect(() => {
     if (!appointment) return;
 
-    console.log('=== GAME STATE REALTIME SUBSCRIPTION SETUP ===');
-    console.log('Event ID:', appointment.event_id);
+    console.log('Setting up game state subscription');
 
     const channel = supabase
-      .channel(`event_game_state_${appointment.event_id}`)
+      .channel(`game_${appointment.event_id}`)
       .on(
         'postgres_changes',
         {
@@ -829,49 +625,27 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('=== GAME STATE UPDATE RECEIVED ===');
-          console.log('Payload:', JSON.stringify(payload, null, 2));
+          console.log('Game state update:', payload);
           
           const newEvent = payload.new as any;
           
-          // Log game state changes
-          console.log('Game state changed:', {
-            game_phase: newEvent.game_phase,
-            selected_participant_name: newEvent.selected_participant_name,
-            current_question: newEvent.current_question,
-            current_question_level: newEvent.current_question_level
-          });
-          
-          // CRITICAL: If game is in active phase, ensure gameStarted is true
-          if (newEvent.game_phase === 'roulette' || 
-              newEvent.game_phase === 'question' || 
-              newEvent.game_phase === 'playing') {
-            console.log('Game is active, setting gameStarted to true');
+          if (newEvent.game_phase === 'waiting_for_spin' || 
+              newEvent.game_phase === 'show_result' ||
+              newEvent.game_phase === 'question') {
+            console.log('Game is active');
             setGameStarted(true);
           }
           
-          // CRITICAL: Reload appointment to get updated game state
-          // This ensures all users see the same game state
           loadAppointment();
         }
       )
-      .subscribe((status) => {
-        console.log('Game state realtime subscription status:', status);
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to game state changes');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Game state subscription error');
-        }
-      });
+      .subscribe();
 
     return () => {
-      console.log('Cleaning up game state realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [appointment, loadAppointment]);
 
-  // FIXED: Validation - Check total confirmed participants by event_id (minimum 2)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   const ritualOpacity = ritualAnimation.interpolate({
@@ -916,9 +690,6 @@ export default function InteraccionScreen() {
             <Text style={styles.placeholderText}>
               No tienes ningún evento confirmado
             </Text>
-            <Text style={styles.placeholderSubtext}>
-              Confirma tu asistencia a un evento para acceder a la experiencia
-            </Text>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -949,31 +720,13 @@ export default function InteraccionScreen() {
             <Text style={styles.eventInfoTitle}>Evento confirmado</Text>
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
             <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
-            
-            {appointment.event.is_location_revealed && appointment.event.location_name ? (
-              <>
-                <Text style={styles.eventInfoLocation}>{appointment.event.location_name}</Text>
-                {appointment.event.location_address && (
-                  <Text style={styles.eventInfoAddress}>{appointment.event.location_address}</Text>
-                )}
-              </>
-            ) : (
-              <Text style={styles.eventInfoLocationPlaceholder}>Ubicación se revelará próximamente</Text>
-            )}
-            
-            <View style={styles.infoBox}>
-              <Text style={styles.infoBoxText}>
-                La experiencia interactiva estará disponible el día del evento desde las 12:00 AM
-              </Text>
-            </View>
           </View>
         </ScrollView>
       </LinearGradient>
     );
   }
 
-  // CRITICAL FIX: Show presentation phase when experience has started AND not all have presented AND game hasn't started
-  // This ensures the "Ya me presenté" button is visible
+  // Show presentation phase
   if (experienceStarted && !allPresented && !gameStarted) {
     const presentedCount = activeParticipants.filter(p => p.is_presented).length;
     const totalCount = activeParticipants.length;
@@ -987,64 +740,56 @@ export default function InteraccionScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Fase 2: Presentación Guiada</Text>
+          <Text style={styles.titleWhite}>Presentación Guiada</Text>
           <Text style={styles.subtitleWhite}>Antes de iniciar el juego</Text>
 
           <View style={styles.phaseCard}>
             <Text style={styles.phaseMessage}>
-              Antes de iniciar el juego, cada uno diga su nombre y a qué se dedica.
+              Cada uno diga su nombre y a qué se dedica.
             </Text>
           </View>
 
           <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>Progreso de presentaciones</Text>
+            <Text style={styles.progressTitle}>Progreso</Text>
             <Text style={styles.progressText}>{progressText}</Text>
           </View>
 
           <View style={styles.participantsSection}>
-            <Text style={styles.participantsTitleWhite}>Participantes Activos</Text>
-            {activeParticipants.length === 0 ? (
-              <View style={styles.emptyParticipants}>
-                <Text style={styles.emptyParticipantsText}>No hay participantes confirmados aún</Text>
-              </View>
-            ) : (
-              activeParticipants.map((participant, index) => {
-                const displayName = participant.profiles?.name || 'Participante Anónimo';
-                const displayCity = participant.profiles?.city || 'Ciudad no especificada';
-                const displayInterestedIn = participant.profiles?.interested_in || 'No especificado';
-                
-                return (
-                  <React.Fragment key={index}>
-                  <View style={styles.participantCard}>
-                    <View style={styles.participantInfo}>
-                      {participant.profiles?.profile_photo_url ? (
-                        <Image 
-                          source={{ uri: participant.profiles.profile_photo_url }} 
-                          style={styles.participantPhoto}
-                        />
-                      ) : (
-                        <View style={styles.participantPhotoPlaceholder}>
-                          <Text style={styles.participantPhotoPlaceholderText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.participantDetails}>
-                        <Text style={styles.participantName}>{displayName}</Text>
-                        <Text style={styles.participantOccupation}>{displayCity}</Text>
-                        <Text style={styles.participantInterest}>Interesado en: {displayInterestedIn}</Text>
-                      </View>
-                    </View>
-                    {participant.is_presented && (
-                      <View style={styles.presentedBadge}>
-                        <Text style={styles.presentedBadgeText}>✓ Presentado</Text>
+            <Text style={styles.participantsTitleWhite}>Participantes</Text>
+            {activeParticipants.map((participant, index) => {
+              const displayName = participant.profiles?.name || 'Participante';
+              const displayCity = participant.profiles?.city || 'Ciudad';
+              
+              return (
+                <React.Fragment key={index}>
+                <View style={styles.participantCard}>
+                  <View style={styles.participantInfo}>
+                    {participant.profiles?.profile_photo_url ? (
+                      <Image 
+                        source={{ uri: participant.profiles.profile_photo_url }} 
+                        style={styles.participantPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantPhotoPlaceholder}>
+                        <Text style={styles.participantPhotoPlaceholderText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
                       </View>
                     )}
+                    <View style={styles.participantDetails}>
+                      <Text style={styles.participantName}>{displayName}</Text>
+                      <Text style={styles.participantOccupation}>{displayCity}</Text>
+                    </View>
                   </View>
-                  </React.Fragment>
-                );
-              })
-            )}
+                  {participant.is_presented && (
+                    <View style={styles.presentedBadge}>
+                      <Text style={styles.presentedBadgeText}>✓</Text>
+                    </View>
+                  )}
+                </View>
+                </React.Fragment>
+              );
+            })}
           </View>
 
           {!userPresented && (
@@ -1060,15 +805,7 @@ export default function InteraccionScreen() {
           {userPresented && !allPresented && (
             <View style={styles.waitingCard}>
               <Text style={styles.waitingText}>
-                ✓ Te has presentado. Esperando a que todos se presenten...
-              </Text>
-            </View>
-          )}
-
-          {allPresented && (
-            <View style={styles.allPresentedCard}>
-              <Text style={styles.allPresentedText}>
-                ✅ ¡Todos se han presentado! La dinámica del juego comenzará pronto.
+                ✓ Esperando a que todos se presenten...
               </Text>
             </View>
           )}
@@ -1077,21 +814,16 @@ export default function InteraccionScreen() {
     );
   }
 
-  // CRITICAL FIX: Once game starts OR all presented, keep GameDynamicsScreen mounted
-  // This prevents the component from unmounting during state transitions
+  // Show game dynamics once all presented or game started
   if (allPresented || gameStarted) {
-    console.log('=== RENDERING GAME DYNAMICS SCREEN ===');
-    console.log('gameStarted:', gameStarted);
-    console.log('allPresented:', allPresented);
-    console.log('activeParticipants:', activeParticipants.length);
-    console.log('game_phase from DB:', appointment.event.game_phase);
+    console.log('Rendering GameDynamicsScreen');
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
-      name: p.profiles?.name || 'Participante Anónimo',
+      name: p.profiles?.name || 'Participante',
       profile_photo_url: p.profiles?.profile_photo_url || null,
-      occupation: p.profiles?.city || 'Ciudad no especificada',
+      occupation: p.profiles?.city || 'Ciudad',
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
       presented: p.is_presented
@@ -1105,7 +837,6 @@ export default function InteraccionScreen() {
     ? appointment.event.location_name
     : 'Ubicación se revelará próximamente';
   
-  // CRITICAL: Calculate participant count for display
   const participantCountText = activeParticipants.length.toString();
 
   return (
@@ -1118,18 +849,6 @@ export default function InteraccionScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
-
-        {countdown > 0 && (
-          <View style={styles.reminderCard}>
-            <Text style={styles.reminderIcon}>💫</Text>
-            <Text style={styles.reminderText}>
-              Los primeros minutos son clave para generar conexión.
-            </Text>
-            <Text style={styles.reminderSubtext}>
-              Llega a tiempo y aprovecha cada momento.
-            </Text>
-          </View>
-        )}
 
         <View style={styles.countdownCard}>
           <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
@@ -1145,9 +864,6 @@ export default function InteraccionScreen() {
             </View>
           </View>
           <Text style={styles.eventLocation}>{locationText}</Text>
-          {appointment.event.is_location_revealed && appointment.event.location_address && (
-            <Text style={styles.eventLocationAddress}>{appointment.event.location_address}</Text>
-          )}
         </View>
 
         {checkInPhase === 'code_entry' && (
@@ -1189,7 +905,7 @@ export default function InteraccionScreen() {
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
               <Text style={styles.confirmedText}>
-                ¡Llegada confirmada! Eres un Participante Activo.
+                ¡Llegada confirmada!
               </Text>
             </View>
 
@@ -1204,7 +920,7 @@ export default function InteraccionScreen() {
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => {
-                    const displayName = participant.profiles?.name || 'Participante Anónimo';
+                    const displayName = participant.profiles?.name || 'Participante';
                     
                     return (
                       <React.Fragment key={index}>
@@ -1229,14 +945,6 @@ export default function InteraccionScreen() {
                 </View>
               )}
             </View>
-
-            {!canStartExperience && (
-              <View style={styles.waitingInfoCard}>
-                <Text style={styles.waitingInfoText}>
-                  La experiencia comenzará cuando al menos 2 personas estén confirmadas.
-                </Text>
-              </View>
-            )}
 
             {canStartExperience && (
               <TouchableOpacity
@@ -1268,23 +976,6 @@ export default function InteraccionScreen() {
         </Animated.View>
       )}
 
-      {specialToastVisible && (
-        <Animated.View
-          style={[
-            styles.specialToastContainer,
-            {
-              opacity: specialToastOpacity,
-              transform: [{ scale: specialToastScale }],
-            },
-          ]}
-        >
-          <View style={styles.specialToastContent}>
-            <Text style={styles.specialToastIcon}>🎉</Text>
-            <Text style={styles.specialToastText}>{specialToastMessage}</Text>
-          </View>
-        </Animated.View>
-      )}
-
       <Modal
         visible={showRitualModal}
         transparent
@@ -1301,10 +992,7 @@ export default function InteraccionScreen() {
             <Text style={styles.ritualIcon}>✨</Text>
             <Text style={styles.ritualTitle}>La experiencia comienza ahora.</Text>
             <Text style={styles.ritualText}>
-              Los primeros minutos son cruciales para crear una mejor experiencia con el resto del grupo.
-            </Text>
-            <Text style={styles.ritualSubtext}>
-              Participa desde el inicio y deja que la energía fluya.
+              Los primeros minutos son cruciales para crear una mejor experiencia.
             </Text>
             <TouchableOpacity
               style={styles.ritualButton}
@@ -1325,20 +1013,17 @@ export default function InteraccionScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.welcomeModalContent}>
-            <Text style={styles.welcomeTitle}>Bienvenidos a la Experiencia Nospi</Text>
+            <Text style={styles.welcomeTitle}>Bienvenidos a Nospi</Text>
             <Text style={styles.welcomeText}>
-              Nospi no es una cena común.{'\n\n'}
-              Esta dinámica está diseñada para romper el hielo, generar conexión real y evitar momentos incómodos.{'\n\n'}
-              Todos deben participar para que funcione.{'\n\n'}
-              Puedes pasar una pregunta, pero eso afectará tu puntaje.{'\n\n'}
-              Entre más participes, mejor será la energía de la mesa.
+              Esta dinámica está diseñada para romper el hielo y generar conexión real.{'\n\n'}
+              Todos deben participar para que funcione.
             </Text>
             <TouchableOpacity
               style={styles.welcomeButton}
               onPress={handleContinueToPresentation}
               activeOpacity={0.8}
             >
-              <Text style={styles.welcomeButtonText}>Comenzar experiencia</Text>
+              <Text style={styles.welcomeButtonText}>Comenzar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1394,11 +1079,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 40,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   placeholderIcon: {
     fontSize: 80,
@@ -1409,24 +1089,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    marginBottom: 12,
-  },
-  placeholderSubtext: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    opacity: 0.7,
   },
   eventInfoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   eventInfoIcon: {
     fontSize: 60,
@@ -1448,67 +1116,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: nospiColors.purpleMid,
-    marginBottom: 8,
-  },
-  eventInfoLocation: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  eventInfoAddress: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  eventInfoLocationPlaceholder: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: 16,
-  },
-  infoBox: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-  },
-  infoBoxText: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  reminderCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  reminderIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  reminderText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  reminderSubtext: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
   },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1516,11 +1123,6 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   countdownLabel: {
     fontSize: 16,
@@ -1540,11 +1142,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -1573,21 +1170,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  eventLocationAddress: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 4,
-  },
   codeEntryCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     padding: 24,
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   codeEntryTitle: {
     fontSize: 24,
@@ -1624,11 +1211,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   confirmCodeButtonText: {
     fontSize: 18,
@@ -1652,7 +1234,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#065F46',
     textAlign: 'center',
-    lineHeight: 24,
     fontWeight: '600',
   },
   participantsListCard: {
@@ -1660,11 +1241,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   participantsListHeader: {
     flexDirection: 'row',
@@ -1685,7 +1261,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     minWidth: 50,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   participantCountText: {
     fontSize: 20,
@@ -1732,11 +1307,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   startButtonText: {
     fontSize: 18,
@@ -1746,36 +1316,16 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
-  waitingInfoCard: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  waitingInfoText: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontWeight: '600',
-  },
   phaseCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     padding: 24,
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   phaseMessage: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    lineHeight: 24,
     fontWeight: '600',
   },
   progressCard: {
@@ -1805,15 +1355,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 12,
   },
-  emptyParticipants: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyParticipantsText: {
-    fontSize: 16,
-    color: '#9CA3AF',
-    textAlign: 'center',
-  },
   participantCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
@@ -1822,11 +1363,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   participantInfo: {
     flexDirection: 'row',
@@ -1865,12 +1401,6 @@ const styles = StyleSheet.create({
   participantOccupation: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
-  },
-  participantInterest: {
-    fontSize: 12,
-    color: '#888',
-    fontStyle: 'italic',
   },
   presentedBadge: {
     backgroundColor: '#10B981',
@@ -1879,7 +1409,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   presentedBadgeText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
   },
@@ -1889,11 +1419,6 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   presentedButtonText: {
     fontSize: 18,
@@ -1912,22 +1437,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#065F46',
     textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-  allPresentedCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  allPresentedText: {
-    fontSize: 16,
-    color: '#065F46',
-    textAlign: 'center',
-    lineHeight: 24,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -1944,11 +1453,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 500,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   ritualIcon: {
     fontSize: 80,
@@ -1965,27 +1469,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     lineHeight: 26,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  ritualSubtext: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 26,
     marginBottom: 32,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   ritualButton: {
     backgroundColor: nospiColors.purpleDark,
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 48,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   ritualButtonText: {
     fontSize: 18,
@@ -1998,11 +1489,6 @@ const styles = StyleSheet.create({
     padding: 32,
     width: '100%',
     maxWidth: 500,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   welcomeTitle: {
     fontSize: 26,
@@ -2023,11 +1509,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   welcomeButtonText: {
     fontSize: 18,
@@ -2047,13 +1528,11 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: nospiColors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   toastIcon: {
     fontSize: 24,
@@ -2064,37 +1543,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: nospiColors.purpleDark,
     flex: 1,
-  },
-  specialToastContainer: {
-    position: 'absolute',
-    top: '40%',
-    left: 20,
-    right: 20,
-    zIndex: 9999,
-    alignItems: 'center',
-  },
-  specialToastContent: {
-    backgroundColor: 'rgba(139, 92, 246, 0.98)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    minWidth: 280,
-  },
-  specialToastIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  specialToastText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
   },
 });
