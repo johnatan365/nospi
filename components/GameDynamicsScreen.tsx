@@ -65,49 +65,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [hasTriggeredAnimation, setHasTriggeredAnimation] = useState(false);
   
   const wheelRotation = useRef(new Animated.Value(0)).current;
   const glowAnimation = useRef(new Animated.Value(0)).current;
   const selectedPulse = useRef(new Animated.Value(1)).current;
-
-  // Sync game state from database
-  useEffect(() => {
-    console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
-    console.log('Fase del evento:', appointment.event.game_phase);
-    
-    const dbPhase = appointment.event.game_phase;
-    
-    if (dbPhase === 'show_result' || dbPhase === 'question') {
-      // Encontrar participante seleccionado
-      const participant = activeParticipants.find(
-        p => p.user_id === appointment.event.selected_participant_id
-      );
-      
-      if (participant) {
-        setSelectedParticipant(participant);
-      }
-      
-      if (appointment.event.current_question) {
-        setCurrentQuestion(appointment.event.current_question);
-      }
-      
-      if (dbPhase === 'question') {
-        setGamePhase('question');
-      } else {
-        setGamePhase('show_result');
-      }
-    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin') {
-      setGamePhase('waiting_for_spin');
-    } else {
-      setGamePhase('ready');
-    }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants]);
 
   // DECLARE startRouletteAnimation BEFORE the useEffect that uses it
   const startRouletteAnimation = useCallback(() => {
     console.log('=== INICIANDO ANIMACIÓN DE LA RULETA ===');
     setIsSpinning(true);
     setGamePhase('show_result');
+    setHasTriggeredAnimation(true);
     
     // Reiniciar animaciones
     wheelRotation.setValue(0);
@@ -165,7 +134,46 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     });
   }, [activeParticipants.length, wheelRotation, glowAnimation, selectedPulse]);
 
-  // Realtime subscription for game state updates - NOW AFTER startRouletteAnimation
+  // Sync game state from database AND trigger animation if needed
+  useEffect(() => {
+    console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
+    console.log('Fase del evento:', appointment.event.game_phase);
+    
+    const dbPhase = appointment.event.game_phase;
+    
+    if (dbPhase === 'show_result' || dbPhase === 'question') {
+      // Encontrar participante seleccionado
+      const participant = activeParticipants.find(
+        p => p.user_id === appointment.event.selected_participant_id
+      );
+      
+      if (participant) {
+        setSelectedParticipant(participant);
+      }
+      
+      if (appointment.event.current_question) {
+        setCurrentQuestion(appointment.event.current_question);
+      }
+      
+      if (dbPhase === 'question') {
+        setGamePhase('question');
+      } else {
+        setGamePhase('show_result');
+        
+        // 🚨 FIX: Trigger animation if we're in show_result and haven't animated yet
+        if (!hasTriggeredAnimation && !isSpinning) {
+          console.log('🎯 Fase show_result detectada - Iniciando animación');
+          startRouletteAnimation();
+        }
+      }
+    } else if (dbPhase === 'roulette' || dbPhase === 'waiting_for_spin') {
+      setGamePhase('waiting_for_spin');
+    } else {
+      setGamePhase('ready');
+    }
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation]);
+
+  // Realtime subscription for game state updates
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -182,13 +190,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO ===');
+          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO VIA REALTIME ===');
           const newEvent = payload.new as any;
           
           // Cuando game_phase se convierte en 'show_result', activar animación
-          // REMOVED the !isSpinning check - always trigger animation when phase changes
           if (newEvent.game_phase === 'show_result') {
-            console.log('Iniciando animación de la ruleta desde Realtime');
+            console.log('🚀 Iniciando animación de la ruleta desde Realtime');
+            setHasTriggeredAnimation(false); // Reset flag for next spin
             startRouletteAnimation();
           }
         }
@@ -337,6 +345,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Seleccionando participante:', nextParticipantId);
       console.log('✅ Nuevo índice de turno:', newIndex);
 
+      // Reset animation flag before updating database
+      setHasTriggeredAnimation(false);
+
       // Actualización directa de la tabla events
       setLoadingMessage('Girando la ruleta...');
       
@@ -397,12 +408,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Single modern metallic/glass style triangular pointer pointing downward - ELEGANT */}
+        {/* Single modern yellow/gold triangular pointer pointing downward - ELEGANT */}
         <View style={styles.indicatorContainer}>
           {/* Enhanced shadow layer for depth */}
           <View style={styles.indicatorShadow} />
           
-          {/* Main triangle with refined metallic gradient */}
+          {/* Main triangle with yellow/gold gradient */}
           <View style={styles.triangleContainer}>
             <View style={styles.triangleGradient} />
             
@@ -850,7 +861,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  // Single modern metallic/glass style triangular pointer pointing downward - ELEGANT VERSION
+  // Single modern yellow/gold triangular pointer pointing downward - ELEGANT VERSION
   indicatorContainer: {
     position: 'absolute',
     top: -18,
@@ -893,7 +904,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 55,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#B8B8B8',
+    borderTopColor: '#FFD700',
   },
   triangleHighlight: {
     position: 'absolute',
