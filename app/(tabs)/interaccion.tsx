@@ -53,6 +53,7 @@ interface Profile {
   phone: string;
   city: string;
   profile_photo_url: string | null;
+  interested_in?: string;
 }
 
 interface Participant {
@@ -532,12 +533,15 @@ export default function InteraccionScreen() {
           const email = item.user_email || '';
           const phone = item.user_phone || '';
           const city = item.user_city || '';
+          const interestedIn = item.user_interested_in || '';
           const userPhoto = item.user_profile_photo_url || null;
           
           console.log('Processing participant:', {
             id: item.id,
             user_id: item.user_id,
             name: fullName,
+            city: city,
+            interested_in: interestedIn,
             confirmed: item.confirmed,
             is_presented: item.is_presented
           });
@@ -556,7 +560,8 @@ export default function InteraccionScreen() {
               email: email,
               phone: phone,
               city: city,
-              profile_photo_url: userPhoto
+              profile_photo_url: userPhoto,
+              interested_in: interestedIn
             }
           };
         });
@@ -566,6 +571,8 @@ export default function InteraccionScreen() {
       console.log('Participants:', participants.map(p => ({ 
         name: p.profiles?.name,
         user_id: p.user_id, 
+        city: p.profiles?.city,
+        interested_in: p.profiles?.interested_in,
         confirmed: p.confirmed,
         is_presented: p.is_presented
       })));
@@ -1031,6 +1038,8 @@ export default function InteraccionScreen() {
             ) : (
               activeParticipants.map((participant, index) => {
                 const displayName = participant.profiles?.name || 'Participante Anónimo';
+                const displayCity = participant.profiles?.city || 'Ciudad no especificada';
+                const displayInterestedIn = participant.profiles?.interested_in || 'No especificado';
                 
                 return (
                   <React.Fragment key={index}>
@@ -1050,7 +1059,8 @@ export default function InteraccionScreen() {
                       )}
                       <View style={styles.participantDetails}>
                         <Text style={styles.participantName}>{displayName}</Text>
-                        <Text style={styles.participantOccupation}>Participante</Text>
+                        <Text style={styles.participantOccupation}>{displayCity}</Text>
+                        <Text style={styles.participantInterest}>Interesado en: {displayInterestedIn}</Text>
                       </View>
                     </View>
                     {participant.is_presented && (
@@ -1102,7 +1112,7 @@ export default function InteraccionScreen() {
       user_id: p.user_id,
       name: p.profiles?.name || 'Participante Anónimo',
       profile_photo_url: p.profiles?.profile_photo_url || null,
-      occupation: 'Participante',
+      occupation: p.profiles?.city || 'Ciudad no especificada',
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
       presented: p.is_presented
@@ -1882,6 +1892,12 @@ const styles = StyleSheet.create({
   participantOccupation: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 2,
+  },
+  participantInterest: {
+    fontSize: 12,
+    color: '#888',
+    fontStyle: 'italic',
   },
   presentedBadge: {
     backgroundColor: '#10B981',
