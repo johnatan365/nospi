@@ -200,15 +200,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
 
   const handleStartRoulette = useCallback(async () => {
-    if (!appointment?.event_id || isSpinning || activeParticipants.length === 0) {
+    console.log('=== USUARIO PRESIONÓ GIRAR RULETA ===');
+    console.log('Estado actual - isSpinning:', isSpinning);
+    console.log('Estado actual - gamePhase:', gamePhase);
+    console.log('Participantes activos:', activeParticipants.length);
+    
+    if (!appointment?.event_id || activeParticipants.length === 0) {
       console.warn('No se puede iniciar la ruleta: condiciones no cumplidas');
       console.log('event_id:', appointment?.event_id);
-      console.log('isSpinning:', isSpinning);
       console.log('activeParticipants.length:', activeParticipants.length);
       return;
     }
 
-    console.log('=== USUARIO PRESIONÓ GIRAR RULETA ===');
+    // Allow starting even if currently in show_result phase
     setIsSpinning(true);
     setLoadingMessage('Iniciando ruleta...');
     
@@ -230,16 +234,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       console.log('Estado actual del evento:', eventData);
-
-      // Permitir iniciar desde 'ready', 'intro', o 'waiting_for_spin'
-      const validStartPhases = ['intro', 'ready', 'waiting_for_spin'];
-      if (!validStartPhases.includes(eventData.game_phase)) {
-        console.warn('El evento no está en una fase válida para iniciar la ruleta:', eventData.game_phase);
-        Alert.alert('Error', `La ruleta no puede iniciar en la fase actual: ${eventData.game_phase}`);
-        setIsSpinning(false);
-        setLoadingMessage('');
-        return;
-      }
 
       // Lógica del lado del cliente para seleccionar el siguiente participante
       let levelQueue = eventData.level_queue || [];
@@ -361,7 +355,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setIsSpinning(false);
       setLoadingMessage('');
     }
-  }, [appointment?.event_id, isSpinning, activeParticipants.length]);
+  }, [appointment?.event_id, isSpinning, activeParticipants.length, gamePhase]);
 
   const wheelRotate = wheelRotation.interpolate({
     inputRange: [0, 360],
@@ -379,7 +373,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Premium metallic indicator at top */}
+        {/* Premium metallic indicator - positioned to overlap wheel edge */}
         <View style={styles.indicatorContainer}>
           <View style={styles.indicatorShadow} />
           <LinearGradient
@@ -835,29 +829,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
+  // Arrow indicator positioned to overlap the wheel edge (like the image)
   indicatorContainer: {
     position: 'absolute',
-    top: -50,
+    top: -20, // Moved down so it overlaps the wheel
     left: '50%',
-    marginLeft: -25,
-    width: 50,
-    height: 60,
+    marginLeft: -30,
+    width: 60,
+    height: 70,
     zIndex: 10,
     alignItems: 'center',
   },
   indicatorShadow: {
     position: 'absolute',
     top: 8,
-    width: 46,
-    height: 56,
+    width: 56,
+    height: 66,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 8,
+    borderRadius: 10,
     transform: [{ scaleY: 0.5 }],
   },
   indicatorGradient: {
-    width: 46,
-    height: 56,
-    borderRadius: 8,
+    width: 56,
+    height: 66,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#FFD700',
@@ -865,36 +860,44 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 12,
     elevation: 15,
+    borderWidth: 2,
+    borderColor: '#FFA500',
   },
   indicatorInner: {
-    width: 40,
-    height: 50,
+    width: 48,
+    height: 58,
     backgroundColor: '#FFF8DC',
-    borderRadius: 6,
+    borderRadius: 8,
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: 4,
+    paddingBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
   },
   indicatorTriangle: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 12,
-    borderRightWidth: 12,
-    borderTopWidth: 18,
+    borderLeftWidth: 14,
+    borderRightWidth: 14,
+    borderTopWidth: 22,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#FFA500',
+    borderTopColor: '#FF8C00',
+    shadowColor: '#FF8C00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
   },
   indicatorHighlight: {
     position: 'absolute',
-    top: 4,
-    left: 8,
-    width: 12,
-    height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    borderRadius: 6,
+    top: 6,
+    left: 10,
+    width: 14,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 7,
   },
   spinButton: {
     backgroundColor: '#FFD700',
