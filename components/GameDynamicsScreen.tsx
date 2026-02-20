@@ -261,6 +261,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     await startRoulette();
   };
 
+  const handleReadyToStart = () => {
+    console.log('User clicked Ya estoy listo');
+    setGamePhase('ready');
+  };
+
   const startRoulette = async () => {
     if (isStartingRound) {
       console.log('Round already starting, skipping duplicate call');
@@ -475,6 +480,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.tvWheelContainer}>
+        {/* Fixed arrow pointing down (at top of wheel) */}
+        <View style={styles.fixedArrowContainer}>
+          <View style={styles.arrowTriangle} />
+        </View>
+
         {/* Animated Wheel */}
         <Animated.View
           style={[
@@ -516,8 +526,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                     </View>
                   )}
                   
-                  {/* Participant name */}
-                  <Text style={styles.segmentName} numberOfLines={1}>
+                  {/* Participant name - LARGER SIZE */}
+                  <Text style={styles.segmentName} numberOfLines={2}>
                     {participant.name}
                   </Text>
                 </View>
@@ -530,11 +540,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.centerText}>NOSPI</Text>
           </View>
         </Animated.View>
-
-        {/* Fixed arrow pointing up */}
-        <View style={styles.fixedArrowContainer}>
-          <View style={styles.arrowTriangle} />
-        </View>
       </View>
     );
   };
@@ -543,16 +548,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   // This prevents the component from unmounting during state transitions
   
   if (gamePhase === 'ready') {
+    const confirmedParticipants = activeParticipants.filter(p => p.confirmed);
+    const allReady = confirmedParticipants.length === activeParticipants.length && activeParticipants.length >= 2;
+
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>¡Listos para comenzar!</Text>
-          <Text style={styles.subtitle}>Todos se han presentado</Text>
+          <Text style={styles.titleWhite}>¡Listos para comenzar!</Text>
+          <Text style={styles.subtitleWhite}>Todos se han presentado</Text>
 
           <View style={styles.successCard}>
             <Text style={styles.successIcon}>🎉</Text>
@@ -562,6 +570,39 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </View>
 
+          <View style={styles.participantsReadyCard}>
+            <Text style={styles.participantsReadyTitle}>Participantes confirmados</Text>
+            <View style={styles.participantsReadyList}>
+              {activeParticipants.map((participant, index) => {
+                const displayName = participant.name;
+                const isReady = participant.confirmed;
+                
+                return (
+                  <View key={index} style={styles.participantReadyItem}>
+                    {participant.profile_photo_url ? (
+                      <Image
+                        source={{ uri: participant.profile_photo_url }}
+                        style={styles.participantReadyPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantReadyPhotoPlaceholder}>
+                        <Text style={styles.participantReadyPhotoText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.participantReadyName}>{displayName}</Text>
+                    {isReady && (
+                      <View style={styles.readyBadge}>
+                        <Text style={styles.readyBadgeText}>✓ Listo</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.levelCard}>
             <Text style={styles.levelTitle}>Nivel Inicial</Text>
             <View style={[styles.levelBadge, { backgroundColor: levelColors.divertido }]}>
@@ -569,13 +610,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.startGameButton}
-            onPress={startGame}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.startGameButtonText}>🎮 Iniciar Dinámica</Text>
-          </TouchableOpacity>
+          {allReady ? (
+            <TouchableOpacity
+              style={styles.startGameButton}
+              onPress={startGame}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.startGameButtonText}>🎮 Iniciar Dinámica</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.waitingForAllCard}>
+              <Text style={styles.waitingForAllText}>
+                Esperando a que todos confirmen que están listos...
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </LinearGradient>
     );
@@ -585,14 +634,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   if (gamePhase === 'roulette' || showRoulette) {
     return (
       <LinearGradient
-        colors={['#1a1a2e', '#16213e', '#0f3460']}
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.rouletteContainer}>
-          <Text style={styles.rouletteTitle}>🎰 Ronda {currentRound}</Text>
-          <Text style={styles.rouletteSubtitle}>¡Girando la ruleta!</Text>
+          <Text style={styles.rouletteTitleWhite}>🎰 Ronda {currentRound}</Text>
+          <Text style={styles.rouletteSubtitleWhite}>¡Girando la ruleta!</Text>
 
           {renderTVStyleWheel()}
 
@@ -926,10 +975,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 48,
   },
+  titleWhite: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    marginTop: 48,
+  },
   subtitle: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     opacity: 0.8,
+    marginBottom: 24,
+  },
+  subtitleWhite: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
     marginBottom: 24,
   },
   successCard: {
@@ -1019,6 +1081,12 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 4,
   },
+  rouletteTitleWhite: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
   rouletteSubtitle: {
     fontSize: 18,
     color: '#FFFFFF',
@@ -1026,6 +1094,12 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  rouletteSubtitleWhite: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    marginBottom: 40,
+    opacity: 0.9,
   },
   tvWheelContainer: {
     width: WHEEL_SIZE,
@@ -1087,14 +1161,15 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
   },
   segmentName: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
+    lineHeight: 20,
   },
   centerCircle: {
     position: 'absolute',
@@ -1119,22 +1194,26 @@ const styles = StyleSheet.create({
   },
   fixedArrowContainer: {
     position: 'absolute',
-    top: -20,
-    width: 0,
-    height: 0,
+    top: -30,
+    left: '50%',
+    marginLeft: -25,
+    width: 50,
+    height: 50,
     zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   arrowTriangle: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 20,
-    borderRightWidth: 20,
-    borderBottomWidth: 40,
+    borderLeftWidth: 25,
+    borderRightWidth: 25,
+    borderTopWidth: 45,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#FFD700',
+    borderTopColor: '#FFD700',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
@@ -1550,5 +1629,83 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: nospiColors.purpleDark,
     marginBottom: 4,
+  },
+  participantsReadyCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  participantsReadyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  participantsReadyList: {
+    gap: 12,
+  },
+  participantReadyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+  },
+  participantReadyPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  participantReadyPhotoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantReadyPhotoText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantReadyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  readyBadge: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  readyBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  waitingForAllCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  waitingForAllText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '600',
   },
 });

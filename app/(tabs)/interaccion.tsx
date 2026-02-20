@@ -95,6 +95,7 @@ export default function InteraccionScreen() {
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
+  const [userReady, setUserReady] = useState(false);
 
   // Toast notification states
   const [toastVisible, setToastVisible] = useState(false);
@@ -838,6 +839,36 @@ export default function InteraccionScreen() {
     }
   };
 
+  const handleUserReady = async () => {
+    if (!appointment || !user) return;
+
+    try {
+      console.log('User clicked Ya estoy listo');
+      
+      // Update event_participants to mark user as ready/confirmed
+      const { error } = await supabase
+        .from('event_participants')
+        .update({ 
+          confirmed: true,
+          check_in_time: new Date().toISOString()
+        })
+        .eq('event_id', appointment.event_id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating ready status:', error);
+        return;
+      }
+
+      setUserReady(true);
+      
+      // Reload participants to update the list
+      loadActiveParticipants(appointment.event_id);
+    } catch (error) {
+      console.error('Error marking user as ready:', error);
+    }
+  };
+
   // FIXED: Validation - Check total confirmed participants by event_id (minimum 2)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
@@ -946,14 +977,14 @@ export default function InteraccionScreen() {
 
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Fase 2: Presentación Guiada</Text>
-          <Text style={styles.subtitle}>Antes de iniciar el juego</Text>
+          <Text style={styles.titleWhite}>Fase 2: Presentación Guiada</Text>
+          <Text style={styles.subtitleWhite}>Antes de iniciar el juego</Text>
 
           <View style={styles.phaseCard}>
             <Text style={styles.phaseMessage}>
@@ -967,7 +998,7 @@ export default function InteraccionScreen() {
           </View>
 
           <View style={styles.participantsSection}>
-            <Text style={styles.participantsTitle}>Participantes Activos</Text>
+            <Text style={styles.participantsTitleWhite}>Participantes Activos</Text>
             {activeParticipants.length === 0 ? (
               <View style={styles.emptyParticipants}>
                 <Text style={styles.emptyParticipantsText}>No hay participantes confirmados aún</Text>
@@ -1316,10 +1347,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 48,
   },
+  titleWhite: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    marginTop: 48,
+  },
   subtitle: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     opacity: 0.8,
+    marginBottom: 24,
+  },
+  subtitleWhite: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
     marginBottom: 24,
   },
   placeholderContainer: {
@@ -1736,6 +1780,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  participantsTitleWhite: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   emptyParticipants: {
