@@ -98,7 +98,7 @@ export default function ProfileScreen() {
     if (user) {
       loadProfile();
     }
-  }, [user, loadProfile]);
+  }, [user]); // loadProfile is stable, no need in deps
 
   const loadProfile = async () => {
     try {

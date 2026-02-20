@@ -25,7 +25,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'roulette' | 'playing' | 'finished';
+  game_phase: 'intro' | 'presentation' | 'ready' | 'roulette' | 'question' | 'playing' | 'finished';
   current_turn_index: number;
   current_round: number;
   started_at: string | null;
@@ -91,12 +91,10 @@ export default function InteraccionScreen() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showRitualModal, setShowRitualModal] = useState(false);
   const [experienceStarted, setExperienceStarted] = useState(false);
-  const [showPresentationPhase, setShowPresentationPhase] = useState(false);
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
-  const [userReady, setUserReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false); // CRITICAL: Track if game has started to prevent unmounting
 
   // Toast notification states
@@ -659,7 +657,6 @@ export default function InteraccionScreen() {
     setGameStarted(true);
     setShowWelcomeModal(false);
     setExperienceStarted(true);
-    setShowPresentationPhase(true);
   }, []);
 
   const handleUserPresented = useCallback(async () => {
@@ -696,36 +693,6 @@ export default function InteraccionScreen() {
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error marking user as presented:', error);
-    }
-  }, [appointment, user, loadActiveParticipants]);
-
-  const handleUserReady = useCallback(async () => {
-    if (!appointment || !user) return;
-
-    try {
-      console.log('User clicked Ya estoy listo');
-      
-      // Update event_participants to mark user as ready/confirmed
-      const { error } = await supabase
-        .from('event_participants')
-        .update({ 
-          confirmed: true,
-          check_in_time: new Date().toISOString()
-        })
-        .eq('event_id', appointment.event_id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating ready status:', error);
-        return;
-      }
-
-      setUserReady(true);
-      
-      // Reload participants to update the list
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error marking user as ready:', error);
     }
   }, [appointment, user, loadActiveParticipants]);
 
@@ -1005,7 +972,7 @@ export default function InteraccionScreen() {
     );
   }
 
-  // CRITICAL FIX: Show presentation phase when experience has started AND not all have presented
+  // CRITICAL FIX: Show presentation phase when experience has started AND not all have presented AND game hasn't started
   // This ensures the "Ya me presenté" button is visible
   if (experienceStarted && !allPresented && !gameStarted) {
     const presentedCount = activeParticipants.filter(p => p.is_presented).length;
@@ -1831,12 +1798,6 @@ const styles = StyleSheet.create({
   },
   participantsSection: {
     marginBottom: 16,
-  },
-  participantsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
   },
   participantsTitleWhite: {
     fontSize: 20,

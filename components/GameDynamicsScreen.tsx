@@ -322,57 +322,51 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     });
 
     try {
-      // CRITICAL FIX: Get session using the Supabase client's built-in method
-      console.log('=== GETTING USER SESSION ===');
+      // CRITICAL FIX: Use RPC function instead of Edge Function
+      // RPC functions automatically have access to the authenticated user context
+      console.log('=== CALLING RPC FUNCTION ===');
       
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError.message);
-        setIsStartingRound(false);
-        return;
-      }
-
-      if (!session) {
-        console.error('❌ No active session found - user needs to log in');
-        setIsStartingRound(false);
-        return;
-      }
-
-      console.log('✅ Session found');
-      console.log('User ID:', session.user.id);
-      console.log('Access token length:', session.access_token.length);
-
-      // CRITICAL FIX: Use supabase.functions.invoke with proper auth
-      console.log('=== CALLING EDGE FUNCTION VIA SUPABASE CLIENT ===');
-      
-      const { data, error } = await supabase.functions.invoke('start-game-round', {
-        body: {
-          eventId: appointment.event_id,
-          currentLevel: currentLevel,
-        },
+      const { data, error } = await supabase.rpc('start_game_round', {
+        p_event_id: appointment.event_id,
+        p_current_level: currentLevel,
       });
 
       if (error) {
-        console.error('❌ Edge Function error:', error);
+        console.error('❌ RPC error:', error);
         console.error('Error message:', error.message);
         console.error('Error details:', JSON.stringify(error, null, 2));
         setIsStartingRound(false);
         return;
       }
 
-      console.log('✅ Edge Function response:', JSON.stringify(data, null, 2));
+      console.log('✅ RPC response:', JSON.stringify(data, null, 2));
       console.log('Selected participant:', data.selectedParticipantName);
       console.log('Question:', data.question);
 
-      // The Realtime subscription will handle updating the UI
-      // We just need to wait for the animation to finish
-      setTimeout(() => {
+      // Wait 6 seconds for animation, then update to question phase
+      setTimeout(async () => {
+        console.log('Animation complete, updating to question phase');
+        
+        // Update event to question phase
+        const { error: updateError } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'question',
+            round_started_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (updateError) {
+          console.error('❌ Error updating to question phase:', updateError);
+        } else {
+          console.log('✅ Updated to question phase');
+        }
+
         setIsStartingRound(false);
       }, 6000);
 
     } catch (error) {
-      console.error('❌ Error calling Edge Function:', error);
+      console.error('❌ Error calling RPC function:', error);
       if (error instanceof Error) {
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
