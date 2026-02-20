@@ -173,6 +173,62 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation]);
 
+  // Auto-transition to question phase after animation completes
+  useEffect(() => {
+    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant) {
+      console.log('=== ANIMACIÓN COMPLETADA - TRANSICIONANDO A PREGUNTA ===');
+      console.log('Participante seleccionado:', selectedParticipant.name);
+      
+      // Wait 2 seconds after animation completes to show the result, then transition to question
+      const transitionTimer = setTimeout(async () => {
+        console.log('Transicionando a fase de pregunta...');
+        
+        try {
+          // Generate a random question (you can customize this logic)
+          const questions = [
+            'te gusta bailar?',
+            'cuál es tu mayor sueño?',
+            'qué te hace feliz?',
+            'cuál es tu mayor miedo?',
+            'qué harías si ganaras la lotería?',
+            'cuál es tu película favorita?',
+            'prefieres el mar o la montaña?',
+            'qué superpoder te gustaría tener?',
+            'cuál es tu comida favorita?',
+            'qué te hace reír?'
+          ];
+          
+          const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+          
+          // Update the event to question phase with the selected question
+          const { error: updateError } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'question',
+              current_question: randomQuestion,
+              current_question_level: currentLevel,
+            })
+            .eq('id', appointment.event_id);
+          
+          if (updateError) {
+            console.error('❌ Error al actualizar a fase de pregunta:', updateError);
+            Alert.alert('Error', 'No se pudo pasar a la pregunta.');
+            return;
+          }
+          
+          console.log('✅ Transición a pregunta exitosa');
+          setCurrentQuestion(randomQuestion);
+          setGamePhase('question');
+        } catch (error: any) {
+          console.error('❌ Error inesperado al transicionar a pregunta:', error);
+          Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
+        }
+      }, 2000); // 2 seconds delay after animation completes
+      
+      return () => clearTimeout(transitionTimer);
+    }
+  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
+
   // Realtime subscription for game state updates
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -590,6 +646,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   if (gamePhase === 'question' && currentQuestion && selectedParticipant) {
     const participantName = selectedParticipant.name;
+    const firstName = participantName.split(' ')[0];
 
     return (
       <LinearGradient
@@ -602,12 +659,27 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <View style={styles.selectedCard}>
             <Text style={styles.selectedLabel}>La ruleta eligió a</Text>
             <Text style={styles.selectedName}>{participantName}</Text>
+            {selectedParticipant.profile_photo_url ? (
+              <Image
+                source={{ uri: selectedParticipant.profile_photo_url }}
+                style={styles.selectedPhoto}
+              />
+            ) : (
+              <View style={styles.selectedPhotoPlaceholder}>
+                <Text style={styles.selectedPhotoInitial}>
+                  {firstName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.questionCard}>
             <Text style={styles.questionIcon}>❓</Text>
-            <Text style={styles.questionIntro}>{participantName},</Text>
-            <Text style={styles.questionText}>{currentQuestion}</Text>
+            <View style={styles.questionTextContainer}>
+              <Text style={styles.questionIntro}>{firstName}</Text>
+              <Text style={styles.questionComma}>, </Text>
+              <Text style={styles.questionText}>{currentQuestion}</Text>
+            </View>
           </View>
 
           <View style={styles.infoCard}>
@@ -961,6 +1033,31 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: nospiColors.purpleMid,
+    marginBottom: 16,
+  },
+  selectedPhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: nospiColors.purpleMid,
+    marginTop: 8,
+  },
+  selectedPhotoPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: nospiColors.purpleMid,
+    marginTop: 8,
+  },
+  selectedPhotoInitial: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
   },
   questionCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -978,18 +1075,27 @@ const styles = StyleSheet.create({
     fontSize: 64,
     marginBottom: 20,
   },
+  questionTextContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   questionIntro: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: nospiColors.purpleMid,
-    marginBottom: 12,
     textAlign: 'center',
   },
+  questionComma: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+  },
   questionText: {
-    fontSize: 20,
+    fontSize: 24,
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    lineHeight: 30,
     fontWeight: '600',
   },
   infoCard: {
