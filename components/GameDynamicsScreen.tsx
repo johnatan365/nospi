@@ -186,6 +186,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     const dbPhase = appointment.event.game_phase;
     
+    // CRITICAL FIX: Don't override local state if we're transitioning to question
+    if (isTransitioningToQuestion) {
+      console.log('⏸️ Transición en progreso - ignorando actualización de sincronización');
+      return;
+    }
+    
     // Map database phases to local game phases
     if (dbPhase === 'question') {
       // QUESTION PHASE - Show the question screen
@@ -243,7 +249,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       
       setGamePhase('waiting_for_spin');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id]);
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id, isTransitioningToQuestion]);
 
   // Auto-transition to question phase after animation completes
   useEffect(() => {
@@ -251,7 +257,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('=== ANIMACIÓN COMPLETADA - PREPARANDO TRANSICIÓN A PREGUNTA ===');
       console.log('Participante seleccionado:', selectedParticipant.name);
       
-      // Set flag to prevent multiple transitions
+      // Set flag to prevent multiple transitions AND prevent sync from overriding
       setIsTransitioningToQuestion(true);
       
       // Wait 2 seconds after animation completes to show the result, then transition to question
@@ -277,7 +283,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           
           console.log('📝 Pregunta seleccionada:', randomQuestion);
           
-          // Update the event to question phase with the selected question
+          // Update local state FIRST for immediate UI response
+          setCurrentQuestion(randomQuestion);
+          setGamePhase('question');
+          
+          // Then update the database
           const { error: updateError } = await supabase
             .from('events')
             .update({
@@ -291,20 +301,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           if (updateError) {
             console.error('❌ Error al actualizar a fase de pregunta:', updateError);
             Alert.alert('Error', 'No se pudo pasar a la pregunta.');
+            // Revert local state on error
             setIsTransitioningToQuestion(false);
+            setGamePhase('show_result');
             return;
           }
           
           console.log('✅ Transición a pregunta exitosa en la base de datos');
-          
-          // Update local state immediately for responsive UI
-          setCurrentQuestion(randomQuestion);
-          setGamePhase('question');
-          // Don't clear isTransitioningToQuestion here - let the sync effect do it
+          // Clear transition flag after successful DB update
+          setIsTransitioningToQuestion(false);
         } catch (error: any) {
           console.error('❌ Error inesperado al transicionar a pregunta:', error);
           Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
           setIsTransitioningToQuestion(false);
+          setGamePhase('show_result');
         }
       }, 2000); // 2 seconds delay after animation completes
       
