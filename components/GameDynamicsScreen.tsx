@@ -208,7 +208,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    console.log('=== USUARIO PRESIONÓ INICIAR RULETA ===');
+    console.log('=== USUARIO PRESIONÓ GIRAR RULETA ===');
     setIsSpinning(true);
     setLoadingMessage('Iniciando ruleta...');
     
@@ -518,7 +518,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             activeOpacity={0.8}
           >
             <Text style={styles.startButtonText}>
-              {isSpinning ? '⏳ Iniciando...' : '🎰 Iniciar Ruleta'}
+              {isSpinning ? '⏳ Iniciando...' : '🎰 Girar Ruleta'}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -540,9 +540,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           {renderProfessionalWheel()}
 
-          <View style={styles.suspenseCard}>
-            <Text style={styles.suspenseText}>✨ Creando suspenso... ✨</Text>
-          </View>
+          {/* Replace suspense text with button */}
+          {loadingMessage ? (
+            <View style={styles.loadingCard}>
+              <Text style={styles.loadingText}>{loadingMessage}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.spinButton, isSpinning && styles.buttonDisabled]}
+            onPress={handleStartRoulette}
+            disabled={isSpinning}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.spinButtonText}>
+              {isSpinning ? '⏳ Girando...' : '🎰 Girar Ruleta'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -882,17 +896,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
     borderRadius: 6,
   },
-  suspenseCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 20,
+  spinButton: {
+    backgroundColor: '#FFD700',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 48,
+    alignItems: 'center',
     marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  suspenseText: {
-    fontSize: 18,
+  spinButtonText: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
+    color: '#1a0b2e',
   },
   selectedCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
