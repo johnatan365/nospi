@@ -101,40 +101,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants]);
 
-  // Realtime subscription for game state updates
-  useEffect(() => {
-    if (!appointment?.event_id) return;
-
-    console.log('=== SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
-    
-    const channel = supabase
-      .channel(`game_${appointment.event_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
-        },
-        (payload) => {
-          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO ===');
-          const newEvent = payload.new as any;
-          
-          // Cuando game_phase se convierte en 'show_result', activar animación
-          if (newEvent.game_phase === 'show_result' && !isSpinning) {
-            console.log('Iniciando animación de la ruleta');
-            startRouletteAnimation();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
-
+  // DECLARE startRouletteAnimation BEFORE the useEffect that uses it
   const startRouletteAnimation = useCallback(() => {
     console.log('=== INICIANDO ANIMACIÓN DE LA RULETA ===');
     setIsSpinning(true);
@@ -195,6 +162,40 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       ]).start();
     });
   }, [activeParticipants.length, wheelRotation, glowAnimation, selectedPulse]);
+
+  // Realtime subscription for game state updates - NOW AFTER startRouletteAnimation
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+
+    console.log('=== SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
+    
+    const channel = supabase
+      .channel(`game_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('=== ACTUALIZACIÓN DEL ESTADO DEL JUEGO ===');
+          const newEvent = payload.new as any;
+          
+          // Cuando game_phase se convierte en 'show_result', activar animación
+          if (newEvent.game_phase === 'show_result' && !isSpinning) {
+            console.log('Iniciando animación de la ruleta');
+            startRouletteAnimation();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
 
   const handleStartRoulette = useCallback(async () => {
     if (!appointment?.event_id || isSpinning) return;
