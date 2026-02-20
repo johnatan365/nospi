@@ -199,7 +199,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment?.event_id, isSpinning, startRouletteAnimation]);
 
   const handleStartRoulette = useCallback(async () => {
-    if (!appointment?.event_id || isSpinning || activeParticipants.length === 0) return;
+    if (!appointment?.event_id || isSpinning || activeParticipants.length === 0) {
+      console.warn('No se puede iniciar la ruleta: condiciones no cumplidas');
+      return;
+    }
 
     console.log('=== USUARIO PRESIONÓ INICIAR RULETA ===');
     
@@ -216,8 +219,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
-      if (eventData.game_phase !== 'waiting_for_spin') {
-        console.warn('El evento no está en fase waiting_for_spin');
+      console.log('Estado actual del evento:', eventData);
+
+      // Permitir iniciar desde 'ready', 'intro', o 'waiting_for_spin'
+      if (eventData.game_phase !== 'waiting_for_spin' && 
+          eventData.game_phase !== 'ready' && 
+          eventData.game_phase !== 'intro') {
+        console.warn('El evento no está en una fase válida para iniciar la ruleta:', eventData.game_phase);
         return;
       }
 
@@ -297,6 +305,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('Nuevo índice de turno:', newIndex);
 
       // Actualización directa de la tabla events
+      // NO usar optimistic locking para permitir iniciar desde cualquier fase
       const { error: updateError } = await supabase
         .from('events')
         .update({
@@ -304,15 +313,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           current_turn_index: newIndex,
           game_phase: 'show_result',
         })
-        .eq('id', appointment.event_id)
-        .eq('game_phase', 'waiting_for_spin'); // Optimistic locking
+        .eq('id', appointment.event_id);
 
       if (updateError) {
         console.error('Error al actualizar el evento para el giro de la ruleta:', updateError);
         return;
       }
 
-      console.log('Giro de ruleta iniciado exitosamente mediante actualización directa');
+      console.log('✅ Giro de ruleta iniciado exitosamente mediante actualización directa');
       // La animación se activará mediante la suscripción Realtime
     } catch (error) {
       console.error('Error inesperado al iniciar la ruleta:', error);
@@ -462,11 +470,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           <TouchableOpacity
-            style={styles.startButton}
+            style={[styles.startButton, isSpinning && styles.buttonDisabled]}
             onPress={handleStartRoulette}
+            disabled={isSpinning}
             activeOpacity={0.8}
           >
-            <Text style={styles.startButtonText}>🎰 Iniciar Ruleta</Text>
+            <Text style={styles.startButtonText}>
+              {isSpinning ? '⏳ Iniciando...' : '🎰 Iniciar Ruleta'}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
@@ -599,6 +610,9 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#1a0b2e',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   rouletteContainer: {
     flex: 1,
