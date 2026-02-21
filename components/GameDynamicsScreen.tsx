@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -88,7 +88,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isOptimisticUpdate, setIsOptimisticUpdate] = useState(false);
+  
+  // Use ref to track optimistic updates - this persists across renders
+  const isOptimisticUpdateRef = useRef(false);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -100,12 +102,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     getCurrentUser();
   }, []);
 
+  // Initial sync from database - only runs once on mount
   useEffect(() => {
-    if (isOptimisticUpdate) {
-      console.log('⏭️ Skipping sync - optimistic update in progress');
-      return;
-    }
-    
     console.log('=== INITIAL SYNC FROM DATABASE ===');
     const event = appointment.event;
     
@@ -128,8 +126,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } else {
       setGamePhase('ready');
     }
-  }, [appointment.event, activeParticipants, isOptimisticUpdate]);
+  }, []); // Only run on mount
 
+  // Realtime subscription - updates from other users
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -147,14 +146,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 === REALTIME UPDATE ===');
-          const newEvent = payload.new as any;
-          console.log('📡 New phase:', newEvent.game_phase);
-          
-          if (isOptimisticUpdate) {
+          // Skip if we're in the middle of an optimistic update
+          if (isOptimisticUpdateRef.current) {
             console.log('⏭️ Skipping realtime update - optimistic update in progress');
             return;
           }
+          
+          console.log('📡 === REALTIME UPDATE ===');
+          const newEvent = payload.new as any;
+          console.log('📡 New phase:', newEvent.game_phase);
+          console.log('📡 Answered users:', newEvent.answered_users);
           
           if (newEvent.game_phase === 'question_active') {
             setGamePhase('question_active');
@@ -185,7 +186,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('📡 Unsubscribing');
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, activeParticipants, isOptimisticUpdate]);
+  }, [appointment?.event_id, activeParticipants]);
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
@@ -197,8 +198,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    setIsOptimisticUpdate(true);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // Set optimistic flag IMMEDIATELY
+    isOptimisticUpdateRef.current = true;
+    console.log('🔒 Optimistic update flag SET');
     
     setLoading(true);
     
@@ -207,6 +209,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const starter = activeParticipants[randomIndex];
     const firstQuestion = QUESTIONS.divertido[0];
     
+    // Update UI immediately
     setGamePhase('question_active');
     setCurrentLevel('divertido');
     setCurrentQuestionIndex(0);
@@ -240,7 +243,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error starting dynamic:', error);
-        setIsOptimisticUpdate(false);
+        // Revert optimistic update
+        isOptimisticUpdateRef.current = false;
         setGamePhase('ready');
         setCurrentQuestion(null);
         setStarterParticipant(null);
@@ -248,12 +252,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       console.log('✅ Dynamic started successfully');
+      
+      // Keep the flag set for a bit longer to prevent race conditions
       setTimeout(() => {
-        setIsOptimisticUpdate(false);
-      }, 100);
+        isOptimisticUpdateRef.current = false;
+        console.log('🔓 Optimistic update flag CLEARED');
+      }, 500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      setIsOptimisticUpdate(false);
+      isOptimisticUpdateRef.current = false;
       setGamePhase('ready');
       setCurrentQuestion(null);
       setStarterParticipant(null);
@@ -279,9 +286,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
-    setIsOptimisticUpdate(true);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // Set optimistic flag IMMEDIATELY
+    isOptimisticUpdateRef.current = true;
+    console.log('🔒 Optimistic update flag SET');
     
+    // Update UI immediately
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
     setAnsweredUsers(newAnsweredUsers);
     
@@ -306,18 +315,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error updating answered users:', error);
-        setIsOptimisticUpdate(false);
+        // Revert optimistic update
+        isOptimisticUpdateRef.current = false;
         setAnsweredUsers(answeredUsers);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
+      
+      // Keep the flag set for a bit longer to prevent race conditions
       setTimeout(() => {
-        setIsOptimisticUpdate(false);
-      }, 100);
+        isOptimisticUpdateRef.current = false;
+        console.log('🔓 Optimistic update flag CLEARED');
+      }, 500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      setIsOptimisticUpdate(false);
+      isOptimisticUpdateRef.current = false;
       setAnsweredUsers(answeredUsers);
     }
   }, [appointment, currentUserId, answeredUsers]);
