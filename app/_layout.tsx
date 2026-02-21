@@ -12,9 +12,9 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SupabaseProvider } from "@/contexts/SupabaseContext";
+import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
 import * as SplashScreen from "expo-splash-screen";
-import { useColorScheme, Platform } from "react-native";
+import { useColorScheme, Platform, ActivityIndicator, View } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -24,6 +24,108 @@ import { supabase } from "@/lib/supabase";
 WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
+
+// Inner component that uses SupabaseContext for navigation guard
+function RootNavigator() {
+  const router = useRouter();
+  const { session, user, loading: authLoading } = useSupabase();
+  const [onboardingCheckComplete, setOnboardingCheckComplete] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+
+  // Check onboarding status when user session changes
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      console.log('RootNavigator: Checking onboarding status for user:', user?.id);
+      
+      if (!user) {
+        console.log('RootNavigator: No user, marking check complete');
+        setOnboardingCheckComplete(true);
+        return;
+      }
+
+      try {
+        // Fetch user profile to check onboarding_completed status
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('onboarding_completed')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('RootNavigator: Error fetching profile:', error);
+          // If profile doesn't exist yet, assume onboarding not completed
+          setOnboardingCompleted(false);
+        } else {
+          console.log('RootNavigator: Onboarding status:', profile?.onboarding_completed);
+          setOnboardingCompleted(profile?.onboarding_completed || false);
+        }
+      } catch (e) {
+        console.error('RootNavigator: Exception checking onboarding:', e);
+        setOnboardingCompleted(false);
+      } finally {
+        setOnboardingCheckComplete(true);
+      }
+    };
+
+    if (!authLoading) {
+      checkOnboardingStatus();
+    }
+  }, [user, authLoading]);
+
+  // Navigate based on auth and onboarding status
+  useEffect(() => {
+    if (!authLoading && onboardingCheckComplete) {
+      console.log('RootNavigator: Navigation decision - Session:', !!session, 'Onboarding:', onboardingCompleted);
+      
+      if (!session) {
+        // No session - go to welcome
+        console.log('RootNavigator: No session, navigating to welcome');
+        router.replace('/welcome');
+      } else if (!onboardingCompleted) {
+        // Session exists but onboarding not completed - go to onboarding
+        console.log('RootNavigator: Session exists but onboarding incomplete, navigating to onboarding');
+        router.replace('/onboarding/interests');
+      } else {
+        // Session exists and onboarding completed - go to main app
+        console.log('RootNavigator: Session exists and onboarding complete, navigating to main app');
+        router.replace('/(tabs)/events');
+      }
+    }
+  }, [session, authLoading, onboardingCheckComplete, onboardingCompleted]);
+
+  // Show loading while checking auth and onboarding
+  if (authLoading || !onboardingCheckComplete) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#6B21A8" />
+      </View>
+    );
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Rango de Edad', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -36,7 +138,6 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
   const listenerRef = useRef<any>(null);
-  const router = useRouter();
   
   // CRITICAL: State to control app rendering until OAuth code exchange completes
   const [initializing, setInitializing] = useState(true);
@@ -184,27 +285,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
           <SystemBars style="auto" />
           <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="welcome" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Rango de Edad', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
-            <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
-            <Stack.Screen name="admin" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
+          <RootNavigator />
         </ThemeProvider>
       </SupabaseProvider>
     </GestureHandlerRootView>

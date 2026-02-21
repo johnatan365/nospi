@@ -35,106 +35,8 @@ export default function RegisterScreen() {
         console.log('RegisterScreen: Session detected, user ID:', session.user?.id);
         setLoading(false); // Clear loading state
         
-        // Check if user profile exists
-        const { data: existingProfile, error: profileError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error('RegisterScreen: Error checking profile:', profileError);
-        }
-
-        // If profile doesn't exist, create it with OAuth data
-        if (!existingProfile) {
-          console.log('RegisterScreen: Creating new profile for OAuth user');
-          
-          // Get onboarding data from AsyncStorage
-          const interestsData = await AsyncStorage.getItem('onboarding_interests');
-          const personalityData = await AsyncStorage.getItem('onboarding_personality');
-          const nameData = await AsyncStorage.getItem('onboarding_name');
-          const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
-          const ageData = await AsyncStorage.getItem('onboarding_age');
-          const genderData = await AsyncStorage.getItem('onboarding_gender');
-          const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
-          const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
-          const countryData = await AsyncStorage.getItem('onboarding_country');
-          const cityData = await AsyncStorage.getItem('onboarding_city');
-          const phoneData = await AsyncStorage.getItem('onboarding_phone');
-          const photoData = await AsyncStorage.getItem('onboarding_photo');
-          const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
-
-          const interests = interestsData ? JSON.parse(interestsData) : [];
-          const personality = personalityData ? JSON.parse(personalityData) : [];
-          const name = nameData || session.user.user_metadata?.full_name || '';
-          const birthdate = birthdateData || '';
-          const age = ageData ? parseInt(ageData) : 18;
-          const gender = genderData || 'hombre';
-          const interestedIn = interestedInData || 'ambos';
-          const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
-          const country = countryData || 'Colombia';
-          const city = cityData || 'Medellín';
-          const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-          const photo = photoData || session.user.user_metadata?.avatar_url || null;
-          const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
-
-          const { error: createProfileError } = await supabase
-            .from('users')
-            .insert({
-              id: session.user.id,
-              email: session.user.email,
-              name,
-              birthdate,
-              age,
-              gender,
-              interested_in: interestedIn,
-              age_range_min: ageRange.min,
-              age_range_max: ageRange.max,
-              country,
-              city,
-              phone: phoneInfo.phoneNumber,
-              profile_photo_url: photo,
-              interests: interests,
-              personality_traits: personality,
-              compatibility_percentage: compatibility,
-              notification_preferences: {
-                whatsapp: false,
-                email: true,
-                sms: false,
-                push: true,
-              },
-            });
-
-          if (createProfileError) {
-            console.error('RegisterScreen: Error creating profile:', createProfileError);
-            setError('Error al crear el perfil');
-            return;
-          }
-
-          console.log('RegisterScreen: Profile created successfully');
-
-          // Clear onboarding data
-          await AsyncStorage.multiRemove([
-            'onboarding_interests',
-            'onboarding_personality',
-            'onboarding_name',
-            'onboarding_birthdate',
-            'onboarding_age',
-            'onboarding_gender',
-            'onboarding_interested_in',
-            'onboarding_age_range',
-            'onboarding_country',
-            'onboarding_city',
-            'onboarding_phone',
-            'onboarding_photo',
-            'onboarding_compatibility',
-          ]);
-        }
-
-        // Navigate to events screen
-        console.log('RegisterScreen: Navigating to events screen');
-        router.replace('/(tabs)/events');
+        // CRITICAL: Save onboarding data to profile
+        await saveOnboardingDataToProfile(session.user.id, session.user);
       } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
         console.log('RegisterScreen: User signed out or deleted');
         setLoading(false);
@@ -146,6 +48,155 @@ export default function RegisterScreen() {
       authListener.subscription.unsubscribe();
     };
   }, [router]);
+
+  // Helper function to save onboarding data to profile
+  const saveOnboardingDataToProfile = async (userId: string, user: any) => {
+    try {
+      console.log('RegisterScreen: Saving onboarding data for user:', userId);
+
+      // Get all onboarding data from AsyncStorage
+      const interestsData = await AsyncStorage.getItem('onboarding_interests');
+      const personalityData = await AsyncStorage.getItem('onboarding_personality');
+      const nameData = await AsyncStorage.getItem('onboarding_name');
+      const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
+      const ageData = await AsyncStorage.getItem('onboarding_age');
+      const genderData = await AsyncStorage.getItem('onboarding_gender');
+      const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
+      const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
+      const countryData = await AsyncStorage.getItem('onboarding_country');
+      const cityData = await AsyncStorage.getItem('onboarding_city');
+      const phoneData = await AsyncStorage.getItem('onboarding_phone');
+      const photoData = await AsyncStorage.getItem('onboarding_photo');
+      const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
+
+      const interests = interestsData ? JSON.parse(interestsData) : [];
+      const personality = personalityData ? JSON.parse(personalityData) : [];
+      const name = nameData || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
+      const birthdate = birthdateData || '1999-01-01';
+      const age = ageData ? parseInt(ageData) : 25;
+      const gender = genderData || 'no binario';
+      const interestedIn = interestedInData || 'ambos';
+      const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
+      const country = countryData || 'Colombia';
+      const city = cityData || 'Medellín';
+      const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
+      const photo = photoData || user.user_metadata?.avatar_url || null;
+      const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
+
+      console.log('RegisterScreen: Onboarding data retrieved:', {
+        interests: interests.length,
+        personality: personality.length,
+        name,
+        phone: phoneInfo.phoneNumber,
+      });
+
+      // Check if profile exists
+      const { data: existingProfile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (existingProfile) {
+        // Profile exists - UPDATE with onboarding data
+        console.log('RegisterScreen: Updating existing profile with onboarding data');
+        
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            name,
+            birthdate,
+            age,
+            gender,
+            interested_in: interestedIn,
+            age_range_min: ageRange.min,
+            age_range_max: ageRange.max,
+            country,
+            city,
+            phone: phoneInfo.phoneNumber,
+            profile_photo_url: photo,
+            interests: interests,
+            personality_traits: personality,
+            compatibility_percentage: compatibility,
+            onboarding_completed: true, // CRITICAL: Mark onboarding as completed
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('RegisterScreen: Error updating profile:', updateError);
+          setError('Error al guardar los datos del perfil');
+          return;
+        }
+
+        console.log('✅ RegisterScreen: Profile updated successfully with onboarding data');
+      } else {
+        // Profile doesn't exist - CREATE with onboarding data
+        console.log('RegisterScreen: Creating new profile with onboarding data');
+        
+        const { error: createError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            email: user.email,
+            name,
+            birthdate,
+            age,
+            gender,
+            interested_in: interestedIn,
+            age_range_min: ageRange.min,
+            age_range_max: ageRange.max,
+            country,
+            city,
+            phone: phoneInfo.phoneNumber,
+            profile_photo_url: photo,
+            interests: interests,
+            personality_traits: personality,
+            compatibility_percentage: compatibility,
+            notification_preferences: {
+              whatsapp: false,
+              email: true,
+              sms: false,
+              push: true,
+            },
+            onboarding_completed: true, // CRITICAL: Mark onboarding as completed
+          });
+
+        if (createError) {
+          console.error('RegisterScreen: Error creating profile:', createError);
+          setError('Error al crear el perfil');
+          return;
+        }
+
+        console.log('✅ RegisterScreen: Profile created successfully with onboarding data');
+      }
+
+      // Clear onboarding data from AsyncStorage
+      await AsyncStorage.multiRemove([
+        'onboarding_interests',
+        'onboarding_personality',
+        'onboarding_name',
+        'onboarding_birthdate',
+        'onboarding_age',
+        'onboarding_gender',
+        'onboarding_interested_in',
+        'onboarding_age_range',
+        'onboarding_country',
+        'onboarding_city',
+        'onboarding_phone',
+        'onboarding_photo',
+        'onboarding_compatibility',
+      ]);
+
+      console.log('RegisterScreen: Onboarding data cleared from AsyncStorage');
+
+      // Navigate to main app
+      console.log('RegisterScreen: Navigating to main app (tabs)');
+      router.replace('/(tabs)/events');
+    } catch (error) {
+      console.error('RegisterScreen: Error saving onboarding data:', error);
+      setError('Error al guardar los datos');
+    }
+  };
 
   const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
@@ -363,51 +414,6 @@ export default function RegisterScreen() {
     console.log('User registering with email:', email);
 
     try {
-      // Get all onboarding data from AsyncStorage
-      const interestsData = await AsyncStorage.getItem('onboarding_interests');
-      const personalityData = await AsyncStorage.getItem('onboarding_personality');
-      const nameData = await AsyncStorage.getItem('onboarding_name');
-      const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
-      const ageData = await AsyncStorage.getItem('onboarding_age');
-      const genderData = await AsyncStorage.getItem('onboarding_gender');
-      const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
-      const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
-      const countryData = await AsyncStorage.getItem('onboarding_country');
-      const cityData = await AsyncStorage.getItem('onboarding_city');
-      const phoneData = await AsyncStorage.getItem('onboarding_phone');
-      const photoData = await AsyncStorage.getItem('onboarding_photo');
-      const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
-
-      console.log('Retrieved onboarding data:', {
-        interests: interestsData,
-        personality: personalityData,
-        name: nameData,
-        birthdate: birthdateData,
-        age: ageData,
-        gender: genderData,
-        interestedIn: interestedInData,
-        ageRange: ageRangeData,
-        country: countryData,
-        city: cityData,
-        phone: phoneData,
-        photo: photoData,
-        compatibility: compatibilityData,
-      });
-
-      const interests = interestsData ? JSON.parse(interestsData) : [];
-      const personality = personalityData ? JSON.parse(personalityData) : [];
-      const name = nameData || '';
-      const birthdate = birthdateData || '';
-      const age = ageData ? parseInt(ageData) : 18;
-      const gender = genderData || 'hombre';
-      const interestedIn = interestedInData || 'ambos';
-      const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
-      const country = countryData || 'Colombia';
-      const city = cityData || 'Medellín';
-      const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-      const photo = photoData || null;
-      const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
-
       // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -430,62 +436,10 @@ export default function RegisterScreen() {
 
       console.log('Auth user created:', authData.user.id);
 
-      // Create user profile in users table
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email,
-          name,
-          birthdate,
-          age,
-          gender,
-          interested_in: interestedIn,
-          age_range_min: ageRange.min,
-          age_range_max: ageRange.max,
-          country,
-          city,
-          phone: phoneInfo.phoneNumber,
-          profile_photo_url: photo,
-          interests: interests,
-          personality_traits: personality,
-          compatibility_percentage: compatibility,
-          notification_preferences: {
-            whatsapp: false,
-            email: true,
-            sms: false,
-            push: true,
-          },
-        });
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        setError(`Error al crear el perfil: ${profileError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      console.log('User profile created successfully');
-
-      // Clear onboarding data
-      await AsyncStorage.multiRemove([
-        'onboarding_interests',
-        'onboarding_personality',
-        'onboarding_name',
-        'onboarding_birthdate',
-        'onboarding_age',
-        'onboarding_gender',
-        'onboarding_interested_in',
-        'onboarding_age_range',
-        'onboarding_country',
-        'onboarding_city',
-        'onboarding_phone',
-        'onboarding_photo',
-        'onboarding_compatibility',
-      ]);
-
-      // Navigate to events screen
-      router.replace('/(tabs)/events');
+      // CRITICAL: Save onboarding data to profile
+      await saveOnboardingDataToProfile(authData.user.id, authData.user);
+      
+      setLoading(false);
     } catch (error) {
       console.error('Registration failed:', error);
       setError('Error al registrarse. Intenta de nuevo.');

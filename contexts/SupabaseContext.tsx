@@ -73,6 +73,8 @@ async function ensureUserProfile(user: User | null) {
           sms: false,
           push: true,
         },
+        // CRITICAL: Do NOT set onboarding_completed here - let the onboarding flow set it
+        onboarding_completed: false,
       });
 
       if (insertError) {
