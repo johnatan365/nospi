@@ -19,7 +19,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create Supabase client with platform-specific configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    // CRITICAL FIX: Use undefined for web (browser native storage), AsyncStorage for mobile
+    storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     // CRITICAL: Enable URL detection on web, disable on mobile (manual exchangeCodeForSession)
