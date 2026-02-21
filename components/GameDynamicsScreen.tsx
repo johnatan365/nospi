@@ -89,6 +89,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isOptimisticUpdate, setIsOptimisticUpdate] = useState(false);
 
   // Get current user ID
   useEffect(() => {
@@ -101,8 +102,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     getCurrentUser();
   }, []);
 
-  // Sync state from database
+  // Sync state from database (but skip during optimistic updates)
   useEffect(() => {
+    // Skip sync if we're in the middle of an optimistic update
+    if (isOptimisticUpdate) {
+      console.log('⏭️ Skipping sync - optimistic update in progress');
+      return;
+    }
+    
     console.log('=== INITIAL SYNC FROM DATABASE ===');
     const event = appointment.event;
     
@@ -125,7 +132,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } else {
       setGamePhase('ready');
     }
-  }, [appointment.event, activeParticipants]);
+  }, [appointment.event, activeParticipants, isOptimisticUpdate]);
 
   // Realtime subscription for game state updates
   useEffect(() => {
@@ -192,6 +199,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     // OPTIMISTIC UI UPDATE - Immediately update local state
     setLoading(true);
+    setIsOptimisticUpdate(true); // Prevent sync effect from overriding
     
     // Randomly select starter
     const randomIndex = Math.floor(Math.random() * activeParticipants.length);
@@ -240,16 +248,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         setGamePhase('ready');
         setCurrentQuestion(null);
         setStarterParticipant(null);
+        setIsOptimisticUpdate(false);
         return;
       }
 
       console.log('✅ Dynamic started successfully');
+      // Database update complete - allow sync to resume
+      setIsOptimisticUpdate(false);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       // Revert optimistic update on error
       setGamePhase('ready');
       setCurrentQuestion(null);
       setStarterParticipant(null);
+      setIsOptimisticUpdate(false);
     } finally {
       setLoading(false);
     }
