@@ -231,9 +231,10 @@ export default function MatchSelectionScreen({
     };
   }, [matchDeadlineAt, serverTime, allVotesReceived]);
 
-  // Subscribe to confirmed matches (realtime)
+  // CRITICAL FIX: Subscribe to confirmed matches for BOTH users
   useEffect(() => {
-    console.log('📡 Subscribing to match confirmations for event:', eventId, 'level:', currentLevel);
+    console.log('📡 === SUBSCRIBING TO MATCH CONFIRMATIONS ===');
+    console.log('📡 Event:', eventId, 'Level:', currentLevel, 'User:', currentUserId);
     
     const channel = supabase
       .channel(`matches_${eventId}_${currentLevel}_${currentUserId}`)
@@ -246,35 +247,62 @@ export default function MatchSelectionScreen({
           filter: `event_id=eq.${eventId}`,
         },
         async (payload) => {
-          console.log('💜 Match confirmed event received:', payload);
+          console.log('💜 === MATCH CONFIRMED EVENT RECEIVED ===');
+          console.log('💜 Payload:', payload);
+          
           const newMatch = payload.new as any;
           
-          // Check if current user is part of this match AND it's for the current level
-          if (newMatch.level === currentLevel && 
-              (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId)) {
+          console.log('💜 Match details:', {
+            level: newMatch.level,
+            currentLevel: currentLevel,
+            user1_id: newMatch.user1_id,
+            user2_id: newMatch.user2_id,
+            currentUserId: currentUserId
+          });
+          
+          // CRITICAL: Check if current user is part of this match AND it's for the current level
+          const isUserInMatch = (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId);
+          const isCurrentLevel = newMatch.level === currentLevel;
+          
+          console.log('💜 Match check:', {
+            isUserInMatch,
+            isCurrentLevel,
+            shouldShowModal: isUserInMatch && isCurrentLevel
+          });
+          
+          if (isCurrentLevel && isUserInMatch) {
             const otherUserId = newMatch.user1_id === currentUserId ? newMatch.user2_id : newMatch.user1_id;
             
-            // Get the other user's name
-            const { data: userData } = await supabase
-              .from('users')
+            console.log('💜 Fetching other user name for:', otherUserId);
+            
+            // Get the other user's name from profiles table
+            const { data: profileData } = await supabase
+              .from('profiles')
               .select('name')
               .eq('id', otherUserId)
               .single();
             
-            const otherUserName = userData?.name || 'Alguien';
+            const otherUserName = profileData?.name || 'Alguien';
             
-            console.log('✨ Match confirmed with:', otherUserName);
+            console.log('✨ === SHOWING MATCH MODAL ===');
+            console.log('✨ Matched with:', otherUserName);
+            
             setMatchedUserName(otherUserName);
             setShowMatchModal(true);
             
             // Trigger premium match animation
             triggerMatchAnimation();
+          } else {
+            console.log('⏭️ Skipping match modal - not for current user or level');
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Match subscription status:', status);
+      });
 
     return () => {
+      console.log('📡 Cleaning up match subscription');
       supabase.removeChannel(channel);
     };
   }, [eventId, currentLevel, currentUserId]);

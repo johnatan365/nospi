@@ -819,8 +819,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.evaluationTitle}>Evalúa tu experiencia</Text>
             <Text style={styles.evaluationText}>
               Puedes calificar a los demás participantes.{'\n'}
-              Esta información nos ayuda a mejorar futuros encuentros.{'\n'}
-              En cualquier momento puedes modificar tu evaluación.
+              Esta información nos ayuda a mejorar futuros encuentros.
             </Text>
             
             <View style={styles.participantsRatingSection}>
@@ -1118,8 +1117,9 @@ const styles = StyleSheet.create({
   iceBreakCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
-    padding: 32,
-    marginBottom: 24,
+    padding: 28,
+    marginTop: 60,
+    marginBottom: 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -1128,45 +1128,45 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   iceBreakIcon: {
-    fontSize: 80,
-    marginBottom: 16,
+    fontSize: 72,
+    marginBottom: 12,
   },
   iceBreakTitle: {
-    fontSize: 32,
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  iceBreakSubtitle: {
+    fontSize: 17,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  evaluationCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+  },
+  evaluationIcon: {
+    fontSize: 56,
+    marginBottom: 12,
+  },
+  evaluationTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     marginBottom: 12,
     textAlign: 'center',
   },
-  iceBreakSubtitle: {
-    fontSize: 18,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 26,
-  },
-  evaluationCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-  },
-  evaluationIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  evaluationTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
   evaluationText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
+    lineHeight: 22,
+    marginBottom: 20,
   },
   participantsRatingSection: {
     width: '100%',
@@ -1175,47 +1175,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(233, 213, 255, 0.5)',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   participantRatingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   participantRatingPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
   },
   participantRatingPhotoPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: nospiColors.purpleLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   participantRatingPhotoPlaceholderText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
   participantRatingName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   starButton: {
-    padding: 4,
+    padding: 2,
   },
   starIcon: {
-    fontSize: 32,
+    fontSize: 28,
   },
 });
