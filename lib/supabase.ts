@@ -15,13 +15,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Create Supabase client with AsyncStorage for session persistence
+// Create Supabase client with AsyncStorage for session persistence and PKCE flow
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: false, // CRITICAL: We handle URL detection manually
+    flowType: 'pkce', // CRITICAL: Enable PKCE flow for Expo
   },
 });
 
