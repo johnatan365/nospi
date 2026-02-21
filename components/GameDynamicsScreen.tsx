@@ -89,7 +89,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  // Use ref to track optimistic updates - this persists across renders
+  // CRITICAL: Ref to prevent Realtime race conditions during optimistic updates
   const isOptimisticUpdateRef = useRef(false);
 
   useEffect(() => {
@@ -236,9 +236,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    // Set optimistic flag IMMEDIATELY
+    // 1. OPTIMISTIC UI: Set flag IMMEDIATELY to block Realtime updates
     isOptimisticUpdateRef.current = true;
-    console.log('🔒 Optimistic update flag SET');
+    console.log('🔒 Optimistic update flag SET (start dynamic)');
     
     setLoading(true);
     
@@ -247,7 +247,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const starter = activeParticipants[randomIndex];
     const firstQuestion = QUESTIONS.divertido[0];
     
-    // Update UI immediately (optimistic)
+    // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
     setGamePhase('question_active');
     setCurrentLevel('divertido');
     setCurrentQuestionIndex(0);
@@ -259,6 +259,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('⚡ UI transition time:', (uiTransitionTime - transitionStartTime).toFixed(2), 'ms');
     
     try {
+      // 2. DATABASE UPDATE: Send update in background
       console.log('💾 Starting database update...');
       const dbUpdateStartTime = performance.now();
       
@@ -281,7 +282,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error starting dynamic:', error);
-        // Revert optimistic update
+        // 4. REVERT: Revert optimistic update on failure
         isOptimisticUpdateRef.current = false;
         setGamePhase('ready');
         setCurrentQuestion(null);
@@ -291,13 +292,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       console.log('✅ Dynamic started successfully');
       
-      // Keep the flag set for longer to prevent race conditions with Realtime
+      // 3. SYNC: Keep the flag set for 1500ms to prevent race conditions with Realtime
       setTimeout(() => {
         isOptimisticUpdateRef.current = false;
-        console.log('🔓 Optimistic update flag CLEARED');
+        console.log('🔓 Optimistic update flag CLEARED (start dynamic)');
       }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // 4. REVERT: Revert optimistic update on failure
       isOptimisticUpdateRef.current = false;
       setGamePhase('ready');
       setCurrentQuestion(null);
@@ -322,13 +324,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    // Set optimistic flag FIRST - before any state changes
+    // Store previous state for potential revert
+    const previousAnsweredUsers = [...answeredUsers];
+
+    // 1. OPTIMISTIC UI: Set flag IMMEDIATELY to block Realtime updates
     isOptimisticUpdateRef.current = true;
     console.log('🔒 Optimistic update flag SET (answered)');
     
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
-    // Update UI immediately (optimistic)
+    // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
     setAnsweredUsers(newAnsweredUsers);
     
@@ -336,6 +341,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
     
     try {
+      // 2. DATABASE UPDATE: Send update in background
       console.log('💾 Starting database update...');
       const dbUpdateStartTime = performance.now();
       
@@ -353,23 +359,24 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error updating answered users:', error);
-        // Revert optimistic update
+        // 4. REVERT: Revert optimistic update on failure
         isOptimisticUpdateRef.current = false;
-        setAnsweredUsers(answeredUsers);
+        setAnsweredUsers(previousAnsweredUsers);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
       
-      // Keep the flag set longer to prevent race conditions with realtime
+      // 3. SYNC: Keep the flag set for 1500ms to prevent race conditions with Realtime
       setTimeout(() => {
         isOptimisticUpdateRef.current = false;
         console.log('🔓 Optimistic update flag CLEARED (answered)');
       }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // 4. REVERT: Revert optimistic update on failure
       isOptimisticUpdateRef.current = false;
-      setAnsweredUsers(answeredUsers);
+      setAnsweredUsers(previousAnsweredUsers);
     }
   }, [appointment, currentUserId, answeredUsers]);
 
@@ -383,7 +390,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const questionsForLevel = QUESTIONS[currentLevel];
     const nextQuestionIndex = currentQuestionIndex + 1;
 
-    // Set optimistic flag FIRST - before any state changes
+    // Store previous state for potential revert
+    const previousQuestionIndex = currentQuestionIndex;
+    const previousAnsweredUsers = [...answeredUsers];
+    const previousQuestion = currentQuestion;
+    const previousStarter = starterParticipant;
+    const previousGamePhase = gamePhase;
+
+    // 1. OPTIMISTIC UI: Set flag IMMEDIATELY to block Realtime updates
     isOptimisticUpdateRef.current = true;
     console.log('🔒 Optimistic update flag SET (continue)');
 
@@ -397,7 +411,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const newStarter = activeParticipants[randomIndex];
         const nextQuestion = questionsForLevel[nextQuestionIndex];
 
-        // Update UI immediately (optimistic)
+        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
         console.log('⚡ Optimistically updating to next question');
         setCurrentQuestionIndex(nextQuestionIndex);
         setAnsweredUsers([]);
@@ -407,6 +421,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const uiUpdateTime = performance.now();
         console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
 
+        // 2. DATABASE UPDATE: Send update in background
         console.log('💾 Starting database update...');
         const dbUpdateStartTime = performance.now();
 
@@ -427,16 +442,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (error) {
           console.error('❌ Error advancing question:', error);
-          // Revert optimistic update
+          // 4. REVERT: Revert optimistic update on failure
           isOptimisticUpdateRef.current = false;
-          setCurrentQuestionIndex(currentQuestionIndex);
-          setAnsweredUsers(answeredUsers);
+          setCurrentQuestionIndex(previousQuestionIndex);
+          setAnsweredUsers(previousAnsweredUsers);
+          setCurrentQuestion(previousQuestion);
+          setStarterParticipant(previousStarter);
           return;
         }
 
         console.log('✅ Advanced to next question');
         
-        // Keep flag set longer to prevent race conditions
+        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
         setTimeout(() => {
           isOptimisticUpdateRef.current = false;
           console.log('🔓 Optimistic update flag CLEARED (continue)');
@@ -444,11 +461,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else {
         // Level finished - transition
         console.log('⚡ Optimistically transitioning to level_transition');
+        
+        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
         setGamePhase('level_transition');
         
         const uiUpdateTime = performance.now();
         console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
 
+        // 2. DATABASE UPDATE: Send update in background
         console.log('💾 Starting database update...');
         const dbUpdateStartTime = performance.now();
 
@@ -466,15 +486,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (error) {
           console.error('❌ Error transitioning level:', error);
-          // Revert optimistic update
+          // 4. REVERT: Revert optimistic update on failure
           isOptimisticUpdateRef.current = false;
-          setGamePhase('question_active');
+          setGamePhase(previousGamePhase);
           return;
         }
 
         console.log('✅ Level finished - transitioning');
         
-        // Keep flag set longer to prevent race conditions
+        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
         setTimeout(() => {
           isOptimisticUpdateRef.current = false;
           console.log('🔓 Optimistic update flag CLEARED (level transition)');
@@ -482,11 +502,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // 4. REVERT: Revert optimistic update on failure
       isOptimisticUpdateRef.current = false;
+      setCurrentQuestionIndex(previousQuestionIndex);
+      setAnsweredUsers(previousAnsweredUsers);
+      setCurrentQuestion(previousQuestion);
+      setStarterParticipant(previousStarter);
+      setGamePhase(previousGamePhase);
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers, currentQuestion, starterParticipant, gamePhase]);
 
   const handleContinueToNextLevel = useCallback(async () => {
     console.log('⬆️ Continuing to next level');
