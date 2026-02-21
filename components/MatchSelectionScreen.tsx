@@ -50,7 +50,7 @@ export default function MatchSelectionScreen({
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [serverTime, setServerTime] = useState<Date>(new Date());
   
-  // Animation refs - using single value for scale (no interpolate)
+  // Animation refs
   const heartScale = useRef(new Animated.Value(0.8)).current;
   const matchGlowAnimation = useRef(new Animated.Value(0)).current;
   const matchTextAnimation = useRef(new Animated.Value(0)).current;
@@ -99,9 +99,11 @@ export default function MatchSelectionScreen({
     checkExistingVote();
   }, [eventId, currentLevel, currentUserId]);
 
-  // Check if all participants have voted
+  // CRITICAL: Check if all participants have voted
   const checkAllVotes = useCallback(async () => {
     try {
+      console.log('📊 === CHECKING ALL VOTES ===');
+      
       const { data, error } = await supabase
         .from('event_matches_votes')
         .select('from_user_id')
@@ -120,23 +122,32 @@ export default function MatchSelectionScreen({
       console.log('📊 Vote status:', {
         votedCount: votedUserIds.length,
         totalCount: allParticipantIds.length,
-        allVoted
+        allVoted,
+        votedUserIds,
+        allParticipantIds
       });
 
       setAllVotesReceived(allVoted);
 
-      // If all votes received, stop countdown immediately
-      if (allVoted && countdownIntervalRef.current) {
-        console.log('🛑 All votes received - stopping countdown');
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
+      // CRITICAL: If all votes received, stop countdown immediately
+      if (allVoted) {
+        console.log('🛑 === ALL VOTES RECEIVED - STOPPING COUNTDOWN ===');
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          console.log('✅ Countdown interval cleared');
+        }
       }
     } catch (error) {
       console.error('❌ Error checking all votes:', error);
     }
   }, [eventId, currentLevel, participants]);
 
+  // Initial vote check and realtime subscription
   useEffect(() => {
+    console.log('📡 === SETTING UP VOTE MONITORING ===');
+    
+    // Initial check
     checkAllVotes();
 
     // Subscribe to vote changes
@@ -156,6 +167,7 @@ export default function MatchSelectionScreen({
             return;
           }
           console.log('📡 Vote change detected:', payload);
+          // CRITICAL: Recalculate immediately on any vote change
           checkAllVotes();
         }
       )
@@ -166,17 +178,21 @@ export default function MatchSelectionScreen({
     };
   }, [eventId, currentLevel, participants, checkAllVotes]);
 
-  // Countdown timer based on server time and deadline
+  // CRITICAL: Countdown timer - stops when all votes received
   useEffect(() => {
+    console.log('⏰ === COUNTDOWN TIMER SETUP ===');
+    console.log('⏰ matchDeadlineAt:', matchDeadlineAt);
+    console.log('⏰ allVotesReceived:', allVotesReceived);
+    
     // Clear any existing interval
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
     }
 
-    // Don't start countdown if all votes already received or no deadline
+    // CRITICAL: Don't start countdown if all votes already received or no deadline
     if (!matchDeadlineAt || allVotesReceived) {
-      console.log('⏸️ Not starting countdown - allVotesReceived:', allVotesReceived);
+      console.log('⏸️ Not starting countdown - allVotesReceived:', allVotesReceived, 'deadline:', matchDeadlineAt);
       return;
     }
 
@@ -202,11 +218,13 @@ export default function MatchSelectionScreen({
       }
     };
 
+    console.log('▶️ Starting countdown interval');
     updateCountdown();
     countdownIntervalRef.current = setInterval(updateCountdown, 1000);
 
     return () => {
       if (countdownIntervalRef.current) {
+        console.log('🛑 Clearing countdown interval on unmount');
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
       }
@@ -270,8 +288,7 @@ export default function MatchSelectionScreen({
     matchTextAnimation.setValue(0);
     hasTriggeredHapticRef.current = false;
 
-    // Heart scale animation using Animated.sequence (no interpolate)
-    // Initial scale = 0.8 → Animate to 1.1 (150ms) → Animate back to 1.0 (150ms)
+    // Heart scale animation using Animated.sequence
     Animated.sequence([
       Animated.timing(heartScale, {
         toValue: 1.1,
@@ -287,7 +304,7 @@ export default function MatchSelectionScreen({
       }),
     ]).start();
 
-    // Glow animation (subtle purple glow)
+    // Glow animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(matchGlowAnimation, {
@@ -315,7 +332,7 @@ export default function MatchSelectionScreen({
       }).start();
     }, 200);
 
-    // Trigger haptic at peak scale (1.1) - 150ms after start
+    // Trigger haptic at peak scale
     setTimeout(() => {
       if (!hasTriggeredHapticRef.current && Platform.OS !== 'web') {
         hasTriggeredHapticRef.current = true;
@@ -392,7 +409,8 @@ export default function MatchSelectionScreen({
 
       setHasVoted(true);
 
-      // Recalculate vote count immediately after submission
+      // CRITICAL: Recalculate vote count immediately after submission
+      console.log('🔄 Recalculating vote count after submission');
       await checkAllVotes();
 
       // If match was found immediately, show modal
@@ -425,7 +443,7 @@ export default function MatchSelectionScreen({
 
   const otherParticipants = participants.filter(p => p.user_id !== currentUserId);
 
-  // Glow opacity interpolation (this is safe - monotonically increasing)
+  // Glow opacity interpolation
   const glowOpacity = matchGlowAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 0.8],
@@ -438,7 +456,7 @@ export default function MatchSelectionScreen({
   const secondsDisplay = String(remainingSeconds).padStart(2, '0');
   const timerDisplay = `${minutesDisplay}:${secondsDisplay}`;
 
-  // Determine if "Continuar" button should be enabled
+  // CRITICAL: Determine if "Continuar" button should be enabled
   const canContinue = allVotesReceived || deadlineReached;
 
   // Determine timer color and animation
@@ -446,6 +464,7 @@ export default function MatchSelectionScreen({
   const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
 
   if (hasVoted && !showMatchModal) {
+    // CRITICAL: Show different message based on state
     const waitingMessage = allVotesReceived 
       ? '✨ ¡Todos han decidido!'
       : deadlineReached 
@@ -462,6 +481,7 @@ export default function MatchSelectionScreen({
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Tu elección ha sido registrada</Text>
 
+          {/* CRITICAL: Hide countdown if all votes received */}
           {!allVotesReceived && !deadlineReached && matchDeadlineAt && (
             <View style={styles.timerCard}>
               <Text style={styles.timerLabel}>🕐 Decisiones finales en:</Text>

@@ -25,12 +25,13 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'finished';
+  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
   current_question: string | null;
   current_question_starter_id: string | null;
+  match_deadline_at: string | null;
 }
 
 interface Appointment {
@@ -93,7 +94,9 @@ export default function InteraccionScreen() {
   const [userPresented, setUserPresented] = useState(false);
   const [allPresented, setAllPresented] = useState(false);
   const [ritualAnimation] = useState(new Animated.Value(0));
-  const [gameStarted, setGameStarted] = useState(false);
+  
+  // CRITICAL: Game state derived from event_state in database
+  const [gamePhase, setGamePhase] = useState<string>('intro');
 
   // Toast notification states
   const [toastVisible, setToastVisible] = useState(false);
@@ -284,6 +287,7 @@ export default function InteraccionScreen() {
     }
 
     try {
+      console.log('🔄 === LOADING APPOINTMENT (RECONNECTION SAFETY) ===');
       console.log('Loading appointment for user:', user.id);
       
       const { data, error } = await supabase
@@ -317,7 +321,8 @@ export default function InteraccionScreen() {
             current_question_index,
             answered_users,
             current_question,
-            current_question_starter_id
+            current_question_starter_id,
+            match_deadline_at
           )
         `)
         .eq('user_id', user.id)
@@ -327,51 +332,40 @@ export default function InteraccionScreen() {
 
       if (error) {
         console.error('❌ Error loading appointment:', error);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         setLoading(false);
         return;
       }
       
-      console.log('✅ Query successful, raw data:', JSON.stringify(data, null, 2));
-      
       if (!data || data.length === 0) {
         console.log('❌ No confirmed appointments found');
-        console.log('❌ Query filters: status=confirmada, payment_status=completed');
         setAppointment(null);
         setLoading(false);
         return;
       }
-      
-      console.log('✅ Found', data.length, 'confirmed appointment(s)');
 
       const now = new Date();
       
-      // Find the most recent confirmed appointment (today or future)
       const upcomingAppointment = data.find(apt => {
         if (!apt.event?.start_time) return false;
         const eventDate = new Date(apt.event.start_time);
-        // Check if event is today or in the future (compare dates only, not time)
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
         return eventDayStart >= todayStart;
       });
 
-      // If no upcoming appointment found, use the most recent one
       const appointmentData = upcomingAppointment || data[0];
       
-      console.log('📅 Appointment selection:');
-      console.log('📅 Total confirmed appointments:', data.length);
-      console.log('📅 Selected appointment:', appointmentData?.id);
-      console.log('📅 Event date:', appointmentData?.event?.start_time);
-      console.log('Appointment loaded:', appointmentData.id);
-      console.log('Game phase:', appointmentData.event?.game_phase);
+      console.log('✅ Appointment loaded:', appointmentData.id);
+      console.log('📊 Event state from database:', {
+        game_phase: appointmentData.event?.game_phase,
+        current_level: appointmentData.event?.current_level,
+        match_deadline_at: appointmentData.event?.match_deadline_at
+      });
       
-      // Check if game is active
-      if (appointmentData.event?.game_phase === 'question_active' || 
-          appointmentData.event?.game_phase === 'level_transition' ||
-          appointmentData.event?.game_phase === 'finished') {
-        console.log('Game is active');
-        setGameStarted(true);
+      // CRITICAL: Set game phase from database
+      if (appointmentData.event?.game_phase) {
+        console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
+        setGamePhase(appointmentData.event.game_phase);
       }
       
       setAppointment(appointmentData as any);
@@ -465,14 +459,14 @@ export default function InteraccionScreen() {
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(async () => {
-    if (!appointment) return;
-
     console.log('🎮 === STARTING EXPERIENCE ===');
-    console.log('🎮 Updating game_phase for ALL participants...');
     
+    if (!appointment?.event_id || activeParticipants.length < 2) {
+      console.warn('⚠️ Cannot start - need at least 2 participants');
+      return;
+    }
+
     try {
-      // Update the event's game_phase to 'ready'
-      // This will trigger Realtime for ALL participants
       const { error } = await supabase
         .from('events')
         .update({ 
@@ -487,10 +481,9 @@ export default function InteraccionScreen() {
       }
 
       console.log('✅ Game phase updated to ready');
-      console.log('✅ ALL participants will see the change via Realtime');
       
       // Update local state
-      setGameStarted(true);
+      setGamePhase('ready');
       setShowRitualModal(true);
       
       Animated.timing(ritualAnimation, {
@@ -502,14 +495,14 @@ export default function InteraccionScreen() {
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     }
-  }, [appointment, ritualAnimation]);
+  }, [appointment, activeParticipants, ritualAnimation]);
 
   const handleBeginExperience = useCallback(async () => {
     if (!appointment) return;
 
     try {
       console.log('Begin experience');
-      setGameStarted(true);
+      setGamePhase('ready');
       
       const { error } = await supabase
         .from('appointments')
@@ -530,7 +523,7 @@ export default function InteraccionScreen() {
 
   const handleContinueToPresentation = useCallback(() => {
     console.log('Continue to presentation');
-    setGameStarted(true);
+    setGamePhase('ready');
     setShowWelcomeModal(false);
     setExperienceStarted(true);
   }, []);
@@ -570,9 +563,70 @@ export default function InteraccionScreen() {
     }
   }, [appointment, user, loadActiveParticipants]);
 
+  // CRITICAL: Subscribe to event_state changes
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+
+    console.log('📡 === SUBSCRIBING TO EVENT_STATE CHANGES ===');
+    console.log('📡 Event ID:', appointment.event_id);
+
+    const channel = supabase
+      .channel(`event_state_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('📡 === EVENT_STATE CHANGE DETECTED ===');
+          const newEvent = payload.new as any;
+          console.log('📡 New state:', {
+            game_phase: newEvent.game_phase,
+            current_level: newEvent.current_level,
+            match_deadline_at: newEvent.match_deadline_at
+          });
+          
+          // CRITICAL: Update game phase from database
+          if (newEvent.game_phase) {
+            console.log('🎮 Updating game phase from realtime:', newEvent.game_phase);
+            setGamePhase(newEvent.game_phase);
+          }
+          
+          // Update appointment with new event state
+          setAppointment(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              event: {
+                ...prev.event,
+                game_phase: newEvent.game_phase,
+                current_level: newEvent.current_level,
+                current_question_index: newEvent.current_question_index,
+                answered_users: newEvent.answered_users,
+                current_question: newEvent.current_question,
+                current_question_starter_id: newEvent.current_question_starter_id,
+                match_deadline_at: newEvent.match_deadline_at
+              }
+            };
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 event_state subscription status:', status);
+      });
+
+    return () => {
+      console.log('📡 Unsubscribing event_state');
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id]);
+
   useFocusEffect(
     useCallback(() => {
-      console.log('Screen focused');
+      console.log('🔄 === SCREEN FOCUSED - RECONNECTION SAFETY ===');
       
       if (user) {
         loadAppointment();
@@ -650,66 +704,9 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants, showToastNotification, shownConfirmations]);
 
-  // Listen for game_phase changes from ANY participant
-  useEffect(() => {
-    if (!appointment) return;
-
-    console.log('📡 === SUBSCRIBING TO GAME_PHASE CHANGES ===');
-    console.log('📡 Event ID:', appointment.event_id);
-
-    const channel = supabase
-      .channel(`game_sync_${appointment.event_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
-        },
-        (payload) => {
-          console.log('📡 === GAME_PHASE CHANGE DETECTED ===');
-          const newEvent = payload.new as any;
-          console.log('📡 New phase:', newEvent.game_phase);
-          
-          // When ANY participant starts the experience, ALL participants see it
-          if (newEvent.game_phase === 'ready' || 
-              newEvent.game_phase === 'question_active' ||
-              newEvent.game_phase === 'level_transition' ||
-              newEvent.game_phase === 'finished') {
-            console.log('✅ Game started - Syncing for ALL');
-            setGameStarted(true);
-          }
-          
-          // Reload appointment to get latest state
-          loadAppointment();
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 game_sync subscription status:', status);
-      });
-
-    return () => {
-      console.log('📡 Unsubscribing game_sync');
-      supabase.removeChannel(channel);
-    };
-  }, [appointment, loadAppointment]);
-
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
-
-  const ritualOpacity = ritualAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const ritualScale = ritualAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.8, 1],
-  });
-
   // Auto-transition to game when all presented
   useEffect(() => {
-    if (allPresented && appointment && !gameStarted) {
+    if (allPresented && appointment && gamePhase !== 'ready' && gamePhase !== 'question_active' && gamePhase !== 'match_selection') {
       console.log('✅ All presented - Auto-transitioning to game');
       
       const autoStartGame = async () => {
@@ -726,7 +723,7 @@ export default function InteraccionScreen() {
             console.error('❌ Error auto-transitioning:', error);
           } else {
             console.log('✅ Auto-transition successful to ready');
-            setGameStarted(true);
+            setGamePhase('ready');
           }
         } catch (error) {
           console.error('❌ Unexpected error auto-transitioning:', error);
@@ -735,7 +732,19 @@ export default function InteraccionScreen() {
 
       autoStartGame();
     }
-  }, [allPresented, appointment, gameStarted]);
+  }, [allPresented, appointment, gamePhase]);
+
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+
+  const ritualOpacity = ritualAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const ritualScale = ritualAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
 
   if (loading) {
     return (
@@ -806,7 +815,7 @@ export default function InteraccionScreen() {
   }
 
   // Show presentation phase
-  if (experienceStarted && !allPresented && !gameStarted) {
+  if (experienceStarted && !allPresented && gamePhase !== 'ready' && gamePhase !== 'question_active' && gamePhase !== 'match_selection') {
     const presentedCount = activeParticipants.filter(p => p.is_presented).length;
     const totalCount = activeParticipants.length;
     const progressText = `${presentedCount} de ${totalCount}`;
@@ -893,9 +902,9 @@ export default function InteraccionScreen() {
     );
   }
 
-  // Show game dynamics once all presented or game started
-  if (allPresented || gameStarted) {
-    console.log('Rendering GameDynamicsScreen');
+  // CRITICAL: Show game dynamics based on game_phase from database
+  if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished') {
+    console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
       id: p.id,
