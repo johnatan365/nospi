@@ -450,18 +450,46 @@ export default function InteraccionScreen() {
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
-  const handleStartExperience = useCallback(() => {
-    console.log('Starting experience');
-    setGameStarted(true);
-    setShowRitualModal(true);
+  // 🚨 SYNCHRONIZED: When ONE participant presses "Iniciar Experiencia", ALL participants transition
+  const handleStartExperience = useCallback(async () => {
+    if (!appointment) return;
+
+    console.log('🎮 === UN PARTICIPANTE PRESIONÓ INICIAR EXPERIENCIA ===');
+    console.log('🎮 Actualizando game_phase para TODOS los participantes...');
     
-    Animated.timing(ritualAnimation, {
-      toValue: 1,
-      duration: 2000,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  }, [ritualAnimation]);
+    try {
+      // Update the event's game_phase to 'waiting_for_spin'
+      // This will trigger Realtime for ALL participants
+      const { error } = await supabase
+        .from('events')
+        .update({ 
+          game_phase: 'waiting_for_spin',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error al iniciar experiencia:', error);
+        return;
+      }
+
+      console.log('✅ Game phase actualizado a waiting_for_spin');
+      console.log('✅ TODOS los participantes verán el cambio via Realtime');
+      
+      // Update local state
+      setGameStarted(true);
+      setShowRitualModal(true);
+      
+      Animated.timing(ritualAnimation, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } catch (error) {
+      console.error('❌ Error inesperado:', error);
+    }
+  }, [appointment, ritualAnimation]);
 
   const handleBeginExperience = useCallback(async () => {
     if (!appointment) return;
@@ -609,13 +637,15 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants, showToastNotification, shownConfirmations]);
 
+  // 🚨 SYNCHRONIZED: Listen for game_phase changes from ANY participant
   useEffect(() => {
     if (!appointment) return;
 
-    console.log('Setting up game state subscription');
+    console.log('📡 === SUSCRIBIÉNDOSE A CAMBIOS DE GAME_PHASE ===');
+    console.log('📡 Event ID:', appointment.event_id);
 
     const channel = supabase
-      .channel(`game_${appointment.event_id}`)
+      .channel(`game_sync_${appointment.event_id}`)
       .on(
         'postgres_changes',
         {
@@ -625,23 +655,28 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('Game state update:', payload);
-          
+          console.log('📡 === CAMBIO DE GAME_PHASE DETECTADO ===');
           const newEvent = payload.new as any;
+          console.log('📡 Nueva fase:', newEvent.game_phase);
           
+          // When ANY participant starts the experience, ALL participants see it
           if (newEvent.game_phase === 'waiting_for_spin' || 
               newEvent.game_phase === 'show_result' ||
               newEvent.game_phase === 'question') {
-            console.log('Game is active');
+            console.log('✅ Juego iniciado - Sincronizando para TODOS');
             setGameStarted(true);
           }
           
+          // Reload appointment to get latest state
           loadAppointment();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Estado de suscripción game_sync:', status);
+      });
 
     return () => {
+      console.log('📡 Cancelando suscripción game_sync');
       supabase.removeChannel(channel);
     };
   }, [appointment, loadAppointment]);
@@ -667,7 +702,10 @@ export default function InteraccionScreen() {
         try {
           const { error } = await supabase
             .from('events')
-            .update({ game_phase: 'waiting_for_spin' })
+            .update({ 
+              game_phase: 'waiting_for_spin',
+              updated_at: new Date().toISOString()
+            })
             .eq('id', appointment.event_id);
 
           if (error) {
