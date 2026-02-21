@@ -102,39 +102,72 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     getCurrentUser();
   }, []);
 
-  // Initial sync from database - only runs once on mount
-  useEffect(() => {
-    console.log('=== INITIAL SYNC FROM DATABASE ===');
-    const event = appointment.event;
-    
-    if (event.game_phase === 'question_active') {
-      setGamePhase('question_active');
-      setCurrentLevel((event.current_level as QuestionLevel) || 'divertido');
-      setCurrentQuestionIndex(event.current_question_index || 0);
-      setAnsweredUsers(event.answered_users || []);
-      setCurrentQuestion(event.current_question || null);
-      
-      if (event.current_question_starter_id) {
-        const starter = activeParticipants.find(p => p.user_id === event.current_question_starter_id);
-        setStarterParticipant(starter || null);
-      }
-    } else if (event.game_phase === 'level_transition') {
-      setGamePhase('level_transition');
-      setCurrentLevel((event.current_level as QuestionLevel) || 'divertido');
-    } else if (event.game_phase === 'finished') {
-      setGamePhase('finished');
-    } else {
-      setGamePhase('ready');
-    }
-  }, []); // Only run on mount
-
-  // Realtime subscription - updates from other users
+  // Main data sync and Realtime subscription
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 === SUBSCRIBING TO GAME STATE ===');
+    console.log('📡 === SETTING UP REALTIME SUBSCRIPTION ===');
     console.log('📡 Event ID:', appointment.event_id);
     
+    // Initial fetch from database
+    const fetchEventState = async () => {
+      // Skip if optimistic update is in progress
+      if (isOptimisticUpdateRef.current) {
+        console.log('⏭️ Skipping initial fetch - optimistic update in progress');
+        return;
+      }
+
+      console.log('📥 Fetching initial event state from database');
+      
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', appointment.event_id)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching event state:', error);
+        return;
+      }
+
+      if (!data) {
+        console.log('❌ No event data found');
+        return;
+      }
+
+      console.log('✅ Event state fetched:', {
+        game_phase: data.game_phase,
+        current_level: data.current_level,
+        current_question_index: data.current_question_index,
+        answered_users: data.answered_users
+      });
+
+      // Update local state based on database
+      if (data.game_phase === 'question_active') {
+        setGamePhase('question_active');
+        setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
+        setCurrentQuestionIndex(data.current_question_index || 0);
+        setAnsweredUsers(data.answered_users || []);
+        setCurrentQuestion(data.current_question || null);
+        
+        if (data.current_question_starter_id) {
+          const starter = activeParticipants.find(p => p.user_id === data.current_question_starter_id);
+          setStarterParticipant(starter || null);
+        }
+      } else if (data.game_phase === 'level_transition') {
+        setGamePhase('level_transition');
+        setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
+      } else if (data.game_phase === 'finished') {
+        setGamePhase('finished');
+      } else {
+        setGamePhase('ready');
+      }
+    };
+
+    // Fetch initial state
+    fetchEventState();
+
+    // Set up Realtime subscription
     const channel = supabase
       .channel(`game_${appointment.event_id}`)
       .on(
@@ -146,17 +179,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          // Skip if we're in the middle of an optimistic update
+          // CRITICAL: Skip if we're in the middle of an optimistic update
           if (isOptimisticUpdateRef.current) {
             console.log('⏭️ Skipping realtime update - optimistic update in progress');
             return;
           }
           
-          console.log('📡 === REALTIME UPDATE ===');
+          console.log('📡 === REALTIME UPDATE RECEIVED ===');
           const newEvent = payload.new as any;
-          console.log('📡 New phase:', newEvent.game_phase);
-          console.log('📡 Answered users:', newEvent.answered_users);
+          console.log('📡 New state:', {
+            game_phase: newEvent.game_phase,
+            current_level: newEvent.current_level,
+            current_question_index: newEvent.current_question_index,
+            answered_users: newEvent.answered_users
+          });
           
+          // Update local state based on realtime update
           if (newEvent.game_phase === 'question_active') {
             setGamePhase('question_active');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -183,7 +221,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       });
 
     return () => {
-      console.log('📡 Unsubscribing');
+      console.log('📡 Cleaning up subscription');
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id, activeParticipants]);
@@ -209,7 +247,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const starter = activeParticipants[randomIndex];
     const firstQuestion = QUESTIONS.divertido[0];
     
-    // Update UI immediately
+    // Update UI immediately (optimistic)
     setGamePhase('question_active');
     setCurrentLevel('divertido');
     setCurrentQuestionIndex(0);
@@ -253,11 +291,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       console.log('✅ Dynamic started successfully');
       
-      // Keep the flag set for a bit longer to prevent race conditions
+      // Keep the flag set for longer to prevent race conditions with Realtime
       setTimeout(() => {
         isOptimisticUpdateRef.current = false;
         console.log('🔓 Optimistic update flag CLEARED');
-      }, 500);
+      }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       isOptimisticUpdateRef.current = false;
@@ -290,7 +328,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
-    // Update UI immediately
+    // Update UI immediately (optimistic)
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
     setAnsweredUsers(newAnsweredUsers);
     
