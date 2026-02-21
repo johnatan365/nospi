@@ -284,14 +284,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    const newAnsweredUsers = [...answeredUsers, currentUserId];
+    // Set optimistic flag FIRST - before any state changes
+    isOptimisticUpdateRef.current = true;
+    console.log('🔒 Optimistic update flag SET (answered)');
     
-    // Set optimistic flag IMMEDIATELY - use Promise to ensure it's set before state update
-    await new Promise<void>(resolve => {
-      isOptimisticUpdateRef.current = true;
-      console.log('🔒 Optimistic update flag SET');
-      setTimeout(resolve, 0);
-    });
+    const newAnsweredUsers = [...answeredUsers, currentUserId];
     
     // Update UI immediately
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
@@ -326,11 +323,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       console.log('✅ User marked as answered successfully');
       
-      // Keep the flag set longer to prevent race conditions
+      // Keep the flag set longer to prevent race conditions with realtime
       setTimeout(() => {
         isOptimisticUpdateRef.current = false;
-        console.log('🔓 Optimistic update flag CLEARED');
-      }, 1000);
+        console.log('🔓 Optimistic update flag CLEARED (answered)');
+      }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       isOptimisticUpdateRef.current = false;
@@ -348,12 +345,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const questionsForLevel = QUESTIONS[currentLevel];
     const nextQuestionIndex = currentQuestionIndex + 1;
 
-    // Set optimistic flag IMMEDIATELY
-    await new Promise<void>(resolve => {
-      isOptimisticUpdateRef.current = true;
-      console.log('🔒 Optimistic update flag SET');
-      setTimeout(resolve, 0);
-    });
+    // Set optimistic flag FIRST - before any state changes
+    isOptimisticUpdateRef.current = true;
+    console.log('🔒 Optimistic update flag SET (continue)');
 
     setLoading(true);
 
@@ -407,8 +401,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Keep flag set longer to prevent race conditions
         setTimeout(() => {
           isOptimisticUpdateRef.current = false;
-          console.log('🔓 Optimistic update flag CLEARED');
-        }, 1000);
+          console.log('🔓 Optimistic update flag CLEARED (continue)');
+        }, 1500);
       } else {
         // Level finished - transition
         console.log('⚡ Optimistically transitioning to level_transition');
@@ -445,8 +439,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Keep flag set longer to prevent race conditions
         setTimeout(() => {
           isOptimisticUpdateRef.current = false;
-          console.log('🔓 Optimistic update flag CLEARED');
-        }, 1000);
+          console.log('🔓 Optimistic update flag CLEARED (level transition)');
+        }, 1500);
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
