@@ -286,9 +286,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
-    // Set optimistic flag IMMEDIATELY
-    isOptimisticUpdateRef.current = true;
-    console.log('🔒 Optimistic update flag SET');
+    // Set optimistic flag IMMEDIATELY - use Promise to ensure it's set before state update
+    await new Promise<void>(resolve => {
+      isOptimisticUpdateRef.current = true;
+      console.log('🔒 Optimistic update flag SET');
+      setTimeout(resolve, 0);
+    });
     
     // Update UI immediately
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
@@ -323,11 +326,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       console.log('✅ User marked as answered successfully');
       
-      // Keep the flag set for a bit longer to prevent race conditions
+      // Keep the flag set longer to prevent race conditions
       setTimeout(() => {
         isOptimisticUpdateRef.current = false;
         console.log('🔓 Optimistic update flag CLEARED');
-      }, 500);
+      }, 1000);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       isOptimisticUpdateRef.current = false;
@@ -336,20 +339,44 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentUserId, answeredUsers]);
 
   const handleContinue = useCallback(async () => {
-    console.log('➡️ Continuing to next question');
+    console.log('➡️ === CONTINUING TO NEXT QUESTION ===');
+    const actionStartTime = performance.now();
+    console.log('⏱️ Button pressed at:', actionStartTime);
     
     if (!appointment?.event_id) return;
+
+    const questionsForLevel = QUESTIONS[currentLevel];
+    const nextQuestionIndex = currentQuestionIndex + 1;
+
+    // Set optimistic flag IMMEDIATELY
+    await new Promise<void>(resolve => {
+      isOptimisticUpdateRef.current = true;
+      console.log('🔒 Optimistic update flag SET');
+      setTimeout(resolve, 0);
+    });
 
     setLoading(true);
 
     try {
-      const questionsForLevel = QUESTIONS[currentLevel];
-      const nextQuestionIndex = currentQuestionIndex + 1;
-
       if (nextQuestionIndex < questionsForLevel.length) {
+        // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
+        const newStarter = activeParticipants[randomIndex];
         const nextQuestion = questionsForLevel[nextQuestionIndex];
+
+        // Update UI immediately (optimistic)
+        console.log('⚡ Optimistically updating to next question');
+        setCurrentQuestionIndex(nextQuestionIndex);
+        setAnsweredUsers([]);
+        setCurrentQuestion(nextQuestion);
+        setStarterParticipant(newStarter);
+        
+        const uiUpdateTime = performance.now();
+        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
+
+        console.log('💾 Starting database update...');
+        const dbUpdateStartTime = performance.now();
 
         const { error } = await supabase
           .from('events')
@@ -362,13 +389,37 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           })
           .eq('id', appointment.event_id);
 
+        const dbUpdateEndTime = performance.now();
+        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
+
         if (error) {
           console.error('❌ Error advancing question:', error);
+          // Revert optimistic update
+          isOptimisticUpdateRef.current = false;
+          setCurrentQuestionIndex(currentQuestionIndex);
+          setAnsweredUsers(answeredUsers);
           return;
         }
 
         console.log('✅ Advanced to next question');
+        
+        // Keep flag set longer to prevent race conditions
+        setTimeout(() => {
+          isOptimisticUpdateRef.current = false;
+          console.log('🔓 Optimistic update flag CLEARED');
+        }, 1000);
       } else {
+        // Level finished - transition
+        console.log('⚡ Optimistically transitioning to level_transition');
+        setGamePhase('level_transition');
+        
+        const uiUpdateTime = performance.now();
+        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
+
+        console.log('💾 Starting database update...');
+        const dbUpdateStartTime = performance.now();
+
         const { error } = await supabase
           .from('events')
           .update({
@@ -377,19 +428,33 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           })
           .eq('id', appointment.event_id);
 
+        const dbUpdateEndTime = performance.now();
+        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
+
         if (error) {
           console.error('❌ Error transitioning level:', error);
+          // Revert optimistic update
+          isOptimisticUpdateRef.current = false;
+          setGamePhase('question_active');
           return;
         }
 
         console.log('✅ Level finished - transitioning');
+        
+        // Keep flag set longer to prevent race conditions
+        setTimeout(() => {
+          isOptimisticUpdateRef.current = false;
+          console.log('🔓 Optimistic update flag CLEARED');
+        }, 1000);
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      isOptimisticUpdateRef.current = false;
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers]);
 
   const handleContinueToNextLevel = useCallback(async () => {
     console.log('⬆️ Continuing to next level');
@@ -474,7 +539,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   if (gamePhase === 'ready') {
     const canStart = activeParticipants.length >= 2;
-    const participantCountText = activeParticipants.length.toString();
 
     return (
       <LinearGradient
@@ -494,11 +558,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               El sistema elegirá quién rompe el hielo 😉{'\n\n'}
               Cuando todos hayan participado, la siguiente pregunta aparecerá automáticamente.
             </Text>
-          </View>
-
-          <View style={styles.participantsCard}>
-            <Text style={styles.participantsTitle}>Participantes confirmados</Text>
-            <Text style={styles.participantsCount}>{participantCountText}</Text>
           </View>
 
           {canStart ? (
@@ -749,24 +808,6 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 24,
     textAlign: 'center',
-  },
-  participantsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  participantsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  participantsCount: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
   },
   startButton: {
     backgroundColor: '#FFD700',
