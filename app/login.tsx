@@ -123,15 +123,16 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use Linking.createURL('auth') for PKCE flow
+      // CRITICAL: Use Linking.createURL('auth') for PKCE flow redirect
       const redirectUrl = Linking.createURL('auth');
       console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
 
+      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -149,15 +150,30 @@ export default function LoginScreen() {
       console.log('Google OAuth initiated:', data);
       
       if (data.url) {
-        console.log('LoginScreen: Opening Google OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: Opening Google OAuth in IN-APP browser');
+        
+        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl,
+          {
+            // Ensure we use the in-app browser, not external browser
+            showInRecents: true,
+          }
+        );
+        
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // Don't set loading to false here - let the auth state change handler do it
+        // Handle cancellation
         if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled Google OAuth');
+          setError('Inicio de sesión cancelado');
+          setLoading(false);
+        } else if (result.type === 'dismiss') {
+          console.log('LoginScreen: OAuth browser dismissed');
           setLoading(false);
         }
+        // Success case is handled by the global deep link listener in _layout.tsx
       } else {
         console.log('LoginScreen: No OAuth URL returned');
         setError('No se pudo iniciar el proceso de OAuth');
@@ -176,15 +192,16 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use Linking.createURL('auth') for PKCE flow
+      // CRITICAL: Use Linking.createURL('auth') for PKCE flow redirect
       const redirectUrl = Linking.createURL('auth');
       console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
 
+      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
         },
       });
 
@@ -198,15 +215,30 @@ export default function LoginScreen() {
       console.log('Apple OAuth initiated:', data);
       
       if (data.url) {
-        console.log('LoginScreen: Opening Apple OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: Opening Apple OAuth in IN-APP browser');
+        
+        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl,
+          {
+            // Ensure we use the in-app browser, not external browser
+            showInRecents: true,
+          }
+        );
+        
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // Don't set loading to false here - let the auth state change handler do it
+        // Handle cancellation
         if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled Apple OAuth');
+          setError('Inicio de sesión cancelado');
+          setLoading(false);
+        } else if (result.type === 'dismiss') {
+          console.log('LoginScreen: OAuth browser dismissed');
           setLoading(false);
         }
+        // Success case is handled by the global deep link listener in _layout.tsx
       } else {
         console.log('LoginScreen: No OAuth URL returned');
         setError('No se pudo iniciar el proceso de OAuth');
