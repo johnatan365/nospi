@@ -2,20 +2,20 @@
 /**
  * GameDynamicsScreen - Nospi Interactive Game Experience
  * 
- * OPTIMIZED ARCHITECTURE:
- * - Immediate animation start on button press
- * - Reliable transition to question phase
+ * SIMPLIFIED ARCHITECTURE:
+ * - Direct question flow without roulette
  * - Clean state management
+ * - Realtime synchronization
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, Image, Dimensions, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'waiting_for_spin' | 'show_result' | 'question';
+type GamePhase = 'ready' | 'question';
 
 interface Participant {
   id: string;
@@ -34,8 +34,6 @@ interface Appointment {
   event: {
     id: string;
     game_phase?: string;
-    selected_participant_id?: string;
-    selected_participant_name?: string;
     current_question?: string;
     current_question_level?: string;
   };
@@ -46,95 +44,32 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const WHEEL_SIZE = Math.min(SCREEN_WIDTH - 64, 340);
-
-// Professional elegant colors for wheel segments
-const SEGMENT_COLORS = [
-  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
-  '#EF4444', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981',
-];
-
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   console.log('🎮 Rendering GameDynamicsScreen');
   
-  const [gamePhase, setGamePhase] = useState<GamePhase>('waiting_for_spin');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
   const [currentLevel] = useState<QuestionLevel>('divertido');
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
-  
-  const wheelRotation = useRef(new Animated.Value(0)).current;
-  const glowAnimation = useRef(new Animated.Value(0)).current;
-  const selectedPulse = useRef(new Animated.Value(1)).current;
-  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
 
-  // Animation function
-  const startRouletteAnimation = useCallback((targetParticipantId: string) => {
-    console.log('🎯 === INICIANDO ANIMACIÓN DE LA RULETA ===');
-    console.log('🎯 Participante objetivo:', targetParticipantId);
+  // Generate random question
+  const generateQuestion = useCallback(() => {
+    const questions = [
+      '¿te gusta bailar?',
+      '¿cuál es tu mayor sueño?',
+      '¿qué te hace feliz?',
+      '¿cuál es tu mayor miedo?',
+      '¿qué harías si ganaras la lotería?',
+      '¿cuál es tu película favorita?',
+      '¿prefieres el mar o la montaña?',
+      '¿qué superpoder te gustaría tener?',
+      '¿cuál es tu comida favorita?',
+      '¿qué te hace reír?'
+    ];
     
-    setIsSpinning(true);
-    
-    // Find the target participant index
-    const targetIndex = activeParticipants.findIndex(p => p.user_id === targetParticipantId);
-    console.log('🎯 Índice del participante:', targetIndex);
-    
-    // Reset animations
-    wheelRotation.setValue(0);
-    glowAnimation.setValue(0);
-    
-    // Calculate target rotation
-    const degreesPerSegment = 360 / activeParticipants.length;
-    const extraSpins = 3; // Reduced from 5 for faster animation
-    const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
-    
-    console.log('🎯 Rotación objetivo:', targetRotation, 'grados');
-    
-    // Start glow animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnimation, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnimation, {
-          toValue: 0,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    // Main wheel animation - 3 seconds (reduced from 4.2)
-    Animated.timing(wheelRotation, {
-      toValue: targetRotation,
-      duration: 3000,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      console.log('✅ Animación completada');
-      setIsSpinning(false);
-      
-      // Pulse effect
-      Animated.sequence([
-        Animated.timing(selectedPulse, {
-          toValue: 1.1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(selectedPulse, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  }, [activeParticipants, wheelRotation, glowAnimation, selectedPulse]);
+    return questions[Math.floor(Math.random() * questions.length)];
+  }, []);
 
   // Realtime subscription for game state updates
   useEffect(() => {
@@ -157,37 +92,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('📡 === ACTUALIZACIÓN VIA REALTIME ===');
           const newEvent = payload.new as any;
           console.log('📡 Nueva fase:', newEvent.game_phase);
-          console.log('📡 Participante seleccionado:', newEvent.selected_participant_id);
+          console.log('📡 Pregunta actual:', newEvent.current_question);
+          console.log('📡 Índice de pregunta:', newEvent.current_question_index);
           
           // Sync state from database
           if (newEvent.game_phase === 'question') {
             console.log('📝 Sincronizando fase de pregunta');
             setGamePhase('question');
             
-            const participant = activeParticipants.find(
-              p => p.user_id === newEvent.selected_participant_id
-            );
-            if (participant) {
-              setSelectedParticipant(participant);
-            }
-            
             if (newEvent.current_question) {
               setCurrentQuestion(newEvent.current_question);
             }
-          } else if (newEvent.game_phase === 'show_result') {
-            console.log('🎯 Sincronizando fase show_result');
-            setGamePhase('show_result');
             
-            const participant = activeParticipants.find(
-              p => p.user_id === newEvent.selected_participant_id
-            );
-            if (participant) {
-              setSelectedParticipant(participant);
+            if (newEvent.current_question_index !== undefined) {
+              setCurrentQuestionIndex(newEvent.current_question_index);
             }
-          } else if (newEvent.game_phase === 'waiting_for_spin') {
-            console.log('⏳ Sincronizando fase waiting_for_spin');
-            setGamePhase('waiting_for_spin');
-            setSelectedParticipant(null);
+            
+            if (newEvent.answered_users) {
+              setAnsweredUsers(newEvent.answered_users);
+            }
+          } else if (newEvent.game_phase === 'ready') {
+            console.log('⏳ Sincronizando fase ready');
+            setGamePhase('ready');
             setCurrentQuestion(null);
           }
         }
@@ -200,7 +126,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('📡 Cancelando suscripción');
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, activeParticipants]);
+  }, [appointment?.event_id]);
 
   // Initial sync from database
   useEffect(() => {
@@ -212,247 +138,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     if (dbPhase === 'question') {
       console.log('📝 Fase de pregunta detectada');
       
-      const participant = activeParticipants.find(
-        p => p.user_id === appointment.event.selected_participant_id
-      );
-      
-      if (participant) {
-        setSelectedParticipant(participant);
-      }
-      
       if (appointment.event.current_question) {
         setCurrentQuestion(appointment.event.current_question);
       }
       
       setGamePhase('question');
-    } else if (dbPhase === 'show_result') {
-      console.log('🎯 Fase show_result detectada');
-      
-      const participant = activeParticipants.find(
-        p => p.user_id === appointment.event.selected_participant_id
-      );
-      
-      if (participant) {
-        setSelectedParticipant(participant);
-      }
-      
-      setGamePhase('show_result');
     } else {
-      console.log('⏳ Fase waiting_for_spin o inicial');
-      setGamePhase('waiting_for_spin');
+      console.log('⏳ Fase ready o inicial');
+      setGamePhase('ready');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants]);
+  }, [appointment.event.game_phase, appointment.event.current_question]);
 
-  // Auto-transition to question after animation completes
-  useEffect(() => {
-    // Clear any existing timer
-    if (transitionTimerRef.current) {
-      clearTimeout(transitionTimerRef.current);
-      transitionTimerRef.current = null;
-    }
-
-    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant) {
-      console.log('=== PREPARANDO TRANSICIÓN A PREGUNTA ===');
-      console.log('Participante seleccionado:', selectedParticipant.name);
-      
-      // Wait 1.5 seconds after animation (reduced from 2 seconds)
-      transitionTimerRef.current = setTimeout(async () => {
-        console.log('🔄 Transicionando a fase de pregunta...');
-        
-        try {
-          // Generate random question
-          const questions = [
-            '¿te gusta bailar?',
-            '¿cuál es tu mayor sueño?',
-            '¿qué te hace feliz?',
-            '¿cuál es tu mayor miedo?',
-            '¿qué harías si ganaras la lotería?',
-            '¿cuál es tu película favorita?',
-            '¿prefieres el mar o la montaña?',
-            '¿qué superpoder te gustaría tener?',
-            '¿cuál es tu comida favorita?',
-            '¿qué te hace reír?'
-          ];
-          
-          const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
-          console.log('📝 Pregunta seleccionada:', randomQuestion);
-          
-          // Update database
-          const { error: updateError } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'question',
-              current_question: randomQuestion,
-              current_question_level: currentLevel,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-          
-          if (updateError) {
-            console.error('❌ Error al actualizar a fase de pregunta:', updateError);
-            Alert.alert('Error', 'No se pudo pasar a la pregunta.');
-            return;
-          }
-          
-          console.log('✅ Transición a pregunta exitosa');
-          
-          // Update local state (Realtime will also sync this)
-          setCurrentQuestion(randomQuestion);
-          setGamePhase('question');
-        } catch (error: any) {
-          console.error('❌ Error inesperado al transicionar:', error);
-          Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
-        }
-      }, 1500);
-    }
-
-    return () => {
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current);
-        transitionTimerRef.current = null;
-      }
-    };
-  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
-
-  const handleStartRoulette = useCallback(async () => {
-    console.log('🎰 === USUARIO PRESIONÓ GIRAR RULETA ===');
-    console.log('🎰 Participantes activos:', activeParticipants.length);
-    
-    if (!appointment?.event_id || activeParticipants.length === 0) {
-      console.warn('⚠️ No se puede iniciar la ruleta');
-      Alert.alert('Error', 'No hay participantes para girar la ruleta.');
-      return;
-    }
-
-    if (isSpinning) {
-      console.log('⚠️ Ya está girando');
-      return;
-    }
-
-    setLoadingMessage('Iniciando ruleta...');
-    
-    try {
-      // Get current event state
-      console.log('📊 Obteniendo estado actual del evento...');
-      const { data: eventData, error: fetchError } = await supabase
-        .from('events')
-        .select('level_queue, current_turn_index')
-        .eq('id', appointment.event_id)
-        .single();
-
-      if (fetchError) {
-        console.error('❌ Error al obtener el evento:', fetchError);
-        Alert.alert('Error', 'No se pudo obtener el estado del evento.');
-        setLoadingMessage('');
-        return;
-      }
-
-      console.log('✅ Estado actual del evento:', eventData);
-
-      let levelQueue = eventData.level_queue || [];
-      let currentTurnIndex = eventData.current_turn_index || 0;
-
-      // Initialize level_queue if empty
-      if (!levelQueue || levelQueue.length === 0) {
-        console.log('🔄 === INICIALIZANDO LEVEL_QUEUE ===');
-        setLoadingMessage('Preparando participantes...');
-        
-        const { data: participants, error: participantsError } = await supabase
-          .from('event_participants')
-          .select('user_id')
-          .eq('event_id', appointment.event_id)
-          .eq('confirmed', true);
-
-        if (participantsError || !participants || participants.length === 0) {
-          console.error('❌ Error al obtener participantes');
-          Alert.alert('Error', 'No hay participantes confirmados.');
-          setLoadingMessage('');
-          return;
-        }
-
-        const participantIds = participants.map(p => p.user_id);
-        
-        // Shuffle (Fisher-Yates)
-        for (let i = participantIds.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
-        }
-
-        levelQueue = participantIds;
-        currentTurnIndex = 0;
-
-        console.log('✅ Cola inicializada:', levelQueue);
-
-        const { error: updateQueueError } = await supabase
-          .from('events')
-          .update({
-            level_queue: levelQueue,
-            current_turn_index: currentTurnIndex,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (updateQueueError) {
-          console.error('❌ Error al inicializar level_queue:', updateQueueError);
-          Alert.alert('Error', 'No se pudo guardar la lista de participantes.');
-          setLoadingMessage('');
-          return;
-        }
-      }
-
-      if (levelQueue.length === 0) {
-        console.error('❌ Cola vacía');
-        Alert.alert('Error', 'No hay participantes en la cola.');
-        setLoadingMessage('');
-        return;
-      }
-
-      // Select next participant
-      const nextParticipantId = levelQueue[currentTurnIndex];
-      const newIndex = (currentTurnIndex + 1) % levelQueue.length;
-
-      console.log('✅ Seleccionando participante:', nextParticipantId);
-      console.log('✅ Nuevo índice:', newIndex);
-
-      // Find participant object
-      const selectedPart = activeParticipants.find(p => p.user_id === nextParticipantId);
-      if (selectedPart) {
-        setSelectedParticipant(selectedPart);
-      }
-
-      // START ANIMATION IMMEDIATELY (before database update)
-      console.log('🚀 Iniciando animación INMEDIATAMENTE');
-      setGamePhase('show_result');
-      startRouletteAnimation(nextParticipantId);
-      setLoadingMessage('');
-
-      // Update database in background
-      console.log('📤 Actualizando base de datos...');
-      const { error: updateError } = await supabase
-        .from('events')
-        .update({
-          selected_participant_id: nextParticipantId,
-          current_turn_index: newIndex,
-          game_phase: 'show_result',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (updateError) {
-        console.error('❌ Error al actualizar evento:', updateError);
-        // Animation already started, so just log the error
-      } else {
-        console.log('✅ Base de datos actualizada');
-      }
-    } catch (error: any) {
-      console.error('❌ Error inesperado:', error);
-      Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
-      setLoadingMessage('');
-    }
-  }, [appointment?.event_id, isSpinning, activeParticipants, startRouletteAnimation]);
-
-  const handleContinueGame = useCallback(async () => {
-    console.log('🎮 === CONTINUANDO EL JUEGO ===');
+  const handleStartQuestion = useCallback(async () => {
+    console.log('🎮 === INICIANDO PREGUNTA ===');
     
     if (!appointment?.event_id) {
       console.error('❌ No hay event_id');
@@ -460,146 +158,80 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
 
     try {
+      const newQuestion = generateQuestion();
+      console.log('📝 Pregunta generada:', newQuestion);
+      
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'waiting_for_spin',
-          current_question: null,
-          current_question_level: null,
+          game_phase: 'question',
+          current_question: newQuestion,
+          current_question_level: currentLevel,
+          current_question_index: 0,
+          answered_users: [],
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error al continuar:', error);
-        Alert.alert('Error', 'No se pudo continuar el juego.');
+        console.error('❌ Error al iniciar pregunta:', error);
+        Alert.alert('Error', 'No se pudo iniciar la pregunta.');
         return;
       }
 
-      console.log('✅ Juego continuado');
-      setGamePhase('waiting_for_spin');
-      setCurrentQuestion(null);
-      setSelectedParticipant(null);
+      console.log('✅ Pregunta iniciada');
+      setGamePhase('question');
+      setCurrentQuestion(newQuestion);
+      setCurrentQuestionIndex(0);
+      setAnsweredUsers([]);
     } catch (error: any) {
       console.error('❌ Error inesperado:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error.');
     }
-  }, [appointment?.event_id]);
+  }, [appointment?.event_id, currentLevel, generateQuestion]);
 
-  const wheelRotate = wheelRotation.interpolate({
-    inputRange: [0, 360],
-    outputRange: ['0deg', '360deg'],
-  });
+  const handleNextQuestion = useCallback(async () => {
+    console.log('🎮 === SIGUIENTE PREGUNTA ===');
+    
+    if (!appointment?.event_id) {
+      console.error('❌ No hay event_id');
+      return;
+    }
 
-  const glowOpacity = glowAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.8],
-  });
+    try {
+      const newQuestion = generateQuestion();
+      const newIndex = currentQuestionIndex + 1;
+      console.log('📝 Nueva pregunta:', newQuestion);
+      console.log('📝 Nuevo índice:', newIndex);
+      
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'question',
+          current_question: newQuestion,
+          current_question_index: newIndex,
+          answered_users: [],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
 
-  const renderProfessionalWheel = () => {
-    const participantCount = activeParticipants.length;
-    const degreesPerSegment = 360 / participantCount;
+      if (error) {
+        console.error('❌ Error al pasar a siguiente pregunta:', error);
+        Alert.alert('Error', 'No se pudo pasar a la siguiente pregunta.');
+        return;
+      }
 
-    return (
-      <View style={styles.wheelContainer}>
-        {/* Pointer */}
-        <View style={styles.indicatorContainer}>
-          <View style={styles.indicatorShadow} />
-          <View style={styles.triangleContainer}>
-            <View style={styles.triangleGradient} />
-            <View style={styles.triangleHighlight} />
-          </View>
-        </View>
+      console.log('✅ Siguiente pregunta iniciada');
+      setCurrentQuestion(newQuestion);
+      setCurrentQuestionIndex(newIndex);
+      setAnsweredUsers([]);
+    } catch (error: any) {
+      console.error('❌ Error inesperado:', error);
+      Alert.alert('Error', error.message || 'Ocurrió un error.');
+    }
+  }, [appointment?.event_id, currentQuestionIndex, generateQuestion]);
 
-        {/* Glow during spin */}
-        {isSpinning && (
-          <Animated.View
-            style={[
-              styles.wheelGlow,
-              {
-                opacity: glowOpacity,
-              },
-            ]}
-          />
-        )}
-
-        {/* Rotating wheel */}
-        <Animated.View
-          style={[
-            styles.wheel,
-            {
-              transform: [{ rotate: wheelRotate }],
-            },
-          ]}
-        >
-          {/* Segments */}
-          {activeParticipants.map((participant, index) => {
-            const startAngle = index * degreesPerSegment;
-            const segmentColor = SEGMENT_COLORS[index % SEGMENT_COLORS.length];
-
-            return (
-              <View
-                key={participant.id}
-                style={[
-                  styles.segment,
-                  {
-                    transform: [{ rotate: `${startAngle}deg` }],
-                  },
-                ]}
-              >
-                <LinearGradient
-                  colors={[segmentColor, `${segmentColor}CC`]}
-                  style={styles.segmentGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                >
-                  {participant.profile_photo_url ? (
-                    <Image
-                      source={{ uri: participant.profile_photo_url }}
-                      style={styles.participantPhoto}
-                    />
-                  ) : (
-                    <View style={styles.participantPhotoPlaceholder}>
-                      <Text style={styles.participantInitial}>
-                        {participant.name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {participantCount <= 6 && (
-                    <Text style={styles.participantName} numberOfLines={1}>
-                      {participant.name}
-                    </Text>
-                  )}
-                  {participantCount > 6 && participantCount <= 10 && (
-                    <Text style={styles.participantNameSmall} numberOfLines={1}>
-                      {participant.name.split(' ')[0]}
-                    </Text>
-                  )}
-                </LinearGradient>
-              </View>
-            );
-          })}
-
-          {/* Center circle */}
-          <View style={styles.centerCircle}>
-            <LinearGradient
-              colors={['#FFD700', '#FFA500', '#FFD700']}
-              style={styles.centerRing}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.centerInner}>
-                <Text style={styles.centerText}>NOSPI</Text>
-              </View>
-            </LinearGradient>
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
-
-  if (gamePhase === 'waiting_for_spin' || gamePhase === 'show_result') {
+  if (gamePhase === 'ready') {
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
@@ -607,36 +239,39 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <View style={styles.rouletteContainer}>
-          <Text style={styles.rouletteTitleWhite}>Girando la Ruleta</Text>
-          <Text style={styles.rouletteSubtitleWhite}>¿Quién será elegido?</Text>
+        <View style={styles.readyContainer}>
+          <Text style={styles.readyTitle}>¡Listos para comenzar!</Text>
+          <Text style={styles.readySubtitle}>Presiona el botón para iniciar la primera pregunta</Text>
 
-          {renderProfessionalWheel()}
-
-          {loadingMessage ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>{loadingMessage}</Text>
-            </View>
-          ) : null}
+          <View style={styles.participantsCard}>
+            <Text style={styles.participantsTitle}>Participantes ({activeParticipants.length})</Text>
+            {activeParticipants.map((participant) => {
+              const displayName = participant.name;
+              
+              return (
+                <View key={participant.id} style={styles.participantRow}>
+                  <Text style={styles.participantNameText}>{displayName}</Text>
+                </View>
+              );
+            })}
+          </View>
 
           <TouchableOpacity
-            style={[styles.spinButton, isSpinning && styles.buttonDisabled]}
-            onPress={handleStartRoulette}
-            disabled={isSpinning}
+            style={styles.startButton}
+            onPress={handleStartQuestion}
             activeOpacity={0.8}
           >
-            <Text style={styles.spinButtonText}>
-              {isSpinning ? '⏳ Girando...' : '🎰 Girar Ruleta'}
-            </Text>
+            <Text style={styles.startButtonText}>🎯 Iniciar Pregunta</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
     );
   }
 
-  if (gamePhase === 'question' && currentQuestion && selectedParticipant) {
-    const participantName = selectedParticipant.name;
-    const firstName = participantName.split(' ')[0];
+  if (gamePhase === 'question' && currentQuestion) {
+    const answeredCount = answeredUsers.length;
+    const totalCount = activeParticipants.length;
+    const progressText = `${answeredCount} de ${totalCount} han respondido`;
 
     return (
       <LinearGradient
@@ -646,30 +281,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.selectedCard}>
-            <Text style={styles.selectedLabel}>La ruleta eligió a</Text>
-            <Text style={styles.selectedName}>{participantName}</Text>
-            {selectedParticipant.profile_photo_url ? (
-              <Image
-                source={{ uri: selectedParticipant.profile_photo_url }}
-                style={styles.selectedPhoto}
-              />
-            ) : (
-              <View style={styles.selectedPhotoPlaceholder}>
-                <Text style={styles.selectedPhotoInitial}>
-                  {firstName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-          </View>
-
           <View style={styles.questionCard}>
             <Text style={styles.questionIcon}>❓</Text>
-            <View style={styles.questionTextContainer}>
-              <Text style={styles.questionIntro}>{firstName}</Text>
-              <Text style={styles.questionComma}>, </Text>
-              <Text style={styles.questionText}>{currentQuestion}</Text>
-            </View>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
+          </View>
+
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Progreso</Text>
+            <Text style={styles.progressText}>{progressText}</Text>
           </View>
 
           <View style={styles.infoCard}>
@@ -679,11 +298,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           <TouchableOpacity
-            style={styles.continueButton}
-            onPress={handleContinueGame}
+            style={styles.nextButton}
+            onPress={handleNextQuestion}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar con el juego</Text>
+            <Text style={styles.nextButtonText}>Siguiente Pregunta</Text>
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
@@ -704,315 +323,68 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 120,
   },
-  titleWhite: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 48,
-    textAlign: 'center',
-  },
-  subtitleWhite: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-
-  loadingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  rouletteContainer: {
+  readyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  rouletteTitleWhite: {
+  readyTitle: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
   },
-  rouletteSubtitleWhite: {
+  readySubtitle: {
     fontSize: 18,
     color: '#FFFFFF',
     marginBottom: 40,
     opacity: 0.9,
     textAlign: 'center',
   },
-  wheelContainer: {
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
+  participantsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
     marginBottom: 40,
-  },
-  wheelGlow: {
-    position: 'absolute',
-    width: WHEEL_SIZE + 40,
-    height: WHEEL_SIZE + 40,
-    borderRadius: (WHEEL_SIZE + 40) / 2,
-    backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-  },
-  wheel: {
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE,
-    borderRadius: WHEEL_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 15,
-  },
-  segment: {
-    position: 'absolute',
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE / 2,
-    top: 0,
-    left: 0,
-    transformOrigin: 'center bottom',
-  },
-  segmentGradient: {
     width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    paddingTop: 24,
-    borderTopLeftRadius: WHEEL_SIZE / 2,
-    borderTopRightRadius: WHEEL_SIZE / 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    maxWidth: 400,
   },
-  participantPhoto: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-  },
-  participantPhotoPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-  },
-  participantInitial: {
-    fontSize: 24,
+  participantsTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#4a2c6e',
-  },
-  participantName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-    paddingHorizontal: 8,
   },
-  participantNameSmall: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+  participantRow: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  centerCircle: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  centerRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  centerInner: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  centerText: {
+  participantNameText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a2c6e',
+    color: '#333',
+    fontWeight: '500',
+    textAlign: 'center',
   },
-  indicatorContainer: {
-    position: 'absolute',
-    top: -18,
-    left: '50%',
-    marginLeft: -22,
-    width: 44,
-    height: 70,
-    zIndex: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  indicatorShadow: {
-    position: 'absolute',
-    top: 10,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 22,
-    borderRightWidth: 22,
-    borderTopWidth: 55,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  triangleContainer: {
-    width: 44,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  triangleGradient: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 22,
-    borderRightWidth: 22,
-    borderTopWidth: 55,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#FFD700',
-  },
-  triangleHighlight: {
-    position: 'absolute',
-    top: 6,
-    left: 10,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 18,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-  },
-  spinButton: {
+  startButton: {
     backgroundColor: '#FFD700',
     borderRadius: 20,
     paddingVertical: 20,
     paddingHorizontal: 48,
     alignItems: 'center',
-    marginTop: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 10,
   },
-  spinButtonText: {
+  startButtonText: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#1a0b2e',
-  },
-  selectedCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  selectedLabel: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  selectedName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    marginBottom: 16,
-  },
-  selectedPhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: nospiColors.purpleMid,
-    marginTop: 8,
-  },
-  selectedPhotoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: nospiColors.purpleLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: nospiColors.purpleMid,
-    marginTop: 8,
-  },
-  selectedPhotoInitial: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
   },
   questionCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1020,6 +392,7 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     marginBottom: 24,
+    marginTop: 48,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -1030,28 +403,29 @@ const styles = StyleSheet.create({
     fontSize: 64,
     marginBottom: 20,
   },
-  questionTextContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  questionIntro: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    textAlign: 'center',
-  },
-  questionComma: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-  },
   questionText: {
     fontSize: 24,
     color: nospiColors.purpleDark,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  progressCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  progressText: {
+    fontSize: 32,
+    color: nospiColors.purpleDark,
+    fontWeight: 'bold',
   },
   infoCard: {
     backgroundColor: '#DBEAFE',
@@ -1068,7 +442,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  continueButton: {
+  nextButton: {
     backgroundColor: nospiColors.purpleDark,
     borderRadius: 20,
     paddingVertical: 20,
@@ -1080,7 +454,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  continueButtonText: {
+  nextButtonText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
