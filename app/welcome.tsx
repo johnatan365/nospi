@@ -51,7 +51,7 @@ export default function WelcomeScreen() {
 
   const tagline1 = 'Tu dosis semanal';
   const tagline2 = 'de conexión';
-  const subtitle = 'Conoce personas reales en encuentros grupales cada viernes';
+  const subtitle = 'Conoce personas reales en encuentros grupales cada semana';
   const startButtonText = 'Empezar';
   const loginButtonText = 'Ya tengo una cuenta';
 

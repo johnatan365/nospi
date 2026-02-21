@@ -484,7 +484,7 @@ export default function MatchSelectionScreen({
           {/* CRITICAL: Hide countdown if all votes received */}
           {!allVotesReceived && !deadlineReached && matchDeadlineAt && (
             <View style={styles.timerCard}>
-              <Text style={styles.timerLabel}>🕐 Decisiones finales en:</Text>
+              <Text style={styles.timerLabel}>🕐 Tienes este tiempo para elegir:</Text>
               <Text style={[
                 styles.timerDisplay,
                 isWarning && styles.timerWarning,
@@ -523,7 +523,7 @@ export default function MatchSelectionScreen({
 
         {matchDeadlineAt && (
           <View style={styles.timerCard}>
-            <Text style={styles.timerLabel}>🕐 Decisiones finales en:</Text>
+            <Text style={styles.timerLabel}>🕐 Tienes este tiempo para elegir:</Text>
             <Text style={[
               styles.timerDisplay,
               isWarning && styles.timerWarning,

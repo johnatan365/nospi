@@ -491,9 +491,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Level finished - transition to match selection
         console.log('⚡ Optimistically transitioning to match_selection');
         
-        // Calculate match deadline (60 seconds from now)
+        // Calculate match deadline (15 seconds from now)
         const now = new Date();
-        const deadline = new Date(now.getTime() + 60 * 1000);
+        const deadline = new Date(now.getTime() + 15 * 1000);
         
         // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
         setGamePhase('match_selection');
@@ -665,6 +665,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </View>
 
+          <View style={styles.ruleCard}>
+            <Text style={styles.ruleEmoji}>😏</Text>
+            <Text style={styles.ruleTitle}>Regla extra:</Text>
+            <Text style={styles.ruleText}>
+              Si alguien decide no responder una pregunta,{'\n'}
+              deberá tomar un shot 🥃 o cumplir un reto que el grupo le asigne.
+            </Text>
+          </View>
+
           {canStart ? (
             <TouchableOpacity
               style={[styles.startButton, loading && styles.buttonDisabled]}
@@ -799,14 +808,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>¡Experiencia Completada!</Text>
-          <Text style={styles.subtitleWhite}>Gracias por participar</Text>
+          <Text style={styles.titleWhite}>✨ ¡Ya rompieron el hielo!</Text>
+          <Text style={styles.subtitleWhite}>Ahora disfruten el resto de la noche y déjense sorprender 💜</Text>
 
-          <View style={styles.finishedCard}>
-            <Text style={styles.finishedIcon}>🎊</Text>
-            <Text style={styles.finishedText}>
-              Han completado la dinámica de grupo.{'\n\n'}
-              ¡Esperamos que hayan disfrutado la experiencia!
+          <View style={styles.evaluationCard}>
+            <Text style={styles.evaluationIcon}>⭐</Text>
+            <Text style={styles.evaluationTitle}>Evalúa tu experiencia</Text>
+            <Text style={styles.evaluationText}>
+              Puedes calificar a los demás participantes.{'\n'}
+              Esta información nos ayuda a mejorar futuros encuentros.{'\n'}
+              En cualquier momento puedes modificar tu evaluación.
             </Text>
           </View>
         </ScrollView>
@@ -865,6 +876,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     lineHeight: 24,
+    textAlign: 'center',
+  },
+  ruleCard: {
+    backgroundColor: 'rgba(255, 245, 230, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 200, 100, 0.5)',
+  },
+  ruleEmoji: {
+    fontSize: 32,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  ruleTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  ruleText: {
+    fontSize: 15,
+    color: '#5D4037',
+    lineHeight: 22,
     textAlign: 'center',
   },
   startButton: {
@@ -1036,20 +1073,27 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     textAlign: 'center',
   },
-  finishedCard: {
+  evaluationCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
-    padding: 40,
+    padding: 32,
     alignItems: 'center',
   },
-  finishedIcon: {
-    fontSize: 100,
-    marginBottom: 24,
+  evaluationIcon: {
+    fontSize: 64,
+    marginBottom: 16,
   },
-  finishedText: {
-    fontSize: 18,
+  evaluationTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
     color: nospiColors.purpleDark,
+    marginBottom: 16,
     textAlign: 'center',
-    lineHeight: 28,
+  },
+  evaluationText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });
