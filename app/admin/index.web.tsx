@@ -495,11 +495,12 @@ export default function AdminPanelScreen() {
 
       const isoDate = combinedDate.toISOString();
 
+      // FIX: Map 'restaurant' to 'restaurante' to match database constraint
       const eventData = {
         name: eventForm.name,
         city: eventForm.city,
         description: eventForm.description,
-        type: eventForm.type,
+        type: eventForm.type === 'restaurant' ? 'restaurante' : eventForm.type,
         date: isoDate,
         time: eventForm.time,
         location: eventForm.is_location_revealed && eventForm.location_name 
