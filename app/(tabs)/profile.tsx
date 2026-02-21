@@ -77,6 +77,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -124,14 +125,26 @@ export default function ProfileScreen() {
       }
 
       if (!data || data.length === 0) {
-        console.log('No profile data found');
-        setLoading(false);
+        console.log('No profile data found, profile may still be creating...');
+        
+        // Retry loading profile after a short delay (profile might be creating)
+        if (retryCount < 3) {
+          console.log(`Retrying profile load (attempt ${retryCount + 1}/3)...`);
+          setTimeout(() => {
+            setRetryCount(retryCount + 1);
+            loadProfile();
+          }, 1000);
+        } else {
+          console.log('Profile not found after retries');
+          setLoading(false);
+        }
         return;
       }
 
       const profileData = data[0];
       console.log('Profile loaded successfully');
       setProfile(profileData);
+      setRetryCount(0); // Reset retry count on success
       setEditName(profileData.name || '');
       setEditPhone(profileData.phone || '');
       setEditCountry(profileData.country || 'Colombia');
@@ -356,6 +369,8 @@ export default function ProfileScreen() {
   };
 
   if (loading) {
+    const loadingMessage = retryCount > 0 ? 'Creando tu perfil...' : 'Cargando perfil...';
+    
     return (
       <LinearGradient
         colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
@@ -365,6 +380,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={styles.loadingText}>{loadingMessage}</Text>
         </View>
       </LinearGradient>
     );
@@ -380,6 +396,16 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setRetryCount(0);
+              loadProfile();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -819,11 +845,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginTop: 16,
+    textAlign: 'center',
   },
   errorText: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     alignItems: 'center',
