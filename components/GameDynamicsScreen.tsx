@@ -156,6 +156,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const newEvent = payload.new as any;
           console.log('📡 New phase:', newEvent.game_phase);
           
+          // Skip if we're in optimistic update mode
+          if (isOptimisticUpdate) {
+            console.log('⏭️ Skipping realtime update - optimistic update in progress');
+            return;
+          }
+          
           if (newEvent.game_phase === 'question_active') {
             setGamePhase('question_active');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -185,7 +191,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('📡 Unsubscribing');
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, activeParticipants]);
+  }, [appointment?.event_id, activeParticipants, isOptimisticUpdate]);
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
@@ -287,6 +293,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     // OPTIMISTIC UI UPDATE - Immediately update local state
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
+    setIsOptimisticUpdate(true); // CRITICAL: Prevent realtime from overriding
     setAnsweredUsers(newAnsweredUsers);
     
     const uiUpdateTime = performance.now();
@@ -313,14 +320,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.error('❌ Error updating answered users:', error);
         // Revert optimistic update on error
         setAnsweredUsers(answeredUsers);
+        setIsOptimisticUpdate(false);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
+      // Database update complete - allow sync to resume
+      setIsOptimisticUpdate(false);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       // Revert optimistic update on error
       setAnsweredUsers(answeredUsers);
+      setIsOptimisticUpdate(false);
     }
   }, [appointment, currentUserId, answeredUsers]);
 
@@ -460,9 +471,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const answeredCount = answeredUsers.length;
   const totalCount = activeParticipants.length;
   const allAnswered = answeredCount === totalCount;
-  const answeredPercentage = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
-  // Safety mechanism: Show continue button when at least 1 user has answered (as per Gen 18 requirement)
-  const showSafetyContinue = answeredCount >= 1 && !allAnswered;
   const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
 
   // Level display
@@ -577,7 +585,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </TouchableOpacity>
           )}
 
-          {userHasAnswered && !showSafetyContinue && (
+          {userHasAnswered && !allAnswered && (
             <View style={styles.waitingCard}>
               <Text style={styles.waitingText}>
                 ✓ Esperando a que todos respondan...
@@ -585,7 +593,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </View>
           )}
 
-          {showSafetyContinue && (
+          {allAnswered && (
             <TouchableOpacity
               style={[styles.continueButton, loading && styles.buttonDisabled]}
               onPress={handleContinue}
@@ -806,6 +814,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     padding: 16,
+    marginTop: 60,
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
