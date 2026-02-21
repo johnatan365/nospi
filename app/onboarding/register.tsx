@@ -9,8 +9,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 
-// CRITICAL: Call this at the top level to complete auth sessions
-WebBrowser.maybeCompleteAuthSession();
+// CRITICAL: Call this at the top level to complete auth sessions (MOBILE ONLY)
+if (Platform.OS !== 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -151,64 +153,83 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
-      const redirectUri = Platform.OS === 'web' 
-        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
-        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
-      
-      console.log('RegisterScreen: Apple OAuth redirect URI:', redirectUri);
-
-      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
-        },
-      });
-
-      if (error) {
-        console.error('Apple OAuth error:', error);
+      if (Platform.OS === 'web') {
+        // WEB: Use direct OAuth redirect (NO WebBrowser)
+        console.log('RegisterScreen: Web - Using direct OAuth redirect');
         
-        // Check for specific error about provider not enabled
-        if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-          setError('Apple OAuth no está habilitado. Por favor, habilita Apple como proveedor en el Panel de Supabase (Authentication → Providers → Apple).');
-        } else {
-          setError(`Error al conectar con Apple: ${error.message}`);
-        }
-        setLoading(false);
-        return;
-      }
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
+          },
+        });
 
-      console.log('Apple OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('RegisterScreen: Opening Apple OAuth in IN-APP browser');
-        
-        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri,
-          {
-            // Ensure we use the in-app browser, not external browser
-            showInRecents: true,
+        if (error) {
+          console.error('Apple OAuth error:', error);
+          
+          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
+            setError('Apple OAuth no está habilitado. Por favor, habilita Apple como proveedor en el Panel de Supabase (Authentication → Providers → Apple).');
+          } else {
+            setError(`Error al conectar con Apple: ${error.message}`);
           }
-        );
+          setLoading(false);
+          return;
+        }
+
+        console.log('Web: Apple OAuth redirect initiated');
+        // Browser will redirect automatically
+      } else {
+        // MOBILE: Use WebBrowser for in-app browser
+        console.log('RegisterScreen: Mobile - Using WebBrowser for OAuth');
         
-        console.log('RegisterScreen: WebBrowser result:', result);
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
+        console.log('RegisterScreen: Apple OAuth redirect URI:', redirectUri);
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: redirectUri,
+            skipBrowserRedirect: true,
+          },
+        });
+
+        if (error) {
+          console.error('Apple OAuth error:', error);
+          
+          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
+            setError('Apple OAuth no está habilitado. Por favor, habilita Apple como proveedor en el Panel de Supabase (Authentication → Providers → Apple).');
+          } else {
+            setError(`Error al conectar con Apple: ${error.message}`);
+          }
+          setLoading(false);
+          return;
+        }
+
+        console.log('Apple OAuth initiated:', data);
         
-        // Handle cancellation or dismissal
-        if (result.type === 'cancel' || result.type === 'dismiss') {
-          console.log('RegisterScreen: User cancelled or dismissed OAuth');
-          setError(result.type === 'cancel' ? 'Registro con Apple cancelado' : 'Navegador cerrado');
+        if (data.url) {
+          console.log('RegisterScreen: Opening Apple OAuth in IN-APP browser');
+          
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUri,
+            {
+              showInRecents: true,
+            }
+          );
+          
+          console.log('RegisterScreen: WebBrowser result:', result);
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
+            console.log('RegisterScreen: User cancelled or dismissed OAuth');
+            setError(result.type === 'cancel' ? 'Registro con Apple cancelado' : 'Navegador cerrado');
+            setLoading(false);
+          }
+        } else {
+          console.log('RegisterScreen: No OAuth URL returned');
+          setError('No se pudo iniciar el proceso de OAuth');
           setLoading(false);
         }
-        // Success case is handled by the auth state change listener above
-        // The loading state will be cleared when SIGNED_IN event fires
-      } else {
-        console.log('RegisterScreen: No OAuth URL returned');
-        setError('No se pudo iniciar el proceso de OAuth');
-        setLoading(false);
       }
     } catch (error) {
       console.error('Apple sign-up failed:', error);
@@ -223,68 +244,91 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
-      const redirectUri = Platform.OS === 'web' 
-        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
-        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
-      
-      console.log('RegisterScreen: Google OAuth redirect URI:', redirectUri);
-
-      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
+      if (Platform.OS === 'web') {
+        // WEB: Use direct OAuth redirect (NO WebBrowser)
+        console.log('RegisterScreen: Web - Using direct OAuth redirect');
+        
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        console.error('Google OAuth error:', error);
-        
-        // Check for specific error about provider not enabled
-        if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-          setError('Google OAuth no está habilitado correctamente. Por favor, verifica la configuración en el Panel de Supabase (Authentication → Providers → Google).');
-        } else {
-          setError(`Error al conectar con Google: ${error.message}`);
-        }
-        setLoading(false);
-        return;
-      }
-
-      console.log('Google OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('RegisterScreen: Opening Google OAuth in IN-APP browser');
-        
-        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri,
-          {
-            // Ensure we use the in-app browser, not external browser
-            showInRecents: true,
+        if (error) {
+          console.error('Google OAuth error:', error);
+          
+          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
+            setError('Google OAuth no está habilitado correctamente. Por favor, verifica la configuración en el Panel de Supabase (Authentication → Providers → Google).');
+          } else {
+            setError(`Error al conectar con Google: ${error.message}`);
           }
-        );
+          setLoading(false);
+          return;
+        }
+
+        console.log('Web: Google OAuth redirect initiated');
+        // Browser will redirect automatically
+      } else {
+        // MOBILE: Use WebBrowser for in-app browser
+        console.log('RegisterScreen: Mobile - Using WebBrowser for OAuth');
         
-        console.log('RegisterScreen: WebBrowser result:', result);
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
+        console.log('RegisterScreen: Google OAuth redirect URI:', redirectUri);
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUri,
+            skipBrowserRedirect: true,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+
+        if (error) {
+          console.error('Google OAuth error:', error);
+          
+          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
+            setError('Google OAuth no está habilitado correctamente. Por favor, verifica la configuración en el Panel de Supabase (Authentication → Providers → Google).');
+          } else {
+            setError(`Error al conectar con Google: ${error.message}`);
+          }
+          setLoading(false);
+          return;
+        }
+
+        console.log('Google OAuth initiated:', data);
         
-        // Handle cancellation or dismissal
-        if (result.type === 'cancel' || result.type === 'dismiss') {
-          console.log('RegisterScreen: User cancelled or dismissed OAuth');
-          setError(result.type === 'cancel' ? 'Registro con Google cancelado' : 'Navegador cerrado');
+        if (data.url) {
+          console.log('RegisterScreen: Opening Google OAuth in IN-APP browser');
+          
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUri,
+            {
+              showInRecents: true,
+            }
+          );
+          
+          console.log('RegisterScreen: WebBrowser result:', result);
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
+            console.log('RegisterScreen: User cancelled or dismissed OAuth');
+            setError(result.type === 'cancel' ? 'Registro con Google cancelado' : 'Navegador cerrado');
+            setLoading(false);
+          }
+        } else {
+          console.log('RegisterScreen: No OAuth URL returned');
+          setError('No se pudo iniciar el proceso de OAuth');
           setLoading(false);
         }
-        // Success case is handled by the auth state change listener above
-        // The loading state will be cleared when SIGNED_IN event fires
-      } else {
-        console.log('RegisterScreen: No OAuth URL returned');
-        setError('No se pudo iniciar el proceso de OAuth');
-        setLoading(false);
       }
     } catch (error) {
       console.error('Google sign-up failed:', error);

@@ -8,8 +8,10 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 
-// CRITICAL: Call this at the top level to complete auth sessions
-WebBrowser.maybeCompleteAuthSession();
+// CRITICAL: Call this at the top level to complete auth sessions (MOBILE ONLY)
+if (Platform.OS !== 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -131,62 +133,82 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
-      const redirectUri = Platform.OS === 'web' 
-        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
-        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
-      
-      console.log('LoginScreen: Google OAuth redirect URI:', redirectUri);
-
-      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
+      if (Platform.OS === 'web') {
+        // WEB: Use direct OAuth redirect (NO WebBrowser)
+        console.log('LoginScreen: Web - Using direct OAuth redirect');
+        
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        console.error('Google OAuth error:', error);
-        setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
-        setLoading(false);
-        return;
-      }
+        if (error) {
+          console.error('Google OAuth error:', error);
+          setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+          setLoading(false);
+          return;
+        }
 
-      console.log('Google OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('LoginScreen: Opening Google OAuth in IN-APP browser');
+        console.log('Web: Google OAuth redirect initiated');
+        // Browser will redirect automatically, no need to handle result
+        // RootLayout will handle the ?code= parameter when user returns
+      } else {
+        // MOBILE: Use WebBrowser for in-app browser
+        console.log('LoginScreen: Mobile - Using WebBrowser for OAuth');
         
-        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri,
-          {
-            // Ensure we use the in-app browser, not external browser
-            showInRecents: true,
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
+        console.log('LoginScreen: Mobile OAuth redirect URI:', redirectUri);
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUri,
+            skipBrowserRedirect: true, // Get URL manually
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+
+        if (error) {
+          console.error('Google OAuth error:', error);
+          setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+          setLoading(false);
+          return;
+        }
+
+        console.log('Google OAuth initiated:', data);
+        
+        if (data.url) {
+          console.log('LoginScreen: Opening Google OAuth in IN-APP browser');
+          
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUri,
+            {
+              showInRecents: true,
+            }
+          );
+          
+          console.log('LoginScreen: WebBrowser result:', result);
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
+            console.log('LoginScreen: User cancelled or dismissed OAuth');
+            setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
+            setLoading(false);
           }
-        );
-        
-        console.log('LoginScreen: WebBrowser result:', result);
-        
-        // Handle cancellation or dismissal
-        if (result.type === 'cancel' || result.type === 'dismiss') {
-          console.log('LoginScreen: User cancelled or dismissed OAuth');
-          setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
+        } else {
+          console.log('LoginScreen: No OAuth URL returned');
+          setError('No se pudo iniciar el proceso de OAuth');
           setLoading(false);
         }
-        // Success case is handled by the auth state change listener above
-        // The loading state will be cleared when SIGNED_IN event fires
-      } else {
-        console.log('LoginScreen: No OAuth URL returned');
-        setError('No se pudo iniciar el proceso de OAuth');
-        setLoading(false);
       }
     } catch (error) {
       console.error('Google login failed:', error);
@@ -201,58 +223,73 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
-      const redirectUri = Platform.OS === 'web' 
-        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
-        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
-      
-      console.log('LoginScreen: Apple OAuth redirect URI:', redirectUri);
-
-      // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
-        },
-      });
-
-      if (error) {
-        console.error('Apple OAuth error:', error);
-        setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Apple OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('LoginScreen: Opening Apple OAuth in IN-APP browser');
+      if (Platform.OS === 'web') {
+        // WEB: Use direct OAuth redirect (NO WebBrowser)
+        console.log('LoginScreen: Web - Using direct OAuth redirect');
         
-        // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri,
-          {
-            // Ensure we use the in-app browser, not external browser
-            showInRecents: true,
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
+          },
+        });
+
+        if (error) {
+          console.error('Apple OAuth error:', error);
+          setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+          setLoading(false);
+          return;
+        }
+
+        console.log('Web: Apple OAuth redirect initiated');
+        // Browser will redirect automatically
+      } else {
+        // MOBILE: Use WebBrowser for in-app browser
+        console.log('LoginScreen: Mobile - Using WebBrowser for OAuth');
+        
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
+        console.log('LoginScreen: Apple OAuth redirect URI:', redirectUri);
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: redirectUri,
+            skipBrowserRedirect: true,
+          },
+        });
+
+        if (error) {
+          console.error('Apple OAuth error:', error);
+          setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+          setLoading(false);
+          return;
+        }
+
+        console.log('Apple OAuth initiated:', data);
+        
+        if (data.url) {
+          console.log('LoginScreen: Opening Apple OAuth in IN-APP browser');
+          
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUri,
+            {
+              showInRecents: true,
+            }
+          );
+          
+          console.log('LoginScreen: WebBrowser result:', result);
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
+            console.log('LoginScreen: User cancelled or dismissed OAuth');
+            setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
+            setLoading(false);
           }
-        );
-        
-        console.log('LoginScreen: WebBrowser result:', result);
-        
-        // Handle cancellation or dismissal
-        if (result.type === 'cancel' || result.type === 'dismiss') {
-          console.log('LoginScreen: User cancelled or dismissed OAuth');
-          setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
+        } else {
+          console.log('LoginScreen: No OAuth URL returned');
+          setError('No se pudo iniciar el proceso de OAuth');
           setLoading(false);
         }
-        // Success case is handled by the auth state change listener above
-        // The loading state will be cleared when SIGNED_IN event fires
-      } else {
-        console.log('LoginScreen: No OAuth URL returned');
-        setError('No se pudo iniciar el proceso de OAuth');
-        setLoading(false);
       }
     } catch (error) {
       console.error('Apple login failed:', error);
