@@ -50,7 +50,8 @@ export default function MatchSelectionScreen({
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [serverTime, setServerTime] = useState<Date>(new Date());
   
-  const matchAnimation = useRef(new Animated.Value(0)).current;
+  // Animation refs - using single value for scale (no interpolate)
+  const heartScale = useRef(new Animated.Value(0.8)).current;
   const matchGlowAnimation = useRef(new Animated.Value(0)).current;
   const matchTextAnimation = useRef(new Animated.Value(0)).current;
   const isOptimisticUpdateRef = useRef(false);
@@ -237,22 +238,23 @@ export default function MatchSelectionScreen({
     console.log('🎉 Triggering match animation');
     
     // Reset animation values
-    matchAnimation.setValue(0);
+    heartScale.setValue(0.8);
     matchGlowAnimation.setValue(0);
     matchTextAnimation.setValue(0);
     hasTriggeredHapticRef.current = false;
 
-    // Heart scale animation: 0.8 → 1.1 → 1.0
+    // Heart scale animation using Animated.sequence (no interpolate)
+    // Initial scale = 0.8 → Animate to 1.1 (150ms) → Animate back to 1.0 (150ms)
     Animated.sequence([
-      Animated.timing(matchAnimation, {
+      Animated.timing(heartScale, {
         toValue: 1.1,
-        duration: 300,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(matchAnimation, {
-        toValue: 1,
-        duration: 200,
+      Animated.timing(heartScale, {
+        toValue: 1.0,
+        duration: 150,
         easing: Easing.inOut(Easing.ease),
         useNativeDriver: true,
       }),
@@ -286,7 +288,7 @@ export default function MatchSelectionScreen({
       }).start();
     }, 200);
 
-    // Trigger haptic at peak scale (1.1) - 300ms after start
+    // Trigger haptic at peak scale (1.1) - 150ms after start
     setTimeout(() => {
       if (!hasTriggeredHapticRef.current && Platform.OS !== 'web') {
         hasTriggeredHapticRef.current = true;
@@ -297,11 +299,11 @@ export default function MatchSelectionScreen({
           console.log('⚠️ Haptic not available:', error);
         }
       }
-    }, 300);
+    }, 150);
 
     // Auto-close modal after 3 seconds
     setTimeout(() => {
-      Animated.timing(matchAnimation, {
+      Animated.timing(heartScale, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
@@ -309,7 +311,7 @@ export default function MatchSelectionScreen({
         setShowMatchModal(false);
       });
     }, 3000);
-  }, [matchAnimation, matchGlowAnimation, matchTextAnimation]);
+  }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
     console.log('Selected user:', userId);
@@ -393,16 +395,7 @@ export default function MatchSelectionScreen({
 
   const otherParticipants = participants.filter(p => p.user_id !== currentUserId);
 
-  const matchScale = matchAnimation.interpolate({
-    inputRange: [0, 0.8, 1.1, 1],
-    outputRange: [0.8, 0.8, 1.1, 1],
-  });
-
-  const matchOpacity = matchAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
+  // Glow opacity interpolation (this is safe - monotonically increasing)
   const glowOpacity = matchGlowAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 0.8],
@@ -578,8 +571,7 @@ export default function MatchSelectionScreen({
             style={[
               styles.matchModalContent,
               { 
-                opacity: matchOpacity,
-                transform: [{ scale: matchScale }]
+                transform: [{ scale: heartScale }]
               }
             ]}
           >
