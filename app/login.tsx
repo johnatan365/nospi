@@ -25,6 +25,11 @@ export default function LoginScreen() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('LoginScreen: Auth state changed:', event, session?.user?.id);
       
+      // CRITICAL: Clear loading state when auth state changes
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        setLoading(false);
+      }
+      
       if (event === 'SIGNED_IN' && session) {
         console.log('LoginScreen: User signed in, checking profile...');
         
@@ -77,7 +82,6 @@ export default function LoginScreen() {
 
         // Navigate to events screen
         console.log('LoginScreen: Navigating to events screen');
-        setLoading(false);
         router.replace('/(tabs)/events');
       }
     });
@@ -107,15 +111,16 @@ export default function LoginScreen() {
       if (error) {
         console.error('Login error:', error);
         setError('Email o contraseña incorrectos');
+        setLoading(false);
         return;
       }
 
       console.log('Login successful, user:', data.user?.id);
+      // Don't set loading to false here - let the auth state change handler do it
       router.replace('/(tabs)/events');
     } catch (error) {
       console.error('Login failed:', error);
       setError('Error al iniciar sesión. Intenta de nuevo.');
-    } finally {
       setLoading(false);
     }
   };
@@ -170,16 +175,14 @@ export default function LoginScreen() {
         
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // Handle cancellation
-        if (result.type === 'cancel') {
-          console.log('LoginScreen: User cancelled Google OAuth');
-          setError('Inicio de sesión cancelado');
-          setLoading(false);
-        } else if (result.type === 'dismiss') {
-          console.log('LoginScreen: OAuth browser dismissed');
+        // Handle cancellation or dismissal
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          console.log('LoginScreen: User cancelled or dismissed OAuth');
+          setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
           setLoading(false);
         }
-        // Success case is handled by the global deep link listener in _layout.tsx
+        // Success case is handled by the auth state change listener above
+        // The loading state will be cleared when SIGNED_IN event fires
       } else {
         console.log('LoginScreen: No OAuth URL returned');
         setError('No se pudo iniciar el proceso de OAuth');
@@ -238,16 +241,14 @@ export default function LoginScreen() {
         
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // Handle cancellation
-        if (result.type === 'cancel') {
-          console.log('LoginScreen: User cancelled Apple OAuth');
-          setError('Inicio de sesión cancelado');
-          setLoading(false);
-        } else if (result.type === 'dismiss') {
-          console.log('LoginScreen: OAuth browser dismissed');
+        // Handle cancellation or dismissal
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          console.log('LoginScreen: User cancelled or dismissed OAuth');
+          setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
           setLoading(false);
         }
-        // Success case is handled by the global deep link listener in _layout.tsx
+        // Success case is handled by the auth state change listener above
+        // The loading state will be cleared when SIGNED_IN event fires
       } else {
         console.log('LoginScreen: No OAuth URL returned');
         setError('No se pudo iniciar el proceso de OAuth');
