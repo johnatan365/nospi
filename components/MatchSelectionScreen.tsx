@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, Animated, Easing, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import * as Haptics from 'expo-haptics';
 
 interface Participant {
   id: string;
@@ -25,6 +26,7 @@ interface MatchSelectionScreenProps {
 interface ProcessMatchVoteResult {
   match: boolean;
   matched_user_id: string | null;
+  matched_user_name: string | null;
 }
 
 export default function MatchSelectionScreen({
@@ -49,6 +51,10 @@ export default function MatchSelectionScreen({
   const [serverTime, setServerTime] = useState<Date>(new Date());
   
   const matchAnimation = useRef(new Animated.Value(0)).current;
+  const matchGlowAnimation = useRef(new Animated.Value(0)).current;
+  const matchTextAnimation = useRef(new Animated.Value(0)).current;
+  const isOptimisticUpdateRef = useRef(false);
+  const hasTriggeredHapticRef = useRef(false);
 
   // Fetch server time on mount
   useEffect(() => {
@@ -100,7 +106,7 @@ export default function MatchSelectionScreen({
     const checkExistingVote = async () => {
       try {
         const { data, error } = await supabase
-          .from('event_matches_votes')
+          .from('event_match_votes')
           .select('*')
           .eq('event_id', eventId)
           .eq('level', currentLevel)
@@ -124,7 +130,7 @@ export default function MatchSelectionScreen({
     const checkAllVotes = async () => {
       try {
         const { data, error } = await supabase
-          .from('event_matches_votes')
+          .from('event_match_votes')
           .select('from_user_id')
           .eq('event_id', eventId)
           .eq('level', currentLevel);
@@ -160,10 +166,14 @@ export default function MatchSelectionScreen({
         {
           event: '*',
           schema: 'public',
-          table: 'event_matches_votes',
+          table: 'event_match_votes',
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
+          if (isOptimisticUpdateRef.current) {
+            console.log('⏭️ Skipping vote realtime update - optimistic update in progress');
+            return;
+          }
           console.log('📡 Vote change detected:', payload);
           checkAllVotes();
         }
@@ -211,23 +221,8 @@ export default function MatchSelectionScreen({
             setMatchedUserName(otherUserName);
             setShowMatchModal(true);
             
-            // Animate the match modal
-            Animated.sequence([
-              Animated.timing(matchAnimation, {
-                toValue: 1,
-                duration: 600,
-                easing: Easing.elastic(1.2),
-                useNativeDriver: true,
-              }),
-              Animated.delay(3000),
-              Animated.timing(matchAnimation, {
-                toValue: 0,
-                duration: 300,
-                useNativeDriver: true,
-              }),
-            ]).start(() => {
-              setShowMatchModal(false);
-            });
+            // Trigger premium match animation
+            triggerMatchAnimation();
           }
         }
       )
@@ -236,7 +231,85 @@ export default function MatchSelectionScreen({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [eventId, currentLevel, currentUserId, matchAnimation]);
+  }, [eventId, currentLevel, currentUserId]);
+
+  const triggerMatchAnimation = useCallback(() => {
+    console.log('🎉 Triggering match animation');
+    
+    // Reset animation values
+    matchAnimation.setValue(0);
+    matchGlowAnimation.setValue(0);
+    matchTextAnimation.setValue(0);
+    hasTriggeredHapticRef.current = false;
+
+    // Heart scale animation: 0.8 → 1.1 → 1.0
+    Animated.sequence([
+      Animated.timing(matchAnimation, {
+        toValue: 1.1,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(matchAnimation, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Glow animation (subtle purple glow)
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(matchGlowAnimation, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(matchGlowAnimation, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Text fade-in after 200ms
+    setTimeout(() => {
+      Animated.timing(matchTextAnimation, {
+        toValue: 1,
+        duration: 400,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    }, 200);
+
+    // Trigger haptic at peak scale (1.1) - 300ms after start
+    setTimeout(() => {
+      if (!hasTriggeredHapticRef.current && Platform.OS !== 'web') {
+        hasTriggeredHapticRef.current = true;
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          console.log('✨ Haptic feedback triggered');
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }
+    }, 300);
+
+    // Auto-close modal after 3 seconds
+    setTimeout(() => {
+      Animated.timing(matchAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMatchModal(false);
+      });
+    }, 3000);
+  }, [matchAnimation, matchGlowAnimation, matchTextAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
     console.log('Selected user:', userId);
@@ -255,6 +328,9 @@ export default function MatchSelectionScreen({
     }
 
     console.log('💘 === CONFIRMING MATCH SELECTION (ATOMIC RPC) ===');
+    
+    // Set optimistic flag to block realtime updates
+    isOptimisticUpdateRef.current = true;
     setLoading(true);
 
     try {
@@ -277,6 +353,7 @@ export default function MatchSelectionScreen({
 
       if (error) {
         console.error('❌ Error calling process_match_vote RPC:', error);
+        isOptimisticUpdateRef.current = false;
         setLoading(false);
         return;
       }
@@ -287,46 +364,27 @@ export default function MatchSelectionScreen({
       setHasVoted(true);
 
       // If match was found immediately, show modal
-      if (result.match && result.matched_user_id) {
-        console.log('💜 Immediate match detected with:', result.matched_user_id);
-        
-        // Get the matched user's name
-        const { data: userData } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', result.matched_user_id)
-          .single();
-        
-        const matchedName = userData?.name || 'Alguien';
-        setMatchedUserName(matchedName);
+      if (result.match && result.matched_user_id && result.matched_user_name) {
+        console.log('💜 Immediate match detected with:', result.matched_user_name);
+        setMatchedUserName(result.matched_user_name);
         setShowMatchModal(true);
-        
-        // Animate the match modal
-        Animated.sequence([
-          Animated.timing(matchAnimation, {
-            toValue: 1,
-            duration: 600,
-            easing: Easing.elastic(1.2),
-            useNativeDriver: true,
-          }),
-          Animated.delay(3000),
-          Animated.timing(matchAnimation, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setShowMatchModal(false);
-        });
+        triggerMatchAnimation();
       } else {
         console.log('⏳ No immediate match - waiting for reciprocal vote or user selected "Ninguno"');
       }
+
+      // Clear optimistic flag after delay
+      setTimeout(() => {
+        isOptimisticUpdateRef.current = false;
+        console.log('🔓 Optimistic update flag CLEARED (vote)');
+      }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      isOptimisticUpdateRef.current = false;
     } finally {
       setLoading(false);
     }
-  }, [selectedUserId, eventId, currentLevel, currentUserId, matchAnimation]);
+  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation]);
 
   const handleContinue = useCallback(() => {
     console.log('➡️ Continuing to next phase');
@@ -336,14 +394,21 @@ export default function MatchSelectionScreen({
   const otherParticipants = participants.filter(p => p.user_id !== currentUserId);
 
   const matchScale = matchAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, 1],
+    inputRange: [0, 0.8, 1.1, 1],
+    outputRange: [0.8, 0.8, 1.1, 1],
   });
 
   const matchOpacity = matchAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
+
+  const glowOpacity = matchGlowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
+
+  const textOpacity = matchTextAnimation;
 
   // Format countdown timer
   const minutesDisplay = String(remainingMinutes).padStart(2, '0');
@@ -353,8 +418,14 @@ export default function MatchSelectionScreen({
   // Determine if "Continuar" button should be enabled
   const canContinue = allVotesReceived || deadlineReached;
 
+  // Determine timer color and animation
+  const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
+  const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
+
   if (hasVoted && !showMatchModal) {
-    const waitingMessage = deadlineReached 
+    const waitingMessage = allVotesReceived 
+      ? '✨ ¡Todos han decidido!'
+      : deadlineReached 
       ? 'Tiempo finalizado. Puedes continuar.'
       : 'Estamos esperando las decisiones del grupo…';
 
@@ -368,15 +439,19 @@ export default function MatchSelectionScreen({
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Tu elección ha sido registrada</Text>
 
-          {!deadlineReached && matchDeadlineAt && (
+          {!allVotesReceived && !deadlineReached && matchDeadlineAt && (
             <View style={styles.timerCard}>
-              <Text style={styles.timerLabel}>Tiempo restante para decidir:</Text>
-              <Text style={styles.timerDisplay}>{timerDisplay}</Text>
+              <Text style={styles.timerLabel}>🕐 Decisiones finales en:</Text>
+              <Text style={[
+                styles.timerDisplay,
+                isWarning && styles.timerWarning,
+                isCritical && styles.timerCritical
+              ]}>{timerDisplay}</Text>
             </View>
           )}
 
           <View style={styles.waitingCard}>
-            <Text style={styles.waitingIcon}>{deadlineReached ? '✅' : '⏳'}</Text>
+            <Text style={styles.waitingIcon}>{allVotesReceived ? '✨' : deadlineReached ? '✅' : '⏳'}</Text>
             <Text style={styles.waitingText}>{waitingMessage}</Text>
           </View>
 
@@ -405,8 +480,12 @@ export default function MatchSelectionScreen({
 
         {matchDeadlineAt && (
           <View style={styles.timerCard}>
-            <Text style={styles.timerLabel}>Tiempo restante para decidir:</Text>
-            <Text style={styles.timerDisplay}>{timerDisplay}</Text>
+            <Text style={styles.timerLabel}>🕐 Decisiones finales en:</Text>
+            <Text style={[
+              styles.timerDisplay,
+              isWarning && styles.timerWarning,
+              isCritical && styles.timerCritical
+            ]}>{timerDisplay}</Text>
           </View>
         )}
 
@@ -504,11 +583,16 @@ export default function MatchSelectionScreen({
               }
             ]}
           >
-            <Text style={styles.matchIcon}>✨</Text>
-            <Text style={styles.matchTitle}>¡Match confirmado!</Text>
-            <Text style={styles.matchText}>
-              Tú y {matchedUserName} se eligieron 💜
-            </Text>
+            <Animated.View style={[styles.glowContainer, { opacity: glowOpacity }]}>
+              <View style={styles.glowCircle} />
+            </Animated.View>
+            <Text style={styles.matchIcon}>💜</Text>
+            <Animated.View style={{ opacity: textOpacity }}>
+              <Text style={styles.matchTitle}>✨ ¡Match confirmado!</Text>
+              <Text style={styles.matchText}>
+                Tú y {matchedUserName} se eligieron 💜
+              </Text>
+            </Animated.View>
           </Animated.View>
         </View>
       </Modal>
@@ -553,6 +637,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a0b2e',
     fontVariant: ['tabular-nums'],
+  },
+  timerWarning: {
+    color: '#F59E0B',
+  },
+  timerCritical: {
+    color: '#EF4444',
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -718,6 +808,23 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
+    position: 'relative',
+  },
+  glowContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  glowCircle: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: nospiColors.purpleMid,
+    opacity: 0.3,
   },
   matchIcon: {
     fontSize: 80,

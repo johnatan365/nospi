@@ -107,22 +107,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     getCurrentUser();
   }, []);
 
-  // Main data sync and Realtime subscription
+  // CRITICAL: Reconnection Safety - Always derive state from event_state
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 === SETTING UP REALTIME SUBSCRIPTION ===');
-    console.log('📡 Event ID:', appointment.event_id);
+    console.log('🔄 === RECONNECTION SAFETY: Checking event_state ===');
     
-    // Initial fetch from database
-    const fetchEventState = async () => {
-      // Skip if optimistic update is in progress
+    const restoreStateFromDatabase = async () => {
       if (isOptimisticUpdateRef.current) {
-        console.log('⏭️ Skipping initial fetch - optimistic update in progress');
+        console.log('⏭️ Skipping state restoration - optimistic update in progress');
         return;
       }
 
-      console.log('📥 Fetching initial event state from database');
+      console.log('📥 Fetching current event state from database');
       
       const { data, error } = await supabase
         .from('events')
@@ -149,8 +146,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         match_deadline_at: data.match_deadline_at
       });
 
-      // Update local state based on database
-      if (data.game_phase === 'question_active') {
+      // CRITICAL: Restore state based on game_phase
+      if (data.game_phase === 'match_selection') {
+        console.log('🔄 Restoring match_selection phase');
+        setGamePhase('match_selection');
+        setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
+        setMatchStartedAt(data.match_started_at || null);
+        setMatchDeadlineAt(data.match_deadline_at || null);
+      } else if (data.game_phase === 'question_active') {
+        console.log('🔄 Restoring question_active phase');
         setGamePhase('question_active');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
@@ -161,23 +165,29 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const starter = activeParticipants.find(p => p.user_id === data.current_question_starter_id);
           setStarterParticipant(starter || null);
         }
-      } else if (data.game_phase === 'match_selection') {
-        setGamePhase('match_selection');
-        setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
-        setMatchStartedAt(data.match_started_at || null);
-        setMatchDeadlineAt(data.match_deadline_at || null);
       } else if (data.game_phase === 'level_transition') {
+        console.log('🔄 Restoring level_transition phase');
         setGamePhase('level_transition');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
       } else if (data.game_phase === 'finished') {
+        console.log('🔄 Restoring finished phase');
         setGamePhase('finished');
       } else {
+        console.log('🔄 Restoring ready phase');
         setGamePhase('ready');
       }
     };
 
-    // Fetch initial state
-    fetchEventState();
+    // Restore state on mount and app resume
+    restoreStateFromDatabase();
+  }, [appointment?.event_id, activeParticipants]);
+
+  // Main data sync and Realtime subscription
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+
+    console.log('📡 === SETTING UP REALTIME SUBSCRIPTION ===');
+    console.log('📡 Event ID:', appointment.event_id);
 
     // Set up Realtime subscription
     const channel = supabase
