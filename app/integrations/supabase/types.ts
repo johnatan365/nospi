@@ -1,3 +1,6 @@
+// This file is a type definition file and should not be in the app/ directory
+// It's being kept here for backwards compatibility but should not be imported directly
+// Types are now defined in lib/supabase.ts
 
 export type Json =
   | string
@@ -59,3 +62,6 @@ export interface Database {
     }
   }
 }
+
+// Dummy export to make this a valid module (prevents Expo Router from treating it as a route)
+export default null;

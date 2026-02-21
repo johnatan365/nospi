@@ -449,7 +449,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const totalCount = activeParticipants.length;
   const allAnswered = answeredCount === totalCount;
   const answeredPercentage = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
-  const showSafetyContinue = answeredPercentage >= 80 && !allAnswered;
+  // Safety mechanism: Show continue button when at least 1 user has answered (as per Gen 18 requirement)
+  const showSafetyContinue = answeredCount >= 1 && !allAnswered;
   const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
 
   // Level display
@@ -512,7 +513,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   // Question active phase
   if (gamePhase === 'question_active' && currentQuestion) {
     const starterName = starterParticipant?.name || 'Alguien';
-    const progressText = `${answeredCount} de ${totalCount}`;
 
     return (
       <LinearGradient
@@ -533,14 +533,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           <View style={styles.starterCard}>
-            <Text style={styles.starterLabel}>Empieza:</Text>
-            <Text style={styles.starterName}>{starterName}</Text>
-            <Text style={styles.starterInstruction}>y luego continúa hacia la derecha</Text>
-          </View>
-
-          <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>Progreso</Text>
-            <Text style={styles.progressText}>{progressText}</Text>
+            <Text style={styles.starterLabelWhite}>Empieza:</Text>
+            <Text style={styles.starterNameWhite}>{starterName}</Text>
+            <Text style={styles.starterInstructionWhite}>y luego continúa hacia la derecha</Text>
           </View>
 
           <View style={styles.checklistCard}>
@@ -570,7 +565,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </TouchableOpacity>
           )}
 
-          {userHasAnswered && !allAnswered && (
+          {userHasAnswered && !showSafetyContinue && (
             <View style={styles.waitingCard}>
               <Text style={styles.waitingText}>
                 ✓ Esperando a que todos respondan...
@@ -578,7 +573,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </View>
           )}
 
-          {allAnswered && (
+          {showSafetyContinue && (
             <TouchableOpacity
               style={[styles.continueButton, loading && styles.buttonDisabled]}
               onPress={handleContinue}
@@ -587,19 +582,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             >
               <Text style={styles.continueButtonText}>
                 {loading ? '⏳ Cargando...' : '➡️ Continuar'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {showSafetyContinue && (
-            <TouchableOpacity
-              style={[styles.safetyButton, loading && styles.buttonDisabled]}
-              onPress={handleContinue}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.safetyButtonText}>
-                {loading ? '⏳ Cargando...' : '⚠️ Continuar (80% respondió)'}
               </Text>
             </TouchableOpacity>
           )}
@@ -849,7 +831,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   starterCard: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: nospiColors.purpleMid,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -871,23 +853,21 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontStyle: 'italic',
   },
-  progressCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  progressTitle: {
+  starterLabelWhite: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
-    fontWeight: '600',
   },
-  progressText: {
-    fontSize: 32,
+  starterNameWhite: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  starterInstructionWhite: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontStyle: 'italic',
   },
   checklistCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
