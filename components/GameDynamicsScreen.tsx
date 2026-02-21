@@ -2,13 +2,10 @@
 /**
  * GameDynamicsScreen - Nospi Interactive Game Experience
  * 
- * CLEAN STABLE ARCHITECTURE:
- * - Client-side participant selection with direct table updates
- * - NO RPC functions or Edge Functions
- * - All clients sync via Realtime subscriptions
- * - No automatic phase rollback
- * - Forward-only phase transitions
- * - Professional roulette UI with 4.2s animation
+ * OPTIMIZED ARCHITECTURE:
+ * - Immediate animation start on button press
+ * - Reliable transition to question phase
+ * - Clean state management
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -67,34 +64,35 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [hasTriggeredAnimation, setHasTriggeredAnimation] = useState(false);
-  const [isTransitioningToQuestion, setIsTransitioningToQuestion] = useState(false);
   
   const wheelRotation = useRef(new Animated.Value(0)).current;
   const glowAnimation = useRef(new Animated.Value(0)).current;
   const selectedPulse = useRef(new Animated.Value(1)).current;
+  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // DECLARE startRouletteAnimation BEFORE the useEffect that uses it
-  const startRouletteAnimation = useCallback(() => {
+  // Animation function
+  const startRouletteAnimation = useCallback((targetParticipantId: string) => {
     console.log('🎯 === INICIANDO ANIMACIÓN DE LA RULETA ===');
-    setIsSpinning(true);
-    setGamePhase('show_result');
-    setHasTriggeredAnimation(true);
+    console.log('🎯 Participante objetivo:', targetParticipantId);
     
-    // Reiniciar animaciones
+    setIsSpinning(true);
+    
+    // Find the target participant index
+    const targetIndex = activeParticipants.findIndex(p => p.user_id === targetParticipantId);
+    console.log('🎯 Índice del participante:', targetIndex);
+    
+    // Reset animations
     wheelRotation.setValue(0);
     glowAnimation.setValue(0);
     
-    // Calcular rotación objetivo
-    const targetIndex = Math.floor(Math.random() * activeParticipants.length);
+    // Calculate target rotation
     const degreesPerSegment = 360 / activeParticipants.length;
-    const extraSpins = 5 + Math.floor(Math.random() * 2);
+    const extraSpins = 3; // Reduced from 5 for faster animation
     const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
     
     console.log('🎯 Rotación objetivo:', targetRotation, 'grados');
-    console.log('🎯 Participantes en la ruleta:', activeParticipants.length);
     
-    // Iniciar animación de brillo
+    // Start glow animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnimation, {
@@ -112,17 +110,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       ])
     ).start();
     
-    // Animación principal de la rueda - 4.2 segundos con desaceleración suave
+    // Main wheel animation - 3 seconds (reduced from 4.2)
     Animated.timing(wheelRotation, {
       toValue: targetRotation,
-      duration: 4200,
+      duration: 3000,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
       console.log('✅ Animación completada');
       setIsSpinning(false);
       
-      // Pulso del segmento seleccionado
+      // Pulse effect
       Animated.sequence([
         Animated.timing(selectedPulse, {
           toValue: 1.1,
@@ -136,9 +134,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         }),
       ]).start();
     });
-  }, [activeParticipants.length, wheelRotation, glowAnimation, selectedPulse]);
+  }, [activeParticipants, wheelRotation, glowAnimation, selectedPulse]);
 
-  // Realtime subscription for game state updates - MUST BE BEFORE OTHER EFFECTS
+  // Realtime subscription for game state updates
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -156,15 +154,41 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 === ACTUALIZACIÓN DEL ESTADO DEL JUEGO VIA REALTIME ===');
+          console.log('📡 === ACTUALIZACIÓN VIA REALTIME ===');
           const newEvent = payload.new as any;
           console.log('📡 Nueva fase:', newEvent.game_phase);
           console.log('📡 Participante seleccionado:', newEvent.selected_participant_id);
           
-          // Cuando game_phase se convierte en 'show_result', activar animación
-          if (newEvent.game_phase === 'show_result' && !hasTriggeredAnimation) {
-            console.log('🚀 Iniciando animación de la ruleta desde Realtime');
-            startRouletteAnimation();
+          // Sync state from database
+          if (newEvent.game_phase === 'question') {
+            console.log('📝 Sincronizando fase de pregunta');
+            setGamePhase('question');
+            
+            const participant = activeParticipants.find(
+              p => p.user_id === newEvent.selected_participant_id
+            );
+            if (participant) {
+              setSelectedParticipant(participant);
+            }
+            
+            if (newEvent.current_question) {
+              setCurrentQuestion(newEvent.current_question);
+            }
+          } else if (newEvent.game_phase === 'show_result') {
+            console.log('🎯 Sincronizando fase show_result');
+            setGamePhase('show_result');
+            
+            const participant = activeParticipants.find(
+              p => p.user_id === newEvent.selected_participant_id
+            );
+            if (participant) {
+              setSelectedParticipant(participant);
+            }
+          } else if (newEvent.game_phase === 'waiting_for_spin') {
+            console.log('⏳ Sincronizando fase waiting_for_spin');
+            setGamePhase('waiting_for_spin');
+            setSelectedParticipant(null);
+            setCurrentQuestion(null);
           }
         }
       )
@@ -176,96 +200,67 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('📡 Cancelando suscripción');
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, startRouletteAnimation, hasTriggeredAnimation]);
+  }, [appointment?.event_id, activeParticipants]);
 
-  // Sync game state from database AND trigger animation if needed
+  // Initial sync from database
   useEffect(() => {
-    console.log('=== SINCRONIZANDO ESTADO DEL JUEGO DESDE LA BASE DE DATOS ===');
+    console.log('=== SINCRONIZACIÓN INICIAL ===');
     console.log('Fase del evento:', appointment.event.game_phase);
-    console.log('isTransitioningToQuestion:', isTransitioningToQuestion);
     
     const dbPhase = appointment.event.game_phase;
     
-    // CRITICAL FIX: Don't override local state if we're transitioning to question
-    if (isTransitioningToQuestion) {
-      console.log('⏸️ Transición en progreso - ignorando actualización de sincronización');
-      return;
-    }
-    
-    // Map database phases to local game phases
     if (dbPhase === 'question') {
-      // QUESTION PHASE - Show the question screen
       console.log('📝 Fase de pregunta detectada');
       
-      // Clear the transition flag when we reach question phase
-      setIsTransitioningToQuestion(false);
-      
-      // Encontrar participante seleccionado
       const participant = activeParticipants.find(
         p => p.user_id === appointment.event.selected_participant_id
       );
       
       if (participant) {
-        console.log('✅ Participante seleccionado encontrado:', participant.name);
         setSelectedParticipant(participant);
       }
       
       if (appointment.event.current_question) {
-        console.log('✅ Pregunta actual:', appointment.event.current_question);
         setCurrentQuestion(appointment.event.current_question);
       }
       
       setGamePhase('question');
     } else if (dbPhase === 'show_result') {
-      // SHOW_RESULT PHASE - Show the roulette animation
       console.log('🎯 Fase show_result detectada');
       
-      // Clear the transition flag - we're back to show_result
-      setIsTransitioningToQuestion(false);
-      
-      // Encontrar participante seleccionado
       const participant = activeParticipants.find(
         p => p.user_id === appointment.event.selected_participant_id
       );
       
       if (participant) {
-        console.log('✅ Participante seleccionado encontrado:', participant.name);
         setSelectedParticipant(participant);
       }
       
       setGamePhase('show_result');
-      
-      // Trigger animation if we're in show_result and haven't animated yet
-      if (!hasTriggeredAnimation && !isSpinning) {
-        console.log('🚀 Iniciando animación de la ruleta');
-        startRouletteAnimation();
-      }
     } else {
-      // For any other phase (intro, ready, waiting_for_spin, roulette, etc.), show the spin button
       console.log('⏳ Fase waiting_for_spin o inicial');
-      
-      // Clear the transition flag
-      setIsTransitioningToQuestion(false);
-      
       setGamePhase('waiting_for_spin');
     }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants, hasTriggeredAnimation, isSpinning, startRouletteAnimation, appointment.event_id, isTransitioningToQuestion]);
+  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants]);
 
-  // Auto-transition to question phase after animation completes
+  // Auto-transition to question after animation completes
   useEffect(() => {
-    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant && !isTransitioningToQuestion) {
-      console.log('=== ANIMACIÓN COMPLETADA - PREPARANDO TRANSICIÓN A PREGUNTA ===');
+    // Clear any existing timer
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+
+    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant) {
+      console.log('=== PREPARANDO TRANSICIÓN A PREGUNTA ===');
       console.log('Participante seleccionado:', selectedParticipant.name);
       
-      // Set flag to prevent multiple transitions AND prevent sync from overriding
-      setIsTransitioningToQuestion(true);
-      
-      // Wait 2 seconds after animation completes to show the result, then transition to question
-      const transitionTimer = setTimeout(async () => {
+      // Wait 1.5 seconds after animation (reduced from 2 seconds)
+      transitionTimerRef.current = setTimeout(async () => {
         console.log('🔄 Transicionando a fase de pregunta...');
         
         try {
-          // Generate a random question (you can customize this logic)
+          // Generate random question
           const questions = [
             '¿te gusta bailar?',
             '¿cuál es tu mayor sueño?',
@@ -280,14 +275,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           ];
           
           const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
-          
           console.log('📝 Pregunta seleccionada:', randomQuestion);
           
-          // Update local state FIRST for immediate UI response
-          setCurrentQuestion(randomQuestion);
-          setGamePhase('question');
-          
-          // Then update the database
+          // Update database
           const { error: updateError } = await supabase
             .from('events')
             .update({
@@ -301,54 +291,52 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           if (updateError) {
             console.error('❌ Error al actualizar a fase de pregunta:', updateError);
             Alert.alert('Error', 'No se pudo pasar a la pregunta.');
-            // Revert local state on error
-            setIsTransitioningToQuestion(false);
-            setGamePhase('show_result');
             return;
           }
           
-          console.log('✅ Transición a pregunta exitosa en la base de datos');
-          // Clear transition flag after successful DB update
-          setIsTransitioningToQuestion(false);
+          console.log('✅ Transición a pregunta exitosa');
+          
+          // Update local state (Realtime will also sync this)
+          setCurrentQuestion(randomQuestion);
+          setGamePhase('question');
         } catch (error: any) {
-          console.error('❌ Error inesperado al transicionar a pregunta:', error);
+          console.error('❌ Error inesperado al transicionar:', error);
           Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
-          setIsTransitioningToQuestion(false);
-          setGamePhase('show_result');
         }
-      }, 2000); // 2 seconds delay after animation completes
-      
-      return () => clearTimeout(transitionTimer);
+      }, 1500);
     }
-  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel, isTransitioningToQuestion]);
+
+    return () => {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+    };
+  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
 
   const handleStartRoulette = useCallback(async () => {
     console.log('🎰 === USUARIO PRESIONÓ GIRAR RULETA ===');
-    console.log('🎰 Estado actual - isSpinning:', isSpinning);
-    console.log('🎰 Estado actual - gamePhase:', gamePhase);
     console.log('🎰 Participantes activos:', activeParticipants.length);
     
     if (!appointment?.event_id || activeParticipants.length === 0) {
-      console.warn('⚠️ No se puede iniciar la ruleta: condiciones no cumplidas');
-      console.log('event_id:', appointment?.event_id);
-      console.log('activeParticipants.length:', activeParticipants.length);
+      console.warn('⚠️ No se puede iniciar la ruleta');
       Alert.alert('Error', 'No hay participantes para girar la ruleta.');
       return;
     }
 
     if (isSpinning) {
-      console.log('⚠️ Ya está girando, ignorando clic');
+      console.log('⚠️ Ya está girando');
       return;
     }
 
     setLoadingMessage('Iniciando ruleta...');
     
     try {
-      // 1. Get current event state
+      // Get current event state
       console.log('📊 Obteniendo estado actual del evento...');
       const { data: eventData, error: fetchError } = await supabase
         .from('events')
-        .select('level_queue, current_turn_index, game_phase')
+        .select('level_queue, current_turn_index')
         .eq('id', appointment.event_id)
         .single();
 
@@ -360,10 +348,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       console.log('✅ Estado actual del evento:', eventData);
-      console.log('📊 Current game_phase:', eventData.game_phase);
-      console.log('📊 Level_queue length:', eventData.level_queue?.length || 0);
 
-      // Lógica del lado del cliente para seleccionar el siguiente participante
       let levelQueue = eventData.level_queue || [];
       let currentTurnIndex = eventData.current_turn_index || 0;
 
@@ -372,31 +357,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('🔄 === INICIALIZANDO LEVEL_QUEUE ===');
         setLoadingMessage('Preparando participantes...');
         
-        // Obtener participantes confirmados
         const { data: participants, error: participantsError } = await supabase
           .from('event_participants')
           .select('user_id')
           .eq('event_id', appointment.event_id)
           .eq('confirmed', true);
 
-        if (participantsError) {
-          console.error('❌ Error al obtener participantes confirmados:', participantsError);
-          Alert.alert('Error', 'No se pudieron obtener los participantes.');
+        if (participantsError || !participants || participants.length === 0) {
+          console.error('❌ Error al obtener participantes');
+          Alert.alert('Error', 'No hay participantes confirmados.');
           setLoadingMessage('');
           return;
         }
 
-        if (!participants || participants.length === 0) {
-          console.error('❌ Error: No hay participantes confirmados para inicializar la cola');
-          Alert.alert('Error', 'No hay participantes confirmados para la ruleta.');
-          setLoadingMessage('');
-          return;
-        }
-
-        // Extraer los user_ids
         const participantIds = participants.map(p => p.user_id);
         
-        // Mezclar los IDs (algoritmo Fisher-Yates)
+        // Shuffle (Fisher-Yates)
         for (let i = participantIds.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
@@ -405,10 +381,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         levelQueue = participantIds;
         currentTurnIndex = 0;
 
-        console.log('✅ Cola de participantes inicializada:', levelQueue);
-        console.log('📊 Level_queue length after init:', levelQueue.length);
+        console.log('✅ Cola inicializada:', levelQueue);
 
-        // Actualizar el evento con la nueva level_queue
         const { error: updateQueueError } = await supabase
           .from('events')
           .update({
@@ -424,44 +398,37 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           setLoadingMessage('');
           return;
         }
-
-        console.log('✅ Level_queue guardada en la base de datos');
       }
 
-      // Verificar que la cola no esté vacía después de la inicialización
       if (levelQueue.length === 0) {
-        console.error('❌ Error: La cola de participantes está vacía después del intento de inicialización');
-        Alert.alert('Error', 'No hay participantes en la cola para seleccionar.');
+        console.error('❌ Cola vacía');
+        Alert.alert('Error', 'No hay participantes en la cola.');
         setLoadingMessage('');
         return;
       }
 
       // Select next participant
       const nextParticipantId = levelQueue[currentTurnIndex];
-      if (!nextParticipantId) {
-        console.error('❌ Error: No se pudo encontrar un participante en el índice actual');
-        Alert.alert('Error', 'No se pudo seleccionar un participante.');
-        setLoadingMessage('');
-        return;
-      }
-
-      // Calcular el nuevo índice (loop back al inicio si es necesario)
       const newIndex = (currentTurnIndex + 1) % levelQueue.length;
 
       console.log('✅ Seleccionando participante:', nextParticipantId);
-      console.log('✅ Nuevo índice de turno:', newIndex);
+      console.log('✅ Nuevo índice:', newIndex);
 
-      // Reset animation flag before updating database
-      console.log('🔄 Reseteando flags de animación y transición');
-      setHasTriggeredAnimation(false);
-      setIsTransitioningToQuestion(false);
+      // Find participant object
+      const selectedPart = activeParticipants.find(p => p.user_id === nextParticipantId);
+      if (selectedPart) {
+        setSelectedParticipant(selectedPart);
+      }
 
-      // Update event to show_result phase
-      setLoadingMessage('Girando la ruleta...');
-      
-      console.log('📤 Actualizando evento a show_result...');
-      
-      const { data, error: updateError } = await supabase
+      // START ANIMATION IMMEDIATELY (before database update)
+      console.log('🚀 Iniciando animación INMEDIATAMENTE');
+      setGamePhase('show_result');
+      startRouletteAnimation(nextParticipantId);
+      setLoadingMessage('');
+
+      // Update database in background
+      console.log('📤 Actualizando base de datos...');
+      const { error: updateError } = await supabase
         .from('events')
         .update({
           selected_participant_id: nextParticipantId,
@@ -469,37 +436,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           game_phase: 'show_result',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', appointment.event_id)
-        .select();
+        .eq('id', appointment.event_id);
 
       if (updateError) {
-        console.error('❌ Error al actualizar el evento para el giro de la ruleta:', updateError);
-        Alert.alert('Error', 'No se pudo actualizar el evento para la ruleta.');
-        setLoadingMessage('');
-        return;
+        console.error('❌ Error al actualizar evento:', updateError);
+        // Animation already started, so just log the error
+      } else {
+        console.log('✅ Base de datos actualizada');
       }
-
-      // Check if update was successful
-      if (!data || data.length === 0) {
-        console.error('❌ NO ROWS UPDATED - La actualización no afectó ninguna fila');
-        Alert.alert('Error', 'No se pudo iniciar la ruleta. Inténtalo de nuevo.');
-        setLoadingMessage('');
-        return;
-      }
-
-      console.log('✅ Evento actualizado a show_result. Rows affected:', data.length);
-      console.log('✅ Nueva fase:', data[0].game_phase);
-      console.log('✅ Participante seleccionado:', data[0].selected_participant_id);
-      
-      // La animación se activará mediante la suscripción Realtime
-      // Clear loading message after a short delay
-      setTimeout(() => setLoadingMessage(''), 500);
     } catch (error: any) {
-      console.error('❌ Error inesperado al iniciar la ruleta:', error);
+      console.error('❌ Error inesperado:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
       setLoadingMessage('');
     }
-  }, [appointment?.event_id, isSpinning, activeParticipants.length, gamePhase]);
+  }, [appointment?.event_id, isSpinning, activeParticipants, startRouletteAnimation]);
 
   const handleContinueGame = useCallback(async () => {
     console.log('🎮 === CONTINUANDO EL JUEGO ===');
@@ -510,7 +460,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
 
     try {
-      // Reset to waiting_for_spin to allow another spin
       const { error } = await supabase
         .from('events')
         .update({
@@ -522,19 +471,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error al continuar el juego:', error);
+        console.error('❌ Error al continuar:', error);
         Alert.alert('Error', 'No se pudo continuar el juego.');
         return;
       }
 
-      console.log('✅ Juego continuado - volviendo a waiting_for_spin');
+      console.log('✅ Juego continuado');
       setGamePhase('waiting_for_spin');
       setCurrentQuestion(null);
       setSelectedParticipant(null);
-      setHasTriggeredAnimation(false);
-      setIsTransitioningToQuestion(false);
     } catch (error: any) {
-      console.error('❌ Error inesperado al continuar:', error);
+      console.error('❌ Error inesperado:', error);
       Alert.alert('Error', error.message || 'Ocurrió un error.');
     }
   }, [appointment?.event_id]);
@@ -555,21 +502,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <View style={styles.wheelContainer}>
-        {/* Single modern yellow/gold triangular pointer pointing downward - ELEGANT */}
+        {/* Pointer */}
         <View style={styles.indicatorContainer}>
-          {/* Enhanced shadow layer for depth */}
           <View style={styles.indicatorShadow} />
-          
-          {/* Main triangle with yellow/gold gradient */}
           <View style={styles.triangleContainer}>
             <View style={styles.triangleGradient} />
-            
-            {/* Enhanced glass highlight effect for sophistication */}
             <View style={styles.triangleHighlight} />
           </View>
         </View>
 
-        {/* Animated glow during spin */}
+        {/* Glow during spin */}
         {isSpinning && (
           <Animated.View
             style={[
@@ -611,7 +553,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 >
-                  {/* Profile photo */}
                   {participant.profile_photo_url ? (
                     <Image
                       source={{ uri: participant.profile_photo_url }}
@@ -625,7 +566,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                     </View>
                   )}
                   
-                  {/* Name - dynamic layout based on count */}
                   {participantCount <= 6 && (
                     <Text style={styles.participantName} numberOfLines={1}>
                       {participant.name}
@@ -641,7 +581,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             );
           })}
 
-          {/* Center circle with metallic gold ring */}
+          {/* Center circle */}
           <View style={styles.centerCircle}>
             <LinearGradient
               colors={['#FFD700', '#FFA500', '#FFD700']}
@@ -949,7 +889,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4a2c6e',
   },
-  // Single modern yellow/gold triangular pointer pointing downward - ELEGANT VERSION
   indicatorContainer: {
     position: 'absolute',
     top: -18,
