@@ -296,7 +296,7 @@ export default function InteraccionScreen() {
           location_confirmed,
           experience_started,
           presented,
-          event:events (
+          event:events!inner (
             id,
             type,
             date,
@@ -326,25 +326,43 @@ export default function InteraccionScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading appointment:', error);
+        console.error('❌ Error loading appointment:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         setLoading(false);
         return;
       }
       
+      console.log('✅ Query successful, raw data:', JSON.stringify(data, null, 2));
+      
       if (!data || data.length === 0) {
+        console.log('❌ No confirmed appointments found');
+        console.log('❌ Query filters: status=confirmada, payment_status=completed');
         setAppointment(null);
         setLoading(false);
         return;
       }
+      
+      console.log('✅ Found', data.length, 'confirmed appointment(s)');
 
       const now = new Date();
+      
+      // Find the most recent confirmed appointment (today or future)
       const upcomingAppointment = data.find(apt => {
         if (!apt.event?.start_time) return false;
         const eventDate = new Date(apt.event.start_time);
-        return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // Check if event is today or in the future (compare dates only, not time)
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDayStart >= todayStart;
       });
 
+      // If no upcoming appointment found, use the most recent one
       const appointmentData = upcomingAppointment || data[0];
+      
+      console.log('📅 Appointment selection:');
+      console.log('📅 Total confirmed appointments:', data.length);
+      console.log('📅 Selected appointment:', appointmentData?.id);
+      console.log('📅 Event date:', appointmentData?.event?.start_time);
       console.log('Appointment loaded:', appointmentData.id);
       console.log('Game phase:', appointmentData.event?.game_phase);
       
