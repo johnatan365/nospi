@@ -4,7 +4,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
 import "react-native-reanimated";
 import { useFonts } from "expo-font";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   DarkTheme,
@@ -37,49 +37,73 @@ export default function RootLayout() {
   const { isConnected } = useNetworkState();
   const listenerRef = useRef<any>(null);
   const router = useRouter();
+  
+  // CRITICAL: State to control app rendering until OAuth code exchange completes
+  const [initializing, setInitializing] = useState(true);
 
-  // CRITICAL: Web-specific OAuth code exchange handler
+  // CRITICAL: Web-specific OAuth code exchange handler - RUNS BEFORE APP RENDERS
   useEffect(() => {
     if (Platform.OS === 'web') {
-      console.log('Web: Checking for OAuth code in URL');
+      console.log('Web: Checking for OAuth code in URL before rendering app');
       
       const handleWebOAuthRedirect = async () => {
         // Check if we're on the web platform
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined') {
+          setInitializing(false);
+          return;
+        }
         
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
 
         if (code) {
-          console.log('Web: Found OAuth code in URL, exchanging for session...');
+          console.log('Web: Found OAuth code in URL, exchanging for session BEFORE rendering...');
           
           try {
             const { data, error } = await supabase.auth.exchangeCodeForSession(code);
             
             if (error) {
               console.error('Web: Error exchanging code for session:', error);
+              // Clean URL even on error
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setInitializing(false);
             } else {
               console.log('Web: Code exchanged successfully, session created');
               
-              // Clean the URL to remove the code parameter
+              // CRITICAL: Clean the URL to remove the code parameter
               window.history.replaceState({}, document.title, window.location.pathname);
               
               // Check session and navigate
               const { data: sessionData } = await supabase.auth.getSession();
               if (sessionData.session) {
-                console.log('Web: Session found, navigating to authenticated area');
-                router.replace('/(tabs)/events');
+                console.log('Web: Session found, user:', sessionData.session.user.id);
+                // Session exists, app will render and auth listeners will handle navigation
               }
+              
+              // CRITICAL: Allow app to render now that exchange is complete
+              setInitializing(false);
             }
           } catch (e) {
             console.error('Web: Exception during code exchange:', e);
+            // Clean URL even on exception
+            if (typeof window !== 'undefined') {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            setInitializing(false);
           }
+        } else {
+          // No code in URL, proceed normally
+          console.log('Web: No OAuth code in URL, proceeding normally');
+          setInitializing(false);
         }
       };
 
       handleWebOAuthRedirect();
+    } else {
+      // Mobile: No need to block rendering
+      setInitializing(false);
     }
-  }, [router]);
+  }, []);
 
   // CRITICAL: Mobile-specific deep link handler for OAuth callbacks
   useEffect(() => {
@@ -143,12 +167,14 @@ export default function RootLayout() {
 
   useEffect(() => {
     console.log('Root layout mounted');
-    if (loaded) {
+    if (loaded && !initializing) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, initializing]);
 
-  if (!loaded) {
+  // CRITICAL: Don't render app until fonts are loaded AND OAuth exchange is complete
+  if (!loaded || initializing) {
+    console.log('RootLayout: Waiting for initialization...', { loaded, initializing });
     return null;
   }
 
