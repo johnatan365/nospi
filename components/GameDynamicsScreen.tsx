@@ -256,9 +256,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, activeParticipants]);
 
   const handleAnswered = useCallback(async () => {
-    console.log('✅ User marked as answered');
+    console.log('✅ === USER MARKING AS ANSWERED ===');
+    const actionStartTime = performance.now();
+    console.log('⏱️ Button pressed at:', actionStartTime);
     
-    if (!appointment?.event_id || !currentUserId) return;
+    if (!appointment?.event_id || !currentUserId) {
+      console.warn('⚠️ Cannot mark as answered - missing event_id or user_id');
+      return;
+    }
     
     // Check if user already answered
     if (answeredUsers.includes(currentUserId)) {
@@ -268,7 +273,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
+    // OPTIMISTIC UI UPDATE - Immediately update local state
+    console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
+    setAnsweredUsers(newAnsweredUsers);
+    
+    const uiUpdateTime = performance.now();
+    console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
+    
+    // Now perform database update asynchronously
     try {
+      console.log('💾 Starting database update...');
+      const dbUpdateStartTime = performance.now();
+      
       const { error } = await supabase
         .from('events')
         .update({
@@ -277,14 +293,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         })
         .eq('id', appointment.event_id);
 
+      const dbUpdateEndTime = performance.now();
+      console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+      console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
+
       if (error) {
         console.error('❌ Error updating answered users:', error);
+        // Revert optimistic update on error
+        setAnsweredUsers(answeredUsers);
         return;
       }
 
-      console.log('✅ User marked as answered');
+      console.log('✅ User marked as answered successfully');
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // Revert optimistic update on error
+      setAnsweredUsers(answeredUsers);
     }
   }, [appointment, currentUserId, answeredUsers]);
 
@@ -520,7 +544,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           <View style={styles.checklistCard}>
-            <Text style={styles.checklistTitle}>Participantes</Text>
+            <Text style={styles.checklistTitle}>Ya contestaron</Text>
             {activeParticipants.map((participant, index) => {
               const hasAnswered = answeredUsers.includes(participant.user_id);
               const displayName = participant.name;
