@@ -22,6 +22,11 @@ interface MatchSelectionScreenProps {
   matchDeadlineAt: string | null;
 }
 
+interface ProcessMatchVoteResult {
+  match: boolean;
+  matched_user_id: string | null;
+}
+
 export default function MatchSelectionScreen({
   eventId,
   currentLevel,
@@ -170,12 +175,12 @@ export default function MatchSelectionScreen({
     };
   }, [eventId, currentLevel, participants]);
 
-  // Subscribe to confirmed matches
+  // Subscribe to confirmed matches (realtime)
   useEffect(() => {
-    console.log('📡 Subscribing to match confirmations');
+    console.log('📡 Subscribing to match confirmations for event:', eventId, 'level:', currentLevel);
     
     const channel = supabase
-      .channel(`matches_${eventId}_${currentLevel}`)
+      .channel(`matches_${eventId}_${currentLevel}_${currentUserId}`)
       .on(
         'postgres_changes',
         {
@@ -188,8 +193,9 @@ export default function MatchSelectionScreen({
           console.log('💜 Match confirmed event received:', payload);
           const newMatch = payload.new as any;
           
-          // Check if current user is part of this match
-          if (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId) {
+          // Check if current user is part of this match AND it's for the current level
+          if (newMatch.level === currentLevel && 
+              (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId)) {
             const otherUserId = newMatch.user1_id === currentUserId ? newMatch.user2_id : newMatch.user1_id;
             
             // Get the other user's name
@@ -248,78 +254,79 @@ export default function MatchSelectionScreen({
       return;
     }
 
-    console.log('💘 === CONFIRMING MATCH SELECTION ===');
+    console.log('💘 === CONFIRMING MATCH SELECTION (ATOMIC RPC) ===');
     setLoading(true);
 
     try {
       const selectedUserIdValue = selectedUserId === 'none' ? null : selectedUserId;
       
-      // 1. Insert vote
-      console.log('💾 Inserting vote...');
-      const { error: insertError } = await supabase
-        .from('event_matches_votes')
-        .insert({
-          event_id: eventId,
-          level: currentLevel,
-          from_user_id: currentUserId,
-          selected_user_id: selectedUserIdValue,
-        });
+      console.log('🔧 Calling process_match_vote RPC with:', {
+        p_event_id: eventId,
+        p_level: currentLevel,
+        p_from_user_id: currentUserId,
+        p_selected_user_id: selectedUserIdValue,
+      });
 
-      if (insertError) {
-        console.error('❌ Error inserting vote:', insertError);
+      // Call the atomic RPC function
+      const { data, error } = await supabase.rpc('process_match_vote', {
+        p_event_id: eventId,
+        p_level: currentLevel,
+        p_from_user_id: currentUserId,
+        p_selected_user_id: selectedUserIdValue,
+      });
+
+      if (error) {
+        console.error('❌ Error calling process_match_vote RPC:', error);
         setLoading(false);
         return;
       }
 
-      console.log('✅ Vote inserted successfully');
+      const result = data as ProcessMatchVoteResult;
+      console.log('✅ RPC result:', result);
+
       setHasVoted(true);
 
-      // 2. Check for reciprocal vote if a user was selected
-      if (selectedUserIdValue) {
-        console.log('🔍 Checking for reciprocal vote...');
+      // If match was found immediately, show modal
+      if (result.match && result.matched_user_id) {
+        console.log('💜 Immediate match detected with:', result.matched_user_id);
         
-        const { data: reciprocalData } = await supabase
-          .from('event_matches_votes')
-          .select('*')
-          .eq('event_id', eventId)
-          .eq('level', currentLevel)
-          .eq('from_user_id', selectedUserIdValue)
-          .eq('selected_user_id', currentUserId)
+        // Get the matched user's name
+        const { data: userData } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', result.matched_user_id)
           .single();
-
-        if (reciprocalData) {
-          console.log('💜 Reciprocal vote found! Creating confirmed match...');
-          
-          // 3. Create confirmed match (ensure consistent user ID order)
-          const [user1, user2] = [currentUserId, selectedUserIdValue].sort();
-          
-          const { error: confirmError } = await supabase
-            .from('event_matches_confirmed')
-            .insert({
-              event_id: eventId,
-              level: currentLevel,
-              user1_id: user1,
-              user2_id: user2,
-            });
-
-          if (confirmError) {
-            console.error('❌ Error confirming match:', confirmError);
-          } else {
-            console.log('✅ Match confirmed successfully');
-            // The realtime subscription will handle showing the modal
-          }
-        } else {
-          console.log('⏳ No reciprocal vote yet - waiting...');
-        }
+        
+        const matchedName = userData?.name || 'Alguien';
+        setMatchedUserName(matchedName);
+        setShowMatchModal(true);
+        
+        // Animate the match modal
+        Animated.sequence([
+          Animated.timing(matchAnimation, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.elastic(1.2),
+            useNativeDriver: true,
+          }),
+          Animated.delay(3000),
+          Animated.timing(matchAnimation, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowMatchModal(false);
+        });
       } else {
-        console.log('⏭️ User selected "Ninguno" - no match check needed');
+        console.log('⏳ No immediate match - waiting for reciprocal vote or user selected "Ninguno"');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedUserId, eventId, currentLevel, currentUserId]);
+  }, [selectedUserId, eventId, currentLevel, currentUserId, matchAnimation]);
 
   const handleContinue = useCallback(() => {
     console.log('➡️ Continuing to next phase');
