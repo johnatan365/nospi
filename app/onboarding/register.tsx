@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -151,11 +151,11 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use AuthSession.makeRedirectUri for proper PKCE flow
-      const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'nospi',
-        path: 'auth',
-      });
+      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
+      const redirectUri = Platform.OS === 'web' 
+        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
+        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
+      
       console.log('RegisterScreen: Apple OAuth redirect URI:', redirectUri);
 
       // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
@@ -223,11 +223,11 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use AuthSession.makeRedirectUri for proper PKCE flow
-      const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'nospi',
-        path: 'auth',
-      });
+      // CRITICAL FIX: Use window.location.origin for web, scheme root for mobile
+      const redirectUri = Platform.OS === 'web' 
+        ? window.location.origin // Redirect to https://nospi.vercel.app/ (NO /auth)
+        : AuthSession.makeRedirectUri({ scheme: 'nospi' }); // Redirect to nospi:// (NO /auth)
+      
       console.log('RegisterScreen: Google OAuth redirect URI:', redirectUri);
 
       // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
