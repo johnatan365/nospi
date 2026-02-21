@@ -182,24 +182,41 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
+    const transitionStartTime = performance.now();
+    console.log('⏱️ Button pressed at:', transitionStartTime);
     
     if (!appointment?.event_id || activeParticipants.length < 2) {
       console.warn('⚠️ Cannot start - need at least 2 participants');
       return;
     }
 
+    // OPTIMISTIC UI UPDATE - Immediately update local state
     setLoading(true);
-
+    
+    // Randomly select starter
+    const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+    const starterUserId = activeParticipants[randomIndex].user_id;
+    const starter = activeParticipants[randomIndex];
+    
+    // Get first question
+    const firstQuestion = QUESTIONS.divertido[0];
+    
+    // IMMEDIATELY transition UI (optimistic update)
+    setGamePhase('question_active');
+    setCurrentLevel('divertido');
+    setCurrentQuestionIndex(0);
+    setAnsweredUsers([]);
+    setCurrentQuestion(firstQuestion);
+    setStarterParticipant(starter);
+    
+    const uiTransitionTime = performance.now();
+    console.log('⚡ UI transition time:', (uiTransitionTime - transitionStartTime).toFixed(2), 'ms');
+    
+    // Now perform database update asynchronously (don't block UI)
     try {
-      // Randomly select starter
-      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-      const starterUserId = activeParticipants[randomIndex].user_id;
+      console.log('💾 Starting database update...');
+      const dbUpdateStartTime = performance.now();
       
-      // Get first question
-      const firstQuestion = QUESTIONS.divertido[0];
-      
-      console.log('✅ Starting with:', starterUserId, 'Question:', firstQuestion);
-
       const { error } = await supabase
         .from('events')
         .update({
@@ -213,14 +230,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         })
         .eq('id', appointment.event_id);
 
+      const dbUpdateEndTime = performance.now();
+      console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+      console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - transitionStartTime).toFixed(2), 'ms');
+
       if (error) {
         console.error('❌ Error starting dynamic:', error);
+        // Revert optimistic update on error
+        setGamePhase('ready');
+        setCurrentQuestion(null);
+        setStarterParticipant(null);
         return;
       }
 
       console.log('✅ Dynamic started successfully');
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // Revert optimistic update on error
+      setGamePhase('ready');
+      setCurrentQuestion(null);
+      setStarterParticipant(null);
     } finally {
       setLoading(false);
     }
@@ -417,17 +446,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
-          <Text style={styles.subtitleWhite}>Todos responden las mismas preguntas</Text>
 
           <View style={styles.infoCard}>
-            <Text style={styles.infoIcon}>ℹ️</Text>
-            <Text style={styles.infoTitle}>Cómo funciona</Text>
+            <Text style={styles.infoIcon}>✨</Text>
+            <Text style={styles.infoTitle}>¡Comienza la experiencia!</Text>
             <Text style={styles.infoText}>
-              • Todos ven la misma pregunta{'\n'}
-              • El sistema elige quién empieza{'\n'}
-              • Continúan en sentido horario{'\n'}
-              • Cada uno presiona "Ya contesté"{'\n'}
-              • Cuando todos responden, siguiente pregunta
+              Responden juntos, se escuchan y se conocen mejor.{'\n'}
+              El sistema elegirá quién rompe el hielo 😉{'\n\n'}
+              Cuando todos hayan participado, la siguiente pregunta aparecerá automáticamente.
             </Text>
           </View>
 
@@ -485,7 +511,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <View style={styles.starterCard}>
             <Text style={styles.starterLabel}>Empieza:</Text>
             <Text style={styles.starterName}>{starterName}</Text>
-            <Text style={styles.starterInstruction}>Continúa en sentido horario</Text>
+            <Text style={styles.starterInstruction}>y luego continúa hacia la derecha</Text>
           </View>
 
           <View style={styles.progressCard}>
@@ -672,7 +698,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
   },
@@ -695,16 +721,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   infoTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
   },
   infoText: {
     fontSize: 16,
     color: '#333',
     lineHeight: 24,
+    textAlign: 'center',
   },
   participantsCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
