@@ -4,9 +4,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'question_active' | 'level_transition' | 'finished';
+type GamePhase = 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished';
 
 interface Participant {
   id: string;
@@ -154,6 +155,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const starter = activeParticipants.find(p => p.user_id === data.current_question_starter_id);
           setStarterParticipant(starter || null);
         }
+      } else if (data.game_phase === 'match_selection') {
+        setGamePhase('match_selection');
+        setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
       } else if (data.game_phase === 'level_transition') {
         setGamePhase('level_transition');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
@@ -206,6 +210,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               const starter = activeParticipants.find(p => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
+          } else if (newEvent.game_phase === 'match_selection') {
+            setGamePhase('match_selection');
+            setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'level_transition') {
             setGamePhase('level_transition');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -459,11 +466,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('🔓 Optimistic update flag CLEARED (continue)');
         }, 1500);
       } else {
-        // Level finished - transition
-        console.log('⚡ Optimistically transitioning to level_transition');
+        // Level finished - transition to match selection
+        console.log('⚡ Optimistically transitioning to match_selection');
         
         // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
-        setGamePhase('level_transition');
+        setGamePhase('match_selection');
         
         const uiUpdateTime = performance.now();
         console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
@@ -475,7 +482,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const { error } = await supabase
           .from('events')
           .update({
-            game_phase: 'level_transition',
+            game_phase: 'match_selection',
             updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
@@ -485,19 +492,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
 
         if (error) {
-          console.error('❌ Error transitioning level:', error);
+          console.error('❌ Error transitioning to match selection:', error);
           // 4. REVERT: Revert optimistic update on failure
           isOptimisticUpdateRef.current = false;
           setGamePhase(previousGamePhase);
           return;
         }
 
-        console.log('✅ Level finished - transitioning');
+        console.log('✅ Level finished - transitioning to match selection');
         
         // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
         setTimeout(() => {
           isOptimisticUpdateRef.current = false;
-          console.log('🔓 Optimistic update flag CLEARED (level transition)');
+          console.log('🔓 Optimistic update flag CLEARED (match selection transition)');
         }, 1500);
       }
     } catch (error) {
@@ -514,8 +521,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers, currentQuestion, starterParticipant, gamePhase]);
 
-  const handleContinueToNextLevel = useCallback(async () => {
-    console.log('⬆️ Continuing to next level');
+  const handleMatchComplete = useCallback(async () => {
+    console.log('💘 === MATCH SELECTION COMPLETE ===');
     
     if (!appointment?.event_id) return;
 
@@ -527,6 +534,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const nextLevel = levels[currentLevelIndex + 1];
 
       if (nextLevel) {
+        // Continue to next level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const firstQuestion = QUESTIONS[nextLevel][0];
@@ -550,6 +558,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         }
 
         console.log('✅ Started next level:', nextLevel);
+      } else {
+        // All levels complete - end game
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'finished',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error ending game:', error);
+          return;
+        }
+
+        console.log('✅ Game ended');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -558,35 +582,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, activeParticipants]);
 
-  const handleEndGame = useCallback(async () => {
-    console.log('🏁 Ending game');
-    
-    if (!appointment?.event_id) return;
-
-    setLoading(true);
-
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({
-          game_phase: 'finished',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error ending game:', error);
-        return;
-      }
-
-      console.log('✅ Game ended');
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointment]);
-
   const answeredCount = answeredUsers.length;
   const totalCount = activeParticipants.length;
   const allAnswered = answeredCount === totalCount && totalCount > 0;
@@ -594,6 +589,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+
+  // Show match selection screen
+  if (gamePhase === 'match_selection' && currentUserId) {
+    return (
+      <MatchSelectionScreen
+        eventId={appointment.event_id}
+        currentLevel={currentLevel}
+        currentUserId={currentUserId}
+        participants={activeParticipants}
+        onMatchComplete={handleMatchComplete}
+      />
+    );
+  }
 
   if (gamePhase === 'ready') {
     const canStart = activeParticipants.length >= 2;
@@ -721,11 +729,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }
 
   if (gamePhase === 'level_transition') {
-    const levels: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
-    const currentLevelIndex = levels.indexOf(currentLevel);
-    const hasNextLevel = currentLevelIndex < levels.length - 1;
-    const nextLevelName = hasNextLevel ? (levels[currentLevelIndex + 1] === 'sensual' ? 'Sensual' : 'Atrevido') : '';
-
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
@@ -743,48 +746,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               Han completado el nivel {levelName}
             </Text>
           </View>
-
-          {hasNextLevel ? (
-            <>
-              <View style={styles.nextLevelCard}>
-                <Text style={styles.nextLevelTitle}>Siguiente nivel:</Text>
-                <Text style={styles.nextLevelName}>{nextLevelName}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.continueButton, loading && styles.buttonDisabled]}
-                onPress={handleContinueToNextLevel}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.continueButtonText}>
-                  {loading ? '⏳ Cargando...' : '⬆️ Continuar al siguiente nivel'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.endButton, loading && styles.buttonDisabled]}
-                onPress={handleEndGame}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.endButtonText}>
-                  {loading ? '⏳ Cargando...' : '🏁 Terminar aquí'}
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={[styles.continueButton, loading && styles.buttonDisabled]}
-              onPress={handleEndGame}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.continueButtonText}>
-                {loading ? '⏳ Cargando...' : '🏁 Finalizar'}
-              </Text>
-            </TouchableOpacity>
-          )}
         </ScrollView>
       </LinearGradient>
     );
@@ -1035,35 +996,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: nospiColors.purpleDark,
     textAlign: 'center',
-  },
-  nextLevelCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  nextLevelTitle: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  nextLevelName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-  },
-  endButton: {
-    backgroundColor: '#EF4444',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-  },
-  endButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
   },
   finishedCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
