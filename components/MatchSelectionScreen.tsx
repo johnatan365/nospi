@@ -56,6 +56,7 @@ export default function MatchSelectionScreen({
   const matchTextAnimation = useRef(new Animated.Value(0)).current;
   const isOptimisticUpdateRef = useRef(false);
   const hasTriggeredHapticRef = useRef(false);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch server time on mount
   useEffect(() => {
@@ -74,40 +75,12 @@ export default function MatchSelectionScreen({
     fetchServerTime();
   }, []);
 
-  // Countdown timer based on server time and deadline
-  useEffect(() => {
-    if (!matchDeadlineAt) return;
-
-    const updateCountdown = () => {
-      const now = new Date(serverTime.getTime() + (Date.now() - serverTime.getTime()));
-      const deadlineMs = new Date(matchDeadlineAt).getTime();
-      const nowMs = now.getTime();
-      const remaining = Math.max(0, deadlineMs - nowMs);
-
-      const minutes = Math.floor(remaining / (1000 * 60));
-      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-
-      setRemainingMinutes(minutes);
-      setRemainingSeconds(seconds);
-
-      if (remaining === 0) {
-        setDeadlineReached(true);
-        console.log('⏰ Deadline reached!');
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [matchDeadlineAt, serverTime]);
-
   // Check if user has already voted for this level
   useEffect(() => {
     const checkExistingVote = async () => {
       try {
         const { data, error } = await supabase
-          .from('event_match_votes')
+          .from('event_matches_votes')
           .select('*')
           .eq('event_id', eventId)
           .eq('level', currentLevel)
@@ -127,36 +100,43 @@ export default function MatchSelectionScreen({
   }, [eventId, currentLevel, currentUserId]);
 
   // Check if all participants have voted
-  useEffect(() => {
-    const checkAllVotes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('event_match_votes')
-          .select('from_user_id')
-          .eq('event_id', eventId)
-          .eq('level', currentLevel);
+  const checkAllVotes = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('event_matches_votes')
+        .select('from_user_id')
+        .eq('event_id', eventId)
+        .eq('level', currentLevel);
 
-        if (error) {
-          console.error('❌ Error checking votes:', error);
-          return;
-        }
-
-        const votedUserIds = data.map(v => v.from_user_id);
-        const allParticipantIds = participants.map(p => p.user_id);
-        const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
-
-        console.log('📊 Vote status:', {
-          votedCount: votedUserIds.length,
-          totalCount: allParticipantIds.length,
-          allVoted
-        });
-
-        setAllVotesReceived(allVoted);
-      } catch (error) {
-        console.error('❌ Error checking all votes:', error);
+      if (error) {
+        console.error('❌ Error checking votes:', error);
+        return;
       }
-    };
 
+      const votedUserIds = data.map(v => v.from_user_id);
+      const allParticipantIds = participants.map(p => p.user_id);
+      const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
+
+      console.log('📊 Vote status:', {
+        votedCount: votedUserIds.length,
+        totalCount: allParticipantIds.length,
+        allVoted
+      });
+
+      setAllVotesReceived(allVoted);
+
+      // If all votes received, stop countdown immediately
+      if (allVoted && countdownIntervalRef.current) {
+        console.log('🛑 All votes received - stopping countdown');
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    } catch (error) {
+      console.error('❌ Error checking all votes:', error);
+    }
+  }, [eventId, currentLevel, participants]);
+
+  useEffect(() => {
     checkAllVotes();
 
     // Subscribe to vote changes
@@ -167,7 +147,7 @@ export default function MatchSelectionScreen({
         {
           event: '*',
           schema: 'public',
-          table: 'event_match_votes',
+          table: 'event_matches_votes',
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
@@ -184,7 +164,54 @@ export default function MatchSelectionScreen({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [eventId, currentLevel, participants]);
+  }, [eventId, currentLevel, participants, checkAllVotes]);
+
+  // Countdown timer based on server time and deadline
+  useEffect(() => {
+    // Clear any existing interval
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    // Don't start countdown if all votes already received or no deadline
+    if (!matchDeadlineAt || allVotesReceived) {
+      console.log('⏸️ Not starting countdown - allVotesReceived:', allVotesReceived);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = new Date(serverTime.getTime() + (Date.now() - serverTime.getTime()));
+      const deadlineMs = new Date(matchDeadlineAt).getTime();
+      const nowMs = now.getTime();
+      const remaining = Math.max(0, deadlineMs - nowMs);
+
+      const minutes = Math.floor(remaining / (1000 * 60));
+      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+      setRemainingMinutes(minutes);
+      setRemainingSeconds(seconds);
+
+      if (remaining === 0) {
+        setDeadlineReached(true);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        console.log('⏰ Deadline reached!');
+      }
+    };
+
+    updateCountdown();
+    countdownIntervalRef.current = setInterval(updateCountdown, 1000);
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, [matchDeadlineAt, serverTime, allVotesReceived]);
 
   // Subscribe to confirmed matches (realtime)
   useEffect(() => {
@@ -365,6 +392,9 @@ export default function MatchSelectionScreen({
 
       setHasVoted(true);
 
+      // Recalculate vote count immediately after submission
+      await checkAllVotes();
+
       // If match was found immediately, show modal
       if (result.match && result.matched_user_id && result.matched_user_name) {
         console.log('💜 Immediate match detected with:', result.matched_user_name);
@@ -386,7 +416,7 @@ export default function MatchSelectionScreen({
     } finally {
       setLoading(false);
     }
-  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation]);
+  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
 
   const handleContinue = useCallback(() => {
     console.log('➡️ Continuing to next phase');
