@@ -25,12 +25,14 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question' | 'playing' | 'finished';
+  game_phase: 'intro' | 'ready' | 'waiting_for_spin' | 'show_result' | 'question' | 'playing' | 'finished';
+  current_turn_index: number;
+  current_round: number;
   started_at: string | null;
+  selected_participant_id: string | null;
+  selected_participant_name: string | null;
   current_question: string | null;
   current_question_level: string | null;
-  current_question_index: number;
-  answered_users: string[];
 }
 
 interface Appointment {
@@ -351,7 +353,8 @@ export default function InteraccionScreen() {
       console.log('Game phase:', appointmentData.event?.game_phase);
       
       // Check if game is active
-      if (appointmentData.event?.game_phase === 'ready' || 
+      if (appointmentData.event?.game_phase === 'waiting_for_spin' || 
+          appointmentData.event?.game_phase === 'show_result' ||
           appointmentData.event?.game_phase === 'question') {
         console.log('Game is active');
         setGameStarted(true);
@@ -455,12 +458,12 @@ export default function InteraccionScreen() {
     console.log('🎮 Actualizando game_phase para TODOS los participantes...');
     
     try {
-      // Update the event's game_phase to 'ready'
+      // Update the event's game_phase to 'waiting_for_spin'
       // This will trigger Realtime for ALL participants
       const { error } = await supabase
         .from('events')
         .update({ 
-          game_phase: 'ready',
+          game_phase: 'waiting_for_spin',
           updated_at: new Date().toISOString()
         })
         .eq('id', appointment.event_id);
@@ -470,7 +473,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('✅ Game phase actualizado a ready');
+      console.log('✅ Game phase actualizado a waiting_for_spin');
       console.log('✅ TODOS los participantes verán el cambio via Realtime');
       
       // Update local state
@@ -657,7 +660,8 @@ export default function InteraccionScreen() {
           console.log('📡 Nueva fase:', newEvent.game_phase);
           
           // When ANY participant starts the experience, ALL participants see it
-          if (newEvent.game_phase === 'ready' || 
+          if (newEvent.game_phase === 'waiting_for_spin' || 
+              newEvent.game_phase === 'show_result' ||
               newEvent.game_phase === 'question') {
             console.log('✅ Juego iniciado - Sincronizando para TODOS');
             setGameStarted(true);
@@ -692,22 +696,22 @@ export default function InteraccionScreen() {
   // Auto-transition to game when all presented
   useEffect(() => {
     if (allPresented && appointment && !gameStarted) {
-      console.log('✅ Todos se han presentado - Auto-transicionando al juego');
+      console.log('✅ Todos se han presentado - Auto-transicionando a la ruleta');
       
       const autoStartGame = async () => {
         try {
           const { error } = await supabase
             .from('events')
             .update({ 
-              game_phase: 'ready',
+              game_phase: 'waiting_for_spin',
               updated_at: new Date().toISOString()
             })
             .eq('id', appointment.event_id);
 
           if (error) {
-            console.error('❌ Error al auto-transicionar al juego:', error);
+            console.error('❌ Error al auto-transicionar a la ruleta:', error);
           } else {
-            console.log('✅ Auto-transición exitosa a ready');
+            console.log('✅ Auto-transición exitosa a waiting_for_spin');
             setGameStarted(true);
           }
         } catch (error) {
