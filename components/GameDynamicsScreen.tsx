@@ -38,7 +38,6 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
-// Question bank by level
 const QUESTIONS = {
   divertido: [
     '¿Cuál es tu mayor sueño?',
@@ -91,7 +90,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOptimisticUpdate, setIsOptimisticUpdate] = useState(false);
 
-  // Get current user ID
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -102,9 +100,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     getCurrentUser();
   }, []);
 
-  // Sync state from database (but skip during optimistic updates)
   useEffect(() => {
-    // Skip sync if we're in the middle of an optimistic update
     if (isOptimisticUpdate) {
       console.log('⏭️ Skipping sync - optimistic update in progress');
       return;
@@ -134,7 +130,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment.event, activeParticipants, isOptimisticUpdate]);
 
-  // Realtime subscription for game state updates
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -156,7 +151,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const newEvent = payload.new as any;
           console.log('📡 New phase:', newEvent.game_phase);
           
-          // Skip if we're in optimistic update mode
           if (isOptimisticUpdate) {
             console.log('⏭️ Skipping realtime update - optimistic update in progress');
             return;
@@ -203,24 +197,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
-    // CRITICAL: Set flag FIRST before any state changes
     setIsOptimisticUpdate(true);
-    
-    // Small delay to ensure flag is set before state changes
     await new Promise(resolve => setTimeout(resolve, 0));
     
-    // OPTIMISTIC UI UPDATE - Immediately update local state
     setLoading(true);
     
-    // Randomly select starter
     const randomIndex = Math.floor(Math.random() * activeParticipants.length);
     const starterUserId = activeParticipants[randomIndex].user_id;
     const starter = activeParticipants[randomIndex];
-    
-    // Get first question
     const firstQuestion = QUESTIONS.divertido[0];
     
-    // IMMEDIATELY transition UI (optimistic update)
     setGamePhase('question_active');
     setCurrentLevel('divertido');
     setCurrentQuestionIndex(0);
@@ -231,7 +217,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const uiTransitionTime = performance.now();
     console.log('⚡ UI transition time:', (uiTransitionTime - transitionStartTime).toFixed(2), 'ms');
     
-    // Now perform database update asynchronously (don't block UI)
     try {
       console.log('💾 Starting database update...');
       const dbUpdateStartTime = performance.now();
@@ -255,7 +240,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error starting dynamic:', error);
-        // Revert optimistic update on error
         setIsOptimisticUpdate(false);
         setGamePhase('ready');
         setCurrentQuestion(null);
@@ -264,13 +248,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       console.log('✅ Dynamic started successfully');
-      // Database update complete - allow sync to resume after a delay
       setTimeout(() => {
         setIsOptimisticUpdate(false);
       }, 100);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      // Revert optimistic update on error
       setIsOptimisticUpdate(false);
       setGamePhase('ready');
       setCurrentQuestion(null);
@@ -290,7 +272,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
     
-    // Check if user already answered
     if (answeredUsers.includes(currentUserId)) {
       console.log('⚠️ User already answered');
       return;
@@ -298,20 +279,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
-    // CRITICAL: Set flag FIRST before any state changes
     setIsOptimisticUpdate(true);
-    
-    // Small delay to ensure flag is set
     await new Promise(resolve => setTimeout(resolve, 0));
     
-    // OPTIMISTIC UI UPDATE - Immediately update local state
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
     setAnsweredUsers(newAnsweredUsers);
     
     const uiUpdateTime = performance.now();
     console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
     
-    // Now perform database update asynchronously
     try {
       console.log('💾 Starting database update...');
       const dbUpdateStartTime = performance.now();
@@ -330,20 +306,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error updating answered users:', error);
-        // Revert optimistic update on error
         setIsOptimisticUpdate(false);
         setAnsweredUsers(answeredUsers);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
-      // Database update complete - allow sync to resume after a delay
       setTimeout(() => {
         setIsOptimisticUpdate(false);
       }, 100);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      // Revert optimistic update on error
       setIsOptimisticUpdate(false);
       setAnsweredUsers(answeredUsers);
     }
@@ -361,7 +334,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const nextQuestionIndex = currentQuestionIndex + 1;
 
       if (nextQuestionIndex < questionsForLevel.length) {
-        // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
@@ -384,7 +356,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        // Level finished - transition
         const { error } = await supabase
           .from('events')
           .update({
@@ -420,7 +391,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const nextLevel = levels[currentLevelIndex + 1];
 
       if (nextLevel) {
-        // Start next level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const firstQuestion = QUESTIONS[nextLevel][0];
@@ -481,17 +451,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment]);
 
-  // Calculate progress
   const answeredCount = answeredUsers.length;
   const totalCount = activeParticipants.length;
-  const allAnswered = answeredCount === totalCount;
+  const allAnswered = answeredCount === totalCount && totalCount > 0;
   const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
 
-  // Level display
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  // Ready phase - waiting to start
   if (gamePhase === 'ready') {
     const canStart = activeParticipants.length >= 2;
     const participantCountText = activeParticipants.length.toString();
@@ -544,7 +511,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
-  // Question active phase
   if (gamePhase === 'question_active' && currentQuestion) {
     const starterName = starterParticipant?.name || 'Alguien';
 
@@ -624,7 +590,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
-  // Level transition phase
   if (gamePhase === 'level_transition') {
     const levels: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
     const currentLevelIndex = levels.indexOf(currentLevel);
@@ -695,7 +660,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
-  // Finished phase
   if (gamePhase === 'finished') {
     return (
       <LinearGradient
@@ -828,7 +792,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     padding: 16,
-    marginTop: 60,
+    marginTop: 80,
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -871,22 +835,6 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     alignItems: 'center',
-  },
-  starterLabel: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  starterName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  starterInstruction: {
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    fontStyle: 'italic',
   },
   starterLabelWhite: {
     fontSize: 16,
@@ -955,19 +903,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   continueButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  safetyButton: {
-    backgroundColor: '#F59E0B',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  safetyButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',

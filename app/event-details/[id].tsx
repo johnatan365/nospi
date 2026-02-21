@@ -113,7 +113,6 @@ export default function EventDetailsScreen() {
     setConfirming(true);
     
     try {
-      // Check if user already has an appointment for this event
       const { data: existingAppointment } = await supabase
         .from('appointments')
         .select('*')
@@ -128,7 +127,6 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      // All users must pay per event - no subscription check
       console.log('Storing pending event and redirecting to payment screen');
       await AsyncStorage.setItem('pending_event_confirmation', id as string);
       console.log('Stored pending event ID:', id);
@@ -188,42 +186,43 @@ export default function EventDetailsScreen() {
       <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.eventCard}>
-          <Text style={styles.eventIcon}>{eventIcon}</Text>
-          <Text style={styles.eventName}>{event.name}</Text>
-          <Text style={styles.eventType}>{eventTypeText}</Text>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Fecha:</Text>
-            <Text style={styles.detailValue}>{dateText}</Text>
+          {/* Header - Icon and Title */}
+          <View style={styles.headerSection}>
+            <Text style={styles.eventIcon}>{eventIcon}</Text>
+            <Text style={styles.eventName}>{event.name}</Text>
+            <Text style={styles.eventType}>{eventTypeText}</Text>
           </View>
+          
+          {/* Info Grid - Compact 2-column layout */}
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>📅 Fecha</Text>
+              <Text style={styles.infoValue}>{dateText}</Text>
+            </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Hora:</Text>
-            <Text style={styles.detailValue}>{event.time}</Text>
-          </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>🕐 Hora</Text>
+              <Text style={styles.infoValue}>{event.time}</Text>
+            </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Ciudad:</Text>
-            <Text style={styles.detailValue}>{event.city}</Text>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>🌆 Ciudad</Text>
+              <Text style={styles.infoValue}>{event.city}</Text>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>👥 Personas</Text>
+              <Text style={styles.infoValue}>{participantsText}</Text>
+            </View>
           </View>
 
           {event.description && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Descripción:</Text>
-              <Text style={styles.detailValue}>{event.description}</Text>
+            <View style={styles.descriptionSection}>
+              <Text style={styles.descriptionText}>{event.description}</Text>
             </View>
           )}
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Participantes:</Text>
-            <Text style={styles.detailValue}>{participantsText}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Location Section */}
+          {/* Location Section - Compact */}
           <View style={styles.locationSection}>
             <Text style={styles.locationTitle}>📍 Ubicación</Text>
             {showLocation ? (
@@ -236,26 +235,21 @@ export default function EventDetailsScreen() {
                     onPress={handleOpenMaps}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                    <Text style={styles.mapsButtonText}>🗺️ Abrir Maps</Text>
                   </TouchableOpacity>
                 )}
               </>
             ) : (
               <Text style={styles.locationPlaceholder}>
-                Ubicación se revelará próximamente.
+                Se revelará próximamente
               </Text>
             )}
           </View>
 
-          <View style={styles.divider} />
-
+          {/* Action Section */}
           {!isEnrolled && (
-            <>
-              <Text style={styles.question}>¿Deseas asistir a esta cita?</Text>
-              <Text style={styles.description}>
-                Al confirmar, te unirás a un grupo de {event.max_participants} personas para un encuentro en persona.
-              </Text>
-
+            <View style={styles.actionSection}>
+              <Text style={styles.question}>¿Deseas asistir?</Text>
               <TouchableOpacity
                 style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
                 onPress={handleConfirm}
@@ -268,12 +262,12 @@ export default function EventDetailsScreen() {
                   <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
                 )}
               </TouchableOpacity>
-            </>
+            </View>
           )}
 
           {isEnrolled && (
             <View style={styles.enrolledBadge}>
-              <Text style={styles.enrolledText}>✓ Ya estás inscrito en este evento</Text>
+              <Text style={styles.enrolledText}>✓ Ya estás inscrito</Text>
             </View>
           )}
         </View>
@@ -290,8 +284,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
-    paddingBottom: 100,
+    padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -305,72 +299,90 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
+    borderRadius: 20,
+    padding: 20,
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
   },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   eventIcon: {
-    fontSize: 80,
-    marginBottom: 16,
+    fontSize: 60,
+    marginBottom: 12,
   },
   eventName: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   eventType: {
-    fontSize: 20,
+    fontSize: 18,
     color: nospiColors.purpleMid,
     fontWeight: '600',
-    marginBottom: 24,
   },
-  divider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#E0E0E0',
-    marginVertical: 24,
-  },
-  detailRow: {
-    width: '100%',
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingTop: 16,
   },
-  detailLabel: {
-    fontSize: 14,
+  infoItem: {
+    width: '50%',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 13,
     color: '#666',
     fontWeight: '600',
     marginBottom: 4,
   },
-  detailValue: {
-    fontSize: 16,
+  infoValue: {
+    fontSize: 14,
     color: '#333',
+    fontWeight: '500',
+  },
+  descriptionSection: {
+    marginBottom: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
   locationSection: {
-    width: '100%',
     marginBottom: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
   },
   locationTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  locationName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
     marginBottom: 8,
   },
-  locationAddress: {
+  locationName: {
     fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  locationAddress: {
+    fontSize: 14,
     color: '#666',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   locationPlaceholder: {
     fontSize: 14,
@@ -379,36 +391,33 @@ const styles = StyleSheet.create({
   },
   mapsButton: {
     backgroundColor: '#4285F4',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignItems: 'center',
   },
   mapsButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
+  actionSection: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
   question: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    marginBottom: 12,
-  },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
+    marginBottom: 16,
   },
   confirmButton: {
     backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
-    borderRadius: 16,
-    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 14,
     alignItems: 'center',
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
@@ -422,20 +431,19 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: nospiColors.white,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
   },
   enrolledBadge: {
     backgroundColor: '#10B981',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    width: '100%',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignItems: 'center',
   },
   enrolledText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });
