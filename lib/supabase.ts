@@ -23,8 +23,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // CRITICAL: Enable URL detection on web, disable on mobile (manual exchangeCodeForSession)
-    detectSessionInUrl: Platform.OS === 'web',
+    // CRITICAL: Disable automatic URL detection - we handle code exchange manually
+    detectSessionInUrl: false,
     flowType: 'pkce', // CRITICAL: Enable PKCE flow for secure OAuth
   },
 });
