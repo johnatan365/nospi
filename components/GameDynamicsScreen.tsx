@@ -203,9 +203,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       return;
     }
 
+    // CRITICAL: Set flag FIRST before any state changes
+    setIsOptimisticUpdate(true);
+    
+    // Small delay to ensure flag is set before state changes
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
     // OPTIMISTIC UI UPDATE - Immediately update local state
     setLoading(true);
-    setIsOptimisticUpdate(true); // Prevent sync effect from overriding
     
     // Randomly select starter
     const randomIndex = Math.floor(Math.random() * activeParticipants.length);
@@ -251,23 +256,25 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (error) {
         console.error('❌ Error starting dynamic:', error);
         // Revert optimistic update on error
+        setIsOptimisticUpdate(false);
         setGamePhase('ready');
         setCurrentQuestion(null);
         setStarterParticipant(null);
-        setIsOptimisticUpdate(false);
         return;
       }
 
       console.log('✅ Dynamic started successfully');
-      // Database update complete - allow sync to resume
-      setIsOptimisticUpdate(false);
+      // Database update complete - allow sync to resume after a delay
+      setTimeout(() => {
+        setIsOptimisticUpdate(false);
+      }, 100);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       // Revert optimistic update on error
+      setIsOptimisticUpdate(false);
       setGamePhase('ready');
       setCurrentQuestion(null);
       setStarterParticipant(null);
-      setIsOptimisticUpdate(false);
     } finally {
       setLoading(false);
     }
@@ -291,9 +298,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     const newAnsweredUsers = [...answeredUsers, currentUserId];
     
+    // CRITICAL: Set flag FIRST before any state changes
+    setIsOptimisticUpdate(true);
+    
+    // Small delay to ensure flag is set
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
     // OPTIMISTIC UI UPDATE - Immediately update local state
     console.log('⚡ Optimistically updating UI with new answered users:', newAnsweredUsers);
-    setIsOptimisticUpdate(true); // CRITICAL: Prevent realtime from overriding
     setAnsweredUsers(newAnsweredUsers);
     
     const uiUpdateTime = performance.now();
@@ -319,19 +331,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (error) {
         console.error('❌ Error updating answered users:', error);
         // Revert optimistic update on error
-        setAnsweredUsers(answeredUsers);
         setIsOptimisticUpdate(false);
+        setAnsweredUsers(answeredUsers);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
-      // Database update complete - allow sync to resume
-      setIsOptimisticUpdate(false);
+      // Database update complete - allow sync to resume after a delay
+      setTimeout(() => {
+        setIsOptimisticUpdate(false);
+      }, 100);
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       // Revert optimistic update on error
-      setAnsweredUsers(answeredUsers);
       setIsOptimisticUpdate(false);
+      setAnsweredUsers(answeredUsers);
     }
   }, [appointment, currentUserId, answeredUsers]);
 
