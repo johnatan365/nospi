@@ -21,17 +21,14 @@ export default function LoginScreen() {
   useEffect(() => {
     console.log('LoginScreen: Monitoring auth state changes');
     
-    // Listen for auth state changes
+    // CRITICAL: Listen for auth state changes to handle OAuth redirect
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('LoginScreen: Auth state changed:', event, session?.user?.id);
+      console.log('LoginScreen: Auth state changed:', event, 'Session exists:', !!session);
       
-      // CRITICAL: Clear loading state when auth state changes
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        setLoading(false);
-      }
-      
-      if (event === 'SIGNED_IN' && session) {
-        console.log('LoginScreen: User signed in, checking profile...');
+      // CRITICAL: Handle SIGNED_IN event (fires after OAuth redirect on web)
+      if (session) {
+        console.log('LoginScreen: Session detected, user ID:', session.user?.id);
+        setLoading(false); // Clear loading state
         
         // Check if user profile exists
         const { data: existingProfile, error: profileError } = await supabase
@@ -83,6 +80,9 @@ export default function LoginScreen() {
         // Navigate to events screen
         console.log('LoginScreen: Navigating to events screen');
         router.replace('/(tabs)/events');
+      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        console.log('LoginScreen: User signed out or deleted');
+        setLoading(false);
       }
     });
 
