@@ -1,21 +1,12 @@
 
-/**
- * GameDynamicsScreen - Nospi Interactive Game Experience
- * 
- * OPTIMIZED ARCHITECTURE:
- * - Immediate animation start on button press
- * - Reliable transition to question phase
- * - Clean state management
- */
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, Image, Dimensions, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'waiting_for_spin' | 'show_result' | 'question';
+type GamePhase = 'ready' | 'question_active' | 'level_transition' | 'finished';
 
 interface Participant {
   id: string;
@@ -34,10 +25,11 @@ interface Appointment {
   event: {
     id: string;
     game_phase?: string;
-    selected_participant_id?: string;
-    selected_participant_name?: string;
+    current_level?: string;
+    current_question_index?: number;
+    answered_users?: string[];
     current_question?: string;
-    current_question_level?: string;
+    current_question_starter_id?: string;
   };
 }
 
@@ -46,101 +38,100 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const WHEEL_SIZE = Math.min(SCREEN_WIDTH - 64, 340);
-
-// Professional elegant colors for wheel segments
-const SEGMENT_COLORS = [
-  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
-  '#EF4444', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981',
-];
+// Question bank by level
+const QUESTIONS = {
+  divertido: [
+    '¿Cuál es tu mayor sueño?',
+    '¿Qué te hace reír sin control?',
+    '¿Cuál es tu película favorita?',
+    '¿Prefieres el mar o la montaña?',
+    '¿Qué superpoder te gustaría tener?',
+    '¿Cuál es tu comida favorita?',
+    '¿Qué harías si ganaras la lotería?',
+    '¿Te gusta bailar?',
+    '¿Cuál es tu mayor miedo?',
+    '¿Qué te hace feliz?'
+  ],
+  sensual: [
+    '¿Qué te atrae de una persona?',
+    '¿Cuál es tu idea de una cita perfecta?',
+    '¿Qué te hace sentir especial?',
+    '¿Cuál es tu mayor fantasía?',
+    '¿Qué te pone nervioso en una primera cita?',
+    '¿Qué es lo más romántico que has hecho?',
+    '¿Qué te hace sentir deseado/a?',
+    '¿Cuál es tu lugar favorito para un beso?',
+    '¿Qué te enamora de alguien?',
+    '¿Qué te hace sentir conectado con alguien?'
+  ],
+  atrevido: [
+    '¿Cuál es tu secreto mejor guardado?',
+    '¿Qué es lo más loco que has hecho por amor?',
+    '¿Cuál es tu mayor arrepentimiento?',
+    '¿Qué es lo que nunca le has dicho a nadie?',
+    '¿Cuál es tu mayor inseguridad?',
+    '¿Qué es lo más atrevido que has hecho?',
+    '¿Cuál es tu mayor deseo oculto?',
+    '¿Qué es lo que más te avergüenza?',
+    '¿Cuál es tu mayor tentación?',
+    '¿Qué es lo que más te asusta de ti mismo/a?'
+  ]
+};
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   console.log('🎮 Rendering GameDynamicsScreen');
   
-  const [gamePhase, setGamePhase] = useState<GamePhase>('waiting_for_spin');
-  const [currentLevel] = useState<QuestionLevel>('divertido');
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
+  const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
-  
-  const wheelRotation = useRef(new Animated.Value(0)).current;
-  const glowAnimation = useRef(new Animated.Value(0)).current;
-  const selectedPulse = useRef(new Animated.Value(1)).current;
-  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Animation function
-  const startRouletteAnimation = useCallback((targetParticipantId: string) => {
-    console.log('🎯 === INICIANDO ANIMACIÓN DE LA RULETA ===');
-    console.log('🎯 Participante objetivo:', targetParticipantId);
+  // Get current user ID
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
+  // Sync state from database
+  useEffect(() => {
+    console.log('=== INITIAL SYNC FROM DATABASE ===');
+    const event = appointment.event;
     
-    setIsSpinning(true);
-    
-    // Find the target participant index
-    const targetIndex = activeParticipants.findIndex(p => p.user_id === targetParticipantId);
-    console.log('🎯 Índice del participante:', targetIndex);
-    
-    // Reset animations
-    wheelRotation.setValue(0);
-    glowAnimation.setValue(0);
-    
-    // Calculate target rotation
-    const degreesPerSegment = 360 / activeParticipants.length;
-    const extraSpins = 3; // Reduced from 5 for faster animation
-    const targetRotation = (extraSpins * 360) + (targetIndex * degreesPerSegment);
-    
-    console.log('🎯 Rotación objetivo:', targetRotation, 'grados');
-    
-    // Start glow animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnimation, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnimation, {
-          toValue: 0,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    // Main wheel animation - 3 seconds (reduced from 4.2)
-    Animated.timing(wheelRotation, {
-      toValue: targetRotation,
-      duration: 3000,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      console.log('✅ Animación completada');
-      setIsSpinning(false);
+    if (event.game_phase === 'question_active') {
+      setGamePhase('question_active');
+      setCurrentLevel((event.current_level as QuestionLevel) || 'divertido');
+      setCurrentQuestionIndex(event.current_question_index || 0);
+      setAnsweredUsers(event.answered_users || []);
+      setCurrentQuestion(event.current_question || null);
       
-      // Pulse effect
-      Animated.sequence([
-        Animated.timing(selectedPulse, {
-          toValue: 1.1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(selectedPulse, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  }, [activeParticipants, wheelRotation, glowAnimation, selectedPulse]);
+      if (event.current_question_starter_id) {
+        const starter = activeParticipants.find(p => p.user_id === event.current_question_starter_id);
+        setStarterParticipant(starter || null);
+      }
+    } else if (event.game_phase === 'level_transition') {
+      setGamePhase('level_transition');
+      setCurrentLevel((event.current_level as QuestionLevel) || 'divertido');
+    } else if (event.game_phase === 'finished') {
+      setGamePhase('finished');
+    } else {
+      setGamePhase('ready');
+    }
+  }, [appointment.event, activeParticipants]);
 
   // Realtime subscription for game state updates
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 === SUSCRIBIÉNDOSE AL ESTADO DEL JUEGO ===');
+    console.log('📡 === SUBSCRIBING TO GAME STATE ===');
     console.log('📡 Event ID:', appointment.event_id);
     
     const channel = supabase
@@ -154,452 +145,269 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 === ACTUALIZACIÓN VIA REALTIME ===');
+          console.log('📡 === REALTIME UPDATE ===');
           const newEvent = payload.new as any;
-          console.log('📡 Nueva fase:', newEvent.game_phase);
-          console.log('📡 Participante seleccionado:', newEvent.selected_participant_id);
+          console.log('📡 New phase:', newEvent.game_phase);
           
-          // Sync state from database
-          if (newEvent.game_phase === 'question') {
-            console.log('📝 Sincronizando fase de pregunta');
-            setGamePhase('question');
+          if (newEvent.game_phase === 'question_active') {
+            setGamePhase('question_active');
+            setCurrentLevel(newEvent.current_level || 'divertido');
+            setCurrentQuestionIndex(newEvent.current_question_index || 0);
+            setAnsweredUsers(newEvent.answered_users || []);
+            setCurrentQuestion(newEvent.current_question || null);
             
-            const participant = activeParticipants.find(
-              p => p.user_id === newEvent.selected_participant_id
-            );
-            if (participant) {
-              setSelectedParticipant(participant);
+            if (newEvent.current_question_starter_id) {
+              const starter = activeParticipants.find(p => p.user_id === newEvent.current_question_starter_id);
+              setStarterParticipant(starter || null);
             }
-            
-            if (newEvent.current_question) {
-              setCurrentQuestion(newEvent.current_question);
-            }
-          } else if (newEvent.game_phase === 'show_result') {
-            console.log('🎯 Sincronizando fase show_result');
-            setGamePhase('show_result');
-            
-            const participant = activeParticipants.find(
-              p => p.user_id === newEvent.selected_participant_id
-            );
-            if (participant) {
-              setSelectedParticipant(participant);
-            }
-          } else if (newEvent.game_phase === 'waiting_for_spin') {
-            console.log('⏳ Sincronizando fase waiting_for_spin');
-            setGamePhase('waiting_for_spin');
-            setSelectedParticipant(null);
-            setCurrentQuestion(null);
+          } else if (newEvent.game_phase === 'level_transition') {
+            setGamePhase('level_transition');
+            setCurrentLevel(newEvent.current_level || 'divertido');
+          } else if (newEvent.game_phase === 'finished') {
+            setGamePhase('finished');
+          } else {
+            setGamePhase('ready');
           }
         }
       )
       .subscribe((status) => {
-        console.log('📡 Estado de suscripción:', status);
+        console.log('📡 Subscription status:', status);
       });
 
     return () => {
-      console.log('📡 Cancelando suscripción');
+      console.log('📡 Unsubscribing');
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id, activeParticipants]);
 
-  // Initial sync from database
-  useEffect(() => {
-    console.log('=== SINCRONIZACIÓN INICIAL ===');
-    console.log('Fase del evento:', appointment.event.game_phase);
+  const handleStartDynamic = useCallback(async () => {
+    console.log('🎮 === STARTING DYNAMIC ===');
     
-    const dbPhase = appointment.event.game_phase;
-    
-    if (dbPhase === 'question') {
-      console.log('📝 Fase de pregunta detectada');
-      
-      const participant = activeParticipants.find(
-        p => p.user_id === appointment.event.selected_participant_id
-      );
-      
-      if (participant) {
-        setSelectedParticipant(participant);
-      }
-      
-      if (appointment.event.current_question) {
-        setCurrentQuestion(appointment.event.current_question);
-      }
-      
-      setGamePhase('question');
-    } else if (dbPhase === 'show_result') {
-      console.log('🎯 Fase show_result detectada');
-      
-      const participant = activeParticipants.find(
-        p => p.user_id === appointment.event.selected_participant_id
-      );
-      
-      if (participant) {
-        setSelectedParticipant(participant);
-      }
-      
-      setGamePhase('show_result');
-    } else {
-      console.log('⏳ Fase waiting_for_spin o inicial');
-      setGamePhase('waiting_for_spin');
-    }
-  }, [appointment.event.game_phase, appointment.event.selected_participant_id, appointment.event.current_question, activeParticipants]);
-
-  // Auto-transition to question after animation completes
-  useEffect(() => {
-    // Clear any existing timer
-    if (transitionTimerRef.current) {
-      clearTimeout(transitionTimerRef.current);
-      transitionTimerRef.current = null;
-    }
-
-    if (gamePhase === 'show_result' && !isSpinning && selectedParticipant) {
-      console.log('=== PREPARANDO TRANSICIÓN A PREGUNTA ===');
-      console.log('Participante seleccionado:', selectedParticipant.name);
-      
-      // Wait 1.5 seconds after animation (reduced from 2 seconds)
-      transitionTimerRef.current = setTimeout(async () => {
-        console.log('🔄 Transicionando a fase de pregunta...');
-        
-        try {
-          // Generate random question
-          const questions = [
-            '¿te gusta bailar?',
-            '¿cuál es tu mayor sueño?',
-            '¿qué te hace feliz?',
-            '¿cuál es tu mayor miedo?',
-            '¿qué harías si ganaras la lotería?',
-            '¿cuál es tu película favorita?',
-            '¿prefieres el mar o la montaña?',
-            '¿qué superpoder te gustaría tener?',
-            '¿cuál es tu comida favorita?',
-            '¿qué te hace reír?'
-          ];
-          
-          const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
-          console.log('📝 Pregunta seleccionada:', randomQuestion);
-          
-          // Update database
-          const { error: updateError } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'question',
-              current_question: randomQuestion,
-              current_question_level: currentLevel,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-          
-          if (updateError) {
-            console.error('❌ Error al actualizar a fase de pregunta:', updateError);
-            Alert.alert('Error', 'No se pudo pasar a la pregunta.');
-            return;
-          }
-          
-          console.log('✅ Transición a pregunta exitosa');
-          
-          // Update local state (Realtime will also sync this)
-          setCurrentQuestion(randomQuestion);
-          setGamePhase('question');
-        } catch (error: any) {
-          console.error('❌ Error inesperado al transicionar:', error);
-          Alert.alert('Error', error.message || 'Ocurrió un error al mostrar la pregunta.');
-        }
-      }, 1500);
-    }
-
-    return () => {
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current);
-        transitionTimerRef.current = null;
-      }
-    };
-  }, [gamePhase, isSpinning, selectedParticipant, appointment.event_id, currentLevel]);
-
-  const handleStartRoulette = useCallback(async () => {
-    console.log('🎰 === USUARIO PRESIONÓ GIRAR RULETA ===');
-    console.log('🎰 Participantes activos:', activeParticipants.length);
-    
-    if (!appointment?.event_id || activeParticipants.length === 0) {
-      console.warn('⚠️ No se puede iniciar la ruleta');
-      Alert.alert('Error', 'No hay participantes para girar la ruleta.');
+    if (!appointment?.event_id || activeParticipants.length < 2) {
+      console.warn('⚠️ Cannot start - need at least 2 participants');
       return;
     }
 
-    if (isSpinning) {
-      console.log('⚠️ Ya está girando');
-      return;
-    }
-
-    setLoadingMessage('Iniciando ruleta...');
-    
-    try {
-      // Get current event state
-      console.log('📊 Obteniendo estado actual del evento...');
-      const { data: eventData, error: fetchError } = await supabase
-        .from('events')
-        .select('level_queue, current_turn_index')
-        .eq('id', appointment.event_id)
-        .single();
-
-      if (fetchError) {
-        console.error('❌ Error al obtener el evento:', fetchError);
-        Alert.alert('Error', 'No se pudo obtener el estado del evento.');
-        setLoadingMessage('');
-        return;
-      }
-
-      console.log('✅ Estado actual del evento:', eventData);
-
-      let levelQueue = eventData.level_queue || [];
-      let currentTurnIndex = eventData.current_turn_index || 0;
-
-      // Initialize level_queue if empty
-      if (!levelQueue || levelQueue.length === 0) {
-        console.log('🔄 === INICIALIZANDO LEVEL_QUEUE ===');
-        setLoadingMessage('Preparando participantes...');
-        
-        const { data: participants, error: participantsError } = await supabase
-          .from('event_participants')
-          .select('user_id')
-          .eq('event_id', appointment.event_id)
-          .eq('confirmed', true);
-
-        if (participantsError || !participants || participants.length === 0) {
-          console.error('❌ Error al obtener participantes');
-          Alert.alert('Error', 'No hay participantes confirmados.');
-          setLoadingMessage('');
-          return;
-        }
-
-        const participantIds = participants.map(p => p.user_id);
-        
-        // Shuffle (Fisher-Yates)
-        for (let i = participantIds.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
-        }
-
-        levelQueue = participantIds;
-        currentTurnIndex = 0;
-
-        console.log('✅ Cola inicializada:', levelQueue);
-
-        const { error: updateQueueError } = await supabase
-          .from('events')
-          .update({
-            level_queue: levelQueue,
-            current_turn_index: currentTurnIndex,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (updateQueueError) {
-          console.error('❌ Error al inicializar level_queue:', updateQueueError);
-          Alert.alert('Error', 'No se pudo guardar la lista de participantes.');
-          setLoadingMessage('');
-          return;
-        }
-      }
-
-      if (levelQueue.length === 0) {
-        console.error('❌ Cola vacía');
-        Alert.alert('Error', 'No hay participantes en la cola.');
-        setLoadingMessage('');
-        return;
-      }
-
-      // Select next participant
-      const nextParticipantId = levelQueue[currentTurnIndex];
-      const newIndex = (currentTurnIndex + 1) % levelQueue.length;
-
-      console.log('✅ Seleccionando participante:', nextParticipantId);
-      console.log('✅ Nuevo índice:', newIndex);
-
-      // Find participant object
-      const selectedPart = activeParticipants.find(p => p.user_id === nextParticipantId);
-      if (selectedPart) {
-        setSelectedParticipant(selectedPart);
-      }
-
-      // START ANIMATION IMMEDIATELY (before database update)
-      console.log('🚀 Iniciando animación INMEDIATAMENTE');
-      setGamePhase('show_result');
-      startRouletteAnimation(nextParticipantId);
-      setLoadingMessage('');
-
-      // Update database in background
-      console.log('📤 Actualizando base de datos...');
-      const { error: updateError } = await supabase
-        .from('events')
-        .update({
-          selected_participant_id: nextParticipantId,
-          current_turn_index: newIndex,
-          game_phase: 'show_result',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (updateError) {
-        console.error('❌ Error al actualizar evento:', updateError);
-        // Animation already started, so just log the error
-      } else {
-        console.log('✅ Base de datos actualizada');
-      }
-    } catch (error: any) {
-      console.error('❌ Error inesperado:', error);
-      Alert.alert('Error', error.message || 'Ocurrió un error al iniciar la ruleta.');
-      setLoadingMessage('');
-    }
-  }, [appointment?.event_id, isSpinning, activeParticipants, startRouletteAnimation]);
-
-  const handleContinueGame = useCallback(async () => {
-    console.log('🎮 === CONTINUANDO EL JUEGO ===');
-    
-    if (!appointment?.event_id) {
-      console.error('❌ No hay event_id');
-      return;
-    }
+    setLoading(true);
 
     try {
+      // Randomly select starter
+      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+      const starterUserId = activeParticipants[randomIndex].user_id;
+      
+      // Get first question
+      const firstQuestion = QUESTIONS.divertido[0];
+      
+      console.log('✅ Starting with:', starterUserId, 'Question:', firstQuestion);
+
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'waiting_for_spin',
-          current_question: null,
-          current_question_level: null,
+          game_phase: 'question_active',
+          current_level: 'divertido',
+          current_question_index: 0,
+          answered_users: [],
+          current_question: firstQuestion,
+          current_question_starter_id: starterUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error al continuar:', error);
-        Alert.alert('Error', 'No se pudo continuar el juego.');
+        console.error('❌ Error starting dynamic:', error);
         return;
       }
 
-      console.log('✅ Juego continuado');
-      setGamePhase('waiting_for_spin');
-      setCurrentQuestion(null);
-      setSelectedParticipant(null);
-    } catch (error: any) {
-      console.error('❌ Error inesperado:', error);
-      Alert.alert('Error', error.message || 'Ocurrió un error.');
+      console.log('✅ Dynamic started successfully');
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [appointment?.event_id]);
+  }, [appointment, activeParticipants]);
 
-  const wheelRotate = wheelRotation.interpolate({
-    inputRange: [0, 360],
-    outputRange: ['0deg', '360deg'],
-  });
+  const handleAnswered = useCallback(async () => {
+    console.log('✅ User marked as answered');
+    
+    if (!appointment?.event_id || !currentUserId) return;
+    
+    // Check if user already answered
+    if (answeredUsers.includes(currentUserId)) {
+      console.log('⚠️ User already answered');
+      return;
+    }
 
-  const glowOpacity = glowAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.8],
-  });
+    const newAnsweredUsers = [...answeredUsers, currentUserId];
+    
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          answered_users: newAnsweredUsers,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
 
-  const renderProfessionalWheel = () => {
-    const participantCount = activeParticipants.length;
-    const degreesPerSegment = 360 / participantCount;
+      if (error) {
+        console.error('❌ Error updating answered users:', error);
+        return;
+      }
 
-    return (
-      <View style={styles.wheelContainer}>
-        {/* Pointer */}
-        <View style={styles.indicatorContainer}>
-          <View style={styles.indicatorShadow} />
-          <View style={styles.triangleContainer}>
-            <View style={styles.triangleGradient} />
-            <View style={styles.triangleHighlight} />
-          </View>
-        </View>
+      console.log('✅ User marked as answered');
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    }
+  }, [appointment, currentUserId, answeredUsers]);
 
-        {/* Glow during spin */}
-        {isSpinning && (
-          <Animated.View
-            style={[
-              styles.wheelGlow,
-              {
-                opacity: glowOpacity,
-              },
-            ]}
-          />
-        )}
+  const handleContinue = useCallback(async () => {
+    console.log('➡️ Continuing to next question');
+    
+    if (!appointment?.event_id) return;
 
-        {/* Rotating wheel */}
-        <Animated.View
-          style={[
-            styles.wheel,
-            {
-              transform: [{ rotate: wheelRotate }],
-            },
-          ]}
-        >
-          {/* Segments */}
-          {activeParticipants.map((participant, index) => {
-            const startAngle = index * degreesPerSegment;
-            const segmentColor = SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+    setLoading(true);
 
-            return (
-              <View
-                key={participant.id}
-                style={[
-                  styles.segment,
-                  {
-                    transform: [{ rotate: `${startAngle}deg` }],
-                  },
-                ]}
-              >
-                <LinearGradient
-                  colors={[segmentColor, `${segmentColor}CC`]}
-                  style={styles.segmentGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                >
-                  {participant.profile_photo_url ? (
-                    <Image
-                      source={{ uri: participant.profile_photo_url }}
-                      style={styles.participantPhoto}
-                    />
-                  ) : (
-                    <View style={styles.participantPhotoPlaceholder}>
-                      <Text style={styles.participantInitial}>
-                        {participant.name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {participantCount <= 6 && (
-                    <Text style={styles.participantName} numberOfLines={1}>
-                      {participant.name}
-                    </Text>
-                  )}
-                  {participantCount > 6 && participantCount <= 10 && (
-                    <Text style={styles.participantNameSmall} numberOfLines={1}>
-                      {participant.name.split(' ')[0]}
-                    </Text>
-                  )}
-                </LinearGradient>
-              </View>
-            );
-          })}
+    try {
+      const questionsForLevel = QUESTIONS[currentLevel];
+      const nextQuestionIndex = currentQuestionIndex + 1;
 
-          {/* Center circle */}
-          <View style={styles.centerCircle}>
-            <LinearGradient
-              colors={['#FFD700', '#FFA500', '#FFD700']}
-              style={styles.centerRing}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.centerInner}>
-                <Text style={styles.centerText}>NOSPI</Text>
-              </View>
-            </LinearGradient>
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
+      if (nextQuestionIndex < questionsForLevel.length) {
+        // Next question in same level
+        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+        const newStarterUserId = activeParticipants[randomIndex].user_id;
+        const nextQuestion = questionsForLevel[nextQuestionIndex];
 
-  if (gamePhase === 'waiting_for_spin' || gamePhase === 'show_result') {
+        const { error } = await supabase
+          .from('events')
+          .update({
+            current_question_index: nextQuestionIndex,
+            answered_users: [],
+            current_question: nextQuestion,
+            current_question_starter_id: newStarterUserId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error advancing question:', error);
+          return;
+        }
+
+        console.log('✅ Advanced to next question');
+      } else {
+        // Level finished - transition
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'level_transition',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error transitioning level:', error);
+          return;
+        }
+
+        console.log('✅ Level finished - transitioning');
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
+
+  const handleContinueToNextLevel = useCallback(async () => {
+    console.log('⬆️ Continuing to next level');
+    
+    if (!appointment?.event_id) return;
+
+    setLoading(true);
+
+    try {
+      const levels: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
+      const currentLevelIndex = levels.indexOf(currentLevel);
+      const nextLevel = levels[currentLevelIndex + 1];
+
+      if (nextLevel) {
+        // Start next level
+        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+        const newStarterUserId = activeParticipants[randomIndex].user_id;
+        const firstQuestion = QUESTIONS[nextLevel][0];
+
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'question_active',
+            current_level: nextLevel,
+            current_question_index: 0,
+            answered_users: [],
+            current_question: firstQuestion,
+            current_question_starter_id: newStarterUserId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error starting next level:', error);
+          return;
+        }
+
+        console.log('✅ Started next level:', nextLevel);
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, currentLevel, activeParticipants]);
+
+  const handleEndGame = useCallback(async () => {
+    console.log('🏁 Ending game');
+    
+    if (!appointment?.event_id) return;
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'finished',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error ending game:', error);
+        return;
+      }
+
+      console.log('✅ Game ended');
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment]);
+
+  // Calculate progress
+  const answeredCount = answeredUsers.length;
+  const totalCount = activeParticipants.length;
+  const allAnswered = answeredCount === totalCount;
+  const answeredPercentage = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
+  const showSafetyContinue = answeredPercentage >= 80 && !allAnswered;
+  const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
+
+  // Level display
+  const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
+  const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+
+  // Ready phase - waiting to start
+  if (gamePhase === 'ready') {
+    const canStart = activeParticipants.length >= 2;
+    const participantCountText = activeParticipants.length.toString();
+
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
@@ -607,36 +415,54 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <View style={styles.rouletteContainer}>
-          <Text style={styles.rouletteTitleWhite}>Girando la Ruleta</Text>
-          <Text style={styles.rouletteSubtitleWhite}>¿Quién será elegido?</Text>
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
+          <Text style={styles.subtitleWhite}>Todos responden las mismas preguntas</Text>
 
-          {renderProfessionalWheel()}
-
-          {loadingMessage ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>{loadingMessage}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.spinButton, isSpinning && styles.buttonDisabled]}
-            onPress={handleStartRoulette}
-            disabled={isSpinning}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.spinButtonText}>
-              {isSpinning ? '⏳ Girando...' : '🎰 Girar Ruleta'}
+          <View style={styles.infoCard}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+            <Text style={styles.infoTitle}>Cómo funciona</Text>
+            <Text style={styles.infoText}>
+              • Todos ven la misma pregunta{'\n'}
+              • El sistema elige quién empieza{'\n'}
+              • Continúan en sentido horario{'\n'}
+              • Cada uno presiona "Ya contesté"{'\n'}
+              • Cuando todos responden, siguiente pregunta
             </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+
+          <View style={styles.participantsCard}>
+            <Text style={styles.participantsTitle}>Participantes confirmados</Text>
+            <Text style={styles.participantsCount}>{participantCountText}</Text>
+          </View>
+
+          {canStart ? (
+            <TouchableOpacity
+              style={[styles.startButton, loading && styles.buttonDisabled]}
+              onPress={handleStartDynamic}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.startButtonText}>
+                {loading ? '⏳ Iniciando...' : '🎉 Iniciar Dinámica'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.waitingCard}>
+              <Text style={styles.waitingText}>
+                Se necesitan al menos 2 participantes confirmados
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       </LinearGradient>
     );
   }
 
-  if (gamePhase === 'question' && currentQuestion && selectedParticipant) {
-    const participantName = selectedParticipant.name;
-    const firstName = participantName.split(' ')[0];
+  // Question active phase
+  if (gamePhase === 'question_active' && currentQuestion) {
+    const starterName = starterParticipant?.name || 'Alguien';
+    const progressText = `${answeredCount} de ${totalCount}`;
 
     return (
       <LinearGradient
@@ -646,45 +472,183 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.selectedCard}>
-            <Text style={styles.selectedLabel}>La ruleta eligió a</Text>
-            <Text style={styles.selectedName}>{participantName}</Text>
-            {selectedParticipant.profile_photo_url ? (
-              <Image
-                source={{ uri: selectedParticipant.profile_photo_url }}
-                style={styles.selectedPhoto}
-              />
-            ) : (
-              <View style={styles.selectedPhotoPlaceholder}>
-                <Text style={styles.selectedPhotoInitial}>
-                  {firstName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelEmoji}>{levelEmoji}</Text>
+            <Text style={styles.levelText}>{levelName}</Text>
           </View>
 
           <View style={styles.questionCard}>
             <Text style={styles.questionIcon}>❓</Text>
-            <View style={styles.questionTextContainer}>
-              <Text style={styles.questionIntro}>{firstName}</Text>
-              <Text style={styles.questionComma}>, </Text>
-              <Text style={styles.questionText}>{currentQuestion}</Text>
-            </View>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
           </View>
 
-          <View style={styles.infoCard}>
-            <Text style={styles.infoText}>
-              🔄 Todos los participantes ven la misma pregunta en tiempo real
+          <View style={styles.starterCard}>
+            <Text style={styles.starterLabel}>Empieza:</Text>
+            <Text style={styles.starterName}>{starterName}</Text>
+            <Text style={styles.starterInstruction}>Continúa en sentido horario</Text>
+          </View>
+
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Progreso</Text>
+            <Text style={styles.progressText}>{progressText}</Text>
+          </View>
+
+          <View style={styles.checklistCard}>
+            <Text style={styles.checklistTitle}>Participantes</Text>
+            {activeParticipants.map((participant, index) => {
+              const hasAnswered = answeredUsers.includes(participant.user_id);
+              const displayName = participant.name;
+              
+              return (
+                <View key={index} style={styles.checklistItem}>
+                  <Text style={styles.checklistIcon}>{hasAnswered ? '✅' : '⬜'}</Text>
+                  <Text style={[styles.checklistName, hasAnswered && styles.checklistNameAnswered]}>
+                    {displayName}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {!userHasAnswered && (
+            <TouchableOpacity
+              style={styles.answeredButton}
+              onPress={handleAnswered}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.answeredButtonText}>Ya contesté</Text>
+            </TouchableOpacity>
+          )}
+
+          {userHasAnswered && !allAnswered && (
+            <View style={styles.waitingCard}>
+              <Text style={styles.waitingText}>
+                ✓ Esperando a que todos respondan...
+              </Text>
+            </View>
+          )}
+
+          {allAnswered && (
+            <TouchableOpacity
+              style={[styles.continueButton, loading && styles.buttonDisabled]}
+              onPress={handleContinue}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.continueButtonText}>
+                {loading ? '⏳ Cargando...' : '➡️ Continuar'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {showSafetyContinue && (
+            <TouchableOpacity
+              style={[styles.safetyButton, loading && styles.buttonDisabled]}
+              onPress={handleContinue}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.safetyButtonText}>
+                {loading ? '⏳ Cargando...' : '⚠️ Continuar (80% respondió)'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // Level transition phase
+  if (gamePhase === 'level_transition') {
+    const levels: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
+    const currentLevelIndex = levels.indexOf(currentLevel);
+    const hasNextLevel = currentLevelIndex < levels.length - 1;
+    const nextLevelName = hasNextLevel ? (levels[currentLevelIndex + 1] === 'sensual' ? 'Sensual' : 'Atrevido') : '';
+
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.titleWhite}>Nivel Completado</Text>
+          <Text style={styles.subtitleWhite}>¡Buen trabajo!</Text>
+
+          <View style={styles.transitionCard}>
+            <Text style={styles.transitionIcon}>🎉</Text>
+            <Text style={styles.transitionText}>
+              Han completado el nivel {levelName}
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.continueButton}
-            onPress={handleContinueGame}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.continueButtonText}>Continuar con el juego</Text>
-          </TouchableOpacity>
+          {hasNextLevel ? (
+            <>
+              <View style={styles.nextLevelCard}>
+                <Text style={styles.nextLevelTitle}>Siguiente nivel:</Text>
+                <Text style={styles.nextLevelName}>{nextLevelName}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.continueButton, loading && styles.buttonDisabled]}
+                onPress={handleContinueToNextLevel}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.continueButtonText}>
+                  {loading ? '⏳ Cargando...' : '⬆️ Continuar al siguiente nivel'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.endButton, loading && styles.buttonDisabled]}
+                onPress={handleEndGame}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.endButtonText}>
+                  {loading ? '⏳ Cargando...' : '🏁 Terminar aquí'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={[styles.continueButton, loading && styles.buttonDisabled]}
+              onPress={handleEndGame}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.continueButtonText}>
+                {loading ? '⏳ Cargando...' : '🏁 Finalizar'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // Finished phase
+  if (gamePhase === 'finished') {
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.titleWhite}>¡Experiencia Completada!</Text>
+          <Text style={styles.subtitleWhite}>Gracias por participar</Text>
+
+          <View style={styles.finishedCard}>
+            <Text style={styles.finishedIcon}>🎊</Text>
+            <Text style={styles.finishedText}>
+              Han completado la dinámica de grupo.{'\n\n'}
+              ¡Esperamos que hayan disfrutado la experiencia!
+            </Text>
+          </View>
         </ScrollView>
       </LinearGradient>
     );
@@ -719,357 +683,49 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-
-  loadingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  rouletteContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  rouletteTitleWhite: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  rouletteSubtitleWhite: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    marginBottom: 40,
-    opacity: 0.9,
-    textAlign: 'center',
-  },
-  wheelContainer: {
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  wheelGlow: {
-    position: 'absolute',
-    width: WHEEL_SIZE + 40,
-    height: WHEEL_SIZE + 40,
-    borderRadius: (WHEEL_SIZE + 40) / 2,
-    backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-  },
-  wheel: {
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE,
-    borderRadius: WHEEL_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 15,
-  },
-  segment: {
-    position: 'absolute',
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE / 2,
-    top: 0,
-    left: 0,
-    transformOrigin: 'center bottom',
-  },
-  segmentGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    paddingTop: 24,
-    borderTopLeftRadius: WHEEL_SIZE / 2,
-    borderTopRightRadius: WHEEL_SIZE / 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  participantPhoto: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-  },
-  participantPhotoPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-  },
-  participantInitial: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4a2c6e',
-  },
-  participantName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-    paddingHorizontal: 8,
-  },
-  participantNameSmall: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  centerCircle: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  centerRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  centerInner: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  centerText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a2c6e',
-  },
-  indicatorContainer: {
-    position: 'absolute',
-    top: -18,
-    left: '50%',
-    marginLeft: -22,
-    width: 44,
-    height: 70,
-    zIndex: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  indicatorShadow: {
-    position: 'absolute',
-    top: 10,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 22,
-    borderRightWidth: 22,
-    borderTopWidth: 55,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  triangleContainer: {
-    width: 44,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  triangleGradient: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 22,
-    borderRightWidth: 22,
-    borderTopWidth: 55,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#FFD700',
-  },
-  triangleHighlight: {
-    position: 'absolute',
-    top: 6,
-    left: 10,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 18,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-  },
-  spinButton: {
-    backgroundColor: '#FFD700',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 48,
-    alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  spinButtonText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1a0b2e',
-  },
-  selectedCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  selectedLabel: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  selectedName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    marginBottom: 16,
-  },
-  selectedPhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: nospiColors.purpleMid,
-    marginTop: 8,
-  },
-  selectedPhotoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: nospiColors.purpleLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: nospiColors.purpleMid,
-    marginTop: 8,
-  },
-  selectedPhotoInitial: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-  },
-  questionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  questionIcon: {
-    fontSize: 64,
-    marginBottom: 20,
-  },
-  questionTextContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  questionIntro: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    textAlign: 'center',
-  },
-  questionComma: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-  },
-  questionText: {
-    fontSize: 24,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
   infoCard: {
-    backgroundColor: '#DBEAFE',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  infoIcon: {
+    fontSize: 48,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  infoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   infoText: {
-    fontSize: 14,
-    color: '#1E40AF',
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '600',
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
   },
-  continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+  participantsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  participantsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  participantsCount: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+  },
+  startButton: {
+    backgroundColor: '#FFD700',
     borderRadius: 20,
     paddingVertical: 20,
     paddingHorizontal: 32,
@@ -1080,9 +736,236 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  continueButtonText: {
+  startButtonText: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#1a0b2e',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  waitingCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#92400E',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  levelBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  levelText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  questionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  questionIcon: {
+    fontSize: 64,
+    marginBottom: 20,
+  },
+  questionText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+  },
+  starterCard: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  starterLabel: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  starterName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  starterInstruction: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    fontStyle: 'italic',
+  },
+  progressCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  progressText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  checklistCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  checklistTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  checklistIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  checklistName: {
+    fontSize: 16,
+    color: '#333',
+  },
+  checklistNameAnswered: {
+    textDecorationLine: 'line-through',
+    opacity: 0.6,
+  },
+  answeredButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  answeredButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  continueButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  continueButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  safetyButton: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  safetyButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  transitionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  transitionIcon: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  transitionText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+  },
+  nextLevelCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  nextLevelTitle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  nextLevelName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+  },
+  endButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  endButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  finishedCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+  },
+  finishedIcon: {
+    fontSize: 100,
+    marginBottom: 24,
+  },
+  finishedText: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    lineHeight: 28,
   },
 });
