@@ -630,7 +630,7 @@ export default function MatchSelectionScreen({
             </Animated.View>
             <Text style={styles.matchIcon}>💜</Text>
             <Animated.View style={{ opacity: textOpacity }}>
-              <Text style={styles.matchTitle}>✨ ¡Match confirmado!</Text>
+              <Text style={styles.matchTitle}>✨ ¡Hay match!</Text>
               <Text style={styles.matchText}>
                 Tú y {matchedUserName} se eligieron 💜
               </Text>

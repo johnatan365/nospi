@@ -491,9 +491,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Level finished - transition to match selection
         console.log('⚡ Optimistically transitioning to match_selection');
         
-        // Calculate match deadline (15 seconds from now)
+        // Calculate match deadline (20 seconds from now)
         const now = new Date();
-        const deadline = new Date(now.getTime() + 15 * 1000);
+        const deadline = new Date(now.getTime() + 20 * 1000);
         
         // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
         setGamePhase('match_selection');
@@ -808,8 +808,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>✨ ¡Ya rompieron el hielo!</Text>
-          <Text style={styles.subtitleWhite}>Ahora disfruten el resto de la noche y déjense sorprender 💜</Text>
+          <View style={styles.iceBreakCard}>
+            <Text style={styles.iceBreakIcon}>✨</Text>
+            <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
+            <Text style={styles.iceBreakSubtitle}>Ahora disfruten el resto de la noche y déjense sorprender 💜</Text>
+          </View>
 
           <View style={styles.evaluationCard}>
             <Text style={styles.evaluationIcon}>⭐</Text>
@@ -819,6 +822,45 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               Esta información nos ayuda a mejorar futuros encuentros.{'\n'}
               En cualquier momento puedes modificar tu evaluación.
             </Text>
+            
+            <View style={styles.participantsRatingSection}>
+              {activeParticipants.filter(p => p.user_id !== currentUserId).map((participant, index) => {
+                const displayName = participant.name;
+                
+                return (
+                  <View key={index} style={styles.participantRatingCard}>
+                    <View style={styles.participantRatingHeader}>
+                      {participant.profile_photo_url ? (
+                        <Image 
+                          source={{ uri: participant.profile_photo_url }} 
+                          style={styles.participantRatingPhoto}
+                        />
+                      ) : (
+                        <View style={styles.participantRatingPhotoPlaceholder}>
+                          <Text style={styles.participantRatingPhotoPlaceholderText}>
+                            {displayName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.participantRatingName}>{displayName}</Text>
+                    </View>
+                    
+                    <View style={styles.starsContainer}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <TouchableOpacity
+                          key={star}
+                          style={styles.starButton}
+                          onPress={() => console.log(`Rated ${displayName} with ${star} stars`)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.starIcon}>⭐</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -1073,6 +1115,35 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     textAlign: 'center',
   },
+  iceBreakCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  iceBreakIcon: {
+    fontSize: 80,
+    marginBottom: 16,
+  },
+  iceBreakTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  iceBreakSubtitle: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 26,
+  },
   evaluationCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
@@ -1095,5 +1166,56 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 24,
+  },
+  participantsRatingSection: {
+    width: '100%',
+  },
+  participantRatingCard: {
+    backgroundColor: 'rgba(233, 213, 255, 0.5)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  participantRatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  participantRatingPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  participantRatingPhotoPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantRatingPhotoPlaceholderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantRatingName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  starButton: {
+    padding: 4,
+  },
+  starIcon: {
+    fontSize: 32,
   },
 });

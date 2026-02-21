@@ -469,8 +469,8 @@ const styles = StyleSheet.create({
     height: 32,
   },
   paymentIconPSE: {
-    width: 80,
-    height: 40,
+    width: 100,
+    height: 50,
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
