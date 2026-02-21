@@ -45,8 +45,8 @@ export default function RootLayout() {
       const url = event.url;
       console.log('Global deep link received:', url);
       
-      // Check if this is an OAuth callback
-      if (url.includes('auth') || url.includes('callback')) {
+      // Check if this is an OAuth callback (nospi://auth)
+      if (url.includes('nospi://auth') || url.includes('/auth')) {
         console.log('OAuth callback detected, exchanging code for session...');
         
         try {
@@ -61,6 +61,7 @@ export default function RootLayout() {
           if (data.session) {
             console.log('✅ Session exchanged successfully, user:', data.session.user.id);
             console.log('Session will be persisted automatically by Supabase client');
+            // The onAuthStateChange listeners in login.tsx and register.tsx will handle navigation
           } else {
             console.log('⚠️ No session returned from exchangeCodeForSession');
           }
@@ -72,11 +73,11 @@ export default function RootLayout() {
 
     // Add listener only once
     if (!listenerRef.current) {
-      console.log('Adding global Linking listener');
+      console.log('Adding global Linking listener for OAuth callbacks');
       listenerRef.current = Linking.addEventListener('url', handleDeepLink);
     }
 
-    // Check if app was opened with a URL
+    // Check if app was opened with a URL (cold start)
     Linking.getInitialURL().then((url) => {
       if (url) {
         console.log('App opened with initial URL:', url);

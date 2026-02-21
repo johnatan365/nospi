@@ -6,7 +6,10 @@ import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import * as AuthSession from 'expo-auth-session';
+
+// CRITICAL: Call this at the top level to complete auth sessions
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -123,15 +126,18 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use Linking.createURL('auth') for PKCE flow redirect
-      const redirectUrl = Linking.createURL('auth');
-      console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
+      // CRITICAL: Use AuthSession.makeRedirectUri for proper PKCE flow
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'nospi',
+        path: 'auth',
+      });
+      console.log('LoginScreen: Google OAuth redirect URI:', redirectUri);
 
       // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: redirectUri,
           skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
           queryParams: {
             access_type: 'offline',
@@ -155,7 +161,7 @@ export default function LoginScreen() {
         // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
-          redirectUrl,
+          redirectUri,
           {
             // Ensure we use the in-app browser, not external browser
             showInRecents: true,
@@ -192,15 +198,18 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      // CRITICAL: Use Linking.createURL('auth') for PKCE flow redirect
-      const redirectUrl = Linking.createURL('auth');
-      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
+      // CRITICAL: Use AuthSession.makeRedirectUri for proper PKCE flow
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'nospi',
+        path: 'auth',
+      });
+      console.log('LoginScreen: Apple OAuth redirect URI:', redirectUri);
 
       // CRITICAL: signInWithOAuth with skipBrowserRedirect to get the URL
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: redirectUri,
           skipBrowserRedirect: true, // CRITICAL: We handle browser opening manually
         },
       });
@@ -220,7 +229,7 @@ export default function LoginScreen() {
         // CRITICAL: Use WebBrowser.openAuthSessionAsync to open in-app browser (NOT external Chrome)
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
-          redirectUrl,
+          redirectUri,
           {
             // Ensure we use the in-app browser, not external browser
             showInRecents: true,
