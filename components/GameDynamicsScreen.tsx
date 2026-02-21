@@ -31,6 +31,8 @@ interface Appointment {
     answered_users?: string[];
     current_question?: string;
     current_question_starter_id?: string;
+    match_started_at?: string;
+    match_deadline_at?: string;
   };
 }
 
@@ -89,6 +91,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [matchStartedAt, setMatchStartedAt] = useState<string | null>(null);
+  const [matchDeadlineAt, setMatchDeadlineAt] = useState<string | null>(null);
   
   // CRITICAL: Ref to prevent Realtime race conditions during optimistic updates
   const isOptimisticUpdateRef = useRef(false);
@@ -140,7 +144,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         game_phase: data.game_phase,
         current_level: data.current_level,
         current_question_index: data.current_question_index,
-        answered_users: data.answered_users
+        answered_users: data.answered_users,
+        match_started_at: data.match_started_at,
+        match_deadline_at: data.match_deadline_at
       });
 
       // Update local state based on database
@@ -158,6 +164,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else if (data.game_phase === 'match_selection') {
         setGamePhase('match_selection');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
+        setMatchStartedAt(data.match_started_at || null);
+        setMatchDeadlineAt(data.match_deadline_at || null);
       } else if (data.game_phase === 'level_transition') {
         setGamePhase('level_transition');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
@@ -195,7 +203,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             game_phase: newEvent.game_phase,
             current_level: newEvent.current_level,
             current_question_index: newEvent.current_question_index,
-            answered_users: newEvent.answered_users
+            answered_users: newEvent.answered_users,
+            match_started_at: newEvent.match_started_at,
+            match_deadline_at: newEvent.match_deadline_at
           });
           
           // Update local state based on realtime update
@@ -213,6 +223,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           } else if (newEvent.game_phase === 'match_selection') {
             setGamePhase('match_selection');
             setCurrentLevel(newEvent.current_level || 'divertido');
+            setMatchStartedAt(newEvent.match_started_at || null);
+            setMatchDeadlineAt(newEvent.match_deadline_at || null);
           } else if (newEvent.game_phase === 'level_transition') {
             setGamePhase('level_transition');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -469,8 +481,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Level finished - transition to match selection
         console.log('⚡ Optimistically transitioning to match_selection');
         
+        // Calculate match deadline (60 seconds from now)
+        const now = new Date();
+        const deadline = new Date(now.getTime() + 60 * 1000);
+        
         // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
         setGamePhase('match_selection');
+        setMatchStartedAt(now.toISOString());
+        setMatchDeadlineAt(deadline.toISOString());
         
         const uiUpdateTime = performance.now();
         console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
@@ -483,6 +501,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           .from('events')
           .update({
             game_phase: 'match_selection',
+            match_started_at: now.toISOString(),
+            match_deadline_at: deadline.toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
@@ -496,10 +516,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           // 4. REVERT: Revert optimistic update on failure
           isOptimisticUpdateRef.current = false;
           setGamePhase(previousGamePhase);
+          setMatchStartedAt(null);
+          setMatchDeadlineAt(null);
           return;
         }
 
-        console.log('✅ Level finished - transitioning to match selection');
+        console.log('✅ Level finished - transitioning to match selection with deadline:', deadline.toISOString());
         
         // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
         setTimeout(() => {
@@ -516,6 +538,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setCurrentQuestion(previousQuestion);
       setStarterParticipant(previousStarter);
       setGamePhase(previousGamePhase);
+      setMatchStartedAt(null);
+      setMatchDeadlineAt(null);
     } finally {
       setLoading(false);
     }
@@ -548,6 +572,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             answered_users: [],
             current_question: firstQuestion,
             current_question_starter_id: newStarterUserId,
+            match_started_at: null,
+            match_deadline_at: null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
@@ -564,6 +590,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           .from('events')
           .update({
             game_phase: 'finished',
+            match_started_at: null,
+            match_deadline_at: null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
@@ -599,6 +627,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         currentUserId={currentUserId}
         participants={activeParticipants}
         onMatchComplete={handleMatchComplete}
+        matchDeadlineAt={matchDeadlineAt}
       />
     );
   }

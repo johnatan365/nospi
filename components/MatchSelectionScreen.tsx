@@ -19,6 +19,7 @@ interface MatchSelectionScreenProps {
   currentUserId: string;
   participants: Participant[];
   onMatchComplete: () => void;
+  matchDeadlineAt: string | null;
 }
 
 export default function MatchSelectionScreen({
@@ -27,23 +28,73 @@ export default function MatchSelectionScreen({
   currentUserId,
   participants,
   onMatchComplete,
+  matchDeadlineAt,
 }: MatchSelectionScreenProps) {
-  console.log('💘 Rendering MatchSelectionScreen');
+  console.log('💘 Rendering MatchSelectionScreen with deadline:', matchDeadlineAt);
   
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedUserName, setMatchedUserName] = useState('');
-  const [waitingForOthers, setWaitingForOthers] = useState(false);
+  const [allVotesReceived, setAllVotesReceived] = useState(false);
+  const [deadlineReached, setDeadlineReached] = useState(false);
+  const [remainingMinutes, setRemainingMinutes] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [serverTime, setServerTime] = useState<Date>(new Date());
   
   const matchAnimation = useRef(new Animated.Value(0)).current;
+
+  // Fetch server time on mount
+  useEffect(() => {
+    const fetchServerTime = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_server_time');
+        if (!error && data) {
+          const serverTimestamp = new Date(data);
+          setServerTime(serverTimestamp);
+          console.log('🕐 Server time fetched:', serverTimestamp.toISOString());
+        }
+      } catch (err) {
+        console.error('❌ Error fetching server time:', err);
+      }
+    };
+    fetchServerTime();
+  }, []);
+
+  // Countdown timer based on server time and deadline
+  useEffect(() => {
+    if (!matchDeadlineAt) return;
+
+    const updateCountdown = () => {
+      const now = new Date(serverTime.getTime() + (Date.now() - serverTime.getTime()));
+      const deadlineMs = new Date(matchDeadlineAt).getTime();
+      const nowMs = now.getTime();
+      const remaining = Math.max(0, deadlineMs - nowMs);
+
+      const minutes = Math.floor(remaining / (1000 * 60));
+      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+      setRemainingMinutes(minutes);
+      setRemainingSeconds(seconds);
+
+      if (remaining === 0) {
+        setDeadlineReached(true);
+        console.log('⏰ Deadline reached!');
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [matchDeadlineAt, serverTime]);
 
   // Check if user has already voted for this level
   useEffect(() => {
     const checkExistingVote = async () => {
       try {
-        const voteData = await supabase
+        const { data, error } = await supabase
           .from('event_matches_votes')
           .select('*')
           .eq('event_id', eventId)
@@ -51,10 +102,9 @@ export default function MatchSelectionScreen({
           .eq('from_user_id', currentUserId)
           .single();
 
-        if (voteData.data) {
+        if (data && !error) {
           console.log('✅ User has already voted for this level');
           setHasVoted(true);
-          setWaitingForOthers(true);
         }
       } catch (error) {
         console.log('No existing vote found');
@@ -63,6 +113,62 @@ export default function MatchSelectionScreen({
 
     checkExistingVote();
   }, [eventId, currentLevel, currentUserId]);
+
+  // Check if all participants have voted
+  useEffect(() => {
+    const checkAllVotes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('event_matches_votes')
+          .select('from_user_id')
+          .eq('event_id', eventId)
+          .eq('level', currentLevel);
+
+        if (error) {
+          console.error('❌ Error checking votes:', error);
+          return;
+        }
+
+        const votedUserIds = data.map(v => v.from_user_id);
+        const allParticipantIds = participants.map(p => p.user_id);
+        const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
+
+        console.log('📊 Vote status:', {
+          votedCount: votedUserIds.length,
+          totalCount: allParticipantIds.length,
+          allVoted
+        });
+
+        setAllVotesReceived(allVoted);
+      } catch (error) {
+        console.error('❌ Error checking all votes:', error);
+      }
+    };
+
+    checkAllVotes();
+
+    // Subscribe to vote changes
+    const channel = supabase
+      .channel(`votes_${eventId}_${currentLevel}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_matches_votes',
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          console.log('📡 Vote change detected:', payload);
+          checkAllVotes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, currentLevel, participants]);
 
   // Subscribe to confirmed matches
   useEffect(() => {
@@ -87,13 +193,13 @@ export default function MatchSelectionScreen({
             const otherUserId = newMatch.user1_id === currentUserId ? newMatch.user2_id : newMatch.user1_id;
             
             // Get the other user's name
-            const userData = await supabase
+            const { data: userData } = await supabase
               .from('users')
               .select('name')
               .eq('id', otherUserId)
               .single();
             
-            const otherUserName = userData.data?.name || 'Alguien';
+            const otherUserName = userData?.name || 'Alguien';
             
             console.log('✨ Match confirmed with:', otherUserName);
             setMatchedUserName(otherUserName);
@@ -150,7 +256,7 @@ export default function MatchSelectionScreen({
       
       // 1. Insert vote
       console.log('💾 Inserting vote...');
-      const insertError = await supabase
+      const { error: insertError } = await supabase
         .from('event_matches_votes')
         .insert({
           event_id: eventId,
@@ -159,8 +265,8 @@ export default function MatchSelectionScreen({
           selected_user_id: selectedUserIdValue,
         });
 
-      if (insertError.error) {
-        console.error('❌ Error inserting vote:', insertError.error);
+      if (insertError) {
+        console.error('❌ Error inserting vote:', insertError);
         setLoading(false);
         return;
       }
@@ -172,7 +278,7 @@ export default function MatchSelectionScreen({
       if (selectedUserIdValue) {
         console.log('🔍 Checking for reciprocal vote...');
         
-        const reciprocalData = await supabase
+        const { data: reciprocalData } = await supabase
           .from('event_matches_votes')
           .select('*')
           .eq('event_id', eventId)
@@ -181,32 +287,32 @@ export default function MatchSelectionScreen({
           .eq('selected_user_id', currentUserId)
           .single();
 
-        if (reciprocalData.data) {
+        if (reciprocalData) {
           console.log('💜 Reciprocal vote found! Creating confirmed match...');
           
-          // 3. Create confirmed match
-          const confirmError = await supabase
+          // 3. Create confirmed match (ensure consistent user ID order)
+          const [user1, user2] = [currentUserId, selectedUserIdValue].sort();
+          
+          const { error: confirmError } = await supabase
             .from('event_matches_confirmed')
             .insert({
               event_id: eventId,
               level: currentLevel,
-              user1_id: currentUserId,
-              user2_id: selectedUserIdValue,
+              user1_id: user1,
+              user2_id: user2,
             });
 
-          if (confirmError.error) {
-            console.error('❌ Error confirming match:', confirmError.error);
+          if (confirmError) {
+            console.error('❌ Error confirming match:', confirmError);
           } else {
             console.log('✅ Match confirmed successfully');
             // The realtime subscription will handle showing the modal
           }
         } else {
           console.log('⏳ No reciprocal vote yet - waiting...');
-          setWaitingForOthers(true);
         }
       } else {
         console.log('⏭️ User selected "Ninguno" - no match check needed');
-        setWaitingForOthers(true);
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -232,7 +338,19 @@ export default function MatchSelectionScreen({
     outputRange: [0, 1],
   });
 
+  // Format countdown timer
+  const minutesDisplay = String(remainingMinutes).padStart(2, '0');
+  const secondsDisplay = String(remainingSeconds).padStart(2, '0');
+  const timerDisplay = `${minutesDisplay}:${secondsDisplay}`;
+
+  // Determine if "Continuar" button should be enabled
+  const canContinue = allVotesReceived || deadlineReached;
+
   if (hasVoted && !showMatchModal) {
+    const waitingMessage = deadlineReached 
+      ? 'Tiempo finalizado. Puedes continuar.'
+      : 'Estamos esperando las decisiones del grupo…';
+
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
@@ -243,16 +361,22 @@ export default function MatchSelectionScreen({
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Tu elección ha sido registrada</Text>
 
+          {!deadlineReached && matchDeadlineAt && (
+            <View style={styles.timerCard}>
+              <Text style={styles.timerLabel}>Tiempo restante para decidir:</Text>
+              <Text style={styles.timerDisplay}>{timerDisplay}</Text>
+            </View>
+          )}
+
           <View style={styles.waitingCard}>
-            <Text style={styles.waitingIcon}>⏳</Text>
-            <Text style={styles.waitingText}>
-              Esperando a que todos elijan...
-            </Text>
+            <Text style={styles.waitingIcon}>{deadlineReached ? '✅' : '⏳'}</Text>
+            <Text style={styles.waitingText}>{waitingMessage}</Text>
           </View>
 
           <TouchableOpacity
-            style={styles.continueButton}
+            style={[styles.continueButton, !canContinue && styles.buttonDisabled]}
             onPress={handleContinue}
+            disabled={!canContinue}
             activeOpacity={0.8}
           >
             <Text style={styles.continueButtonText}>Continuar</Text>
@@ -271,6 +395,13 @@ export default function MatchSelectionScreen({
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.titleWhite}>💘 Momento de decisión</Text>
+
+        {matchDeadlineAt && (
+          <View style={styles.timerCard}>
+            <Text style={styles.timerLabel}>Tiempo restante para decidir:</Text>
+            <Text style={styles.timerDisplay}>{timerDisplay}</Text>
+          </View>
+        )}
 
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>
@@ -396,6 +527,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
+  },
+  timerCard: {
+    backgroundColor: 'rgba(255, 215, 0, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  timerLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a0b2e',
+    marginBottom: 8,
+  },
+  timerDisplay: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#1a0b2e',
+    fontVariant: ['tabular-nums'],
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
