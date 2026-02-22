@@ -1,18 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 
-// CRITICAL: Call this at the top level to complete auth sessions (MOBILE ONLY)
-if (Platform.OS !== 'web') {
-  WebBrowser.maybeCompleteAuthSession();
-}
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -24,179 +21,157 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    console.log('RegisterScreen: Monitoring auth state changes');
+    console.log('RegisterScreen: Setting up OAuth callback listener');
     
-    // CRITICAL: Listen for auth state changes to handle OAuth redirect
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('RegisterScreen: Auth state changed:', event, 'Session exists:', !!session);
+    // Handle OAuth callback
+    const handleUrl = async (event: { url: string }) => {
+      console.log('RegisterScreen: Received URL callback:', event.url);
       
-      // CRITICAL: Handle session existence (fires after OAuth redirect on web)
-      if (session) {
-        console.log('RegisterScreen: Session detected, user ID:', session.user?.id);
-        setLoading(false); // Clear loading state
+      if (event.url.includes('#access_token=')) {
+        console.log('RegisterScreen: OAuth callback detected, processing...');
+        setLoading(true);
         
-        // CRITICAL: Save onboarding data to profile
-        await saveOnboardingDataToProfile(session.user.id, session.user);
-      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        console.log('RegisterScreen: User signed out or deleted');
-        setLoading(false);
+        try {
+          // Extract the session from the URL
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error('RegisterScreen: Error getting session after OAuth:', error);
+            setError('Error al completar el registro con OAuth');
+            setLoading(false);
+            return;
+          }
+
+          if (data.session) {
+            console.log('RegisterScreen: OAuth session established, user:', data.session.user.id);
+            
+            // Check if user profile exists
+            const { data: existingProfile, error: profileError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.session.user.id)
+              .maybeSingle();
+
+            if (profileError) {
+              console.error('RegisterScreen: Error checking profile:', profileError);
+            }
+
+            // If profile doesn't exist, create it with OAuth data
+            if (!existingProfile) {
+              console.log('RegisterScreen: Creating new profile for OAuth user');
+              
+              // Get onboarding data from AsyncStorage
+              const interestsData = await AsyncStorage.getItem('onboarding_interests');
+              const personalityData = await AsyncStorage.getItem('onboarding_personality');
+              const nameData = await AsyncStorage.getItem('onboarding_name');
+              const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
+              const ageData = await AsyncStorage.getItem('onboarding_age');
+              const genderData = await AsyncStorage.getItem('onboarding_gender');
+              const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
+              const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
+              const countryData = await AsyncStorage.getItem('onboarding_country');
+              const cityData = await AsyncStorage.getItem('onboarding_city');
+              const phoneData = await AsyncStorage.getItem('onboarding_phone');
+              const photoData = await AsyncStorage.getItem('onboarding_photo');
+              const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
+
+              const interests = interestsData ? JSON.parse(interestsData) : [];
+              const personality = personalityData ? JSON.parse(personalityData) : [];
+              const name = nameData || data.session.user.user_metadata?.full_name || '';
+              const birthdate = birthdateData || '';
+              const age = ageData ? parseInt(ageData) : 18;
+              const gender = genderData || 'hombre';
+              const interestedIn = interestedInData || 'ambos';
+              const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
+              const country = countryData || 'Colombia';
+              const city = cityData || 'Medellín';
+              const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
+              const photo = photoData || data.session.user.user_metadata?.avatar_url || null;
+              const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
+
+              const { error: createProfileError } = await supabase
+                .from('users')
+                .insert({
+                  id: data.session.user.id,
+                  email: data.session.user.email,
+                  name,
+                  birthdate,
+                  age,
+                  gender,
+                  interested_in: interestedIn,
+                  age_range_min: ageRange.min,
+                  age_range_max: ageRange.max,
+                  country,
+                  city,
+                  phone: phoneInfo.phoneNumber,
+                  profile_photo_url: photo,
+                  interests: interests,
+                  personality_traits: personality,
+                  compatibility_percentage: compatibility,
+                  notification_preferences: {
+                    whatsapp: false,
+                    email: true,
+                    sms: false,
+                    push: true,
+                  },
+                });
+
+              if (createProfileError) {
+                console.error('RegisterScreen: Error creating profile:', createProfileError);
+                setError('Error al crear el perfil');
+                setLoading(false);
+                return;
+              }
+
+              console.log('RegisterScreen: Profile created successfully');
+
+              // Clear onboarding data
+              await AsyncStorage.multiRemove([
+                'onboarding_interests',
+                'onboarding_personality',
+                'onboarding_name',
+                'onboarding_birthdate',
+                'onboarding_age',
+                'onboarding_gender',
+                'onboarding_interested_in',
+                'onboarding_age_range',
+                'onboarding_country',
+                'onboarding_city',
+                'onboarding_phone',
+                'onboarding_photo',
+                'onboarding_compatibility',
+              ]);
+            }
+
+            // Navigate to events screen
+            console.log('RegisterScreen: Navigating to events screen');
+            router.replace('/(tabs)/events');
+          }
+        } catch (error) {
+          console.error('RegisterScreen: OAuth callback processing failed:', error);
+          setError('Error al procesar el registro');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Add URL listener
+    const subscription = Linking.addEventListener('url', handleUrl);
+
+    // Check if app was opened with a URL
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('RegisterScreen: App opened with URL:', url);
+        handleUrl({ url });
       }
     });
 
     return () => {
-      console.log('RegisterScreen: Cleaning up auth listener');
-      authListener.subscription.unsubscribe();
+      console.log('RegisterScreen: Cleaning up URL listener');
+      subscription.remove();
     };
   }, [router]);
-
-  // Helper function to save onboarding data to profile
-  const saveOnboardingDataToProfile = async (userId: string, user: any) => {
-    try {
-      console.log('RegisterScreen: Saving onboarding data for user:', userId);
-
-      // Get all onboarding data from AsyncStorage
-      const interestsData = await AsyncStorage.getItem('onboarding_interests');
-      const personalityData = await AsyncStorage.getItem('onboarding_personality');
-      const nameData = await AsyncStorage.getItem('onboarding_name');
-      const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
-      const ageData = await AsyncStorage.getItem('onboarding_age');
-      const genderData = await AsyncStorage.getItem('onboarding_gender');
-      const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
-      const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
-      const countryData = await AsyncStorage.getItem('onboarding_country');
-      const cityData = await AsyncStorage.getItem('onboarding_city');
-      const phoneData = await AsyncStorage.getItem('onboarding_phone');
-      const photoData = await AsyncStorage.getItem('onboarding_photo');
-      const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
-
-      const interests = interestsData ? JSON.parse(interestsData) : [];
-      const personality = personalityData ? JSON.parse(personalityData) : [];
-      const name = nameData || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
-      const birthdate = birthdateData || '1999-01-01';
-      const age = ageData ? parseInt(ageData) : 25;
-      const gender = genderData || 'no binario';
-      const interestedIn = interestedInData || 'ambos';
-      const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
-      const country = countryData || 'Colombia';
-      const city = cityData || 'Medellín';
-      const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-      const photo = photoData || user.user_metadata?.avatar_url || null;
-      const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
-
-      console.log('RegisterScreen: Onboarding data retrieved:', {
-        interests: interests.length,
-        personality: personality.length,
-        name,
-        phone: phoneInfo.phoneNumber,
-      });
-
-      // Check if profile exists
-      const { data: existingProfile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (existingProfile) {
-        // Profile exists - UPDATE with onboarding data
-        console.log('RegisterScreen: Updating existing profile with onboarding data');
-        
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            name,
-            birthdate,
-            age,
-            gender,
-            interested_in: interestedIn,
-            age_range_min: ageRange.min,
-            age_range_max: ageRange.max,
-            country,
-            city,
-            phone: phoneInfo.phoneNumber,
-            profile_photo_url: photo,
-            interests: interests,
-            personality_traits: personality,
-            compatibility_percentage: compatibility,
-            onboarding_completed: true, // CRITICAL: Mark onboarding as completed
-          })
-          .eq('id', userId);
-
-        if (updateError) {
-          console.error('RegisterScreen: Error updating profile:', updateError);
-          setError('Error al guardar los datos del perfil');
-          return;
-        }
-
-        console.log('✅ RegisterScreen: Profile updated successfully with onboarding data');
-      } else {
-        // Profile doesn't exist - CREATE with onboarding data
-        console.log('RegisterScreen: Creating new profile with onboarding data');
-        
-        const { error: createError } = await supabase
-          .from('users')
-          .insert({
-            id: userId,
-            email: user.email,
-            name,
-            birthdate,
-            age,
-            gender,
-            interested_in: interestedIn,
-            age_range_min: ageRange.min,
-            age_range_max: ageRange.max,
-            country,
-            city,
-            phone: phoneInfo.phoneNumber,
-            profile_photo_url: photo,
-            interests: interests,
-            personality_traits: personality,
-            compatibility_percentage: compatibility,
-            notification_preferences: {
-              whatsapp: false,
-              email: true,
-              sms: false,
-              push: true,
-            },
-            onboarding_completed: true, // CRITICAL: Mark onboarding as completed
-          });
-
-        if (createError) {
-          console.error('RegisterScreen: Error creating profile:', createError);
-          setError('Error al crear el perfil');
-          return;
-        }
-
-        console.log('✅ RegisterScreen: Profile created successfully with onboarding data');
-      }
-
-      // Clear onboarding data from AsyncStorage
-      await AsyncStorage.multiRemove([
-        'onboarding_interests',
-        'onboarding_personality',
-        'onboarding_name',
-        'onboarding_birthdate',
-        'onboarding_age',
-        'onboarding_gender',
-        'onboarding_interested_in',
-        'onboarding_age_range',
-        'onboarding_country',
-        'onboarding_city',
-        'onboarding_phone',
-        'onboarding_photo',
-        'onboarding_compatibility',
-      ]);
-
-      console.log('RegisterScreen: Onboarding data cleared from AsyncStorage');
-
-      // Navigate to main app
-      console.log('RegisterScreen: Navigating to main app (tabs)');
-      router.replace('/(tabs)/events');
-    } catch (error) {
-      console.error('RegisterScreen: Error saving onboarding data:', error);
-      setError('Error al guardar los datos');
-    }
-  };
 
   const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
@@ -204,83 +179,29 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      if (Platform.OS === 'web') {
-        // WEB: Use direct OAuth redirect (NO WebBrowser)
-        console.log('RegisterScreen: Web - Using direct OAuth redirect');
-        
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'apple',
-          options: {
-            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
-          },
-        });
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
-        if (error) {
-          console.error('Apple OAuth error:', error);
-          
-          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-            setError('Apple OAuth no está habilitado. Por favor, habilita Apple como proveedor en el Panel de Supabase (Authentication → Providers → Apple).');
-          } else {
-            setError(`Error al conectar con Apple: ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
 
-        console.log('Web: Apple OAuth redirect initiated');
-        // Browser will redirect automatically
-      } else {
-        // MOBILE: Use WebBrowser for in-app browser
-        console.log('RegisterScreen: Mobile - Using WebBrowser for OAuth');
-        
-        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
-        console.log('RegisterScreen: Apple OAuth redirect URI:', redirectUri);
+      if (error) {
+        console.error('Apple OAuth error:', error);
+        setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+        setLoading(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'apple',
-          options: {
-            redirectTo: redirectUri,
-            skipBrowserRedirect: true,
-          },
-        });
-
-        if (error) {
-          console.error('Apple OAuth error:', error);
-          
-          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-            setError('Apple OAuth no está habilitado. Por favor, habilita Apple como proveedor en el Panel de Supabase (Authentication → Providers → Apple).');
-          } else {
-            setError(`Error al conectar con Apple: ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
-
-        console.log('Apple OAuth initiated:', data);
-        
-        if (data.url) {
-          console.log('RegisterScreen: Opening Apple OAuth in IN-APP browser');
-          
-          const result = await WebBrowser.openAuthSessionAsync(
-            data.url,
-            redirectUri,
-            {
-              showInRecents: true,
-            }
-          );
-          
-          console.log('RegisterScreen: WebBrowser result:', result);
-          
-          if (result.type === 'cancel' || result.type === 'dismiss') {
-            console.log('RegisterScreen: User cancelled or dismissed OAuth');
-            setError(result.type === 'cancel' ? 'Registro con Apple cancelado' : 'Navegador cerrado');
-            setLoading(false);
-          }
-        } else {
-          console.log('RegisterScreen: No OAuth URL returned');
-          setError('No se pudo iniciar el proceso de OAuth');
-          setLoading(false);
-        }
+      console.log('Apple OAuth initiated:', data);
+      
+      if (data.url) {
+        console.log('RegisterScreen: Opening Apple OAuth URL');
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       }
     } catch (error) {
       console.error('Apple sign-up failed:', error);
@@ -295,91 +216,29 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      if (Platform.OS === 'web') {
-        // WEB: Use direct OAuth redirect (NO WebBrowser)
-        console.log('RegisterScreen: Web - Using direct OAuth redirect');
-        
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            },
-          },
-        });
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
 
-        if (error) {
-          console.error('Google OAuth error:', error);
-          
-          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-            setError('Google OAuth no está habilitado correctamente. Por favor, verifica la configuración en el Panel de Supabase (Authentication → Providers → Google).');
-          } else {
-            setError(`Error al conectar con Google: ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
 
-        console.log('Web: Google OAuth redirect initiated');
-        // Browser will redirect automatically
-      } else {
-        // MOBILE: Use WebBrowser for in-app browser
-        console.log('RegisterScreen: Mobile - Using WebBrowser for OAuth');
-        
-        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
-        console.log('RegisterScreen: Google OAuth redirect URI:', redirectUri);
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+        setLoading(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: redirectUri,
-            skipBrowserRedirect: true,
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            },
-          },
-        });
-
-        if (error) {
-          console.error('Google OAuth error:', error);
-          
-          if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
-            setError('Google OAuth no está habilitado correctamente. Por favor, verifica la configuración en el Panel de Supabase (Authentication → Providers → Google).');
-          } else {
-            setError(`Error al conectar con Google: ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
-
-        console.log('Google OAuth initiated:', data);
-        
-        if (data.url) {
-          console.log('RegisterScreen: Opening Google OAuth in IN-APP browser');
-          
-          const result = await WebBrowser.openAuthSessionAsync(
-            data.url,
-            redirectUri,
-            {
-              showInRecents: true,
-            }
-          );
-          
-          console.log('RegisterScreen: WebBrowser result:', result);
-          
-          if (result.type === 'cancel' || result.type === 'dismiss') {
-            console.log('RegisterScreen: User cancelled or dismissed OAuth');
-            setError(result.type === 'cancel' ? 'Registro con Google cancelado' : 'Navegador cerrado');
-            setLoading(false);
-          }
-        } else {
-          console.log('RegisterScreen: No OAuth URL returned');
-          setError('No se pudo iniciar el proceso de OAuth');
-          setLoading(false);
-        }
+      console.log('Google OAuth initiated:', data);
+      
+      if (data.url) {
+        console.log('RegisterScreen: Opening Google OAuth URL');
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       }
     } catch (error) {
       console.error('Google sign-up failed:', error);
@@ -414,6 +273,51 @@ export default function RegisterScreen() {
     console.log('User registering with email:', email);
 
     try {
+      // Get all onboarding data from AsyncStorage
+      const interestsData = await AsyncStorage.getItem('onboarding_interests');
+      const personalityData = await AsyncStorage.getItem('onboarding_personality');
+      const nameData = await AsyncStorage.getItem('onboarding_name');
+      const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
+      const ageData = await AsyncStorage.getItem('onboarding_age');
+      const genderData = await AsyncStorage.getItem('onboarding_gender');
+      const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
+      const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
+      const countryData = await AsyncStorage.getItem('onboarding_country');
+      const cityData = await AsyncStorage.getItem('onboarding_city');
+      const phoneData = await AsyncStorage.getItem('onboarding_phone');
+      const photoData = await AsyncStorage.getItem('onboarding_photo');
+      const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
+
+      console.log('Retrieved onboarding data:', {
+        interests: interestsData,
+        personality: personalityData,
+        name: nameData,
+        birthdate: birthdateData,
+        age: ageData,
+        gender: genderData,
+        interestedIn: interestedInData,
+        ageRange: ageRangeData,
+        country: countryData,
+        city: cityData,
+        phone: phoneData,
+        photo: photoData,
+        compatibility: compatibilityData,
+      });
+
+      const interests = interestsData ? JSON.parse(interestsData) : [];
+      const personality = personalityData ? JSON.parse(personalityData) : [];
+      const name = nameData || '';
+      const birthdate = birthdateData || '';
+      const age = ageData ? parseInt(ageData) : 18;
+      const gender = genderData || 'hombre';
+      const interestedIn = interestedInData || 'ambos';
+      const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
+      const country = countryData || 'Colombia';
+      const city = cityData || 'Medellín';
+      const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
+      const photo = photoData || null;
+      const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
+
       // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -423,26 +327,76 @@ export default function RegisterScreen() {
       if (authError) {
         console.error('Auth registration error:', authError);
         setError(`Error al crear la cuenta: ${authError.message}`);
-        setLoading(false);
         return;
       }
 
       if (!authData.user) {
         console.error('No user data returned from auth');
         setError('Error al crear la cuenta');
-        setLoading(false);
         return;
       }
 
       console.log('Auth user created:', authData.user.id);
 
-      // CRITICAL: Save onboarding data to profile
-      await saveOnboardingDataToProfile(authData.user.id, authData.user);
-      
-      setLoading(false);
+      // Create user profile in users table
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email,
+          name,
+          birthdate,
+          age,
+          gender,
+          interested_in: interestedIn,
+          age_range_min: ageRange.min,
+          age_range_max: ageRange.max,
+          country,
+          city,
+          phone: phoneInfo.phoneNumber,
+          profile_photo_url: photo,
+          interests: interests,
+          personality_traits: personality,
+          compatibility_percentage: compatibility,
+          notification_preferences: {
+            whatsapp: false,
+            email: true,
+            sms: false,
+            push: true,
+          },
+        });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        setError(`Error al crear el perfil: ${profileError.message}`);
+        return;
+      }
+
+      console.log('User profile created successfully');
+
+      // Clear onboarding data
+      await AsyncStorage.multiRemove([
+        'onboarding_interests',
+        'onboarding_personality',
+        'onboarding_name',
+        'onboarding_birthdate',
+        'onboarding_age',
+        'onboarding_gender',
+        'onboarding_interested_in',
+        'onboarding_age_range',
+        'onboarding_country',
+        'onboarding_city',
+        'onboarding_phone',
+        'onboarding_photo',
+        'onboarding_compatibility',
+      ]);
+
+      // Navigate to events screen
+      router.replace('/(tabs)/events');
     } catch (error) {
       console.error('Registration failed:', error);
       setError('Error al registrarse. Intenta de nuevo.');
+    } finally {
       setLoading(false);
     }
   };
