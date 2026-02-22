@@ -77,11 +77,17 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
@@ -124,14 +130,26 @@ export default function ProfileScreen() {
       }
 
       if (!data || data.length === 0) {
-        console.log('No profile data found');
-        setLoading(false);
+        console.log('No profile data found, profile may still be creating...');
+        
+        // Retry loading profile after a short delay (profile might be creating)
+        if (retryCount < 3) {
+          console.log(`Retrying profile load (attempt ${retryCount + 1}/3)...`);
+          setTimeout(() => {
+            setRetryCount(retryCount + 1);
+            loadProfile();
+          }, 1000);
+        } else {
+          console.log('Profile not found after retries');
+          setLoading(false);
+        }
         return;
       }
 
       const profileData = data[0];
       console.log('Profile loaded successfully');
       setProfile(profileData);
+      setRetryCount(0); // Reset retry count on success
       setEditName(profileData.name || '');
       setEditPhone(profileData.phone || '');
       setEditCountry(profileData.country || 'Colombia');
@@ -166,6 +184,50 @@ export default function ProfileScreen() {
   const handleEditPress = () => {
     console.log('User tapped edit profile');
     setEditModalVisible(true);
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'Las contraseñas no coinciden');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      console.log('Changing password...');
+      
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        console.error('Error changing password:', error);
+        Alert.alert('Error', error.message || 'No se pudo cambiar la contraseña');
+        return;
+      }
+
+      console.log('Password changed successfully');
+      Alert.alert('Éxito', 'Contraseña cambiada correctamente');
+      setChangePasswordModalVisible(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      Alert.alert('Error', 'No se pudo cambiar la contraseña');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const handlePhotoPress = async () => {
@@ -356,6 +418,8 @@ export default function ProfileScreen() {
   };
 
   if (loading) {
+    const loadingMessage = retryCount > 0 ? 'Creando tu perfil...' : 'Cargando perfil...';
+    
     return (
       <LinearGradient
         colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
@@ -365,6 +429,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={styles.loadingText}>{loadingMessage}</Text>
         </View>
       </LinearGradient>
     );
@@ -380,6 +445,16 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setRetryCount(0);
+              loadProfile();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -505,6 +580,15 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={styles.section}
+          onPress={() => setChangePasswordModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
+          <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
           activeOpacity={0.8}
@@ -512,6 +596,227 @@ export default function ProfileScreen() {
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Editar Perfil</Text>
+
+              <Text style={styles.inputLabel}>Nombre</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Tu nombre"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.inputLabel}>Teléfono</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Tu teléfono"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.inputLabel}>País</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCountryPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCountry}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Ciudad</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCityPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCity}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Interesado en</Text>
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'hombres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('hombres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'hombres' && styles.optionButtonTextActive]}>
+                    Hombres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'mujeres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('mujeres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'mujeres' && styles.optionButtonTextActive]}>
+                    Mujeres
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'ambos' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('ambos')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'ambos' && styles.optionButtonTextActive]}>
+                    Ambos
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
+              <View style={styles.ageSliderSection}>
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
+                  <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={18}
+                  maximumValue={59}
+                  step={1}
+                  value={editAgeRangeMin}
+                  onValueChange={handleMinAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Máximo</Text>
+                  <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={19}
+                  maximumValue={60}
+                  step={1}
+                  value={editAgeRangeMax}
+                  onValueChange={handleMaxAgeChange}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+              </View>
+
+              <Text style={styles.inputLabel}>Intereses</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_INTERESTS.map((interest, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
+                    onPress={() => toggleInterest(interest)}
+                  >
+                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Personalidad</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_PERSONALITY.map((trait, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
+                    onPress={() => togglePersonality(trait)}
+                  >
+                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>
+                      {trait}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEditModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCountry}
+              onValueChange={(value) => {
+                setEditCountry(value);
+                const cities = CITIES_BY_COUNTRY[value] || [];
+                if (cities.length > 0) {
+                  setEditCity(cities[0]);
+                }
+              }}
+              style={styles.picker}
+            >
+              {COUNTRIES.map((country) => (
+                <Picker.Item key={country} label={country} value={country} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCity}
+              onValueChange={(value) => setEditCity(value)}
+              style={styles.picker}
+            >
+              {availableCities.map((city) => (
+                <Picker.Item key={city} label={city} value={city} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
 
       {/* Notification Preferences Modal */}
       <Modal
@@ -579,47 +884,482 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={changePasswordModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setChangePasswordModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
+            <Text style={styles.modalSubtitle}>Ingresa tu nueva contraseña</Text>
+
+            <Text style={styles.inputLabel}>Nueva Contraseña</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor="#999"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.inputLabel}>Confirmar Contraseña</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Repite la contraseña"
+              placeholderTextColor="#999"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+
+            <TouchableOpacity
+              style={[styles.saveButton, changingPassword && styles.buttonDisabled]}
+              onPress={handleChangePassword}
+              disabled={changingPassword}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>
+                {changingPassword ? 'Cambiando...' : 'Cambiar Contraseña'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setChangePasswordModalVisible(false);
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  container: { flex: 1 },
-  contentContainer: { padding: 24, paddingBottom: 120 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { fontSize: 16, color: nospiColors.purpleDark, textAlign: 'center' },
-  header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
-  profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
-  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: nospiColors.purpleLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
-  profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: nospiColors.purpleDark },
-  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
-  editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: nospiColors.purpleDark },
-  editPhotoIconText: { fontSize: 16 },
-  name: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
-  age: { fontSize: 18, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 16 },
-  editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: nospiColors.purpleDark },
-  editButtonText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
-  section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
-  sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
-  infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
-  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { backgroundColor: nospiColors.purpleLight, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  tagText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
-  signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
-  signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
-  modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
-  notificationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
-  notificationOptionText: { fontSize: 16, color: '#333' },
-  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
-  checkboxActive: { backgroundColor: nospiColors.purpleDark, borderColor: nospiColors.purpleDark },
-  checkmark: { color: nospiColors.white, fontSize: 16, fontWeight: 'bold' },
-  modalCloseButton: { backgroundColor: '#E0E0E0', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
-  modalCloseButtonText: { color: '#333', fontSize: 16, fontWeight: '600' },
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 24,
+    paddingBottom: 120,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  header: {
+    alignItems: 'center',
+    marginTop: 48,
+    marginBottom: 32,
+  },
+  profilePhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: nospiColors.white,
+  },
+  profilePhotoPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: nospiColors.white,
+  },
+  profilePhotoPlaceholderText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editPhotoIcon: {
+    position: 'absolute',
+    bottom: 16,
+    right: 0,
+    backgroundColor: nospiColors.white,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: nospiColors.purpleDark,
+  },
+  editPhotoIconText: {
+    fontSize: 16,
+  },
+  name: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  age: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
+    marginBottom: 16,
+  },
+  editButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleDark,
+  },
+  editButtonText: {
+    color: nospiColors.purpleDark,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  section: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+    textAlign: 'right',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    backgroundColor: nospiColors.purpleLight,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  tagText: {
+    color: nospiColors.purpleDark,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signOutButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  signOutButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalScrollView: {
+    maxHeight: '90%',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
+  modalContent: {
+    backgroundColor: nospiColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 8,
+  },
+  pickerButton: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  optionButtonActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  optionButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  optionButtonTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  ageSliderSection: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  ageSliderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  ageSliderLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  ageSliderValue: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    fontWeight: 'bold',
+  },
+  ageSlider: {
+    width: '100%',
+    height: 40,
+    marginBottom: 12,
+  },
+  tagsEditContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  tagEdit: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  tagEditActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  tagEditText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tagEditTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  saveButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  notificationOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  notificationOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#CCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: nospiColors.purpleDark,
+    borderColor: nospiColors.purpleDark,
+  },
+  checkmark: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalCloseButton: {
+    backgroundColor: '#E0E0E0',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  modalCloseButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: nospiColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+  },
+  pickerModalClose: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
+  },
+  picker: {
+    width: '100%',
+    height: 200,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
 });

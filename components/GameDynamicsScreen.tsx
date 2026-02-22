@@ -41,8 +41,99 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
+interface ParticipantRatingProps {
+  participant: Participant;
+  displayName: string;
+  eventId: string;
+  currentUserId: string | null;
+}
+
+function ParticipantRating({ participant, displayName, eventId, currentUserId }: ParticipantRatingProps) {
+  const [selectedRating, setSelectedRating] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleRating = useCallback(async (rating: number) => {
+    if (!currentUserId || saving) return;
+
+    console.log(`User rated ${displayName} with ${rating} stars`);
+    setSelectedRating(rating);
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from('event_ratings')
+        .upsert({
+          event_id: eventId,
+          rater_user_id: currentUserId,
+          rated_user_id: participant.user_id,
+          rating: rating,
+          created_at: new Date().toISOString(),
+        }, {
+          onConflict: 'event_id,rater_user_id,rated_user_id'
+        });
+
+      if (error) {
+        console.error('Error saving rating:', error);
+        setSelectedRating(null);
+      } else {
+        console.log('Rating saved successfully');
+      }
+    } catch (error) {
+      console.error('Failed to save rating:', error);
+      setSelectedRating(null);
+    } finally {
+      setSaving(false);
+    }
+  }, [currentUserId, eventId, participant.user_id, displayName, saving]);
+
+  return (
+    <View style={styles.participantRatingCard}>
+      <View style={styles.participantRatingHeader}>
+        {participant.profile_photo_url ? (
+          <Image 
+            source={{ uri: participant.profile_photo_url }} 
+            style={styles.participantRatingPhoto}
+          />
+        ) : (
+          <View style={styles.participantRatingPhotoPlaceholder}>
+            <Text style={styles.participantRatingPhotoPlaceholderText}>
+              {displayName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <Text style={styles.participantRatingName}>{displayName}</Text>
+      </View>
+      
+      <View style={styles.starsContainer}>
+        {[1, 2, 3, 4, 5].map((star) => {
+          const isSelected = selectedRating !== null && star <= selectedRating;
+          const starEmoji = isSelected ? '⭐' : '☆';
+          
+          return (
+            <TouchableOpacity
+              key={star}
+              style={styles.starButton}
+              onPress={() => handleRating(star)}
+              disabled={saving}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.starIcon, isSelected && styles.starIconSelected]}>
+                {starEmoji}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {saving && (
+        <Text style={styles.savingText}>Guardando...</Text>
+      )}
+    </View>
+  );
+}
+
 const QUESTIONS = {
   divertido: [
+    '¿Cuál es tu nombre y a qué te dedicas?',
     '¿Cuál es tu mayor sueño?',
     '¿Qué te hace reír sin control?',
     '¿Cuál es tu película favorita?',
@@ -596,7 +687,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('✅ Started next level:', nextLevel);
       } else {
         // All levels complete - end game
-        const { error } = await supabase
+        const { error: eventError } = await supabase
           .from('events')
           .update({
             game_phase: 'finished',
@@ -606,12 +697,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           })
           .eq('id', appointment.event_id);
 
-        if (error) {
-          console.error('❌ Error ending game:', error);
+        if (eventError) {
+          console.error('❌ Error ending game:', eventError);
           return;
         }
 
         console.log('✅ Game ended');
+
+        // Update all appointments for this event to "anterior" status
+        const { error: appointmentError } = await supabase
+          .from('appointments')
+          .update({
+            status: 'anterior',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('event_id', appointment.event_id)
+          .eq('status', 'confirmada');
+
+        if (appointmentError) {
+          console.error('❌ Error updating appointments to anterior:', appointmentError);
+        } else {
+          console.log('✅ All appointments moved to anteriores');
+        }
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -827,36 +934,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 const displayName = participant.name;
                 
                 return (
-                  <View key={index} style={styles.participantRatingCard}>
-                    <View style={styles.participantRatingHeader}>
-                      {participant.profile_photo_url ? (
-                        <Image 
-                          source={{ uri: participant.profile_photo_url }} 
-                          style={styles.participantRatingPhoto}
-                        />
-                      ) : (
-                        <View style={styles.participantRatingPhotoPlaceholder}>
-                          <Text style={styles.participantRatingPhotoPlaceholderText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <Text style={styles.participantRatingName}>{displayName}</Text>
-                    </View>
-                    
-                    <View style={styles.starsContainer}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <TouchableOpacity
-                          key={star}
-                          style={styles.starButton}
-                          onPress={() => console.log(`Rated ${displayName} with ${star} stars`)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.starIcon}>⭐</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
+                  <ParticipantRating
+                    key={index}
+                    participant={participant}
+                    displayName={displayName}
+                    eventId={appointment.event_id}
+                    currentUserId={currentUserId}
+                  />
                 );
               })}
             </View>
@@ -1217,5 +1301,14 @@ const styles = StyleSheet.create({
   },
   starIcon: {
     fontSize: 28,
+  },
+  starIconSelected: {
+    opacity: 1,
+  },
+  savingText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });
