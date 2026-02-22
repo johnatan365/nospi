@@ -3,7 +3,6 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 // Get Supabase credentials from app.json extra config
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
@@ -16,16 +15,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Create Supabase client with platform-specific configuration
+// Create Supabase client with AsyncStorage for session persistence
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // CRITICAL FIX: Use undefined for web (browser native storage), AsyncStorage for mobile
-    storage: Platform.OS === 'web' ? undefined : AsyncStorage,
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // CRITICAL: Disable automatic URL detection - we handle code exchange manually
     detectSessionInUrl: false,
-    flowType: 'pkce', // CRITICAL: Enable PKCE flow for secure OAuth
   },
 });
 

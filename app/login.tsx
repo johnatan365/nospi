@@ -1,17 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 
-// CRITICAL: Call this at the top level to complete auth sessions (MOBILE ONLY)
-if (Platform.OS !== 'web') {
-  WebBrowser.maybeCompleteAuthSession();
-}
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -21,76 +18,104 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    console.log('LoginScreen: Monitoring auth state changes');
+    console.log('LoginScreen: Setting up OAuth callback listener');
     
-    // CRITICAL: Listen for auth state changes to handle OAuth redirect
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('LoginScreen: Auth state changed:', event, 'Session exists:', !!session);
+    // Handle OAuth callback
+    const handleUrl = async (event: { url: string }) => {
+      console.log('LoginScreen: Received URL callback:', event.url);
       
-      // CRITICAL: Handle SIGNED_IN event (fires after OAuth redirect on web)
-      if (session) {
-        console.log('LoginScreen: Session detected, user ID:', session.user?.id);
-        setLoading(false); // Clear loading state
+      if (event.url.includes('#access_token=')) {
+        console.log('LoginScreen: OAuth callback detected, processing...');
+        setLoading(true);
         
-        // Check if user profile exists
-        const { data: existingProfile, error: profileError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error('LoginScreen: Error checking profile:', profileError);
-        }
-
-        // If profile doesn't exist, create a basic one
-        if (!existingProfile) {
-          console.log('LoginScreen: Creating new profile for OAuth user');
+        try {
+          // Extract the session from the URL
+          const { data, error } = await supabase.auth.getSession();
           
-          const { error: createProfileError } = await supabase
-            .from('users')
-            .insert({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || '',
-              birthdate: '',
-              age: 18,
-              gender: 'hombre',
-              interested_in: 'ambos',
-              age_range_min: 18,
-              age_range_max: 60,
-              country: 'Colombia',
-              city: 'Medellín',
-              phone: '',
-              profile_photo_url: session.user.user_metadata?.avatar_url || null,
-              interests: [],
-              personality_traits: [],
-              compatibility_percentage: 95,
-              notification_preferences: {
-                whatsapp: false,
-                email: true,
-                sms: false,
-                push: true,
-              },
-            });
-
-          if (createProfileError) {
-            console.error('LoginScreen: Error creating profile:', createProfileError);
+          if (error) {
+            console.error('LoginScreen: Error getting session after OAuth:', error);
+            setError('Error al completar el inicio de sesión con OAuth');
+            setLoading(false);
+            return;
           }
-        }
 
-        // Navigate to events screen
-        console.log('LoginScreen: Navigating to events screen');
-        router.replace('/(tabs)/events');
-      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        console.log('LoginScreen: User signed out or deleted');
-        setLoading(false);
+          if (data.session) {
+            console.log('LoginScreen: OAuth session established, user:', data.session.user.id);
+            
+            // Check if user profile exists
+            const { data: existingProfile, error: profileError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.session.user.id)
+              .maybeSingle();
+
+            if (profileError) {
+              console.error('LoginScreen: Error checking profile:', profileError);
+            }
+
+            // If profile doesn't exist, create a basic one
+            if (!existingProfile) {
+              console.log('LoginScreen: Creating new profile for OAuth user');
+              
+              const { error: createProfileError } = await supabase
+                .from('users')
+                .insert({
+                  id: data.session.user.id,
+                  email: data.session.user.email,
+                  name: data.session.user.user_metadata?.full_name || '',
+                  birthdate: '',
+                  age: 18,
+                  gender: 'hombre',
+                  interested_in: 'ambos',
+                  age_range_min: 18,
+                  age_range_max: 60,
+                  country: 'Colombia',
+                  city: 'Medellín',
+                  phone: '',
+                  profile_photo_url: data.session.user.user_metadata?.avatar_url || null,
+                  interests: [],
+                  personality_traits: [],
+                  compatibility_percentage: 95,
+                  notification_preferences: {
+                    whatsapp: false,
+                    email: true,
+                    sms: false,
+                    push: true,
+                  },
+                });
+
+              if (createProfileError) {
+                console.error('LoginScreen: Error creating profile:', createProfileError);
+              }
+            }
+
+            // Navigate to events screen
+            console.log('LoginScreen: Navigating to events screen');
+            router.replace('/(tabs)/events');
+          }
+        } catch (error) {
+          console.error('LoginScreen: OAuth callback processing failed:', error);
+          setError('Error al procesar el inicio de sesión');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Add URL listener
+    const subscription = Linking.addEventListener('url', handleUrl);
+
+    // Check if app was opened with a URL
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('LoginScreen: App opened with URL:', url);
+        handleUrl({ url });
       }
     });
 
     return () => {
-      console.log('LoginScreen: Cleaning up auth listener');
-      authListener.subscription.unsubscribe();
+      console.log('LoginScreen: Cleaning up URL listener');
+      subscription.remove();
     };
   }, [router]);
 
@@ -113,16 +138,15 @@ export default function LoginScreen() {
       if (error) {
         console.error('Login error:', error);
         setError('Email o contraseña incorrectos');
-        setLoading(false);
         return;
       }
 
       console.log('Login successful, user:', data.user?.id);
-      // Don't set loading to false here - let the auth state change handler do it
       router.replace('/(tabs)/events');
     } catch (error) {
       console.error('Login failed:', error);
       setError('Error al iniciar sesión. Intenta de nuevo.');
+    } finally {
       setLoading(false);
     }
   };
@@ -133,82 +157,29 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      if (Platform.OS === 'web') {
-        // WEB: Use direct OAuth redirect (NO WebBrowser)
-        console.log('LoginScreen: Web - Using direct OAuth redirect');
-        
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            },
-          },
-        });
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
 
-        if (error) {
-          console.error('Google OAuth error:', error);
-          setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
-          setLoading(false);
-          return;
-        }
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
 
-        console.log('Web: Google OAuth redirect initiated');
-        // Browser will redirect automatically, no need to handle result
-        // RootLayout will handle the ?code= parameter when user returns
-      } else {
-        // MOBILE: Use WebBrowser for in-app browser
-        console.log('LoginScreen: Mobile - Using WebBrowser for OAuth');
-        
-        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
-        console.log('LoginScreen: Mobile OAuth redirect URI:', redirectUri);
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+        setLoading(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: redirectUri,
-            skipBrowserRedirect: true, // Get URL manually
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            },
-          },
-        });
-
-        if (error) {
-          console.error('Google OAuth error:', error);
-          setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
-          setLoading(false);
-          return;
-        }
-
-        console.log('Google OAuth initiated:', data);
-        
-        if (data.url) {
-          console.log('LoginScreen: Opening Google OAuth in IN-APP browser');
-          
-          const result = await WebBrowser.openAuthSessionAsync(
-            data.url,
-            redirectUri,
-            {
-              showInRecents: true,
-            }
-          );
-          
-          console.log('LoginScreen: WebBrowser result:', result);
-          
-          if (result.type === 'cancel' || result.type === 'dismiss') {
-            console.log('LoginScreen: User cancelled or dismissed OAuth');
-            setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
-            setLoading(false);
-          }
-        } else {
-          console.log('LoginScreen: No OAuth URL returned');
-          setError('No se pudo iniciar el proceso de OAuth');
-          setLoading(false);
-        }
+      console.log('Google OAuth initiated:', data);
+      
+      if (data.url) {
+        console.log('LoginScreen: Opening Google OAuth URL');
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       }
     } catch (error) {
       console.error('Google login failed:', error);
@@ -223,73 +194,29 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      if (Platform.OS === 'web') {
-        // WEB: Use direct OAuth redirect (NO WebBrowser)
-        console.log('LoginScreen: Web - Using direct OAuth redirect');
-        
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'apple',
-          options: {
-            redirectTo: window.location.origin, // Redirect to https://nospi.vercel.app/
-          },
-        });
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
 
-        if (error) {
-          console.error('Apple OAuth error:', error);
-          setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
-          setLoading(false);
-          return;
-        }
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
 
-        console.log('Web: Apple OAuth redirect initiated');
-        // Browser will redirect automatically
-      } else {
-        // MOBILE: Use WebBrowser for in-app browser
-        console.log('LoginScreen: Mobile - Using WebBrowser for OAuth');
-        
-        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'nospi' });
-        console.log('LoginScreen: Apple OAuth redirect URI:', redirectUri);
+      if (error) {
+        console.error('Apple OAuth error:', error);
+        setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+        setLoading(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'apple',
-          options: {
-            redirectTo: redirectUri,
-            skipBrowserRedirect: true,
-          },
-        });
-
-        if (error) {
-          console.error('Apple OAuth error:', error);
-          setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
-          setLoading(false);
-          return;
-        }
-
-        console.log('Apple OAuth initiated:', data);
-        
-        if (data.url) {
-          console.log('LoginScreen: Opening Apple OAuth in IN-APP browser');
-          
-          const result = await WebBrowser.openAuthSessionAsync(
-            data.url,
-            redirectUri,
-            {
-              showInRecents: true,
-            }
-          );
-          
-          console.log('LoginScreen: WebBrowser result:', result);
-          
-          if (result.type === 'cancel' || result.type === 'dismiss') {
-            console.log('LoginScreen: User cancelled or dismissed OAuth');
-            setError(result.type === 'cancel' ? 'Inicio de sesión cancelado' : 'Navegador cerrado');
-            setLoading(false);
-          }
-        } else {
-          console.log('LoginScreen: No OAuth URL returned');
-          setError('No se pudo iniciar el proceso de OAuth');
-          setLoading(false);
-        }
+      console.log('Apple OAuth initiated:', data);
+      
+      if (data.url) {
+        console.log('LoginScreen: Opening Apple OAuth URL');
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       }
     } catch (error) {
       console.error('Apple login failed:', error);

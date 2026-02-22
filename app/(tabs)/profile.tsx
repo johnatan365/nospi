@@ -77,17 +77,11 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
@@ -130,26 +124,14 @@ export default function ProfileScreen() {
       }
 
       if (!data || data.length === 0) {
-        console.log('No profile data found, profile may still be creating...');
-        
-        // Retry loading profile after a short delay (profile might be creating)
-        if (retryCount < 3) {
-          console.log(`Retrying profile load (attempt ${retryCount + 1}/3)...`);
-          setTimeout(() => {
-            setRetryCount(retryCount + 1);
-            loadProfile();
-          }, 1000);
-        } else {
-          console.log('Profile not found after retries');
-          setLoading(false);
-        }
+        console.log('No profile data found');
+        setLoading(false);
         return;
       }
 
       const profileData = data[0];
       console.log('Profile loaded successfully');
       setProfile(profileData);
-      setRetryCount(0); // Reset retry count on success
       setEditName(profileData.name || '');
       setEditPhone(profileData.phone || '');
       setEditCountry(profileData.country || 'Colombia');
@@ -184,50 +166,6 @@ export default function ProfileScreen() {
   const handleEditPress = () => {
     console.log('User tapped edit profile');
     setEditModalVisible(true);
-  };
-
-  const handleChangePassword = async () => {
-    if (!newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      console.log('Changing password...');
-      
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) {
-        console.error('Error changing password:', error);
-        Alert.alert('Error', error.message || 'No se pudo cambiar la contraseña');
-        return;
-      }
-
-      console.log('Password changed successfully');
-      Alert.alert('Éxito', 'Contraseña cambiada correctamente');
-      setChangePasswordModalVisible(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      console.error('Failed to change password:', error);
-      Alert.alert('Error', 'No se pudo cambiar la contraseña');
-    } finally {
-      setChangingPassword(false);
-    }
   };
 
   const handlePhotoPress = async () => {
@@ -418,8 +356,6 @@ export default function ProfileScreen() {
   };
 
   if (loading) {
-    const loadingMessage = retryCount > 0 ? 'Creando tu perfil...' : 'Cargando perfil...';
-    
     return (
       <LinearGradient
         colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
@@ -429,7 +365,6 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-          <Text style={styles.loadingText}>{loadingMessage}</Text>
         </View>
       </LinearGradient>
     );
@@ -445,16 +380,6 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => {
-              setRetryCount(0);
-              loadProfile();
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.retryButtonText}>Reintentar</Text>
-          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -577,15 +502,6 @@ export default function ProfileScreen() {
         >
           <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
           <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.section}
-          onPress={() => setChangePasswordModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
-          <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -884,67 +800,6 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Change Password Modal */}
-      <Modal
-        visible={changePasswordModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setChangePasswordModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
-            <Text style={styles.modalSubtitle}>Ingresa tu nueva contraseña</Text>
-
-            <Text style={styles.inputLabel}>Nueva Contraseña</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#999"
-              secureTextEntry
-              autoCapitalize="none"
-            />
-
-            <Text style={styles.inputLabel}>Confirmar Contraseña</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Repite la contraseña"
-              placeholderTextColor="#999"
-              secureTextEntry
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              style={[styles.saveButton, changingPassword && styles.buttonDisabled]}
-              onPress={handleChangePassword}
-              disabled={changingPassword}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.saveButtonText}>
-                {changingPassword ? 'Cambiando...' : 'Cambiar Contraseña'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => {
-                setChangePasswordModalVisible(false);
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }
@@ -964,31 +819,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginTop: 16,
-    textAlign: 'center',
   },
   errorText: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  retryButtonText: {
-    color: nospiColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
   header: {
     alignItems: 'center',
@@ -1358,8 +1193,5 @@ const styles = StyleSheet.create({
   picker: {
     width: '100%',
     height: 200,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 });
