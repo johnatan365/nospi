@@ -168,7 +168,9 @@ export default function InteraccionScreen() {
 
   const updateCountdown = useCallback((startTime: string) => {
     const now = new Date();
+    // Add 10 minutes to the official event start time
     const eventDate = new Date(startTime);
+    eventDate.setMinutes(eventDate.getMinutes() + 10);
     const diff = eventDate.getTime() - now.getTime();
 
     setCountdown(diff);

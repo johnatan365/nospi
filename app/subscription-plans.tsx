@@ -195,7 +195,10 @@ export default function SubscriptionPlansScreen() {
         </View>
 
         <View style={styles.paymentSection}>
-          <Text style={styles.paymentTitle}>Método de Pago</Text>
+          <View style={styles.paymentTitleContainer}>
+            <Text style={styles.paymentTitle}>Método de Pago</Text>
+            <Text style={styles.paymentSubtitle}>⚠️ Selecciona una opción para continuar</Text>
+          </View>
 
           {showGooglePay && (
             <TouchableOpacity
@@ -419,12 +422,25 @@ const styles = StyleSheet.create({
   },
   paymentSection: {
     marginBottom: 24,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+  },
+  paymentTitleContainer: {
+    marginBottom: 16,
   },
   paymentTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  paymentSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
   },
   paymentButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

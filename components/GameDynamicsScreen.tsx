@@ -43,6 +43,7 @@ interface GameDynamicsScreenProps {
 
 const QUESTIONS = {
   divertido: [
+    '¿Cuál es tu nombre y a qué te dedicas?',
     '¿Cuál es tu mayor sueño?',
     '¿Qué te hace reír sin control?',
     '¿Cuál es tu película favorita?',
@@ -93,9 +94,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [matchStartedAt, setMatchStartedAt] = useState<string | null>(null);
   const [matchDeadlineAt, setMatchDeadlineAt] = useState<string | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<Date | null>(null);
+  const [questionTimeRemaining, setQuestionTimeRemaining] = useState<number>(300); // 5 minutes in seconds
+  const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
   
   // CRITICAL: Ref to prevent Realtime race conditions during optimistic updates
   const isOptimisticUpdateRef = useRef(false);
+  const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -106,6 +111,40 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
     getCurrentUser();
   }, []);
+
+  // Question timer - 5 minutes per question
+  useEffect(() => {
+    if (gamePhase !== 'question_active') {
+      if (questionTimerRef.current) {
+        clearInterval(questionTimerRef.current);
+        questionTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Start timer when question becomes active
+    setQuestionStartTime(new Date());
+    setQuestionTimeRemaining(300); // 5 minutes
+
+    questionTimerRef.current = setInterval(() => {
+      setQuestionTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // Time's up - auto advance
+          console.log('⏰ Question time expired - auto advancing');
+          handleContinue();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (questionTimerRef.current) {
+        clearInterval(questionTimerRef.current);
+        questionTimerRef.current = null;
+      }
+    };
+  }, [gamePhase, currentQuestionIndex]);
 
   // CRITICAL: Reconnection Safety - Always derive state from event_state
   useEffect(() => {
@@ -595,8 +634,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Started next level:', nextLevel);
       } else {
-        // All levels complete - end game
-        const { error } = await supabase
+        // All levels complete - end game and move appointments to "anterior"
+        const { error: eventError } = await supabase
           .from('events')
           .update({
             game_phase: 'finished',
@@ -606,9 +645,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           })
           .eq('id', appointment.event_id);
 
-        if (error) {
-          console.error('❌ Error ending game:', error);
+        if (eventError) {
+          console.error('❌ Error ending game:', eventError);
           return;
+        }
+
+        // Move all appointments for this event to "anterior" status
+        const { error: appointmentsError } = await supabase
+          .from('appointments')
+          .update({ status: 'anterior' })
+          .eq('event_id', appointment.event_id)
+          .eq('status', 'confirmada');
+
+        if (appointmentsError) {
+          console.error('❌ Error updating appointments:', appointmentsError);
+        } else {
+          console.log('✅ Moved appointments to anterior status');
         }
 
         console.log('✅ Game ended');
@@ -620,6 +672,43 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, activeParticipants]);
 
+  const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
+    if (!appointment?.event_id || !currentUserId) return;
+
+    console.log('⭐ Rating user:', ratedUserId, 'with', rating, 'stars');
+
+    try {
+      // Save rating to database
+      const { error } = await supabase
+        .from('event_ratings')
+        .upsert({
+          event_id: appointment.event_id,
+          rater_user_id: currentUserId,
+          rated_user_id: ratedUserId,
+          rating: rating,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'event_id,rater_user_id,rated_user_id'
+        });
+
+      if (error) {
+        console.error('❌ Error saving rating:', error);
+        return;
+      }
+
+      console.log('✅ Rating saved successfully');
+      
+      // Update local state
+      setUserRatings(prev => ({
+        ...prev,
+        [ratedUserId]: rating
+      }));
+    } catch (error) {
+      console.error('❌ Failed to save rating:', error);
+    }
+  }, [appointment, currentUserId]);
+
   const answeredCount = answeredUsers.length;
   const totalCount = activeParticipants.length;
   const allAnswered = answeredCount === totalCount && totalCount > 0;
@@ -627,6 +716,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+
+  // Format timer display
+  const timerMinutes = Math.floor(questionTimeRemaining / 60);
+  const timerSeconds = questionTimeRemaining % 60;
+  const timerDisplay = `${timerMinutes}:${timerSeconds.toString().padStart(2, '0')}`;
 
   // Show match selection screen
   if (gamePhase === 'match_selection' && currentUserId) {
@@ -711,6 +805,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <View style={styles.levelBadge}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
             <Text style={styles.levelText}>{levelName}</Text>
+          </View>
+
+          <View style={styles.timerCard}>
+            <Text style={styles.timerLabel}>⏱️ Tiempo restante:</Text>
+            <Text style={[styles.timerDisplay, questionTimeRemaining < 60 && styles.timerWarning]}>
+              {timerDisplay}
+            </Text>
           </View>
 
           <View style={styles.questionCard}>
@@ -825,6 +926,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <View style={styles.participantsRatingSection}>
               {activeParticipants.filter(p => p.user_id !== currentUserId).map((participant, index) => {
                 const displayName = participant.name;
+                const currentRating = userRatings[participant.user_id] || 0;
                 
                 return (
                   <View key={index} style={styles.participantRatingCard}>
@@ -849,13 +951,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                         <TouchableOpacity
                           key={star}
                           style={styles.starButton}
-                          onPress={() => console.log(`Rated ${displayName} with ${star} stars`)}
+                          onPress={() => handleRateUser(participant.user_id, star)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.starIcon}>⭐</Text>
+                          <Text style={[styles.starIcon, star <= currentRating && styles.starIconSelected]}>⭐</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
+                    {currentRating > 0 && (
+                      <Text style={styles.ratingConfirmation}>✓ Calificación guardada</Text>
+                    )}
                   </View>
                 );
               })}
@@ -1217,5 +1322,37 @@ const styles = StyleSheet.create({
   },
   starIcon: {
     fontSize: 28,
+    opacity: 0.3,
+  },
+  starIconSelected: {
+    opacity: 1,
+  },
+  ratingConfirmation: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  timerCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  timerLabel: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  timerDisplay: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  timerWarning: {
+    color: '#EF4444',
   },
 });

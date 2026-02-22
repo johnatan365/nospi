@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Alert } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -90,6 +91,9 @@ export default function AdminPanelScreen() {
 
   // Event creation modal
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [newEvent, setNewEvent] = useState({
     name: '',
     city: '',
@@ -271,6 +275,25 @@ export default function AdminPanelScreen() {
       setEventAttendees([]);
     } finally {
       setLoadingAttendees(false);
+    }
+  };
+
+  const handleDateChange = (event: any, date?: Date) => {
+    setShowDatePicker(false);
+    if (date) {
+      setSelectedDate(date);
+      const dateString = date.toISOString().split('T')[0];
+      setNewEvent({ ...newEvent, date: dateString });
+    }
+  };
+
+  const handleTimeChange = (event: any, date?: Date) => {
+    setShowTimePicker(false);
+    if (date) {
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const timeString = `${hours}:${minutes}`;
+      setNewEvent({ ...newEvent, time: timeString });
     }
   };
 
@@ -1521,5 +1544,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+  },
+  datePickerButton: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    color: '#333',
   },
 });

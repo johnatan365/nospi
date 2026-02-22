@@ -1207,20 +1207,38 @@ export default function AdminPanelScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="2024-02-15"
+              <Text style={styles.inputLabel}>Fecha *</Text>
+              <input
+                type="date"
+                style={{
+                  backgroundColor: '#F3F4F6',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  width: '100%',
+                  marginBottom: 8,
+                }}
                 value={eventForm.date}
-                onChangeText={(text) => setEventForm({ ...eventForm, date: text })}
+                onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
               />
 
-              <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="21:15"
+              <Text style={styles.inputLabel}>Hora *</Text>
+              <input
+                type="time"
+                style={{
+                  backgroundColor: '#F3F4F6',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  width: '100%',
+                  marginBottom: 8,
+                }}
                 value={eventForm.time}
-                onChangeText={(text) => setEventForm({ ...eventForm, time: text })}
+                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
               />
 
               <Text style={styles.inputLabel}>Máximo de Participantes</Text>

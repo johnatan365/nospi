@@ -94,6 +94,13 @@ export default function ProfileScreen() {
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
+  // Password change state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
   useEffect(() => {
     if (user) {
       loadProfile();
@@ -355,6 +362,61 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    console.log('User attempting to change password');
+    setPasswordError('');
+
+    // Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Por favor completa todos los campos');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Las contraseñas no coinciden');
+      return;
+    }
+
+    try {
+      // Verify current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile?.email || '',
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        setPasswordError('La contraseña actual es incorrecta');
+        return;
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        console.error('Error updating password:', updateError);
+        setPasswordError('No se pudo actualizar la contraseña');
+        return;
+      }
+
+      console.log('Password updated successfully');
+      Alert.alert('Éxito', 'Contraseña actualizada correctamente');
+      setShowPasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      setPasswordError('Error al cambiar la contraseña');
+    }
+  };
+
   if (loading) {
     return (
       <LinearGradient
@@ -505,6 +567,15 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={styles.section}
+          onPress={() => setShowPasswordModal(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
+          <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
           activeOpacity={0.8}
@@ -512,6 +583,89 @@ export default function ProfileScreen() {
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Password Change Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
+            <Text style={styles.modalSubtitle}>Ingresa tu contraseña actual y la nueva</Text>
+
+            <Text style={styles.inputLabel}>Contraseña Actual *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Contraseña actual"
+              placeholderTextColor="#999"
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={(text) => {
+                setCurrentPassword(text);
+                setPasswordError('');
+              }}
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.inputLabel}>Nueva Contraseña *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nueva contraseña (mínimo 6 caracteres)"
+              placeholderTextColor="#999"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={(text) => {
+                setNewPassword(text);
+                setPasswordError('');
+              }}
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.inputLabel}>Confirmar Nueva Contraseña *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Confirma la nueva contraseña"
+              placeholderTextColor="#999"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setPasswordError('');
+              }}
+              autoCapitalize="none"
+            />
+
+            {passwordError ? (
+              <Text style={styles.passwordError}>{passwordError}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleChangePassword}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>Cambiar Contraseña</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowPasswordModal(false);
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Notification Preferences Modal */}
       <Modal
@@ -622,4 +776,40 @@ const styles = StyleSheet.create({
   checkmark: { color: nospiColors.white, fontSize: 16, fontWeight: 'bold' },
   modalCloseButton: { backgroundColor: '#E0E0E0', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
   modalCloseButtonText: { color: '#333', fontSize: 16, fontWeight: '600' },
+  passwordError: {
+    fontSize: 14,
+    color: '#EF4444',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  saveButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
