@@ -162,6 +162,18 @@ export default function AdminPanelScreen() {
     confirmation_code: '1986',
   });
 
+  // Event questions management (for specific event)
+  const [eventQuestions, setEventQuestions] = useState<{
+    divertido: string[];
+    sensual: string[];
+    atrevido: string[];
+  }>({
+    divertido: [],
+    sensual: [],
+    atrevido: [],
+  });
+  const [showEventQuestionsSection, setShowEventQuestionsSection] = useState(false);
+
   // Question management
   const [showQuestionsModal, setShowQuestionsModal] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -474,10 +486,17 @@ export default function AdminPanelScreen() {
       event_status: 'draft',
       confirmation_code: '1986',
     });
+    // Load default questions for new event
+    setEventQuestions({
+      divertido: DEFAULT_QUESTIONS_DATA.divertido.slice(0, 5),
+      sensual: DEFAULT_QUESTIONS_DATA.sensual.slice(0, 5),
+      atrevido: DEFAULT_QUESTIONS_DATA.atrevido.slice(0, 5),
+    });
+    setShowEventQuestionsSection(false);
     setShowEventModal(true);
   };
 
-  const openEditEventModal = (event: Event) => {
+  const openEditEventModal = async (event: Event) => {
     console.log('Opening edit event modal for:', event.id);
     setEditingEventId(event.id);
     
@@ -510,7 +529,74 @@ export default function AdminPanelScreen() {
       event_status: event.event_status || 'draft',
       confirmation_code: event.confirmation_code || '1986',
     });
+
+    // Load existing questions for this event
+    try {
+      const { data: existingQuestions, error } = await supabase
+        .from('event_questions')
+        .select('*')
+        .eq('event_id', event.id)
+        .order('question_order', { ascending: true });
+
+      if (error) {
+        console.error('Error loading event questions:', error);
+      } else {
+        const questionsByLevel = {
+          divertido: existingQuestions?.filter(q => q.level === 'divertido').map(q => q.question_text) || [],
+          sensual: existingQuestions?.filter(q => q.level === 'sensual').map(q => q.question_text) || [],
+          atrevido: existingQuestions?.filter(q => q.level === 'atrevido').map(q => q.question_text) || [],
+        };
+        setEventQuestions(questionsByLevel);
+      }
+    } catch (error) {
+      console.error('Failed to load event questions:', error);
+    }
+
+    setShowEventQuestionsSection(false);
     setShowEventModal(true);
+  };
+
+  const saveEventQuestions = async (eventId: string) => {
+    try {
+      // Delete existing questions for this event
+      await supabase
+        .from('event_questions')
+        .delete()
+        .eq('event_id', eventId);
+
+      // Insert new questions
+      const questionsToInsert: any[] = [];
+      let orderCounter = 0;
+
+      for (const [level, questionsList] of Object.entries(eventQuestions)) {
+        questionsList.forEach((questionText) => {
+          if (questionText.trim()) {
+            questionsToInsert.push({
+              event_id: eventId,
+              level: level,
+              question_text: questionText.trim(),
+              question_order: orderCounter++,
+              is_default: false,
+            });
+          }
+        });
+      }
+
+      if (questionsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('event_questions')
+          .insert(questionsToInsert);
+
+        if (error) {
+          console.error('Error saving event questions:', error);
+          window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
+        } else {
+          console.log('✅ Event questions saved successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save event questions:', error);
+    }
   };
 
   const handleSaveEvent = async () => {
@@ -585,6 +671,10 @@ export default function AdminPanelScreen() {
         }
 
         console.log('✅ Event updated successfully:', data);
+        
+        // Save event questions
+        await saveEventQuestions(editingEventId);
+        
         window.alert('Evento actualizado exitosamente');
       } else {
         const { data, error } = await supabase
@@ -599,6 +689,12 @@ export default function AdminPanelScreen() {
         }
 
         console.log('✅ Event created successfully:', data);
+        
+        // Save event questions for new event
+        if (data && data[0]) {
+          await saveEventQuestions(data[0].id);
+        }
+        
         window.alert('Evento creado exitosamente');
       }
 
@@ -618,6 +714,11 @@ export default function AdminPanelScreen() {
         is_location_revealed: false,
         event_status: 'draft',
         confirmation_code: '1986',
+      });
+      setEventQuestions({
+        divertido: [],
+        sensual: [],
+        atrevido: [],
       });
       loadDashboardData();
     } catch (error) {
@@ -1930,6 +2031,146 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 </TouchableOpacity>
               </View>
 
+              {/* Event Questions Section */}
+              <View style={styles.eventQuestionsSection}>
+                <TouchableOpacity
+                  style={styles.questionsToggleButton}
+                  onPress={() => setShowEventQuestionsSection(!showEventQuestionsSection)}
+                >
+                  <Text style={styles.questionsToggleText}>
+                    {showEventQuestionsSection ? '▼' : '▶'} Gestionar Preguntas del Evento
+                  </Text>
+                </TouchableOpacity>
+
+                {showEventQuestionsSection && (
+                  <View style={styles.questionsContent}>
+                    <Text style={styles.questionsHint}>
+                      Personaliza las preguntas para este evento específico. Si no agregas preguntas, se usarán las predeterminadas.
+                    </Text>
+
+                    {/* Divertido Level */}
+                    <View style={styles.questionLevelSection}>
+                      <Text style={styles.questionLevelTitle}>😄 Nivel Divertido</Text>
+                      {eventQuestions.divertido.map((question, index) => (
+                        <View key={index} style={styles.questionInputRow}>
+                          <TextInput
+                            style={styles.questionTextInput}
+                            value={question}
+                            onChangeText={(text) => {
+                              const newQuestions = [...eventQuestions.divertido];
+                              newQuestions[index] = text;
+                              setEventQuestions({ ...eventQuestions, divertido: newQuestions });
+                            }}
+                            placeholder={`Pregunta ${index + 1}`}
+                            multiline
+                          />
+                          <TouchableOpacity
+                            style={styles.removeQuestionButton}
+                            onPress={() => {
+                              const newQuestions = eventQuestions.divertido.filter((_, i) => i !== index);
+                              setEventQuestions({ ...eventQuestions, divertido: newQuestions });
+                            }}
+                          >
+                            <Text style={styles.removeQuestionText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                      <TouchableOpacity
+                        style={styles.addQuestionSmallButton}
+                        onPress={() => {
+                          setEventQuestions({
+                            ...eventQuestions,
+                            divertido: [...eventQuestions.divertido, ''],
+                          });
+                        }}
+                      >
+                        <Text style={styles.addQuestionSmallText}>+ Agregar Pregunta Divertida</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Sensual Level */}
+                    <View style={styles.questionLevelSection}>
+                      <Text style={styles.questionLevelTitle}>😘 Nivel Sensual</Text>
+                      {eventQuestions.sensual.map((question, index) => (
+                        <View key={index} style={styles.questionInputRow}>
+                          <TextInput
+                            style={styles.questionTextInput}
+                            value={question}
+                            onChangeText={(text) => {
+                              const newQuestions = [...eventQuestions.sensual];
+                              newQuestions[index] = text;
+                              setEventQuestions({ ...eventQuestions, sensual: newQuestions });
+                            }}
+                            placeholder={`Pregunta ${index + 1}`}
+                            multiline
+                          />
+                          <TouchableOpacity
+                            style={styles.removeQuestionButton}
+                            onPress={() => {
+                              const newQuestions = eventQuestions.sensual.filter((_, i) => i !== index);
+                              setEventQuestions({ ...eventQuestions, sensual: newQuestions });
+                            }}
+                          >
+                            <Text style={styles.removeQuestionText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                      <TouchableOpacity
+                        style={styles.addQuestionSmallButton}
+                        onPress={() => {
+                          setEventQuestions({
+                            ...eventQuestions,
+                            sensual: [...eventQuestions.sensual, ''],
+                          });
+                        }}
+                      >
+                        <Text style={styles.addQuestionSmallText}>+ Agregar Pregunta Sensual</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Atrevido Level */}
+                    <View style={styles.questionLevelSection}>
+                      <Text style={styles.questionLevelTitle}>🔥 Nivel Atrevido</Text>
+                      {eventQuestions.atrevido.map((question, index) => (
+                        <View key={index} style={styles.questionInputRow}>
+                          <TextInput
+                            style={styles.questionTextInput}
+                            value={question}
+                            onChangeText={(text) => {
+                              const newQuestions = [...eventQuestions.atrevido];
+                              newQuestions[index] = text;
+                              setEventQuestions({ ...eventQuestions, atrevido: newQuestions });
+                            }}
+                            placeholder={`Pregunta ${index + 1}`}
+                            multiline
+                          />
+                          <TouchableOpacity
+                            style={styles.removeQuestionButton}
+                            onPress={() => {
+                              const newQuestions = eventQuestions.atrevido.filter((_, i) => i !== index);
+                              setEventQuestions({ ...eventQuestions, atrevido: newQuestions });
+                            }}
+                          >
+                            <Text style={styles.removeQuestionText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                      <TouchableOpacity
+                        style={styles.addQuestionSmallButton}
+                        onPress={() => {
+                          setEventQuestions({
+                            ...eventQuestions,
+                            atrevido: [...eventQuestions.atrevido, ''],
+                          });
+                        }}
+                      >
+                        <Text style={styles.addQuestionSmallText}>+ Agregar Pregunta Atrevida</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonCancel]}
@@ -2757,5 +2998,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 4,
+  },
+  eventQuestionsSection: {
+    marginTop: 24,
+    marginBottom: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 20,
+  },
+  questionsToggleButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  questionsToggleText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  questionsContent: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  questionsHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  questionLevelSection: {
+    marginBottom: 20,
+  },
+  questionLevelTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  questionInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  questionTextInput: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minHeight: 40,
+  },
+  removeQuestionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeQuestionText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: 'bold',
+  },
+  addQuestionSmallButton: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  addQuestionSmallText: {
+    color: nospiColors.purpleDark,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
