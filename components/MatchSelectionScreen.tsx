@@ -59,6 +59,24 @@ export default function MatchSelectionScreen({
   const hasTriggeredHapticRef = useRef(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasCalledOnMatchCompleteRef = useRef(false);
+  
+  // CRITICAL FIX: Use refs to track latest state values
+  const loadingRef = useRef(loading);
+  const hasVotedRef = useRef(hasVoted);
+  const selectedUserIdRef = useRef(selectedUserId);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+  
+  useEffect(() => {
+    hasVotedRef.current = hasVoted;
+  }, [hasVoted]);
+  
+  useEffect(() => {
+    selectedUserIdRef.current = selectedUserId;
+  }, [selectedUserId]);
 
   // CRITICAL FIX: Move triggerMatchAnimation to the top, before any useEffect that uses it
   const triggerMatchAnimation = useCallback(() => {
@@ -419,39 +437,40 @@ export default function MatchSelectionScreen({
     setSelectedUserId('none');
   }, []);
 
-  // CRITICAL FIX: Simplify handleConfirmSelection - remove dependencies that cause re-creation
+  // CRITICAL FIX: Use refs to get fresh state values
   const handleConfirmSelection = useCallback(async () => {
     console.log('🔘 === BUTTON CLICKED: Confirmar elección ===');
-    console.log('🔘 Current state at click time:', {
-      selectedUserId,
-      loading,
-      hasVoted,
+    console.log('🔘 Current state at click time (from refs):', {
+      selectedUserId: selectedUserIdRef.current,
+      loading: loadingRef.current,
+      hasVoted: hasVotedRef.current,
     });
 
-    if (!selectedUserId) {
+    // CRITICAL: Use ref values for checks
+    if (!selectedUserIdRef.current) {
       console.warn('⚠️ No selection made');
       return;
     }
 
-    if (loading) {
+    if (loadingRef.current) {
       console.warn('⚠️ Already loading');
       return;
     }
 
-    if (hasVoted) {
+    if (hasVotedRef.current) {
       console.warn('⚠️ Already voted');
       return;
     }
 
     console.log('💘 === CONFIRMING MATCH SELECTION ===');
-    console.log('💘 Selected user ID:', selectedUserId);
+    console.log('💘 Selected user ID:', selectedUserIdRef.current);
     
     // Set optimistic flag to block realtime updates
     isOptimisticUpdateRef.current = true;
     setLoading(true);
 
     try {
-      const selectedUserIdValue = selectedUserId === 'none' ? null : selectedUserId;
+      const selectedUserIdValue = selectedUserIdRef.current === 'none' ? null : selectedUserIdRef.current;
       
       console.log('🔧 Calling process_match_vote RPC with:', {
         p_event_id: eventId,
@@ -522,7 +541,7 @@ export default function MatchSelectionScreen({
       setLoading(false);
       console.log('✅ Loading state set to false');
     }
-  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
+  }, [eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
 
   // CRITICAL: Determine if we can continue
   const canContinue = allVotesReceived || deadlineReached;
@@ -693,6 +712,7 @@ export default function MatchSelectionScreen({
           style={[styles.confirmButton, isButtonDisabled && styles.buttonDisabled]}
           onPress={() => {
             console.log('🔘 === TOUCHABLE OPACITY PRESSED ===');
+            console.log('🔘 Calling handleConfirmSelection directly');
             handleConfirmSelection();
           }}
           disabled={isButtonDisabled}
