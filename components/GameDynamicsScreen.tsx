@@ -273,6 +273,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
+    console.log('🎮 User clicked Iniciar Dinámica button');
     
     if (!appointment?.event_id || activeParticipants.length < 2) {
       console.warn('⚠️ Cannot start - need at least 2 participants');
@@ -281,19 +282,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     setLoading(true);
     
-    const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-    const starterUserId = activeParticipants[randomIndex].user_id;
-    const starter = activeParticipants[randomIndex];
-    const firstQuestion = QUESTIONS.divertido[0];
-    
-    setGamePhase('questions');
-    setCurrentLevel(1);
-    setCurrentQuestionIndex(0);
-    setAnsweredUsers([]);
-    setCurrentQuestion(firstQuestion);
-    setStarterParticipant(starter);
-    
     try {
+      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+      const starterUserId = activeParticipants[randomIndex].user_id;
+      const firstQuestion = QUESTIONS.divertido[0];
+      
+      console.log('🎮 Updating database to start dynamic...');
+      console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
+      console.log('🎮 First question:', firstQuestion);
+      
       const { error } = await supabase
         .from('events')
         .update({
@@ -308,17 +305,25 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error starting dynamic:', error);
-        setGamePhase('ready');
+        console.error('❌ Error starting dynamic:', error.message, error.code, error.details, error.hint);
+        setLoading(false);
         return;
       }
 
-      console.log('✅ Dynamic started successfully');
+      console.log('✅ Database updated successfully - dynamic started');
+      console.log('✅ Realtime subscription will update UI automatically');
+      
+      // Don't set local state here - let the realtime subscription handle it
+      // This prevents race conditions
+      
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      setGamePhase('ready');
-    } finally {
       setLoading(false);
+    } finally {
+      // Keep loading state until realtime update arrives
+      setTimeout(() => {
+        setLoading(false);
+      }, 2000);
     }
   }, [appointment, activeParticipants]);
 
@@ -336,7 +341,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
     
     const newAnsweredUsers = [...answeredUsers, currentUserId];
-    setAnsweredUsers(newAnsweredUsers);
     
     try {
       const { error } = await supabase
@@ -349,14 +353,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (error) {
         console.error('❌ Error updating answered users:', error);
-        setAnsweredUsers(answeredUsers);
         return;
       }
 
       console.log('✅ User marked as answered successfully');
     } catch (error) {
       console.error('❌ Unexpected error:', error);
-      setAnsweredUsers(answeredUsers);
     }
   }, [appointment, currentUserId, answeredUsers]);
 
@@ -376,13 +378,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
-        const newStarter = activeParticipants[randomIndex];
         const nextQuestion = questionsForLevel[nextQuestionIndex];
-
-        setCurrentQuestionIndex(nextQuestionIndex);
-        setAnsweredUsers([]);
-        setCurrentQuestion(nextQuestion);
-        setStarterParticipant(newStarter);
 
         const { error } = await supabase
           .from('events')
@@ -404,8 +400,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else {
         // Level finished - transition to match selection
         console.log('⚡ Transitioning to match_selection');
-        
-        setGamePhase('match_selection');
 
         const { error } = await supabase
           .from('events')
@@ -577,14 +571,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('✅ Event reset successfully');
       }
 
-      setGamePhase('ready');
-      setCurrentLevel(1);
-      setCurrentQuestionIndex(0);
-      setAnsweredUsers([]);
-      setCurrentQuestion(null);
-      setStarterParticipant(null);
-      setUserRatings({});
-
       console.log('✅ Event finished successfully');
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
@@ -600,6 +586,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const levelEmoji = currentLevel === 1 ? '😄' : currentLevel === 2 ? '💕' : '🔥';
   const levelName = currentLevel === 1 ? 'Divertido' : currentLevel === 2 ? 'Sensual' : 'Atrevido';
+
+  console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
   // Show match selection screen
   if (gamePhase === 'match_selection' && currentUserId) {
