@@ -428,14 +428,24 @@ export default function MatchSelectionScreen({
   }, [eventId, currentLevel, currentUserId, triggerMatchAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
+    // CRITICAL: Disable selection changes after voting
+    if (hasVoted) {
+      console.log('⚠️ Cannot change selection - already voted');
+      return;
+    }
     console.log('👆 Selected user:', userId);
     setSelectedUserId(userId);
-  }, []);
+  }, [hasVoted]);
 
   const handleSelectNone = useCallback(() => {
+    // CRITICAL: Disable selection changes after voting
+    if (hasVoted) {
+      console.log('⚠️ Cannot change selection - already voted');
+      return;
+    }
     console.log('👆 Selected: Ninguno por ahora');
     setSelectedUserId('none');
-  }, []);
+  }, [hasVoted]);
 
   // CRITICAL FIX: Use refs to get fresh state values
   const handleConfirmSelection = useCallback(async () => {
@@ -465,6 +475,10 @@ export default function MatchSelectionScreen({
     console.log('💘 === CONFIRMING MATCH SELECTION ===');
     console.log('💘 Selected user ID:', selectedUserIdRef.current);
     
+    // CRITICAL FIX: Set hasVoted IMMEDIATELY for instant UI feedback
+    console.log('✅ Setting hasVoted to TRUE immediately');
+    setHasVoted(true);
+    
     // Set optimistic flag to block realtime updates
     isOptimisticUpdateRef.current = true;
     setLoading(true);
@@ -493,6 +507,10 @@ export default function MatchSelectionScreen({
         console.error('❌ Error message:', error.message);
         console.error('❌ Error code:', error.code);
         console.error('❌ Error hint:', error.hint);
+        
+        // CRITICAL: Reset hasVoted on error to allow retry
+        console.log('🔄 Resetting hasVoted to FALSE due to error');
+        setHasVoted(false);
         isOptimisticUpdateRef.current = false;
         setLoading(false);
         return;
@@ -502,10 +520,6 @@ export default function MatchSelectionScreen({
       console.log('✅ RPC result:', JSON.stringify(data, null, 2));
 
       const result = data as ProcessMatchVoteResult;
-
-      // CRITICAL FIX: Set hasVoted IMMEDIATELY after successful RPC
-      console.log('✅ Setting hasVoted to TRUE');
-      setHasVoted(true);
 
       // CRITICAL: Recalculate vote count immediately after submission
       console.log('🔄 Recalculating vote count after submission');
@@ -535,8 +549,11 @@ export default function MatchSelectionScreen({
     } catch (error) {
       console.error('❌ Unexpected error in handleConfirmSelection:', error);
       console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      isOptimisticUpdateRef.current = false;
+      
+      // CRITICAL: Reset hasVoted on error to allow retry
+      console.log('🔄 Resetting hasVoted to FALSE due to unexpected error');
       setHasVoted(false);
+      isOptimisticUpdateRef.current = false;
     } finally {
       setLoading(false);
       console.log('✅ Loading state set to false');
@@ -612,13 +629,16 @@ export default function MatchSelectionScreen({
   // CRITICAL: Check if button should be disabled
   const isButtonDisabled = !selectedUserId || loading || hasVoted;
   
+  // CRITICAL: Determine button text based on state
+  const buttonText = hasVoted ? 'Elección confirmada ✅' : loading ? '⏳ Confirmando...' : 'Confirmar elección';
+  
   // CRITICAL: Log button state on every render
   console.log('🔘 Button render state:', {
     selectedUserId,
     loading,
     hasVoted,
     isButtonDisabled,
-    buttonText: loading ? '⏳ Confirmando...' : hasVoted ? '✓ Elección confirmada' : 'Confirmar elección'
+    buttonText
   });
 
   return (
@@ -662,9 +682,14 @@ export default function MatchSelectionScreen({
             return (
               <React.Fragment key={index}>
               <TouchableOpacity
-                style={[styles.participantCard, isSelected && styles.participantCardSelected]}
+                style={[
+                  styles.participantCard, 
+                  isSelected && styles.participantCardSelected,
+                  hasVoted && styles.participantCardDisabled
+                ]}
                 onPress={() => handleSelectUser(participant.user_id)}
-                activeOpacity={0.7}
+                activeOpacity={hasVoted ? 1 : 0.7}
+                disabled={hasVoted}
               >
                 <View style={styles.participantInfo}>
                   {participant.profile_photo_url ? (
@@ -695,9 +720,14 @@ export default function MatchSelectionScreen({
           })}
 
           <TouchableOpacity
-            style={[styles.noneCard, selectedUserId === 'none' && styles.noneCardSelected]}
+            style={[
+              styles.noneCard, 
+              selectedUserId === 'none' && styles.noneCardSelected,
+              hasVoted && styles.participantCardDisabled
+            ]}
             onPress={handleSelectNone}
-            activeOpacity={0.7}
+            activeOpacity={hasVoted ? 1 : 0.7}
+            disabled={hasVoted}
           >
             <Text style={styles.noneText}>Ninguno por ahora</Text>
             {selectedUserId === 'none' && (
@@ -709,7 +739,11 @@ export default function MatchSelectionScreen({
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, isButtonDisabled && styles.buttonDisabled]}
+          style={[
+            styles.confirmButton, 
+            isButtonDisabled && styles.buttonDisabled,
+            hasVoted && styles.buttonConfirmed
+          ]}
           onPress={() => {
             console.log('🔘 === TOUCHABLE OPACITY PRESSED ===');
             console.log('🔘 Calling handleConfirmSelection directly');
@@ -719,7 +753,7 @@ export default function MatchSelectionScreen({
           activeOpacity={0.8}
         >
           <Text style={styles.confirmButtonText}>
-            {loading ? '⏳ Confirmando...' : hasVoted ? '✓ Elección confirmada' : 'Confirmar elección'}
+            {buttonText}
           </Text>
         </TouchableOpacity>
 
@@ -850,6 +884,9 @@ const styles = StyleSheet.create({
     borderColor: nospiColors.purpleMid,
     backgroundColor: 'rgba(233, 213, 255, 0.95)',
   },
+  participantCardDisabled: {
+    opacity: 0.6,
+  },
   participantInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -933,7 +970,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   buttonDisabled: {
-    opacity: 0.5,
+    opacity: 0.6,
+  },
+  buttonConfirmed: {
+    backgroundColor: '#10B981',
   },
   waitingCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
