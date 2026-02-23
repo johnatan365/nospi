@@ -272,11 +272,12 @@ export default function AdminPanelScreen() {
       // Load events
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, address, start_time, max_participants, current_participants, status, event_status, confirmation_code')
+        .select('*')
         .order('date', { ascending: false });
 
       if (eventsError) {
         console.error('Error loading events:', eventsError);
+        window.alert('Error al cargar eventos: ' + eventsError.message);
       } else {
         console.log('✅ Events loaded successfully:', eventsData?.length || 0);
         setEvents(eventsData || []);
@@ -568,6 +569,8 @@ export default function AdminPanelScreen() {
         confirmation_code: finalConfirmationCode,
       };
 
+      console.log('Saving event data:', eventData);
+
       if (editingEventId) {
         const { data, error } = await supabase
           .from('events')
@@ -576,10 +579,12 @@ export default function AdminPanelScreen() {
           .select();
 
         if (error) {
+          console.error('Error updating event:', error);
           window.alert('Error al actualizar evento: ' + error.message);
           return;
         }
 
+        console.log('✅ Event updated successfully:', data);
         window.alert('Evento actualizado exitosamente');
       } else {
         const { data, error } = await supabase
@@ -588,10 +593,12 @@ export default function AdminPanelScreen() {
           .select();
 
         if (error) {
+          console.error('Error creating event:', error);
           window.alert('Error al crear evento: ' + error.message);
           return;
         }
 
+        console.log('✅ Event created successfully:', data);
         window.alert('Evento creado exitosamente');
       }
 
@@ -614,6 +621,7 @@ export default function AdminPanelScreen() {
       });
       loadDashboardData();
     } catch (error) {
+      console.error('Unexpected error saving event:', error);
       window.alert('Error inesperado: ' + String(error));
     }
   };
@@ -1022,9 +1030,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     }
   };
 
-  // Render functions remain the same as before, but I'll add the new buttons to the questions modal
-  // Due to length constraints, I'll only show the modified parts
-
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -1070,9 +1075,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     );
   };
 
-  // ... (other render functions remain the same - renderEvents, renderUsers, renderAppointments, renderRealtime, renderMatches)
-  // Due to length, I'm not repeating them here, but they should remain unchanged from the original file
-
+  // Password modal
   if (showPasswordModal) {
     return (
       <View style={styles.fullScreenContainer}>
@@ -1179,160 +1182,226 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         </ScrollView>
       </View>
 
-      {/* Questions Management Modal - MODIFIED with new buttons */}
+      {/* Event Creation/Edit Modal */}
       <Modal
-        visible={showQuestionsModal}
+        visible={showEventModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowQuestionsModal(false)}
+        onRequestClose={() => setShowEventModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.questionsModalContent}>
-            <View style={styles.questionsModalHeader}>
-              <Text style={styles.questionsModalTitle}>
-                Gestión de Preguntas
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
               </Text>
-              <TouchableOpacity
-                style={styles.closeModalButton}
-                onPress={() => setShowQuestionsModal(false)}
-              >
-                <Text style={styles.closeModalButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            {/* NEW: Action buttons for restore and mass upload */}
-            <View style={styles.questionActionsBar}>
-              <TouchableOpacity
-                style={styles.restoreButton}
-                onPress={handleRestoreDefaultQuestions}
-                disabled={loadingQuestions}
-              >
-                <Text style={styles.restoreButtonText}>
-                  🔄 Restaurar Preguntas Predeterminadas
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.downloadTemplateButton}
-                onPress={handleDownloadTemplate}
-              >
-                <Text style={styles.downloadTemplateButtonText}>
-                  📥 Descargar Plantilla CSV
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.massUploadButton}
-                onPress={handleMassUpload}
-              >
-                <Text style={styles.massUploadButtonText}>
-                  📤 Cargar Preguntas Masivamente
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.levelSelector}>
-              <TouchableOpacity
-                style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
-                onPress={() => {
-                  setSelectedLevel('divertido');
-                  loadQuestions();
-                }}
-              >
-                <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
-                  😄 Divertido
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
-                onPress={() => {
-                  setSelectedLevel('sensual');
-                  loadQuestions();
-                }}
-              >
-                <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
-                  💕 Sensual
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
-                onPress={() => {
-                  setSelectedLevel('atrevido');
-                  loadQuestions();
-                }}
-              >
-                <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
-                  🔥 Atrevido
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.addQuestionSection}>
-              <Text style={styles.addQuestionLabel}>Agregar Nueva Pregunta</Text>
+              <Text style={styles.inputLabel}>Nombre del Evento *</Text>
               <TextInput
-                style={styles.addQuestionInput}
-                placeholder="Escribe la pregunta aquí..."
-                value={newQuestionText}
-                onChangeText={setNewQuestionText}
-                multiline
+                style={styles.input}
+                placeholder="Ej: Encuentro de Solteros"
+                value={eventForm.name}
+                onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
               />
-              <TouchableOpacity
-                style={styles.addQuestionButton}
-                onPress={handleAddQuestion}
-              >
-                <Text style={styles.addQuestionButtonText}>+ Agregar Pregunta</Text>
-              </TouchableOpacity>
-            </View>
 
-            {loadingQuestions ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-                <Text style={styles.loadingText}>Cargando preguntas...</Text>
+              <Text style={styles.inputLabel}>Ciudad *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bogotá"
+                value={eventForm.city}
+                onChangeText={(text) => setEventForm({ ...eventForm, city: text })}
+              />
+
+              <Text style={styles.inputLabel}>Descripción</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Descripción del evento"
+                value={eventForm.description}
+                onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.inputLabel}>Tipo de Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'bar' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'bar' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.type === 'bar' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    🍸 Bar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.type === 'restaurant' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, type: 'restaurant' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.type === 'restaurant' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    🍽️ Restaurante
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <ScrollView style={styles.questionsList}>
-                <Text style={styles.questionsListTitle}>
-                  Preguntas Actuales ({questions.length})
+
+              <Text style={styles.inputLabel}>Fecha (YYYY-MM-DD) *</Text>
+              <input
+                type="date"
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  borderWidth: 1,
+                  borderColor: '#E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 8,
+                  width: '100%',
+                }}
+                value={eventForm.date}
+                onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Hora (HH:mm formato 24 horas) *</Text>
+              <input
+                type="time"
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  borderWidth: 1,
+                  borderColor: '#E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 8,
+                  width: '100%',
+                }}
+                value={eventForm.time}
+                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Máximo de Participantes</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="6"
+                keyboardType="numeric"
+                value={String(eventForm.max_participants)}
+                onChangeText={(text) =>
+                  setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })
+                }
+              />
+
+              <Text style={styles.inputLabel}>Nombre del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bar El Encuentro"
+                value={eventForm.location_name}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Calle 85 #15-20"
+                value={eventForm.location_address}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
+              />
+
+              <Text style={styles.inputLabel}>Enlace de Maps</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://maps.google.com/..."
+                value={eventForm.maps_link}
+                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+              />
+
+              <View style={styles.highlightedSection}>
+                <Text style={[styles.inputLabel, styles.requiredLabel]}>🔑 Código de confirmación *</Text>
+                <Text style={styles.inputHint}>
+                  Los participantes deberán ingresar este código para confirmar su asistencia
                 </Text>
-                {questions.map((question, index) => (
-                  <View key={question.id} style={styles.questionItem}>
-                    <View style={styles.questionHeader}>
-                      <Text style={styles.questionNumber}>#{index + 1}</Text>
-                      <Text style={styles.questionText}>{question.question_text}</Text>
-                    </View>
-                    <View style={styles.questionActions}>
-                      <TouchableOpacity
-                        style={styles.editQuestionButton}
-                        onPress={() => {
-                          const newText = window.prompt('Editar pregunta:', question.question_text);
-                          if (newText) {
-                            handleUpdateQuestion(question.id, newText);
-                          }
-                        }}
-                      >
-                        <Text style={styles.editQuestionButtonText}>✏️ Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteQuestionButton}
-                        onPress={() => handleDeleteQuestion(question.id)}
-                      >
-                        <Text style={styles.deleteQuestionButtonText}>🗑️ Eliminar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+                <TextInput
+                  style={[styles.input, styles.highlightedInput]}
+                  placeholder="Ej: 1986"
+                  value={eventForm.confirmation_code}
+                  onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
+                />
+                <Text style={styles.defaultHint}>Por defecto: 1986</Text>
+              </View>
+
+              <Text style={styles.inputLabel}>Estado del Evento</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'draft' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'draft' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'draft' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    📝 Borrador
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    eventForm.event_status === 'published' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => setEventForm({ ...eventForm, event_status: 'published' })}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      eventForm.event_status === 'published' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    ✅ Publicado
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowEventModal(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonConfirm]}
+                  onPress={handleSaveEvent}
+                >
+                  <Text style={styles.modalButtonTextConfirm}>
+                    {editingEventId ? 'Actualizar' : 'Crear Evento'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
-
-      {/* Other modals remain the same */}
     </View>
   );
 }
 
-// Styles - adding new styles for the action buttons
 const styles = StyleSheet.create({
-  // ... (all existing styles remain the same)
   fullScreenContainer: {
     flex: 1,
     backgroundColor: '#F3E8FF',
@@ -1527,209 +1596,132 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
-  questionsModalContent: {
+  modalScrollContent: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  modalContent: {
     backgroundColor: 'white',
     borderRadius: 20,
-    width: '90%',
-    maxWidth: 900,
-    maxHeight: '85%',
-    overflow: 'hidden',
+    padding: 24,
+    width: '100%',
+    maxWidth: 600,
   },
-  questionsModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  questionsModalTitle: {
+  modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
+    marginBottom: 24,
   },
-  closeModalButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    marginTop: 12,
   },
-  closeModalButtonText: {
-    fontSize: 20,
+  requiredLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  inputHint: {
+    fontSize: 13,
     color: '#6B7280',
-    fontWeight: 'bold',
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
-  // NEW STYLES for action buttons
-  questionActionsBar: {
-    flexDirection: 'row',
+  defaultHint: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  input: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  highlightedSection: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
     padding: 16,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    marginTop: 20,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: '#F59E0B',
   },
-  restoreButton: {
-    flex: 1,
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  restoreButtonText: {
-    color: 'white',
-    fontSize: 13,
+  highlightedInput: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
+    fontSize: 18,
     fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 2,
   },
-  downloadTemplateButton: {
-    flex: 1,
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
-  downloadTemplateButtonText: {
-    color: 'white',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  massUploadButton: {
-    flex: 1,
-    backgroundColor: '#8B5CF6',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  massUploadButtonText: {
-    color: 'white',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  levelSelector: {
+  typeSelector: {
     flexDirection: 'row',
-    padding: 20,
     gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 8,
   },
-  levelButton: {
+  typeButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: '#E0E0E0',
   },
-  levelButtonActive: {
+  typeButtonActive: {
     backgroundColor: nospiColors.purpleLight,
     borderColor: nospiColors.purpleDark,
   },
-  levelButtonText: {
+  typeButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#6B7280',
   },
-  levelButtonTextActive: {
+  typeButtonTextActive: {
     color: nospiColors.purpleDark,
   },
-  addQuestionSection: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
   },
-  addQuestionLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  addQuestionInput: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    minHeight: 80,
-    textAlignVertical: 'top',
-    marginBottom: 12,
-  },
-  addQuestionButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  addQuestionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  questionsList: {
+  modalButton: {
     flex: 1,
-    padding: 20,
-  },
-  questionsListTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-  },
-  questionItem: {
-    backgroundColor: '#F9FAFB',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  questionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  questionNumber: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleMid,
-    marginRight: 12,
-    minWidth: 40,
-  },
-  questionText: {
-    fontSize: 16,
-    color: '#374151',
-    flex: 1,
-    lineHeight: 24,
-  },
-  questionActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editQuestionButton: {
-    flex: 1,
-    backgroundColor: '#6366F1',
-    borderRadius: 8,
-    padding: 10,
     alignItems: 'center',
   },
-  editQuestionButtonText: {
-    color: 'white',
-    fontSize: 14,
+  modalButtonCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalButtonConfirm: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  modalButtonTextCancel: {
+    color: '#6B7280',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  deleteQuestionButton: {
-    flex: 1,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-  },
-  deleteQuestionButtonText: {
+  modalButtonTextConfirm: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });
