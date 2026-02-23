@@ -1075,6 +1075,392 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     );
   };
 
+  const renderEvents = () => {
+    return (
+      <View style={styles.listContainer}>
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>Gestión de Eventos</Text>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={openCreateEventModal}
+          >
+            <Text style={styles.createButtonText}>+ Crear Evento</Text>
+          </TouchableOpacity>
+        </View>
+
+        {events.map((event) => {
+          const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
+          const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
+          const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
+          const confirmationCode = event.confirmation_code || '1986';
+          
+          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
+
+          return (
+            <View key={event.id} style={styles.listItem}>
+              <View style={styles.listItemHeader}>
+                <Text style={styles.listItemTitle}>{event.name || `${eventTypeText} - ${event.city}`}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                  <Text style={styles.statusBadgeText}>{statusText}</Text>
+                </View>
+              </View>
+              <Text style={styles.listItemDetail}>Ciudad: {event.city}</Text>
+              <Text style={styles.listItemDetail}>Fecha: {event.date} a las {event.time}</Text>
+              {event.description && (
+                <Text style={styles.listItemDetail}>Descripción: {event.description}</Text>
+              )}
+              <Text style={styles.listItemDetail}>
+                Participantes: {event.current_participants}/{event.max_participants}
+              </Text>
+              <Text style={styles.listItemDetail}>
+                Usuarios registrados: {eventAppointmentsCount}
+              </Text>
+              <View style={styles.codeHighlight}>
+                <Text style={styles.codeLabel}>🔑 Código de confirmación:</Text>
+                <Text style={styles.codeValue}>{confirmationCode}</Text>
+              </View>
+              {event.location_name && (
+                <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
+              )}
+              {event.location_address && (
+                <Text style={styles.listItemDetail}>Dirección: {event.location_address}</Text>
+              )}
+              
+              <View style={styles.eventActions}>
+                <TouchableOpacity
+                  style={styles.viewAttendeesButton}
+                  onPress={() => handleViewAttendees(event)}
+                >
+                  <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.questionsButton}
+                  onPress={() => {
+                    setShowQuestionsModal(true);
+                    loadQuestions();
+                  }}
+                >
+                  <Text style={styles.questionsButtonText}>❓ Gestionar Preguntas</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.matchesButton}
+                  onPress={() => {
+                    setSelectedEventForMatches(event.id);
+                    loadEventMatchesAndRatings(event.id);
+                    setCurrentView('matches');
+                  }}
+                >
+                  <Text style={styles.matchesButtonText}>💜 Ver Matches y Calificaciones</Text>
+                </TouchableOpacity>
+
+                {event.event_status === 'draft' && (
+                  <TouchableOpacity
+                    style={styles.publishButton}
+                    onPress={() => handlePublishEvent(event.id)}
+                  >
+                    <Text style={styles.publishButtonText}>✅ Publicar Evento</Text>
+                  </TouchableOpacity>
+                )}
+
+                {event.event_status === 'published' && !event.is_location_revealed && (
+                  <TouchableOpacity
+                    style={styles.revealButton}
+                    onPress={() => handleRevealLocation(event.id)}
+                  >
+                    <Text style={styles.revealButtonText}>📍 Revelar Ubicación</Text>
+                  </TouchableOpacity>
+                )}
+
+                {event.event_status === 'published' && (
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => handleCloseEvent(event.id)}
+                  >
+                    <Text style={styles.closeButtonText}>🔒 Cerrar Evento</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => openEditEventModal(event)}
+                >
+                  <Text style={styles.editButtonText}>✏️ Editar</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteEvent(event.id)}
+                >
+                  <Text style={styles.deleteButtonText}>🗑️ Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderUsers = () => {
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Usuarios Registrados ({users.length})</Text>
+        {users.map((user) => {
+          const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+          const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
+          
+          return (
+            <View key={user.id} style={styles.listItem}>
+              <Text style={styles.listItemTitle}>{user.name}</Text>
+              <Text style={styles.listItemDetail}>📧 Email: {user.email}</Text>
+              <Text style={styles.listItemDetail}>📱 Teléfono: {user.phone}</Text>
+              <Text style={styles.listItemDetail}>
+                📍 Ubicación: {user.city}, {user.country}
+              </Text>
+              <Text style={styles.listItemDetail}>👤 Género: {genderText}</Text>
+              <Text style={styles.listItemDetail}>💝 Interesado en: {interestedInText}</Text>
+              {user.age && <Text style={styles.listItemDetail}>🎂 Edad: {user.age} años</Text>}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderAppointments = () => {
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Citas y Reservas ({appointments.length})</Text>
+        {appointments.map((appointment) => {
+          const statusColor = appointment.status === 'confirmed' ? '#10B981' : '#F59E0B';
+          const paymentColor = appointment.payment_status === 'paid' ? '#10B981' : '#EF4444';
+          const confirmationCode = appointment.events.confirmation_code || '1986';
+          const interestedInText = appointment.users.interested_in === 'hombres' ? 'Hombres' : appointment.users.interested_in === 'mujeres' ? 'Mujeres' : appointment.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
+          const genderText = appointment.users.gender === 'hombre' ? 'Hombre' : appointment.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
+
+          return (
+            <View key={appointment.id} style={styles.listItem}>
+              <View style={styles.listItemHeader}>
+                <Text style={styles.listItemTitle}>{appointment.users.name}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                  <Text style={styles.statusBadgeText}>{appointment.status}</Text>
+                </View>
+              </View>
+              <Text style={styles.listItemDetail}>
+                🎉 Evento: {appointment.events.name || `${appointment.events.type} - ${appointment.events.city}`}
+              </Text>
+              <Text style={styles.listItemDetail}>
+                📅 Fecha: {appointment.events.date} a las {appointment.events.time}
+              </Text>
+              <View style={styles.codeHighlight}>
+                <Text style={styles.codeLabel}>🔑 Código del evento:</Text>
+                <Text style={styles.codeValue}>{confirmationCode}</Text>
+              </View>
+              <Text style={styles.listItemDetail}>📧 Email: {appointment.users.email}</Text>
+              <Text style={styles.listItemDetail}>📱 Teléfono: {appointment.users.phone}</Text>
+              <Text style={styles.listItemDetail}>👤 Género: {genderText}</Text>
+              <Text style={styles.listItemDetail}>💝 Interesado en: {interestedInText}</Text>
+              {appointment.users.age && <Text style={styles.listItemDetail}>🎂 Edad: {appointment.users.age} años</Text>}
+              <View style={[styles.statusBadge, { backgroundColor: paymentColor, marginTop: 8 }]}>
+                <Text style={styles.statusBadgeText}>
+                  💳 Pago: {appointment.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderRealtime = () => {
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Monitoreo en Tiempo Real</Text>
+        
+        <View style={styles.realtimeInfo}>
+          <Text style={styles.realtimeInfoText}>
+            Selecciona un evento para monitorear la asistencia en tiempo real
+          </Text>
+        </View>
+
+        <View style={styles.eventSelector}>
+          <Text style={styles.inputLabel}>Seleccionar Evento:</Text>
+          <select
+            style={{
+              backgroundColor: '#F5F5F5',
+              borderWidth: 1,
+              borderColor: '#E0E0E0',
+              borderRadius: 12,
+              padding: 12,
+              fontSize: 16,
+              marginBottom: 16,
+              width: '100%',
+            }}
+            value={selectedEventForMonitoring || ''}
+            onChange={(e) => {
+              const eventId = e.target.value;
+              setSelectedEventForMonitoring(eventId);
+              if (eventId) {
+                loadEventParticipants(eventId);
+              }
+            }}
+          >
+            <option value="">-- Selecciona un evento --</option>
+            {events.filter(e => e.event_status === 'published').map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.name || `${event.type} - ${event.city}`} - {event.date}
+              </option>
+            ))}
+          </select>
+        </View>
+
+        {selectedEventForMonitoring && (
+          <View style={styles.participantsContainer}>
+            <Text style={styles.participantsTitle}>
+              Participantes Confirmados ({eventParticipants.length})
+            </Text>
+            {eventParticipants.map((participant, index) => {
+              const checkInStatus = participant.is_presented ? '✅ Presente' : '⏳ Pendiente';
+              const checkInColor = participant.is_presented ? '#10B981' : '#F59E0B';
+              
+              return (
+                <View key={participant.id} style={styles.participantItem}>
+                  <View style={styles.participantHeader}>
+                    <Text style={styles.participantNumber}>#{index + 1}</Text>
+                    <Text style={styles.participantName}>{participant.users?.name || 'Usuario'}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: checkInColor }]}>
+                      <Text style={styles.statusBadgeText}>{checkInStatus}</Text>
+                    </View>
+                  </View>
+                  {participant.users && (
+                    <>
+                      <Text style={styles.participantDetail}>📧 {participant.users.email}</Text>
+                      <Text style={styles.participantDetail}>📱 {participant.users.phone}</Text>
+                      <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
+                    </>
+                  )}
+                  {participant.check_in_time && (
+                    <Text style={styles.participantDetail}>
+                      🕐 Check-in: {new Date(participant.check_in_time).toLocaleString('es-ES')}
+                    </Text>
+                  )}
+                  {participant.presented_at && (
+                    <Text style={styles.participantDetail}>
+                      ✅ Presentado: {new Date(participant.presented_at).toLocaleString('es-ES')}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderMatches = () => {
+    const selectedEvent = events.find(e => e.id === selectedEventForMatches);
+    
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Matches y Calificaciones</Text>
+        
+        {!selectedEventForMatches ? (
+          <View style={styles.realtimeInfo}>
+            <Text style={styles.realtimeInfoText}>
+              Selecciona un evento desde la vista de Eventos para ver los matches y calificaciones
+            </Text>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setCurrentView('events')}
+            >
+              <Text style={styles.actionButtonText}>Ir a Eventos</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {selectedEvent && (
+              <View style={styles.eventInfoSection}>
+                <Text style={styles.eventInfoTitle}>
+                  {selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}
+                </Text>
+                <Text style={styles.eventInfoDetail}>
+                  📅 {selectedEvent.date} a las {selectedEvent.time}
+                </Text>
+              </View>
+            )}
+
+            {loadingMatches ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando datos...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.matchesSection}>
+                  <Text style={styles.subsectionTitle}>💜 Matches por Nivel ({eventMatches.length})</Text>
+                  {eventMatches.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay matches registrados para este evento</Text>
+                  ) : (
+                    eventMatches.map((match) => {
+                      const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '😘' : '🔥';
+                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      
+                      return (
+                        <View key={match.id} style={styles.matchItem}>
+                          <View style={styles.matchHeader}>
+                            <Text style={styles.matchLevel}>{levelEmoji} {levelText}</Text>
+                            <Text style={styles.matchDate}>
+                              {new Date(match.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.matchUsers}>
+                            👤 {match.user1?.name || 'Usuario 1'} ↔️ {match.user2?.name || 'Usuario 2'}
+                          </Text>
+                          <Text style={styles.matchEmails}>
+                            📧 {match.user1?.email || 'N/A'} ↔️ {match.user2?.email || 'N/A'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={styles.ratingsSection}>
+                  <Text style={styles.subsectionTitle}>⭐ Calificaciones ({eventRatings.length})</Text>
+                  {eventRatings.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay calificaciones registradas para este evento</Text>
+                  ) : (
+                    eventRatings.map((rating) => {
+                      const stars = '⭐'.repeat(rating.rating);
+                      
+                      return (
+                        <View key={rating.id} style={styles.ratingItem}>
+                          <View style={styles.ratingHeader}>
+                            <Text style={styles.ratingStars}>{stars} ({rating.rating}/5)</Text>
+                            <Text style={styles.ratingDate}>
+                              {new Date(rating.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.ratingUsers}>
+                            👤 {rating.rater?.name || 'Usuario'} calificó a {rating.rated?.name || 'Usuario'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </>
+            )}
+          </>
+        )}
+      </View>
+    );
+  };
+
   // Password modal
   if (showPasswordModal) {
     return (
@@ -1178,9 +1564,176 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         {/* Content */}
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           {currentView === 'dashboard' && renderDashboard()}
-          {/* Other views would be rendered here - keeping them from original file */}
+          {currentView === 'events' && renderEvents()}
+          {currentView === 'users' && renderUsers()}
+          {currentView === 'appointments' && renderAppointments()}
+          {currentView === 'realtime' && renderRealtime()}
+          {currentView === 'matches' && renderMatches()}
         </ScrollView>
       </View>
+
+      {/* Questions Management Modal */}
+      <Modal
+        visible={showQuestionsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQuestionsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.questionsModalContent}>
+            <View style={styles.questionsModalHeader}>
+              <Text style={styles.questionsModalTitle}>Gestión de Preguntas</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowQuestionsModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.questionsActions}>
+              <TouchableOpacity
+                style={styles.restoreButton}
+                onPress={handleRestoreDefaultQuestions}
+              >
+                <Text style={styles.restoreButtonText}>🔄 Restaurar Preguntas Predeterminadas</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.downloadButton}
+                onPress={handleDownloadTemplate}
+              >
+                <Text style={styles.downloadButtonText}>📥 Descargar Plantilla CSV</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={handleMassUpload}
+              >
+                <Text style={styles.uploadButtonText}>📤 Cargar Preguntas Masivamente</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.levelSelector}>
+              <Text style={styles.inputLabel}>Seleccionar Nivel:</Text>
+              <View style={styles.levelButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.levelButton,
+                    selectedLevel === 'divertido' && styles.levelButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedLevel('divertido');
+                    loadQuestions();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.levelButtonText,
+                      selectedLevel === 'divertido' && styles.levelButtonTextActive,
+                    ]}
+                  >
+                    😄 Divertido
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.levelButton,
+                    selectedLevel === 'sensual' && styles.levelButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedLevel('sensual');
+                    loadQuestions();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.levelButtonText,
+                      selectedLevel === 'sensual' && styles.levelButtonTextActive,
+                    ]}
+                  >
+                    😘 Sensual
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.levelButton,
+                    selectedLevel === 'atrevido' && styles.levelButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedLevel('atrevido');
+                    loadQuestions();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.levelButtonText,
+                      selectedLevel === 'atrevido' && styles.levelButtonTextActive,
+                    ]}
+                  >
+                    🔥 Atrevido
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.addQuestionSection}>
+              <Text style={styles.inputLabel}>Agregar Nueva Pregunta:</Text>
+              <TextInput
+                style={styles.questionInput}
+                placeholder="Escribe la pregunta aquí..."
+                value={newQuestionText}
+                onChangeText={setNewQuestionText}
+                multiline
+              />
+              <TouchableOpacity
+                style={styles.addQuestionButton}
+                onPress={handleAddQuestion}
+              >
+                <Text style={styles.addQuestionButtonText}>+ Agregar Pregunta</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingQuestions ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando preguntas...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.questionsList}>
+                <Text style={styles.questionsListTitle}>
+                  Preguntas del nivel {selectedLevel} ({questions.length})
+                </Text>
+                {questions.map((question, index) => (
+                  <View key={question.id} style={styles.questionItem}>
+                    <View style={styles.questionHeader}>
+                      <Text style={styles.questionNumber}>#{index + 1}</Text>
+                      <Text style={styles.questionText}>{question.question_text}</Text>
+                    </View>
+                    <View style={styles.questionActions}>
+                      <TouchableOpacity
+                        style={styles.editQuestionButton}
+                        onPress={() => {
+                          const newText = window.prompt('Editar pregunta:', question.question_text);
+                          if (newText) {
+                            handleUpdateQuestion(question.id, newText);
+                          }
+                        }}
+                      >
+                        <Text style={styles.editQuestionButtonText}>✏️ Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.deleteQuestionButton}
+                        onPress={() => handleDeleteQuestion(question.id)}
+                      >
+                        <Text style={styles.deleteQuestionButtonText}>🗑️ Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Event Creation/Edit Modal */}
       <Modal
@@ -1723,5 +2276,486 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  listContainer: {
+    flex: 1,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  createButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  createButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  codeHighlight: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  codeLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  codeValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#92400E',
+    letterSpacing: 2,
+  },
+  eventActions: {
+    marginTop: 12,
+    gap: 8,
+  },
+  viewAttendeesButton: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  viewAttendeesButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  questionsButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  questionsButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  matchesButton: {
+    backgroundColor: '#EC4899',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  matchesButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  publishButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  publishButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  revealButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  revealButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  editButton: {
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  realtimeInfo: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 24,
+  },
+  realtimeInfoText: {
+    fontSize: 16,
+    color: '#3730A3',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  eventSelector: {
+    marginBottom: 24,
+  },
+  participantsContainer: {
+    marginTop: 24,
+  },
+  participantsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  participantItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  participantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  participantNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginRight: 8,
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  participantDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  matchesSection: {
+    marginBottom: 32,
+  },
+  ratingsSection: {
+    marginBottom: 32,
+  },
+  subsectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: 20,
+  },
+  matchItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  matchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  matchLevel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  matchDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  matchUsers: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  matchEmails: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  ratingItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ratingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingStars: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+  },
+  ratingDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  ratingUsers: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  questionsModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 800,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  questionsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  questionsModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  closeModalButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  questionsActions: {
+    padding: 20,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  restoreButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  restoreButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  downloadButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  downloadButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  uploadButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  uploadButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  levelSelector: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  levelButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  levelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  levelButtonActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  levelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  levelButtonTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  addQuestionSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  questionInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  addQuestionButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  addQuestionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  questionsList: {
+    flex: 1,
+    padding: 20,
+  },
+  questionsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  questionItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  questionHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  questionNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginRight: 8,
+  },
+  questionText: {
+    fontSize: 14,
+    color: '#374151',
+    flex: 1,
+  },
+  questionActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editQuestionButton: {
+    flex: 1,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  editQuestionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  deleteQuestionButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  deleteQuestionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  eventInfoSection: {
+    padding: 20,
+    backgroundColor: nospiColors.purpleLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  eventInfoDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
   },
 });
