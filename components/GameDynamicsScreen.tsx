@@ -105,6 +105,69 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const isOptimisticUpdateRef = useRef(false);
   const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // CRITICAL FIX: Define handleFinishEvent at the TOP LEVEL, unconditionally
+  // This must be defined before any conditional logic to avoid "Rendered more hooks than during the previous render" error
+  const handleFinishEvent = useCallback(async () => {
+    if (!appointment?.event_id) return;
+
+    console.log('🏁 === FINISHING EVENT ===');
+    setLoading(true);
+
+    try {
+      // Move all appointments for this event to "anterior" status
+      const { error: appointmentsError } = await supabase
+        .from('appointments')
+        .update({ status: 'anterior' })
+        .eq('event_id', appointment.event_id)
+        .eq('status', 'confirmada');
+
+      if (appointmentsError) {
+        console.error('❌ Error updating appointments:', appointmentsError);
+      } else {
+        console.log('✅ Moved appointments to anterior status');
+      }
+
+      // Reset game phase to intro for next time
+      const { error: eventError } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'intro',
+          current_level: null,
+          current_question_index: null,
+          answered_users: null,
+          current_question: null,
+          current_question_starter_id: null,
+          match_started_at: null,
+          match_deadline_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (eventError) {
+        console.error('❌ Error resetting event:', eventError);
+      } else {
+        console.log('✅ Event reset successfully');
+      }
+
+      // Reset local state to ready phase
+      setGamePhase('ready');
+      setCurrentLevel('divertido');
+      setCurrentQuestionIndex(0);
+      setAnsweredUsers([]);
+      setCurrentQuestion(null);
+      setStarterParticipant(null);
+      setMatchStartedAt(null);
+      setMatchDeadlineAt(null);
+      setUserRatings({});
+
+      console.log('✅ Event finished successfully - returned to ready state');
+    } catch (error) {
+      console.error('❌ Unexpected error finishing event:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment]);
+
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -933,67 +996,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       </LinearGradient>
     );
   }
-
-  const handleFinishEvent = useCallback(async () => {
-    if (!appointment?.event_id) return;
-
-    console.log('🏁 === FINISHING EVENT ===');
-    setLoading(true);
-
-    try {
-      // Move all appointments for this event to "anterior" status
-      const { error: appointmentsError } = await supabase
-        .from('appointments')
-        .update({ status: 'anterior' })
-        .eq('event_id', appointment.event_id)
-        .eq('status', 'confirmada');
-
-      if (appointmentsError) {
-        console.error('❌ Error updating appointments:', appointmentsError);
-      } else {
-        console.log('✅ Moved appointments to anterior status');
-      }
-
-      // Reset game phase to intro for next time
-      const { error: eventError } = await supabase
-        .from('events')
-        .update({
-          game_phase: 'intro',
-          current_level: null,
-          current_question_index: null,
-          answered_users: null,
-          current_question: null,
-          current_question_starter_id: null,
-          match_started_at: null,
-          match_deadline_at: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (eventError) {
-        console.error('❌ Error resetting event:', eventError);
-      } else {
-        console.log('✅ Event reset successfully');
-      }
-
-      // Reset local state to ready phase
-      setGamePhase('ready');
-      setCurrentLevel('divertido');
-      setCurrentQuestionIndex(0);
-      setAnsweredUsers([]);
-      setCurrentQuestion(null);
-      setStarterParticipant(null);
-      setMatchStartedAt(null);
-      setMatchDeadlineAt(null);
-      setUserRatings({});
-
-      console.log('✅ Event finished successfully - returned to ready state');
-    } catch (error) {
-      console.error('❌ Unexpected error finishing event:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointment]);
 
   if (gamePhase === 'finished') {
     return (
