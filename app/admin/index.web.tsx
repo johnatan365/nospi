@@ -1867,9 +1867,382 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         </View>
       </Modal>
 
-      {/* Event Creation/Edit Modal - Keeping the same as before */}
-      {/* Questions Management Modal - Keeping the same as before */}
-      {/* (The rest of the modals remain unchanged) */}
+      {/* Event Creation/Edit Modal */}
+      <Modal
+        visible={showEventModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEventModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.eventModalContent}>
+            <View style={styles.eventModalHeader}>
+              <Text style={styles.eventModalTitle}>
+                {editingEventId ? 'Editar Evento' : 'Crear Nuevo Evento'}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowEventModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.eventModalBody}>
+              <Text style={styles.inputLabel}>Nombre del Evento *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Noche de Solteros"
+                value={eventForm.name}
+                onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Ciudad *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bogotá"
+                value={eventForm.city}
+                onChangeText={(text) => setEventForm({ ...eventForm, city: text })}
+              />
+
+              <Text style={styles.inputLabel}>Descripción</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Describe el evento..."
+                value={eventForm.description}
+                onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
+                multiline
+                numberOfLines={4}
+              />
+
+              <Text style={styles.inputLabel}>Tipo de Evento *</Text>
+              <select
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  borderWidth: 1,
+                  borderColor: '#E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 16,
+                  width: '100%',
+                }}
+                value={eventForm.type}
+                onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
+              >
+                <option value="bar">Bar</option>
+                <option value="restaurant">Restaurante</option>
+              </select>
+
+              <Text style={styles.inputLabel}>Fecha *</Text>
+              <input
+                type="date"
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  border: '1px solid #E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 16,
+                  width: '100%',
+                }}
+                value={eventForm.date}
+                onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Hora *</Text>
+              <input
+                type="time"
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  border: '1px solid #E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 16,
+                  width: '100%',
+                }}
+                value={eventForm.time}
+                onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Nombre del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Bar La Terraza"
+                value={eventForm.location_name}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
+              />
+
+              <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Calle 85 #15-20"
+                value={eventForm.location_address}
+                onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
+              />
+
+              <Text style={styles.inputLabel}>Enlace de Google Maps</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://maps.google.com/..."
+                value={eventForm.maps_link}
+                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+              />
+
+              <Text style={styles.inputLabel}>Máximo de Participantes</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="6"
+                keyboardType="numeric"
+                value={String(eventForm.max_participants)}
+                onChangeText={(text) => setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })}
+              />
+
+              <Text style={styles.inputLabel}>Código de Confirmación</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1986"
+                value={eventForm.confirmation_code}
+                onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
+              />
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setEventForm({ ...eventForm, is_location_revealed: !eventForm.is_location_revealed })}
+                >
+                  <Text style={styles.checkboxText}>
+                    {eventForm.is_location_revealed ? '☑' : '☐'} Revelar ubicación inmediatamente
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Estado del Evento</Text>
+              <select
+                style={{
+                  backgroundColor: '#F5F5F5',
+                  borderWidth: 1,
+                  borderColor: '#E0E0E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 16,
+                  width: '100%',
+                }}
+                value={eventForm.event_status}
+                onChange={(e) => setEventForm({ ...eventForm, event_status: e.target.value as 'draft' | 'published' | 'closed' })}
+              >
+                <option value="draft">Borrador</option>
+                <option value="published">Publicado</option>
+                <option value="closed">Cerrado</option>
+              </select>
+
+              {/* Event Questions Section */}
+              <View style={styles.questionsSection}>
+                <TouchableOpacity
+                  style={styles.questionsSectionHeader}
+                  onPress={() => setShowEventQuestionsSection(!showEventQuestionsSection)}
+                >
+                  <Text style={styles.questionsSectionTitle}>
+                    ❓ Preguntas del Evento (Opcional)
+                  </Text>
+                  <Text style={styles.questionsSectionToggle}>
+                    {showEventQuestionsSection ? '▼' : '▶'}
+                  </Text>
+                </TouchableOpacity>
+
+                {showEventQuestionsSection && (
+                  <View style={styles.questionsContent}>
+                    <Text style={styles.questionsInfo}>
+                      Personaliza las preguntas para este evento específico. Si no agregas preguntas, se usarán las predeterminadas.
+                    </Text>
+
+                    {(['divertido', 'sensual', 'atrevido'] as const).map((level) => {
+                      const levelEmoji = level === 'divertido' ? '😄' : level === 'sensual' ? '😘' : '🔥';
+                      const levelText = level === 'divertido' ? 'Divertido' : level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      
+                      return (
+                        <View key={level} style={styles.questionLevelSection}>
+                          <Text style={styles.questionLevelTitle}>
+                            {levelEmoji} Nivel {levelText}
+                          </Text>
+                          {eventQuestions[level].map((question, index) => (
+                            <View key={index} style={styles.questionInputRow}>
+                              <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder={`Pregunta ${index + 1}`}
+                                value={question}
+                                onChangeText={(text) => {
+                                  const newQuestions = { ...eventQuestions };
+                                  newQuestions[level][index] = text;
+                                  setEventQuestions(newQuestions);
+                                }}
+                              />
+                              <TouchableOpacity
+                                style={styles.removeQuestionButton}
+                                onPress={() => {
+                                  const newQuestions = { ...eventQuestions };
+                                  newQuestions[level].splice(index, 1);
+                                  setEventQuestions(newQuestions);
+                                }}
+                              >
+                                <Text style={styles.removeQuestionButtonText}>✕</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          <TouchableOpacity
+                            style={styles.addQuestionButton}
+                            onPress={() => {
+                              const newQuestions = { ...eventQuestions };
+                              newQuestions[level].push('');
+                              setEventQuestions(newQuestions);
+                            }}
+                          >
+                            <Text style={styles.addQuestionButtonText}>+ Agregar Pregunta</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveEventButton}
+                onPress={handleSaveEvent}
+              >
+                <Text style={styles.saveEventButtonText}>
+                  {editingEventId ? '💾 Guardar Cambios' : '✨ Crear Evento'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Questions Management Modal */}
+      <Modal
+        visible={showQuestionsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQuestionsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.questionsModalContent}>
+            <View style={styles.questionsModalHeader}>
+              <Text style={styles.questionsModalTitle}>Gestión de Preguntas</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowQuestionsModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.questionsModalBody}>
+              <View style={styles.levelSelector}>
+                <TouchableOpacity
+                  style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
+                  onPress={() => {
+                    setSelectedLevel('divertido');
+                    loadQuestions();
+                  }}
+                >
+                  <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
+                    😄 Divertido
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
+                  onPress={() => {
+                    setSelectedLevel('sensual');
+                    loadQuestions();
+                  }}
+                >
+                  <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
+                    😘 Sensual
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
+                  onPress={() => {
+                    setSelectedLevel('atrevido');
+                    loadQuestions();
+                  }}
+                >
+                  <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
+                    🔥 Atrevido
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.addQuestionSection}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="Nueva pregunta..."
+                  value={newQuestionText}
+                  onChangeText={setNewQuestionText}
+                />
+                <TouchableOpacity style={styles.addButton} onPress={handleAddQuestion}>
+                  <Text style={styles.addButtonText}>+ Agregar</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.bulkActionsSection}>
+                <TouchableOpacity
+                  style={styles.bulkActionButton}
+                  onPress={handleRestoreDefaultQuestions}
+                >
+                  <Text style={styles.bulkActionButtonText}>🔄 Restaurar Predeterminadas</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkActionButton}
+                  onPress={handleDownloadTemplate}
+                >
+                  <Text style={styles.bulkActionButtonText}>📥 Descargar Plantilla CSV</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkActionButton}
+                  onPress={handleMassUpload}
+                >
+                  <Text style={styles.bulkActionButtonText}>📤 Cargar desde CSV</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingQuestions ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                </View>
+              ) : (
+                <ScrollView style={styles.questionsList}>
+                  {questions.map((question, index) => (
+                    <View key={question.id} style={styles.questionItem}>
+                      <Text style={styles.questionNumber}>#{index + 1}</Text>
+                      <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        value={question.question_text}
+                        onChangeText={(text) => {
+                          const updatedQuestions = [...questions];
+                          updatedQuestions[index].question_text = text;
+                          setQuestions(updatedQuestions);
+                        }}
+                        onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
+                      />
+                      <TouchableOpacity
+                        style={styles.deleteQuestionButton}
+                        onPress={() => handleDeleteQuestion(question.id)}
+                      >
+                        <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2468,5 +2841,250 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+  },
+  eventModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 700,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  eventModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  eventModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  input: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  checkboxContainer: {
+    marginBottom: 16,
+  },
+  checkbox: {
+    padding: 12,
+  },
+  checkboxText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+  },
+  questionsSection: {
+    marginTop: 24,
+    marginBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 16,
+  },
+  questionsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+  },
+  questionsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  questionsSectionToggle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+  },
+  questionsContent: {
+    marginTop: 16,
+  },
+  questionsInfo: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  questionLevelSection: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  questionLevelTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  questionInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  removeQuestionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeQuestionButtonText: {
+    fontSize: 18,
+    color: '#DC2626',
+    fontWeight: 'bold',
+  },
+  addQuestionButton: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  addQuestionButtonText: {
+    color: nospiColors.purpleDark,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  saveEventButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  saveEventButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  questionsModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 700,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  questionsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  questionsModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  questionsModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  levelSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  levelButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  levelButtonActive: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  levelButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  levelButtonTextActive: {
+    color: 'white',
+  },
+  addQuestionSection: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  addButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  bulkActionsSection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  bulkActionButton: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  bulkActionButtonText: {
+    color: '#3730A3',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  questionsList: {
+    flex: 1,
+  },
+  questionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  questionNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    width: 32,
+  },
+  deleteQuestionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteQuestionButtonText: {
+    fontSize: 18,
   },
 });
