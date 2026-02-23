@@ -37,7 +37,8 @@ export default function MatchSelectionScreen({
   onMatchComplete,
   matchDeadlineAt,
 }: MatchSelectionScreenProps) {
-  console.log('💘 Rendering MatchSelectionScreen with deadline:', matchDeadlineAt);
+  console.log('💘 === MATCH SELECTION SCREEN RENDERED ===');
+  console.log('💘 Props:', { eventId, currentLevel, currentUserId, matchDeadlineAt });
   
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,10 +58,11 @@ export default function MatchSelectionScreen({
   const isOptimisticUpdateRef = useRef(false);
   const hasTriggeredHapticRef = useRef(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasCalledOnMatchCompleteRef = useRef(false);
 
   // CRITICAL FIX: Move triggerMatchAnimation to the top, before any useEffect that uses it
   const triggerMatchAnimation = useCallback(() => {
-    console.log('🎉 Triggering enhanced match animation');
+    console.log('🎉 === TRIGGERING MATCH ANIMATION ===');
     
     // Reset animation values
     heartScale.setValue(0.5);
@@ -139,17 +141,20 @@ export default function MatchSelectionScreen({
       }, 500);
     }
 
-    // Auto-close modal after 7 seconds (4 seconds longer than original)
+    // Auto-close modal after 4 seconds
     setTimeout(() => {
+      console.log('⏰ === MATCH MODAL AUTO-CLOSE TRIGGERED ===');
       Animated.timing(heartScale, {
         toValue: 0,
         duration: 400,
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }).start(() => {
+        console.log('✅ Match modal animation complete - closing modal');
         setShowMatchModal(false);
+        console.log('✅ showMatchModal set to false - auto-continue should trigger');
       });
-    }, 7000);
+    }, 4000);
   }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
   // Fetch server time on mount
@@ -173,6 +178,7 @@ export default function MatchSelectionScreen({
   useEffect(() => {
     const checkExistingVote = async () => {
       try {
+        console.log('🔍 Checking if user has already voted...');
         const { data, error } = await supabase
           .from('event_matches_votes')
           .select('*')
@@ -184,9 +190,11 @@ export default function MatchSelectionScreen({
         if (data && !error) {
           console.log('✅ User has already voted for this level');
           setHasVoted(true);
+        } else {
+          console.log('ℹ️ No existing vote found');
         }
       } catch (error) {
-        console.log('No existing vote found');
+        console.log('ℹ️ No existing vote found (error)');
       }
     };
 
@@ -402,12 +410,12 @@ export default function MatchSelectionScreen({
   }, [eventId, currentLevel, currentUserId, triggerMatchAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
-    console.log('Selected user:', userId);
+    console.log('👆 Selected user:', userId);
     setSelectedUserId(userId);
   }, []);
 
   const handleSelectNone = useCallback(() => {
-    console.log('Selected: Ninguno por ahora');
+    console.log('👆 Selected: Ninguno por ahora');
     setSelectedUserId('none');
   }, []);
 
@@ -417,7 +425,7 @@ export default function MatchSelectionScreen({
       return;
     }
 
-    console.log('💘 === CONFIRMING MATCH SELECTION (ATOMIC RPC) ===');
+    console.log('💘 === CONFIRMING MATCH SELECTION ===');
     console.log('💘 Selected user ID:', selectedUserId);
     
     // Set optimistic flag to block realtime updates
@@ -434,7 +442,7 @@ export default function MatchSelectionScreen({
         p_selected_user_id: selectedUserIdValue,
       });
 
-      // Call the atomic RPC function
+      // CRITICAL: Ensure we're calling the UUID version of the RPC
       const { data, error } = await supabase.rpc('process_match_vote', {
         p_event_id: eventId,
         p_level: currentLevel,
@@ -492,10 +500,52 @@ export default function MatchSelectionScreen({
     }
   }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
 
-  const handleContinue = useCallback(() => {
-    console.log('➡️ Continuing to next phase');
-    onMatchComplete();
-  }, [onMatchComplete]);
+  // CRITICAL: Determine if we can continue
+  const canContinue = allVotesReceived || deadlineReached;
+
+  // CRITICAL FIX: Auto-continue when conditions are met
+  useEffect(() => {
+    console.log('🔄 === AUTO-CONTINUE CHECK ===');
+    console.log('🔄 State:', {
+      hasVoted,
+      showMatchModal,
+      canContinue,
+      allVotesReceived,
+      deadlineReached,
+      hasCalledOnMatchComplete: hasCalledOnMatchCompleteRef.current
+    });
+    
+    // CRITICAL: Only auto-continue if:
+    // 1. User has voted
+    // 2. Match modal is NOT showing
+    // 3. Can continue (all votes or deadline)
+    // 4. Haven't already called onMatchComplete
+    if (hasVoted && !showMatchModal && canContinue && !hasCalledOnMatchCompleteRef.current) {
+      console.log('✅ === AUTO-CONTINUING TO NEXT PHASE ===');
+      console.log('✅ Reason:', allVotesReceived ? 'All votes received' : 'Deadline reached');
+      
+      // Set flag to prevent multiple calls
+      hasCalledOnMatchCompleteRef.current = true;
+      
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        console.log('➡️ Calling onMatchComplete()');
+        onMatchComplete();
+      }, 800);
+      
+      return () => {
+        console.log('🧹 Clearing auto-continue timer');
+        clearTimeout(timer);
+      };
+    } else {
+      console.log('⏸️ Not auto-continuing:', {
+        reason: !hasVoted ? 'User has not voted' : 
+                showMatchModal ? 'Match modal is showing' : 
+                !canContinue ? 'Cannot continue yet (waiting for votes/deadline)' :
+                hasCalledOnMatchCompleteRef.current ? 'Already called onMatchComplete' : 'Unknown'
+      });
+    }
+  }, [hasVoted, showMatchModal, canContinue, allVotesReceived, deadlineReached, onMatchComplete]);
 
   const otherParticipants = participants.filter(p => p.user_id !== currentUserId);
 
@@ -512,24 +562,9 @@ export default function MatchSelectionScreen({
   const secondsDisplay = String(remainingSeconds).padStart(2, '0');
   const timerDisplay = `${minutesDisplay}:${secondsDisplay}`;
 
-  // CRITICAL: Determine if "Continuar" button should be enabled
-  const canContinue = allVotesReceived || deadlineReached;
-
   // Determine timer color and animation
   const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
   const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
-
-  // CRITICAL FIX: Auto-continue when all votes received or deadline reached (but NOT if match modal is showing)
-  useEffect(() => {
-    if (hasVoted && !showMatchModal && canContinue) {
-      console.log('✅ All votes received or deadline reached - auto-continuing to next phase');
-      // Small delay to ensure smooth transition
-      const timer = setTimeout(() => {
-        handleContinue();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [hasVoted, showMatchModal, canContinue, handleContinue]);
 
   return (
     <LinearGradient
@@ -619,15 +654,24 @@ export default function MatchSelectionScreen({
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, (!selectedUserId || loading) && styles.buttonDisabled]}
+          style={[styles.confirmButton, (!selectedUserId || loading || hasVoted) && styles.buttonDisabled]}
           onPress={handleConfirmSelection}
-          disabled={!selectedUserId || loading}
+          disabled={!selectedUserId || loading || hasVoted}
           activeOpacity={0.8}
         >
           <Text style={styles.confirmButtonText}>
-            {loading ? '⏳ Confirmando...' : 'Confirmar elección'}
+            {loading ? '⏳ Confirmando...' : hasVoted ? '✓ Elección confirmada' : 'Confirmar elección'}
           </Text>
         </TouchableOpacity>
+
+        {hasVoted && !showMatchModal && (
+          <View style={styles.waitingCard}>
+            <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+            <Text style={styles.waitingText}>
+              {canContinue ? '✓ Procesando resultados...' : '⏳ Esperando a que todos elijan...'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -822,6 +866,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 32,
     alignItems: 'center',
+    marginBottom: 16,
   },
   confirmButtonText: {
     fontSize: 18,
@@ -834,31 +879,16 @@ const styles = StyleSheet.create({
   waitingCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
-    padding: 40,
+    padding: 32,
     alignItems: 'center',
     marginBottom: 24,
-  },
-  waitingIcon: {
-    fontSize: 64,
-    marginBottom: 20,
   },
   waitingText: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     textAlign: 'center',
     fontWeight: '600',
-  },
-  continueButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-  },
-  continueButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    marginTop: 16,
   },
   modalOverlay: {
     flex: 1,
