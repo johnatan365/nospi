@@ -52,6 +52,7 @@ export default function MatchSelectionScreen({
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [serverTime, setServerTime] = useState<Date>(new Date());
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [loadingInitialCheck, setLoadingInitialCheck] = useState(true);
   
   // Animation refs
   const heartScale = useRef(new Animated.Value(0.8)).current;
@@ -62,7 +63,7 @@ export default function MatchSelectionScreen({
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasCalledOnMatchCompleteRef = useRef(false);
   
-  // CRITICAL FIX: Use refs to track latest state values
+  // CRITICAL FIX: Use refs to track latest state values to prevent stale closures
   const loadingRef = useRef(loading);
   const hasVotedRef = useRef(hasVoted);
   const selectedUserIdRef = useRef(selectedUserId);
@@ -70,16 +71,9 @@ export default function MatchSelectionScreen({
   // Keep refs in sync with state
   useEffect(() => {
     loadingRef.current = loading;
-  }, [loading]);
-  
-  useEffect(() => {
     hasVotedRef.current = hasVoted;
-    console.log('🔄 hasVoted state changed to:', hasVoted);
-  }, [hasVoted]);
-  
-  useEffect(() => {
     selectedUserIdRef.current = selectedUserId;
-  }, [selectedUserId]);
+  }, [loading, hasVoted, selectedUserId]);
 
   // CRITICAL FIX: Move triggerMatchAnimation to the top, before any useEffect that uses it
   const triggerMatchAnimation = useCallback(() => {
@@ -198,43 +192,53 @@ export default function MatchSelectionScreen({
   // CRITICAL FIX: Check if user has already voted for this level (ONLY ONCE on mount)
   useEffect(() => {
     const checkExistingVote = async () => {
+      if (!currentUserId || !eventId || !currentLevel || initialCheckComplete) {
+        return;
+      }
+
+      setLoadingInitialCheck(true);
+      
       try {
         console.log('🔍 === INITIAL VOTE CHECK (MOUNT ONLY) ===');
-        console.log('🔍 Checking for existing vote:', { eventId, currentLevel, currentUserId });
+        console.log('🔍 Checking for existing vote:', { 
+          eventId, 
+          currentLevel: Number(currentLevel), 
+          currentUserId 
+        });
         
+        // CRITICAL FIX: Use Number() to ensure level is INTEGER
         const { data, error } = await supabase
-          .from('event_matches_votes')
-          .select('*')
+          .from('event_match_votes')
+          .select('id')
           .eq('event_id', eventId)
-          .eq('level', currentLevel)
-          .eq('from_user_id', currentUserId)
+          .eq('level', Number(currentLevel))
+          .eq('user_id', currentUserId)
           .maybeSingle();
 
         if (error) {
           console.error('❌ Error checking existing vote:', error);
           setInitialCheckComplete(true);
+          setLoadingInitialCheck(false);
           return;
         }
 
         if (data) {
           console.log('✅ User has already voted for this level - setting hasVoted to TRUE');
+          console.log('✅ Existing vote data:', data);
           setHasVoted(true);
         } else {
           console.log('ℹ️ No existing vote found - user has not voted yet');
           setHasVoted(false);
         }
-        
-        setInitialCheckComplete(true);
       } catch (error) {
         console.error('❌ Error in checkExistingVote:', error);
+      } finally {
         setInitialCheckComplete(true);
+        setLoadingInitialCheck(false);
       }
     };
 
-    // CRITICAL: Only run this check ONCE on mount
-    if (!initialCheckComplete) {
-      checkExistingVote();
-    }
+    checkExistingVote();
   }, [eventId, currentLevel, currentUserId, initialCheckComplete]);
 
   // CRITICAL: Check if all participants have voted
@@ -243,17 +247,17 @@ export default function MatchSelectionScreen({
       console.log('📊 === CHECKING ALL VOTES ===');
       
       const { data, error } = await supabase
-        .from('event_matches_votes')
-        .select('from_user_id')
+        .from('event_match_votes')
+        .select('user_id')
         .eq('event_id', eventId)
-        .eq('level', currentLevel);
+        .eq('level', Number(currentLevel));
 
       if (error) {
         console.error('❌ Error checking votes:', error);
         return;
       }
 
-      const votedUserIds = data.map(v => v.from_user_id);
+      const votedUserIds = data.map(v => v.user_id);
       const allParticipantIds = participants.map(p => p.user_id);
       const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
 
@@ -296,7 +300,7 @@ export default function MatchSelectionScreen({
         {
           event: '*',
           schema: 'public',
-          table: 'event_matches_votes',
+          table: 'event_match_votes',
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
@@ -392,7 +396,7 @@ export default function MatchSelectionScreen({
           
           console.log('💜 Match details:', {
             level: newMatch.level,
-            currentLevel: currentLevel,
+            currentLevel: Number(currentLevel),
             user1_id: newMatch.user1_id,
             user2_id: newMatch.user2_id,
             currentUserId: currentUserId
@@ -400,7 +404,7 @@ export default function MatchSelectionScreen({
           
           // CRITICAL: Check if current user is part of this match AND it's for the current level
           const isUserInMatch = (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId);
-          const isCurrentLevel = newMatch.level === currentLevel;
+          const isCurrentLevel = newMatch.level === Number(currentLevel);
           
           console.log('💜 Match check:', {
             isUserInMatch,
@@ -465,11 +469,11 @@ export default function MatchSelectionScreen({
     setSelectedUserId('none');
   }, []);
 
-  // CRITICAL FIX: Completely rewritten to ensure immediate UI update
+  // CRITICAL FIX: Robust insert handling with proper error handling and type casting
   const handleConfirmSelection = useCallback(async () => {
     console.log('🔘 === BUTTON CLICKED: Confirmar elección ===');
     
-    // Get current values from refs
+    // Get current values from refs to prevent stale closure issues
     const currentSelectedUserId = selectedUserIdRef.current;
     const currentLoading = loadingRef.current;
     const currentHasVoted = hasVotedRef.current;
@@ -500,7 +504,7 @@ export default function MatchSelectionScreen({
     console.log('💘 Selected user ID:', currentSelectedUserId);
     
     // CRITICAL FIX: Set hasVoted IMMEDIATELY for instant UI feedback
-    console.log('✅ Setting hasVoted to TRUE immediately');
+    console.log('✅ Setting hasVoted to TRUE immediately (optimistic update)');
     setHasVoted(true);
     setLoading(true);
     
@@ -510,59 +514,74 @@ export default function MatchSelectionScreen({
     try {
       const selectedUserIdValue = currentSelectedUserId === 'none' ? null : currentSelectedUserId;
       
-      console.log('🔧 Calling process_match_vote RPC with:', {
-        p_event_id: eventId,
-        p_level: currentLevel,
-        p_from_user_id: currentUserId,
-        p_selected_user_id: selectedUserIdValue,
+      console.log('📝 === INSERTING VOTE INTO DATABASE ===');
+      console.log('📝 Insert data:', {
+        event_id: eventId,
+        level: Number(currentLevel),
+        user_id: currentUserId,
+        selected_user_id: selectedUserIdValue,
       });
 
-      // CRITICAL: Ensure we're calling the UUID version of the RPC
-      const { data, error } = await supabase.rpc('process_match_vote', {
-        p_event_id: eventId,
-        p_level: currentLevel,
-        p_from_user_id: currentUserId,
-        p_selected_user_id: selectedUserIdValue,
-      });
+      // CRITICAL FIX: Direct insert with robust error handling and type casting
+      const { data, error } = await supabase
+        .from('event_match_votes')
+        .insert({
+          event_id: eventId,
+          level: Number(currentLevel), // CRITICAL: Force INTEGER type
+          user_id: currentUserId,
+          selected_user_id: selectedUserIdValue,
+        })
+        .select()
+        .single();
 
       if (error) {
-        console.error('❌ Error calling process_match_vote RPC:', error);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        console.error('❌ === VOTE INSERT FAILED ===');
+        console.error('❌ Error:', error);
         console.error('❌ Error message:', error.message);
         console.error('❌ Error code:', error.code);
+        console.error('❌ Error details:', error.details);
         console.error('❌ Error hint:', error.hint);
         
-        // CRITICAL: Reset hasVoted on error to allow retry
-        console.log('🔄 Resetting hasVoted to FALSE due to error');
+        // CRITICAL: Revert optimistic update on error
+        console.log('🔄 Reverting hasVoted to FALSE due to insert error');
         setHasVoted(false);
         isOptimisticUpdateRef.current = false;
         setLoading(false);
         return;
       }
 
-      console.log('✅ RPC call successful');
-      console.log('✅ RPC result:', JSON.stringify(data, null, 2));
-
-      const result = data as ProcessMatchVoteResult;
+      console.log('✅ === VOTE INSERTED SUCCESSFULLY ===');
+      console.log('✅ Inserted data:', data);
 
       // CRITICAL: Recalculate vote count immediately after submission
       console.log('🔄 Recalculating vote count after submission');
       await checkAllVotes();
 
-      // If match was found immediately, show modal
-      if (result.match && result.matched_user_id && result.matched_user_name) {
-        console.log('💜 === IMMEDIATE MATCH DETECTED ===');
-        console.log('💜 Matched with:', result.matched_user_name);
-        setMatchedUserName(result.matched_user_name);
-        setShowMatchModal(true);
-        triggerMatchAnimation();
+      // Check if there's an immediate match by calling the RPC function
+      console.log('🔍 Checking for immediate match...');
+      const { data: matchData, error: matchError } = await supabase.rpc('process_match_vote', {
+        p_event_id: eventId,
+        p_level: currentLevel,
+        p_from_user_id: currentUserId,
+        p_selected_user_id: selectedUserIdValue,
+      });
+
+      if (matchError) {
+        console.error('⚠️ Error checking for match:', matchError);
       } else {
-        console.log('⏳ No immediate match - waiting for reciprocal vote or user selected "Ninguno"');
-        console.log('⏳ Result details:', {
-          match: result.match,
-          matched_user_id: result.matched_user_id,
-          matched_user_name: result.matched_user_name
-        });
+        const result = matchData as ProcessMatchVoteResult;
+        console.log('🔍 Match check result:', result);
+
+        // If match was found immediately, show modal
+        if (result.match && result.matched_user_id && result.matched_user_name) {
+          console.log('💜 === IMMEDIATE MATCH DETECTED ===');
+          console.log('💜 Matched with:', result.matched_user_name);
+          setMatchedUserName(result.matched_user_name);
+          setShowMatchModal(true);
+          triggerMatchAnimation();
+        } else {
+          console.log('⏳ No immediate match - waiting for reciprocal vote or user selected "Ninguno"');
+        }
       }
 
       // Clear optimistic flag after delay
@@ -571,11 +590,12 @@ export default function MatchSelectionScreen({
         console.log('🔓 Optimistic update flag CLEARED (vote)');
       }, 1500);
     } catch (error) {
-      console.error('❌ Unexpected error in handleConfirmSelection:', error);
+      console.error('❌ === UNEXPECTED ERROR IN VOTE CONFIRMATION ===');
+      console.error('❌ Error:', error);
       console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       
-      // CRITICAL: Reset hasVoted on error to allow retry
-      console.log('🔄 Resetting hasVoted to FALSE due to unexpected error');
+      // CRITICAL: Revert optimistic update on error
+      console.log('🔄 Reverting hasVoted to FALSE due to unexpected error');
       setHasVoted(false);
       isOptimisticUpdateRef.current = false;
     } finally {
@@ -667,7 +687,7 @@ export default function MatchSelectionScreen({
   });
 
   // Show loading while checking initial vote status
-  if (!initialCheckComplete) {
+  if (loadingInitialCheck) {
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
