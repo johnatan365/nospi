@@ -227,12 +227,13 @@ export default function ProfileScreen() {
 
       console.log('Upload successful:', uploadData);
 
+      // Add cache-busting parameter to force reload
       const { data: urlData } = supabase.storage
         .from('profile-photos')
         .getPublicUrl(filePath);
 
-      const photoUrl = urlData.publicUrl;
-      console.log('Public URL:', photoUrl);
+      const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      console.log('Public URL with cache-busting:', photoUrl);
 
       const { error: updateError } = await supabase
         .from('users')
@@ -246,7 +247,13 @@ export default function ProfileScreen() {
       }
 
       console.log('Photo uploaded and profile updated successfully');
+      
+      // Force immediate UI update with new photo URL
       setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
+      
+      // Reload profile to ensure consistency
+      await loadProfile();
+      
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {
       console.error('Failed to upload photo:', error);

@@ -413,6 +413,58 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const handleSendEventReminder = async (eventId: string) => {
+    Alert.alert(
+      'Enviar Recordatorio',
+      '¿Enviar recordatorio a todos los participantes de este evento según sus preferencias de notificación?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Enviar',
+          onPress: async () => {
+            try {
+              console.log('Sending event reminder for:', eventId);
+              
+              // Get all appointments for this event
+              const { data: appointmentsData, error: appointmentsError } = await supabase
+                .from('appointments')
+                .select('user_id')
+                .eq('event_id', eventId)
+                .eq('status', 'confirmada');
+
+              if (appointmentsError) {
+                console.error('Error fetching appointments:', appointmentsError);
+                Alert.alert('Error', 'Error al obtener participantes: ' + appointmentsError.message);
+                return;
+              }
+
+              if (!appointmentsData || appointmentsData.length === 0) {
+                Alert.alert('Información', 'No hay participantes confirmados para este evento');
+                return;
+              }
+
+              // Call the RPC function to send notifications
+              const { error: notificationError } = await supabase.rpc('send_event_reminder_now', {
+                p_event_id: eventId
+              });
+
+              if (notificationError) {
+                console.error('Error sending notifications:', notificationError);
+                Alert.alert('Error', 'Error al enviar notificaciones: ' + notificationError.message);
+                return;
+              }
+
+              Alert.alert('Éxito', `Recordatorio enviado a ${appointmentsData.length} participantes según sus preferencias de notificación`);
+            } catch (error) {
+              console.error('Failed to send event reminder:', error);
+              Alert.alert('Error', 'Error inesperado al enviar recordatorio');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const performDeleteEvent = async (eventId: string) => {
     try {
       console.log('Deleting event:', eventId);
@@ -502,40 +554,38 @@ export default function AdminPanelScreen() {
           const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
           return (
-            <View key={event.id} style={styles.listItem}>
+            <View key={event.id} style={styles.listItemCompact}>
               <View style={styles.listItemHeader}>
                 <Text style={styles.listItemTitle}>{event.name || `${eventTypeText} - ${event.city}`}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                   <Text style={styles.statusBadgeText}>{statusText}</Text>
                 </View>
               </View>
-              <Text style={styles.listItemDetail}>Ciudad: {event.city}</Text>
-              <Text style={styles.listItemDetail}>Fecha: {event.date} a las {event.time}</Text>
-              {event.description && (
-                <Text style={styles.listItemDetail}>Descripción: {event.description}</Text>
-              )}
-              <Text style={styles.listItemDetail}>
-                Participantes: {event.current_participants}/{event.max_participants}
-              </Text>
-              <Text style={styles.listItemDetail}>
-                Usuarios registrados: {eventAppointmentsCount}
-              </Text>
+              <View style={styles.compactInfoRow}>
+                <Text style={styles.compactInfoText}>📍 {event.city}</Text>
+                <Text style={styles.compactInfoText}>📅 {event.date}</Text>
+              </View>
+              <View style={styles.compactInfoRow}>
+                <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
+                <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
+              </View>
               <View style={styles.codeHighlight}>
-                <Text style={styles.codeLabel}>🔑 Código de confirmación:</Text>
+                <Text style={styles.codeLabel}>🔑 Código:</Text>
                 <Text style={styles.codeValue}>{confirmationCode}</Text>
               </View>
-              {event.location_name && (
-                <Text style={styles.listItemDetail}>Lugar: {event.location_name}</Text>
-              )}
-              {event.location_address && (
-                <Text style={styles.listItemDetail}>Dirección: {event.location_address}</Text>
-              )}
               
               <TouchableOpacity
                 style={styles.viewAttendeesButton}
                 onPress={() => handleViewAttendees(event)}
               >
                 <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.sendNotificationButton}
+                onPress={() => handleSendEventReminder(event.id)}
+              >
+                <Text style={styles.sendNotificationButtonText}>🔔 Enviar Recordatorio Ahora</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -1304,6 +1354,42 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  sendNotificationButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  sendNotificationButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  listItemCompact: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: nospiColors.purpleMid,
+  },
+  compactInfoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  compactInfoText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   deleteButton: {
     backgroundColor: '#EF4444',
