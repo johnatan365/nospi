@@ -40,6 +40,7 @@ export default function MatchSelectionScreen({
   console.log('💘 === MATCH SELECTION SCREEN RENDERED ===');
   console.log('💘 Props:', { eventId, currentLevel, currentUserId, matchDeadlineAt });
   
+  // CRITICAL FIX: Separate local UI state from realtime state
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
@@ -50,6 +51,7 @@ export default function MatchSelectionScreen({
   const [remainingMinutes, setRemainingMinutes] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [serverTime, setServerTime] = useState<Date>(new Date());
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   
   // Animation refs
   const heartScale = useRef(new Animated.Value(0.8)).current;
@@ -193,32 +195,47 @@ export default function MatchSelectionScreen({
     fetchServerTime();
   }, []);
 
-  // Check if user has already voted for this level
+  // CRITICAL FIX: Check if user has already voted for this level (ONLY ONCE on mount)
   useEffect(() => {
     const checkExistingVote = async () => {
       try {
-        console.log('🔍 Checking if user has already voted...');
+        console.log('🔍 === INITIAL VOTE CHECK (MOUNT ONLY) ===');
+        console.log('🔍 Checking for existing vote:', { eventId, currentLevel, currentUserId });
+        
         const { data, error } = await supabase
           .from('event_matches_votes')
           .select('*')
           .eq('event_id', eventId)
           .eq('level', currentLevel)
           .eq('from_user_id', currentUserId)
-          .single();
+          .maybeSingle();
 
-        if (data && !error) {
-          console.log('✅ User has already voted for this level');
+        if (error) {
+          console.error('❌ Error checking existing vote:', error);
+          setInitialCheckComplete(true);
+          return;
+        }
+
+        if (data) {
+          console.log('✅ User has already voted for this level - setting hasVoted to TRUE');
           setHasVoted(true);
         } else {
-          console.log('ℹ️ No existing vote found');
+          console.log('ℹ️ No existing vote found - user has not voted yet');
+          setHasVoted(false);
         }
+        
+        setInitialCheckComplete(true);
       } catch (error) {
-        console.log('ℹ️ No existing vote found (error)');
+        console.error('❌ Error in checkExistingVote:', error);
+        setInitialCheckComplete(true);
       }
     };
 
-    checkExistingVote();
-  }, [eventId, currentLevel, currentUserId]);
+    // CRITICAL: Only run this check ONCE on mount
+    if (!initialCheckComplete) {
+      checkExistingVote();
+    }
+  }, [eventId, currentLevel, currentUserId, initialCheckComplete]);
 
   // CRITICAL: Check if all participants have voted
   const checkAllVotes = useCallback(async () => {
@@ -264,7 +281,7 @@ export default function MatchSelectionScreen({
     }
   }, [eventId, currentLevel, participants]);
 
-  // Initial vote check and realtime subscription
+  // CRITICAL FIX: Realtime subscription for vote changes (but NEVER modify hasVoted)
   useEffect(() => {
     console.log('📡 === SETTING UP VOTE MONITORING ===');
     
@@ -288,7 +305,7 @@ export default function MatchSelectionScreen({
             return;
           }
           console.log('📡 Vote change detected:', payload);
-          // CRITICAL: Recalculate immediately on any vote change
+          // CRITICAL: Only update vote count, NEVER modify hasVoted
           checkAllVotes();
         }
       )
@@ -297,7 +314,7 @@ export default function MatchSelectionScreen({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [eventId, currentLevel, participants, checkAllVotes]);
+  }, [eventId, currentLevel, checkAllVotes]);
 
   // CRITICAL: Countdown timer - stops when all votes received
   useEffect(() => {
@@ -645,8 +662,26 @@ export default function MatchSelectionScreen({
     loading,
     hasVoted,
     isButtonDisabled,
-    buttonText
+    buttonText,
+    initialCheckComplete
   });
+
+  // Show loading while checking initial vote status
+  if (!initialCheckComplete) {
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+          <Text style={styles.loadingText}>Cargando...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient
@@ -816,6 +851,16 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 24,
     paddingBottom: 120,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginTop: 16,
   },
   titleWhite: {
     fontSize: 28,
