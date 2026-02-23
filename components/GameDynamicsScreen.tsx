@@ -275,7 +275,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     console.log('🎮 === STARTING DYNAMIC ===');
     console.log('🎮 User clicked Iniciar Dinámica button');
     
-    if (!appointment?.event_id || activeParticipants.length < 2) {
+    if (!appointment?.event_id || loading) {
+      console.warn('⚠️ Cannot start - already loading or no event');
+      return;
+    }
+
+    if (activeParticipants.length < 2) {
       console.warn('⚠️ Cannot start - need at least 2 participants');
       return;
     }
@@ -320,12 +325,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.error('❌ Unexpected error:', error);
       setLoading(false);
     } finally {
-      // Keep loading state until realtime update arrives
+      // Keep loading state for 2 seconds to prevent double-clicks
       setTimeout(() => {
         setLoading(false);
       }, 2000);
     }
-  }, [appointment, activeParticipants]);
+  }, [appointment, activeParticipants, loading]);
 
   const handleAnswered = useCallback(async () => {
     console.log('✅ === USER MARKING AS ANSWERED ===');
@@ -608,6 +613,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   if (gamePhase === 'ready') {
     const canStart = activeParticipants.length >= 2;
+    const buttonDisabled = loading || !canStart;
 
     return (
       <LinearGradient
@@ -630,9 +636,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           {canStart ? (
             <TouchableOpacity
-              style={[styles.startButton, loading && styles.buttonDisabled]}
+              style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
               onPress={handleStartDynamic}
-              disabled={loading}
+              disabled={buttonDisabled}
               activeOpacity={0.8}
             >
               <Text style={styles.startButtonText}>
