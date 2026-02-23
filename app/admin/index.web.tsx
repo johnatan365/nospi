@@ -190,6 +190,10 @@ export default function AdminPanelScreen() {
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
 
+  // NEW: Event configuration modal
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
+
   useEffect(() => {
     console.log('Admin panel component mounted');
   }, []);
@@ -1174,6 +1178,13 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     }
   };
 
+  // NEW: Open configuration modal
+  const handleOpenConfigModal = (event: Event) => {
+    console.log('Opening configuration modal for event:', event.id);
+    setSelectedEventForConfig(event);
+    setShowConfigModal(true);
+  };
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -1258,83 +1269,13 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
               
-              <View style={styles.eventActions}>
-                <TouchableOpacity
-                  style={styles.viewAttendeesButton}
-                  onPress={() => handleViewAttendees(event)}
-                >
-                  <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.sendNotificationButton}
-                  onPress={() => handleSendEventReminder(event.id)}
-                >
-                  <Text style={styles.sendNotificationButtonText}>🔔 Enviar Recordatorio Ahora</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.questionsButton}
-                  onPress={() => {
-                    setShowQuestionsModal(true);
-                    loadQuestions();
-                  }}
-                >
-                  <Text style={styles.questionsButtonText}>❓ Gestionar Preguntas</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.matchesButton}
-                  onPress={() => {
-                    setSelectedEventForMatches(event.id);
-                    loadEventMatchesAndRatings(event.id);
-                    setCurrentView('matches');
-                  }}
-                >
-                  <Text style={styles.matchesButtonText}>💜 Ver Matches y Calificaciones</Text>
-                </TouchableOpacity>
-
-                {event.event_status === 'draft' && (
-                  <TouchableOpacity
-                    style={styles.publishButton}
-                    onPress={() => handlePublishEvent(event.id)}
-                  >
-                    <Text style={styles.publishButtonText}>✅ Publicar Evento</Text>
-                  </TouchableOpacity>
-                )}
-
-                {event.event_status === 'published' && !event.is_location_revealed && (
-                  <TouchableOpacity
-                    style={styles.revealButton}
-                    onPress={() => handleRevealLocation(event.id)}
-                  >
-                    <Text style={styles.revealButtonText}>📍 Revelar Ubicación</Text>
-                  </TouchableOpacity>
-                )}
-
-                {event.event_status === 'published' && (
-                  <TouchableOpacity
-                    style={styles.closeButton}
-                    onPress={() => handleCloseEvent(event.id)}
-                  >
-                    <Text style={styles.closeButtonText}>🔒 Cerrar Evento</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => openEditEventModal(event)}
-                >
-                  <Text style={styles.editButtonText}>✏️ Editar</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteEvent(event.id)}
-                >
-                  <Text style={styles.deleteButtonText}>🗑️ Eliminar</Text>
-                </TouchableOpacity>
-              </View>
+              {/* NEW: Single "Configurar" button */}
+              <TouchableOpacity
+                style={styles.configButton}
+                onPress={() => handleOpenConfigModal(event)}
+              >
+                <Text style={styles.configButtonText}>⚙️ Configurar</Text>
+              </TouchableOpacity>
             </View>
           );
         })}
@@ -1711,6 +1652,144 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         </ScrollView>
       </View>
 
+      {/* NEW: Configuration Modal */}
+      <Modal
+        visible={showConfigModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowConfigModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.configModalContent}>
+            <View style={styles.configModalHeader}>
+              <Text style={styles.configModalTitle}>Configuración del Evento</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowConfigModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedEventForConfig && (
+              <>
+                <View style={styles.eventInfoSection}>
+                  <Text style={styles.eventInfoTitle}>
+                    {selectedEventForConfig.name || `${selectedEventForConfig.type} - ${selectedEventForConfig.city}`}
+                  </Text>
+                  <Text style={styles.eventInfoDetail}>
+                    📅 {selectedEventForConfig.date} a las {selectedEventForConfig.time}
+                  </Text>
+                </View>
+
+                <ScrollView style={styles.configActionsContainer}>
+                  <TouchableOpacity
+                    style={styles.configActionButton}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      handleViewAttendees(selectedEventForConfig);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>
+                      👥 Ver Asistentes ({appointments.filter(a => a.event_id === selectedEventForConfig.id).length})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#10B981' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      handleSendEventReminder(selectedEventForConfig.id);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>🔔 Enviar Recordatorio Ahora</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      setShowQuestionsModal(true);
+                      loadQuestions();
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>❓ Gestionar Preguntas</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#EC4899' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      setSelectedEventForMatches(selectedEventForConfig.id);
+                      loadEventMatchesAndRatings(selectedEventForConfig.id);
+                      setCurrentView('matches');
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>💜 Ver Matches y Calificaciones</Text>
+                  </TouchableOpacity>
+
+                  {selectedEventForConfig.event_status === 'draft' && (
+                    <TouchableOpacity
+                      style={[styles.configActionButton, { backgroundColor: '#10B981' }]}
+                      onPress={() => {
+                        setShowConfigModal(false);
+                        handlePublishEvent(selectedEventForConfig.id);
+                      }}
+                    >
+                      <Text style={styles.configActionButtonText}>✅ Publicar Evento</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedEventForConfig.event_status === 'published' && !selectedEventForConfig.is_location_revealed && (
+                    <TouchableOpacity
+                      style={[styles.configActionButton, { backgroundColor: '#3B82F6' }]}
+                      onPress={() => {
+                        setShowConfigModal(false);
+                        handleRevealLocation(selectedEventForConfig.id);
+                      }}
+                    >
+                      <Text style={styles.configActionButtonText}>📍 Revelar Ubicación</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedEventForConfig.event_status === 'published' && (
+                    <TouchableOpacity
+                      style={[styles.configActionButton, { backgroundColor: '#F59E0B' }]}
+                      onPress={() => {
+                        setShowConfigModal(false);
+                        handleCloseEvent(selectedEventForConfig.id);
+                      }}
+                    >
+                      <Text style={styles.configActionButtonText}>🔒 Cerrar Evento</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#6366F1' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      openEditEventModal(selectedEventForConfig);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>✏️ Editar Evento</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#EF4444' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      handleDeleteEvent(selectedEventForConfig.id);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>🗑️ Eliminar Evento</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Attendees Modal */}
       <Modal
         visible={showAttendeesModal}
@@ -1752,7 +1831,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             ) : (
               <ScrollView style={styles.attendeesList}>
                 {eventAttendees.map((attendee, index) => {
-                  const statusColor = attendee.status === 'confirmada' ? '#10B981' : '#F59E0B';
+                  const statusColor = attendee.status === 'confirmed' ? '#10B981' : '#F59E0B';
                   const paymentColor = attendee.payment_status === 'paid' ? '#10B981' : '#EF4444';
                   const interestedInText = attendee.users.interested_in === 'hombres' ? 'Hombres' : attendee.users.interested_in === 'mujeres' ? 'Mujeres' : attendee.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
                   const genderText = attendee.users.gender === 'hombre' ? 'Hombre' : attendee.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
@@ -1788,8 +1867,8 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         </View>
       </Modal>
 
-      {/* Questions Management Modal - Keeping the same as before */}
       {/* Event Creation/Edit Modal - Keeping the same as before */}
+      {/* Questions Management Modal - Keeping the same as before */}
       {/* (The rest of the modals remain unchanged) */}
     </View>
   );
@@ -2032,32 +2111,6 @@ const styles = StyleSheet.create({
     color: '#92400E',
     letterSpacing: 2,
   },
-  eventActions: {
-    marginTop: 12,
-    gap: 8,
-  },
-  viewAttendeesButton: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  viewAttendeesButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  sendNotificationButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  sendNotificationButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
   listItemCompact: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -2082,81 +2135,66 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
   },
-  questionsButton: {
-    backgroundColor: '#8B5CF6',
+  configButton: {
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
+    marginTop: 12,
   },
-  questionsButtonText: {
+  configButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
   },
-  matchesButton: {
-    backgroundColor: '#EC4899',
-    borderRadius: 8,
-    padding: 12,
+  configModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 600,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  configModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  configModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  closeModalButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  matchesButtonText: {
-    color: 'white',
-    fontSize: 14,
+  closeModalButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
     fontWeight: 'bold',
   },
-  publishButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-    padding: 12,
+  configActionsContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  configActionButton: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
+    marginBottom: 12,
   },
-  publishButtonText: {
+  configActionButtonText: {
     color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  revealButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  revealButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    backgroundColor: '#F59E0B',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  editButton: {
-    backgroundColor: '#6366F1',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   realtimeInfo: {
@@ -2382,19 +2420,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-  },
-  closeModalButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeModalButtonText: {
-    fontSize: 20,
-    color: '#6B7280',
-    fontWeight: 'bold',
   },
   emptyAttendeesContainer: {
     padding: 40,

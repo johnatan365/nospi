@@ -132,6 +132,14 @@ export default function ProfileScreen() {
 
       const profileData = data[0];
       console.log('Profile loaded successfully');
+      
+      // FIX: Add cache-busting to profile photo URL when loading
+      if (profileData.profile_photo_url) {
+        const url = new URL(profileData.profile_photo_url);
+        url.searchParams.set('t', Date.now().toString());
+        profileData.profile_photo_url = url.toString();
+      }
+      
       setProfile(profileData);
       setEditName(profileData.name || '');
       setEditPhone(profileData.phone || '');
@@ -211,12 +219,27 @@ export default function ProfileScreen() {
 
       console.log('Uploading to bucket: profile-photos, path:', filePath);
 
+      // FIX: Delete old photo first to ensure clean upload
+      const { data: existingFiles } = await supabase.storage
+        .from('profile-photos')
+        .list('', {
+          search: user?.id || '',
+        });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(f => f.name);
+        await supabase.storage
+          .from('profile-photos')
+          .remove(filesToDelete);
+        console.log('Deleted old photos:', filesToDelete);
+      }
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
-          cacheControl: '3600',
-          upsert: true,
+          cacheControl: '0', // FIX: Disable caching to ensure immediate reload
+          upsert: false, // FIX: Don't upsert, always create new file
         });
 
       if (uploadError) {
@@ -227,13 +250,13 @@ export default function ProfileScreen() {
 
       console.log('Upload successful:', uploadData);
 
-      // Add cache-busting parameter to force reload
+      // Get public URL without cache-busting (we'll add it when displaying)
       const { data: urlData } = supabase.storage
         .from('profile-photos')
         .getPublicUrl(filePath);
 
-      const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-      console.log('Public URL with cache-busting:', photoUrl);
+      const photoUrl = urlData.publicUrl;
+      console.log('Public URL:', photoUrl);
 
       const { error: updateError } = await supabase
         .from('users')
@@ -248,11 +271,9 @@ export default function ProfileScreen() {
 
       console.log('Photo uploaded and profile updated successfully');
       
-      // Force immediate UI update with new photo URL
-      setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
-      
-      // Reload profile to ensure consistency
-      await loadProfile();
+      // FIX: Force immediate UI update with cache-busted URL
+      const cacheBustedUrl = `${photoUrl}?t=${Date.now()}`;
+      setProfile(prev => prev ? { ...prev, profile_photo_url: cacheBustedUrl } : null);
       
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {
@@ -475,7 +496,11 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
             {profile.profile_photo_url ? (
               <View>
-                <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
+                <Image 
+                  source={{ uri: profile.profile_photo_url }} 
+                  style={styles.profilePhoto}
+                  key={profile.profile_photo_url} // FIX: Force re-render when URL changes
+                />
                 {uploadingPhoto && (
                   <View style={styles.photoOverlay}>
                     <ActivityIndicator size="large" color={nospiColors.white} />
@@ -1165,9 +1190,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   modalInput: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
