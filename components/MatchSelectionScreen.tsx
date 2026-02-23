@@ -287,9 +287,11 @@ export default function MatchSelectionScreen({
   }, [eventId, currentLevel, currentUserId]);
 
   // CRITICAL: Check if all participants have voted
+  // This is ONLY for UI display purposes (countdown, waiting message)
+  // It does NOT trigger phase transitions - backend handles that
   const checkAllVotes = useCallback(async () => {
     try {
-      console.log('📊 === CHECKING ALL VOTES ===');
+      console.log('📊 === CHECKING ALL VOTES (UI ONLY) ===');
       
       const { data, error } = await supabase
         .from('event_matches_votes')
@@ -306,7 +308,7 @@ export default function MatchSelectionScreen({
       const allParticipantIds = participants.map(p => p.user_id);
       const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
 
-      console.log('📊 Vote status:', {
+      console.log('📊 Vote status (UI only - does NOT trigger phase change):', {
         votedCount: votedUserIds.length,
         totalCount: allParticipantIds.length,
         allVoted,
@@ -317,6 +319,7 @@ export default function MatchSelectionScreen({
       // If all votes received, stop countdown
       if (allVoted) {
         console.log('🛑 === ALL VOTES RECEIVED - STOPPING COUNTDOWN ===');
+        console.log('⚠️ Phase transition will be handled by BACKEND, not frontend');
         if (countdownIntervalRef.current) {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
@@ -521,8 +524,11 @@ export default function MatchSelectionScreen({
         user_id: currentUserId,
         selected_user_id: selectedUserIdValue,
       });
+      console.log('⚠️ CRITICAL: This insert must NOT trigger game_phase change');
+      console.log('⚠️ CRITICAL: game_phase must remain "match_selection" until all votes or deadline');
 
       // CRITICAL: Insert vote - DO NOT set local state
+      // This insert should NOT trigger any phase transition in the backend
       const { data, error } = await supabase
         .from('event_matches_votes')
         .insert({
@@ -543,8 +549,9 @@ export default function MatchSelectionScreen({
       console.log('✅ === VOTE INSERTED SUCCESSFULLY ===');
       console.log('✅ Inserted data:', data);
       console.log('✅ Realtime will update userHasVoted state');
+      console.log('✅ game_phase should remain "match_selection" - NO PHASE CHANGE');
 
-      // Recalculate vote count
+      // Recalculate vote count (UI only - does not trigger phase change)
       await checkAllVotes();
 
       // Check for immediate match

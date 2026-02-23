@@ -493,9 +493,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         match_deadline_at: data.match_deadline_at
       });
 
-      // CRITICAL: Restore state based on game_phase
+      // CRITICAL FIX: Restore state EXACTLY as stored in database
+      // Do NOT recalculate or derive phase from vote counts
+      // Trust the database game_phase field as the single source of truth
+      
       if (data.game_phase === 'match_selection') {
-        console.log('🔄 Restoring match_selection phase');
+        console.log('🔄 Restoring match_selection phase - STABLE until backend changes it');
         setGamePhase('match_selection');
         setCurrentLevel((data.current_level as QuestionLevel) || 'divertido');
         setMatchStartedAt(data.match_started_at || null);
@@ -565,8 +568,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             match_deadline_at: newEvent.match_deadline_at
           });
           
-          // Update local state based on realtime update
+          // CRITICAL FIX: Only update phase if it actually changed in the database
+          // Do NOT recalculate or derive phase from vote counts
+          // Trust the database as the single source of truth
+          
           if (newEvent.game_phase === 'question_active') {
+            console.log('📡 Updating to question_active phase');
             setGamePhase('question_active');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
@@ -578,18 +585,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               setStarterParticipant(starter || null);
             }
           } else if (newEvent.game_phase === 'match_selection') {
+            console.log('📡 Updating to match_selection phase');
+            // CRITICAL: Match phase must remain stable until backend changes it
             setGamePhase('match_selection');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setMatchStartedAt(newEvent.match_started_at || null);
             setMatchDeadlineAt(newEvent.match_deadline_at || null);
           } else if (newEvent.game_phase === 'level_transition') {
+            console.log('📡 Updating to level_transition phase');
             setGamePhase('level_transition');
             setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'finished') {
+            console.log('📡 Updating to finished phase');
             setGamePhase('finished');
-          } else {
+          } else if (newEvent.game_phase === 'ready') {
+            console.log('📡 Updating to ready phase');
             setGamePhase('ready');
           }
+          
+          // CRITICAL: Do NOT change phase based on vote counts or other derived logic
+          // The backend is responsible for phase transitions
         }
       )
       .subscribe((status) => {
@@ -756,8 +771,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentUserId, answeredUsers]);
 
+  // CRITICAL: This is called by MatchSelectionScreen when match phase is complete
+  // This is the ONLY place where phase transition from match_selection should happen
   const handleMatchComplete = useCallback(async () => {
     console.log('💘 === MATCH SELECTION COMPLETE ===');
+    console.log('⚠️ CRITICAL: This is the ONLY authorized phase transition from match_selection');
     
     if (!appointment?.event_id) return;
 
@@ -770,6 +788,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (nextLevel) {
         // Continue to next level
+        console.log('➡️ Transitioning to next level:', nextLevel);
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const firstQuestion = QUESTIONS[nextLevel][0];
@@ -797,6 +816,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('✅ Started next level:', nextLevel);
       } else {
         // All levels complete - end game (do NOT move to anterior yet - wait for Finalizar button)
+        console.log('🏁 All levels complete - transitioning to finished');
         const { error: eventError } = await supabase
           .from('events')
           .update({
@@ -871,8 +891,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const timerSeconds = questionTimeRemaining % 60;
   const timerDisplay = `${timerMinutes}:${timerSeconds.toString().padStart(2, '0')}`;
 
-  // Show match selection screen
+  // CRITICAL: Show match selection screen - NO DYNAMIC KEY
+  // Component must remain mounted during entire match_selection phase
+  // Do NOT add key prop that changes based on vote count or other dynamic values
   if (gamePhase === 'match_selection' && currentUserId) {
+    console.log('🎮 Rendering MatchSelectionScreen - phase is STABLE');
     return (
       <MatchSelectionScreen
         eventId={appointment.event_id}
