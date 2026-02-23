@@ -16,17 +16,11 @@ interface Participant {
 
 interface MatchSelectionScreenProps {
   eventId: string;
-  currentLevel: string;
+  currentLevel: number;
   currentUserId: string;
   participants: Participant[];
-  onMatchComplete: () => void;
-  matchDeadlineAt: string | null;
-}
-
-interface ProcessMatchVoteResult {
-  match: boolean;
-  matched_user_id: string | null;
-  matched_user_name: string | null;
+  onMatchComplete: (nextLevel: number, nextPhase: 'questions' | 'free_phase') => Promise<void>;
+  triggerMatchAnimation: (matchedUserId: string) => void;
 }
 
 export default function MatchSelectionScreen({
@@ -35,59 +29,193 @@ export default function MatchSelectionScreen({
   currentUserId,
   participants,
   onMatchComplete,
-  matchDeadlineAt,
+  triggerMatchAnimation,
 }: MatchSelectionScreenProps) {
-  console.log('💘 === MATCH SELECTION SCREEN RENDERED ===');
-  console.log('💘 Props:', { eventId, currentLevel, currentUserId, matchDeadlineAt });
+  console.log('💘 === MATCH SELECTION SCREEN V2 RENDERED ===');
+  console.log('💘 Props:', { eventId, currentLevel, currentUserId });
   
-  // CRITICAL: Remove local hasVoted state - derive from DB only
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [userHasVoted, setUserHasVoted] = useState(false); // Derived from DB
-  const [loadingVoteStatus, setLoadingVoteStatus] = useState(true); // Loading initial vote check
+  const [totalVotes, setTotalVotes] = useState(0);
+  const [totalParticipants, setTotalParticipants] = useState(0);
+  const [allVotes, setAllVotes] = useState<Array<{ user_id: string; selected_user_id: string | null }>>([]);
+  const [userHasVoted, setUserHasVoted] = useState(false);
+  const [loadingVoteStatus, setLoadingVoteStatus] = useState(true);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedUserName, setMatchedUserName] = useState('');
-  const [allVotesReceived, setAllVotesReceived] = useState(false);
-  const [deadlineReached, setDeadlineReached] = useState(false);
-  const [remainingMinutes, setRemainingMinutes] = useState(0);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const [serverTime, setServerTime] = useState<Date>(new Date());
   
   // Animation refs
   const heartScale = useRef(new Animated.Value(0.8)).current;
   const matchGlowAnimation = useRef(new Animated.Value(0)).current;
   const matchTextAnimation = useRef(new Animated.Value(0)).current;
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasCalledOnMatchCompleteRef = useRef(false);
   
   // Refs for stable access in callbacks
-  const loadingRef = useRef(loading);
-  const userHasVotedRef = useRef(userHasVoted);
   const selectedUserIdRef = useRef(selectedUserId);
-  
-  // Keep refs in sync with state
-  useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
-  
-  useEffect(() => {
-    userHasVotedRef.current = userHasVoted;
-  }, [userHasVoted]);
   
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId;
   }, [selectedUserId]);
 
-  // CRITICAL: Move triggerMatchAnimation to the top
-  const triggerMatchAnimation = useCallback(() => {
+  // PHASE 1: Fetch votes and participants on mount
+  const fetchVotesAndParticipants = useCallback(async () => {
+    console.log('📊 === FETCHING VOTES AND PARTICIPANTS ===');
+    setLoadingVoteStatus(true);
+
+    try {
+      // Fetch all votes for current event and level
+      const { data: votesData, error: votesError } = await supabase
+        .from('event_matches_votes')
+        .select('from_user_id, selected_user_id')
+        .eq('event_id', eventId)
+        .eq('level', currentLevel.toString());
+
+      if (votesError) {
+        console.error('❌ Error fetching votes:', votesError);
+        setLoadingVoteStatus(false);
+        return;
+      }
+
+      // Fetch confirmed participants count
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('event_participants')
+        .select('user_id')
+        .eq('event_id', eventId)
+        .eq('confirmed', true);
+
+      if (participantsError) {
+        console.error('❌ Error fetching participants:', participantsError);
+        setLoadingVoteStatus(false);
+        return;
+      }
+
+      const votes = votesData || [];
+      const confirmedParticipants = participantsData || [];
+
+      console.log('📊 Votes:', votes.length, 'Participants:', confirmedParticipants.length);
+
+      // Derive user's vote status from DB
+      const currentUserVote = votes.find((vote) => vote.from_user_id === currentUserId);
+      setUserHasVoted(!!currentUserVote);
+
+      // Store all votes for match detection
+      setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
+      setTotalVotes(votes.length);
+      setTotalParticipants(confirmedParticipants.length);
+    } catch (error) {
+      console.error('❌ Error in fetchVotesAndParticipants:', error);
+    } finally {
+      setLoadingVoteStatus(false);
+    }
+  }, [eventId, currentLevel, currentUserId]);
+
+  useEffect(() => {
+    fetchVotesAndParticipants();
+  }, [fetchVotesAndParticipants]);
+
+  // PHASE 1: Subscribe to vote changes
+  useEffect(() => {
+    console.log('📡 === SUBSCRIBING TO VOTE CHANGES ===');
+
+    const channel = supabase
+      .channel(`votes_${eventId}_${currentLevel}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_matches_votes',
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          console.log('📡 Vote change detected:', payload.eventType);
+          fetchVotesAndParticipants();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, currentLevel, fetchVotesAndParticipants]);
+
+  // PHASE 3: Match detection when all votes received
+  const checkAndTriggerMatch = useCallback(() => {
+    console.log('🔍 === CHECKING FOR MATCHES ===');
+    console.log('🔍 Total votes:', totalVotes, 'Total participants:', totalParticipants);
+
+    if (totalVotes !== totalParticipants || totalParticipants === 0) {
+      console.log('⏸️ Not all votes received yet');
+      return;
+    }
+
+    console.log('✅ All votes received - checking for reciprocal matches');
+
+    // Find reciprocal matches
+    const reciprocalMatches: Array<{ user1: string; user2: string }> = [];
+    
+    allVotes.forEach((voteA) => {
+      if (!voteA.selected_user_id) return; // Skip "Ninguno por ahora"
+      
+      const voteB = allVotes.find(
+        (voteC) =>
+          voteC.user_id === voteA.selected_user_id &&
+          voteC.selected_user_id === voteA.user_id
+      );
+      
+      if (voteB) {
+        // Check if we already have this match (avoid duplicates)
+        const alreadyExists = reciprocalMatches.some(
+          (m) =>
+            (m.user1 === voteA.user_id && m.user2 === voteB.user_id) ||
+            (m.user1 === voteB.user_id && m.user2 === voteA.user_id)
+        );
+        
+        if (!alreadyExists) {
+          reciprocalMatches.push({ user1: voteA.user_id, user2: voteB.user_id });
+          console.log('💜 Reciprocal match found:', voteA.user_id, '<->', voteB.user_id);
+        }
+      }
+    });
+
+    console.log('💜 Total reciprocal matches:', reciprocalMatches.length);
+
+    // Check if current user is in a match
+    const currentUserMatch = reciprocalMatches.find(
+      (match) => match.user1 === currentUserId || match.user2 === currentUserId
+    );
+
+    if (currentUserMatch) {
+      const matchedUserId =
+        currentUserMatch.user1 === currentUserId
+          ? currentUserMatch.user2
+          : currentUserMatch.user1;
+
+      console.log('✨ Current user has a match with:', matchedUserId);
+
+      // Get matched user's name
+      const matchedParticipant = participants.find((p) => p.user_id === matchedUserId);
+      const matchedName = matchedParticipant?.name || 'Alguien';
+
+      setMatchedUserName(matchedName);
+      setShowMatchModal(true);
+      triggerMatchAnimation(matchedUserId);
+    } else {
+      console.log('ℹ️ Current user has no match this round');
+    }
+  }, [totalVotes, totalParticipants, allVotes, currentUserId, participants, triggerMatchAnimation]);
+
+  useEffect(() => {
+    checkAndTriggerMatch();
+  }, [checkAndTriggerMatch]);
+
+  // Match animation
+  const animateMatch = useCallback(() => {
     console.log('🎉 === TRIGGERING MATCH ANIMATION ===');
     
-    // Reset animation values
     heartScale.setValue(0.5);
     matchGlowAnimation.setValue(0);
     matchTextAnimation.setValue(0);
 
-    // Enhanced heart scale animation with bounce effect
     Animated.sequence([
       Animated.spring(heartScale, {
         toValue: 1.3,
@@ -103,7 +231,6 @@ export default function MatchSelectionScreen({
       }),
     ]).start();
 
-    // Enhanced glow animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(matchGlowAnimation, {
@@ -121,7 +248,6 @@ export default function MatchSelectionScreen({
       ])
     ).start();
 
-    // Text fade-in
     setTimeout(() => {
       Animated.spring(matchTextAnimation, {
         toValue: 1,
@@ -131,24 +257,7 @@ export default function MatchSelectionScreen({
       }).start();
     }, 300);
 
-    // Haptic feedback
     if (Platform.OS !== 'web') {
-      setTimeout(() => {
-        try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
-        }
-      }, 300);
-      
       setTimeout(() => {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -158,464 +267,119 @@ export default function MatchSelectionScreen({
       }, 500);
     }
 
-    // Auto-close modal after 4 seconds
     setTimeout(() => {
-      console.log('⏰ === MATCH MODAL AUTO-CLOSE TRIGGERED ===');
       Animated.timing(heartScale, {
         toValue: 0,
         duration: 400,
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }).start(() => {
-        console.log('✅ Match modal animation complete - closing modal');
         setShowMatchModal(false);
       });
     }, 4000);
   }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
-  // Fetch server time on mount
   useEffect(() => {
-    const fetchServerTime = async () => {
-      try {
-        const { data, error } = await supabase.rpc('get_server_time');
-        if (!error && data) {
-          const serverTimestamp = new Date(data);
-          setServerTime(serverTimestamp);
-          console.log('🕐 Server time fetched:', serverTimestamp.toISOString());
-        }
-      } catch (err) {
-        console.error('❌ Error fetching server time:', err);
-      }
-    };
-    fetchServerTime();
-  }, []);
-
-  // CRITICAL: Check if user has voted and subscribe to vote changes
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkAndSubscribeUserVote = async () => {
-      if (!eventId || !currentLevel || !currentUserId) {
-        setLoadingVoteStatus(false);
-        return;
-      }
-
-      setLoadingVoteStatus(true);
-
-      try {
-        console.log('🔍 === CHECKING USER VOTE FROM DATABASE ===');
-        console.log('🔍 Query params:', { 
-          eventId, 
-          level: Number(currentLevel), 
-          currentUserId 
-        });
-        
-        // 1. Initial check for existing vote
-        const { data: vote, error: initialError } = await supabase
-          .from('event_matches_votes')
-          .select('id')
-          .eq('event_id', eventId)
-          .eq('level', Number(currentLevel))
-          .eq('user_id', currentUserId)
-          .maybeSingle();
-
-        if (initialError) {
-          console.error('❌ Error checking initial user vote:', initialError);
-        }
-        
-        if (isMounted) {
-          const hasVoted = !!vote;
-          console.log(hasVoted ? '✅ User has voted - vote exists in DB' : 'ℹ️ User has not voted yet');
-          setUserHasVoted(hasVoted);
-          setLoadingVoteStatus(false);
-        }
-
-        // 2. Realtime subscription for changes to the user's vote
-        const voteChannel = supabase
-          .channel(`user_vote_channel_${eventId}_${currentLevel}_${currentUserId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'event_matches_votes',
-              filter: `event_id=eq.${eventId}`,
-            },
-            (payload) => {
-              console.log('📡 Realtime vote update received:', payload);
-              
-              // Check if this update is for the current user and level
-              const newData = payload.new as any;
-              const oldData = payload.old as any;
-              
-              const isCurrentUserAndLevel = 
-                (newData?.user_id === currentUserId && newData?.level === Number(currentLevel)) ||
-                (oldData?.user_id === currentUserId && oldData?.level === Number(currentLevel));
-              
-              if (isCurrentUserAndLevel && isMounted) {
-                console.log('📡 Vote update is for current user and level');
-                // Update userHasVoted based on realtime event
-                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                  console.log('✅ Setting userHasVoted to TRUE (realtime INSERT/UPDATE)');
-                  setUserHasVoted(true);
-                } else if (payload.eventType === 'DELETE') {
-                  console.log('❌ Setting userHasVoted to FALSE (realtime DELETE)');
-                  setUserHasVoted(false);
-                }
-              }
-            }
-          )
-          .subscribe();
-
-        return () => {
-          console.log('🧹 Cleaning up user vote subscription');
-          supabase.removeChannel(voteChannel);
-        };
-      } catch (error) {
-        console.error('❌ Error in checkAndSubscribeUserVote:', error);
-        if (isMounted) {
-          setLoadingVoteStatus(false);
-        }
-      }
-    };
-
-    checkAndSubscribeUserVote();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [eventId, currentLevel, currentUserId]);
-
-  // CRITICAL: Check if all participants have voted
-  // This is ONLY for UI display purposes (countdown, waiting message)
-  // It does NOT trigger phase transitions - backend handles that
-  const checkAllVotes = useCallback(async () => {
-    try {
-      console.log('📊 === CHECKING ALL VOTES (UI ONLY) ===');
-      
-      const { data, error } = await supabase
-        .from('event_matches_votes')
-        .select('user_id')
-        .eq('event_id', eventId)
-        .eq('level', Number(currentLevel));
-
-      if (error) {
-        console.error('❌ Error checking votes:', error);
-        return;
-      }
-
-      const votedUserIds = data.map(v => v.user_id);
-      const allParticipantIds = participants.map(p => p.user_id);
-      const allVoted = allParticipantIds.every(id => votedUserIds.includes(id));
-
-      console.log('📊 Vote status (UI only - does NOT trigger phase change):', {
-        votedCount: votedUserIds.length,
-        totalCount: allParticipantIds.length,
-        allVoted,
-      });
-
-      setAllVotesReceived(allVoted);
-
-      // If all votes received, stop countdown
-      if (allVoted) {
-        console.log('🛑 === ALL VOTES RECEIVED - STOPPING COUNTDOWN ===');
-        console.log('⚠️ Phase transition will be handled by BACKEND, not frontend');
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error checking all votes:', error);
+    if (showMatchModal) {
+      animateMatch();
     }
-  }, [eventId, currentLevel, participants]);
-
-  // Subscribe to vote changes for all participants
-  useEffect(() => {
-    console.log('📡 === SETTING UP VOTE MONITORING ===');
-    
-    // Initial check
-    checkAllVotes();
-
-    // Subscribe to vote changes
-    const channel = supabase
-      .channel(`votes_${eventId}_${currentLevel}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'event_matches_votes',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          console.log('📡 Vote change detected:', payload);
-          checkAllVotes();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [eventId, currentLevel, checkAllVotes]);
-
-  // Countdown timer
-  useEffect(() => {
-    console.log('⏰ === COUNTDOWN TIMER SETUP ===');
-    
-    // Clear any existing interval
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-
-    // Don't start countdown if all votes already received or no deadline
-    if (!matchDeadlineAt || allVotesReceived) {
-      console.log('⏸️ Not starting countdown');
-      return;
-    }
-
-    const updateCountdown = () => {
-      const now = new Date(serverTime.getTime() + (Date.now() - serverTime.getTime()));
-      const deadlineMs = new Date(matchDeadlineAt).getTime();
-      const nowMs = now.getTime();
-      const remaining = Math.max(0, deadlineMs - nowMs);
-
-      const minutes = Math.floor(remaining / (1000 * 60));
-      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-
-      setRemainingMinutes(minutes);
-      setRemainingSeconds(seconds);
-
-      if (remaining === 0) {
-        setDeadlineReached(true);
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-        console.log('⏰ Deadline reached!');
-      }
-    };
-
-    console.log('▶️ Starting countdown interval');
-    updateCountdown();
-    countdownIntervalRef.current = setInterval(updateCountdown, 1000);
-
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-    };
-  }, [matchDeadlineAt, serverTime, allVotesReceived]);
-
-  // Subscribe to confirmed matches
-  useEffect(() => {
-    console.log('📡 === SUBSCRIBING TO MATCH CONFIRMATIONS ===');
-    
-    const channel = supabase
-      .channel(`matches_${eventId}_${currentLevel}_${currentUserId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'event_matches_confirmed',
-          filter: `event_id=eq.${eventId}`,
-        },
-        async (payload) => {
-          console.log('💜 === MATCH CONFIRMED EVENT RECEIVED ===');
-          
-          const newMatch = payload.new as any;
-          
-          const isUserInMatch = (newMatch.user1_id === currentUserId || newMatch.user2_id === currentUserId);
-          const isCurrentLevel = newMatch.level === Number(currentLevel);
-          
-          if (isCurrentLevel && isUserInMatch) {
-            const otherUserId = newMatch.user1_id === currentUserId ? newMatch.user2_id : newMatch.user1_id;
-            
-            // Get the other user's name
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('name')
-              .eq('id', otherUserId)
-              .single();
-            
-            const otherUserName = profileData?.name || 'Alguien';
-            
-            console.log('✨ === SHOWING MATCH MODAL ===');
-            console.log('✨ Matched with:', otherUserName);
-            
-            setMatchedUserName(otherUserName);
-            setShowMatchModal(true);
-            triggerMatchAnimation();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [eventId, currentLevel, currentUserId, triggerMatchAnimation]);
+  }, [showMatchModal, animateMatch]);
 
   const handleSelectUser = useCallback((userId: string) => {
-    // Disable selection changes after voting
-    if (userHasVotedRef.current) {
+    if (userHasVoted) {
       console.log('⚠️ Cannot change selection - already voted');
       return;
     }
     console.log('👆 Selected user:', userId);
     setSelectedUserId(userId);
-  }, []);
+  }, [userHasVoted]);
 
   const handleSelectNone = useCallback(() => {
-    // Disable selection changes after voting
-    if (userHasVotedRef.current) {
+    if (userHasVoted) {
       console.log('⚠️ Cannot change selection - already voted');
       return;
     }
     console.log('👆 Selected: Ninguno por ahora');
     setSelectedUserId('none');
-  }, []);
+  }, [userHasVoted]);
 
-  // CRITICAL: Vote confirmation - insert into DB and let realtime update UI
+  // PHASE 1: Vote confirmation
   const handleConfirmSelection = useCallback(async () => {
-    console.log('🔘 === BUTTON CLICKED: Confirmar elección ===');
+    console.log('🔘 === CONFIRMING SELECTION ===');
     
     const currentSelectedUserId = selectedUserIdRef.current;
-    const currentLoading = loadingRef.current;
-    const currentUserHasVoted = userHasVotedRef.current;
     
-    console.log('🔘 Current state:', {
-      selectedUserId: currentSelectedUserId,
-      loading: currentLoading,
-      userHasVoted: currentUserHasVoted,
-    });
-
-    // Guard clauses
     if (!currentSelectedUserId) {
       console.warn('⚠️ No selection made');
       return;
     }
 
-    if (currentLoading) {
+    if (loading) {
       console.warn('⚠️ Already loading');
       return;
     }
 
-    if (currentUserHasVoted) {
+    if (userHasVoted) {
       console.warn('⚠️ Already voted');
       return;
     }
 
-    console.log('💘 === CONFIRMING MATCH SELECTION ===');
-    
     setLoading(true);
 
     try {
       const selectedUserIdValue = currentSelectedUserId === 'none' ? null : currentSelectedUserId;
       
-      console.log('📝 === INSERTING VOTE INTO DATABASE ===');
-      console.log('📝 Insert data:', {
+      console.log('📝 Inserting vote:', {
         event_id: eventId,
-        level: Number(currentLevel),
-        user_id: currentUserId,
+        level: currentLevel.toString(),
+        from_user_id: currentUserId,
         selected_user_id: selectedUserIdValue,
       });
-      console.log('⚠️ CRITICAL: This insert must NOT trigger game_phase change');
-      console.log('⚠️ CRITICAL: game_phase must remain "match_selection" until all votes or deadline');
 
-      // CRITICAL: Insert vote - DO NOT set local state
-      // This insert should NOT trigger any phase transition in the backend
       const { data, error } = await supabase
         .from('event_matches_votes')
         .insert({
           event_id: eventId,
-          level: Number(currentLevel),
-          user_id: currentUserId,
+          level: currentLevel.toString(),
+          from_user_id: currentUserId,
           selected_user_id: selectedUserIdValue,
         })
         .select('id')
         .single();
 
       if (error) {
-        console.error('❌ === VOTE INSERT FAILED ===');
-        console.error('❌ Error:', error.message, error.details, error.hint);
+        console.error('❌ Vote insert failed:', error);
         return;
       }
 
-      console.log('✅ === VOTE INSERTED SUCCESSFULLY ===');
-      console.log('✅ Inserted data:', data);
-      console.log('✅ Realtime will update userHasVoted state');
-      console.log('✅ game_phase should remain "match_selection" - NO PHASE CHANGE');
-
-      // Recalculate vote count (UI only - does not trigger phase change)
-      await checkAllVotes();
-
-      // Check for immediate match
-      console.log('🔍 Checking for immediate match...');
-      const { data: matchData, error: matchError } = await supabase.rpc('process_match_vote', {
-        p_event_id: eventId,
-        p_level: currentLevel,
-        p_from_user_id: currentUserId,
-        p_selected_user_id: selectedUserIdValue,
-      });
-
-      if (matchError) {
-        console.error('⚠️ Error checking for match:', matchError);
-      } else {
-        const result = matchData as ProcessMatchVoteResult;
-        console.log('🔍 Match check result:', result);
-
-        if (result.match && result.matched_user_id && result.matched_user_name) {
-          console.log('💜 === IMMEDIATE MATCH DETECTED ===');
-          setMatchedUserName(result.matched_user_name);
-          setShowMatchModal(true);
-          triggerMatchAnimation();
-        }
-      }
+      console.log('✅ Vote inserted successfully:', data);
+      
+      // Realtime will update UI
+      await fetchVotesAndParticipants();
     } catch (error) {
-      console.error('❌ === UNEXPECTED ERROR ===');
-      console.error('❌ Error:', error);
+      console.error('❌ Unexpected error:', error);
     } finally {
       setLoading(false);
     }
-  }, [eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
+  }, [eventId, currentLevel, currentUserId, loading, userHasVoted, fetchVotesAndParticipants]);
 
-  // Determine if we can continue
-  const canContinue = allVotesReceived || deadlineReached;
+  // PHASE 2: Continue button logic
+  const canContinue = totalVotes === totalParticipants && totalParticipants > 0;
 
-  // Auto-continue when conditions are met
-  useEffect(() => {
-    console.log('🔄 === AUTO-CONTINUE CHECK ===');
-    console.log('🔄 State:', {
-      userHasVoted,
-      showMatchModal,
-      canContinue,
-      hasCalledOnMatchComplete: hasCalledOnMatchCompleteRef.current
-    });
+  const handleContinue = useCallback(async () => {
+    console.log('➡️ === CONTINUE PRESSED ===');
     
-    if (userHasVoted && !showMatchModal && canContinue && !hasCalledOnMatchCompleteRef.current) {
-      console.log('✅ === AUTO-CONTINUING TO NEXT PHASE ===');
-      
-      hasCalledOnMatchCompleteRef.current = true;
-      
-      const timer = setTimeout(() => {
-        console.log('➡️ Calling onMatchComplete()');
-        onMatchComplete();
-      }, 800);
-      
-      return () => {
-        clearTimeout(timer);
-      };
+    if (currentLevel < 3) {
+      console.log('➡️ Advancing to level', currentLevel + 1);
+      await onMatchComplete(currentLevel + 1, 'questions');
+    } else {
+      console.log('🏁 All levels complete - moving to free phase');
+      await onMatchComplete(currentLevel, 'free_phase');
     }
-  }, [userHasVoted, showMatchModal, canContinue, onMatchComplete]);
+  }, [currentLevel, onMatchComplete]);
 
-  const otherParticipants = participants.filter(p => p.user_id !== currentUserId);
+  const otherParticipants = participants.filter((p) => p.user_id !== currentUserId);
 
-  // Glow opacity interpolation
   const glowOpacity = matchGlowAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 0.8],
@@ -623,28 +387,13 @@ export default function MatchSelectionScreen({
 
   const textOpacity = matchTextAnimation;
 
-  // Format countdown timer
-  const minutesDisplay = String(remainingMinutes).padStart(2, '0');
-  const secondsDisplay = String(remainingSeconds).padStart(2, '0');
-  const timerDisplay = `${minutesDisplay}:${secondsDisplay}`;
-
-  const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
-  const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
-
-  // CRITICAL: Button state derived from DB
   const isButtonDisabled = !selectedUserId || loading || userHasVoted || loadingVoteStatus;
-  const buttonText = userHasVoted ? 'Elección confirmada ✅' : loading ? '⏳ Confirmando...' : 'Confirmar elección';
-  
-  console.log('🔘 Button render state:', {
-    selectedUserId,
-    loading,
-    userHasVoted,
-    loadingVoteStatus,
-    isButtonDisabled,
-    buttonText,
-  });
+  const buttonText = userHasVoted
+    ? 'Elección confirmada ✅'
+    : loading
+    ? '⏳ Confirmando...'
+    : 'Confirmar elección';
 
-  // Show loading while checking initial vote status
   if (loadingVoteStatus) {
     return (
       <LinearGradient
@@ -671,17 +420,6 @@ export default function MatchSelectionScreen({
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <Text style={styles.titleWhite}>💘 Momento de decisión</Text>
 
-        {matchDeadlineAt && (
-          <View style={styles.timerCard}>
-            <Text style={styles.timerLabel}>🕐 Tienes este tiempo para elegir:</Text>
-            <Text style={[
-              styles.timerDisplay,
-              isWarning && styles.timerWarning,
-              isCritical && styles.timerCritical
-            ]}>{timerDisplay}</Text>
-          </View>
-        )}
-
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>
             Elige con quién te gustaría seguir conectando.
@@ -701,49 +439,49 @@ export default function MatchSelectionScreen({
             
             return (
               <React.Fragment key={index}>
-              <TouchableOpacity
-                style={[
-                  styles.participantCard, 
-                  isSelected && styles.participantCardSelected,
-                  userHasVoted && styles.participantCardDisabled
-                ]}
-                onPress={() => handleSelectUser(participant.user_id)}
-                activeOpacity={userHasVoted ? 1 : 0.7}
-                disabled={userHasVoted}
-              >
-                <View style={styles.participantInfo}>
-                  {participant.profile_photo_url ? (
-                    <Image 
-                      source={{ uri: participant.profile_photo_url }} 
-                      style={styles.participantPhoto}
-                    />
-                  ) : (
-                    <View style={styles.participantPhotoPlaceholder}>
-                      <Text style={styles.participantPhotoPlaceholderText}>
-                        {displayName.charAt(0).toUpperCase()}
-                      </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.participantCard,
+                    isSelected && styles.participantCardSelected,
+                    userHasVoted && styles.participantCardDisabled,
+                  ]}
+                  onPress={() => handleSelectUser(participant.user_id)}
+                  activeOpacity={userHasVoted ? 1 : 0.7}
+                  disabled={userHasVoted}
+                >
+                  <View style={styles.participantInfo}>
+                    {participant.profile_photo_url ? (
+                      <Image
+                        source={{ uri: participant.profile_photo_url }}
+                        style={styles.participantPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantPhotoPlaceholder}>
+                        <Text style={styles.participantPhotoPlaceholderText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.participantDetails}>
+                      <Text style={styles.participantName}>{displayName}</Text>
+                      <Text style={styles.participantOccupation}>{participant.occupation}</Text>
+                    </View>
+                  </View>
+                  {isSelected && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>✓</Text>
                     </View>
                   )}
-                  <View style={styles.participantDetails}>
-                    <Text style={styles.participantName}>{displayName}</Text>
-                    <Text style={styles.participantOccupation}>{participant.occupation}</Text>
-                  </View>
-                </View>
-                {isSelected && (
-                  <View style={styles.selectedBadge}>
-                    <Text style={styles.selectedBadgeText}>✓</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
               </React.Fragment>
             );
           })}
 
           <TouchableOpacity
             style={[
-              styles.noneCard, 
+              styles.noneCard,
               selectedUserId === 'none' && styles.noneCardSelected,
-              userHasVoted && styles.participantCardDisabled
+              userHasVoted && styles.participantCardDisabled,
             ]}
             onPress={handleSelectNone}
             activeOpacity={userHasVoted ? 1 : 0.7}
@@ -760,42 +498,45 @@ export default function MatchSelectionScreen({
 
         <TouchableOpacity
           style={[
-            styles.confirmButton, 
+            styles.confirmButton,
             isButtonDisabled && styles.buttonDisabled,
-            userHasVoted && styles.buttonConfirmed
+            userHasVoted && styles.buttonConfirmed,
           ]}
           onPress={handleConfirmSelection}
           disabled={isButtonDisabled}
           activeOpacity={0.8}
         >
-          <Text style={styles.confirmButtonText}>
-            {buttonText}
-          </Text>
+          <Text style={styles.confirmButtonText}>{buttonText}</Text>
         </TouchableOpacity>
 
-        {userHasVoted && !showMatchModal && (
+        {userHasVoted && !canContinue && (
           <View style={styles.waitingCard}>
             <ActivityIndicator size="large" color={nospiColors.purpleMid} />
             <Text style={styles.waitingText}>
-              {canContinue ? '✓ Procesando resultados...' : '⏳ Esperando a que todos elijan...'}
+              ⏳ Esperando a que todos elijan... ({totalVotes}/{totalParticipants})
             </Text>
           </View>
         )}
+
+        {canContinue && (
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinue}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>➡️ Continuar</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
-      <Modal
-        visible={showMatchModal}
-        transparent
-        animationType="none"
-        onRequestClose={() => {}}
-      >
+      <Modal visible={showMatchModal} transparent animationType="none" onRequestClose={() => {}}>
         <View style={styles.modalOverlay}>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.matchModalContent,
-              { 
-                transform: [{ scale: heartScale }]
-              }
+              {
+                transform: [{ scale: heartScale }],
+              },
             ]}
           >
             <Animated.View style={[styles.glowContainer, { opacity: glowOpacity }]}>
@@ -804,13 +545,9 @@ export default function MatchSelectionScreen({
             </Animated.View>
             <Text style={styles.matchIcon}>💜</Text>
             <Animated.View style={{ opacity: textOpacity }}>
-              <Text style={styles.matchTitle}>✨ ¡Hay match! ✨</Text>
-              <Text style={styles.matchText}>
-                Tú y {matchedUserName} se eligieron
-              </Text>
-              <Text style={styles.matchSubtext}>
-                ¡Sigan conociéndose! 💜
-              </Text>
+              <Text style={styles.matchTitle}>✨ ¡Match confirmado! ✨</Text>
+              <Text style={styles.matchText}>Tú y {matchedUserName} se eligieron</Text>
+              <Text style={styles.matchSubtext}>¡Sigan conociéndose! 💜</Text>
             </Animated.View>
           </Animated.View>
         </View>
@@ -847,31 +584,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
-  },
-  timerCard: {
-    backgroundColor: 'rgba(255, 215, 0, 0.95)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  timerLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a0b2e',
-    marginBottom: 8,
-  },
-  timerDisplay: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#1a0b2e',
-    fontVariant: ['tabular-nums'],
-  },
-  timerWarning: {
-    color: '#F59E0B',
-  },
-  timerCritical: {
-    color: '#EF4444',
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1014,6 +726,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
     marginTop: 16,
+  },
+  continueButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  continueButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   modalOverlay: {
     flex: 1,
