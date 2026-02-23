@@ -58,6 +58,100 @@ export default function MatchSelectionScreen({
   const hasTriggeredHapticRef = useRef(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // CRITICAL FIX: Move triggerMatchAnimation to the top, before any useEffect that uses it
+  const triggerMatchAnimation = useCallback(() => {
+    console.log('🎉 Triggering enhanced match animation');
+    
+    // Reset animation values
+    heartScale.setValue(0.5);
+    matchGlowAnimation.setValue(0);
+    matchTextAnimation.setValue(0);
+    hasTriggeredHapticRef.current = false;
+
+    // Enhanced heart scale animation with bounce effect
+    Animated.sequence([
+      Animated.spring(heartScale, {
+        toValue: 1.3,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.spring(heartScale, {
+        toValue: 1.0,
+        friction: 5,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Enhanced glow animation with more dramatic effect
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(matchGlowAnimation, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(matchGlowAnimation, {
+          toValue: 0,
+          duration: 800,
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Text fade-in with slide up effect
+    setTimeout(() => {
+      Animated.spring(matchTextAnimation, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+    }, 300);
+
+    // Multiple haptic feedback for celebration effect
+    if (Platform.OS !== 'web') {
+      setTimeout(() => {
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }, 100);
+      
+      setTimeout(() => {
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }, 300);
+      
+      setTimeout(() => {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }, 500);
+    }
+
+    // Auto-close modal after 7 seconds (4 seconds longer than original)
+    setTimeout(() => {
+      Animated.timing(heartScale, {
+        toValue: 0,
+        duration: 400,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMatchModal(false);
+      });
+    }, 7000);
+  }, [heartScale, matchGlowAnimation, matchTextAnimation]);
+
   // Fetch server time on mount
   useEffect(() => {
     const fetchServerTime = async () => {
@@ -306,99 +400,6 @@ export default function MatchSelectionScreen({
       supabase.removeChannel(channel);
     };
   }, [eventId, currentLevel, currentUserId, triggerMatchAnimation]);
-
-  const triggerMatchAnimation = useCallback(() => {
-    console.log('🎉 Triggering enhanced match animation');
-    
-    // Reset animation values
-    heartScale.setValue(0.5);
-    matchGlowAnimation.setValue(0);
-    matchTextAnimation.setValue(0);
-    hasTriggeredHapticRef.current = false;
-
-    // Enhanced heart scale animation with bounce effect
-    Animated.sequence([
-      Animated.spring(heartScale, {
-        toValue: 1.3,
-        friction: 3,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.spring(heartScale, {
-        toValue: 1.0,
-        friction: 5,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Enhanced glow animation with more dramatic effect
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(matchGlowAnimation, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(matchGlowAnimation, {
-          toValue: 0,
-          duration: 800,
-          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Text fade-in with slide up effect
-    setTimeout(() => {
-      Animated.spring(matchTextAnimation, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
-    }, 300);
-
-    // Multiple haptic feedback for celebration effect
-    if (Platform.OS !== 'web') {
-      setTimeout(() => {
-        try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
-        }
-      }, 300);
-      
-      setTimeout(() => {
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
-        }
-      }, 500);
-    }
-
-    // Auto-close modal after 7 seconds (4 seconds longer than original)
-    setTimeout(() => {
-      Animated.timing(heartScale, {
-        toValue: 0,
-        duration: 400,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }).start(() => {
-        setShowMatchModal(false);
-      });
-    }, 7000);
-  }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
     console.log('Selected user:', userId);
