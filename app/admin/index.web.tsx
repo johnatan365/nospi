@@ -180,6 +180,7 @@ export default function AdminPanelScreen() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<'divertido' | 'sensual' | 'atrevido'>('divertido');
   const [newQuestionText, setNewQuestionText] = useState('');
+  const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
 
   // Matches and ratings
   const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
@@ -1091,6 +1092,99 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     input.click();
   };
 
+  const handleDragStart = (questionId: string) => {
+    setDraggedQuestionId(questionId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (targetQuestionId: string) => {
+    if (!draggedQuestionId || draggedQuestionId === targetQuestionId) {
+      setDraggedQuestionId(null);
+      return;
+    }
+
+    const draggedIndex = questions.findIndex(q => q.id === draggedQuestionId);
+    const targetIndex = questions.findIndex(q => q.id === targetQuestionId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedQuestionId(null);
+      return;
+    }
+
+    // Reorder questions array
+    const newQuestions = [...questions];
+    const [draggedQuestion] = newQuestions.splice(draggedIndex, 1);
+    newQuestions.splice(targetIndex, 0, draggedQuestion);
+
+    // Update question_order for all questions
+    const updates = newQuestions.map((q, index) => ({
+      id: q.id,
+      question_order: index,
+    }));
+
+    // Optimistically update UI
+    setQuestions(newQuestions);
+    setDraggedQuestionId(null);
+
+    // Update database
+    try {
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('event_questions')
+          .update({ question_order: update.question_order, updated_at: new Date().toISOString() })
+          .eq('id', update.id);
+
+        if (error) {
+          console.error('Error updating question order:', error);
+          window.alert('Error al reordenar preguntas: ' + error.message);
+          loadQuestions(); // Reload to revert
+          return;
+        }
+      }
+
+      console.log('✅ Questions reordered successfully');
+    } catch (error) {
+      console.error('Failed to reorder questions:', error);
+      window.alert('Error inesperado al reordenar preguntas');
+      loadQuestions(); // Reload to revert
+    }
+  };
+
+  const handleDeleteAttendee = async (attendeeId: string, attendeeName: string) => {
+    const confirmed = window.confirm(`¿Estás seguro de que quieres eliminar a ${attendeeName} de este evento?`);
+    if (!confirmed) return;
+
+    try {
+      console.log('Deleting attendee:', attendeeId);
+      
+      // Delete from appointments table
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', attendeeId);
+
+      if (error) {
+        console.error('Error deleting attendee:', error);
+        window.alert('Error al eliminar asistente: ' + error.message);
+        return;
+      }
+
+      console.log('✅ Attendee deleted successfully');
+      window.alert('Asistente eliminado exitosamente');
+      
+      // Reload attendees list
+      if (selectedEventForAttendees) {
+        handleViewAttendees(selectedEventForAttendees);
+      }
+    } catch (error) {
+      console.error('Failed to delete attendee:', error);
+      window.alert('Error inesperado al eliminar asistente');
+    }
+  };
+
   const handleSendEventReminder = async (eventId: string) => {
     const confirmed = window.confirm('¿Enviar recordatorio a todos los participantes de este evento según sus preferencias de notificación?');
     if (!confirmed) return;
@@ -1841,6 +1935,12 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                       <View style={styles.attendeeHeader}>
                         <Text style={styles.attendeeNumber}>#{index + 1}</Text>
                         <Text style={styles.attendeeName}>{attendee.users.name}</Text>
+                        <TouchableOpacity
+                          style={styles.deleteAttendeeButton}
+                          onPress={() => handleDeleteAttendee(attendee.id, attendee.users.name)}
+                        >
+                          <Text style={styles.deleteAttendeeButtonText}>🗑️</Text>
+                        </TouchableOpacity>
                       </View>
                       <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
                       <Text style={styles.attendeeDetail}>📱 {attendee.users.phone}</Text>
@@ -2217,25 +2317,38 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
               ) : (
                 <ScrollView style={styles.questionsList}>
                   {questions.map((question, index) => (
-                    <View key={question.id} style={styles.questionItem}>
-                      <Text style={styles.questionNumber}>#{index + 1}</Text>
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        value={question.question_text}
-                        onChangeText={(text) => {
-                          const updatedQuestions = [...questions];
-                          updatedQuestions[index].question_text = text;
-                          setQuestions(updatedQuestions);
-                        }}
-                        onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
-                      />
-                      <TouchableOpacity
-                        style={styles.deleteQuestionButton}
-                        onPress={() => handleDeleteQuestion(question.id)}
-                      >
-                        <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <div
+                      key={question.id}
+                      draggable
+                      onDragStart={() => handleDragStart(question.id)}
+                      onDragOver={handleDragOver}
+                      onDrop={() => handleDrop(question.id)}
+                      style={{
+                        cursor: 'grab',
+                        opacity: draggedQuestionId === question.id ? 0.5 : 1,
+                      }}
+                    >
+                      <View style={styles.questionItem}>
+                        <Text style={styles.dragHandle}>⋮⋮</Text>
+                        <Text style={styles.questionNumber}>#{index + 1}</Text>
+                        <TextInput
+                          style={[styles.input, { flex: 1 }]}
+                          value={question.question_text}
+                          onChangeText={(text) => {
+                            const updatedQuestions = [...questions];
+                            updatedQuestions[index].question_text = text;
+                            setQuestions(updatedQuestions);
+                          }}
+                          onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
+                        />
+                        <TouchableOpacity
+                          style={styles.deleteQuestionButton}
+                          onPress={() => handleDeleteQuestion(question.id)}
+                        >
+                          <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </div>
                   ))}
                 </ScrollView>
               )}
@@ -3086,5 +3199,23 @@ const styles = StyleSheet.create({
   },
   deleteQuestionButtonText: {
     fontSize: 18,
+  },
+  dragHandle: {
+    fontSize: 20,
+    color: '#9CA3AF',
+    marginRight: 8,
+    cursor: 'grab',
+  },
+  deleteAttendeeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  deleteAttendeeButtonText: {
+    fontSize: 16,
   },
 });

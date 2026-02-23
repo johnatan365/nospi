@@ -292,6 +292,7 @@ export default function InteraccionScreen() {
       console.log('🔄 === LOADING APPOINTMENT (RECONNECTION SAFETY) ===');
       console.log('Loading appointment for user:', user.id);
       
+      // CRITICAL FIX: Load appointments with status 'confirmada' OR 'anterior' to show finished events
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -302,6 +303,7 @@ export default function InteraccionScreen() {
           location_confirmed,
           experience_started,
           presented,
+          status,
           event:events!inner (
             id,
             type,
@@ -328,7 +330,7 @@ export default function InteraccionScreen() {
           )
         `)
         .eq('user_id', user.id)
-        .eq('status', 'confirmada')
+        .in('status', ['confirmada', 'anterior'])
         .eq('payment_status', 'completed')
         .order('created_at', { ascending: false });
 
@@ -347,7 +349,19 @@ export default function InteraccionScreen() {
 
       const now = new Date();
       
+      // CRITICAL FIX: Prioritize appointments with status 'confirmada' for today's event
+      const todayConfirmedAppointment = data.find(apt => {
+        if (apt.status !== 'confirmada') return false;
+        if (!apt.event?.start_time) return false;
+        const eventDate = new Date(apt.event.start_time);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDayStart.getTime() === todayStart.getTime();
+      });
+
+      // If no today's confirmed appointment, find upcoming confirmed appointment
       const upcomingAppointment = data.find(apt => {
+        if (apt.status !== 'confirmada') return false;
         if (!apt.event?.start_time) return false;
         const eventDate = new Date(apt.event.start_time);
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -355,9 +369,10 @@ export default function InteraccionScreen() {
         return eventDayStart >= todayStart;
       });
 
-      const appointmentData = upcomingAppointment || data[0];
+      const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
       
       console.log('✅ Appointment loaded:', appointmentData.id);
+      console.log('📊 Appointment status:', appointmentData.status);
       console.log('📊 Event state from database:', {
         game_phase: appointmentData.event?.game_phase,
         current_level: appointmentData.event?.current_level,

@@ -114,17 +114,29 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setLoading(true);
 
     try {
-      // Move all appointments for this event to "anterior" status
-      const { error: appointmentsError } = await supabase
+      // CRITICAL FIX: Move ALL appointments for this event to "anterior" status
+      // This ensures BOTH users see the event in "anteriores"
+      const { data: allAppointments, error: fetchError } = await supabase
         .from('appointments')
-        .update({ status: 'anterior' })
-        .eq('event_id', appointment.event_id)
-        .eq('status', 'confirmada');
+        .select('id')
+        .eq('event_id', appointment.event_id);
 
-      if (appointmentsError) {
-        console.error('❌ Error updating appointments:', appointmentsError);
+      if (fetchError) {
+        console.error('❌ Error fetching appointments:', fetchError);
       } else {
-        console.log('✅ Moved appointments to anterior status');
+        console.log('📊 Found appointments to update:', allAppointments?.length || 0);
+        
+        // Update ALL appointments to "anterior" status
+        const { error: appointmentsError } = await supabase
+          .from('appointments')
+          .update({ status: 'anterior' })
+          .eq('event_id', appointment.event_id);
+
+        if (appointmentsError) {
+          console.error('❌ Error updating appointments:', appointmentsError);
+        } else {
+          console.log('✅ Moved ALL appointments to anterior status');
+        }
       }
 
       // Reset game phase to intro for next time

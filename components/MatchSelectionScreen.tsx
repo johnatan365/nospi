@@ -859,12 +859,14 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.3,
     shadowRadius: 30,
     elevation: 20,
+    minHeight: 400,
   },
   glowContainer: {
     position: 'absolute',
@@ -874,6 +876,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 0,
   },
   glowCircle: {
     width: 240,
@@ -893,6 +896,7 @@ const styles = StyleSheet.create({
   matchIcon: {
     fontSize: 100,
     marginBottom: 28,
+    zIndex: 1,
   },
   matchTitle: {
     fontSize: 32,
@@ -901,6 +905,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     letterSpacing: 1,
+    zIndex: 1,
   },
   matchText: {
     fontSize: 22,
@@ -908,6 +913,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
     marginBottom: 8,
+    zIndex: 1,
   },
   matchSubtext: {
     fontSize: 18,
@@ -916,5 +922,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontStyle: 'italic',
     fontWeight: '500',
+    zIndex: 1,
   },
 });
