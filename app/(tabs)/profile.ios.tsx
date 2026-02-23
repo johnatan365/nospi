@@ -131,7 +131,17 @@ export default function ProfileScreen() {
       }
 
       const profileData = data[0];
-      console.log('Profile loaded successfully');
+      console.log('✅ Profile loaded successfully');
+      
+      // CRITICAL FIX: Always add cache-busting to profile photo URL when loading
+      if (profileData.profile_photo_url) {
+        // Remove any existing cache-busting parameter first
+        const baseUrl = profileData.profile_photo_url.split('?')[0];
+        const cacheBustedUrl = `${baseUrl}?t=${Date.now()}`;
+        console.log('🔄 Cache-busted photo URL:', cacheBustedUrl);
+        profileData.profile_photo_url = cacheBustedUrl;
+      }
+      
       setProfile(profileData);
       setEditName(profileData.name || '');
       setEditPhone(profileData.phone || '');
@@ -200,63 +210,92 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      console.log('Uploading photo from URI:', uri);
+      console.log('🖼️ === UPLOADING PROFILE PHOTO (iOS) ===');
+      console.log('URI:', uri);
       
       const response = await fetch(uri);
       const blob = await response.blob();
       
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+      const timestamp = Date.now();
+      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
       const filePath = fileName;
 
-      console.log('Uploading to bucket: profile-photos, path:', filePath);
+      console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
+      // CRITICAL FIX: Delete ALL old photos first to ensure clean upload
+      console.log('🗑️ Deleting old photos...');
+      const { data: existingFiles } = await supabase.storage
+        .from('profile-photos')
+        .list('', {
+          search: user?.id || '',
+        });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(f => f.name);
+        const { error: deleteError } = await supabase.storage
+          .from('profile-photos')
+          .remove(filesToDelete);
+        
+        if (deleteError) {
+          console.error('⚠️ Error deleting old photos:', deleteError);
+        } else {
+          console.log('✅ Deleted old photos:', filesToDelete);
+        }
+      }
+
+      // Upload new photo
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
-          cacheControl: '3600',
-          upsert: true,
+          cacheControl: '0', // Disable caching
+          upsert: false, // Always create new file
         });
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
+        console.error('❌ Upload error:', uploadError);
         Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
         return;
       }
 
-      console.log('Upload successful:', uploadData);
+      console.log('✅ Upload successful:', uploadData);
 
-      // Add cache-busting parameter to force reload
+      // Get public URL
       const { data: urlData } = supabase.storage
         .from('profile-photos')
         .getPublicUrl(filePath);
 
-      const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-      console.log('Public URL with cache-busting:', photoUrl);
+      const basePhotoUrl = urlData.publicUrl;
+      console.log('🔗 Base public URL:', basePhotoUrl);
 
+      // Update database with base URL (no cache-busting in DB)
       const { error: updateError } = await supabase
         .from('users')
-        .update({ profile_photo_url: photoUrl })
+        .update({ profile_photo_url: basePhotoUrl })
         .eq('id', user?.id);
 
       if (updateError) {
-        console.error('Update error:', updateError);
+        console.error('❌ Database update error:', updateError);
         Alert.alert('Error', 'No se pudo actualizar el perfil');
         return;
       }
 
-      console.log('Photo uploaded and profile updated successfully');
+      console.log('✅ Database updated successfully');
       
-      // Force immediate UI update with new photo URL
-      setProfile(prev => prev ? { ...prev, profile_photo_url: photoUrl } : null);
+      // CRITICAL FIX: Force immediate UI update with cache-busted URL
+      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
+      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
       
-      // Reload profile to ensure consistency
-      await loadProfile();
+      setProfile(prev => prev ? { 
+        ...prev, 
+        profile_photo_url: cacheBustedUrl 
+      } : null);
       
+      console.log('✅ === PHOTO UPLOAD COMPLETE ===');
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (error) {
-      console.error('Failed to upload photo:', error);
+      console.error('❌ Failed to upload photo:', error);
       Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
     } finally {
       setUploadingPhoto(false);

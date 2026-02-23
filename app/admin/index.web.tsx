@@ -2138,7 +2138,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 <option value="closed">Cerrado</option>
               </select>
 
-              {/* Event Questions Section */}
+              {/* Event Questions Section with Drag-and-Drop */}
               <View style={styles.questionsSection}>
                 <TouchableOpacity
                   style={styles.questionsSectionHeader}
@@ -2155,7 +2155,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 {showEventQuestionsSection && (
                   <View style={styles.questionsContent}>
                     <Text style={styles.questionsInfo}>
-                      Personaliza las preguntas para este evento específico. Si no agregas preguntas, se usarán las predeterminadas.
+                      Personaliza las preguntas para este evento específico. Arrastra las preguntas para reordenarlas. Si no agregas preguntas, se usarán las predeterminadas.
                     </Text>
 
                     {(['divertido', 'sensual', 'atrevido'] as const).map((level) => {
@@ -2168,28 +2168,57 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                             {levelEmoji} Nivel {levelText}
                           </Text>
                           {eventQuestions[level].map((question, index) => (
-                            <View key={index} style={styles.questionInputRow}>
-                              <TextInput
-                                style={[styles.input, { flex: 1 }]}
-                                placeholder={`Pregunta ${index + 1}`}
-                                value={question}
-                                onChangeText={(text) => {
-                                  const newQuestions = { ...eventQuestions };
-                                  newQuestions[level][index] = text;
-                                  setEventQuestions(newQuestions);
-                                }}
-                              />
-                              <TouchableOpacity
-                                style={styles.removeQuestionButton}
-                                onPress={() => {
-                                  const newQuestions = { ...eventQuestions };
-                                  newQuestions[level].splice(index, 1);
-                                  setEventQuestions(newQuestions);
-                                }}
-                              >
-                                <Text style={styles.removeQuestionButtonText}>✕</Text>
-                              </TouchableOpacity>
-                            </View>
+                            <div
+                              key={index}
+                              draggable
+                              onDragStart={() => {
+                                // Store the dragged question info
+                                (window as any).__draggedEventQuestion = { level, index };
+                              }}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={() => {
+                                const draggedInfo = (window as any).__draggedEventQuestion;
+                                if (!draggedInfo || draggedInfo.level !== level || draggedInfo.index === index) {
+                                  return;
+                                }
+                                
+                                // Reorder questions within the same level
+                                const newQuestions = { ...eventQuestions };
+                                const [draggedQuestion] = newQuestions[level].splice(draggedInfo.index, 1);
+                                newQuestions[level].splice(index, 0, draggedQuestion);
+                                setEventQuestions(newQuestions);
+                                
+                                delete (window as any).__draggedEventQuestion;
+                              }}
+                              style={{
+                                cursor: 'grab',
+                                marginBottom: 8,
+                              }}
+                            >
+                              <View style={styles.questionInputRow}>
+                                <Text style={styles.dragHandle}>⋮⋮</Text>
+                                <TextInput
+                                  style={[styles.input, { flex: 1 }]}
+                                  placeholder={`Pregunta ${index + 1}`}
+                                  value={question}
+                                  onChangeText={(text) => {
+                                    const newQuestions = { ...eventQuestions };
+                                    newQuestions[level][index] = text;
+                                    setEventQuestions(newQuestions);
+                                  }}
+                                />
+                                <TouchableOpacity
+                                  style={styles.removeQuestionButton}
+                                  onPress={() => {
+                                    const newQuestions = { ...eventQuestions };
+                                    newQuestions[level].splice(index, 1);
+                                    setEventQuestions(newQuestions);
+                                  }}
+                                >
+                                  <Text style={styles.removeQuestionButtonText}>✕</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </div>
                           ))}
                           <TouchableOpacity
                             style={styles.addQuestionButton}
@@ -3052,7 +3081,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+  },
+  dragHandle: {
+    fontSize: 20,
+    color: '#9CA3AF',
+    marginRight: 8,
+    cursor: 'grab',
   },
   removeQuestionButton: {
     width: 36,

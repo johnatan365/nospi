@@ -413,11 +413,12 @@ export default function MatchSelectionScreen({
 
   const handleConfirmSelection = useCallback(async () => {
     if (!selectedUserId) {
-      console.warn('No selection made');
+      console.warn('⚠️ No selection made');
       return;
     }
 
     console.log('💘 === CONFIRMING MATCH SELECTION (ATOMIC RPC) ===');
+    console.log('💘 Selected user ID:', selectedUserId);
     
     // Set optimistic flag to block realtime updates
     isOptimisticUpdateRef.current = true;
@@ -443,15 +444,19 @@ export default function MatchSelectionScreen({
 
       if (error) {
         console.error('❌ Error calling process_match_vote RPC:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         isOptimisticUpdateRef.current = false;
         setLoading(false);
         return;
       }
 
+      console.log('✅ RPC call successful');
+      console.log('✅ RPC result:', JSON.stringify(data, null, 2));
+
       const result = data as ProcessMatchVoteResult;
-      console.log('✅ RPC result:', result);
 
       setHasVoted(true);
+      console.log('✅ hasVoted set to true');
 
       // CRITICAL: Recalculate vote count immediately after submission
       console.log('🔄 Recalculating vote count after submission');
@@ -459,12 +464,18 @@ export default function MatchSelectionScreen({
 
       // If match was found immediately, show modal
       if (result.match && result.matched_user_id && result.matched_user_name) {
-        console.log('💜 Immediate match detected with:', result.matched_user_name);
+        console.log('💜 === IMMEDIATE MATCH DETECTED ===');
+        console.log('💜 Matched with:', result.matched_user_name);
         setMatchedUserName(result.matched_user_name);
         setShowMatchModal(true);
         triggerMatchAnimation();
       } else {
         console.log('⏳ No immediate match - waiting for reciprocal vote or user selected "Ninguno"');
+        console.log('⏳ Result details:', {
+          match: result.match,
+          matched_user_id: result.matched_user_id,
+          matched_user_name: result.matched_user_name
+        });
       }
 
       // Clear optimistic flag after delay
@@ -473,10 +484,11 @@ export default function MatchSelectionScreen({
         console.log('🔓 Optimistic update flag CLEARED (vote)');
       }, 1500);
     } catch (error) {
-      console.error('❌ Unexpected error:', error);
+      console.error('❌ Unexpected error in handleConfirmSelection:', error);
       isOptimisticUpdateRef.current = false;
     } finally {
       setLoading(false);
+      console.log('✅ Loading state set to false');
     }
   }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
 
@@ -507,12 +519,15 @@ export default function MatchSelectionScreen({
   const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
   const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
 
-  // SKIP "Tu elección ha sido registrada" screen - auto-continue when all votes received or deadline reached
+  // CRITICAL FIX: Auto-continue when all votes received or deadline reached (but NOT if match modal is showing)
   useEffect(() => {
     if (hasVoted && !showMatchModal && canContinue) {
       console.log('✅ All votes received or deadline reached - auto-continuing to next phase');
-      // Immediate transition - no waiting screen
-      handleContinue();
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        handleContinue();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [hasVoted, showMatchModal, canContinue, handleContinue]);
 
