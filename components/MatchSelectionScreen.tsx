@@ -72,6 +72,7 @@ export default function MatchSelectionScreen({
   
   useEffect(() => {
     hasVotedRef.current = hasVoted;
+    console.log('🔄 hasVoted state changed to:', hasVoted);
   }, [hasVoted]);
   
   useEffect(() => {
@@ -429,62 +430,68 @@ export default function MatchSelectionScreen({
 
   const handleSelectUser = useCallback((userId: string) => {
     // CRITICAL: Disable selection changes after voting
-    if (hasVoted) {
+    if (hasVotedRef.current) {
       console.log('⚠️ Cannot change selection - already voted');
       return;
     }
     console.log('👆 Selected user:', userId);
     setSelectedUserId(userId);
-  }, [hasVoted]);
+  }, []);
 
   const handleSelectNone = useCallback(() => {
     // CRITICAL: Disable selection changes after voting
-    if (hasVoted) {
+    if (hasVotedRef.current) {
       console.log('⚠️ Cannot change selection - already voted');
       return;
     }
     console.log('👆 Selected: Ninguno por ahora');
     setSelectedUserId('none');
-  }, [hasVoted]);
+  }, []);
 
-  // CRITICAL FIX: Use refs to get fresh state values
+  // CRITICAL FIX: Completely rewritten to ensure immediate UI update
   const handleConfirmSelection = useCallback(async () => {
     console.log('🔘 === BUTTON CLICKED: Confirmar elección ===');
+    
+    // Get current values from refs
+    const currentSelectedUserId = selectedUserIdRef.current;
+    const currentLoading = loadingRef.current;
+    const currentHasVoted = hasVotedRef.current;
+    
     console.log('🔘 Current state at click time (from refs):', {
-      selectedUserId: selectedUserIdRef.current,
-      loading: loadingRef.current,
-      hasVoted: hasVotedRef.current,
+      selectedUserId: currentSelectedUserId,
+      loading: currentLoading,
+      hasVoted: currentHasVoted,
     });
 
-    // CRITICAL: Use ref values for checks
-    if (!selectedUserIdRef.current) {
+    // CRITICAL: Guard clauses using ref values
+    if (!currentSelectedUserId) {
       console.warn('⚠️ No selection made');
       return;
     }
 
-    if (loadingRef.current) {
+    if (currentLoading) {
       console.warn('⚠️ Already loading');
       return;
     }
 
-    if (hasVotedRef.current) {
+    if (currentHasVoted) {
       console.warn('⚠️ Already voted');
       return;
     }
 
     console.log('💘 === CONFIRMING MATCH SELECTION ===');
-    console.log('💘 Selected user ID:', selectedUserIdRef.current);
+    console.log('💘 Selected user ID:', currentSelectedUserId);
     
     // CRITICAL FIX: Set hasVoted IMMEDIATELY for instant UI feedback
     console.log('✅ Setting hasVoted to TRUE immediately');
     setHasVoted(true);
+    setLoading(true);
     
     // Set optimistic flag to block realtime updates
     isOptimisticUpdateRef.current = true;
-    setLoading(true);
 
     try {
-      const selectedUserIdValue = selectedUserIdRef.current === 'none' ? null : selectedUserIdRef.current;
+      const selectedUserIdValue = currentSelectedUserId === 'none' ? null : currentSelectedUserId;
       
       console.log('🔧 Calling process_match_vote RPC with:', {
         p_event_id: eventId,
@@ -744,11 +751,7 @@ export default function MatchSelectionScreen({
             isButtonDisabled && styles.buttonDisabled,
             hasVoted && styles.buttonConfirmed
           ]}
-          onPress={() => {
-            console.log('🔘 === TOUCHABLE OPACITY PRESSED ===');
-            console.log('🔘 Calling handleConfirmSelection directly');
-            handleConfirmSelection();
-          }}
+          onPress={handleConfirmSelection}
           disabled={isButtonDisabled}
           activeOpacity={0.8}
         >
