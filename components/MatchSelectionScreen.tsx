@@ -420,8 +420,26 @@ export default function MatchSelectionScreen({
   }, []);
 
   const handleConfirmSelection = useCallback(async () => {
+    console.log('🔘 === BUTTON CLICKED: Confirmar elección ===');
+    console.log('🔘 Current state:', {
+      selectedUserId,
+      loading,
+      hasVoted,
+      buttonDisabled: !selectedUserId || loading || hasVoted
+    });
+
     if (!selectedUserId) {
-      console.warn('⚠️ No selection made');
+      console.warn('⚠️ No selection made - button should be disabled');
+      return;
+    }
+
+    if (loading) {
+      console.warn('⚠️ Already loading - button should be disabled');
+      return;
+    }
+
+    if (hasVoted) {
+      console.warn('⚠️ Already voted - button should be disabled');
       return;
     }
 
@@ -453,6 +471,9 @@ export default function MatchSelectionScreen({
       if (error) {
         console.error('❌ Error calling process_match_vote RPC:', error);
         console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error hint:', error.hint);
         isOptimisticUpdateRef.current = false;
         setLoading(false);
         return;
@@ -493,12 +514,13 @@ export default function MatchSelectionScreen({
       }, 1500);
     } catch (error) {
       console.error('❌ Unexpected error in handleConfirmSelection:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       isOptimisticUpdateRef.current = false;
     } finally {
       setLoading(false);
       console.log('✅ Loading state set to false');
     }
-  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes]);
+  }, [selectedUserId, eventId, currentLevel, currentUserId, triggerMatchAnimation, checkAllVotes, loading, hasVoted]);
 
   // CRITICAL: Determine if we can continue
   const canContinue = allVotesReceived || deadlineReached;
@@ -565,6 +587,15 @@ export default function MatchSelectionScreen({
   // Determine timer color and animation
   const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
   const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
+
+  // CRITICAL: Check if button should be disabled
+  const isButtonDisabled = !selectedUserId || loading || hasVoted;
+  console.log('🔘 Button state:', {
+    selectedUserId,
+    loading,
+    hasVoted,
+    isButtonDisabled
+  });
 
   return (
     <LinearGradient
@@ -654,9 +685,9 @@ export default function MatchSelectionScreen({
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, (!selectedUserId || loading || hasVoted) && styles.buttonDisabled]}
+          style={[styles.confirmButton, isButtonDisabled && styles.buttonDisabled]}
           onPress={handleConfirmSelection}
-          disabled={!selectedUserId || loading || hasVoted}
+          disabled={isButtonDisabled}
           activeOpacity={0.8}
         >
           <Text style={styles.confirmButtonText}>
