@@ -177,29 +177,32 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
     getCurrentUser();
 
-    // Load questions from database
+    // FIX: Load questions from database for THIS EVENT ONLY
     const loadQuestions = async () => {
       try {
-        const { data, error } = await supabase
+        console.log('📚 Loading questions for event:', appointment.event_id);
+        
+        // First, try to load event-specific questions
+        const { data: eventQuestions, error: eventError } = await supabase
           .from('event_questions')
           .select('*')
-          .is('event_id', null)
+          .eq('event_id', appointment.event_id)
           .order('level', { ascending: true })
           .order('question_order', { ascending: true });
 
-        if (error) {
-          console.error('Error loading questions:', error);
-          return;
+        if (eventError) {
+          console.error('Error loading event questions:', eventError);
         }
 
-        if (data && data.length > 0) {
+        // If event has custom questions, use them
+        if (eventQuestions && eventQuestions.length > 0) {
           const questionsByLevel: any = {
             divertido: [],
             sensual: [],
             atrevido: []
           };
 
-          data.forEach((q: any) => {
+          eventQuestions.forEach((q: any) => {
             if (questionsByLevel[q.level]) {
               questionsByLevel[q.level].push(q.question_text);
             }
@@ -210,7 +213,44 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               questionsByLevel.sensual.length > 0 && 
               questionsByLevel.atrevido.length > 0) {
             QUESTIONS = questionsByLevel;
-            console.log('✅ Questions loaded from database');
+            console.log('✅ Event-specific questions loaded');
+            return;
+          }
+        }
+
+        // Otherwise, fall back to default questions
+        console.log('📚 Loading default questions (no event-specific questions found)');
+        const { data: defaultQuestions, error: defaultError } = await supabase
+          .from('event_questions')
+          .select('*')
+          .is('event_id', null)
+          .order('level', { ascending: true })
+          .order('question_order', { ascending: true });
+
+        if (defaultError) {
+          console.error('Error loading default questions:', defaultError);
+          return;
+        }
+
+        if (defaultQuestions && defaultQuestions.length > 0) {
+          const questionsByLevel: any = {
+            divertido: [],
+            sensual: [],
+            atrevido: []
+          };
+
+          defaultQuestions.forEach((q: any) => {
+            if (questionsByLevel[q.level]) {
+              questionsByLevel[q.level].push(q.question_text);
+            }
+          });
+
+          // Only update if we have questions for all levels
+          if (questionsByLevel.divertido.length > 0 && 
+              questionsByLevel.sensual.length > 0 && 
+              questionsByLevel.atrevido.length > 0) {
+            QUESTIONS = questionsByLevel;
+            console.log('✅ Default questions loaded from database');
           }
         }
       } catch (error) {
@@ -219,7 +259,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
 
     loadQuestions();
-  }, []);
+  }, [appointment.event_id]);
 
   // Define handleContinue before it's used in the timer effect
   const handleContinue = useCallback(async () => {
