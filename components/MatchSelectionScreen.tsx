@@ -212,7 +212,7 @@ export default function MatchSelectionScreen({
         
         // 1. Initial check for existing vote
         const { data: vote, error: initialError } = await supabase
-          .from('event_match_votes')
+          .from('event_matches_votes')
           .select('id')
           .eq('event_id', eventId)
           .eq('level', Number(currentLevel))
@@ -238,7 +238,7 @@ export default function MatchSelectionScreen({
             {
               event: '*',
               schema: 'public',
-              table: 'event_match_votes',
+              table: 'event_matches_votes',
               filter: `event_id=eq.${eventId}`,
             },
             (payload) => {
@@ -292,7 +292,7 @@ export default function MatchSelectionScreen({
       console.log('📊 === CHECKING ALL VOTES ===');
       
       const { data, error } = await supabase
-        .from('event_match_votes')
+        .from('event_matches_votes')
         .select('user_id')
         .eq('event_id', eventId)
         .eq('level', Number(currentLevel));
@@ -342,7 +342,7 @@ export default function MatchSelectionScreen({
         {
           event: '*',
           schema: 'public',
-          table: 'event_match_votes',
+          table: 'event_matches_votes',
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
@@ -524,7 +524,7 @@ export default function MatchSelectionScreen({
 
       // CRITICAL: Insert vote - DO NOT set local state
       const { data, error } = await supabase
-        .from('event_match_votes')
+        .from('event_matches_votes')
         .insert({
           event_id: eventId,
           level: Number(currentLevel),
