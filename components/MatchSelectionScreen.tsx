@@ -305,84 +305,99 @@ export default function MatchSelectionScreen({
       console.log('📡 Cleaning up match subscription');
       supabase.removeChannel(channel);
     };
-  }, [eventId, currentLevel, currentUserId]);
+  }, [eventId, currentLevel, currentUserId, triggerMatchAnimation]);
 
   const triggerMatchAnimation = useCallback(() => {
-    console.log('🎉 Triggering match animation');
+    console.log('🎉 Triggering enhanced match animation');
     
     // Reset animation values
-    heartScale.setValue(0.8);
+    heartScale.setValue(0.5);
     matchGlowAnimation.setValue(0);
     matchTextAnimation.setValue(0);
     hasTriggeredHapticRef.current = false;
 
-    // Heart scale animation using Animated.sequence
+    // Enhanced heart scale animation with bounce effect
     Animated.sequence([
-      Animated.timing(heartScale, {
-        toValue: 1.1,
-        duration: 150,
-        easing: Easing.out(Easing.cubic),
+      Animated.spring(heartScale, {
+        toValue: 1.3,
+        friction: 3,
+        tension: 40,
         useNativeDriver: true,
       }),
-      Animated.timing(heartScale, {
+      Animated.spring(heartScale, {
         toValue: 1.0,
-        duration: 150,
-        easing: Easing.inOut(Easing.ease),
+        friction: 5,
+        tension: 40,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Glow animation
+    // Enhanced glow animation with more dramatic effect
     Animated.loop(
       Animated.sequence([
         Animated.timing(matchGlowAnimation, {
           toValue: 1,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
+          duration: 800,
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
           useNativeDriver: true,
         }),
         Animated.timing(matchGlowAnimation, {
           toValue: 0,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
+          duration: 800,
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
           useNativeDriver: true,
         }),
       ])
     ).start();
 
-    // Text fade-in after 200ms
+    // Text fade-in with slide up effect
     setTimeout(() => {
-      Animated.timing(matchTextAnimation, {
+      Animated.spring(matchTextAnimation, {
         toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.ease),
+        friction: 8,
+        tension: 40,
         useNativeDriver: true,
       }).start();
-    }, 200);
+    }, 300);
 
-    // Trigger haptic at peak scale
-    setTimeout(() => {
-      if (!hasTriggeredHapticRef.current && Platform.OS !== 'web') {
-        hasTriggeredHapticRef.current = true;
+    // Multiple haptic feedback for celebration effect
+    if (Platform.OS !== 'web') {
+      setTimeout(() => {
         try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          console.log('✨ Haptic feedback triggered');
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         } catch (error) {
           console.log('⚠️ Haptic not available:', error);
         }
-      }
-    }, 150);
+      }, 100);
+      
+      setTimeout(() => {
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }, 300);
+      
+      setTimeout(() => {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+          console.log('⚠️ Haptic not available:', error);
+        }
+      }, 500);
+    }
 
-    // Auto-close modal after 3 seconds
+    // Auto-close modal after 7 seconds (4 seconds longer than original)
     setTimeout(() => {
       Animated.timing(heartScale, {
         toValue: 0,
-        duration: 300,
+        duration: 400,
+        easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }).start(() => {
         setShowMatchModal(false);
       });
-    }, 3000);
+    }, 7000);
   }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
   const handleSelectUser = useCallback((userId: string) => {
@@ -491,53 +506,14 @@ export default function MatchSelectionScreen({
   const isWarning = remainingMinutes === 0 && remainingSeconds <= 10 && remainingSeconds > 5;
   const isCritical = remainingMinutes === 0 && remainingSeconds <= 5 && remainingSeconds > 0;
 
-  if (hasVoted && !showMatchModal) {
-    // CRITICAL: Show different message based on state
-    const waitingMessage = allVotesReceived 
-      ? '✨ ¡Todos han decidido!'
-      : deadlineReached 
-      ? 'Tiempo finalizado. Puedes continuar.'
-      : 'Estamos esperando las decisiones del grupo…';
-
-    return (
-      <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Tu elección ha sido registrada</Text>
-
-          {/* CRITICAL: Hide countdown if all votes received */}
-          {!allVotesReceived && !deadlineReached && matchDeadlineAt && (
-            <View style={styles.timerCard}>
-              <Text style={styles.timerLabel}>🕐 Tienes este tiempo para elegir:</Text>
-              <Text style={[
-                styles.timerDisplay,
-                isWarning && styles.timerWarning,
-                isCritical && styles.timerCritical
-              ]}>{timerDisplay}</Text>
-            </View>
-          )}
-
-          <View style={styles.waitingCard}>
-            <Text style={styles.waitingIcon}>{allVotesReceived ? '✨' : deadlineReached ? '✅' : '⏳'}</Text>
-            <Text style={styles.waitingText}>{waitingMessage}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.continueButton, !canContinue && styles.buttonDisabled]}
-            onPress={handleContinue}
-            disabled={!canContinue}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.continueButtonText}>Continuar</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </LinearGradient>
-    );
-  }
+  // SKIP "Tu elección ha sido registrada" screen - auto-continue when all votes received or deadline reached
+  useEffect(() => {
+    if (hasVoted && !showMatchModal && canContinue) {
+      console.log('✅ All votes received or deadline reached - auto-continuing to next phase');
+      // Immediate transition - no waiting screen
+      handleContinue();
+    }
+  }, [hasVoted, showMatchModal, canContinue, handleContinue]);
 
   return (
     <LinearGradient
@@ -655,12 +631,16 @@ export default function MatchSelectionScreen({
           >
             <Animated.View style={[styles.glowContainer, { opacity: glowOpacity }]}>
               <View style={styles.glowCircle} />
+              <View style={[styles.glowCircle, styles.glowCircleOuter]} />
             </Animated.View>
             <Text style={styles.matchIcon}>💜</Text>
             <Animated.View style={{ opacity: textOpacity }}>
-              <Text style={styles.matchTitle}>✨ ¡Hay match!</Text>
+              <Text style={styles.matchTitle}>✨ ¡Hay match! ✨</Text>
               <Text style={styles.matchText}>
-                Tú y {matchedUserName} se eligieron 💜
+                Tú y {matchedUserName} se eligieron
+              </Text>
+              <Text style={styles.matchSubtext}>
+                ¡Sigan conociéndose! 💜
               </Text>
             </Animated.View>
           </Animated.View>
@@ -873,12 +853,17 @@ const styles = StyleSheet.create({
   },
   matchModalContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 40,
+    borderRadius: 32,
+    padding: 48,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     alignItems: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 20,
   },
   glowContainer: {
     position: 'absolute',
@@ -890,26 +875,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   glowCircle: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
     backgroundColor: nospiColors.purpleMid,
-    opacity: 0.3,
+    opacity: 0.4,
+  },
+  glowCircleOuter: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    opacity: 0.2,
+    backgroundColor: '#FFD700',
   },
   matchIcon: {
-    fontSize: 80,
-    marginBottom: 24,
+    fontSize: 100,
+    marginBottom: 28,
   },
   matchTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
+    letterSpacing: 1,
   },
   matchText: {
-    fontSize: 18,
+    fontSize: 22,
     color: '#333',
     textAlign: 'center',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  matchSubtext: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+    fontWeight: '500',
   },
 });

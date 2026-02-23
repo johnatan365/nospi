@@ -41,7 +41,8 @@ interface GameDynamicsScreenProps {
   activeParticipants: Participant[];
 }
 
-const QUESTIONS = {
+// Questions will be loaded from database
+const DEFAULT_QUESTIONS = {
   divertido: [
     '¿Cuál es tu nombre y a qué te dedicas?',
     '¿Cuál es tu mayor sueño?',
@@ -81,6 +82,8 @@ const QUESTIONS = {
   ]
 };
 
+let QUESTIONS = { ...DEFAULT_QUESTIONS };
+
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   console.log('🎮 Rendering GameDynamicsScreen');
   
@@ -110,7 +113,197 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
     };
     getCurrentUser();
+
+    // Load questions from database
+    const loadQuestions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('event_questions')
+          .select('*')
+          .is('event_id', null)
+          .order('level', { ascending: true })
+          .order('question_order', { ascending: true });
+
+        if (error) {
+          console.error('Error loading questions:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const questionsByLevel: any = {
+            divertido: [],
+            sensual: [],
+            atrevido: []
+          };
+
+          data.forEach((q: any) => {
+            if (questionsByLevel[q.level]) {
+              questionsByLevel[q.level].push(q.question_text);
+            }
+          });
+
+          // Only update if we have questions for all levels
+          if (questionsByLevel.divertido.length > 0 && 
+              questionsByLevel.sensual.length > 0 && 
+              questionsByLevel.atrevido.length > 0) {
+            QUESTIONS = questionsByLevel;
+            console.log('✅ Questions loaded from database');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load questions:', error);
+      }
+    };
+
+    loadQuestions();
   }, []);
+
+  // Define handleContinue before it's used in the timer effect
+  const handleContinue = useCallback(async () => {
+    console.log('➡️ === CONTINUING TO NEXT QUESTION ===');
+    const actionStartTime = performance.now();
+    console.log('⏱️ Button pressed at:', actionStartTime);
+    
+    if (!appointment?.event_id) return;
+
+    const questionsForLevel = QUESTIONS[currentLevel];
+    const nextQuestionIndex = currentQuestionIndex + 1;
+
+    // Store previous state for potential revert
+    const previousQuestionIndex = currentQuestionIndex;
+    const previousAnsweredUsers = [...answeredUsers];
+    const previousQuestion = currentQuestion;
+    const previousStarter = starterParticipant;
+    const previousGamePhase = gamePhase;
+
+    // 1. OPTIMISTIC UI: Set flag IMMEDIATELY to block Realtime updates
+    isOptimisticUpdateRef.current = true;
+    console.log('🔒 Optimistic update flag SET (continue)');
+
+    setLoading(true);
+
+    try {
+      if (nextQuestionIndex < questionsForLevel.length) {
+        // Next question in same level
+        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+        const newStarterUserId = activeParticipants[randomIndex].user_id;
+        const newStarter = activeParticipants[randomIndex];
+        const nextQuestion = questionsForLevel[nextQuestionIndex];
+
+        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
+        console.log('⚡ Optimistically updating to next question');
+        setCurrentQuestionIndex(nextQuestionIndex);
+        setAnsweredUsers([]);
+        setCurrentQuestion(nextQuestion);
+        setStarterParticipant(newStarter);
+        
+        const uiUpdateTime = performance.now();
+        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
+
+        // 2. DATABASE UPDATE: Send update in background
+        console.log('💾 Starting database update...');
+        const dbUpdateStartTime = performance.now();
+
+        const { error } = await supabase
+          .from('events')
+          .update({
+            current_question_index: nextQuestionIndex,
+            answered_users: [],
+            current_question: nextQuestion,
+            current_question_starter_id: newStarterUserId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        const dbUpdateEndTime = performance.now();
+        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
+
+        if (error) {
+          console.error('❌ Error advancing question:', error);
+          // 4. REVERT: Revert optimistic update on failure
+          isOptimisticUpdateRef.current = false;
+          setCurrentQuestionIndex(previousQuestionIndex);
+          setAnsweredUsers(previousAnsweredUsers);
+          setCurrentQuestion(previousQuestion);
+          setStarterParticipant(previousStarter);
+          return;
+        }
+
+        console.log('✅ Advanced to next question');
+        
+        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
+        setTimeout(() => {
+          isOptimisticUpdateRef.current = false;
+          console.log('🔓 Optimistic update flag CLEARED (continue)');
+        }, 1500);
+      } else {
+        // Level finished - transition to match selection
+        console.log('⚡ Optimistically transitioning to match_selection');
+        
+        // Calculate match deadline (20 seconds from now)
+        const now = new Date();
+        const deadline = new Date(now.getTime() + 20 * 1000);
+        
+        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
+        setGamePhase('match_selection');
+        setMatchStartedAt(now.toISOString());
+        setMatchDeadlineAt(deadline.toISOString());
+        
+        const uiUpdateTime = performance.now();
+        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
+
+        // 2. DATABASE UPDATE: Send update in background
+        console.log('💾 Starting database update...');
+        const dbUpdateStartTime = performance.now();
+
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'match_selection',
+            match_started_at: now.toISOString(),
+            match_deadline_at: deadline.toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        const dbUpdateEndTime = performance.now();
+        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
+        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
+
+        if (error) {
+          console.error('❌ Error transitioning to match selection:', error);
+          // 4. REVERT: Revert optimistic update on failure
+          isOptimisticUpdateRef.current = false;
+          setGamePhase(previousGamePhase);
+          setMatchStartedAt(null);
+          setMatchDeadlineAt(null);
+          return;
+        }
+
+        console.log('✅ Level finished - transitioning to match selection with deadline:', deadline.toISOString());
+        
+        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
+        setTimeout(() => {
+          isOptimisticUpdateRef.current = false;
+          console.log('🔓 Optimistic update flag CLEARED (match selection transition)');
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+      // 4. REVERT: Revert optimistic update on failure
+      isOptimisticUpdateRef.current = false;
+      setCurrentQuestionIndex(previousQuestionIndex);
+      setAnsweredUsers(previousAnsweredUsers);
+      setCurrentQuestion(previousQuestion);
+      setStarterParticipant(previousStarter);
+      setGamePhase(previousGamePhase);
+      setMatchStartedAt(null);
+      setMatchDeadlineAt(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers, currentQuestion, starterParticipant, gamePhase]);
 
   // Question timer - 5 minutes per question
   useEffect(() => {
@@ -144,7 +337,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         questionTimerRef.current = null;
       }
     };
-  }, [gamePhase, currentQuestionIndex]);
+  }, [gamePhase, currentQuestionIndex, handleContinue]);
 
   // CRITICAL: Reconnection Safety - Always derive state from event_state
   useEffect(() => {
@@ -448,152 +641,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentUserId, answeredUsers]);
 
-  const handleContinue = useCallback(async () => {
-    console.log('➡️ === CONTINUING TO NEXT QUESTION ===');
-    const actionStartTime = performance.now();
-    console.log('⏱️ Button pressed at:', actionStartTime);
-    
-    if (!appointment?.event_id) return;
-
-    const questionsForLevel = QUESTIONS[currentLevel];
-    const nextQuestionIndex = currentQuestionIndex + 1;
-
-    // Store previous state for potential revert
-    const previousQuestionIndex = currentQuestionIndex;
-    const previousAnsweredUsers = [...answeredUsers];
-    const previousQuestion = currentQuestion;
-    const previousStarter = starterParticipant;
-    const previousGamePhase = gamePhase;
-
-    // 1. OPTIMISTIC UI: Set flag IMMEDIATELY to block Realtime updates
-    isOptimisticUpdateRef.current = true;
-    console.log('🔒 Optimistic update flag SET (continue)');
-
-    setLoading(true);
-
-    try {
-      if (nextQuestionIndex < questionsForLevel.length) {
-        // Next question in same level
-        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-        const newStarterUserId = activeParticipants[randomIndex].user_id;
-        const newStarter = activeParticipants[randomIndex];
-        const nextQuestion = questionsForLevel[nextQuestionIndex];
-
-        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
-        console.log('⚡ Optimistically updating to next question');
-        setCurrentQuestionIndex(nextQuestionIndex);
-        setAnsweredUsers([]);
-        setCurrentQuestion(nextQuestion);
-        setStarterParticipant(newStarter);
-        
-        const uiUpdateTime = performance.now();
-        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
-
-        // 2. DATABASE UPDATE: Send update in background
-        console.log('💾 Starting database update...');
-        const dbUpdateStartTime = performance.now();
-
-        const { error } = await supabase
-          .from('events')
-          .update({
-            current_question_index: nextQuestionIndex,
-            answered_users: [],
-            current_question: nextQuestion,
-            current_question_starter_id: newStarterUserId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        const dbUpdateEndTime = performance.now();
-        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
-        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
-
-        if (error) {
-          console.error('❌ Error advancing question:', error);
-          // 4. REVERT: Revert optimistic update on failure
-          isOptimisticUpdateRef.current = false;
-          setCurrentQuestionIndex(previousQuestionIndex);
-          setAnsweredUsers(previousAnsweredUsers);
-          setCurrentQuestion(previousQuestion);
-          setStarterParticipant(previousStarter);
-          return;
-        }
-
-        console.log('✅ Advanced to next question');
-        
-        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
-        setTimeout(() => {
-          isOptimisticUpdateRef.current = false;
-          console.log('🔓 Optimistic update flag CLEARED (continue)');
-        }, 1500);
-      } else {
-        // Level finished - transition to match selection
-        console.log('⚡ Optimistically transitioning to match_selection');
-        
-        // Calculate match deadline (20 seconds from now)
-        const now = new Date();
-        const deadline = new Date(now.getTime() + 20 * 1000);
-        
-        // 1. OPTIMISTIC UI: Update UI immediately - don't wait for database
-        setGamePhase('match_selection');
-        setMatchStartedAt(now.toISOString());
-        setMatchDeadlineAt(deadline.toISOString());
-        
-        const uiUpdateTime = performance.now();
-        console.log('⚡ UI update time:', (uiUpdateTime - actionStartTime).toFixed(2), 'ms');
-
-        // 2. DATABASE UPDATE: Send update in background
-        console.log('💾 Starting database update...');
-        const dbUpdateStartTime = performance.now();
-
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'match_selection',
-            match_started_at: now.toISOString(),
-            match_deadline_at: deadline.toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        const dbUpdateEndTime = performance.now();
-        console.log('💾 Database update duration:', (dbUpdateEndTime - dbUpdateStartTime).toFixed(2), 'ms');
-        console.log('⏱️ Total time from button press to DB update:', (dbUpdateEndTime - actionStartTime).toFixed(2), 'ms');
-
-        if (error) {
-          console.error('❌ Error transitioning to match selection:', error);
-          // 4. REVERT: Revert optimistic update on failure
-          isOptimisticUpdateRef.current = false;
-          setGamePhase(previousGamePhase);
-          setMatchStartedAt(null);
-          setMatchDeadlineAt(null);
-          return;
-        }
-
-        console.log('✅ Level finished - transitioning to match selection with deadline:', deadline.toISOString());
-        
-        // 3. SYNC: Keep flag set for 1500ms to prevent race conditions with Realtime
-        setTimeout(() => {
-          isOptimisticUpdateRef.current = false;
-          console.log('🔓 Optimistic update flag CLEARED (match selection transition)');
-        }, 1500);
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-      // 4. REVERT: Revert optimistic update on failure
-      isOptimisticUpdateRef.current = false;
-      setCurrentQuestionIndex(previousQuestionIndex);
-      setAnsweredUsers(previousAnsweredUsers);
-      setCurrentQuestion(previousQuestion);
-      setStarterParticipant(previousStarter);
-      setGamePhase(previousGamePhase);
-      setMatchStartedAt(null);
-      setMatchDeadlineAt(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, answeredUsers, currentQuestion, starterParticipant, gamePhase]);
-
   const handleMatchComplete = useCallback(async () => {
     console.log('💘 === MATCH SELECTION COMPLETE ===');
     
@@ -634,7 +681,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Started next level:', nextLevel);
       } else {
-        // All levels complete - end game and move appointments to "anterior"
+        // All levels complete - end game (do NOT move to anterior yet - wait for Finalizar button)
         const { error: eventError } = await supabase
           .from('events')
           .update({
@@ -650,20 +697,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           return;
         }
 
-        // Move all appointments for this event to "anterior" status
-        const { error: appointmentsError } = await supabase
-          .from('appointments')
-          .update({ status: 'anterior' })
-          .eq('event_id', appointment.event_id)
-          .eq('status', 'confirmada');
-
-        if (appointmentsError) {
-          console.error('❌ Error updating appointments:', appointmentsError);
-        } else {
-          console.log('✅ Moved appointments to anterior status');
-        }
-
-        console.log('✅ Game ended');
+        console.log('✅ Game ended - waiting for user to click Finalizar');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -900,6 +934,67 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
+  const handleFinishEvent = useCallback(async () => {
+    if (!appointment?.event_id) return;
+
+    console.log('🏁 === FINISHING EVENT ===');
+    setLoading(true);
+
+    try {
+      // Move all appointments for this event to "anterior" status
+      const { error: appointmentsError } = await supabase
+        .from('appointments')
+        .update({ status: 'anterior' })
+        .eq('event_id', appointment.event_id)
+        .eq('status', 'confirmada');
+
+      if (appointmentsError) {
+        console.error('❌ Error updating appointments:', appointmentsError);
+      } else {
+        console.log('✅ Moved appointments to anterior status');
+      }
+
+      // Reset game phase to intro for next time
+      const { error: eventError } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'intro',
+          current_level: null,
+          current_question_index: null,
+          answered_users: null,
+          current_question: null,
+          current_question_starter_id: null,
+          match_started_at: null,
+          match_deadline_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (eventError) {
+        console.error('❌ Error resetting event:', eventError);
+      } else {
+        console.log('✅ Event reset successfully');
+      }
+
+      // Reset local state to ready phase
+      setGamePhase('ready');
+      setCurrentLevel('divertido');
+      setCurrentQuestionIndex(0);
+      setAnsweredUsers([]);
+      setCurrentQuestion(null);
+      setStarterParticipant(null);
+      setMatchStartedAt(null);
+      setMatchDeadlineAt(null);
+      setUserRatings({});
+
+      console.log('✅ Event finished successfully - returned to ready state');
+    } catch (error) {
+      console.error('❌ Unexpected error finishing event:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment]);
+
   if (gamePhase === 'finished') {
     return (
       <LinearGradient
@@ -966,6 +1061,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               })}
             </View>
           </View>
+
+          <TouchableOpacity
+            style={[styles.finishButton, loading && styles.buttonDisabled]}
+            onPress={handleFinishEvent}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.finishButtonText}>
+              {loading ? '⏳ Finalizando...' : '✅ Finalizar'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     );
@@ -1354,5 +1460,19 @@ const styles = StyleSheet.create({
   },
   timerWarning: {
     color: '#EF4444',
+  },
+  finishButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+  },
+  finishButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

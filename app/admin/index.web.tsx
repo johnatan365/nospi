@@ -74,7 +74,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime';
+type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime' | 'matches';
 
 export default function AdminPanelScreen() {
   const router = useRouter();
@@ -120,6 +120,19 @@ export default function AdminPanelScreen() {
     event_status: 'draft' as 'draft' | 'published' | 'closed',
     confirmation_code: '1986',
   });
+
+  // Question management
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState<'divertido' | 'sensual' | 'atrevido'>('divertido');
+  const [newQuestionText, setNewQuestionText] = useState('');
+
+  // Matches and ratings
+  const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
+  const [eventMatches, setEventMatches] = useState<any[]>([]);
+  const [eventRatings, setEventRatings] = useState<any[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
@@ -670,6 +683,155 @@ export default function AdminPanelScreen() {
     }
   };
 
+  const loadQuestions = async () => {
+    setLoadingQuestions(true);
+    try {
+      const { data, error } = await supabase
+        .from('event_questions')
+        .select('*')
+        .is('event_id', null)
+        .eq('level', selectedLevel)
+        .order('question_order', { ascending: true });
+
+      if (error) {
+        console.error('Error loading questions:', error);
+        window.alert('Error al cargar preguntas: ' + error.message);
+        return;
+      }
+
+      setQuestions(data || []);
+    } catch (error) {
+      console.error('Failed to load questions:', error);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  const handleAddQuestion = async () => {
+    if (!newQuestionText.trim()) {
+      window.alert('Por favor ingresa el texto de la pregunta');
+      return;
+    }
+
+    try {
+      const maxOrder = questions.length > 0 ? Math.max(...questions.map(q => q.question_order)) : -1;
+
+      const { error } = await supabase
+        .from('event_questions')
+        .insert({
+          event_id: null,
+          level: selectedLevel,
+          question_text: newQuestionText.trim(),
+          question_order: maxOrder + 1,
+          is_default: true,
+        });
+
+      if (error) {
+        console.error('Error adding question:', error);
+        window.alert('Error al agregar pregunta: ' + error.message);
+        return;
+      }
+
+      setNewQuestionText('');
+      loadQuestions();
+      window.alert('Pregunta agregada exitosamente');
+    } catch (error) {
+      console.error('Failed to add question:', error);
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId: string) => {
+    const confirmed = window.confirm('¿Eliminar esta pregunta?');
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('event_questions')
+        .delete()
+        .eq('id', questionId);
+
+      if (error) {
+        console.error('Error deleting question:', error);
+        window.alert('Error al eliminar pregunta: ' + error.message);
+        return;
+      }
+
+      loadQuestions();
+      window.alert('Pregunta eliminada exitosamente');
+    } catch (error) {
+      console.error('Failed to delete question:', error);
+    }
+  };
+
+  const handleUpdateQuestion = async (questionId: string, newText: string) => {
+    if (!newText.trim()) {
+      window.alert('El texto de la pregunta no puede estar vacío');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('event_questions')
+        .update({ question_text: newText.trim(), updated_at: new Date().toISOString() })
+        .eq('id', questionId);
+
+      if (error) {
+        console.error('Error updating question:', error);
+        window.alert('Error al actualizar pregunta: ' + error.message);
+        return;
+      }
+
+      loadQuestions();
+      window.alert('Pregunta actualizada exitosamente');
+    } catch (error) {
+      console.error('Failed to update question:', error);
+    }
+  };
+
+  const loadEventMatchesAndRatings = async (eventId: string) => {
+    setLoadingMatches(true);
+    try {
+      // Load matches
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('event_matches')
+        .select(`
+          *,
+          user1:users!event_matches_user1_id_fkey(id, name, email),
+          user2:users!event_matches_user2_id_fkey(id, name, email)
+        `)
+        .eq('event_id', eventId)
+        .order('level', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (matchesError) {
+        console.error('Error loading matches:', matchesError);
+      } else {
+        setEventMatches(matchesData || []);
+      }
+
+      // Load ratings
+      const { data: ratingsData, error: ratingsError } = await supabase
+        .from('event_ratings')
+        .select(`
+          *,
+          rater:users!event_ratings_rater_user_id_fkey(id, name),
+          rated:users!event_ratings_rated_user_id_fkey(id, name)
+        `)
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      if (ratingsError) {
+        console.error('Error loading ratings:', ratingsError);
+      } else {
+        setEventRatings(ratingsData || []);
+      }
+    } catch (error) {
+      console.error('Failed to load matches and ratings:', error);
+    } finally {
+      setLoadingMatches(false);
+    }
+  };
+
   // Render functions remain the same as the original file
   // I'm keeping the same UI rendering logic from the original index.web.tsx
   // The key changes are only in the data loading functions above
@@ -1027,8 +1189,127 @@ export default function AdminPanelScreen() {
     );
   };
 
-  // ... (rest of the component - password modal, loading state, main render, modals, styles)
-  // Keeping the same UI structure as the original file
+  const renderMatches = () => {
+    const selectedEvent = events.find(e => e.id === selectedEventForMatches);
+
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Matches y Calificaciones</Text>
+        
+        {!selectedEventForMatches ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Selecciona un evento para ver matches y calificaciones</Text>
+            <View style={styles.eventSelectorList}>
+              {events.map((event) => (
+                <TouchableOpacity
+                  key={event.id}
+                  style={styles.eventSelectorItem}
+                  onPress={() => {
+                    setSelectedEventForMatches(event.id);
+                    loadEventMatchesAndRatings(event.id);
+                  }}
+                >
+                  <Text style={styles.eventSelectorName}>
+                    {event.name || `${event.type === 'bar' ? 'Bar' : 'Restaurante'} - ${event.city}`}
+                  </Text>
+                  <Text style={styles.eventSelectorDate}>
+                    {event.date} - {event.time}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.matchesHeader}>
+              <View style={styles.matchesEventInfo}>
+                <Text style={styles.matchesEventTitle}>
+                  {selectedEvent?.name || `${selectedEvent?.type === 'bar' ? 'Bar' : 'Restaurante'} - ${selectedEvent?.city}`}
+                </Text>
+                <Text style={styles.matchesEventDate}>
+                  {selectedEvent?.date} a las {selectedEvent?.time}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.backToEventsButton}
+                onPress={() => setSelectedEventForMatches(null)}
+              >
+                <Text style={styles.backToEventsButtonText}>← Volver</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingMatches ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando datos...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.matchesSection}>
+                  <Text style={styles.matchesSectionTitle}>💜 Matches por Ronda ({eventMatches.length})</Text>
+                  {eventMatches.length === 0 ? (
+                    <View style={styles.emptyMatches}>
+                      <Text style={styles.emptyMatchesText}>No hay matches registrados aún</Text>
+                    </View>
+                  ) : (
+                    eventMatches.map((match, index) => {
+                      const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '💕' : '🔥';
+                      const levelName = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      
+                      return (
+                        <View key={match.id} style={styles.matchItem}>
+                          <View style={styles.matchHeader}>
+                            <Text style={styles.matchLevel}>{levelEmoji} {levelName}</Text>
+                            <Text style={styles.matchDate}>
+                              {new Date(match.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <View style={styles.matchUsers}>
+                            <Text style={styles.matchUser}>👤 {match.user1?.name || 'Usuario 1'}</Text>
+                            <Text style={styles.matchConnector}>💜</Text>
+                            <Text style={styles.matchUser}>👤 {match.user2?.name || 'Usuario 2'}</Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={styles.ratingsSection}>
+                  <Text style={styles.ratingsSectionTitle}>⭐ Calificaciones ({eventRatings.length})</Text>
+                  {eventRatings.length === 0 ? (
+                    <View style={styles.emptyRatings}>
+                      <Text style={styles.emptyRatingsText}>No hay calificaciones registradas aún</Text>
+                    </View>
+                  ) : (
+                    eventRatings.map((rating, index) => (
+                      <View key={rating.id} style={styles.ratingItem}>
+                        <View style={styles.ratingHeader}>
+                          <Text style={styles.ratingRater}>
+                            {rating.rater?.name || 'Usuario'} calificó a {rating.rated?.name || 'Usuario'}
+                          </Text>
+                          <View style={styles.ratingStars}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Text key={star} style={styles.ratingStar}>
+                                {star <= rating.rating ? '⭐' : '☆'}
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                        <Text style={styles.ratingDate}>
+                          {new Date(rating.created_at).toLocaleString('es-ES')}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </>
+            )}
+          </>
+        )}
+      </View>
+    );
+  };
 
   if (showPasswordModal) {
     return (
@@ -1119,6 +1400,14 @@ export default function AdminPanelScreen() {
               🔴 En Vivo
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'matches' && styles.tabActive]}
+            onPress={() => setCurrentView('matches')}
+          >
+            <Text style={[styles.tabText, currentView === 'matches' && styles.tabTextActive]}>
+              💜 Matches
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content */}
@@ -1128,6 +1417,7 @@ export default function AdminPanelScreen() {
           {currentView === 'users' && renderUsers()}
           {currentView === 'appointments' && renderAppointments()}
           {currentView === 'realtime' && renderRealtime()}
+          {currentView === 'matches' && renderMatches()}
         </ScrollView>
       </View>
 
@@ -1326,6 +1616,18 @@ export default function AdminPanelScreen() {
                 </TouchableOpacity>
               </View>
 
+              <TouchableOpacity
+                style={styles.questionsManagementButton}
+                onPress={() => {
+                  setShowQuestionsModal(true);
+                  loadQuestions();
+                }}
+              >
+                <Text style={styles.questionsManagementButtonText}>
+                  📝 Gestionar Preguntas
+                </Text>
+              </TouchableOpacity>
+
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonCancel]}
@@ -1429,6 +1731,123 @@ export default function AdminPanelScreen() {
                     </View>
                   );
                 })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Questions Management Modal */}
+      <Modal
+        visible={showQuestionsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQuestionsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.questionsModalContent}>
+            <View style={styles.questionsModalHeader}>
+              <Text style={styles.questionsModalTitle}>
+                Gestión de Preguntas
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowQuestionsModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.levelSelector}>
+              <TouchableOpacity
+                style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
+                onPress={() => {
+                  setSelectedLevel('divertido');
+                  loadQuestions();
+                }}
+              >
+                <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
+                  😄 Divertido
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
+                onPress={() => {
+                  setSelectedLevel('sensual');
+                  loadQuestions();
+                }}
+              >
+                <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
+                  💕 Sensual
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
+                onPress={() => {
+                  setSelectedLevel('atrevido');
+                  loadQuestions();
+                }}
+              >
+                <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
+                  🔥 Atrevido
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.addQuestionSection}>
+              <Text style={styles.addQuestionLabel}>Agregar Nueva Pregunta</Text>
+              <TextInput
+                style={styles.addQuestionInput}
+                placeholder="Escribe la pregunta aquí..."
+                value={newQuestionText}
+                onChangeText={setNewQuestionText}
+                multiline
+              />
+              <TouchableOpacity
+                style={styles.addQuestionButton}
+                onPress={handleAddQuestion}
+              >
+                <Text style={styles.addQuestionButtonText}>+ Agregar Pregunta</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingQuestions ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando preguntas...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.questionsList}>
+                <Text style={styles.questionsListTitle}>
+                  Preguntas Actuales ({questions.length})
+                </Text>
+                {questions.map((question, index) => (
+                  <View key={question.id} style={styles.questionItem}>
+                    <View style={styles.questionHeader}>
+                      <Text style={styles.questionNumber}>#{index + 1}</Text>
+                      <Text style={styles.questionText}>{question.question_text}</Text>
+                    </View>
+                    <View style={styles.questionActions}>
+                      <TouchableOpacity
+                        style={styles.editQuestionButton}
+                        onPress={() => {
+                          const newText = window.prompt('Editar pregunta:', question.question_text);
+                          if (newText) {
+                            handleUpdateQuestion(question.id, newText);
+                          }
+                        }}
+                      >
+                        <Text style={styles.editQuestionButtonText}>✏️ Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.deleteQuestionButton}
+                        onPress={() => handleDeleteQuestion(question.id)}
+                      >
+                        <Text style={styles.deleteQuestionButtonText}>🗑️ Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
               </ScrollView>
             )}
           </View>
@@ -2216,5 +2635,343 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+  },
+  questionsManagementButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  questionsManagementButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  questionsModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 900,
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  questionsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  questionsModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  levelSelector: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  levelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  levelButtonActive: {
+    backgroundColor: nospiColors.purpleLight,
+    borderColor: nospiColors.purpleDark,
+  },
+  levelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  levelButtonTextActive: {
+    color: nospiColors.purpleDark,
+  },
+  addQuestionSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  addQuestionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+  },
+  addQuestionInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  addQuestionButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  addQuestionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  questionsList: {
+    flex: 1,
+    padding: 20,
+  },
+  questionsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  questionItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  questionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  questionNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginRight: 12,
+    minWidth: 40,
+  },
+  questionText: {
+    fontSize: 16,
+    color: '#374151',
+    flex: 1,
+    lineHeight: 24,
+  },
+  questionActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editQuestionButton: {
+    flex: 1,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  editQuestionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  deleteQuestionButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  deleteQuestionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  eventSelectorList: {
+    marginTop: 20,
+    width: '100%',
+  },
+  eventSelectorItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  eventSelectorName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  eventSelectorDate: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  matchesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  matchesEventInfo: {
+    flex: 1,
+  },
+  matchesEventTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  matchesEventDate: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  backToEventsButton: {
+    backgroundColor: nospiColors.purpleLight,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backToEventsButtonText: {
+    color: nospiColors.purpleDark,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  matchesSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  matchesSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  emptyMatches: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyMatchesText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  matchItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  matchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  matchLevel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  matchDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  matchUsers: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  matchUser: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  matchConnector: {
+    fontSize: 20,
+  },
+  ratingsSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ratingsSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  emptyRatings: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyRatingsText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  ratingItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  ratingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingRater: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '600',
+    flex: 1,
+  },
+  ratingStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  ratingStar: {
+    fontSize: 16,
+  },
+  ratingDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });
