@@ -4,10 +4,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
-import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'questions' | 'match_selection' | 'free_phase';
+type GamePhase = 'ready' | 'questions' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -409,23 +408,59 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        // Level finished - transition to match selection
-        console.log('⚡ Transitioning to match_selection');
+        // Level finished - advance to next level or finish
+        console.log('⚡ Level finished');
 
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'match_selection',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
+        const nextLevel: QuestionLevel = 
+          currentLevel === 'divertido' ? 'sensual' :
+          currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
 
-        if (error) {
-          console.error('❌ Error transitioning to match selection:', error);
-          return;
+        if (currentLevel === 'atrevido') {
+          // All levels complete - transition to free_phase
+          console.log('🏁 All levels complete - transitioning to free_phase');
+          
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'free_phase',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error transitioning to free_phase:', error);
+            return;
+          }
+
+          console.log('✅ Transitioned to free_phase');
+        } else {
+          // Continue to next level
+          console.log('➡️ Advancing to next level:', nextLevel);
+          
+          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+          const newStarterUserId = activeParticipants[randomIndex].user_id;
+          const firstQuestion = QUESTIONS[nextLevel][0];
+
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'questions',
+              current_level: nextLevel,
+              current_question_index: 0,
+              answered_users: [],
+              current_question: firstQuestion,
+              current_question_starter_id: newStarterUserId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error starting next level:', error);
+            return;
+          }
+
+          console.log('✅ Started next level:', nextLevel);
         }
-
-        console.log('✅ Level finished - transitioned to match selection');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -434,66 +469,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
-  // PHASE 4: Match complete callback
-  const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
-    console.log('💘 === MATCH COMPLETE ===');
-    console.log('💘 Next level:', nextLevel, 'Next phase:', nextPhase);
-    
-    if (!appointment?.event_id) return;
 
-    setLoading(true);
-
-    try {
-      if (nextPhase === 'questions') {
-        // Continue to next level
-        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-        const newStarterUserId = activeParticipants[randomIndex].user_id;
-        const firstQuestion = QUESTIONS[nextLevel][0];
-
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'questions',
-            current_level: nextLevel,
-            current_question_index: 0,
-            answered_users: [],
-            current_question: firstQuestion,
-            current_question_starter_id: newStarterUserId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (error) {
-          console.error('❌ Error starting next level:', error);
-          return;
-        }
-
-        console.log('✅ Started next level:', nextLevel);
-      } else {
-        // All levels complete - end game
-        console.log('🏁 All levels complete - transitioning to free_phase');
-        
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'free_phase',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (error) {
-          console.error('❌ Error ending game:', error);
-          return;
-        }
-
-        console.log('✅ Game ended');
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointment, activeParticipants]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -599,29 +575,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
-  // Show match selection screen
-  if (gamePhase === 'match_selection' && currentUserId) {
-    console.log('🎮 === RENDERING MATCH SELECTION SCREEN ===');
-    console.log('🎮 Passing participants count:', activeParticipants.length);
-    console.log('🎮 Passing participants:', activeParticipants.map(p => ({
-      user_id: p.user_id,
-      name: p.name
-    })));
-    
-    return (
-      <MatchSelectionScreen
-        eventId={appointment.event_id}
-        currentLevel={currentLevel}
-        currentUserId={currentUserId}
-        participants={activeParticipants}
-        onMatchComplete={handleMatchComplete}
-        triggerMatchAnimation={(matchedUserId) => {
-          console.log('✨ Match animation triggered for:', matchedUserId);
-        }}
-      />
-    );
-  }
-
   if (gamePhase === 'ready') {
     const canStart = activeParticipants.length >= 2;
     const buttonDisabled = loading || !canStart;
@@ -636,12 +589,34 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
 
+          <View style={styles.participantsListCard}>
+            <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+            {activeParticipants.map((participant, index) => {
+              const displayName = participant.name;
+              
+              return (
+                <React.Fragment key={index}>
+                  <View style={styles.participantListItem}>
+                    <View style={styles.participantListPhotoPlaceholder}>
+                      <Text style={styles.participantListPhotoText}>
+                        {displayName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={styles.participantListName}>{displayName}</Text>
+                  </View>
+                </React.Fragment>
+              );
+            })}
+          </View>
+
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>✨</Text>
-            <Text style={styles.infoTitle}>¡Comienza la experiencia!</Text>
+            <Text style={styles.infoTitle}>Esta noche vivirán una experiencia diferente</Text>
             <Text style={styles.infoText}>
-              Responden juntos, se escuchan y se conocen mejor.{'\n'}
-              El sistema elegirá quién rompe el hielo 😉
+              Nospi los guiará por 3 niveles de preguntas diseñadas para romper el hielo y generar conexiones reales.{'\n\n'}
+              Cada nivel aumenta la profundidad de la conversación.{'\n'}
+              No se trata de responder perfecto, sino de disfrutar y dejar que la charla fluya.{'\n\n'}
+              Relájense, diviértanse y déjense sorprender.
             </Text>
           </View>
 
@@ -758,9 +733,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <View style={styles.iceBreakCard}>
             <Text style={styles.iceBreakIcon}>✨</Text>
-            <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
+            <Text style={styles.iceBreakTitle}>Ya rompieron el hielo</Text>
             <Text style={styles.iceBreakSubtitle}>
-              Ahora disfruten el resto de la noche y déjense sorprender 💜
+              Ahora disfruten el resto de la noche y permitan que la conexión fluya naturalmente.
             </Text>
           </View>
 

@@ -106,7 +106,6 @@ export default function AdminPanelScreen() {
     maps_link: '',
     max_participants: 6,
     event_status: 'published' as 'draft' | 'published' | 'closed',
-    confirmation_code: '1986',
   });
 
   useEffect(() => {
@@ -329,13 +328,6 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // Validate and set default confirmation code
-      let finalConfirmationCode = newEvent.confirmation_code.trim();
-      if (!finalConfirmationCode) {
-        console.log('Confirmation code empty, using default: 1986');
-        finalConfirmationCode = '1986';
-      }
-
       // Create ISO timestamp for start_time
       const combinedDateString = `${newEvent.date}T${newEvent.time}:00`;
       const combinedDate = new Date(combinedDateString);
@@ -368,7 +360,6 @@ export default function AdminPanelScreen() {
         status: 'active',
         is_location_revealed: false,
         event_status: newEvent.event_status,
-        confirmation_code: finalConfirmationCode,
       };
 
       console.log('Inserting event data:', eventData);
@@ -405,7 +396,6 @@ export default function AdminPanelScreen() {
         maps_link: '',
         max_participants: 6,
         event_status: 'published',
-        confirmation_code: '1986',
       });
       loadDashboardData();
     } catch (error) {
@@ -586,10 +576,6 @@ export default function AdminPanelScreen() {
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
-              </View>
-              <View style={styles.codeHighlight}>
-                <Text style={styles.codeLabel}>🔑 Código:</Text>
-                <Text style={styles.codeValue}>{confirmationCode}</Text>
               </View>
               
               <TouchableOpacity

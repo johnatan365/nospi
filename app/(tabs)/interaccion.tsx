@@ -63,7 +63,7 @@ interface Participant {
   profiles: Profile | null;
 }
 
-type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
+
 
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
@@ -83,9 +83,6 @@ export default function InteraccionScreen() {
   const [countdown, setCountdown] = useState<number>(0);
   const [countdownDisplay, setCountdownDisplay] = useState<string>('');
   const [isEventDay, setIsEventDay] = useState(false);
-  const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
-  const [confirmationCode, setConfirmationCode] = useState('');
-  const [codeError, setCodeError] = useState('');
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [totalExpectedParticipants, setTotalExpectedParticipants] = useState<number>(0);
@@ -120,10 +117,6 @@ export default function InteraccionScreen() {
 
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
-      
-      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
-        setCheckInPhase('code_entry');
-      }
       return;
     }
 
@@ -133,7 +126,7 @@ export default function InteraccionScreen() {
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
-  }, [appointment, checkInPhase]);
+  }, []);
 
   const requestNotificationPermissions = useCallback(async () => {
     // Skip on web - notifications not fully supported
@@ -351,10 +344,6 @@ export default function InteraccionScreen() {
       
       setAppointment(appointmentData as any);
       
-      if (appointmentData.location_confirmed) {
-        setCheckInPhase('confirmed');
-      }
-      
       if (appointmentData.event && appointmentData.event.start_time) {
         checkIfEventDay(appointmentData.event.start_time);
         scheduleNotifications(appointmentData.event.start_time);
@@ -370,71 +359,7 @@ export default function InteraccionScreen() {
     }
   }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
 
-  const handleCodeConfirmation = useCallback(async () => {
-    if (!appointment || !user) return;
 
-    const enteredCode = confirmationCode.trim();
-    const eventCode = appointment.event.confirmation_code;
-    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
-      ? '1986' 
-      : eventCode.trim();
-    
-    console.log('Code validation - Expected:', expectedCode, 'Entered:', enteredCode);
-
-    if (enteredCode !== expectedCode) {
-      setCodeError('Código incorrecto.');
-      return;
-    }
-
-    setCodeError('');
-
-    try {
-      const confirmedAt = new Date().toISOString();
-
-      const { error: updateError } = await supabase
-        .from('event_participants')
-        .upsert({
-          event_id: appointment.event_id,
-          user_id: user.id,
-          confirmed: true,
-          check_in_time: confirmedAt,
-        }, {
-          onConflict: 'event_id,user_id'
-        });
-
-      if (updateError) {
-        console.error('Error updating event_participants:', updateError);
-        setCodeError('No se pudo registrar tu llegada.');
-        return;
-      }
-
-      console.log('Check-in successful');
-      
-      await supabase
-        .from('appointments')
-        .update({
-          arrival_status: 'on_time',
-          checked_in_at: confirmedAt,
-          location_confirmed: true,
-        })
-        .eq('id', appointment.id);
-      
-      setAppointment(prev => ({
-        ...prev!,
-        arrival_status: 'on_time',
-        checked_in_at: confirmedAt,
-        location_confirmed: true,
-      }));
-      
-      setCheckInPhase('confirmed');
-      setConfirmationCode('');
-      
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error during check-in:', error);
-      setCodeError('Ocurrió un error.');
-    }
-  }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   // CRITICAL: Subscribe to event_state changes
   useEffect(() => {
@@ -552,53 +477,53 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
-  // CRITICAL: Auto-transition to 'ready' phase when minimum participants confirmed
+  // CRITICAL: Auto-transition to 'ready' phase 10 minutes after event start time
   useEffect(() => {
     const checkAndTransitionToReady = async () => {
-      if (!appointment?.event_id) return;
+      if (!appointment?.event_id || !appointment?.event?.start_time) return;
       if (gamePhase !== 'intro') return; // Only transition from intro phase
-      if (activeParticipants.length < 2) return; // Need at least 2 participants
 
-      console.log('🎮 === AUTO-TRANSITIONING TO READY PHASE ===');
-      console.log('🎮 Active participants:', activeParticipants.length);
-      console.log('🎮 Current game phase:', gamePhase);
+      const now = new Date();
+      const eventDate = new Date(appointment.event.start_time);
+      eventDate.setMinutes(eventDate.getMinutes() + 10);
+      
+      // Check if 10 minutes have passed since event start
+      if (now >= eventDate) {
+        console.log('🎮 === AUTO-TRANSITIONING TO READY PHASE (10 min after start) ===');
+        console.log('🎮 Current game phase:', gamePhase);
 
-      try {
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'ready',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
+        try {
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'ready',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
 
-        if (error) {
-          console.error('❌ Error transitioning to ready phase:', error);
-          return;
+          if (error) {
+            console.error('❌ Error transitioning to ready phase:', error);
+            return;
+          }
+
+          console.log('✅ Successfully transitioned to ready phase');
+        } catch (error) {
+          console.error('❌ Unexpected error during transition:', error);
         }
-
-        console.log('✅ Successfully transitioned to ready phase');
-      } catch (error) {
-        console.error('❌ Unexpected error during transition:', error);
       }
     };
 
     checkAndTransitionToReady();
-  }, [appointment?.event_id, activeParticipants.length, gamePhase]);
+    
+    // Check every minute
+    const interval = setInterval(checkAndTransitionToReady, 60000);
+    
+    return () => clearInterval(interval);
+  }, [appointment?.event_id, appointment?.event?.start_time, gamePhase]);
 
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
-  
-  // CRITICAL FIX: Minimum 2 participants must confirm to continue
-  const minimumParticipantsConfirmed = activeParticipants.length >= 2;
-  
-  // Check if all expected participants have confirmed (optional - for display purposes)
-  const allParticipantsConfirmed = totalExpectedParticipants > 0 && activeParticipants.length === totalExpectedParticipants;
-  
-  console.log('🔍 === CONTINUE BUTTON CHECK ===');
+  console.log('🔍 === STATUS CHECK ===');
   console.log('🔍 Active participants:', activeParticipants.length);
   console.log('🔍 Total expected:', totalExpectedParticipants);
-  console.log('🔍 Minimum confirmed (>=2)?', minimumParticipantsConfirmed);
-  console.log('🔍 All confirmed?', allParticipantsConfirmed);
   console.log('🔍 Game phase:', gamePhase);
 
   if (loading) {
@@ -733,111 +658,14 @@ export default function InteraccionScreen() {
           <Text style={styles.eventLocation}>{locationText}</Text>
         </View>
 
-        {checkInPhase === 'code_entry' && (
-          <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-            
-            <TextInput
-              style={styles.codeInput}
-              value={confirmationCode}
-              onChangeText={(text) => {
-                setConfirmationCode(text);
-                setCodeError('');
-              }}
-              placeholder="Código"
-              placeholderTextColor="#999"
-              keyboardType="default"
-              maxLength={10}
-              autoFocus
-            />
-
-            {codeError ? (
-              <Text style={styles.codeErrorText}>{codeError}</Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
-              onPress={handleCodeConfirmation}
-              disabled={!confirmationCode.trim()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {checkInPhase === 'confirmed' && (
-          <>
-            <View style={styles.confirmedCard}>
-              <Text style={styles.confirmedIcon}>✅</Text>
-              <Text style={styles.confirmedText}>
-                ¡Llegada confirmada!
-              </Text>
-            </View>
-
-            <View style={styles.participantsListCard}>
-              <View style={styles.participantsListHeader}>
-                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
-                <View style={styles.participantCountBadge}>
-                  <Text style={styles.participantCountText}>{participantCountText}/{totalParticipantsText}</Text>
-                </View>
-              </View>
-              
-              {activeParticipants.length > 0 && (
-                <View style={styles.participantsList}>
-                  {activeParticipants.map((participant, index) => {
-                    const displayName = participant.profiles?.name || 'Participante';
-                    
-                    return (
-                      <React.Fragment key={index}>
-                      <View style={styles.participantListItem}>
-                        <View style={styles.participantListPhotoPlaceholder}>
-                          <Text style={styles.participantListPhotoText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.participantListName}>{displayName}</Text>
-                      </View>
-                      </React.Fragment>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {!minimumParticipantsConfirmed && (
-              <View style={styles.waitingCard}>
-                <ActivityIndicator size="large" color={nospiColors.purpleMid} />
-                <Text style={styles.waitingText}>
-                  ⏳ Esperando a que al menos 2 participantes confirmen su llegada... ({participantCountText}/{totalParticipantsText})
-                </Text>
-              </View>
-            )}
-
-            {minimumParticipantsConfirmed && !allParticipantsConfirmed && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ✨ {participantCountText} participantes han confirmado su llegada
-                </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El administrador puede iniciar la experiencia. Esperando a más participantes... ({participantCountText}/{totalParticipantsText})
-                </Text>
-              </View>
-            )}
-
-            {allParticipantsConfirmed && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ✨ Todos los participantes han confirmado su llegada
-                </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El administrador iniciará la experiencia pronto
-                </Text>
-              </View>
-            )}
-          </>
-        )}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoText}>
+            ✨ La experiencia comenzará automáticamente 10 minutos después de la hora de inicio
+          </Text>
+          <Text style={styles.infoTextSecondary}>
+            Prepárate para conectar y disfrutar
+          </Text>
+        </View>
       </ScrollView>
     </LinearGradient>
   );
