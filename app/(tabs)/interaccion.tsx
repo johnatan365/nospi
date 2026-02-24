@@ -88,6 +88,7 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
+  const [totalExpectedParticipants, setTotalExpectedParticipants] = useState<number>(0);
   
   // CRITICAL: Game state derived from event_state in database
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -231,6 +232,20 @@ export default function InteraccionScreen() {
       console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
       
       setActiveParticipants(participants);
+      
+      // Also get total expected participants (all appointments for this event)
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('status', 'confirmada')
+        .eq('payment_status', 'completed');
+      
+      if (!appointmentsError && appointmentsData) {
+        const totalExpected = appointmentsData.length;
+        console.log('✅ Total expected participants:', totalExpected);
+        setTotalExpectedParticipants(totalExpected);
+      }
     } catch (error) {
       console.error('❌ Failed to load participants:', error);
     }
@@ -536,6 +551,15 @@ export default function InteraccionScreen() {
   }, [appointment, user, loadActiveParticipants]);
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+  
+  // CRITICAL FIX: Check if all expected participants have confirmed
+  const allParticipantsConfirmed = totalExpectedParticipants > 0 && activeParticipants.length === totalExpectedParticipants;
+  
+  console.log('🔍 === CONTINUE BUTTON CHECK ===');
+  console.log('🔍 Active participants:', activeParticipants.length);
+  console.log('🔍 Total expected:', totalExpectedParticipants);
+  console.log('🔍 All confirmed?', allParticipantsConfirmed);
+  console.log('🔍 Game phase:', gamePhase);
 
   if (loading) {
     return (
@@ -640,6 +664,7 @@ export default function InteraccionScreen() {
     : 'Ubicación se revelará próximamente';
   
   const participantCountText = activeParticipants.length.toString();
+  const totalParticipantsText = totalExpectedParticipants.toString();
 
   return (
     <LinearGradient
@@ -715,7 +740,7 @@ export default function InteraccionScreen() {
               <View style={styles.participantsListHeader}>
                 <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
                 <View style={styles.participantCountBadge}>
-                  <Text style={styles.participantCountText}>{participantCountText}</Text>
+                  <Text style={styles.participantCountText}>{participantCountText}/{totalParticipantsText}</Text>
                 </View>
               </View>
               
@@ -741,10 +766,19 @@ export default function InteraccionScreen() {
               )}
             </View>
 
-            {canStartExperience && (
+            {!allParticipantsConfirmed && (
+              <View style={styles.waitingCard}>
+                <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+                <Text style={styles.waitingText}>
+                  ⏳ Esperando a que todos confirmen su llegada... ({participantCountText}/{totalParticipantsText})
+                </Text>
+              </View>
+            )}
+
+            {allParticipantsConfirmed && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoText}>
-                  ✨ Todos los participantes están listos
+                  ✨ Todos los participantes han confirmado su llegada
                 </Text>
                 <Text style={styles.infoTextSecondary}>
                   El administrador iniciará la experiencia pronto
@@ -972,11 +1006,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    minWidth: 50,
+    minWidth: 60,
     alignItems: 'center',
   },
   participantCountText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
@@ -1011,6 +1045,20 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  waitingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  waitingText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 16,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
