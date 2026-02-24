@@ -14,12 +14,14 @@ interface Participant {
   occupation: string;
 }
 
+type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
+
 interface MatchSelectionScreenProps {
   eventId: string;
-  currentLevel: number;
+  currentLevel: QuestionLevel;
   currentUserId: string;
   participants: Participant[];
-  onMatchComplete: (nextLevel: number, nextPhase: 'questions' | 'free_phase') => Promise<void>;
+  onMatchComplete: (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => Promise<void>;
   triggerMatchAnimation: (matchedUserId: string) => void;
 }
 
@@ -67,7 +69,7 @@ export default function MatchSelectionScreen({
         .from('event_matches_votes')
         .select('from_user_id, selected_user_id')
         .eq('event_id', eventId)
-        .eq('level', currentLevel.toString());
+        .eq('level', currentLevel);
 
       if (votesError) {
         console.error('❌ Error fetching votes:', votesError);
@@ -331,7 +333,7 @@ export default function MatchSelectionScreen({
       
       console.log('📝 Inserting vote:', {
         event_id: eventId,
-        level: currentLevel.toString(),
+        level: currentLevel,
         from_user_id: currentUserId,
         selected_user_id: selectedUserIdValue,
       });
@@ -340,7 +342,7 @@ export default function MatchSelectionScreen({
         .from('event_matches_votes')
         .insert({
           event_id: eventId,
-          level: currentLevel.toString(),
+          level: currentLevel,
           from_user_id: currentUserId,
           selected_user_id: selectedUserIdValue,
         })
@@ -369,9 +371,13 @@ export default function MatchSelectionScreen({
   const handleContinue = useCallback(async () => {
     console.log('➡️ === CONTINUE PRESSED ===');
     
-    if (currentLevel < 3) {
-      console.log('➡️ Advancing to level', currentLevel + 1);
-      await onMatchComplete(currentLevel + 1, 'questions');
+    const nextLevel: QuestionLevel = 
+      currentLevel === 'divertido' ? 'sensual' :
+      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
+    
+    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
+      console.log('➡️ Advancing to level', nextLevel);
+      await onMatchComplete(nextLevel, 'questions');
     } else {
       console.log('🏁 All levels complete - moving to free phase');
       await onMatchComplete(currentLevel, 'free_phase');

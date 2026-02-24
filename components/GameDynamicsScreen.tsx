@@ -26,7 +26,7 @@ interface Appointment {
   event: {
     id: string;
     game_phase?: string;
-    current_level?: number;
+    current_level?: QuestionLevel;
     current_question_index?: number;
     answered_users?: string[];
     current_question?: string;
@@ -61,7 +61,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   console.log('🎮 === GAME DYNAMICS SCREEN V2 ===');
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
-  const [currentLevel, setCurrentLevel] = useState<number>(1);
+  const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
@@ -194,11 +194,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       if (data.game_phase === 'match_selection') {
         console.log('🔄 Restoring match_selection phase');
         setGamePhase('match_selection');
-        setCurrentLevel(data.current_level || 1);
+        setCurrentLevel(data.current_level || 'divertido');
       } else if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
         console.log('🔄 Restoring questions phase');
         setGamePhase('questions');
-        setCurrentLevel(data.current_level || 1);
+        setCurrentLevel(data.current_level || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
         setAnsweredUsers(data.answered_users || []);
         setCurrentQuestion(data.current_question || null);
@@ -242,7 +242,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
             console.log('📡 Updating to questions phase');
             setGamePhase('questions');
-            setCurrentLevel(newEvent.current_level || 1);
+            setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
             setAnsweredUsers(newEvent.answered_users || []);
             setCurrentQuestion(newEvent.current_question || null);
@@ -254,7 +254,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           } else if (newEvent.game_phase === 'match_selection') {
             console.log('📡 Updating to match_selection phase');
             setGamePhase('match_selection');
-            setCurrentLevel(newEvent.current_level || 1);
+            setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'free_phase') {
             console.log('📡 Updating to free_phase');
             setGamePhase('free_phase');
@@ -296,13 +296,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
       console.log('🎮 First question:', firstQuestion);
       
-      // CRITICAL FIX: Use 'questions' as game_phase (not 'question_active')
-      // and set current_level to 1 (number, not string)
+      // CRITICAL FIX: current_level must be TEXT ('divertido', 'sensual', 'atrevido'), not a number
       const { error } = await supabase
         .from('events')
         .update({
           game_phase: 'questions',
-          current_level: 1,
+          current_level: 'divertido',
           current_question_index: 0,
           answered_users: [],
           current_question: firstQuestion,
@@ -374,8 +373,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     
     if (!appointment?.event_id) return;
 
-    const levelKey = currentLevel === 1 ? 'divertido' : currentLevel === 2 ? 'sensual' : 'atrevido';
-    const questionsForLevel = QUESTIONS[levelKey];
+    const questionsForLevel = QUESTIONS[currentLevel];
     const nextQuestionIndex = currentQuestionIndex + 1;
 
     setLoading(true);
@@ -431,7 +429,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
   // PHASE 4: Match complete callback
-  const handleMatchComplete = useCallback(async (nextLevel: number, nextPhase: 'questions' | 'free_phase') => {
+  const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
     console.log('💘 === MATCH COMPLETE ===');
     console.log('💘 Next level:', nextLevel, 'Next phase:', nextPhase);
     
@@ -442,10 +440,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     try {
       if (nextPhase === 'questions') {
         // Continue to next level
-        const levelKey = nextLevel === 1 ? 'divertido' : nextLevel === 2 ? 'sensual' : 'atrevido';
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
-        const firstQuestion = QUESTIONS[levelKey][0];
+        const firstQuestion = QUESTIONS[nextLevel][0];
 
         const { error } = await supabase
           .from('events')
@@ -563,7 +560,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         .from('events')
         .update({
           game_phase: 'ready',
-          current_level: 1,
+          current_level: 'divertido',
           current_question_index: 0,
           answered_users: [],
           current_question: null,
@@ -591,8 +588,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const allAnswered = answeredCount === totalCount && totalCount > 0;
   const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
 
-  const levelEmoji = currentLevel === 1 ? '😄' : currentLevel === 2 ? '💕' : '🔥';
-  const levelName = currentLevel === 1 ? 'Divertido' : currentLevel === 2 ? 'Sensual' : 'Atrevido';
+  const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
+  const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
   console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
