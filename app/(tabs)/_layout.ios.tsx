@@ -18,6 +18,12 @@ export default function TabLayout() {
       label: 'Citas',
     },
     {
+      name: 'rompe-hielo',
+      route: '/(tabs)/rompe-hielo',
+      icon: 'favorite',
+      label: 'Rompe Hielo',
+    },
+    {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
       icon: 'chat',
@@ -41,6 +47,7 @@ export default function TabLayout() {
       >
         <Stack.Screen key="events" name="events" />
         <Stack.Screen key="appointments" name="appointments" />
+        <Stack.Screen key="rompe-hielo" name="rompe-hielo" />
         <Stack.Screen key="interaccion" name="interaccion" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
