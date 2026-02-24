@@ -112,6 +112,18 @@ export default function MatchSelectionScreen({
       // Store all votes for match detection
       setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
       setTotalVotes(votes.length);
+      
+      // CRITICAL DEBUG: Log the continue button condition
+      const votesCount = votes.length;
+      const participantsCount = participantsData?.length || participants.length;
+      const canContinueNow = votesCount === participantsCount && participantsCount > 0;
+      console.log('🔍 === CONTINUE BUTTON CONDITION ===');
+      console.log('🔍 Total votes:', votesCount);
+      console.log('🔍 Total participants:', participantsCount);
+      console.log('🔍 Votes === Participants?', votesCount === participantsCount);
+      console.log('🔍 Participants > 0?', participantsCount > 0);
+      console.log('🔍 Can continue?', canContinueNow);
+      console.log('🔍 User has voted?', !!currentUserVote);
     } catch (error) {
       console.error('❌ Error in fetchVotesAndParticipants:', error);
     } finally {
@@ -376,6 +388,14 @@ export default function MatchSelectionScreen({
 
   // PHASE 2: Continue button logic
   const canContinue = totalVotes === totalParticipants && totalParticipants > 0;
+  
+  // CRITICAL DEBUG: Log every render
+  console.log('🎨 === RENDER STATE ===');
+  console.log('🎨 totalVotes:', totalVotes);
+  console.log('🎨 totalParticipants:', totalParticipants);
+  console.log('🎨 canContinue:', canContinue);
+  console.log('🎨 userHasVoted:', userHasVoted);
+  console.log('🎨 loadingVoteStatus:', loadingVoteStatus);
 
   const handleContinue = useCallback(async () => {
     console.log('➡️ === CONTINUE PRESSED ===');
