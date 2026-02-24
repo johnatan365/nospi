@@ -77,23 +77,15 @@ export default function MatchSelectionScreen({
         return;
       }
 
-      // Fetch confirmed participants count
-      const { data: participantsData, error: participantsError } = await supabase
-        .from('event_participants')
-        .select('user_id')
-        .eq('event_id', eventId)
-        .eq('confirmed', true);
-
-      if (participantsError) {
-        console.error('❌ Error fetching participants:', participantsError);
-        setLoadingVoteStatus(false);
-        return;
-      }
-
       const votes = votesData || [];
-      const confirmedParticipants = participantsData || [];
+      
+      // CRITICAL FIX: Use participants prop instead of querying database
+      // The participants prop already contains the correct list of active participants
+      const totalParticipantsCount = participants.length;
 
-      console.log('📊 Votes:', votes.length, 'Participants:', confirmedParticipants.length);
+      console.log('📊 Votes:', votes.length, 'Participants (from props):', totalParticipantsCount);
+      console.log('📊 Participants list:', participants.map(p => p.user_id));
+      console.log('📊 Votes list:', votes.map(v => v.from_user_id));
 
       // Derive user's vote status from DB
       const currentUserVote = votes.find((vote) => vote.from_user_id === currentUserId);
@@ -102,13 +94,13 @@ export default function MatchSelectionScreen({
       // Store all votes for match detection
       setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
       setTotalVotes(votes.length);
-      setTotalParticipants(confirmedParticipants.length);
+      setTotalParticipants(totalParticipantsCount);
     } catch (error) {
       console.error('❌ Error in fetchVotesAndParticipants:', error);
     } finally {
       setLoadingVoteStatus(false);
     }
-  }, [eventId, currentLevel, currentUserId]);
+  }, [eventId, currentLevel, currentUserId, participants]);
 
   useEffect(() => {
     fetchVotesAndParticipants();
