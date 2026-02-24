@@ -1,0 +1,702 @@
+
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { nospiColors } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
+import { useSupabase } from '@/contexts/SupabaseContext';
+import { useFocusEffect } from '@react-navigation/native';
+import GameDynamicsScreen from '@/components/GameDynamicsScreen';
+
+interface Event {
+  id: string;
+  type: string;
+  date: string;
+  time: string;
+  location: string;
+  location_name: string;
+  location_address: string;
+  maps_link: string;
+  is_location_revealed: boolean;
+  address: string | null;
+  start_time: string | null;
+  max_participants: number;
+  current_participants: number;
+  status: string;
+  confirmation_code: string | null;
+  game_phase: 'countdown' | 'ready' | 'in_progress' | 'free_phase';
+  current_level: 'divertido' | 'sensual' | 'atrevido' | null;
+  current_question_index: number | null;
+  answered_users: string[] | null;
+  current_question: string | null;
+  current_question_starter_id: string | null;
+}
+
+interface Appointment {
+  id: string;
+  event_id: string;
+  arrival_status: string;
+  checked_in_at: string | null;
+  location_confirmed: boolean;
+  event: Event;
+}
+
+interface Profile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  city: string;
+  profile_photo_url: string | null;
+  interested_in?: string;
+}
+
+interface Participant {
+  id: string;
+  user_id: string;
+  event_id: string;
+  confirmed: boolean;
+  check_in_time: string | null;
+  is_presented: boolean;
+  presented_at: string | null;
+  profiles: Profile | null;
+}
+
+export default function RompeHieloScreen() {
+  const { user } = useSupabase();
+  const [loading, setLoading] = useState(true);
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [countdown, setCountdown] = useState<number>(0);
+  const [countdownDisplay, setCountdownDisplay] = useState<string>('');
+  const [isEventDay, setIsEventDay] = useState(false);
+  const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
+  const [gamePhase, setGamePhase] = useState<string>('countdown');
+
+  const checkIfEventDay = useCallback((startTime: string) => {
+    const now = new Date();
+    const eventDate = new Date(startTime);
+    
+    const isSameDay = 
+      now.getFullYear() === eventDate.getFullYear() &&
+      now.getMonth() === eventDate.getMonth() &&
+      now.getDate() === eventDate.getDate();
+    
+    setIsEventDay(isSameDay);
+  }, []);
+
+  const updateCountdown = useCallback((startTime: string) => {
+    const now = new Date();
+    const eventDate = new Date(startTime);
+    const diff = eventDate.getTime() - now.getTime();
+
+    setCountdown(diff);
+
+    if (diff <= 0) {
+      setCountdownDisplay('¡Es hora!');
+      return;
+    }
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    setCountdownDisplay(countdownText);
+  }, []);
+
+  const loadActiveParticipants = useCallback(async (eventId: string) => {
+    try {
+      console.log('Loading active participants for event:', eventId);
+      
+      const { data, error } = await supabase
+        .from('event_participants')
+        .select(`
+          id,
+          user_id,
+          event_id,
+          confirmed,
+          check_in_time,
+          is_presented,
+          presented_at,
+          profiles:user_id (
+            id,
+            name,
+            email,
+            phone,
+            city,
+            profile_photo_url,
+            interested_in
+          )
+        `)
+        .eq('event_id', eventId)
+        .eq('confirmed', true);
+
+      if (error) {
+        console.error('Error loading participants:', error);
+        return;
+      }
+
+      const participants: Participant[] = (data || []).filter(item => item.profiles);
+      console.log('Active participants loaded:', participants.length);
+      setActiveParticipants(participants as any);
+    } catch (error) {
+      console.error('Failed to load participants:', error);
+    }
+  }, []);
+
+  const loadAppointment = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Loading appointment for user:', user.id);
+      
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          event_id,
+          arrival_status,
+          checked_in_at,
+          location_confirmed,
+          status,
+          event:events!inner (
+            id,
+            type,
+            date,
+            time,
+            location,
+            location_name,
+            location_address,
+            maps_link,
+            is_location_revealed,
+            address,
+            start_time,
+            max_participants,
+            current_participants,
+            status,
+            confirmation_code,
+            game_phase,
+            current_level,
+            current_question_index,
+            answered_users,
+            current_question,
+            current_question_starter_id
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'confirmada')
+        .eq('payment_status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading appointment:', error);
+        setLoading(false);
+        return;
+      }
+      
+      if (!data || data.length === 0) {
+        console.log('No confirmed appointments found');
+        setAppointment(null);
+        setLoading(false);
+        return;
+      }
+
+      const now = new Date();
+      
+      const todayConfirmedAppointment = data.find(apt => {
+        if (!apt.event?.start_time) return false;
+        const eventDate = new Date(apt.event.start_time);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDayStart.getTime() === todayStart.getTime();
+      });
+
+      const upcomingAppointment = data.find(apt => {
+        if (!apt.event?.start_time) return false;
+        const eventDate = new Date(apt.event.start_time);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDayStart >= todayStart;
+      });
+
+      const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
+      
+      console.log('Appointment loaded:', appointmentData.id);
+      console.log('Event state from database:', {
+        game_phase: appointmentData.event?.game_phase,
+        current_level: appointmentData.event?.current_level
+      });
+      
+      if (appointmentData.event?.game_phase) {
+        console.log('Setting game phase from database:', appointmentData.event.game_phase);
+        setGamePhase(appointmentData.event.game_phase);
+      }
+      
+      setAppointment(appointmentData as any);
+      
+      if (appointmentData.event && appointmentData.event.start_time) {
+        checkIfEventDay(appointmentData.event.start_time);
+      }
+      
+      if (appointmentData.event_id) {
+        loadActiveParticipants(appointmentData.event_id);
+      }
+    } catch (error) {
+      console.error('Failed to load appointment:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, checkIfEventDay, loadActiveParticipants]);
+
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+
+    console.log('Subscribing to event state changes for event:', appointment.event_id);
+
+    const channel = supabase
+      .channel(`rompe_hielo_event_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('Event state change detected:', payload);
+          const newEvent = payload.new as any;
+          console.log('New state:', {
+            game_phase: newEvent.game_phase,
+            current_level: newEvent.current_level
+          });
+          
+          if (newEvent.game_phase) {
+            console.log('Updating game phase from realtime:', newEvent.game_phase);
+            setGamePhase(newEvent.game_phase);
+          }
+          
+          setAppointment(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              event: {
+                ...prev.event,
+                game_phase: newEvent.game_phase,
+                current_level: newEvent.current_level,
+                current_question_index: newEvent.current_question_index,
+                answered_users: newEvent.answered_users,
+                current_question: newEvent.current_question,
+                current_question_starter_id: newEvent.current_question_starter_id
+              }
+            };
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('Event state subscription status:', status);
+      });
+
+    return () => {
+      console.log('Unsubscribing event state');
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Rompe Hielo screen focused');
+      
+      if (user) {
+        loadAppointment();
+      }
+      
+      return () => {
+        console.log('Rompe Hielo screen unfocused');
+      };
+    }, [user, loadAppointment])
+  );
+
+  useEffect(() => {
+    if (appointment && appointment.event.start_time) {
+      const interval = setInterval(() => {
+        updateCountdown(appointment.event.start_time!);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [appointment, updateCountdown]);
+
+  useEffect(() => {
+    if (!appointment || !user) return;
+
+    console.log('Setting up Realtime subscription for participants');
+    
+    loadActiveParticipants(appointment.event_id);
+
+    const channel = supabase
+      .channel(`rompe_hielo_participants_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_participants',
+          filter: `event_id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('Participant update:', payload.eventType);
+          loadActiveParticipants(appointment.event_id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [appointment, user, loadActiveParticipants]);
+
+  useEffect(() => {
+    const checkAndTransitionToReady = async () => {
+      if (!appointment?.event_id || !appointment?.event?.start_time) return;
+      if (gamePhase !== 'countdown') return;
+
+      const now = new Date();
+      const eventDate = new Date(appointment.event.start_time);
+      eventDate.setMinutes(eventDate.getMinutes() + 10);
+      
+      if (now >= eventDate) {
+        console.log('Auto-transitioning to ready phase (10 min after start)');
+
+        try {
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'ready',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('Error transitioning to ready phase:', error);
+            return;
+          }
+
+          console.log('Successfully transitioned to ready phase');
+        } catch (error) {
+          console.error('Unexpected error during transition:', error);
+        }
+      }
+    };
+
+    checkAndTransitionToReady();
+    
+    const interval = setInterval(checkAndTransitionToReady, 60000);
+    
+    return () => clearInterval(interval);
+  }, [appointment?.event_id, appointment?.event?.start_time, gamePhase]);
+
+  console.log('Rompe Hielo Status:', {
+    activeParticipants: activeParticipants.length,
+    gamePhase: gamePhase,
+    isEventDay: isEventDay
+  });
+
+  if (loading) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Rompe Hielo</Text>
+          <Text style={styles.subtitle}>Experiencia de conexión</Text>
+
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderIcon}>🎯</Text>
+            <Text style={styles.placeholderText}>
+              No tienes ningún evento confirmado
+            </Text>
+            <Text style={styles.placeholderSubtext}>
+              Reserva un evento para acceder a la experiencia Rompe Hielo
+            </Text>
+          </View>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  if (!isEventDay) {
+    const eventDateText = new Date(appointment.event.start_time!).toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Próximo Evento</Text>
+          <Text style={styles.subtitle}>Rompe Hielo</Text>
+
+          <View style={styles.eventInfoCard}>
+            <Text style={styles.eventInfoIcon}>🎉</Text>
+            <Text style={styles.eventInfoTitle}>Evento confirmado</Text>
+            <Text style={styles.eventInfoDate}>{eventDateText}</Text>
+            <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
+            <Text style={styles.eventInfoMessage}>
+              La experiencia Rompe Hielo estará disponible el día del evento
+            </Text>
+          </View>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  if (gamePhase === 'ready' || gamePhase === 'in_progress' || gamePhase === 'free_phase') {
+    console.log('Rendering Game Dynamics Screen');
+    console.log('Game phase:', gamePhase);
+    console.log('Active participants count:', activeParticipants.length);
+    
+    const transformedParticipants = activeParticipants.map(p => ({
+      id: p.id,
+      user_id: p.user_id,
+      name: p.profiles?.name || 'Participante',
+      profile_photo_url: p.profiles?.profile_photo_url || null,
+      occupation: p.profiles?.city || 'Ciudad',
+      confirmed: p.confirmed,
+      check_in_time: p.check_in_time,
+      presented: p.is_presented
+    }));
+    
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
+  }
+
+  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
+  
+  const locationText = appointment.event.is_location_revealed && appointment.event.location_name
+    ? appointment.event.location_name
+    : 'Ubicación se revelará próximamente';
+
+  return (
+    <LinearGradient
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      style={styles.gradient}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <Text style={styles.title}>Hoy es tu experiencia Rompe Hielo</Text>
+        <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+
+        <View style={styles.countdownCard}>
+          <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
+          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
+        </View>
+
+        <View style={styles.eventCard}>
+          <View style={styles.eventHeader}>
+            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
+            <View style={styles.eventHeaderText}>
+              <Text style={styles.eventType}>{eventTypeText}</Text>
+              <Text style={styles.eventTime}>{appointment.event.time}</Text>
+            </View>
+          </View>
+          <Text style={styles.eventLocation}>{locationText}</Text>
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoText}>
+            ✨ La experiencia comenzará automáticamente 10 minutos después de la hora de inicio
+          </Text>
+          <Text style={styles.infoTextSecondary}>
+            Prepárate para romper el hielo y disfrutar
+          </Text>
+        </View>
+      </ScrollView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 24,
+    paddingBottom: 120,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    marginTop: 48,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
+    marginBottom: 24,
+  },
+  placeholderContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+  },
+  placeholderIcon: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  placeholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  placeholderSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  eventInfoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  eventInfoIcon: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
+  eventInfoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  eventInfoDate: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  eventInfoTime: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
+    marginBottom: 16,
+  },
+  eventInfoMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  countdownCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  countdownLabel: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  countdownTime: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+    letterSpacing: 2,
+  },
+  eventCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  eventIconLarge: {
+    fontSize: 40,
+    marginRight: 16,
+  },
+  eventHeaderText: {
+    flex: 1,
+  },
+  eventType: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  eventTime: {
+    fontSize: 16,
+    color: nospiColors.purpleMid,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  eventLocation: {
+    fontSize: 14,
+    color: '#666',
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  infoTextSecondary: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
