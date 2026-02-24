@@ -65,16 +65,13 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
-// Only set notification handler on native platforms
-if (Platform.OS !== 'web') {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-}
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function InteraccionScreen() {
   const { user } = useSupabase();
@@ -88,7 +85,6 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
-  const [totalExpectedParticipants, setTotalExpectedParticipants] = useState<number>(0);
   
   // CRITICAL: Game state derived from event_state in database
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -136,12 +132,6 @@ export default function InteraccionScreen() {
   }, [appointment, checkInPhase]);
 
   const requestNotificationPermissions = useCallback(async () => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      console.log('Notifications not available on web');
-      return;
-    }
-
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       console.log('Notification permission:', status);
@@ -151,12 +141,6 @@ export default function InteraccionScreen() {
   }, []);
 
   const scheduleNotifications = useCallback(async (startTime: string) => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      console.log('Skipping notification scheduling on web');
-      return;
-    }
-
     try {
       const eventDate = new Date(startTime);
       const now = new Date();
@@ -195,20 +179,18 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('🔄 === LOADING ACTIVE PARTICIPANTS ===');
-      console.log('🔄 Event ID:', eventId);
+      console.log('Loading participants for event:', eventId);
       
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
-        console.error('❌ Error loading participants:', error);
+        console.error('Error loading participants:', error);
         return;
       }
 
-      // CRITICAL FIX: Only include participants who have confirmed (checked in with code)
       const participants: Participant[] = (data || [])
-        .filter((item: any) => item.user_name && item.confirmed === true)
+        .filter((item: any) => item.user_name)
         .map((item: any) => ({
           id: item.id,
           user_id: item.user_id,
@@ -228,28 +210,11 @@ export default function InteraccionScreen() {
           }
         }));
 
-      console.log('✅ Active participants loaded:', participants.length);
-      console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
+      console.log('Participants loaded:', participants.length);
       
       setActiveParticipants(participants);
-      
-      // CRITICAL FIX: Get total expected participants from event_participants table
-      // This ensures we count all participants who should check in, not just appointments
-      const { data: allParticipantsData, error: allParticipantsError } = await supabase
-        .from('event_participants')
-        .select('user_id')
-        .eq('event_id', eventId);
-      
-      if (!allParticipantsError && allParticipantsData) {
-        const totalExpected = allParticipantsData.length;
-        console.log('✅ Total expected participants (from event_participants):', totalExpected);
-        console.log('✅ Expected user IDs:', allParticipantsData.map(p => p.user_id));
-        setTotalExpectedParticipants(totalExpected);
-      } else {
-        console.error('❌ Error fetching total expected participants:', allParticipantsError);
-      }
     } catch (error) {
-      console.error('❌ Failed to load participants:', error);
+      console.error('Failed to load participants:', error);
     }
   }, []);
 
@@ -553,15 +518,6 @@ export default function InteraccionScreen() {
   }, [appointment, user, loadActiveParticipants]);
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
-  
-  // CRITICAL FIX: Check if all expected participants have confirmed
-  const allParticipantsConfirmed = totalExpectedParticipants > 0 && activeParticipants.length === totalExpectedParticipants;
-  
-  console.log('🔍 === CONTINUE BUTTON CHECK ===');
-  console.log('🔍 Active participants:', activeParticipants.length);
-  console.log('🔍 Total expected:', totalExpectedParticipants);
-  console.log('🔍 All confirmed?', allParticipantsConfirmed);
-  console.log('🔍 Game phase:', gamePhase);
 
   if (loading) {
     return (
@@ -633,16 +589,9 @@ export default function InteraccionScreen() {
 
   // CRITICAL: Show game dynamics based on game_phase from database
   if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'questions' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
-    console.log('🎮 === RENDERING GAME DYNAMICS SCREEN ===');
-    console.log('🎮 Game phase:', gamePhase);
-    console.log('🎮 Active participants count:', activeParticipants.length);
-    console.log('🎮 Active participants:', activeParticipants.map(p => ({
-      user_id: p.user_id,
-      name: p.profiles?.name,
-      confirmed: p.confirmed
-    })));
+    console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
     
-    const transformedParticipants = activeParticipants.map(p => ({
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
       name: p.profiles?.name || 'Participante',
@@ -651,11 +600,7 @@ export default function InteraccionScreen() {
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
       presented: p.is_presented
-    }));
-    
-    console.log('🎮 Transformed participants count:', transformedParticipants.length);
-    
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
+    }))} />;
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
@@ -666,7 +611,6 @@ export default function InteraccionScreen() {
     : 'Ubicación se revelará próximamente';
   
   const participantCountText = activeParticipants.length.toString();
-  const totalParticipantsText = totalExpectedParticipants.toString();
 
   return (
     <LinearGradient
@@ -742,7 +686,7 @@ export default function InteraccionScreen() {
               <View style={styles.participantsListHeader}>
                 <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
                 <View style={styles.participantCountBadge}>
-                  <Text style={styles.participantCountText}>{participantCountText}/{totalParticipantsText}</Text>
+                  <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
               </View>
               
@@ -768,19 +712,10 @@ export default function InteraccionScreen() {
               )}
             </View>
 
-            {!allParticipantsConfirmed && (
-              <View style={styles.waitingCard}>
-                <ActivityIndicator size="large" color={nospiColors.purpleMid} />
-                <Text style={styles.waitingText}>
-                  ⏳ Esperando a que todos confirmen su llegada... ({participantCountText}/{totalParticipantsText})
-                </Text>
-              </View>
-            )}
-
-            {allParticipantsConfirmed && (
+            {canStartExperience && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoText}>
-                  ✨ Todos los participantes han confirmado su llegada
+                  ✨ Todos los participantes están listos
                 </Text>
                 <Text style={styles.infoTextSecondary}>
                   El administrador iniciará la experiencia pronto
@@ -1008,11 +943,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    minWidth: 60,
+    minWidth: 50,
     alignItems: 'center',
   },
   participantCountText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
@@ -1047,20 +982,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
-  },
-  waitingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  waitingText: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    fontWeight: '600',
-    marginTop: 16,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

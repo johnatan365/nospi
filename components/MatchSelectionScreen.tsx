@@ -77,33 +77,23 @@ export default function MatchSelectionScreen({
         return;
       }
 
-      const votes = votesData || [];
-      
-      // CRITICAL FIX: Fetch participants directly from database instead of relying on prop
-      // This ensures we always have the latest participant count even if the prop is stale
-      console.log('📊 Fetching participants from database...');
+      // Fetch confirmed participants count
       const { data: participantsData, error: participantsError } = await supabase
         .from('event_participants')
-        .select('user_id, confirmed')
+        .select('user_id')
         .eq('event_id', eventId)
         .eq('confirmed', true);
 
       if (participantsError) {
         console.error('❌ Error fetching participants:', participantsError);
-        // Fallback to prop if database query fails
-        const totalParticipantsCount = participants.length;
-        console.log('⚠️ Using participants from prop as fallback:', totalParticipantsCount);
-        setTotalParticipants(totalParticipantsCount);
-      } else {
-        const confirmedParticipants = participantsData || [];
-        const totalParticipantsCount = confirmedParticipants.length;
-        console.log('✅ Participants from database:', totalParticipantsCount);
-        console.log('✅ Participant user IDs:', confirmedParticipants.map(p => p.user_id));
-        setTotalParticipants(totalParticipantsCount);
+        setLoadingVoteStatus(false);
+        return;
       }
 
-      console.log('📊 Votes:', votes.length);
-      console.log('📊 Votes list:', votes.map(v => v.from_user_id));
+      const votes = votesData || [];
+      const confirmedParticipants = participantsData || [];
+
+      console.log('📊 Votes:', votes.length, 'Participants:', confirmedParticipants.length);
 
       // Derive user's vote status from DB
       const currentUserVote = votes.find((vote) => vote.from_user_id === currentUserId);
@@ -112,24 +102,13 @@ export default function MatchSelectionScreen({
       // Store all votes for match detection
       setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
       setTotalVotes(votes.length);
-      
-      // CRITICAL DEBUG: Log the continue button condition
-      const votesCount = votes.length;
-      const participantsCount = participantsData?.length || participants.length;
-      const canContinueNow = votesCount === participantsCount && participantsCount > 0;
-      console.log('🔍 === CONTINUE BUTTON CONDITION ===');
-      console.log('🔍 Total votes:', votesCount);
-      console.log('🔍 Total participants:', participantsCount);
-      console.log('🔍 Votes === Participants?', votesCount === participantsCount);
-      console.log('🔍 Participants > 0?', participantsCount > 0);
-      console.log('🔍 Can continue?', canContinueNow);
-      console.log('🔍 User has voted?', !!currentUserVote);
+      setTotalParticipants(confirmedParticipants.length);
     } catch (error) {
       console.error('❌ Error in fetchVotesAndParticipants:', error);
     } finally {
       setLoadingVoteStatus(false);
     }
-  }, [eventId, currentLevel, currentUserId, participants]);
+  }, [eventId, currentLevel, currentUserId]);
 
   useEffect(() => {
     fetchVotesAndParticipants();
@@ -388,14 +367,6 @@ export default function MatchSelectionScreen({
 
   // PHASE 2: Continue button logic
   const canContinue = totalVotes === totalParticipants && totalParticipants > 0;
-  
-  // CRITICAL DEBUG: Log every render
-  console.log('🎨 === RENDER STATE ===');
-  console.log('🎨 totalVotes:', totalVotes);
-  console.log('🎨 totalParticipants:', totalParticipants);
-  console.log('🎨 canContinue:', canContinue);
-  console.log('🎨 userHasVoted:', userHasVoted);
-  console.log('🎨 loadingVoteStatus:', loadingVoteStatus);
 
   const handleContinue = useCallback(async () => {
     console.log('➡️ === CONTINUE PRESSED ===');

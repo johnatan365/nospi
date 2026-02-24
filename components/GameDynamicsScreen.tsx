@@ -59,12 +59,6 @@ let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   console.log('🎮 === GAME DYNAMICS SCREEN V2 ===');
-  console.log('🎮 Received activeParticipants count:', activeParticipants.length);
-  console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
-    user_id: p.user_id,
-    name: p.name,
-    confirmed: p.confirmed
-  })));
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
@@ -601,13 +595,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // Show match selection screen
   if (gamePhase === 'match_selection' && currentUserId) {
-    console.log('🎮 === RENDERING MATCH SELECTION SCREEN ===');
-    console.log('🎮 Passing participants count:', activeParticipants.length);
-    console.log('🎮 Passing participants:', activeParticipants.map(p => ({
-      user_id: p.user_id,
-      name: p.name
-    })));
-    
+    console.log('🎮 Rendering MatchSelectionScreen');
     return (
       <MatchSelectionScreen
         eventId={appointment.event_id}
