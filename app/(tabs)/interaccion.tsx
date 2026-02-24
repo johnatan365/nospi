@@ -65,13 +65,16 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Only set notification handler on native platforms
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 export default function InteraccionScreen() {
   const { user } = useSupabase();
@@ -132,6 +135,12 @@ export default function InteraccionScreen() {
   }, [appointment, checkInPhase]);
 
   const requestNotificationPermissions = useCallback(async () => {
+    // Skip on web - notifications not fully supported
+    if (Platform.OS === 'web') {
+      console.log('Notifications not available on web');
+      return;
+    }
+
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       console.log('Notification permission:', status);
@@ -141,6 +150,12 @@ export default function InteraccionScreen() {
   }, []);
 
   const scheduleNotifications = useCallback(async (startTime: string) => {
+    // Skip on web - notifications not fully supported
+    if (Platform.OS === 'web') {
+      console.log('Skipping notification scheduling on web');
+      return;
+    }
+
     try {
       const eventDate = new Date(startTime);
       const now = new Date();
