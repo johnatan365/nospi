@@ -33,19 +33,16 @@ export default function MatchSelectionScreen({
   onMatchComplete,
   triggerMatchAnimation,
 }: MatchSelectionScreenProps) {
-  console.log('💘 === MATCH SELECTION SCREEN V2 RENDERED ===');
-  console.log('💘 Props:', { eventId, currentLevel, currentUserId });
+  console.log('💘 === MATCH SELECTION SCREEN V3 - SIMPLIFIED ===');
+  console.log('💘 Event:', eventId, 'Level:', currentLevel, 'User:', currentUserId);
   
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [totalVotes, setTotalVotes] = useState(0);
-  const [totalParticipants, setTotalParticipants] = useState(0);
-  const [allVotes, setAllVotes] = useState<Array<{ user_id: string; selected_user_id: string | null }>>([]);
+  const [votes, setVotes] = useState<Array<{ from_user_id: string; selected_user_id: string | null }>>([]);
   const [userHasVoted, setUserHasVoted] = useState(false);
-  const [loadingVoteStatus, setLoadingVoteStatus] = useState(true);
+  const [loadingVotes, setLoadingVotes] = useState(true);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedUserName, setMatchedUserName] = useState('');
-  const [matchCheckDone, setMatchCheckDone] = useState(false);
   const [isAutoContinuing, setIsAutoContinuing] = useState(false);
   
   // Animation refs
@@ -53,15 +50,10 @@ export default function MatchSelectionScreen({
   const matchGlowAnimation = useRef(new Animated.Value(0)).current;
   const matchTextAnimation = useRef(new Animated.Value(0)).current;
   
-  // Refs for stable access in callbacks
-  const selectedUserIdRef = useRef(selectedUserId);
+  // Control refs
   const hasCheckedMatchRef = useRef(false);
   const autoContinueTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  useEffect(() => {
-    selectedUserIdRef.current = selectedUserId;
-  }, [selectedUserId]);
-
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
@@ -71,82 +63,50 @@ export default function MatchSelectionScreen({
     };
   }, []);
 
-  // PHASE 1: Fetch votes and participants on mount - ONLY ONCE
-  const fetchVotesAndParticipants = useCallback(async () => {
-    console.log('📊 === FETCHING VOTES AND PARTICIPANTS ===');
-    setLoadingVoteStatus(true);
-
+  // STEP 1: Fetch votes - ONLY on mount and when votes change in DB
+  const fetchVotes = useCallback(async () => {
+    console.log('📊 Fetching votes for event:', eventId, 'level:', currentLevel);
+    
     try {
-      // Fetch all votes for current event and level
-      const { data: votesData, error: votesError } = await supabase
+      const { data, error } = await supabase
         .from('event_matches_votes')
         .select('from_user_id, selected_user_id')
         .eq('event_id', eventId)
         .eq('level', currentLevel);
 
-      if (votesError) {
-        console.error('❌ Error fetching votes:', votesError);
-        setLoadingVoteStatus(false);
+      if (error) {
+        console.error('❌ Error fetching votes:', error);
         return;
       }
 
-      const votes = votesData || [];
+      const votesData = data || [];
+      console.log('✅ Votes fetched:', votesData.length);
+      console.log('📊 Votes detail:', votesData);
       
-      // Fetch participants directly from database
-      console.log('📊 Fetching participants from database...');
-      const { data: participantsData, error: participantsError } = await supabase
-        .from('event_participants')
-        .select('user_id, confirmed')
-        .eq('event_id', eventId)
-        .eq('confirmed', true);
-
-      if (participantsError) {
-        console.error('❌ Error fetching participants:', participantsError);
-        const totalParticipantsCount = participants.length;
-        console.log('⚠️ Using participants from prop as fallback:', totalParticipantsCount);
-        setTotalParticipants(totalParticipantsCount);
-      } else {
-        const confirmedParticipants = participantsData || [];
-        const totalParticipantsCount = confirmedParticipants.length;
-        console.log('✅ Participants from database:', totalParticipantsCount);
-        setTotalParticipants(totalParticipantsCount);
-      }
-
-      console.log('📊 Votes:', votes.length);
-
-      // Derive user's vote status from DB
-      const currentUserVote = votes.find((vote) => vote.from_user_id === currentUserId);
-      const hasVoted = !!currentUserVote;
+      setVotes(votesData);
       
+      // Check if current user has voted
+      const userVote = votesData.find(v => v.from_user_id === currentUserId);
+      const hasVoted = !!userVote;
       console.log('🔍 User has voted:', hasVoted);
-      console.log('🔍 Total votes:', votes.length);
-      console.log('🔍 Total participants:', participantsData?.length || participants.length);
-      
       setUserHasVoted(hasVoted);
-
-      // Store all votes for match detection
-      setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
-      setTotalVotes(votes.length);
       
-      const votesCount = votes.length;
-      const participantsCount = participantsData?.length || participants.length;
-      console.log('🔍 Can continue?', votesCount === participantsCount && participantsCount > 0);
     } catch (error) {
-      console.error('❌ Error in fetchVotesAndParticipants:', error);
+      console.error('❌ Error in fetchVotes:', error);
     } finally {
-      setLoadingVoteStatus(false);
+      setLoadingVotes(false);
     }
-  }, [eventId, currentLevel, currentUserId, participants]);
+  }, [eventId, currentLevel, currentUserId]);
 
-  // Initial fetch - only on mount
+  // Initial fetch
   useEffect(() => {
-    console.log('🔄 Initial fetch triggered');
-    fetchVotesAndParticipants();
-  }, [eventId, currentLevel]); // Removed fetchVotesAndParticipants from deps to prevent loops
+    console.log('🔄 Initial vote fetch');
+    fetchVotes();
+  }, [eventId, currentLevel]); // Only re-fetch if event or level changes
 
-  // Subscribe to vote changes
+  // STEP 2: Subscribe to vote changes
   useEffect(() => {
-    console.log('📡 === SUBSCRIBING TO VOTE CHANGES ===');
+    console.log('📡 Setting up vote subscription');
 
     const channel = supabase
       .channel(`votes_${eventId}_${currentLevel}`)
@@ -160,8 +120,7 @@ export default function MatchSelectionScreen({
         },
         (payload) => {
           console.log('📡 Vote change detected:', payload.eventType);
-          console.log('📡 Payload:', payload);
-          fetchVotesAndParticipants();
+          fetchVotes();
         }
       )
       .subscribe();
@@ -169,82 +128,62 @@ export default function MatchSelectionScreen({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [eventId, currentLevel, fetchVotesAndParticipants]);
+  }, [eventId, currentLevel, fetchVotes]);
 
-  // Auto-continue function
-  const handleAutoContinue = useCallback(async () => {
-    console.log('🚀 === AUTO-CONTINUING TO NEXT SCREEN ===');
-    setIsAutoContinuing(true);
-    
-    const nextLevel: QuestionLevel = 
-      currentLevel === 'divertido' ? 'sensual' :
-      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
-    
-    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
-      console.log('➡️ Auto-advancing to level', nextLevel);
-      await onMatchComplete(nextLevel, 'questions');
-    } else {
-      console.log('🏁 All levels complete - auto-moving to free phase');
-      await onMatchComplete(currentLevel, 'free_phase');
-    }
-  }, [currentLevel, onMatchComplete]);
-
-  // PHASE 3: Match detection - ONLY when all votes are in AND we haven't checked yet
+  // STEP 3: Check for matches when all votes are in
   useEffect(() => {
-    console.log('🔍 Match detection check - hasCheckedMatchRef:', hasCheckedMatchRef.current);
-    console.log('🔍 totalVotes:', totalVotes, 'totalParticipants:', totalParticipants);
-    
-    // Prevent multiple checks
+    // Only check once
     if (hasCheckedMatchRef.current) {
-      console.log('⚠️ Already checked for matches, skipping');
+      console.log('⚠️ Already checked for matches');
       return;
     }
 
-    // Only check when all votes are in
+    const totalVotes = votes.length;
+    const totalParticipants = participants.length;
+    
+    console.log('🔍 Match check - Votes:', totalVotes, 'Participants:', totalParticipants);
+    
+    // Wait until all participants have voted
     if (totalVotes !== totalParticipants || totalParticipants === 0) {
-      console.log('⚠️ Not all votes in yet, waiting...');
+      console.log('⏳ Waiting for all votes...');
       return;
     }
 
-    // Mark as checked to prevent re-runs
+    // Mark as checked
     hasCheckedMatchRef.current = true;
-    setMatchCheckDone(true);
-
-    console.log('🔍 === CHECKING FOR MATCHES (ONE TIME) ===');
-    console.log('🔍 Total votes:', totalVotes, 'Total participants:', totalParticipants);
-    console.log('🔍 All votes:', allVotes);
+    console.log('✅ All votes in - checking for matches');
 
     // Find reciprocal matches
-    const reciprocalMatches: Array<{ user1: string; user2: string }> = [];
+    const matches: Array<{ user1: string; user2: string }> = [];
     
-    allVotes.forEach((voteA) => {
+    votes.forEach((voteA) => {
       if (!voteA.selected_user_id) return;
       
-      const voteB = allVotes.find(
-        (voteC) =>
-          voteC.user_id === voteA.selected_user_id &&
-          voteC.selected_user_id === voteA.user_id
+      const voteB = votes.find(
+        (v) =>
+          v.from_user_id === voteA.selected_user_id &&
+          v.selected_user_id === voteA.from_user_id
       );
       
       if (voteB) {
-        const alreadyExists = reciprocalMatches.some(
+        const alreadyExists = matches.some(
           (m) =>
-            (m.user1 === voteA.user_id && m.user2 === voteB.user_id) ||
-            (m.user1 === voteB.user_id && m.user2 === voteA.user_id)
+            (m.user1 === voteA.from_user_id && m.user2 === voteB.from_user_id) ||
+            (m.user1 === voteB.from_user_id && m.user2 === voteA.from_user_id)
         );
         
         if (!alreadyExists) {
-          reciprocalMatches.push({ user1: voteA.user_id, user2: voteB.user_id });
-          console.log('💜 Reciprocal match found:', voteA.user_id, '<->', voteB.user_id);
+          matches.push({ user1: voteA.from_user_id, user2: voteB.from_user_id });
+          console.log('💜 Match found:', voteA.from_user_id, '<->', voteB.from_user_id);
         }
       }
     });
 
-    console.log('💜 Total reciprocal matches:', reciprocalMatches.length);
+    console.log('💜 Total matches:', matches.length);
 
-    // Check if current user is in a match
-    const currentUserMatch = reciprocalMatches.find(
-      (match) => match.user1 === currentUserId || match.user2 === currentUserId
+    // Check if current user has a match
+    const currentUserMatch = matches.find(
+      (m) => m.user1 === currentUserId || m.user2 === currentUserId
     );
 
     if (currentUserMatch) {
@@ -253,7 +192,7 @@ export default function MatchSelectionScreen({
           ? currentUserMatch.user2
           : currentUserMatch.user1;
 
-      console.log('✨ Current user has a match with:', matchedUserId);
+      console.log('✨ Current user matched with:', matchedUserId);
 
       const matchedParticipant = participants.find((p) => p.user_id === matchedUserId);
       const matchedName = matchedParticipant?.name || 'Alguien';
@@ -262,26 +201,42 @@ export default function MatchSelectionScreen({
       setShowMatchModal(true);
       triggerMatchAnimation(matchedUserId);
 
-      // Set timer to auto-continue after 5 seconds
-      console.log('⏱️ Setting auto-continue timer for 5 seconds');
+      // Auto-continue after 5 seconds
+      console.log('⏱️ Setting 5s timer for match');
       autoContinueTimerRef.current = setTimeout(() => {
-        console.log('⏱️ Auto-continue timer fired');
         handleAutoContinue();
       }, 5000);
     } else {
-      console.log('ℹ️ Current user has no match this round');
-      // If no match, auto-continue after a short delay
-      console.log('⏱️ No match - setting auto-continue timer for 2 seconds');
+      console.log('ℹ️ No match for current user');
+      // Auto-continue after 2 seconds
+      console.log('⏱️ Setting 2s timer for no match');
       autoContinueTimerRef.current = setTimeout(() => {
-        console.log('⏱️ Auto-continue timer fired (no match)');
         handleAutoContinue();
       }, 2000);
     }
-  }, [totalVotes, totalParticipants, allVotes, currentUserId, participants, triggerMatchAnimation, handleAutoContinue]);
+  }, [votes, participants, currentUserId, triggerMatchAnimation]);
+
+  // Auto-continue function
+  const handleAutoContinue = useCallback(async () => {
+    console.log('🚀 Auto-continuing to next phase');
+    setIsAutoContinuing(true);
+    
+    const nextLevel: QuestionLevel = 
+      currentLevel === 'divertido' ? 'sensual' :
+      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
+    
+    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
+      console.log('➡️ Advancing to level:', nextLevel);
+      await onMatchComplete(nextLevel, 'questions');
+    } else {
+      console.log('🏁 Moving to free phase');
+      await onMatchComplete(currentLevel, 'free_phase');
+    }
+  }, [currentLevel, onMatchComplete]);
 
   // Match animation
   const animateMatch = useCallback(() => {
-    console.log('🎉 === TRIGGERING MATCH ANIMATION ===');
+    console.log('🎉 Animating match');
     
     heartScale.setValue(0.5);
     matchGlowAnimation.setValue(0);
@@ -333,7 +288,7 @@ export default function MatchSelectionScreen({
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (error) {
-          console.log('⚠️ Haptic not available:', error);
+          console.log('⚠️ Haptic not available');
         }
       }, 500);
     }
@@ -347,7 +302,7 @@ export default function MatchSelectionScreen({
 
   const handleSelectUser = useCallback((userId: string) => {
     if (userHasVoted) {
-      console.log('⚠️ Cannot change selection - already voted');
+      console.log('⚠️ Cannot change - already voted');
       return;
     }
     console.log('👆 Selected user:', userId);
@@ -356,38 +311,30 @@ export default function MatchSelectionScreen({
 
   const handleSelectNone = useCallback(() => {
     if (userHasVoted) {
-      console.log('⚠️ Cannot change selection - already voted');
+      console.log('⚠️ Cannot change - already voted');
       return;
     }
-    console.log('👆 Selected: Ninguno por ahora');
+    console.log('👆 Selected: None');
     setSelectedUserId('none');
   }, [userHasVoted]);
 
-  // Vote confirmation
   const handleConfirmSelection = useCallback(async () => {
-    console.log('🔘 === CONFIRMING SELECTION ===');
+    console.log('🔘 Confirming selection');
     
-    const currentSelectedUserId = selectedUserIdRef.current;
-    
-    if (!currentSelectedUserId) {
+    if (!selectedUserId) {
       console.warn('⚠️ No selection made');
       return;
     }
 
-    if (loading) {
-      console.warn('⚠️ Already loading');
-      return;
-    }
-
-    if (userHasVoted) {
-      console.warn('⚠️ Already voted');
+    if (loading || userHasVoted) {
+      console.warn('⚠️ Already loading or voted');
       return;
     }
 
     setLoading(true);
 
     try {
-      const selectedUserIdValue = currentSelectedUserId === 'none' ? null : currentSelectedUserId;
+      const selectedUserIdValue = selectedUserId === 'none' ? null : selectedUserId;
       
       console.log('📝 Inserting vote:', {
         event_id: eventId,
@@ -396,16 +343,14 @@ export default function MatchSelectionScreen({
         selected_user_id: selectedUserIdValue,
       });
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('event_matches_votes')
         .insert({
           event_id: eventId,
           level: currentLevel,
           from_user_id: currentUserId,
           selected_user_id: selectedUserIdValue,
-        })
-        .select('id')
-        .single();
+        });
 
       if (error) {
         console.error('❌ Vote insert failed:', error);
@@ -413,29 +358,24 @@ export default function MatchSelectionScreen({
         return;
       }
 
-      console.log('✅ Vote inserted successfully:', data);
+      console.log('✅ Vote inserted successfully');
       
-      // Immediately update local state to reflect the vote
+      // Immediately update local state
       setUserHasVoted(true);
       
-      // Fetch updated vote counts immediately
-      console.log('🔄 Fetching updated votes immediately after confirmation');
-      await fetchVotesAndParticipants();
+      // Refetch votes to get updated count
+      await fetchVotes();
       
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     } finally {
       setLoading(false);
     }
-  }, [eventId, currentLevel, currentUserId, loading, userHasVoted, fetchVotesAndParticipants]);
-
-  // Continue button logic
-  const canContinue = totalVotes === totalParticipants && totalParticipants > 0;
+  }, [selectedUserId, loading, userHasVoted, eventId, currentLevel, currentUserId, fetchVotes]);
 
   const handleManualContinue = useCallback(async () => {
-    console.log('➡️ === MANUAL CONTINUE PRESSED ===');
+    console.log('➡️ Manual continue pressed');
     
-    // Clear auto-continue timer if user manually continues
     if (autoContinueTimerRef.current) {
       clearTimeout(autoContinueTimerRef.current);
       autoContinueTimerRef.current = null;
@@ -445,6 +385,9 @@ export default function MatchSelectionScreen({
   }, [handleAutoContinue]);
 
   const otherParticipants = participants.filter((p) => p.user_id !== currentUserId);
+  const totalVotes = votes.length;
+  const totalParticipants = participants.length;
+  const allVotedIn = totalVotes === totalParticipants && totalParticipants > 0;
 
   const glowOpacity = matchGlowAnimation.interpolate({
     inputRange: [0, 1],
@@ -453,7 +396,7 @@ export default function MatchSelectionScreen({
 
   const textOpacity = matchTextAnimation;
 
-  const isButtonDisabled = !selectedUserId || loading || userHasVoted || loadingVoteStatus;
+  const isButtonDisabled = !selectedUserId || loading || userHasVoted || loadingVotes;
   
   const buttonText = userHasVoted
     ? 'Elección confirmada ✅'
@@ -461,7 +404,9 @@ export default function MatchSelectionScreen({
     ? '⏳ Confirmando...'
     : 'Confirmar elección';
 
-  if (loadingVoteStatus) {
+  console.log('🎨 Rendering - Votes:', totalVotes, 'Participants:', totalParticipants, 'User voted:', userHasVoted);
+
+  if (loadingVotes) {
     return (
       <LinearGradient
         colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
@@ -492,8 +437,6 @@ export default function MatchSelectionScreen({
       </LinearGradient>
     );
   }
-
-  console.log('🎨 Rendering UI - userHasVoted:', userHasVoted, 'totalVotes:', totalVotes, 'totalParticipants:', totalParticipants, 'canContinue:', canContinue);
 
   return (
     <LinearGradient
@@ -594,16 +537,19 @@ export default function MatchSelectionScreen({
           <Text style={styles.confirmButtonText}>{buttonText}</Text>
         </TouchableOpacity>
 
-        {userHasVoted && !canContinue && (
+        {userHasVoted && !allVotedIn && (
           <View style={styles.waitingCard}>
             <ActivityIndicator size="large" color={nospiColors.purpleMid} />
             <Text style={styles.waitingText}>
               ⏳ Esperando a que todos elijan... ({totalVotes}/{totalParticipants})
             </Text>
+            <Text style={styles.waitingSubtext}>
+              Han votado: {totalVotes} de {totalParticipants} participantes
+            </Text>
           </View>
         )}
 
-        {canContinue && !showMatchModal && (
+        {allVotedIn && !showMatchModal && (
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleManualContinue}
@@ -811,6 +757,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
     marginTop: 16,
+  },
+  waitingSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
   },
   continueButton: {
     backgroundColor: '#10B981',
