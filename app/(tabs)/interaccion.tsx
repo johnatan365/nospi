@@ -552,14 +552,52 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
+  // CRITICAL: Auto-transition to 'ready' phase when minimum participants confirmed
+  useEffect(() => {
+    const checkAndTransitionToReady = async () => {
+      if (!appointment?.event_id) return;
+      if (gamePhase !== 'intro') return; // Only transition from intro phase
+      if (activeParticipants.length < 2) return; // Need at least 2 participants
+
+      console.log('🎮 === AUTO-TRANSITIONING TO READY PHASE ===');
+      console.log('🎮 Active participants:', activeParticipants.length);
+      console.log('🎮 Current game phase:', gamePhase);
+
+      try {
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'ready',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error transitioning to ready phase:', error);
+          return;
+        }
+
+        console.log('✅ Successfully transitioned to ready phase');
+      } catch (error) {
+        console.error('❌ Unexpected error during transition:', error);
+      }
+    };
+
+    checkAndTransitionToReady();
+  }, [appointment?.event_id, activeParticipants.length, gamePhase]);
+
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
   
-  // CRITICAL FIX: Check if all expected participants have confirmed
+  // CRITICAL FIX: Minimum 2 participants must confirm to continue
+  const minimumParticipantsConfirmed = activeParticipants.length >= 2;
+  
+  // Check if all expected participants have confirmed (optional - for display purposes)
   const allParticipantsConfirmed = totalExpectedParticipants > 0 && activeParticipants.length === totalExpectedParticipants;
   
   console.log('🔍 === CONTINUE BUTTON CHECK ===');
   console.log('🔍 Active participants:', activeParticipants.length);
   console.log('🔍 Total expected:', totalExpectedParticipants);
+  console.log('🔍 Minimum confirmed (>=2)?', minimumParticipantsConfirmed);
   console.log('🔍 All confirmed?', allParticipantsConfirmed);
   console.log('🔍 Game phase:', gamePhase);
 
@@ -768,11 +806,22 @@ export default function InteraccionScreen() {
               )}
             </View>
 
-            {!allParticipantsConfirmed && (
+            {!minimumParticipantsConfirmed && (
               <View style={styles.waitingCard}>
                 <ActivityIndicator size="large" color={nospiColors.purpleMid} />
                 <Text style={styles.waitingText}>
-                  ⏳ Esperando a que todos confirmen su llegada... ({participantCountText}/{totalParticipantsText})
+                  ⏳ Esperando a que al menos 2 participantes confirmen su llegada... ({participantCountText}/{totalParticipantsText})
+                </Text>
+              </View>
+            )}
+
+            {minimumParticipantsConfirmed && !allParticipantsConfirmed && (
+              <View style={styles.infoCard}>
+                <Text style={styles.infoText}>
+                  ✨ {participantCountText} participantes han confirmado su llegada
+                </Text>
+                <Text style={styles.infoTextSecondary}>
+                  El administrador puede iniciar la experiencia. Esperando a más participantes... ({participantCountText}/{totalParticipantsText})
                 </Text>
               </View>
             )}
