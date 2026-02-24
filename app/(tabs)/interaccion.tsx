@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Image, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -25,13 +25,12 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished';
+  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
   current_question: string | null;
   current_question_starter_id: string | null;
-  match_deadline_at: string | null;
 }
 
 interface Appointment {
@@ -40,8 +39,6 @@ interface Appointment {
   arrival_status: string;
   checked_in_at: string | null;
   location_confirmed: boolean;
-  experience_started: boolean;
-  presented: boolean;
   event: Event;
 }
 
@@ -87,67 +84,10 @@ export default function InteraccionScreen() {
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
   
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [showRitualModal, setShowRitualModal] = useState(false);
-  const [experienceStarted, setExperienceStarted] = useState(false);
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
-  const [userPresented, setUserPresented] = useState(false);
-  const [allPresented, setAllPresented] = useState(false);
-  const [ritualAnimation] = useState(new Animated.Value(0));
   
   // CRITICAL: Game state derived from event_state in database
   const [gamePhase, setGamePhase] = useState<string>('intro');
-
-  // Toast notification states
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTranslateY = useRef(new Animated.Value(-50)).current;
-  
-  const shownConfirmations = useRef(new Set<string>()).current;
-
-  const showToastNotification = useCallback((message: string) => {
-    console.log('Toast:', message);
-    setToastMessage(message);
-    setToastVisible(true);
-
-    toastOpacity.setValue(0);
-    toastTranslateY.setValue(-50);
-
-    Animated.parallel([
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.spring(toastTranslateY, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(toastOpacity, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(toastTranslateY, {
-          toValue: -50,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setToastVisible(false);
-      });
-    }, 2000);
-  }, [toastOpacity, toastTranslateY]);
 
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
@@ -168,7 +108,6 @@ export default function InteraccionScreen() {
 
   const updateCountdown = useCallback((startTime: string) => {
     const now = new Date();
-    // Add 10 minutes to the official event start time
     const eventDate = new Date(startTime);
     eventDate.setMinutes(eventDate.getMinutes() + 10);
     const diff = eventDate.getTime() - now.getTime();
@@ -274,9 +213,6 @@ export default function InteraccionScreen() {
       console.log('Participants loaded:', participants.length);
       
       setActiveParticipants(participants);
-      
-      const allHavePresented = participants.length > 0 && participants.every(p => p.is_presented);
-      setAllPresented(allHavePresented);
     } catch (error) {
       console.error('Failed to load participants:', error);
     }
@@ -289,10 +225,9 @@ export default function InteraccionScreen() {
     }
 
     try {
-      console.log('🔄 === LOADING APPOINTMENT (RECONNECTION SAFETY) ===');
+      console.log('🔄 === LOADING APPOINTMENT ===');
       console.log('Loading appointment for user:', user.id);
       
-      // CRITICAL FIX: Load appointments with status 'confirmada' OR 'anterior' to show finished events
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -301,8 +236,6 @@ export default function InteraccionScreen() {
           arrival_status,
           checked_in_at,
           location_confirmed,
-          experience_started,
-          presented,
           status,
           event:events!inner (
             id,
@@ -325,8 +258,7 @@ export default function InteraccionScreen() {
             current_question_index,
             answered_users,
             current_question,
-            current_question_starter_id,
-            match_deadline_at
+            current_question_starter_id
           )
         `)
         .eq('user_id', user.id)
@@ -349,7 +281,6 @@ export default function InteraccionScreen() {
 
       const now = new Date();
       
-      // CRITICAL FIX: Prioritize appointments with status 'confirmada' for today's event
       const todayConfirmedAppointment = data.find(apt => {
         if (apt.status !== 'confirmada') return false;
         if (!apt.event?.start_time) return false;
@@ -359,7 +290,6 @@ export default function InteraccionScreen() {
         return eventDayStart.getTime() === todayStart.getTime();
       });
 
-      // If no today's confirmed appointment, find upcoming confirmed appointment
       const upcomingAppointment = data.find(apt => {
         if (apt.status !== 'confirmada') return false;
         if (!apt.event?.start_time) return false;
@@ -375,8 +305,7 @@ export default function InteraccionScreen() {
       console.log('📊 Appointment status:', appointmentData.status);
       console.log('📊 Event state from database:', {
         game_phase: appointmentData.event?.game_phase,
-        current_level: appointmentData.event?.current_level,
-        match_deadline_at: appointmentData.event?.match_deadline_at
+        current_level: appointmentData.event?.current_level
       });
       
       // CRITICAL: Set game phase from database
@@ -390,9 +319,6 @@ export default function InteraccionScreen() {
       if (appointmentData.location_confirmed) {
         setCheckInPhase('confirmed');
       }
-      
-      setExperienceStarted(appointmentData.experience_started || false);
-      setUserPresented(appointmentData.presented || false);
       
       if (appointmentData.event && appointmentData.event.start_time) {
         checkIfEventDay(appointmentData.event.start_time);
@@ -475,111 +401,6 @@ export default function InteraccionScreen() {
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
-  const handleStartExperience = useCallback(async () => {
-    console.log('🎮 === STARTING EXPERIENCE ===');
-    
-    if (!appointment?.event_id || activeParticipants.length < 2) {
-      console.warn('⚠️ Cannot start - need at least 2 participants');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({ 
-          game_phase: 'ready',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error starting experience:', error);
-        return;
-      }
-
-      console.log('✅ Game phase updated to ready');
-      
-      // Update local state
-      setGamePhase('ready');
-      setShowRitualModal(true);
-      
-      Animated.timing(ritualAnimation, {
-        toValue: 1,
-        duration: 2000,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }).start();
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    }
-  }, [appointment, activeParticipants, ritualAnimation]);
-
-  const handleBeginExperience = useCallback(async () => {
-    if (!appointment) return;
-
-    try {
-      console.log('Begin experience');
-      setGamePhase('ready');
-      
-      const { error } = await supabase
-        .from('appointments')
-        .update({ experience_started: true })
-        .eq('id', appointment.id);
-
-      if (error) {
-        console.error('Error updating experience_started:', error);
-        return;
-      }
-
-      setShowRitualModal(false);
-      setShowWelcomeModal(true);
-    } catch (error) {
-      console.error('Error starting experience:', error);
-    }
-  }, [appointment]);
-
-  const handleContinueToPresentation = useCallback(() => {
-    console.log('Continue to presentation');
-    setGamePhase('ready');
-    setShowWelcomeModal(false);
-    setExperienceStarted(true);
-  }, []);
-
-  const handleUserPresented = useCallback(async () => {
-    if (!appointment || !user) return;
-
-    try {
-      console.log('User marked as presented');
-      
-      const presentedAt = new Date().toISOString();
-      
-      const { error } = await supabase
-        .from('event_participants')
-        .update({ 
-          is_presented: true,
-          presented_at: presentedAt
-        })
-        .eq('event_id', appointment.event_id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating presented status:', error);
-        return;
-      }
-
-      await supabase
-        .from('appointments')
-        .update({ presented: true })
-        .eq('id', appointment.id);
-
-      setUserPresented(true);
-      
-      loadActiveParticipants(appointment.event_id);
-    } catch (error) {
-      console.error('Error marking user as presented:', error);
-    }
-  }, [appointment, user, loadActiveParticipants]);
-
   // CRITICAL: Subscribe to event_state changes
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -602,8 +423,7 @@ export default function InteraccionScreen() {
           const newEvent = payload.new as any;
           console.log('📡 New state:', {
             game_phase: newEvent.game_phase,
-            current_level: newEvent.current_level,
-            match_deadline_at: newEvent.match_deadline_at
+            current_level: newEvent.current_level
           });
           
           // CRITICAL: Update game phase from database
@@ -624,8 +444,7 @@ export default function InteraccionScreen() {
                 current_question_index: newEvent.current_question_index,
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
-                current_question_starter_id: newEvent.current_question_starter_id,
-                match_deadline_at: newEvent.match_deadline_at
+                current_question_starter_id: newEvent.current_question_starter_id
               }
             };
           });
@@ -643,7 +462,7 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 === SCREEN FOCUSED - RECONNECTION SAFETY ===');
+      console.log('🔄 === SCREEN FOCUSED ===');
       
       if (user) {
         loadAppointment();
@@ -672,7 +491,7 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('Setting up Realtime subscription');
+    console.log('Setting up Realtime subscription for participants');
     
     loadActiveParticipants(appointment.event_id);
 
@@ -688,29 +507,6 @@ export default function InteraccionScreen() {
         },
         (payload) => {
           console.log('Participant update:', payload.eventType);
-          
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const newParticipant = payload.new as any;
-            
-            if (newParticipant.is_presented && newParticipant.user_id !== user.id) {
-              const presentationKey = `presented_${newParticipant.user_id}_${newParticipant.event_id}`;
-              
-              if (!shownConfirmations.has(presentationKey)) {
-                shownConfirmations.add(presentationKey);
-                
-                supabase
-                  .from('users')
-                  .select('name')
-                  .eq('id', newParticipant.user_id)
-                  .single()
-                  .then(({ data }) => {
-                    const userName = data?.name || 'Alguien';
-                    showToastNotification(`${userName} se ha presentado.`);
-                  });
-              }
-            }
-          }
-          
           loadActiveParticipants(appointment.event_id);
         }
       )
@@ -719,49 +515,9 @@ export default function InteraccionScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment, user, loadActiveParticipants, showToastNotification, shownConfirmations]);
-
-  // Auto-transition to game when all presented
-  useEffect(() => {
-    if (allPresented && appointment && gamePhase !== 'ready' && gamePhase !== 'question_active' && gamePhase !== 'match_selection') {
-      console.log('✅ All presented - Auto-transitioning to game');
-      
-      const autoStartGame = async () => {
-        try {
-          const { error } = await supabase
-            .from('events')
-            .update({ 
-              game_phase: 'ready',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error auto-transitioning:', error);
-          } else {
-            console.log('✅ Auto-transition successful to ready');
-            setGamePhase('ready');
-          }
-        } catch (error) {
-          console.error('❌ Unexpected error auto-transitioning:', error);
-        }
-      };
-
-      autoStartGame();
-    }
-  }, [allPresented, appointment, gamePhase]);
+  }, [appointment, user, loadActiveParticipants]);
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
-
-  const ritualOpacity = ritualAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const ritualScale = ritualAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.8, 1],
-  });
 
   if (loading) {
     return (
@@ -831,96 +587,8 @@ export default function InteraccionScreen() {
     );
   }
 
-  // Show presentation phase
-  if (experienceStarted && !allPresented && gamePhase !== 'ready' && gamePhase !== 'question_active' && gamePhase !== 'match_selection') {
-    const presentedCount = activeParticipants.filter(p => p.is_presented).length;
-    const totalCount = activeParticipants.length;
-    const progressText = `${presentedCount} de ${totalCount}`;
-
-    return (
-      <LinearGradient
-        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Presentación Guiada</Text>
-          <Text style={styles.subtitleWhite}>Antes de iniciar el juego</Text>
-
-          <View style={styles.phaseCard}>
-            <Text style={styles.phaseMessage}>
-              Cada uno diga su nombre y a qué se dedica.
-            </Text>
-          </View>
-
-          <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>Progreso</Text>
-            <Text style={styles.progressText}>{progressText}</Text>
-          </View>
-
-          <View style={styles.participantsSection}>
-            <Text style={styles.participantsTitleWhite}>Participantes</Text>
-            {activeParticipants.map((participant, index) => {
-              const displayName = participant.profiles?.name || 'Participante';
-              const displayCity = participant.profiles?.city || 'Ciudad';
-              
-              return (
-                <React.Fragment key={index}>
-                <View style={styles.participantCard}>
-                  <View style={styles.participantInfo}>
-                    {participant.profiles?.profile_photo_url ? (
-                      <Image 
-                        source={{ uri: participant.profiles.profile_photo_url }} 
-                        style={styles.participantPhoto}
-                      />
-                    ) : (
-                      <View style={styles.participantPhotoPlaceholder}>
-                        <Text style={styles.participantPhotoPlaceholderText}>
-                          {displayName.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={styles.participantDetails}>
-                      <Text style={styles.participantName}>{displayName}</Text>
-                      <Text style={styles.participantOccupation}>{displayCity}</Text>
-                    </View>
-                  </View>
-                  {participant.is_presented && (
-                    <View style={styles.presentedBadge}>
-                      <Text style={styles.presentedBadgeText}>✓</Text>
-                    </View>
-                  )}
-                </View>
-                </React.Fragment>
-              );
-            })}
-          </View>
-
-          {!userPresented && (
-            <TouchableOpacity
-              style={styles.presentedButton}
-              onPress={handleUserPresented}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.presentedButtonText}>Ya me presenté</Text>
-            </TouchableOpacity>
-          )}
-
-          {userPresented && !allPresented && (
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingText}>
-                ✓ Esperando a que todos se presenten...
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </LinearGradient>
-    );
-  }
-
   // CRITICAL: Show game dynamics based on game_phase from database
-  if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished') {
+  if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'questions' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
     console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
@@ -1005,7 +673,7 @@ export default function InteraccionScreen() {
           </View>
         )}
 
-        {checkInPhase === 'confirmed' && !experienceStarted && (
+        {checkInPhase === 'confirmed' && (
           <>
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
@@ -1030,18 +698,11 @@ export default function InteraccionScreen() {
                     return (
                       <React.Fragment key={index}>
                       <View style={styles.participantListItem}>
-                        {participant.profiles?.profile_photo_url ? (
-                          <Image 
-                            source={{ uri: participant.profiles.profile_photo_url }} 
-                            style={styles.participantListPhoto}
-                          />
-                        ) : (
-                          <View style={styles.participantListPhotoPlaceholder}>
-                            <Text style={styles.participantListPhotoText}>
-                              {displayName.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
+                        <View style={styles.participantListPhotoPlaceholder}>
+                          <Text style={styles.participantListPhotoText}>
+                            {displayName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
                         <Text style={styles.participantListName}>{displayName}</Text>
                       </View>
                       </React.Fragment>
@@ -1052,87 +713,18 @@ export default function InteraccionScreen() {
             </View>
 
             {canStartExperience && (
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={handleStartExperience}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.startButtonText}>🎉 Iniciar Experiencia</Text>
-              </TouchableOpacity>
+              <View style={styles.infoCard}>
+                <Text style={styles.infoText}>
+                  ✨ Todos los participantes están listos
+                </Text>
+                <Text style={styles.infoTextSecondary}>
+                  El administrador iniciará la experiencia pronto
+                </Text>
+              </View>
             )}
           </>
         )}
       </ScrollView>
-
-      {toastVisible && (
-        <Animated.View
-          style={[
-            styles.toastContainer,
-            {
-              opacity: toastOpacity,
-              transform: [{ translateY: toastTranslateY }],
-            },
-          ]}
-        >
-          <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>✨</Text>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </View>
-        </Animated.View>
-      )}
-
-      <Modal
-        visible={showRitualModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {}}
-      >
-        <View style={styles.modalOverlay}>
-          <Animated.View 
-            style={[
-              styles.ritualModalContent,
-              { opacity: ritualOpacity, transform: [{ scale: ritualScale }] }
-            ]}
-          >
-            <Text style={styles.ritualIcon}>✨</Text>
-            <Text style={styles.ritualTitle}>La experiencia comienza ahora.</Text>
-            <Text style={styles.ritualText}>
-              Los primeros minutos son cruciales para crear una mejor experiencia.
-            </Text>
-            <TouchableOpacity
-              style={styles.ritualButton}
-              onPress={handleBeginExperience}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.ritualButtonText}>Continuar</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showWelcomeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {}}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.welcomeModalContent}>
-            <Text style={styles.welcomeTitle}>Bienvenidos a Nospi</Text>
-            <Text style={styles.welcomeText}>
-              Esta dinámica está diseñada para romper el hielo y generar conexión real.{'\n\n'}
-              Todos deben participar para que funcione.
-            </Text>
-            <TouchableOpacity
-              style={styles.welcomeButton}
-              onPress={handleContinueToPresentation}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.welcomeButtonText}>Comenzar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }
@@ -1160,23 +752,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 48,
   },
-  titleWhite: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 48,
-  },
   subtitle: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     opacity: 0.8,
-    marginBottom: 24,
-  },
-  subtitleWhite: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.9,
     marginBottom: 24,
   },
   placeholderContainer: {
@@ -1382,12 +961,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  participantListPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
   participantListPhotoPlaceholder: {
     width: 40,
     height: 40,
@@ -1407,246 +980,25 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-  startButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
   buttonDisabled: {
     opacity: 0.5,
   },
-  phaseCard: {
+  infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     padding: 24,
     marginBottom: 16,
   },
-  phaseMessage: {
-    fontSize: 16,
+  infoText: {
+    fontSize: 18,
+    fontWeight: '600',
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    fontWeight: '600',
-  },
-  progressCard: {
-    backgroundColor: nospiColors.purpleLight,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  progressTitle: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  progressText: {
-    fontSize: 32,
-    color: nospiColors.purpleDark,
-    fontWeight: 'bold',
-  },
-  participantsSection: {
-    marginBottom: 16,
-  },
-  participantsTitleWhite: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
     marginBottom: 12,
   },
-  participantCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  participantInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  participantPhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-  },
-  participantPhotoPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: nospiColors.purpleLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  participantPhotoPlaceholderText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-  },
-  participantDetails: {
-    flex: 1,
-  },
-  participantName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 4,
-  },
-  participantOccupation: {
+  infoTextSecondary: {
     fontSize: 14,
     color: '#666',
-  },
-  presentedBadge: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  presentedBadgeText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  presentedButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  presentedButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  waitingCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#065F46',
     textAlign: 'center',
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  ritualModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 40,
-    width: '100%',
-    maxWidth: 500,
-    alignItems: 'center',
-  },
-  ritualIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  ritualTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  ritualText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 26,
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  ritualButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-  },
-  ritualButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  welcomeModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
-    width: '100%',
-    maxWidth: 500,
-  },
-  welcomeTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  welcomeText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 26,
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  welcomeButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  welcomeButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  toastContainer: {
-    position: 'absolute',
-    top: 80,
-    left: 20,
-    right: 20,
-    zIndex: 9999,
-  },
-  toastContent: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  toastIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  toastText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
-    flex: 1,
   },
 });
