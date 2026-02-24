@@ -166,7 +166,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     loadQuestions();
   }, [appointment.event_id]);
 
-  // PHASE 5: Restore state from event_state
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -195,12 +194,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         current_question_index: data.current_question_index,
       });
 
-      // PHASE 5: Derive UI from event_state
-      if (data.game_phase === 'match_selection') {
-        console.log('🔄 Restoring match_selection phase');
-        setGamePhase('match_selection');
-        setCurrentLevel(data.current_level || 'divertido');
-      } else if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
+      if (data.game_phase === 'in_progress' || data.game_phase === 'questions') {
         console.log('🔄 Restoring questions phase');
         setGamePhase('questions');
         setCurrentLevel(data.current_level || 'divertido');
@@ -224,7 +218,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     restoreStateFromDatabase();
   }, [appointment?.event_id, activeParticipants]);
 
-  // Subscribe to event_state changes
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -244,7 +237,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('📡 === EVENT_STATE UPDATE ===');
           const newEvent = payload.new as any;
           
-          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
+          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'in_progress') {
             console.log('📡 Updating to questions phase');
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -256,10 +249,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
-          } else if (newEvent.game_phase === 'match_selection') {
-            console.log('📡 Updating to match_selection phase');
-            setGamePhase('match_selection');
-            setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'free_phase') {
             console.log('📡 Updating to free_phase');
             setGamePhase('free_phase');
@@ -278,15 +267,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
-    console.log('🎮 User clicked Iniciar Dinámica button');
+    console.log('🎮 User clicked Iniciar experiencia button');
     
     if (!appointment?.event_id || loading) {
       console.warn('⚠️ Cannot start - already loading or no event');
       return;
     }
 
-    if (activeParticipants.length < 2) {
-      console.warn('⚠️ Cannot start - need at least 2 participants');
+    if (activeParticipants.length === 0) {
+      console.warn('⚠️ Cannot start - no participants');
       return;
     }
 
@@ -301,11 +290,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
       console.log('🎮 First question:', firstQuestion);
       
-      // CRITICAL FIX: current_level must be TEXT ('divertido', 'sensual', 'atrevido'), not a number
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'questions',
+          game_phase: 'in_progress',
           current_level: 'divertido',
           current_question_index: 0,
           answered_users: [],
@@ -324,14 +312,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Database updated successfully - dynamic started');
       console.log('✅ Realtime subscription will update UI automatically');
       
-      // Don't set local state here - let the realtime subscription handle it
-      // This prevents race conditions
-      
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       setLoading(false);
     } finally {
-      // Keep loading state for 2 seconds to prevent double-clicks
       setTimeout(() => {
         setLoading(false);
       }, 2000);
@@ -385,7 +369,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
-        // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
@@ -408,7 +391,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        // Level finished - advance to next level or finish
         console.log('⚡ Level finished');
 
         const nextLevel: QuestionLevel = 
@@ -416,7 +398,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
 
         if (currentLevel === 'atrevido') {
-          // All levels complete - transition to free_phase
           console.log('🏁 All levels complete - transitioning to free_phase');
           
           const { error } = await supabase
@@ -434,7 +415,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           console.log('✅ Transitioned to free_phase');
         } else {
-          // Continue to next level
           console.log('➡️ Advancing to next level:', nextLevel);
           
           const randomIndex = Math.floor(Math.random() * activeParticipants.length);
@@ -444,7 +424,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const { error } = await supabase
             .from('events')
             .update({
-              game_phase: 'questions',
+              game_phase: 'in_progress',
               current_level: nextLevel,
               current_question_index: 0,
               answered_users: [],
@@ -468,8 +448,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setLoading(false);
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
-
-
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -576,8 +554,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
   if (gamePhase === 'ready') {
-    const canStart = activeParticipants.length >= 2;
-    const buttonDisabled = loading || !canStart;
+    const buttonDisabled = loading || activeParticipants.length === 0;
 
     return (
       <LinearGradient
@@ -587,26 +564,30 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
+          <Text style={styles.titleWhite}>Experiencia Rompe Hielo</Text>
 
           <View style={styles.participantsListCard}>
             <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
-            {activeParticipants.map((participant, index) => {
-              const displayName = participant.name;
-              
-              return (
-                <React.Fragment key={index}>
-                  <View style={styles.participantListItem}>
-                    <View style={styles.participantListPhotoPlaceholder}>
-                      <Text style={styles.participantListPhotoText}>
-                        {displayName.charAt(0).toUpperCase()}
-                      </Text>
+            {activeParticipants.length === 0 ? (
+              <Text style={styles.noParticipantsText}>No hay participantes confirmados aún</Text>
+            ) : (
+              activeParticipants.map((participant, index) => {
+                const displayName = participant.name;
+                
+                return (
+                  <React.Fragment key={index}>
+                    <View style={styles.participantListItem}>
+                      <View style={styles.participantListPhotoPlaceholder}>
+                        <Text style={styles.participantListPhotoText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={styles.participantListName}>{displayName}</Text>
                     </View>
-                    <Text style={styles.participantListName}>{displayName}</Text>
-                  </View>
-                </React.Fragment>
-              );
-            })}
+                  </React.Fragment>
+                );
+              })
+            )}
           </View>
 
           <View style={styles.infoCard}>
@@ -620,24 +601,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </View>
 
-          {canStart ? (
-            <TouchableOpacity
-              style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
-              onPress={handleStartDynamic}
-              disabled={buttonDisabled}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.startButtonText}>
-                {loading ? '⏳ Iniciando...' : '🎉 Iniciar Dinámica'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingText}>
-                Se necesitan al menos 2 participantes confirmados
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity
+            style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
+            onPress={handleStartDynamic}
+            disabled={buttonDisabled}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.startButtonText}>
+              {loading ? '⏳ Iniciando...' : '🎉 Iniciar experiencia'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     );
@@ -835,6 +808,51 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
+  },
+  participantsListCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  participantsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+  },
+  noParticipantsText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 12,
+  },
+  participantListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  participantListPhotoPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantListPhotoText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantListName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
