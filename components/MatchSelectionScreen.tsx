@@ -79,12 +79,30 @@ export default function MatchSelectionScreen({
 
       const votes = votesData || [];
       
-      // CRITICAL FIX: Use participants prop instead of querying database
-      // The participants prop already contains the correct list of active participants
-      const totalParticipantsCount = participants.length;
+      // CRITICAL FIX: Fetch participants directly from database instead of relying on prop
+      // This ensures we always have the latest participant count even if the prop is stale
+      console.log('📊 Fetching participants from database...');
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('event_participants')
+        .select('user_id, confirmed')
+        .eq('event_id', eventId)
+        .eq('confirmed', true);
 
-      console.log('📊 Votes:', votes.length, 'Participants (from props):', totalParticipantsCount);
-      console.log('📊 Participants list:', participants.map(p => p.user_id));
+      if (participantsError) {
+        console.error('❌ Error fetching participants:', participantsError);
+        // Fallback to prop if database query fails
+        const totalParticipantsCount = participants.length;
+        console.log('⚠️ Using participants from prop as fallback:', totalParticipantsCount);
+        setTotalParticipants(totalParticipantsCount);
+      } else {
+        const confirmedParticipants = participantsData || [];
+        const totalParticipantsCount = confirmedParticipants.length;
+        console.log('✅ Participants from database:', totalParticipantsCount);
+        console.log('✅ Participant user IDs:', confirmedParticipants.map(p => p.user_id));
+        setTotalParticipants(totalParticipantsCount);
+      }
+
+      console.log('📊 Votes:', votes.length);
       console.log('📊 Votes list:', votes.map(v => v.from_user_id));
 
       // Derive user's vote status from DB
@@ -94,7 +112,6 @@ export default function MatchSelectionScreen({
       // Store all votes for match detection
       setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
       setTotalVotes(votes.length);
-      setTotalParticipants(totalParticipantsCount);
     } catch (error) {
       console.error('❌ Error in fetchVotesAndParticipants:', error);
     } finally {

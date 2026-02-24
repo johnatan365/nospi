@@ -179,18 +179,20 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('Loading participants for event:', eventId);
+      console.log('🔄 === LOADING ACTIVE PARTICIPANTS ===');
+      console.log('🔄 Event ID:', eventId);
       
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
-        console.error('Error loading participants:', error);
+        console.error('❌ Error loading participants:', error);
         return;
       }
 
+      // CRITICAL FIX: Only include participants who have confirmed (checked in with code)
       const participants: Participant[] = (data || [])
-        .filter((item: any) => item.user_name)
+        .filter((item: any) => item.user_name && item.confirmed === true)
         .map((item: any) => ({
           id: item.id,
           user_id: item.user_id,
@@ -210,11 +212,12 @@ export default function InteraccionScreen() {
           }
         }));
 
-      console.log('Participants loaded:', participants.length);
+      console.log('✅ Active participants loaded:', participants.length);
+      console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
       
       setActiveParticipants(participants);
     } catch (error) {
-      console.error('Failed to load participants:', error);
+      console.error('❌ Failed to load participants:', error);
     }
   }, []);
 
@@ -589,9 +592,16 @@ export default function InteraccionScreen() {
 
   // CRITICAL: Show game dynamics based on game_phase from database
   if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'questions' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
-    console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
+    console.log('🎮 === RENDERING GAME DYNAMICS SCREEN ===');
+    console.log('🎮 Game phase:', gamePhase);
+    console.log('🎮 Active participants count:', activeParticipants.length);
+    console.log('🎮 Active participants:', activeParticipants.map(p => ({
+      user_id: p.user_id,
+      name: p.profiles?.name,
+      confirmed: p.confirmed
+    })));
     
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants.map(p => ({
+    const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
       name: p.profiles?.name || 'Participante',
@@ -600,7 +610,11 @@ export default function InteraccionScreen() {
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
       presented: p.is_presented
-    }))} />;
+    }));
+    
+    console.log('🎮 Transformed participants count:', transformedParticipants.length);
+    
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
