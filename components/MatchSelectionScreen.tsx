@@ -116,7 +116,13 @@ export default function MatchSelectionScreen({
 
       // Derive user's vote status from DB
       const currentUserVote = votes.find((vote) => vote.from_user_id === currentUserId);
-      setUserHasVoted(!!currentUserVote);
+      const hasVoted = !!currentUserVote;
+      
+      console.log('🔍 User has voted:', hasVoted);
+      console.log('🔍 Total votes:', votes.length);
+      console.log('🔍 Total participants:', participantsData?.length || participants.length);
+      
+      setUserHasVoted(hasVoted);
 
       // Store all votes for match detection
       setAllVotes(votes.map(v => ({ user_id: v.from_user_id, selected_user_id: v.selected_user_id })));
@@ -124,8 +130,6 @@ export default function MatchSelectionScreen({
       
       const votesCount = votes.length;
       const participantsCount = participantsData?.length || participants.length;
-      console.log('🔍 Total votes:', votesCount);
-      console.log('🔍 Total participants:', participantsCount);
       console.log('🔍 Can continue?', votesCount === participantsCount && participantsCount > 0);
     } catch (error) {
       console.error('❌ Error in fetchVotesAndParticipants:', error);
@@ -136,6 +140,7 @@ export default function MatchSelectionScreen({
 
   // Initial fetch - only on mount
   useEffect(() => {
+    console.log('🔄 Initial fetch triggered');
     fetchVotesAndParticipants();
   }, [eventId, currentLevel]); // Removed fetchVotesAndParticipants from deps to prevent loops
 
@@ -155,6 +160,7 @@ export default function MatchSelectionScreen({
         },
         (payload) => {
           console.log('📡 Vote change detected:', payload.eventType);
+          console.log('📡 Payload:', payload);
           fetchVotesAndParticipants();
         }
       )
@@ -185,13 +191,18 @@ export default function MatchSelectionScreen({
 
   // PHASE 3: Match detection - ONLY when all votes are in AND we haven't checked yet
   useEffect(() => {
+    console.log('🔍 Match detection check - hasCheckedMatchRef:', hasCheckedMatchRef.current);
+    console.log('🔍 totalVotes:', totalVotes, 'totalParticipants:', totalParticipants);
+    
     // Prevent multiple checks
     if (hasCheckedMatchRef.current) {
+      console.log('⚠️ Already checked for matches, skipping');
       return;
     }
 
     // Only check when all votes are in
     if (totalVotes !== totalParticipants || totalParticipants === 0) {
+      console.log('⚠️ Not all votes in yet, waiting...');
       return;
     }
 
@@ -201,6 +212,7 @@ export default function MatchSelectionScreen({
 
     console.log('🔍 === CHECKING FOR MATCHES (ONE TIME) ===');
     console.log('🔍 Total votes:', totalVotes, 'Total participants:', totalParticipants);
+    console.log('🔍 All votes:', allVotes);
 
     // Find reciprocal matches
     const reciprocalMatches: Array<{ user1: string; user2: string }> = [];
@@ -397,13 +409,19 @@ export default function MatchSelectionScreen({
 
       if (error) {
         console.error('❌ Vote insert failed:', error);
+        setLoading(false);
         return;
       }
 
       console.log('✅ Vote inserted successfully:', data);
       
-      // Realtime will update UI
+      // Immediately update local state to reflect the vote
+      setUserHasVoted(true);
+      
+      // Fetch updated vote counts immediately
+      console.log('🔄 Fetching updated votes immediately after confirmation');
       await fetchVotesAndParticipants();
+      
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     } finally {
@@ -436,6 +454,7 @@ export default function MatchSelectionScreen({
   const textOpacity = matchTextAnimation;
 
   const isButtonDisabled = !selectedUserId || loading || userHasVoted || loadingVoteStatus;
+  
   const buttonText = userHasVoted
     ? 'Elección confirmada ✅'
     : loading
@@ -473,6 +492,8 @@ export default function MatchSelectionScreen({
       </LinearGradient>
     );
   }
+
+  console.log('🎨 Rendering UI - userHasVoted:', userHasVoted, 'totalVotes:', totalVotes, 'totalParticipants:', totalParticipants, 'canContinue:', canContinue);
 
   return (
     <LinearGradient
