@@ -230,23 +230,50 @@ export default function AdminPanelScreen() {
   };
 
   const handleViewAttendees = async (event: Event) => {
-    console.log('Loading attendees for event:', event.id);
+    console.log('=== LOADING ATTENDEES FOR EVENT ===');
+    console.log('Event ID:', event.id);
+    console.log('Event Name:', event.name);
+    
     setSelectedEvent(event);
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
 
     try {
+      // FIX: Query appointments table directly with proper join
+      console.log('Querying appointments table...');
       const { data, error } = await supabase
-        .rpc('get_event_attendees_for_admin', { p_event_id: event.id });
+        .from('appointments')
+        .select(`
+          id,
+          user_id,
+          event_id,
+          status,
+          payment_status,
+          created_at,
+          users:user_id (
+            id,
+            name,
+            email,
+            phone,
+            city,
+            country,
+            interested_in,
+            gender,
+            age
+          )
+        `)
+        .eq('event_id', event.id)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading event attendees:', error);
+        console.error('❌ Error loading event attendees:', error);
         Alert.alert('Error', 'No se pudieron cargar los asistentes: ' + error.message);
         setEventAttendees([]);
       } else {
-        console.log('✅ Attendees loaded:', data?.length || 0);
+        console.log('✅ Raw attendees data:', data);
+        console.log('✅ Attendees count:', data?.length || 0);
         
-        // Transform the flat data structure into the nested structure
+        // Transform the data to match the expected structure
         const transformedAttendees = data?.map((att: any) => ({
           id: att.id,
           user_id: att.user_id,
@@ -254,23 +281,14 @@ export default function AdminPanelScreen() {
           status: att.status,
           payment_status: att.payment_status,
           created_at: att.created_at,
-          users: {
-            id: att.user_id,
-            name: att.user_name,
-            email: att.user_email,
-            phone: att.user_phone,
-            city: att.user_city,
-            country: att.user_country,
-            interested_in: att.user_interested_in,
-            gender: att.user_gender,
-            age: att.user_age,
-          },
+          users: Array.isArray(att.users) ? att.users[0] : att.users,
         })) || [];
         
+        console.log('✅ Transformed attendees:', transformedAttendees.length);
         setEventAttendees(transformedAttendees);
       }
     } catch (error) {
-      console.error('Failed to load attendees:', error);
+      console.error('❌ Failed to load attendees:', error);
       Alert.alert('Error', 'Error inesperado al cargar asistentes');
       setEventAttendees([]);
     } finally {
