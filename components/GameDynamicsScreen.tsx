@@ -296,6 +296,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
       console.log('🎮 First question:', firstQuestion);
       
+      // CRITICAL FIX: Use 'questions' as game_phase (not 'question_active')
+      // and set current_level to 1 (number, not string)
       const { error } = await supabase
         .from('events')
         .update({
