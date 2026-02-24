@@ -46,6 +46,7 @@ export default function MatchSelectionScreen({
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedUserName, setMatchedUserName] = useState('');
   const [matchCheckDone, setMatchCheckDone] = useState(false);
+  const [isAutoContinuing, setIsAutoContinuing] = useState(false);
   
   // Animation refs
   const heartScale = useRef(new Animated.Value(0.8)).current;
@@ -55,10 +56,20 @@ export default function MatchSelectionScreen({
   // Refs for stable access in callbacks
   const selectedUserIdRef = useRef(selectedUserId);
   const hasCheckedMatchRef = useRef(false);
+  const autoContinueTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId;
   }, [selectedUserId]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoContinueTimerRef.current) {
+        clearTimeout(autoContinueTimerRef.current);
+      }
+    };
+  }, []);
 
   // PHASE 1: Fetch votes and participants on mount - ONLY ONCE
   const fetchVotesAndParticipants = useCallback(async () => {
@@ -154,6 +165,24 @@ export default function MatchSelectionScreen({
     };
   }, [eventId, currentLevel, fetchVotesAndParticipants]);
 
+  // Auto-continue function
+  const handleAutoContinue = useCallback(async () => {
+    console.log('🚀 === AUTO-CONTINUING TO NEXT SCREEN ===');
+    setIsAutoContinuing(true);
+    
+    const nextLevel: QuestionLevel = 
+      currentLevel === 'divertido' ? 'sensual' :
+      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
+    
+    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
+      console.log('➡️ Auto-advancing to level', nextLevel);
+      await onMatchComplete(nextLevel, 'questions');
+    } else {
+      console.log('🏁 All levels complete - auto-moving to free phase');
+      await onMatchComplete(currentLevel, 'free_phase');
+    }
+  }, [currentLevel, onMatchComplete]);
+
   // PHASE 3: Match detection - ONLY when all votes are in AND we haven't checked yet
   useEffect(() => {
     // Prevent multiple checks
@@ -220,10 +249,23 @@ export default function MatchSelectionScreen({
       setMatchedUserName(matchedName);
       setShowMatchModal(true);
       triggerMatchAnimation(matchedUserId);
+
+      // Set timer to auto-continue after 5 seconds
+      console.log('⏱️ Setting auto-continue timer for 5 seconds');
+      autoContinueTimerRef.current = setTimeout(() => {
+        console.log('⏱️ Auto-continue timer fired');
+        handleAutoContinue();
+      }, 5000);
     } else {
       console.log('ℹ️ Current user has no match this round');
+      // If no match, auto-continue after a short delay
+      console.log('⏱️ No match - setting auto-continue timer for 2 seconds');
+      autoContinueTimerRef.current = setTimeout(() => {
+        console.log('⏱️ Auto-continue timer fired (no match)');
+        handleAutoContinue();
+      }, 2000);
     }
-  }, [totalVotes, totalParticipants, allVotes, currentUserId, participants, triggerMatchAnimation]);
+  }, [totalVotes, totalParticipants, allVotes, currentUserId, participants, triggerMatchAnimation, handleAutoContinue]);
 
   // Match animation
   const animateMatch = useCallback(() => {
@@ -283,17 +325,6 @@ export default function MatchSelectionScreen({
         }
       }, 500);
     }
-
-    setTimeout(() => {
-      Animated.timing(heartScale, {
-        toValue: 0,
-        duration: 400,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }).start(() => {
-        setShowMatchModal(false);
-      });
-    }, 4000);
   }, [heartScale, matchGlowAnimation, matchTextAnimation]);
 
   useEffect(() => {
@@ -383,21 +414,17 @@ export default function MatchSelectionScreen({
   // Continue button logic
   const canContinue = totalVotes === totalParticipants && totalParticipants > 0;
 
-  const handleContinue = useCallback(async () => {
-    console.log('➡️ === CONTINUE PRESSED ===');
+  const handleManualContinue = useCallback(async () => {
+    console.log('➡️ === MANUAL CONTINUE PRESSED ===');
     
-    const nextLevel: QuestionLevel = 
-      currentLevel === 'divertido' ? 'sensual' :
-      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
-    
-    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
-      console.log('➡️ Advancing to level', nextLevel);
-      await onMatchComplete(nextLevel, 'questions');
-    } else {
-      console.log('🏁 All levels complete - moving to free phase');
-      await onMatchComplete(currentLevel, 'free_phase');
+    // Clear auto-continue timer if user manually continues
+    if (autoContinueTimerRef.current) {
+      clearTimeout(autoContinueTimerRef.current);
+      autoContinueTimerRef.current = null;
     }
-  }, [currentLevel, onMatchComplete]);
+    
+    await handleAutoContinue();
+  }, [handleAutoContinue]);
 
   const otherParticipants = participants.filter((p) => p.user_id !== currentUserId);
 
@@ -426,6 +453,22 @@ export default function MatchSelectionScreen({
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleMid} />
           <Text style={styles.loadingText}>Cargando...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (isAutoContinuing) {
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+          <Text style={styles.loadingText}>Continuando...</Text>
         </View>
       </LinearGradient>
     );
@@ -539,10 +582,10 @@ export default function MatchSelectionScreen({
           </View>
         )}
 
-        {canContinue && (
+        {canContinue && !showMatchModal && (
           <TouchableOpacity
             style={styles.continueButton}
-            onPress={handleContinue}
+            onPress={handleManualContinue}
             activeOpacity={0.8}
           >
             <Text style={styles.continueButtonText}>➡️ Continuar</Text>
