@@ -41,7 +41,7 @@ interface Appointment {
   event: Event;
 }
 
-interface Profile {
+interface User {
   id: string;
   name: string;
   email: string;
@@ -54,12 +54,12 @@ interface Profile {
 interface Participant {
   id: string;
   user_id: string;
-  event_id: string;
+  name: string;
+  profile_photo_url: string | null;
+  occupation: string;
   confirmed: boolean;
   check_in_time: string | null;
-  is_presented: boolean;
-  presented_at: string | null;
-  profiles: Profile | null;
+  presented: boolean;
 }
 
 export default function RompeHieloScreen() {
@@ -112,17 +112,16 @@ export default function RompeHieloScreen() {
     try {
       console.log('Loading active participants for event:', eventId);
       
+      // FIXED: Query appointments table instead of event_participants
+      // Join with users table (not profiles) to get participant details
       const { data, error } = await supabase
-        .from('event_participants')
+        .from('appointments')
         .select(`
           id,
           user_id,
-          event_id,
-          confirmed,
-          check_in_time,
-          is_presented,
-          presented_at,
-          profiles:user_id (
+          checked_in_at,
+          location_confirmed,
+          users:user_id (
             id,
             name,
             email,
@@ -133,16 +132,33 @@ export default function RompeHieloScreen() {
           )
         `)
         .eq('event_id', eventId)
-        .eq('confirmed', true);
+        .eq('status', 'confirmada')
+        .eq('payment_status', 'completed');
 
       if (error) {
         console.error('Error loading participants:', error);
         return;
       }
 
-      const participants: Participant[] = (data || []).filter(item => item.profiles);
+      console.log('Raw data from appointments:', data);
+
+      // Transform appointments data to participant format
+      const participants: Participant[] = (data || [])
+        .filter(item => item.users)
+        .map(item => ({
+          id: item.id,
+          user_id: item.user_id,
+          name: (item.users as any)?.name || 'Participante',
+          profile_photo_url: (item.users as any)?.profile_photo_url || null,
+          occupation: (item.users as any)?.city || 'Ciudad',
+          confirmed: true,
+          check_in_time: item.checked_in_at,
+          presented: item.location_confirmed || false
+        }));
+
       console.log('Active participants loaded:', participants.length);
-      setActiveParticipants(participants as any);
+      console.log('Participants:', participants);
+      setActiveParticipants(participants);
     } catch (error) {
       console.error('Failed to load participants:', error);
     }
@@ -341,6 +357,7 @@ export default function RompeHieloScreen() {
     
     loadActiveParticipants(appointment.event_id);
 
+    // FIXED: Subscribe to appointments table instead of event_participants
     const channel = supabase
       .channel(`rompe_hielo_participants_${appointment.event_id}`)
       .on(
@@ -348,7 +365,7 @@ export default function RompeHieloScreen() {
         {
           event: '*',
           schema: 'public',
-          table: 'event_participants',
+          table: 'appointments',
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
@@ -533,18 +550,7 @@ export default function RompeHieloScreen() {
     console.log('Game phase:', gamePhase);
     console.log('Active participants count:', activeParticipants.length);
     
-    const transformedParticipants = activeParticipants.map(p => ({
-      id: p.id,
-      user_id: p.user_id,
-      name: p.profiles?.name || 'Participante',
-      profile_photo_url: p.profiles?.profile_photo_url || null,
-      occupation: p.profiles?.city || 'Ciudad',
-      confirmed: p.confirmed,
-      check_in_time: p.check_in_time,
-      presented: p.is_presented
-    }));
-    
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants} />;
   }
 
   return (
@@ -572,14 +578,14 @@ export default function RompeHieloScreen() {
                 <Text style={styles.noParticipantsText}>No hay participantes confirmados aún</Text>
               ) : (
                 activeParticipants.map((participant, index) => {
-                  const displayName = participant.profiles?.name || 'Participante';
+                  const displayName = participant.name;
                   
                   return (
                     <React.Fragment key={index}>
                       <View style={styles.participantListItem}>
-                        {participant.profiles?.profile_photo_url ? (
+                        {participant.profile_photo_url ? (
                           <Image
-                            source={{ uri: participant.profiles.profile_photo_url }}
+                            source={{ uri: participant.profile_photo_url }}
                             style={styles.participantListPhoto}
                           />
                         ) : (
