@@ -732,7 +732,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>✨</Text>
-            <Text style={styles.infoTitle}>¡Todos los participantes están listos!</Text>
+            <Text style={styles.infoTitle}>¡Llegada confirmada!</Text>
             <Text style={styles.infoText}>
               Cada uno debe presionar el botón para confirmar que está listo para comenzar.
             </Text>
@@ -761,6 +761,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 })}
               </View>
 
+              <View style={styles.allReadyCard}>
+                <Text style={styles.allReadyIcon}>🎉</Text>
+                <Text style={styles.allReadyTitle}>Todos los participantes están listos</Text>
+                <Text style={styles.allReadySubtitle}>El administrador iniciará la experiencia pronto</Text>
+              </View>
+
               {!isUserReady && (
                 <TouchableOpacity
                   style={[styles.readyButton, loading && styles.buttonDisabled]}
@@ -780,6 +786,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                     ✓ Esperando a que todos estén listos...
                   </Text>
                 </View>
+              )}
+
+              {canStart && (
+                <TouchableOpacity
+                  style={[styles.continueButton, loading && styles.buttonDisabled]}
+                  onPress={handleStartDynamic}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.continueButtonText}>
+                    {loading ? '⏳ Iniciando...' : '➡️ Continuar'}
+                  </Text>
+                </TouchableOpacity>
               )}
 
               {readyCount === totalParticipants && totalParticipants >= 2 && (
@@ -1104,6 +1123,31 @@ const styles = StyleSheet.create({
   participantReadyNameDone: {
     opacity: 0.6,
   },
+  allReadyCard: {
+    backgroundColor: 'rgba(147, 51, 234, 0.15)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
+    alignItems: 'center',
+  },
+  allReadyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  allReadyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  allReadySubtitle: {
+    fontSize: 16,
+    color: '#E9D5FF',
+    textAlign: 'center',
+  },
   readyButton: {
     backgroundColor: '#FFD700',
     borderRadius: 20,
@@ -1277,14 +1321,19 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: '#10B981',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingVertical: 20,
     paddingHorizontal: 32,
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
   continueButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
