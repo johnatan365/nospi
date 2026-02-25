@@ -88,7 +88,6 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
-  const [totalExpectedParticipants, setTotalExpectedParticipants] = useState<number>(0);
   
   // CRITICAL: Game state derived from event_state in database
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -232,22 +231,6 @@ export default function InteraccionScreen() {
       console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
       
       setActiveParticipants(participants);
-      
-      // CRITICAL FIX: Get total expected participants from event_participants table
-      // This ensures we count all participants who should check in, not just appointments
-      const { data: allParticipantsData, error: allParticipantsError } = await supabase
-        .from('event_participants')
-        .select('user_id')
-        .eq('event_id', eventId);
-      
-      if (!allParticipantsError && allParticipantsData) {
-        const totalExpected = allParticipantsData.length;
-        console.log('✅ Total expected participants (from event_participants):', totalExpected);
-        console.log('✅ Expected user IDs:', allParticipantsData.map(p => p.user_id));
-        setTotalExpectedParticipants(totalExpected);
-      } else {
-        console.error('❌ Error fetching total expected participants:', allParticipantsError);
-      }
     } catch (error) {
       console.error('❌ Failed to load participants:', error);
     }
@@ -552,54 +535,7 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
-  // CRITICAL: Auto-transition to 'ready' phase when minimum participants confirmed
-  useEffect(() => {
-    const checkAndTransitionToReady = async () => {
-      if (!appointment?.event_id) return;
-      if (gamePhase !== 'intro') return; // Only transition from intro phase
-      if (activeParticipants.length < 2) return; // Need at least 2 participants
-
-      console.log('🎮 === AUTO-TRANSITIONING TO READY PHASE ===');
-      console.log('🎮 Active participants:', activeParticipants.length);
-      console.log('🎮 Current game phase:', gamePhase);
-
-      try {
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'ready',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (error) {
-          console.error('❌ Error transitioning to ready phase:', error);
-          return;
-        }
-
-        console.log('✅ Successfully transitioned to ready phase');
-      } catch (error) {
-        console.error('❌ Unexpected error during transition:', error);
-      }
-    };
-
-    checkAndTransitionToReady();
-  }, [appointment?.event_id, activeParticipants.length, gamePhase]);
-
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
-  
-  // CRITICAL FIX: Minimum 2 participants must confirm to continue
-  const minimumParticipantsConfirmed = activeParticipants.length >= 2;
-  
-  // Check if all expected participants have confirmed (optional - for display purposes)
-  const allParticipantsConfirmed = totalExpectedParticipants > 0 && activeParticipants.length === totalExpectedParticipants;
-  
-  console.log('🔍 === CONTINUE BUTTON CHECK ===');
-  console.log('🔍 Active participants:', activeParticipants.length);
-  console.log('🔍 Total expected:', totalExpectedParticipants);
-  console.log('🔍 Minimum confirmed (>=2)?', minimumParticipantsConfirmed);
-  console.log('🔍 All confirmed?', allParticipantsConfirmed);
-  console.log('🔍 Game phase:', gamePhase);
 
   if (loading) {
     return (
@@ -704,7 +640,6 @@ export default function InteraccionScreen() {
     : 'Ubicación se revelará próximamente';
   
   const participantCountText = activeParticipants.length.toString();
-  const totalParticipantsText = totalExpectedParticipants.toString();
 
   return (
     <LinearGradient
@@ -780,7 +715,7 @@ export default function InteraccionScreen() {
               <View style={styles.participantsListHeader}>
                 <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
                 <View style={styles.participantCountBadge}>
-                  <Text style={styles.participantCountText}>{participantCountText}/{totalParticipantsText}</Text>
+                  <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
               </View>
               
@@ -806,30 +741,10 @@ export default function InteraccionScreen() {
               )}
             </View>
 
-            {!minimumParticipantsConfirmed && (
-              <View style={styles.waitingCard}>
-                <ActivityIndicator size="large" color={nospiColors.purpleMid} />
-                <Text style={styles.waitingText}>
-                  ⏳ Esperando a que al menos 2 participantes confirmen su llegada... ({participantCountText}/{totalParticipantsText})
-                </Text>
-              </View>
-            )}
-
-            {minimumParticipantsConfirmed && !allParticipantsConfirmed && (
+            {canStartExperience && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoText}>
-                  ✨ {participantCountText} participantes han confirmado su llegada
-                </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El administrador puede iniciar la experiencia. Esperando a más participantes... ({participantCountText}/{totalParticipantsText})
-                </Text>
-              </View>
-            )}
-
-            {allParticipantsConfirmed && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ✨ Todos los participantes han confirmado su llegada
+                  ✨ Todos los participantes están listos
                 </Text>
                 <Text style={styles.infoTextSecondary}>
                   El administrador iniciará la experiencia pronto
@@ -1057,11 +972,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    minWidth: 60,
+    minWidth: 50,
     alignItems: 'center',
   },
   participantCountText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
@@ -1096,20 +1011,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
-  },
-  waitingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  waitingText: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    fontWeight: '600',
-    marginTop: 16,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
