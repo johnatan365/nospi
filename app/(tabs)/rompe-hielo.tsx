@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -71,6 +71,8 @@ export default function RompeHieloScreen() {
   const [isEventDay, setIsEventDay] = useState(false);
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [gamePhase, setGamePhase] = useState<string>('countdown');
+  const [isTimeToStart, setIsTimeToStart] = useState(false);
+  const [startingExperience, setStartingExperience] = useState(false);
 
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
@@ -93,9 +95,11 @@ export default function RompeHieloScreen() {
 
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
+      setIsTimeToStart(true);
       return;
     }
 
+    setIsTimeToStart(false);
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -399,10 +403,55 @@ export default function RompeHieloScreen() {
     return () => clearInterval(interval);
   }, [appointment?.event_id, appointment?.event?.start_time, gamePhase]);
 
+  const handleStartExperience = useCallback(async () => {
+    console.log('User clicked Comenzar button');
+    
+    if (!appointment?.event_id || startingExperience) {
+      console.warn('Cannot start - already loading or no event');
+      return;
+    }
+
+    if (activeParticipants.length === 0) {
+      console.warn('Cannot start - no participants');
+      return;
+    }
+
+    setStartingExperience(true);
+    
+    try {
+      console.log('Updating database to start experience...');
+      
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'ready',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('Error starting experience:', error);
+        setStartingExperience(false);
+        return;
+      }
+
+      console.log('Successfully started experience - transitioning to ready phase');
+      
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setStartingExperience(false);
+    } finally {
+      setTimeout(() => {
+        setStartingExperience(false);
+      }, 2000);
+    }
+  }, [appointment, activeParticipants, startingExperience]);
+
   console.log('Rompe Hielo Status:', {
     activeParticipants: activeParticipants.length,
     gamePhase: gamePhase,
-    isEventDay: isEventDay
+    isEventDay: isEventDay,
+    isTimeToStart: isTimeToStart
   });
 
   if (loading) {
@@ -498,13 +547,6 @@ export default function RompeHieloScreen() {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
-  
-  const locationText = appointment.event.is_location_revealed && appointment.event.location_name
-    ? appointment.event.location_name
-    : 'Ubicación se revelará próximamente';
-
   return (
     <LinearGradient
       colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
@@ -513,7 +555,8 @@ export default function RompeHieloScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Hoy es tu experiencia Rompe Hielo</Text>
+        <Text style={styles.title}>Hoy es tu experiencia</Text>
+        <Text style={styles.title}>Rompe Hielo</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
         <View style={styles.countdownCard}>
@@ -521,25 +564,62 @@ export default function RompeHieloScreen() {
           <Text style={styles.countdownTime}>{countdownDisplay}</Text>
         </View>
 
-        <View style={styles.eventCard}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
-            <View style={styles.eventHeaderText}>
-              <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{appointment.event.time}</Text>
+        {isTimeToStart && (
+          <>
+            <View style={styles.participantsListCard}>
+              <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+              {activeParticipants.length === 0 ? (
+                <Text style={styles.noParticipantsText}>No hay participantes confirmados aún</Text>
+              ) : (
+                activeParticipants.map((participant, index) => {
+                  const displayName = participant.profiles?.name || 'Participante';
+                  
+                  return (
+                    <React.Fragment key={index}>
+                      <View style={styles.participantListItem}>
+                        {participant.profiles?.profile_photo_url ? (
+                          <Image
+                            source={{ uri: participant.profiles.profile_photo_url }}
+                            style={styles.participantListPhoto}
+                          />
+                        ) : (
+                          <View style={styles.participantListPhotoPlaceholder}>
+                            <Text style={styles.participantListPhotoText}>
+                              {displayName.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.participantListName}>{displayName}</Text>
+                      </View>
+                    </React.Fragment>
+                  );
+                })
+              )}
             </View>
-          </View>
-          <Text style={styles.eventLocation}>{locationText}</Text>
-        </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>
-            ✨ La experiencia comenzará automáticamente 10 minutos después de la hora de inicio
-          </Text>
-          <Text style={styles.infoTextSecondary}>
-            Prepárate para romper el hielo y disfrutar
-          </Text>
-        </View>
+            <TouchableOpacity
+              style={[styles.startButton, (startingExperience || activeParticipants.length === 0) && styles.buttonDisabled]}
+              onPress={handleStartExperience}
+              disabled={startingExperience || activeParticipants.length === 0}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.startButtonText}>
+                {startingExperience ? '⏳ Iniciando...' : '🎉 Comenzar'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {!isTimeToStart && (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoText}>
+              ✨ La experiencia comenzará automáticamente 10 minutos después de la hora de inicio
+            </Text>
+            <Text style={styles.infoTextSecondary}>
+              Prepárate para romper el hielo y disfrutar
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -567,12 +647,14 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     marginBottom: 8,
     marginTop: 48,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     opacity: 0.8,
     marginBottom: 24,
+    textAlign: 'center',
   },
   placeholderContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -648,38 +730,78 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     letterSpacing: 2,
   },
-  eventCard: {
+  participantsListCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
-    padding: 20,
+    padding: 24,
     marginBottom: 16,
   },
-  eventHeader: {
+  participantsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  noParticipantsText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 12,
+  },
+  participantListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  eventIconLarge: {
-    fontSize: 40,
-    marginRight: 16,
+  participantListPhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
   },
-  eventHeaderText: {
-    flex: 1,
+  participantListPhotoPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  eventType: {
-    fontSize: 22,
+  participantListPhotoText: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
-  eventTime: {
+  participantListName: {
     fontSize: 16,
-    color: nospiColors.purpleMid,
-    fontWeight: '600',
-    marginTop: 4,
+    color: '#333',
+    fontWeight: '500',
   },
-  eventLocation: {
-    fontSize: 14,
-    color: '#666',
+  startButton: {
+    backgroundColor: '#FFD700',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+    marginBottom: 16,
+  },
+  startButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a0b2e',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
