@@ -74,7 +74,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime' | 'ratings';
+type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime' | 'matches';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -159,6 +159,7 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
+    confirmation_code: '1986',
   });
 
   // Event questions management (for specific event)
@@ -181,10 +182,11 @@ export default function AdminPanelScreen() {
   const [newQuestionText, setNewQuestionText] = useState('');
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
 
-  // Ratings only (matches removed)
-  const [selectedEventForRatings, setSelectedEventForRatings] = useState<string | null>(null);
+  // Matches and ratings
+  const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
+  const [eventMatches, setEventMatches] = useState<any[]>([]);
   const [eventRatings, setEventRatings] = useState<any[]>([]);
-  const [loadingRatings, setLoadingRatings] = useState(false);
+  const [loadingMatches, setLoadingMatches] = useState(false);
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
@@ -620,6 +622,11 @@ export default function AdminPanelScreen() {
         return;
       }
 
+      let finalConfirmationCode = eventForm.confirmation_code.trim();
+      if (!finalConfirmationCode) {
+        finalConfirmationCode = '1986';
+      }
+
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       const combinedDate = new Date(combinedDateString);
 
@@ -650,6 +657,7 @@ export default function AdminPanelScreen() {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
+        confirmation_code: finalConfirmationCode,
       };
 
       console.log('Saving event data:', eventData);
@@ -710,6 +718,7 @@ export default function AdminPanelScreen() {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
+        confirmation_code: '1986',
       });
       setEventQuestions({
         divertido: [],
@@ -1219,16 +1228,34 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     }
   };
 
-  const loadEventRatings = async (eventId: string) => {
-    setLoadingRatings(true);
+  const loadEventMatchesAndRatings = async (eventId: string) => {
+    setLoadingMatches(true);
     try {
+      // Load matches
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('event_matches')
+        .select(`
+          *,
+          user1:users!event_matches_user1_id_fkey(id, name, email),
+          user2:users!event_matches_user2_id_fkey(id, name, email)
+        `)
+        .eq('event_id', eventId)
+        .order('level', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (matchesError) {
+        console.error('Error loading matches:', matchesError);
+      } else {
+        setEventMatches(matchesData || []);
+      }
+
       // Load ratings
       const { data: ratingsData, error: ratingsError } = await supabase
         .from('event_ratings')
         .select(`
           *,
-          rater:profiles!event_ratings_rater_user_id_fkey(id, name),
-          rated:profiles!event_ratings_rated_user_id_fkey(id, name)
+          rater:users!event_ratings_rater_user_id_fkey(id, name),
+          rated:users!event_ratings_rated_user_id_fkey(id, name)
         `)
         .eq('event_id', eventId)
         .order('created_at', { ascending: false });
@@ -1239,9 +1266,9 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         setEventRatings(ratingsData || []);
       }
     } catch (error) {
-      console.error('Failed to load ratings:', error);
+      console.error('Failed to load matches and ratings:', error);
     } finally {
-      setLoadingRatings(false);
+      setLoadingMatches(false);
     }
   };
 
@@ -1314,6 +1341,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
+          const confirmationCode = event.confirmation_code || '1986';
           
           const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
@@ -1332,6 +1360,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
+                <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
               
               {/* NEW: Single "Configurar" button */}
@@ -1506,17 +1535,17 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     );
   };
 
-  const renderRatings = () => {
-    const selectedEvent = events.find(e => e.id === selectedEventForRatings);
+  const renderMatches = () => {
+    const selectedEvent = events.find(e => e.id === selectedEventForMatches);
     
     return (
       <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Calificaciones de Participantes</Text>
+        <Text style={styles.sectionTitle}>Matches y Calificaciones</Text>
         
-        {!selectedEventForRatings ? (
+        {!selectedEventForMatches ? (
           <View style={styles.realtimeInfo}>
             <Text style={styles.realtimeInfoText}>
-              Selecciona un evento desde la vista de Eventos para ver las calificaciones
+              Selecciona un evento desde la vista de Eventos para ver los matches y calificaciones
             </Text>
             <TouchableOpacity
               style={styles.actionButton}
@@ -1538,36 +1567,67 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
               </View>
             )}
 
-            {loadingRatings ? (
+            {loadingMatches ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-                <Text style={styles.loadingText}>Cargando calificaciones...</Text>
+                <Text style={styles.loadingText}>Cargando datos...</Text>
               </View>
             ) : (
-              <View style={styles.ratingsSection}>
-                <Text style={styles.subsectionTitle}>⭐ Calificaciones ({eventRatings.length})</Text>
-                {eventRatings.length === 0 ? (
-                  <Text style={styles.emptyText}>No hay calificaciones registradas para este evento</Text>
-                ) : (
-                  eventRatings.map((rating) => {
-                    const stars = '⭐'.repeat(rating.rating);
-                    
-                    return (
-                      <View key={rating.id} style={styles.ratingItem}>
-                        <View style={styles.ratingHeader}>
-                          <Text style={styles.ratingStars}>{stars} ({rating.rating}/5)</Text>
-                          <Text style={styles.ratingDate}>
-                            {new Date(rating.created_at).toLocaleString('es-ES')}
+              <>
+                <View style={styles.matchesSection}>
+                  <Text style={styles.subsectionTitle}>💜 Matches por Nivel ({eventMatches.length})</Text>
+                  {eventMatches.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay matches registrados para este evento</Text>
+                  ) : (
+                    eventMatches.map((match) => {
+                      const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '😘' : '🔥';
+                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      
+                      return (
+                        <View key={match.id} style={styles.matchItem}>
+                          <View style={styles.matchHeader}>
+                            <Text style={styles.matchLevel}>{levelEmoji} {levelText}</Text>
+                            <Text style={styles.matchDate}>
+                              {new Date(match.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.matchUsers}>
+                            👤 {match.user1?.name || 'Usuario 1'} ↔️ {match.user2?.name || 'Usuario 2'}
+                          </Text>
+                          <Text style={styles.matchEmails}>
+                            📧 {match.user1?.email || 'N/A'} ↔️ {match.user2?.email || 'N/A'}
                           </Text>
                         </View>
-                        <Text style={styles.ratingUsers}>
-                          👤 {rating.rater?.name || 'Usuario'} calificó a {rating.rated?.name || 'Usuario'}
-                        </Text>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={styles.ratingsSection}>
+                  <Text style={styles.subsectionTitle}>⭐ Calificaciones ({eventRatings.length})</Text>
+                  {eventRatings.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay calificaciones registradas para este evento</Text>
+                  ) : (
+                    eventRatings.map((rating) => {
+                      const stars = '⭐'.repeat(rating.rating);
+                      
+                      return (
+                        <View key={rating.id} style={styles.ratingItem}>
+                          <View style={styles.ratingHeader}>
+                            <Text style={styles.ratingStars}>{stars} ({rating.rating}/5)</Text>
+                            <Text style={styles.ratingDate}>
+                              {new Date(rating.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.ratingUsers}>
+                            👤 {rating.rater?.name || 'Usuario'} calificó a {rating.rated?.name || 'Usuario'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </>
             )}
           </>
         )}
@@ -1666,11 +1726,11 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, currentView === 'ratings' && styles.tabActive]}
-            onPress={() => setCurrentView('ratings')}
+            style={[styles.tab, currentView === 'matches' && styles.tabActive]}
+            onPress={() => setCurrentView('matches')}
           >
-            <Text style={[styles.tabText, currentView === 'ratings' && styles.tabTextActive]}>
-              ⭐ Calificaciones
+            <Text style={[styles.tabText, currentView === 'matches' && styles.tabTextActive]}>
+              💜 Matches
             </Text>
           </TouchableOpacity>
         </View>
@@ -1682,7 +1742,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           {currentView === 'users' && renderUsers()}
           {currentView === 'appointments' && renderAppointments()}
           {currentView === 'realtime' && renderRealtime()}
-          {currentView === 'ratings' && renderRatings()}
+          {currentView === 'matches' && renderMatches()}
         </ScrollView>
       </View>
 
@@ -1754,12 +1814,12 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                     style={[styles.configActionButton, { backgroundColor: '#EC4899' }]}
                     onPress={() => {
                       setShowConfigModal(false);
-                      setSelectedEventForRatings(selectedEventForConfig.id);
-                      loadEventRatings(selectedEventForConfig.id);
-                      setCurrentView('ratings');
+                      setSelectedEventForMatches(selectedEventForConfig.id);
+                      loadEventMatchesAndRatings(selectedEventForConfig.id);
+                      setCurrentView('matches');
                     }}
                   >
-                    <Text style={styles.configActionButtonText}>⭐ Ver Calificaciones</Text>
+                    <Text style={styles.configActionButtonText}>💜 Ver Matches y Calificaciones</Text>
                   </TouchableOpacity>
 
                   {selectedEventForConfig.event_status === 'draft' && (
@@ -2037,6 +2097,14 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 keyboardType="numeric"
                 value={String(eventForm.max_participants)}
                 onChangeText={(text) => setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })}
+              />
+
+              <Text style={styles.inputLabel}>Código de Confirmación</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1986"
+                value={eventForm.confirmation_code}
+                onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
               />
 
               <View style={styles.checkboxContainer}>

@@ -4,9 +4,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'questions' | 'free_phase';
+type GamePhase = 'ready' | 'questions' | 'match_selection' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -57,7 +58,7 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 === GAME DYNAMICS SCREEN V3 ===');
+  console.log('🎮 === GAME DYNAMICS SCREEN V2 ===');
   console.log('🎮 Received activeParticipants count:', activeParticipants.length);
   console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
     user_id: p.user_id,
@@ -74,7 +75,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
-  const [totalParticipantsCount, setTotalParticipantsCount] = useState(0);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -167,55 +167,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     loadQuestions();
   }, [appointment.event_id]);
 
-  useEffect(() => {
-    const loadTotalParticipants = async () => {
-      if (!appointment?.event_id) return;
-
-      try {
-        const { count, error } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('event_id', appointment.event_id)
-          .eq('status', 'confirmada')
-          .eq('payment_status', 'completed');
-
-        if (error) {
-          console.error('Error loading total participants count:', error);
-          return;
-        }
-
-        const totalCount = count || 0;
-        console.log('📊 Total participants in database:', totalCount);
-        setTotalParticipantsCount(totalCount);
-      } catch (error) {
-        console.error('Failed to load total participants:', error);
-      }
-    };
-
-    loadTotalParticipants();
-
-    const channel = supabase
-      .channel(`participants_count_${appointment.event_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'appointments',
-          filter: `event_id=eq.${appointment.event_id}`,
-        },
-        () => {
-          console.log('📊 Participants count changed - reloading');
-          loadTotalParticipants();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [appointment?.event_id]);
-
+  // PHASE 5: Restore state from event_state
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -244,7 +196,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         current_question_index: data.current_question_index,
       });
 
-      if (data.game_phase === 'in_progress' || data.game_phase === 'questions') {
+      // PHASE 5: Derive UI from event_state
+      if (data.game_phase === 'match_selection') {
+        console.log('🔄 Restoring match_selection phase');
+        setGamePhase('match_selection');
+        setCurrentLevel(data.current_level || 'divertido');
+      } else if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
         console.log('🔄 Restoring questions phase');
         setGamePhase('questions');
         setCurrentLevel(data.current_level || 'divertido');
@@ -268,6 +225,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     restoreStateFromDatabase();
   }, [appointment?.event_id, activeParticipants]);
 
+  // Subscribe to event_state changes
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -287,7 +245,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('📡 === EVENT_STATE UPDATE ===');
           const newEvent = payload.new as any;
           
-          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'in_progress') {
+          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
             console.log('📡 Updating to questions phase');
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -299,6 +257,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
+          } else if (newEvent.game_phase === 'match_selection') {
+            console.log('📡 Updating to match_selection phase');
+            setGamePhase('match_selection');
+            setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'free_phase') {
             console.log('📡 Updating to free_phase');
             setGamePhase('free_phase');
@@ -317,15 +279,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
-    console.log('🎮 User clicked Iniciar experiencia button');
+    console.log('🎮 User clicked Iniciar Dinámica button');
     
     if (!appointment?.event_id || loading) {
       console.warn('⚠️ Cannot start - already loading or no event');
       return;
     }
 
-    if (activeParticipants.length === 0) {
-      console.warn('⚠️ Cannot start - no participants');
+    if (activeParticipants.length < 2) {
+      console.warn('⚠️ Cannot start - need at least 2 participants');
       return;
     }
 
@@ -340,10 +302,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
       console.log('🎮 First question:', firstQuestion);
       
+      // CRITICAL FIX: current_level must be TEXT ('divertido', 'sensual', 'atrevido'), not a number
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'in_progress',
+          game_phase: 'questions',
           current_level: 'divertido',
           current_question_index: 0,
           answered_users: [],
@@ -362,10 +325,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Database updated successfully - dynamic started');
       console.log('✅ Realtime subscription will update UI automatically');
       
+      // Don't set local state here - let the realtime subscription handle it
+      // This prevents race conditions
+      
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       setLoading(false);
     } finally {
+      // Keep loading state for 2 seconds to prevent double-clicks
       setTimeout(() => {
         setLoading(false);
       }, 2000);
@@ -419,6 +386,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
+        // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
@@ -441,56 +409,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        console.log('⚡ Level finished');
+        // Level finished - transition to match selection
+        console.log('⚡ Transitioning to match_selection');
 
-        const nextLevel: QuestionLevel = 
-          currentLevel === 'divertido' ? 'sensual' :
-          currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'match_selection',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
 
-        if (currentLevel === 'atrevido') {
-          console.log('🏁 All levels complete - transitioning to free_phase');
-          
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'free_phase',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error transitioning to free_phase:', error);
-            return;
-          }
-
-          console.log('✅ Transitioned to free_phase');
-        } else {
-          console.log('➡️ Advancing to next level:', nextLevel);
-          
-          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-          const newStarterUserId = activeParticipants[randomIndex].user_id;
-          const firstQuestion = QUESTIONS[nextLevel][0];
-
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'in_progress',
-              current_level: nextLevel,
-              current_question_index: 0,
-              answered_users: [],
-              current_question: firstQuestion,
-              current_question_starter_id: newStarterUserId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error starting next level:', error);
-            return;
-          }
-
-          console.log('✅ Started next level:', nextLevel);
+        if (error) {
+          console.error('❌ Error transitioning to match selection:', error);
+          return;
         }
+
+        console.log('✅ Level finished - transitioned to match selection');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -498,6 +433,67 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setLoading(false);
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
+
+  // PHASE 4: Match complete callback
+  const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
+    console.log('💘 === MATCH COMPLETE ===');
+    console.log('💘 Next level:', nextLevel, 'Next phase:', nextPhase);
+    
+    if (!appointment?.event_id) return;
+
+    setLoading(true);
+
+    try {
+      if (nextPhase === 'questions') {
+        // Continue to next level
+        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+        const newStarterUserId = activeParticipants[randomIndex].user_id;
+        const firstQuestion = QUESTIONS[nextLevel][0];
+
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'questions',
+            current_level: nextLevel,
+            current_question_index: 0,
+            answered_users: [],
+            current_question: firstQuestion,
+            current_question_starter_id: newStarterUserId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error starting next level:', error);
+          return;
+        }
+
+        console.log('✅ Started next level:', nextLevel);
+      } else {
+        // All levels complete - end game
+        console.log('🏁 All levels complete - transitioning to free_phase');
+        
+        const { error } = await supabase
+          .from('events')
+          .update({
+            game_phase: 'free_phase',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', appointment.event_id);
+
+        if (error) {
+          console.error('❌ Error ending game:', error);
+          return;
+        }
+
+        console.log('✅ Game ended');
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, activeParticipants]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -603,9 +599,32 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
+  // Show match selection screen
+  if (gamePhase === 'match_selection' && currentUserId) {
+    console.log('🎮 === RENDERING MATCH SELECTION SCREEN ===');
+    console.log('🎮 Passing participants count:', activeParticipants.length);
+    console.log('🎮 Passing participants:', activeParticipants.map(p => ({
+      user_id: p.user_id,
+      name: p.name
+    })));
+    
+    return (
+      <MatchSelectionScreen
+        eventId={appointment.event_id}
+        currentLevel={currentLevel}
+        currentUserId={currentUserId}
+        participants={activeParticipants}
+        onMatchComplete={handleMatchComplete}
+        triggerMatchAnimation={(matchedUserId) => {
+          console.log('✨ Match animation triggered for:', matchedUserId);
+        }}
+      />
+    );
+  }
+
   if (gamePhase === 'ready') {
-    const buttonDisabled = loading || totalParticipantsCount === 0;
-    const participantsText = totalParticipantsCount === 1 ? 'participante' : 'participantes';
+    const canStart = activeParticipants.length >= 2;
+    const buttonDisabled = loading || !canStart;
 
     return (
       <LinearGradient
@@ -615,35 +634,35 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Experiencia Rompe Hielo</Text>
-
-          <View style={styles.participantsCountCard}>
-            <Text style={styles.participantsCountIcon}>👥</Text>
-            <Text style={styles.participantsCountNumber}>{totalParticipantsCount}</Text>
-            <Text style={styles.participantsCountLabel}>{participantsText} confirmados</Text>
-          </View>
+          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
 
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>✨</Text>
-            <Text style={styles.infoTitle}>Esta noche vivirán una experiencia diferente</Text>
+            <Text style={styles.infoTitle}>¡Comienza la experiencia!</Text>
             <Text style={styles.infoText}>
-              Nospi los guiará por 3 niveles de preguntas diseñadas para romper el hielo y generar conexiones reales.{'\n\n'}
-              Cada nivel aumenta la profundidad de la conversación.{'\n'}
-              No se trata de responder perfecto, sino de disfrutar y dejar que la charla fluya.{'\n\n'}
-              Relájense, diviértanse y déjense sorprender.
+              Responden juntos, se escuchan y se conocen mejor.{'\n'}
+              El sistema elegirá quién rompe el hielo 😉
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
-            onPress={handleStartDynamic}
-            disabled={buttonDisabled}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.startButtonText}>
-              {loading ? '⏳ Iniciando...' : '🎉 Iniciar experiencia'}
-            </Text>
-          </TouchableOpacity>
+          {canStart ? (
+            <TouchableOpacity
+              style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
+              onPress={handleStartDynamic}
+              disabled={buttonDisabled}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.startButtonText}>
+                {loading ? '⏳ Iniciando...' : '🎉 Iniciar Dinámica'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.waitingCard}>
+              <Text style={styles.waitingText}>
+                Se necesitan al menos 2 participantes confirmados
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </LinearGradient>
     );
@@ -739,9 +758,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <View style={styles.iceBreakCard}>
             <Text style={styles.iceBreakIcon}>✨</Text>
-            <Text style={styles.iceBreakTitle}>Ya rompieron el hielo</Text>
+            <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
             <Text style={styles.iceBreakSubtitle}>
-              Ahora disfruten el resto de la noche y permitan que la conexión fluya naturalmente.
+              Ahora disfruten el resto de la noche y déjense sorprender 💜
             </Text>
           </View>
 
@@ -841,33 +860,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
-  },
-  participantsCountCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 32,
-    marginBottom: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  participantsCountIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  participantsCountNumber: {
-    fontSize: 72,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-  },
-  participantsCountLabel: {
-    fontSize: 20,
-    color: nospiColors.purpleMid,
-    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
