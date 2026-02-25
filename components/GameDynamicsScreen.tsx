@@ -384,7 +384,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
-    console.log('🎮 User clicked Iniciar Dinámica button');
+    console.log('🎮 User clicked Iniciar Experiencia button');
     
     if (!appointment?.event_id || loading) {
       console.warn('⚠️ Cannot start - already loading or no event');
@@ -744,16 +744,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
 
-          {/* DEBUG INFO - REMOVE AFTER TESTING */}
-          <View style={styles.debugCard}>
-            <Text style={styles.debugText}>DEBUG INFO:</Text>
-            <Text style={styles.debugText}>Participantes activos: {activeParticipants.length}</Text>
-            <Text style={styles.debugText}>Fase del juego: {gamePhase}</Text>
-            <Text style={styles.debugText}>Puede iniciar: {canStart ? 'SÍ' : 'NO'}</Text>
-            <Text style={styles.debugText}>Usuario listo: {isUserReady ? 'SÍ' : 'NO'}</Text>
-            <Text style={styles.debugText}>Listos: {readyCount} de {totalParticipants}</Text>
-          </View>
-
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>✨</Text>
             <Text style={styles.infoTitle}>¡Llegada confirmada!</Text>
@@ -785,12 +775,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 })}
               </View>
 
-              <View style={styles.allReadyCard}>
-                <Text style={styles.allReadyIcon}>🎉</Text>
-                <Text style={styles.allReadyTitle}>Todos los participantes están listos</Text>
-                <Text style={styles.allReadySubtitle}>El administrador iniciará la experiencia pronto</Text>
-              </View>
-
               {!isUserReady && (
                 <TouchableOpacity
                   style={[styles.readyButton, loading && styles.buttonDisabled]}
@@ -812,15 +796,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 </View>
               )}
 
-              {/* CRITICAL: This is the "Continuar" button that should ALWAYS appear when there are 2+ participants */}
+              {/* CRITICAL: This is the "Iniciar Experiencia" button - ALWAYS visible when 2+ participants */}
               <TouchableOpacity
-                style={[styles.continueButton, loading && styles.buttonDisabled]}
+                style={[styles.startExperienceButton, loading && styles.buttonDisabled]}
                 onPress={handleStartDynamic}
                 disabled={loading}
                 activeOpacity={0.8}
               >
-                <Text style={styles.continueButtonText}>
-                  {loading ? '⏳ Iniciando...' : '➡️ Iniciar Experiencia'}
+                <Text style={styles.startExperienceButtonText}>
+                  {loading ? '⏳ Iniciando...' : '🚀 Iniciar Experiencia'}
                 </Text>
               </TouchableOpacity>
 
@@ -1083,20 +1067,6 @@ const styles = StyleSheet.create({
     marginTop: 48,
     textAlign: 'center',
   },
-  debugCard: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#EF4444',
-  },
-  debugText: {
-    fontSize: 14,
-    color: '#991B1B',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
@@ -1160,31 +1130,6 @@ const styles = StyleSheet.create({
   participantReadyNameDone: {
     opacity: 0.6,
   },
-  allReadyCard: {
-    backgroundColor: 'rgba(147, 51, 234, 0.15)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: nospiColors.purpleMid,
-    alignItems: 'center',
-  },
-  allReadyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  allReadyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  allReadySubtitle: {
-    fontSize: 16,
-    color: '#E9D5FF',
-    textAlign: 'center',
-  },
   readyButton: {
     backgroundColor: '#FFD700',
     borderRadius: 20,
@@ -1202,6 +1147,28 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1a0b2e',
+  },
+  startExperienceButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  startExperienceButtonText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   autoStartCard: {
     backgroundColor: '#D1FAE5',
