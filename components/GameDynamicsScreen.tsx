@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'ready' | 'questions' | 'match_selection' | 'free_phase';
+type GamePhase = 'intro' | 'ready' | 'questions' | 'match_selection' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -31,6 +31,7 @@ interface Appointment {
     answered_users?: string[];
     current_question?: string;
     current_question_starter_id?: string;
+    ready_users?: string[];
   };
 }
 
@@ -58,7 +59,7 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 === GAME DYNAMICS SCREEN V2 ===');
+  console.log('🎮 === GAME DYNAMICS SCREEN V3 ===');
   console.log('🎮 Received activeParticipants count:', activeParticipants.length);
   console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
     user_id: p.user_id,
@@ -66,7 +67,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     confirmed: p.confirmed
   })));
   
-  const [gamePhase, setGamePhase] = useState<GamePhase>('ready');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('intro');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
@@ -75,6 +76,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
+  const [readyUsers, setReadyUsers] = useState<string[]>([]);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -167,7 +169,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     loadQuestions();
   }, [appointment.event_id]);
 
-  // PHASE 5: Restore state from event_state
+  // Restore state from event_state
   useEffect(() => {
     if (!appointment?.event_id) return;
 
@@ -194,10 +196,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         game_phase: data.game_phase,
         current_level: data.current_level,
         current_question_index: data.current_question_index,
+        ready_users: data.ready_users,
       });
 
-      // PHASE 5: Derive UI from event_state
-      if (data.game_phase === 'match_selection') {
+      // Restore ready_users
+      if (data.ready_users) {
+        setReadyUsers(data.ready_users);
+      }
+
+      // Derive UI from event_state
+      if (data.game_phase === 'intro') {
+        console.log('🔄 Restoring intro phase');
+        setGamePhase('intro');
+      } else if (data.game_phase === 'match_selection') {
         console.log('🔄 Restoring match_selection phase');
         setGamePhase('match_selection');
         setCurrentLevel(data.current_level || 'divertido');
@@ -216,7 +227,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else if (data.game_phase === 'free_phase') {
         console.log('🔄 Restoring free_phase');
         setGamePhase('free_phase');
-      } else {
+      } else if (data.game_phase === 'ready') {
         console.log('🔄 Restoring ready phase');
         setGamePhase('ready');
       }
@@ -245,7 +256,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('📡 === EVENT_STATE UPDATE ===');
           const newEvent = payload.new as any;
           
-          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
+          // Update ready_users
+          if (newEvent.ready_users) {
+            setReadyUsers(newEvent.ready_users);
+          }
+          
+          if (newEvent.game_phase === 'intro') {
+            console.log('📡 Updating to intro phase');
+            setGamePhase('intro');
+          } else if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
             console.log('📡 Updating to questions phase');
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -277,6 +296,87 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, activeParticipants]);
 
+  // Auto-start when all participants are ready
+  useEffect(() => {
+    if (gamePhase !== 'intro') return;
+    if (activeParticipants.length < 2) return;
+    if (readyUsers.length === 0) return;
+
+    const allParticipantsReady = activeParticipants.every(p => readyUsers.includes(p.user_id));
+    
+    if (allParticipantsReady && readyUsers.length === activeParticipants.length) {
+      console.log('🎉 All participants ready - auto-starting experience');
+      
+      const startExperience = async () => {
+        try {
+          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+          const starterUserId = activeParticipants[randomIndex].user_id;
+          const firstQuestion = QUESTIONS.divertido[0];
+          
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'questions',
+              current_level: 'divertido',
+              current_question_index: 0,
+              answered_users: [],
+              current_question: firstQuestion,
+              current_question_starter_id: starterUserId,
+              ready_users: [],
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error auto-starting experience:', error);
+            return;
+          }
+
+          console.log('✅ Experience auto-started successfully');
+        } catch (error) {
+          console.error('❌ Unexpected error auto-starting:', error);
+        }
+      };
+
+      startExperience();
+    }
+  }, [gamePhase, activeParticipants, readyUsers, appointment.event_id]);
+
+  const handleMarkReady = useCallback(async () => {
+    console.log('✋ User marking themselves as ready');
+    
+    if (!appointment?.event_id || !currentUserId) {
+      console.warn('⚠️ Cannot mark ready - no event or user');
+      return;
+    }
+
+    if (readyUsers.includes(currentUserId)) {
+      console.log('⚠️ User already marked as ready');
+      return;
+    }
+
+    const newReadyUsers = [...new Set([...readyUsers, currentUserId])];
+    
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          ready_users: newReadyUsers,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error marking ready:', error);
+        return;
+      }
+
+      console.log('✅ User marked as ready successfully');
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+    }
+  }, [appointment, currentUserId, readyUsers]);
+
   const handleStartDynamic = useCallback(async () => {
     console.log('🎮 === STARTING DYNAMIC ===');
     console.log('🎮 User clicked Iniciar Dinámica button');
@@ -302,7 +402,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
       console.log('🎮 First question:', firstQuestion);
       
-      // CRITICAL FIX: current_level must be TEXT ('divertido', 'sensual', 'atrevido'), not a number
       const { error } = await supabase
         .from('events')
         .update({
@@ -325,14 +424,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ Database updated successfully - dynamic started');
       console.log('✅ Realtime subscription will update UI automatically');
       
-      // Don't set local state here - let the realtime subscription handle it
-      // This prevents race conditions
-      
     } catch (error) {
       console.error('❌ Unexpected error:', error);
       setLoading(false);
     } finally {
-      // Keep loading state for 2 seconds to prevent double-clicks
       setTimeout(() => {
         setLoading(false);
       }, 2000);
@@ -386,7 +481,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
-        // Next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
@@ -409,7 +503,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        // Level finished - transition to match selection
         console.log('⚡ Transitioning to match_selection');
 
         const { error } = await supabase
@@ -434,7 +527,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
-  // PHASE 4: Match complete callback
   const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
     console.log('💘 === MATCH COMPLETE ===');
     console.log('💘 Next level:', nextLevel, 'Next phase:', nextPhase);
@@ -445,7 +537,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     try {
       if (nextPhase === 'questions') {
-        // Continue to next level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const firstQuestion = QUESTIONS[nextLevel][0];
@@ -470,7 +561,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Started next level:', nextLevel);
       } else {
-        // All levels complete - end game
         console.log('🏁 All levels complete - transitioning to free_phase');
         
         const { error } = await supabase
@@ -565,12 +655,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const { error: eventError } = await supabase
         .from('events')
         .update({
-          game_phase: 'ready',
+          game_phase: 'intro',
           current_level: 'divertido',
           current_question_index: 0,
           answered_users: [],
           current_question: null,
           current_question_starter_id: null,
+          ready_users: [],
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
@@ -619,6 +710,95 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('✨ Match animation triggered for:', matchedUserId);
         }}
       />
+    );
+  }
+
+  // NEW: Show "Estoy listo para comenzar" button when in intro phase with 2+ participants
+  if (gamePhase === 'intro') {
+    const canStart = activeParticipants.length >= 2;
+    const isUserReady = currentUserId ? readyUsers.includes(currentUserId) : false;
+    const readyCount = readyUsers.length;
+    const totalParticipants = activeParticipants.length;
+
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.infoIcon}>✨</Text>
+            <Text style={styles.infoTitle}>¡Todos los participantes están listos!</Text>
+            <Text style={styles.infoText}>
+              Cada uno debe presionar el botón para confirmar que está listo para comenzar.
+            </Text>
+          </View>
+
+          {canStart ? (
+            <>
+              <View style={styles.participantsReadyCard}>
+                <Text style={styles.participantsReadyTitle}>Participantes confirmados</Text>
+                <Text style={styles.participantsReadyCount}>
+                  {readyCount} de {totalParticipants} listos
+                </Text>
+                
+                {activeParticipants.map((participant, index) => {
+                  const isReady = readyUsers.includes(participant.user_id);
+                  const displayName = participant.name;
+                  
+                  return (
+                    <View key={index} style={styles.participantReadyItem}>
+                      <Text style={styles.participantReadyIcon}>{isReady ? '✅' : '⬜'}</Text>
+                      <Text style={[styles.participantReadyName, isReady && styles.participantReadyNameDone]}>
+                        {displayName}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {!isUserReady && (
+                <TouchableOpacity
+                  style={[styles.readyButton, loading && styles.buttonDisabled]}
+                  onPress={handleMarkReady}
+                  disabled={loading || !currentUserId}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.readyButtonText}>
+                    ✋ Estoy listo para comenzar
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {isUserReady && (
+                <View style={styles.waitingCard}>
+                  <Text style={styles.waitingText}>
+                    ✓ Esperando a que todos estén listos...
+                  </Text>
+                </View>
+              )}
+
+              {readyCount === totalParticipants && totalParticipants >= 2 && (
+                <View style={styles.autoStartCard}>
+                  <Text style={styles.autoStartText}>
+                    🎉 ¡Todos listos! Iniciando automáticamente...
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.waitingCard}>
+              <Text style={styles.waitingText}>
+                Se necesitan al menos 2 participantes confirmados
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
     );
   }
 
@@ -884,6 +1064,77 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 24,
     textAlign: 'center',
+  },
+  participantsReadyCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  participantsReadyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  participantsReadyCount: {
+    fontSize: 16,
+    color: nospiColors.purpleMid,
+    marginBottom: 16,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  participantReadyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  participantReadyIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  participantReadyName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  participantReadyNameDone: {
+    opacity: 0.6,
+  },
+  readyButton: {
+    backgroundColor: '#FFD700',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+    marginBottom: 16,
+  },
+  readyButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a0b2e',
+  },
+  autoStartCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#10B981',
+    marginTop: 8,
+  },
+  autoStartText: {
+    fontSize: 16,
+    color: '#065F46',
+    textAlign: 'center',
+    fontWeight: '700',
   },
   startButton: {
     backgroundColor: '#FFD700',
