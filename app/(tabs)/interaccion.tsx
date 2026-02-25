@@ -233,20 +233,18 @@ export default function InteraccionScreen() {
       
       setActiveParticipants(participants);
       
-      // CRITICAL FIX: Get total expected participants from event_participants table
-      // This ensures we count all participants who should check in, not just appointments
-      const { data: allParticipantsData, error: allParticipantsError } = await supabase
-        .from('event_participants')
-        .select('user_id')
-        .eq('event_id', eventId);
+      // Also get total expected participants (all appointments for this event)
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('status', 'confirmada')
+        .eq('payment_status', 'completed');
       
-      if (!allParticipantsError && allParticipantsData) {
-        const totalExpected = allParticipantsData.length;
-        console.log('✅ Total expected participants (from event_participants):', totalExpected);
-        console.log('✅ Expected user IDs:', allParticipantsData.map(p => p.user_id));
+      if (!appointmentsError && appointmentsData) {
+        const totalExpected = appointmentsData.length;
+        console.log('✅ Total expected participants:', totalExpected);
         setTotalExpectedParticipants(totalExpected);
-      } else {
-        console.error('❌ Error fetching total expected participants:', allParticipantsError);
       }
     } catch (error) {
       console.error('❌ Failed to load participants:', error);
