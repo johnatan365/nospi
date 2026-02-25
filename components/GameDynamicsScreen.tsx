@@ -59,7 +59,7 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 === GAME DYNAMICS SCREEN V3 ===');
+  console.log('🎮 === GAME DYNAMICS SCREEN RENDER ===');
   console.log('🎮 Received activeParticipants count:', activeParticipants.length);
   console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
     user_id: p.user_id,
@@ -78,11 +78,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
   const [readyUsers, setReadyUsers] = useState<string[]>([]);
 
+  console.log('🎮 Current gamePhase state:', gamePhase);
+  console.log('🎮 Current readyUsers:', readyUsers);
+  console.log('🎮 Current activeParticipants.length:', activeParticipants.length);
+
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
+        console.log('🎮 Current user ID:', user.id);
       }
     };
     getCurrentUser();
@@ -688,7 +693,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
+  console.log('🎮 === RENDERING DECISION ===');
+  console.log('🎮 gamePhase:', gamePhase);
+  console.log('🎮 activeParticipants.length:', activeParticipants.length);
+  console.log('🎮 Will render intro phase?', gamePhase === 'intro');
 
   // Show match selection screen
   if (gamePhase === 'match_selection' && currentUserId) {
@@ -715,10 +723,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // NEW: Show "Estoy listo para comenzar" button when in intro phase with 2+ participants
   if (gamePhase === 'intro') {
+    console.log('🎮 === RENDERING INTRO PHASE ===');
     const canStart = activeParticipants.length >= 2;
     const isUserReady = currentUserId ? readyUsers.includes(currentUserId) : false;
     const readyCount = readyUsers.length;
     const totalParticipants = activeParticipants.length;
+
+    console.log('🎮 canStart:', canStart);
+    console.log('🎮 isUserReady:', isUserReady);
+    console.log('🎮 readyCount:', readyCount);
+    console.log('🎮 totalParticipants:', totalParticipants);
 
     return (
       <LinearGradient
@@ -729,6 +743,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
+
+          {/* DEBUG INFO - REMOVE AFTER TESTING */}
+          <View style={styles.debugCard}>
+            <Text style={styles.debugText}>DEBUG INFO:</Text>
+            <Text style={styles.debugText}>Participantes activos: {activeParticipants.length}</Text>
+            <Text style={styles.debugText}>Fase del juego: {gamePhase}</Text>
+            <Text style={styles.debugText}>Puede iniciar: {canStart ? 'SÍ' : 'NO'}</Text>
+            <Text style={styles.debugText}>Usuario listo: {isUserReady ? 'SÍ' : 'NO'}</Text>
+            <Text style={styles.debugText}>Listos: {readyCount} de {totalParticipants}</Text>
+          </View>
 
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>✨</Text>
@@ -788,18 +812,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 </View>
               )}
 
-              {canStart && (
-                <TouchableOpacity
-                  style={[styles.continueButton, loading && styles.buttonDisabled]}
-                  onPress={handleStartDynamic}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.continueButtonText}>
-                    {loading ? '⏳ Iniciando...' : '➡️ Continuar'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              {/* CRITICAL: This is the "Continuar" button that should ALWAYS appear when there are 2+ participants */}
+              <TouchableOpacity
+                style={[styles.continueButton, loading && styles.buttonDisabled]}
+                onPress={handleStartDynamic}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.continueButtonText}>
+                  {loading ? '⏳ Iniciando...' : '➡️ Iniciar Experiencia'}
+                </Text>
+              </TouchableOpacity>
 
               {readyCount === totalParticipants && totalParticipants >= 2 && (
                 <View style={styles.autoStartCard}>
@@ -1059,6 +1082,20 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 48,
     textAlign: 'center',
+  },
+  debugCard: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#991B1B',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
