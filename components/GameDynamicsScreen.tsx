@@ -57,7 +57,7 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 === GAME DYNAMICS SCREEN V2 ===');
+  console.log('🎮 === GAME DYNAMICS SCREEN V3 ===');
   console.log('🎮 Received activeParticipants count:', activeParticipants.length);
   console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
     user_id: p.user_id,
@@ -74,6 +74,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
+  const [totalParticipantsCount, setTotalParticipantsCount] = useState(0);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -165,6 +166,55 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     loadQuestions();
   }, [appointment.event_id]);
+
+  useEffect(() => {
+    const loadTotalParticipants = async () => {
+      if (!appointment?.event_id) return;
+
+      try {
+        const { count, error } = await supabase
+          .from('appointments')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', appointment.event_id)
+          .eq('status', 'confirmada')
+          .eq('payment_status', 'completed');
+
+        if (error) {
+          console.error('Error loading total participants count:', error);
+          return;
+        }
+
+        const totalCount = count || 0;
+        console.log('📊 Total participants in database:', totalCount);
+        setTotalParticipantsCount(totalCount);
+      } catch (error) {
+        console.error('Failed to load total participants:', error);
+      }
+    };
+
+    loadTotalParticipants();
+
+    const channel = supabase
+      .channel(`participants_count_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments',
+          filter: `event_id=eq.${appointment.event_id}`,
+        },
+        () => {
+          console.log('📊 Participants count changed - reloading');
+          loadTotalParticipants();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id]);
 
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -554,7 +604,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   console.log('🎮 Rendering GameDynamicsScreen - game_phase:', gamePhase);
 
   if (gamePhase === 'ready') {
-    const buttonDisabled = loading || activeParticipants.length === 0;
+    const buttonDisabled = loading || totalParticipantsCount === 0;
+    const participantsText = totalParticipantsCount === 1 ? 'participante' : 'participantes';
 
     return (
       <LinearGradient
@@ -566,28 +617,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.titleWhite}>Experiencia Rompe Hielo</Text>
 
-          <View style={styles.participantsListCard}>
-            <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
-            {activeParticipants.length === 0 ? (
-              <Text style={styles.noParticipantsText}>No hay participantes confirmados aún</Text>
-            ) : (
-              activeParticipants.map((participant, index) => {
-                const displayName = participant.name;
-                
-                return (
-                  <React.Fragment key={index}>
-                    <View style={styles.participantListItem}>
-                      <View style={styles.participantListPhotoPlaceholder}>
-                        <Text style={styles.participantListPhotoText}>
-                          {displayName.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <Text style={styles.participantListName}>{displayName}</Text>
-                    </View>
-                  </React.Fragment>
-                );
-              })
-            )}
+          <View style={styles.participantsCountCard}>
+            <Text style={styles.participantsCountIcon}>👥</Text>
+            <Text style={styles.participantsCountNumber}>{totalParticipantsCount}</Text>
+            <Text style={styles.participantsCountLabel}>{participantsText} confirmados</Text>
           </View>
 
           <View style={styles.infoCard}>
@@ -809,50 +842,32 @@ const styles = StyleSheet.create({
     marginTop: 48,
     textAlign: 'center',
   },
-  participantsListCard: {
+  participantsCountCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  participantsCountIcon: {
+    fontSize: 64,
     marginBottom: 16,
   },
-  participantsListTitle: {
-    fontSize: 18,
+  participantsCountNumber: {
+    fontSize: 72,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  noParticipantsText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    paddingVertical: 12,
-  },
-  participantListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  participantListPhotoPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: nospiColors.purpleLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  participantListPhotoText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-  },
-  participantListName: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  participantsCountLabel: {
+    fontSize: 20,
+    color: nospiColors.purpleMid,
+    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
