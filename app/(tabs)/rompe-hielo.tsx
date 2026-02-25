@@ -567,7 +567,7 @@ export default function RompeHieloScreen() {
         {isTimeToStart && (
           <>
             <View style={styles.participantsListCard}>
-              <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+              <Text style={styles.participantsListTitle}>Participantes en este evento</Text>
               {activeParticipants.length === 0 ? (
                 <Text style={styles.noParticipantsText}>No hay participantes confirmados aún</Text>
               ) : (
