@@ -473,6 +473,7 @@ export default function InteraccionScreen() {
       return;
     }
 
+    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setStartingExperience(true);
     
     try {
@@ -487,6 +488,10 @@ export default function InteraccionScreen() {
       
       console.log('🎮 Starter user:', activeParticipants[randomIndex].profiles?.name);
       console.log('🎮 First question:', firstQuestion);
+      
+      // CRITICAL FIX: Immediately update local state BEFORE database call
+      console.log('✅ IMMEDIATELY transitioning to questions phase (optimistic update)');
+      setGamePhase('questions');
       
       const { error } = await supabase
         .from('events')
@@ -503,19 +508,23 @@ export default function InteraccionScreen() {
 
       if (error) {
         console.error('❌ Error starting experience:', error);
+        // Revert optimistic update on error
+        setGamePhase('intro');
         setStartingExperience(false);
         return;
       }
 
-      console.log('✅ Successfully started experience - transitioning directly to questions phase');
+      console.log('✅ Successfully started experience in database');
       
     } catch (error) {
       console.error('❌ Unexpected error:', error);
+      // Revert optimistic update on error
+      setGamePhase('intro');
       setStartingExperience(false);
     } finally {
       setTimeout(() => {
         setStartingExperience(false);
-      }, 2000);
+      }, 1000);
     }
   }, [appointment, activeParticipants, startingExperience]);
 

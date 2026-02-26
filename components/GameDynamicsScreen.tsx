@@ -1,11 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
-// MATCH SELECTION DISABLED - import removed
-// import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
 type GamePhase = 'questions' | 'match_selection' | 'free_phase';
@@ -70,6 +68,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
+  
+  // Level transition animation state
+  const [showLevelTransition, setShowLevelTransition] = useState(false);
+  const [transitionLevel, setTransitionLevel] = useState<QuestionLevel | null>(null);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -265,21 +269,80 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, activeParticipants]);
 
+  // Level transition animation function
+  const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
+    console.log('🎬 Showing level transition animation for:', level);
+    
+    setTransitionLevel(level);
+    setShowLevelTransition(true);
+    
+    // Reset animations
+    scaleAnim.setValue(0);
+    fadeAnim.setValue(0);
+    
+    // Animate in
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Hold for 2 seconds
+      setTimeout(() => {
+        // Animate out
+        Animated.parallel([
+          Animated.timing(scaleAnim, {
+            toValue: 1.2,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowLevelTransition(false);
+          setTransitionLevel(null);
+        });
+      }, 2000);
+    });
+  }, [scaleAnim, fadeAnim]);
+
   const handleContinue = useCallback(async () => {
     console.log('➡️ User pressed Continuar button in questions phase');
     
-    if (!appointment?.event_id) return;
+    if (!appointment?.event_id || loading) return;
 
     const questionsForLevel = QUESTIONS[currentLevel];
     const nextQuestionIndex = currentQuestionIndex + 1;
 
+    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
+        // Continue to next question in same level
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
+
+        // CRITICAL FIX: Immediately update local state BEFORE database call
+        console.log('✅ IMMEDIATELY advancing to next question (optimistic update)');
+        setCurrentQuestionIndex(nextQuestionIndex);
+        setCurrentQuestion(nextQuestion);
+        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+        setStarterParticipant(newStarter || null);
 
         const { error } = await supabase
           .from('events')
@@ -294,21 +357,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (error) {
           console.error('❌ Error advancing question:', error);
+          // Revert optimistic update on error
+          setCurrentQuestionIndex(currentQuestionIndex);
+          setCurrentQuestion(currentQuestion);
           setLoading(false);
           return;
         }
 
-        console.log('✅ Advanced to next question - IMMEDIATELY updating local state');
-        
-        // CRITICAL FIX: Immediately update local state after successful database write
-        setCurrentQuestionIndex(nextQuestionIndex);
-        setCurrentQuestion(nextQuestion);
-        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-        setStarterParticipant(newStarter || null);
+        console.log('✅ Advanced to next question in database');
         
       } else {
-        // MATCH SELECTION DISABLED - Skip directly to next level or free phase
-        console.log('⚡ Level finished - skipping match selection');
+        // Level completed - advance to next level or free phase
+        console.log('⚡ Level finished - advancing to next level');
 
         const nextLevel: QuestionLevel = 
           currentLevel === 'divertido' ? 'sensual' :
@@ -318,9 +378,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           // Advance to next level
           console.log('➡️ Advancing to level', nextLevel);
           
+          // CRITICAL: Show level transition animation BEFORE updating database
+          showLevelTransitionAnimation(nextLevel);
+          
           const randomIndex = Math.floor(Math.random() * activeParticipants.length);
           const newStarterUserId = activeParticipants[randomIndex].user_id;
           const firstQuestion = QUESTIONS[nextLevel][0];
+
+          // CRITICAL FIX: Immediately update local state BEFORE database call
+          console.log('✅ IMMEDIATELY transitioning to next level (optimistic update)');
+          setGamePhase('questions');
+          setCurrentLevel(nextLevel);
+          setCurrentQuestionIndex(0);
+          setCurrentQuestion(firstQuestion);
+          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+          setStarterParticipant(newStarter || null);
 
           const { error } = await supabase
             .from('events')
@@ -337,23 +409,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error starting next level:', error);
+            // Revert optimistic update on error
+            setGamePhase('questions');
+            setCurrentLevel(currentLevel);
+            setCurrentQuestionIndex(questionsForLevel.length - 1);
             setLoading(false);
             return;
           }
 
-          console.log('✅ Started next level - IMMEDIATELY updating local state');
-          
-          // CRITICAL FIX: Immediately update local state after successful database write
-          setGamePhase('questions');
-          setCurrentLevel(nextLevel);
-          setCurrentQuestionIndex(0);
-          setCurrentQuestion(firstQuestion);
-          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-          setStarterParticipant(newStarter || null);
+          console.log('✅ Started next level in database');
           
         } else {
           // All levels complete - go to free phase
           console.log('🏁 All levels complete - transitioning to free_phase');
+          
+          // CRITICAL FIX: Immediately update local state BEFORE database call
+          console.log('✅ IMMEDIATELY transitioning to free_phase (optimistic update)');
+          setGamePhase('free_phase');
           
           const { error } = await supabase
             .from('events')
@@ -365,14 +437,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error ending game:', error);
+            // Revert optimistic update on error
+            setGamePhase('questions');
             setLoading(false);
             return;
           }
 
-          console.log('✅ Game ended - IMMEDIATELY updating local state');
-          
-          // CRITICAL FIX: Immediately update local state after successful database write
-          setGamePhase('free_phase');
+          console.log('✅ Game ended in database');
         }
       }
     } catch (error) {
@@ -380,13 +451,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
-
-  // MATCH SELECTION DISABLED - This callback is no longer used
-  const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
-    console.log('💘 Match complete callback (DISABLED) - nextLevel:', nextLevel, 'nextPhase:', nextPhase);
-    // This function is kept for compatibility but should not be called
-  }, []);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, showLevelTransitionAnimation]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -429,7 +494,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleFinishEvent = useCallback(async () => {
     console.log('🏁 User pressed Finalizar button');
     
-    if (!appointment?.event_id || !currentUserId) return;
+    if (!appointment?.event_id || !currentUserId || loading) return;
 
     console.log('🏁 Finishing event individually - moving ONLY this user\'s appointment to anterior');
     
@@ -465,10 +530,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setLoading(false);
     }
     // Note: We keep loading=true because the realtime subscription will handle the UI transition
-  }, [appointment, currentUserId]);
+  }, [appointment, currentUserId, loading]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+  
+  const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
+  const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
   console.log('🎮 Rendering decision - gamePhase:', gamePhase);
 
@@ -537,6 +605,25 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </TouchableOpacity>
         </ScrollView>
+        
+        {/* Level Transition Animation Overlay */}
+        {showLevelTransition && transitionLevel && (
+          <View style={styles.transitionOverlay}>
+            <Animated.View
+              style={[
+                styles.transitionCard,
+                {
+                  transform: [{ scale: scaleAnim }],
+                  opacity: fadeAnim,
+                },
+              ]}
+            >
+              <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
+              <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
+              <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
+            </Animated.View>
+          </View>
+        )}
       </LinearGradient>
     );
   }
@@ -745,6 +832,46 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  transitionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  transitionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    padding: 48,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 20,
+    minWidth: 280,
+  },
+  transitionEmoji: {
+    fontSize: 100,
+    marginBottom: 24,
+  },
+  transitionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  transitionLevel: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
   },
   iceBreakCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
