@@ -4,7 +4,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
-import MatchSelectionScreen from './MatchSelectionScreen';
+// MATCH SELECTION DISABLED - import removed
+// import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
 type GamePhase = 'questions' | 'match_selection' | 'free_phase';
@@ -298,22 +299,59 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         console.log('✅ Advanced to next question');
       } else {
-        console.log('⚡ Transitioning to match_selection');
+        // MATCH SELECTION DISABLED - Skip directly to next level or free phase
+        console.log('⚡ Level finished - skipping match selection');
 
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'match_selection',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
+        const nextLevel: QuestionLevel = 
+          currentLevel === 'divertido' ? 'sensual' :
+          currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
 
-        if (error) {
-          console.error('❌ Error transitioning to match selection:', error);
-          return;
+        if (currentLevel === 'divertido' || currentLevel === 'sensual') {
+          // Advance to next level
+          console.log('➡️ Advancing to level', nextLevel);
+          
+          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+          const newStarterUserId = activeParticipants[randomIndex].user_id;
+          const firstQuestion = QUESTIONS[nextLevel][0];
+
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'questions',
+              current_level: nextLevel,
+              current_question_index: 0,
+              answered_users: [],
+              current_question: firstQuestion,
+              current_question_starter_id: newStarterUserId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error starting next level:', error);
+            return;
+          }
+
+          console.log('✅ Started next level:', nextLevel);
+        } else {
+          // All levels complete - go to free phase
+          console.log('🏁 All levels complete - transitioning to free_phase');
+          
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'free_phase',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error ending game:', error);
+            return;
+          }
+
+          console.log('✅ Game ended');
         }
-
-        console.log('✅ Level finished - transitioned to match selection');
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -322,62 +360,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
+  // MATCH SELECTION DISABLED - This callback is no longer used
   const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
-    console.log('💘 Match complete - nextLevel:', nextLevel, 'nextPhase:', nextPhase);
-    
-    if (!appointment?.event_id) return;
-
-    setLoading(true);
-
-    try {
-      if (nextPhase === 'questions') {
-        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-        const newStarterUserId = activeParticipants[randomIndex].user_id;
-        const firstQuestion = QUESTIONS[nextLevel][0];
-
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'questions',
-            current_level: nextLevel,
-            current_question_index: 0,
-            answered_users: [],
-            current_question: firstQuestion,
-            current_question_starter_id: newStarterUserId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (error) {
-          console.error('❌ Error starting next level:', error);
-          return;
-        }
-
-        console.log('✅ Started next level:', nextLevel);
-      } else {
-        console.log('🏁 All levels complete - transitioning to free_phase');
-        
-        const { error } = await supabase
-          .from('events')
-          .update({
-            game_phase: 'free_phase',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', appointment.event_id);
-
-        if (error) {
-          console.error('❌ Error ending game:', error);
-          return;
-        }
-
-        console.log('✅ Game ended');
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointment, activeParticipants]);
+    console.log('💘 Match complete callback (DISABLED) - nextLevel:', nextLevel, 'nextPhase:', nextPhase);
+    // This function is kept for compatibility but should not be called
+  }, []);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -479,21 +466,24 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   console.log('🎮 Rendering decision - gamePhase:', gamePhase);
 
-  // Show match selection screen
-  if (gamePhase === 'match_selection' && currentUserId) {
-    console.log('🎮 Rendering MatchSelectionScreen');
+  // MATCH SELECTION DISABLED - Skip this phase entirely
+  if (gamePhase === 'match_selection') {
+    console.log('🎮 Match selection phase detected but DISABLED - showing loading');
     
     return (
-      <MatchSelectionScreen
-        eventId={appointment.event_id}
-        currentLevel={currentLevel}
-        currentUserId={currentUserId}
-        participants={activeParticipants}
-        onMatchComplete={handleMatchComplete}
-        triggerMatchAnimation={(matchedUserId) => {
-          console.log('✨ Match animation triggered for:', matchedUserId);
-        }}
-      />
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.container}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={{ textAlign: 'center', marginTop: 20, color: nospiColors.purpleDark }}>
+            Cargando...
+          </Text>
+        </View>
+      </LinearGradient>
     );
   }
 

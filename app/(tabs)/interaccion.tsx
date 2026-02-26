@@ -655,8 +655,8 @@ export default function InteraccionScreen() {
   }
 
   // CRITICAL: Show game dynamics based on game_phase from database
-  // Skip 'intro' and 'ready' phases - go directly to questions, match_selection, or free_phase
-  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+  // MATCH SELECTION DISABLED - Skip 'intro', 'ready', and 'match_selection' phases
+  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
     console.log('🎮 Rendering GameDynamicsScreen with phase:', gamePhase);
     console.log('🎮 Active participants count:', activeParticipants.length);
     
@@ -672,6 +672,27 @@ export default function InteraccionScreen() {
     }));
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
+  }
+  
+  // MATCH SELECTION DISABLED - If somehow we're in match_selection phase, show loading
+  if (gamePhase === 'match_selection') {
+    console.log('⚠️ Match selection phase detected but DISABLED - showing loading');
+    
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={{ textAlign: 'center', marginTop: 20, color: nospiColors.purpleDark, fontSize: 16 }}>
+            Cargando siguiente nivel...
+          </Text>
+        </View>
+      </LinearGradient>
+    );
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
