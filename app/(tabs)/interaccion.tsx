@@ -324,6 +324,7 @@ export default function InteraccionScreen() {
       console.log('📊 Event game_phase:', appointmentData.event?.game_phase);
       console.log('📊 Event event_status:', appointmentData.event?.event_status);
       console.log('📊 Appointment status:', appointmentData.status);
+      console.log('📊 Location confirmed:', appointmentData.location_confirmed);
       
       // CRITICAL FIX: Check if event is closed OR if user's appointment is 'anterior'
       if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
@@ -333,16 +334,23 @@ export default function InteraccionScreen() {
         return;
       }
       
-      // CRITICAL: Set game phase from database
-      if (appointmentData.event?.game_phase) {
-        console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
-        setGamePhase(appointmentData.event.game_phase);
-      }
-      
       setAppointment(appointmentData as any);
       
-      if (appointmentData.location_confirmed) {
+      // CRITICAL FIX: ALWAYS check location_confirmed BEFORE setting game phase
+      // If user hasn't confirmed location, force them to code_entry phase regardless of event's game_phase
+      if (!appointmentData.location_confirmed) {
+        console.log('🚨 User has NOT confirmed location - forcing code_entry phase');
+        setCheckInPhase('code_entry');
+        setGamePhase('intro'); // Keep in intro phase until they confirm
+      } else {
+        console.log('✅ User has confirmed location - setting check-in to confirmed');
         setCheckInPhase('confirmed');
+        
+        // CRITICAL: Only set game phase from database if user has confirmed location
+        if (appointmentData.event?.game_phase) {
+          console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
+          setGamePhase(appointmentData.event.game_phase);
+        }
       }
       
       if (appointmentData.event && appointmentData.event.start_time) {
@@ -398,7 +406,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('Check-in successful');
+      console.log('✅ Check-in successful');
       
       await supabase
         .from('appointments')
@@ -409,6 +417,7 @@ export default function InteraccionScreen() {
         })
         .eq('id', appointment.id);
       
+      // CRITICAL FIX: Update appointment state with location_confirmed = true
       setAppointment(prev => ({
         ...prev!,
         arrival_status: 'on_time',
@@ -418,6 +427,13 @@ export default function InteraccionScreen() {
       
       setCheckInPhase('confirmed');
       setConfirmationCode('');
+      
+      // CRITICAL FIX: After confirming location, set game phase to current event phase
+      // This allows the user to join the game that's already in progress
+      if (appointment.event?.game_phase) {
+        console.log('🎮 User confirmed location - setting game phase to current event phase:', appointment.event.game_phase);
+        setGamePhase(appointment.event.game_phase);
+      }
       
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
@@ -515,16 +531,12 @@ export default function InteraccionScreen() {
             return;
           }
           
-          // CRITICAL: Update game phase from database
-          if (newEvent.game_phase) {
-            console.log('🎮 Updating game phase from realtime:', newEvent.game_phase);
-            setGamePhase(newEvent.game_phase);
-          }
-          
-          // Update appointment with new event state
+          // CRITICAL FIX: Only update game phase if user has confirmed location
+          // This prevents users who haven't entered the code from seeing the game
           setAppointment(prev => {
             if (!prev) return prev;
-            return {
+            
+            const updatedAppointment = {
               ...prev,
               event: {
                 ...prev.event,
@@ -537,6 +549,16 @@ export default function InteraccionScreen() {
                 event_status: newEvent.event_status
               }
             };
+            
+            // CRITICAL: Only update game phase state if user has confirmed location
+            if (prev.location_confirmed && newEvent.game_phase) {
+              console.log('🎮 User has confirmed location - updating game phase from realtime:', newEvent.game_phase);
+              setGamePhase(newEvent.game_phase);
+            } else {
+              console.log('🚨 User has NOT confirmed location - keeping in code_entry phase');
+            }
+            
+            return updatedAppointment;
           });
         }
       )
