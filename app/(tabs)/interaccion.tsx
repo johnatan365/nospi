@@ -31,6 +31,7 @@ interface Event {
   answered_users: string[] | null;
   current_question: string | null;
   current_question_starter_id: string | null;
+  event_status?: 'draft' | 'published' | 'closed';
 }
 
 interface Appointment {
@@ -274,7 +275,8 @@ export default function InteraccionScreen() {
             current_question_index,
             answered_users,
             current_question,
-            current_question_starter_id
+            current_question_starter_id,
+            event_status
           )
         `)
         .eq('user_id', user.id)
@@ -319,6 +321,15 @@ export default function InteraccionScreen() {
       
       console.log('✅ Appointment loaded:', appointmentData.id);
       console.log('📊 Event game_phase:', appointmentData.event?.game_phase);
+      console.log('📊 Event event_status:', appointmentData.event?.event_status);
+      
+      // CRITICAL FIX: Check if event is closed FIRST
+      if (appointmentData.event?.event_status === 'closed') {
+        console.log('🚫 Event is closed - showing no events available');
+        setAppointment(null);
+        setLoading(false);
+        return;
+      }
       
       // CRITICAL: Set game phase from database
       if (appointmentData.event?.game_phase) {
@@ -492,6 +503,14 @@ export default function InteraccionScreen() {
           console.log('📡 Event_state change detected');
           const newEvent = payload.new as any;
           console.log('📡 New game_phase:', newEvent.game_phase);
+          console.log('📡 New event_status:', newEvent.event_status);
+          
+          // CRITICAL FIX: Check if event is closed
+          if (newEvent.event_status === 'closed') {
+            console.log('🚫 Event closed via realtime - clearing appointment');
+            setAppointment(null);
+            return;
+          }
           
           // CRITICAL: Update game phase from database
           if (newEvent.game_phase) {
@@ -511,7 +530,8 @@ export default function InteraccionScreen() {
                 current_question_index: newEvent.current_question_index,
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
-                current_question_starter_id: newEvent.current_question_starter_id
+                current_question_starter_id: newEvent.current_question_starter_id,
+                event_status: newEvent.event_status
               }
             };
           });
