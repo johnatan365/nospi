@@ -405,66 +405,34 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentUserId]);
 
   const handleFinishEvent = useCallback(async () => {
-    if (!appointment?.event_id) return;
+    if (!appointment?.event_id || !currentUserId) return;
 
-    console.log('🏁 Finishing event - closing event and moving appointments to anterior');
+    console.log('🏁 User finishing event individually - moving ONLY this user\'s appointment to anterior');
     setLoading(true);
 
     try {
-      // Step 1: Fetch all appointments for this event
-      const { data: allAppointments, error: fetchError } = await supabase
+      // CRITICAL FIX: Only update THIS user's appointment to 'anterior'
+      // Do NOT close the event or affect other users
+      const { error: appointmentError } = await supabase
         .from('appointments')
-        .select('id, status')
-        .eq('event_id', appointment.event_id);
+        .update({ status: 'anterior' })
+        .eq('event_id', appointment.event_id)
+        .eq('user_id', currentUserId)
+        .eq('status', 'confirmada');
 
-      if (fetchError) {
-        console.error('❌ Error fetching appointments:', fetchError);
+      if (appointmentError) {
+        console.error('❌ Error updating user appointment to anterior:', appointmentError);
       } else {
-        console.log('📊 Found appointments to update:', allAppointments?.length || 0);
-        
-        // Step 2: Move ALL appointments (confirmadas) to anterior status
-        const { error: appointmentsError } = await supabase
-          .from('appointments')
-          .update({ status: 'anterior' })
-          .eq('event_id', appointment.event_id)
-          .eq('status', 'confirmada');
-
-        if (appointmentsError) {
-          console.error('❌ Error updating appointments to anterior:', appointmentsError);
-        } else {
-          console.log('✅ Moved ALL confirmadas appointments to anterior status');
-        }
+        console.log('✅ User appointment moved to anterior status - event continues for other users');
       }
 
-      // Step 3: Close the event by resetting game state
-      const { error: eventError } = await supabase
-        .from('events')
-        .update({
-          game_phase: 'intro',
-          current_level: 'divertido',
-          current_question_index: 0,
-          answered_users: [],
-          current_question: null,
-          current_question_starter_id: null,
-          ready_users: [],
-          event_status: 'closed',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (eventError) {
-        console.error('❌ Error closing event:', eventError);
-      } else {
-        console.log('✅ Event closed successfully');
-      }
-
-      console.log('✅ Event finished successfully - appointments moved to anteriores tab');
+      console.log('✅ User finished event individually - they will no longer see this event');
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
     } finally {
       setLoading(false);
     }
-  }, [appointment]);
+  }, [appointment, currentUserId]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';

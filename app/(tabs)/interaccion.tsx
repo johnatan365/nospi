@@ -40,6 +40,7 @@ interface Appointment {
   arrival_status: string;
   checked_in_at: string | null;
   location_confirmed: boolean;
+  status: string;
   event: Event;
 }
 
@@ -280,7 +281,7 @@ export default function InteraccionScreen() {
           )
         `)
         .eq('user_id', user.id)
-        .in('status', ['confirmada', 'anterior'])
+        .eq('status', 'confirmada')
         .eq('payment_status', 'completed')
         .order('created_at', { ascending: false });
 
@@ -322,10 +323,11 @@ export default function InteraccionScreen() {
       console.log('✅ Appointment loaded:', appointmentData.id);
       console.log('📊 Event game_phase:', appointmentData.event?.game_phase);
       console.log('📊 Event event_status:', appointmentData.event?.event_status);
+      console.log('📊 Appointment status:', appointmentData.status);
       
-      // CRITICAL FIX: Check if event is closed FIRST
-      if (appointmentData.event?.event_status === 'closed') {
-        console.log('🚫 Event is closed - showing no events available');
+      // CRITICAL FIX: Check if event is closed OR if user's appointment is 'anterior'
+      if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
+        console.log('🚫 Event is closed or user finished - showing no events available');
         setAppointment(null);
         setLoading(false);
         return;
@@ -483,13 +485,14 @@ export default function InteraccionScreen() {
     }
   }, [appointment, activeParticipants, startingExperience]);
 
-  // CRITICAL: Subscribe to event_state changes
+  // CRITICAL: Subscribe to event_state changes AND appointment status changes
   useEffect(() => {
-    if (!appointment?.event_id) return;
+    if (!appointment?.event_id || !user) return;
 
-    console.log('📡 Subscribing to event_state changes for event:', appointment.event_id);
+    console.log('📡 Subscribing to event_state and appointment changes for event:', appointment.event_id);
 
-    const channel = supabase
+    // Subscribe to event changes
+    const eventChannel = supabase
       .channel(`event_state_${appointment.event_id}`)
       .on(
         'postgres_changes',
@@ -541,11 +544,40 @@ export default function InteraccionScreen() {
         console.log('📡 event_state subscription status:', status);
       });
 
+    // CRITICAL FIX: Subscribe to appointment status changes
+    const appointmentChannel = supabase
+      .channel(`appointment_${appointment.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments',
+          filter: `id=eq.${appointment.id}`,
+        },
+        (payload) => {
+          console.log('📡 Appointment status change detected');
+          const newAppointment = payload.new as any;
+          console.log('📡 New appointment status:', newAppointment.status);
+          
+          // CRITICAL: If this user's appointment changed to 'anterior', hide the event
+          if (newAppointment.status === 'anterior') {
+            console.log('🚫 User appointment moved to anterior - clearing appointment from view');
+            setAppointment(null);
+            return;
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 appointment subscription status:', status);
+      });
+
     return () => {
-      console.log('📡 Unsubscribing event_state');
-      supabase.removeChannel(channel);
+      console.log('📡 Unsubscribing event_state and appointment');
+      supabase.removeChannel(eventChannel);
+      supabase.removeChannel(appointmentChannel);
     };
-  }, [appointment?.event_id]);
+  }, [appointment?.event_id, appointment?.id, user]);
 
   useFocusEffect(
     useCallback(() => {
