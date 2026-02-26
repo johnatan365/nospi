@@ -64,7 +64,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
@@ -202,7 +201,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         setGamePhase('questions');
         setCurrentLevel(data.current_level || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
-        setAnsweredUsers(data.answered_users || []);
         setCurrentQuestion(data.current_question || null);
         
         if (data.current_question_starter_id) {
@@ -243,7 +241,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
-            setAnsweredUsers(newEvent.answered_users || []);
             setCurrentQuestion(newEvent.current_question || null);
             
             if (newEvent.current_question_starter_id) {
@@ -267,43 +264,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, activeParticipants]);
 
-  const handleAnswered = useCallback(async () => {
-    console.log('✅ User marking as answered');
-    
-    if (!appointment?.event_id || !currentUserId) {
-      console.warn('⚠️ Cannot mark as answered');
-      return;
-    }
-    
-    if (answeredUsers.includes(currentUserId)) {
-      console.log('⚠️ User already answered');
-      return;
-    }
-    
-    const newAnsweredUsers = [...answeredUsers, currentUserId];
-    
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({
-          answered_users: newAnsweredUsers,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error updating answered users:', error);
-        return;
-      }
-
-      console.log('✅ User marked as answered successfully');
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    }
-  }, [appointment, currentUserId, answeredUsers]);
-
   const handleContinue = useCallback(async () => {
-    console.log('➡️ Continuing');
+    console.log('➡️ Continuing to next question');
     
     if (!appointment?.event_id) return;
 
@@ -512,11 +474,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment]);
 
-  const answeredCount = answeredUsers.length;
-  const totalCount = activeParticipants.length;
-  const allAnswered = answeredCount === totalCount && totalCount > 0;
-  const userHasAnswered = currentUserId ? answeredUsers.includes(currentUserId) : false;
-
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
@@ -567,53 +524,22 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.starterInstructionWhite}>y luego continúa hacia la derecha</Text>
           </View>
 
-          <View style={styles.checklistCard}>
-            <Text style={styles.checklistTitle}>Ya contestaron</Text>
-            {activeParticipants.map((participant, index) => {
-              const hasAnswered = answeredUsers.includes(participant.user_id);
-              const displayName = participant.name;
-              
-              return (
-                <View key={index} style={styles.checklistItem}>
-                  <Text style={styles.checklistIcon}>{hasAnswered ? '✅' : '⬜'}</Text>
-                  <Text style={[styles.checklistName, hasAnswered && styles.checklistNameAnswered]}>
-                    {displayName}
-                  </Text>
-                </View>
-              );
-            })}
+          <View style={styles.instructionCard}>
+            <Text style={styles.instructionText}>
+              Presionen continuar cuando todos contesten esta pregunta
+            </Text>
           </View>
 
-          {!userHasAnswered && (
-            <TouchableOpacity
-              style={styles.answeredButton}
-              onPress={handleAnswered}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.answeredButtonText}>Ya contesté</Text>
-            </TouchableOpacity>
-          )}
-
-          {userHasAnswered && !allAnswered && (
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingText}>
-                ✓ Esperando a que todos respondan...
-              </Text>
-            </View>
-          )}
-
-          {allAnswered && (
-            <TouchableOpacity
-              style={[styles.continueButton, loading && styles.buttonDisabled]}
-              onPress={handleContinue}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.continueButtonText}>
-                {loading ? '⏳ Cargando...' : '➡️ Continuar'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.continueButton, loading && styles.buttonDisabled]}
+            onPress={handleContinue}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>
+              {loading ? '⏳ Cargando...' : '➡️ Continuar'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     );
@@ -789,47 +715,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontStyle: 'italic',
   },
-  checklistCard: {
+  instructionCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-  },
-  checklistTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-  },
-  checklistItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
   },
-  checklistIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  checklistName: {
+  instructionText: {
     fontSize: 16,
-    color: '#333',
-  },
-  checklistNameAnswered: {
-    textDecorationLine: 'line-through',
-    opacity: 0.6,
-  },
-  answeredButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  answeredButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    fontWeight: '600',
+    lineHeight: 24,
   },
   continueButton: {
     backgroundColor: '#10B981',
@@ -851,19 +749,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  waitingCard: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#92400E',
-    textAlign: 'center',
-    fontWeight: '600',
   },
   iceBreakCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
