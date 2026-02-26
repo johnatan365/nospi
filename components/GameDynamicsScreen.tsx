@@ -268,15 +268,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleContinue = useCallback(async () => {
     console.log('➡️ User pressed Continuar button in questions phase');
     
-    if (!appointment?.event_id || loading) {
-      console.warn('⚠️ Cannot continue - already loading or no event');
-      return;
-    }
+    if (!appointment?.event_id) return;
 
     const questionsForLevel = QUESTIONS[currentLevel];
     const nextQuestionIndex = currentQuestionIndex + 1;
 
-    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
 
     try {
@@ -284,13 +280,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
-
-        // CRITICAL FIX: Immediately update local state BEFORE database write for instant responsiveness
-        console.log('✅ IMMEDIATELY updating local state (optimistic update)');
-        setCurrentQuestionIndex(nextQuestionIndex);
-        setCurrentQuestion(nextQuestion);
-        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-        setStarterParticipant(newStarter || null);
 
         const { error } = await supabase
           .from('events')
@@ -305,14 +294,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (error) {
           console.error('❌ Error advancing question:', error);
-          // Revert optimistic update on error
-          setCurrentQuestionIndex(currentQuestionIndex);
-          setCurrentQuestion(questionsForLevel[currentQuestionIndex]);
           setLoading(false);
           return;
         }
 
-        console.log('✅ Advanced to next question in database');
+        console.log('✅ Advanced to next question - IMMEDIATELY updating local state');
+        
+        // CRITICAL FIX: Immediately update local state after successful database write
+        setCurrentQuestionIndex(nextQuestionIndex);
+        setCurrentQuestion(nextQuestion);
+        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+        setStarterParticipant(newStarter || null);
         
       } else {
         // MATCH SELECTION DISABLED - Skip directly to next level or free phase
@@ -330,15 +322,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const newStarterUserId = activeParticipants[randomIndex].user_id;
           const firstQuestion = QUESTIONS[nextLevel][0];
 
-          // CRITICAL FIX: Immediately update local state BEFORE database write
-          console.log('✅ IMMEDIATELY updating local state to next level (optimistic update)');
-          setGamePhase('questions');
-          setCurrentLevel(nextLevel);
-          setCurrentQuestionIndex(0);
-          setCurrentQuestion(firstQuestion);
-          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-          setStarterParticipant(newStarter || null);
-
           const { error } = await supabase
             .from('events')
             .update({
@@ -354,24 +337,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error starting next level:', error);
-            // Revert optimistic update on error
-            setGamePhase('questions');
-            setCurrentLevel(currentLevel);
-            setCurrentQuestionIndex(questionsForLevel.length - 1);
-            setCurrentQuestion(questionsForLevel[questionsForLevel.length - 1]);
             setLoading(false);
             return;
           }
 
-          console.log('✅ Started next level in database');
+          console.log('✅ Started next level - IMMEDIATELY updating local state');
+          
+          // CRITICAL FIX: Immediately update local state after successful database write
+          setGamePhase('questions');
+          setCurrentLevel(nextLevel);
+          setCurrentQuestionIndex(0);
+          setCurrentQuestion(firstQuestion);
+          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+          setStarterParticipant(newStarter || null);
           
         } else {
           // All levels complete - go to free phase
           console.log('🏁 All levels complete - transitioning to free_phase');
-          
-          // CRITICAL FIX: Immediately update local state BEFORE database write
-          console.log('✅ IMMEDIATELY updating local state to free_phase (optimistic update)');
-          setGamePhase('free_phase');
           
           const { error } = await supabase
             .from('events')
@@ -383,13 +365,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error ending game:', error);
-            // Revert optimistic update on error
-            setGamePhase('questions');
             setLoading(false);
             return;
           }
 
-          console.log('✅ Game ended in database');
+          console.log('✅ Game ended - IMMEDIATELY updating local state');
+          
+          // CRITICAL FIX: Immediately update local state after successful database write
+          setGamePhase('free_phase');
         }
       }
     } catch (error) {
@@ -397,7 +380,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
   // MATCH SELECTION DISABLED - This callback is no longer used
   const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
@@ -446,10 +429,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleFinishEvent = useCallback(async () => {
     console.log('🏁 User pressed Finalizar button');
     
-    if (!appointment?.event_id || !currentUserId || loading) {
-      console.warn('⚠️ Cannot finish - already loading or no event');
-      return;
-    }
+    if (!appointment?.event_id || !currentUserId) return;
 
     console.log('🏁 Finishing event individually - moving ONLY this user\'s appointment to anterior');
     
@@ -485,7 +465,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setLoading(false);
     }
     // Note: We keep loading=true because the realtime subscription will handle the UI transition
-  }, [appointment, currentUserId, loading]);
+  }, [appointment, currentUserId]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';

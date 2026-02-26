@@ -41,7 +41,6 @@ interface Appointment {
   checked_in_at: string | null;
   location_confirmed: boolean;
   status: string;
-  appointment_time: string;
   event: Event;
 }
 
@@ -66,7 +65,7 @@ interface Participant {
   profiles: Profile | null;
 }
 
-type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed_waiting_for_start' | 'confirmed';
+type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
@@ -113,7 +112,7 @@ export default function InteraccionScreen() {
     setIsEventDay(isToday);
   }, []);
 
-  const updateCountdown = useCallback((startTime: string, locationConfirmed: boolean) => {
+  const updateCountdown = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
     
@@ -128,21 +127,9 @@ export default function InteraccionScreen() {
     setCountdown(diffToPlus10);
 
     // CRITICAL: Show code entry at EXACT appointment time
-    if (diffToEventTime <= 0 && !locationConfirmed && checkInPhase === 'waiting') {
+    if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
       console.log('⏰ Exact appointment time reached - showing code entry');
       setCheckInPhase('code_entry');
-    }
-
-    // CRITICAL: If location confirmed but still waiting for 10 min mark
-    if (locationConfirmed && diffToPlus10 > 0 && checkInPhase === 'confirmed') {
-      console.log('⏰ Location confirmed but waiting for 10 min mark');
-      setCheckInPhase('confirmed_waiting_for_start');
-    }
-
-    // CRITICAL: If 10 min mark passed and location confirmed
-    if (locationConfirmed && diffToPlus10 <= 0 && checkInPhase === 'confirmed_waiting_for_start') {
-      console.log('⏰ 10 min mark reached - ready to start');
-      setCheckInPhase('confirmed');
     }
 
     // Display countdown to 10 minutes after appointment
@@ -157,7 +144,7 @@ export default function InteraccionScreen() {
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
-  }, [checkInPhase]);
+  }, [appointment, checkInPhase]);
 
   const requestNotificationPermissions = useCallback(async () => {
     // Skip on web - notifications not fully supported
@@ -277,7 +264,6 @@ export default function InteraccionScreen() {
           checked_in_at,
           location_confirmed,
           status,
-          appointment_time,
           event:events!inner (
             id,
             type,
@@ -359,27 +345,17 @@ export default function InteraccionScreen() {
       
       setAppointment(appointmentData as any);
       
-      // CRITICAL FIX: Determine check-in phase based on time and location_confirmed
-      const appointmentTime = new Date(appointmentData.appointment_time || appointmentData.event.start_time);
-      const tenMinutesAfterAppointment = new Date(appointmentTime.getTime() + 10 * 60 * 1000);
-      
-      if (now < appointmentTime) {
-        console.log('⏰ Before appointment time - waiting phase');
-        setCheckInPhase('waiting');
-        setGamePhase('intro');
-      } else if (!appointmentData.location_confirmed) {
-        console.log('🚨 At/after appointment time but NOT confirmed - code_entry phase');
+      // CRITICAL FIX: ALWAYS check location_confirmed BEFORE setting game phase
+      // If user hasn't confirmed location, force them to code_entry phase regardless of event's game_phase
+      if (!appointmentData.location_confirmed) {
+        console.log('🚨 User has NOT confirmed location - forcing code_entry phase');
         setCheckInPhase('code_entry');
-        setGamePhase('intro');
-      } else if (now < tenMinutesAfterAppointment) {
-        console.log('✅ Location confirmed but waiting for 10 min mark');
-        setCheckInPhase('confirmed_waiting_for_start');
-        setGamePhase('intro');
+        setGamePhase('intro'); // Keep in intro phase until they confirm
       } else {
-        console.log('✅ Location confirmed and 10 min mark passed - ready to start');
+        console.log('✅ User has confirmed location - setting check-in to confirmed');
         setCheckInPhase('confirmed');
         
-        // Only set game phase from database if user has confirmed location
+        // CRITICAL: Only set game phase from database if user has confirmed location
         if (appointmentData.event?.game_phase) {
           console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
           setGamePhase(appointmentData.event.game_phase);
@@ -425,24 +401,8 @@ export default function InteraccionScreen() {
       const confirmedAt = new Date().toISOString();
 
       // CRITICAL FIX: Immediately update UI state BEFORE database calls for instant responsiveness
-      console.log('✅ IMMEDIATELY transitioning to confirmed_waiting_for_start phase (optimistic update)');
-      
-      const appointmentTime = new Date(appointment.appointment_time || appointment.event.start_time!);
-      const now = new Date();
-      const tenMinutesAfterAppointment = new Date(appointmentTime.getTime() + 10 * 60 * 1000);
-      
-      // Determine correct phase based on time
-      if (now < tenMinutesAfterAppointment) {
-        setCheckInPhase('confirmed_waiting_for_start');
-      } else {
-        setCheckInPhase('confirmed');
-        // If 10 min mark already passed, set game phase immediately
-        if (appointment.event?.game_phase) {
-          console.log('🎮 10 min mark already passed - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
-          setGamePhase(appointment.event.game_phase);
-        }
-      }
-      
+      console.log('✅ IMMEDIATELY transitioning to confirmed phase (optimistic update)');
+      setCheckInPhase('confirmed');
       setConfirmationCode('');
       
       // CRITICAL FIX: Immediately update appointment state with location_confirmed = true
@@ -452,6 +412,13 @@ export default function InteraccionScreen() {
         checked_in_at: confirmedAt,
         location_confirmed: true,
       }));
+      
+      // CRITICAL FIX: Immediately set game phase to current event phase
+      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
+      if (appointment.event?.game_phase) {
+        console.log('🎮 User confirmed location - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
+        setGamePhase(appointment.event.game_phase);
+      }
       
       // Now perform database updates in the background
       const { error: updateError } = await supabase
@@ -601,12 +568,12 @@ export default function InteraccionScreen() {
               }
             };
             
-            // CRITICAL: Only update game phase state if user has confirmed location AND 10 min mark passed
-            if (prev.location_confirmed && checkInPhase === 'confirmed' && newEvent.game_phase) {
-              console.log('🎮 User has confirmed location and 10 min mark passed - updating game phase from realtime:', newEvent.game_phase);
+            // CRITICAL: Only update game phase state if user has confirmed location
+            if (prev.location_confirmed && newEvent.game_phase) {
+              console.log('🎮 User has confirmed location - updating game phase from realtime:', newEvent.game_phase);
               setGamePhase(newEvent.game_phase);
             } else {
-              console.log('🚨 User has NOT confirmed location or still waiting - keeping in current phase');
+              console.log('🚨 User has NOT confirmed location - keeping in code_entry phase');
             }
             
             return updatedAppointment;
@@ -650,7 +617,7 @@ export default function InteraccionScreen() {
       supabase.removeChannel(eventChannel);
       supabase.removeChannel(appointmentChannel);
     };
-  }, [appointment?.event_id, appointment?.id, user, checkInPhase]);
+  }, [appointment?.event_id, appointment?.id, user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -667,12 +634,9 @@ export default function InteraccionScreen() {
   );
 
   useEffect(() => {
-    if (appointment && (appointment.appointment_time || appointment.event.start_time)) {
+    if (appointment && appointment.event.start_time) {
       const interval = setInterval(() => {
-        updateCountdown(
-          appointment.appointment_time || appointment.event.start_time!,
-          appointment.location_confirmed
-        );
+        updateCountdown(appointment.event.start_time!);
       }, 1000);
 
       return () => clearInterval(interval);
@@ -827,6 +791,10 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   
+  const locationText = appointment.event.is_location_revealed && appointment.event.location_name
+    ? appointment.event.location_name
+    : 'Ubicación se revelará próximamente';
+  
   const participantCountText = activeParticipants.length.toString();
 
   return (
@@ -845,6 +813,17 @@ export default function InteraccionScreen() {
             {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
           </Text>
           <Text style={styles.countdownTime}>{countdownDisplay}</Text>
+        </View>
+
+        <View style={styles.eventCard}>
+          <View style={styles.eventHeader}>
+            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
+            <View style={styles.eventHeaderText}>
+              <Text style={styles.eventType}>{eventTypeText}</Text>
+              <Text style={styles.eventTime}>{appointment.event.time}</Text>
+            </View>
+          </View>
+          <Text style={styles.eventLocation}>{locationText}</Text>
         </View>
 
         {checkInPhase === 'code_entry' && (
@@ -881,7 +860,7 @@ export default function InteraccionScreen() {
           </View>
         )}
 
-        {(checkInPhase === 'confirmed_waiting_for_start' || checkInPhase === 'confirmed') && (
+        {checkInPhase === 'confirmed' && (
           <>
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
@@ -1052,6 +1031,39 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 2,
+  },
+  eventCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  eventIconLarge: {
+    fontSize: 40,
+    marginRight: 16,
+  },
+  eventHeaderText: {
+    flex: 1,
+  },
+  eventType: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  eventTime: {
+    fontSize: 16,
+    color: nospiColors.purpleMid,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  eventLocation: {
+    fontSize: 14,
+    color: '#666',
   },
   codeEntryCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
