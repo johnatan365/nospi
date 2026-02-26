@@ -26,10 +26,11 @@ interface Appointment {
     maps_link: string;
     is_location_revealed: boolean;
     event_status: 'draft' | 'published' | 'closed';
+    start_time: string | null;
   } | null;
 }
 
-type FilterType = 'confirmadas' | 'anteriores';
+type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
 export default function AppointmentsScreen() {
   const { user } = useSupabase();
@@ -68,7 +69,12 @@ export default function AppointmentsScreen() {
       setLoading(true);
       console.log('Loading appointments for user:', user.id, 'filter:', filter);
 
-      const statusFilter = filter === 'confirmadas' ? 'confirmada' : 'anterior';
+      let statusFilter = 'confirmada';
+      if (filter === 'anteriores') {
+        statusFilter = 'anterior';
+      } else if (filter === 'canceladas') {
+        statusFilter = 'cancelada';
+      }
 
       const { data, error } = await supabase
         .from('appointments')
@@ -89,7 +95,8 @@ export default function AppointmentsScreen() {
             location_address,
             maps_link,
             is_location_revealed,
-            event_status
+            event_status,
+            start_time
           )
         `)
         .eq('user_id', user.id)
@@ -151,18 +158,72 @@ export default function AppointmentsScreen() {
   };
 
   const confirmCancel = async () => {
-    if (!appointmentToCancel) return;
+    if (!appointmentToCancel || !appointmentToCancel.event) return;
 
     try {
       console.log('Cancelling appointment:', appointmentToCancel.id);
-      const { error } = await supabase
+      
+      // Calculate if cancellation is 24 hours before event
+      const eventStartTime = appointmentToCancel.event.start_time 
+        ? new Date(appointmentToCancel.event.start_time) 
+        : new Date(appointmentToCancel.event.date);
+      
+      const now = new Date();
+      const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      
+      const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
+      
+      console.log('Event start time:', eventStartTime);
+      console.log('Current time:', now);
+      console.log('Time difference (hours):', timeDifferenceMs / (60 * 60 * 1000));
+      console.log('Within refund window (>24h):', isWithinRefundWindow);
+      
+      // Update appointment status to cancelada
+      const { error: appointmentError } = await supabase
         .from('appointments')
-        .update({ status: 'cancelada' })
+        .update({ 
+          status: 'cancelada',
+          payment_status: isWithinRefundWindow ? 'refunded' : 'completed'
+        })
         .eq('id', appointmentToCancel.id);
 
-      if (error) {
-        console.error('Error cancelling appointment:', error);
+      if (appointmentError) {
+        console.error('Error cancelling appointment:', appointmentError);
         return;
+      }
+
+      // If within refund window, add to virtual balance
+      if (isWithinRefundWindow) {
+        console.log('Adding $5 USD to virtual balance');
+        const refundAmount = 5.00; // $5 USD per event
+        
+        const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
+          user_id_param: user?.id,
+          amount_param: refundAmount
+        });
+
+        if (balanceError) {
+          console.error('Error updating virtual balance:', balanceError);
+          // Try direct update as fallback
+          const { data: userData } = await supabase
+            .from('users')
+            .select('virtual_balance')
+            .eq('id', user?.id)
+            .single();
+          
+          const currentBalance = userData?.virtual_balance || 0;
+          const newBalance = currentBalance + refundAmount;
+          
+          await supabase
+            .from('users')
+            .update({ virtual_balance: newBalance })
+            .eq('id', user?.id);
+          
+          console.log('Virtual balance updated via fallback:', newBalance);
+        } else {
+          console.log('Virtual balance updated successfully');
+        }
       }
 
       console.log('Appointment cancelled successfully');
@@ -263,6 +324,14 @@ export default function AppointmentsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.filterButton, filter === 'canceladas' && styles.filterButtonActive]}
+            onPress={() => setFilter('canceladas')}
+          >
+            <Text style={[styles.filterText, filter === 'canceladas' && styles.filterTextActive]}>
+              Canceladas
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.filterButton, filter === 'anteriores' && styles.filterButtonActive]}
             onPress={() => setFilter('anteriores')}
           >
@@ -356,6 +425,8 @@ export default function AppointmentsScreen() {
               <Text style={styles.emptyText}>
                 {filter === 'confirmadas' 
                   ? 'No tienes citas confirmadas' 
+                  : filter === 'canceladas'
+                  ? 'No tienes citas canceladas'
                   : 'No tienes citas anteriores'}
               </Text>
             </View>
@@ -438,9 +509,25 @@ export default function AppointmentsScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
-              <Text style={styles.modalSubtitle}>
-                ¿Estás seguro de que quieres cancelar esta cita?
-              </Text>
+              {appointmentToCancel && appointmentToCancel.event && (() => {
+                const eventStartTime = appointmentToCancel.event.start_time 
+                  ? new Date(appointmentToCancel.event.start_time) 
+                  : new Date(appointmentToCancel.event.date);
+                const now = new Date();
+                const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
+                const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+                const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
+                
+                const refundMessage = isWithinRefundWindow
+                  ? '✅ Como cancelas con más de 24 horas de anticipación, recibirás $5 USD como saldo virtual que podrás usar en tu próximo evento.'
+                  : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
+                
+                return (
+                  <Text style={styles.modalSubtitle}>
+                    {refundMessage}
+                  </Text>
+                );
+              })()}
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity

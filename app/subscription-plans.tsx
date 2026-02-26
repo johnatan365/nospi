@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type PaymentMethod = 'google_pay' | 'apple_pay' | 'card' | 'pse';
+type PaymentMethod = 'google_pay' | 'apple_pay' | 'card' | 'pse' | 'virtual_balance';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -18,13 +18,43 @@ export default function SubscriptionPlansScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(3678);
   const [loadingRate, setLoadingRate] = useState(true);
+  const [virtualBalance, setVirtualBalance] = useState<number>(0);
+  const [loadingBalance, setLoadingBalance] = useState(true);
 
   useEffect(() => {
     console.log('Payment screen loaded - $5 per event');
     setSelectedPayment(null);
     setProcessing(false);
     fetchExchangeRate();
+    fetchVirtualBalance();
   }, []);
+
+  const fetchVirtualBalance = async () => {
+    try {
+      console.log('Fetching user virtual balance');
+      setLoadingBalance(true);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('virtual_balance')
+        .eq('id', user?.id)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching virtual balance:', error);
+        setVirtualBalance(0);
+      } else {
+        const balance = data?.virtual_balance || 0;
+        console.log('User virtual balance:', balance);
+        setVirtualBalance(balance);
+      }
+    } catch (error) {
+      console.error('Failed to fetch virtual balance:', error);
+      setVirtualBalance(0);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   const fetchExchangeRate = async () => {
     try {
@@ -76,6 +106,25 @@ export default function SubscriptionPlansScreen() {
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       console.log('Processing payment for event:', pendingEventId);
+
+      // If paying with virtual balance, deduct from balance
+      if (selectedPayment === 'virtual_balance') {
+        console.log('Paying with virtual balance');
+        const newBalance = virtualBalance - priceUSD;
+        
+        const { error: balanceError } = await supabase
+          .from('users')
+          .update({ virtual_balance: newBalance })
+          .eq('id', user?.id);
+        
+        if (balanceError) {
+          console.error('Error updating virtual balance:', balanceError);
+          setProcessing(false);
+          return;
+        }
+        
+        console.log('Virtual balance updated:', newBalance);
+      }
 
       if (pendingEventId) {
         console.log('Creating appointment for event:', pendingEventId);
@@ -199,6 +248,28 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.paymentTitle}>Método de Pago</Text>
             <Text style={styles.paymentSubtitle}>⚠️ Selecciona una opción para continuar</Text>
           </View>
+
+          {virtualBalance >= priceUSD && !loadingBalance && (
+            <TouchableOpacity
+              style={[styles.paymentButton, styles.virtualBalanceButton, selectedPayment === 'virtual_balance' && styles.paymentButtonSelected]}
+              onPress={() => handlePaymentSelect('virtual_balance')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.paymentButtonContent}>
+                {selectedPayment === 'virtual_balance' && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+                <View style={styles.virtualBalanceContent}>
+                  <Text style={styles.virtualBalanceTitle}>💰 Saldo Virtual</Text>
+                  <Text style={styles.virtualBalanceAmount}>
+                    Disponible: ${virtualBalance.toFixed(2)} USD
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {showGooglePay && (
             <TouchableOpacity
@@ -484,6 +555,25 @@ const styles = StyleSheet.create({
   paymentIcon: {
     width: 100,
     height: 40,
+  },
+  virtualBalanceButton: {
+    backgroundColor: 'rgba(147, 51, 234, 0.1)',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleMid,
+  },
+  virtualBalanceContent: {
+    alignItems: 'center',
+  },
+  virtualBalanceTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  virtualBalanceAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: nospiColors.purpleMid,
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
