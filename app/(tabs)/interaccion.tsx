@@ -86,6 +86,7 @@ export default function InteraccionScreen() {
   const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
+  const [startingExperience, setStartingExperience] = useState(false);
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   
@@ -419,6 +420,50 @@ export default function InteraccionScreen() {
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
+  const handleStartExperience = useCallback(async () => {
+    console.log('🚀 User clicked Continuar button');
+    
+    if (!appointment?.event_id || startingExperience) {
+      console.warn('⚠️ Cannot start - already loading or no event');
+      return;
+    }
+
+    if (activeParticipants.length < 2) {
+      console.warn('⚠️ Cannot start - need at least 2 participants');
+      return;
+    }
+
+    setStartingExperience(true);
+    
+    try {
+      console.log('🎮 Updating database to start experience...');
+      
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'intro',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error starting experience:', error);
+        setStartingExperience(false);
+        return;
+      }
+
+      console.log('✅ Successfully started experience - transitioning to intro phase');
+      
+    } catch (error) {
+      console.error('❌ Unexpected error:', error);
+      setStartingExperience(false);
+    } finally {
+      setTimeout(() => {
+        setStartingExperience(false);
+      }, 2000);
+    }
+  }, [appointment, activeParticipants, startingExperience]);
+
   // CRITICAL: Subscribe to event_state changes
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -742,14 +787,27 @@ export default function InteraccionScreen() {
             </View>
 
             {canStartExperience && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ✨ Todos los participantes están listos
-                </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El administrador iniciará la experiencia pronto
-                </Text>
-              </View>
+              <>
+                <TouchableOpacity
+                  style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
+                  onPress={handleStartExperience}
+                  disabled={startingExperience}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.continueButtonText}>
+                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    ✨ Hay {activeParticipants.length} participantes confirmados
+                  </Text>
+                  <Text style={styles.infoTextSecondary}>
+                    Presiona "Continuar" para iniciar la experiencia
+                  </Text>
+                </View>
+              </>
             )}
           </>
         )}
@@ -1029,5 +1087,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  continueButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  continueButtonText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
