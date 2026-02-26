@@ -905,7 +905,7 @@ export default function InteraccionScreen() {
                   ⏰ Esperando el momento de inicio
                 </Text>
                 <Text style={styles.infoTextSecondary}>
-                  El botón &quot;Continuar&quot; aparecerá cuando termine el conteo (10 minutos después de la hora de la cita)
+                  El botón &quot;Continuar&quot; aparecerá cuando termine el conteo y así poder iniciar la dinámica
                 </Text>
               </View>
             )}
