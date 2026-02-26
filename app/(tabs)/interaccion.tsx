@@ -436,12 +436,27 @@ export default function InteraccionScreen() {
     setStartingExperience(true);
     
     try {
-      console.log('🎮 Updating database to start experience...');
+      console.log('🎮 Updating database to start experience directly to questions...');
+      
+      // Select random starter
+      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+      const starterUserId = activeParticipants[randomIndex].user_id;
+      
+      // Get first question from divertido level
+      const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
+      
+      console.log('🎮 Starter user:', activeParticipants[randomIndex].profiles?.name);
+      console.log('🎮 First question:', firstQuestion);
       
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'intro',
+          game_phase: 'questions',
+          current_level: 'divertido',
+          current_question_index: 0,
+          answered_users: [],
+          current_question: firstQuestion,
+          current_question_starter_id: starterUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
@@ -452,7 +467,7 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('✅ Successfully started experience - transitioning to intro phase');
+      console.log('✅ Successfully started experience - transitioning directly to questions phase');
       
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -788,6 +803,15 @@ export default function InteraccionScreen() {
 
             {canStartExperience && (
               <>
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    ✨ Hay {activeParticipants.length} participantes confirmados
+                  </Text>
+                  <Text style={styles.infoTextSecondary}>
+                    Presiona "Continuar" para iniciar la experiencia
+                  </Text>
+                </View>
+
                 <TouchableOpacity
                   style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
                   onPress={handleStartExperience}
@@ -798,15 +822,6 @@ export default function InteraccionScreen() {
                     {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
                   </Text>
                 </TouchableOpacity>
-
-                <View style={styles.infoCard}>
-                  <Text style={styles.infoText}>
-                    ✨ Hay {activeParticipants.length} participantes confirmados
-                  </Text>
-                  <Text style={styles.infoTextSecondary}>
-                    Presiona "Continuar" para iniciar la experiencia
-                  </Text>
-                </View>
               </>
             )}
           </>
