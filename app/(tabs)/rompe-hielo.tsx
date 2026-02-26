@@ -24,7 +24,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'countdown' | 'ready' | 'in_progress' | 'free_phase';
+  game_phase: 'countdown' | 'intro' | 'ready' | 'in_progress' | 'free_phase';
   current_level: 'divertido' | 'sensual' | 'atrevido' | null;
   current_question_index: number | null;
   answered_users: string[] | null;
@@ -110,7 +110,8 @@ export default function RompeHieloScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('Loading active participants for event:', eventId);
+      console.log('🔄 === LOADING ACTIVE PARTICIPANTS ===');
+      console.log('🔄 Event ID:', eventId);
       
       // FIXED: Query appointments table instead of event_participants
       // Join with users table (not profiles) to get participant details
@@ -136,11 +137,11 @@ export default function RompeHieloScreen() {
         .eq('payment_status', 'completed');
 
       if (error) {
-        console.error('Error loading participants:', error);
+        console.error('❌ Error loading participants:', error);
         return;
       }
 
-      console.log('Raw data from appointments:', data);
+      console.log('✅ Raw data from appointments:', data?.length || 0, 'records');
 
       // Transform appointments data to participant format
       const participants: Participant[] = (data || [])
@@ -156,11 +157,11 @@ export default function RompeHieloScreen() {
           presented: item.location_confirmed || false
         }));
 
-      console.log('Active participants loaded:', participants.length);
-      console.log('Participants:', participants);
+      console.log('✅ Active participants loaded:', participants.length);
+      console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
       setActiveParticipants(participants);
     } catch (error) {
-      console.error('Failed to load participants:', error);
+      console.error('❌ Failed to load participants:', error);
     }
   }, []);
 
@@ -171,7 +172,7 @@ export default function RompeHieloScreen() {
     }
 
     try {
-      console.log('Loading appointment for user:', user.id);
+      console.log('📋 Loading appointment for user:', user.id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -212,13 +213,13 @@ export default function RompeHieloScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading appointment:', error);
+        console.error('❌ Error loading appointment:', error);
         setLoading(false);
         return;
       }
       
       if (!data || data.length === 0) {
-        console.log('No confirmed appointments found');
+        console.log('⚠️ No confirmed appointments found');
         setAppointment(null);
         setLoading(false);
         return;
@@ -244,14 +245,14 @@ export default function RompeHieloScreen() {
 
       const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
       
-      console.log('Appointment loaded:', appointmentData.id);
-      console.log('Event state from database:', {
+      console.log('✅ Appointment loaded:', appointmentData.id);
+      console.log('📊 Event state from database:', {
         game_phase: appointmentData.event?.game_phase,
         current_level: appointmentData.event?.current_level
       });
       
       if (appointmentData.event?.game_phase) {
-        console.log('Setting game phase from database:', appointmentData.event.game_phase);
+        console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
         setGamePhase(appointmentData.event.game_phase);
       }
       
@@ -265,7 +266,7 @@ export default function RompeHieloScreen() {
         loadActiveParticipants(appointmentData.event_id);
       }
     } catch (error) {
-      console.error('Failed to load appointment:', error);
+      console.error('❌ Failed to load appointment:', error);
     } finally {
       setLoading(false);
     }
@@ -274,7 +275,7 @@ export default function RompeHieloScreen() {
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('Subscribing to event state changes for event:', appointment.event_id);
+    console.log('📡 Subscribing to event state changes for event:', appointment.event_id);
 
     const channel = supabase
       .channel(`rompe_hielo_event_${appointment.event_id}`)
@@ -287,15 +288,15 @@ export default function RompeHieloScreen() {
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('Event state change detected:', payload);
+          console.log('📡 Event state change detected:', payload);
           const newEvent = payload.new as any;
-          console.log('New state:', {
+          console.log('📡 New state:', {
             game_phase: newEvent.game_phase,
             current_level: newEvent.current_level
           });
           
           if (newEvent.game_phase) {
-            console.log('Updating game phase from realtime:', newEvent.game_phase);
+            console.log('🎮 Updating game phase from realtime:', newEvent.game_phase);
             setGamePhase(newEvent.game_phase);
           }
           
@@ -317,25 +318,25 @@ export default function RompeHieloScreen() {
         }
       )
       .subscribe((status) => {
-        console.log('Event state subscription status:', status);
+        console.log('📡 Event state subscription status:', status);
       });
 
     return () => {
-      console.log('Unsubscribing event state');
+      console.log('📡 Unsubscribing event state');
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('Rompe Hielo screen focused');
+      console.log('👁️ Rompe Hielo screen focused');
       
       if (user) {
         loadAppointment();
       }
       
       return () => {
-        console.log('Rompe Hielo screen unfocused');
+        console.log('👁️ Rompe Hielo screen unfocused');
       };
     }, [user, loadAppointment])
   );
@@ -353,7 +354,7 @@ export default function RompeHieloScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('Setting up Realtime subscription for participants');
+    console.log('📡 Setting up Realtime subscription for participants');
     
     loadActiveParticipants(appointment.event_id);
 
@@ -369,7 +370,7 @@ export default function RompeHieloScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('Participant update:', payload.eventType);
+          console.log('📡 Participant update:', payload.eventType);
           loadActiveParticipants(appointment.event_id);
         }
       )
@@ -390,25 +391,25 @@ export default function RompeHieloScreen() {
       eventDate.setMinutes(eventDate.getMinutes() + 10);
       
       if (now >= eventDate) {
-        console.log('Auto-transitioning to ready phase (10 min after start)');
+        console.log('⏰ Auto-transitioning to intro phase (10 min after start)');
 
         try {
           const { error } = await supabase
             .from('events')
             .update({
-              game_phase: 'ready',
+              game_phase: 'intro',
               updated_at: new Date().toISOString(),
             })
             .eq('id', appointment.event_id);
 
           if (error) {
-            console.error('Error transitioning to ready phase:', error);
+            console.error('❌ Error transitioning to intro phase:', error);
             return;
           }
 
-          console.log('Successfully transitioned to ready phase');
+          console.log('✅ Successfully transitioned to intro phase');
         } catch (error) {
-          console.error('Unexpected error during transition:', error);
+          console.error('❌ Unexpected error during transition:', error);
         }
       }
     };
@@ -421,41 +422,41 @@ export default function RompeHieloScreen() {
   }, [appointment?.event_id, appointment?.event?.start_time, gamePhase]);
 
   const handleStartExperience = useCallback(async () => {
-    console.log('User clicked Comenzar button');
+    console.log('🚀 User clicked Comenzar button');
     
     if (!appointment?.event_id || startingExperience) {
-      console.warn('Cannot start - already loading or no event');
+      console.warn('⚠️ Cannot start - already loading or no event');
       return;
     }
 
     if (activeParticipants.length === 0) {
-      console.warn('Cannot start - no participants');
+      console.warn('⚠️ Cannot start - no participants');
       return;
     }
 
     setStartingExperience(true);
     
     try {
-      console.log('Updating database to start experience...');
+      console.log('🎮 Updating database to start experience...');
       
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'ready',
+          game_phase: 'intro',
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('Error starting experience:', error);
+        console.error('❌ Error starting experience:', error);
         setStartingExperience(false);
         return;
       }
 
-      console.log('Successfully started experience - transitioning to ready phase');
+      console.log('✅ Successfully started experience - transitioning to intro phase');
       
     } catch (error) {
-      console.error('Unexpected error:', error);
+      console.error('❌ Unexpected error:', error);
       setStartingExperience(false);
     } finally {
       setTimeout(() => {
@@ -464,7 +465,7 @@ export default function RompeHieloScreen() {
     }
   }, [appointment, activeParticipants, startingExperience]);
 
-  console.log('Rompe Hielo Status:', {
+  console.log('📊 Rompe Hielo Status:', {
     activeParticipants: activeParticipants.length,
     gamePhase: gamePhase,
     isEventDay: isEventDay,
@@ -545,10 +546,12 @@ export default function RompeHieloScreen() {
     );
   }
 
-  if (gamePhase === 'ready' || gamePhase === 'in_progress' || gamePhase === 'free_phase') {
-    console.log('Rendering Game Dynamics Screen');
-    console.log('Game phase:', gamePhase);
-    console.log('Active participants count:', activeParticipants.length);
+  // CRITICAL FIX: Render GameDynamicsScreen when gamePhase is 'intro', 'ready', 'in_progress', or 'free_phase'
+  if (gamePhase === 'intro' || gamePhase === 'ready' || gamePhase === 'in_progress' || gamePhase === 'free_phase') {
+    console.log('🎮 === RENDERING GAME DYNAMICS SCREEN ===');
+    console.log('🎮 Game phase:', gamePhase);
+    console.log('🎮 Active participants count:', activeParticipants.length);
+    console.log('🎮 Active participants:', activeParticipants.map(p => ({ user_id: p.user_id, name: p.name })));
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={activeParticipants} />;
   }
