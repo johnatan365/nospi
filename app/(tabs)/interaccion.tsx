@@ -63,7 +63,7 @@ interface Participant {
   profiles: Profile | null;
 }
 
-
+type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
@@ -83,6 +83,9 @@ export default function InteraccionScreen() {
   const [countdown, setCountdown] = useState<number>(0);
   const [countdownDisplay, setCountdownDisplay] = useState<string>('');
   const [isEventDay, setIsEventDay] = useState(false);
+  const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
+  const [confirmationCode, setConfirmationCode] = useState('');
+  const [codeError, setCodeError] = useState('');
   const [startingExperience, setStartingExperience] = useState(false);
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
@@ -117,6 +120,10 @@ export default function InteraccionScreen() {
 
     if (diff <= 0) {
       setCountdownDisplay('¡Es hora!');
+      
+      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
+        setCheckInPhase('code_entry');
+      }
       return;
     }
 
@@ -126,7 +133,7 @@ export default function InteraccionScreen() {
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
-  }, [appointment]);
+  }, [appointment, checkInPhase]);
 
   const requestNotificationPermissions = useCallback(async () => {
     // Skip on web - notifications not fully supported
@@ -328,6 +335,10 @@ export default function InteraccionScreen() {
       
       setAppointment(appointmentData as any);
       
+      if (appointmentData.location_confirmed) {
+        setCheckInPhase('confirmed');
+      }
+      
       if (appointmentData.event && appointmentData.event.start_time) {
         checkIfEventDay(appointmentData.event.start_time);
         scheduleNotifications(appointmentData.event.start_time);
@@ -343,7 +354,71 @@ export default function InteraccionScreen() {
     }
   }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
 
+  const handleCodeConfirmation = useCallback(async () => {
+    if (!appointment || !user) return;
 
+    const enteredCode = confirmationCode.trim();
+    const eventCode = appointment.event.confirmation_code;
+    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
+      ? '1986' 
+      : eventCode.trim();
+    
+    console.log('Code validation - Expected:', expectedCode, 'Entered:', enteredCode);
+
+    if (enteredCode !== expectedCode) {
+      setCodeError('Código incorrecto.');
+      return;
+    }
+
+    setCodeError('');
+
+    try {
+      const confirmedAt = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from('event_participants')
+        .upsert({
+          event_id: appointment.event_id,
+          user_id: user.id,
+          confirmed: true,
+          check_in_time: confirmedAt,
+        }, {
+          onConflict: 'event_id,user_id'
+        });
+
+      if (updateError) {
+        console.error('Error updating event_participants:', updateError);
+        setCodeError('No se pudo registrar tu llegada.');
+        return;
+      }
+
+      console.log('Check-in successful');
+      
+      await supabase
+        .from('appointments')
+        .update({
+          arrival_status: 'on_time',
+          checked_in_at: confirmedAt,
+          location_confirmed: true,
+        })
+        .eq('id', appointment.id);
+      
+      setAppointment(prev => ({
+        ...prev!,
+        arrival_status: 'on_time',
+        checked_in_at: confirmedAt,
+        location_confirmed: true,
+      }));
+      
+      setCheckInPhase('confirmed');
+      setConfirmationCode('');
+      
+      loadActiveParticipants(appointment.event_id);
+    } catch (error) {
+      console.error('Error during check-in:', error);
+      setCodeError('Ocurrió un error.');
+    }
+  }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(async () => {
     console.log('🚀 User clicked Continuar button');
@@ -520,7 +595,7 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
-
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
     return (
@@ -653,7 +728,104 @@ export default function InteraccionScreen() {
           <Text style={styles.eventLocation}>{locationText}</Text>
         </View>
 
+        {checkInPhase === 'code_entry' && (
+          <View style={styles.codeEntryCard}>
+            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
+            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
+            
+            <TextInput
+              style={styles.codeInput}
+              value={confirmationCode}
+              onChangeText={(text) => {
+                setConfirmationCode(text);
+                setCodeError('');
+              }}
+              placeholder="Código"
+              placeholderTextColor="#999"
+              keyboardType="default"
+              maxLength={10}
+              autoFocus
+            />
 
+            {codeError ? (
+              <Text style={styles.codeErrorText}>{codeError}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
+              onPress={handleCodeConfirmation}
+              disabled={!confirmationCode.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {checkInPhase === 'confirmed' && (
+          <>
+            <View style={styles.confirmedCard}>
+              <Text style={styles.confirmedIcon}>✅</Text>
+              <Text style={styles.confirmedText}>
+                ¡Llegada confirmada!
+              </Text>
+            </View>
+
+            <View style={styles.participantsListCard}>
+              <View style={styles.participantsListHeader}>
+                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+                <View style={styles.participantCountBadge}>
+                  <Text style={styles.participantCountText}>{participantCountText}</Text>
+                </View>
+              </View>
+              
+              {activeParticipants.length > 0 && (
+                <View style={styles.participantsList}>
+                  {activeParticipants.map((participant, index) => {
+                    const displayName = participant.profiles?.name || 'Participante';
+                    
+                    return (
+                      <React.Fragment key={index}>
+                      <View style={styles.participantListItem}>
+                        <View style={styles.participantListPhotoPlaceholder}>
+                          <Text style={styles.participantListPhotoText}>
+                            {displayName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={styles.participantListName}>{displayName}</Text>
+                      </View>
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {canStartExperience && (
+              <>
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    ✨ Hay {activeParticipants.length} participantes confirmados
+                  </Text>
+                  <Text style={styles.infoTextSecondary}>
+                    Presiona "Continuar" para iniciar la experiencia
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
+                  onPress={handleStartExperience}
+                  disabled={startingExperience}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.continueButtonText}>
+                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -784,7 +956,172 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  codeEntryCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  codeEntryTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  codeEntrySubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  codeInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleLight,
+  },
+  codeErrorText: {
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmCodeButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  confirmCodeButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  confirmedCard: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  confirmedIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  confirmedText: {
+    fontSize: 16,
+    color: '#065F46',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  participantsListCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  participantsListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  participantsListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  participantCountBadge: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  participantCountText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  participantsList: {
+    marginTop: 8,
+  },
+  participantListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  participantListPhotoPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantListPhotoText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantListName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  infoTextSecondary: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  continueButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  continueButtonText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
