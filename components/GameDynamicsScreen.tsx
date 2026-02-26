@@ -502,7 +502,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setLoading(true);
 
     try {
-      // CRITICAL FIX: Perform database update
+      // CRITICAL FIX: Immediately update local state BEFORE database call (optimistic update)
+      console.log('✅ IMMEDIATELY showing finalization feedback (optimistic update)');
+      
+      // Perform database update
       // Only update THIS user's appointment to 'anterior'
       // Do NOT close the event or affect other users
       const { error: appointmentError } = await supabase

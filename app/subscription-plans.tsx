@@ -269,8 +269,8 @@ export default function SubscriptionPlansScreen() {
                 </View>
               )}
               <Image 
-                source={require('@/assets/images/fe290afc-0bd7-49af-a400-0a591afcb6a2.png')} 
-                style={styles.paymentIconPSE}
+                source={require('@/assets/images/96868a8c-449f-4c99-af42-39110c03f5c3.png')} 
+                style={styles.paymentIcon}
                 resizeMode="contain"
               />
             </View>
@@ -444,12 +444,13 @@ const styles = StyleSheet.create({
   },
   paymentButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingVertical: 16,
+    paddingVertical: 20,
     paddingHorizontal: 24,
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 3,
     borderColor: 'transparent',
+    minHeight: 70,
   },
   paymentButtonSelected: {
     borderColor: nospiColors.purpleDark,
@@ -481,12 +482,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   paymentIcon: {
-    width: 80,
-    height: 32,
-  },
-  paymentIconPSE: {
     width: 100,
-    height: 50,
+    height: 40,
   },
   summaryContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
