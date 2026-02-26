@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import MatchSelectionScreen from './MatchSelectionScreen';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'intro' | 'ready' | 'questions' | 'match_selection' | 'free_phase';
+type GamePhase = 'questions' | 'match_selection' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -59,15 +59,9 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 === GAME DYNAMICS SCREEN RENDER ===');
-  console.log('🎮 Received activeParticipants count:', activeParticipants.length);
-  console.log('🎮 Received activeParticipants:', activeParticipants.map(p => ({
-    user_id: p.user_id,
-    name: p.name,
-    confirmed: p.confirmed
-  })));
+  console.log('🎮 GameDynamicsScreen render - activeParticipants:', activeParticipants.length);
   
-  const [gamePhase, setGamePhase] = useState<GamePhase>('intro');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answeredUsers, setAnsweredUsers] = useState<string[]>([]);
@@ -76,11 +70,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
-  const [readyUsers, setReadyUsers] = useState<string[]>([]);
-
-  console.log('🎮 Current gamePhase state:', gamePhase);
-  console.log('🎮 Current readyUsers:', readyUsers);
-  console.log('🎮 Current activeParticipants.length:', activeParticipants.length);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -178,7 +167,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('🔄 === RESTORING STATE FROM DATABASE ===');
+    console.log('🔄 Restoring state from database');
     
     const restoreStateFromDatabase = async () => {
       const { data, error } = await supabase
@@ -201,19 +190,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         game_phase: data.game_phase,
         current_level: data.current_level,
         current_question_index: data.current_question_index,
-        ready_users: data.ready_users,
       });
 
-      // Restore ready_users
-      if (data.ready_users) {
-        setReadyUsers(data.ready_users);
-      }
-
       // Derive UI from event_state
-      if (data.game_phase === 'intro') {
-        console.log('🔄 Restoring intro phase');
-        setGamePhase('intro');
-      } else if (data.game_phase === 'match_selection') {
+      if (data.game_phase === 'match_selection') {
         console.log('🔄 Restoring match_selection phase');
         setGamePhase('match_selection');
         setCurrentLevel(data.current_level || 'divertido');
@@ -232,9 +212,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else if (data.game_phase === 'free_phase') {
         console.log('🔄 Restoring free_phase');
         setGamePhase('free_phase');
-      } else if (data.game_phase === 'ready') {
-        console.log('🔄 Restoring ready phase');
-        setGamePhase('ready');
       }
     };
 
@@ -245,7 +222,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 === SUBSCRIBING TO EVENT_STATE ===');
+    console.log('📡 Subscribing to event_state');
 
     const channel = supabase
       .channel(`game_${appointment.event_id}`)
@@ -258,18 +235,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 === EVENT_STATE UPDATE ===');
+          console.log('📡 Event_state update');
           const newEvent = payload.new as any;
           
-          // Update ready_users
-          if (newEvent.ready_users) {
-            setReadyUsers(newEvent.ready_users);
-          }
-          
-          if (newEvent.game_phase === 'intro') {
-            console.log('📡 Updating to intro phase');
-            setGamePhase('intro');
-          } else if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
+          if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
             console.log('📡 Updating to questions phase');
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
@@ -288,9 +257,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           } else if (newEvent.game_phase === 'free_phase') {
             console.log('📡 Updating to free_phase');
             setGamePhase('free_phase');
-          } else if (newEvent.game_phase === 'ready') {
-            console.log('📡 Updating to ready phase');
-            setGamePhase('ready');
           }
         }
       )
@@ -301,146 +267,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, activeParticipants]);
 
-  // Auto-start when all participants are ready
-  useEffect(() => {
-    if (gamePhase !== 'intro') return;
-    if (activeParticipants.length < 2) return;
-    if (readyUsers.length === 0) return;
-
-    const allParticipantsReady = activeParticipants.every(p => readyUsers.includes(p.user_id));
-    
-    if (allParticipantsReady && readyUsers.length === activeParticipants.length) {
-      console.log('🎉 All participants ready - auto-starting experience');
-      
-      const startExperience = async () => {
-        try {
-          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-          const starterUserId = activeParticipants[randomIndex].user_id;
-          const firstQuestion = QUESTIONS.divertido[0];
-          
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'questions',
-              current_level: 'divertido',
-              current_question_index: 0,
-              answered_users: [],
-              current_question: firstQuestion,
-              current_question_starter_id: starterUserId,
-              ready_users: [],
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error auto-starting experience:', error);
-            return;
-          }
-
-          console.log('✅ Experience auto-started successfully');
-        } catch (error) {
-          console.error('❌ Unexpected error auto-starting:', error);
-        }
-      };
-
-      startExperience();
-    }
-  }, [gamePhase, activeParticipants, readyUsers, appointment.event_id]);
-
-  const handleMarkReady = useCallback(async () => {
-    console.log('✋ User marking themselves as ready');
-    
-    if (!appointment?.event_id || !currentUserId) {
-      console.warn('⚠️ Cannot mark ready - no event or user');
-      return;
-    }
-
-    if (readyUsers.includes(currentUserId)) {
-      console.log('⚠️ User already marked as ready');
-      return;
-    }
-
-    const newReadyUsers = [...new Set([...readyUsers, currentUserId])];
-    
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({
-          ready_users: newReadyUsers,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error marking ready:', error);
-        return;
-      }
-
-      console.log('✅ User marked as ready successfully');
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-    }
-  }, [appointment, currentUserId, readyUsers]);
-
-  const handleStartDynamic = useCallback(async () => {
-    console.log('🎮 === STARTING DYNAMIC ===');
-    console.log('🎮 User clicked Iniciar Experiencia button');
-    
-    if (!appointment?.event_id || loading) {
-      console.warn('⚠️ Cannot start - already loading or no event');
-      return;
-    }
-
-    if (activeParticipants.length < 2) {
-      console.warn('⚠️ Cannot start - need at least 2 participants');
-      return;
-    }
-
-    setLoading(true);
-    
-    try {
-      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-      const starterUserId = activeParticipants[randomIndex].user_id;
-      const firstQuestion = QUESTIONS.divertido[0];
-      
-      console.log('🎮 Updating database to start dynamic...');
-      console.log('🎮 Starter user:', activeParticipants[randomIndex].name);
-      console.log('🎮 First question:', firstQuestion);
-      
-      const { error } = await supabase
-        .from('events')
-        .update({
-          game_phase: 'questions',
-          current_level: 'divertido',
-          current_question_index: 0,
-          answered_users: [],
-          current_question: firstQuestion,
-          current_question_starter_id: starterUserId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error starting dynamic:', error.message, error.code, error.details, error.hint);
-        setLoading(false);
-        return;
-      }
-
-      console.log('✅ Database updated successfully - dynamic started');
-      console.log('✅ Realtime subscription will update UI automatically');
-      
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-      setLoading(false);
-    } finally {
-      setTimeout(() => {
-        setLoading(false);
-      }, 2000);
-    }
-  }, [appointment, activeParticipants, loading]);
-
   const handleAnswered = useCallback(async () => {
-    console.log('✅ === USER MARKING AS ANSWERED ===');
+    console.log('✅ User marking as answered');
     
     if (!appointment?.event_id || !currentUserId) {
       console.warn('⚠️ Cannot mark as answered');
@@ -475,7 +303,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentUserId, answeredUsers]);
 
   const handleContinue = useCallback(async () => {
-    console.log('➡️ === CONTINUING ===');
+    console.log('➡️ Continuing');
     
     if (!appointment?.event_id) return;
 
@@ -533,8 +361,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentLevel, currentQuestionIndex, activeParticipants]);
 
   const handleMatchComplete = useCallback(async (nextLevel: QuestionLevel, nextPhase: 'questions' | 'free_phase') => {
-    console.log('💘 === MATCH COMPLETE ===');
-    console.log('💘 Next level:', nextLevel, 'Next phase:', nextPhase);
+    console.log('💘 Match complete - nextLevel:', nextLevel, 'nextPhase:', nextPhase);
     
     if (!appointment?.event_id) return;
 
@@ -631,7 +458,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleFinishEvent = useCallback(async () => {
     if (!appointment?.event_id) return;
 
-    console.log('🏁 === FINISHING EVENT ===');
+    console.log('🏁 Finishing event');
     setLoading(true);
 
     try {
@@ -693,19 +520,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  console.log('🎮 === RENDERING DECISION ===');
-  console.log('🎮 gamePhase:', gamePhase);
-  console.log('🎮 activeParticipants.length:', activeParticipants.length);
-  console.log('🎮 Will render intro phase?', gamePhase === 'intro');
+  console.log('🎮 Rendering decision - gamePhase:', gamePhase);
 
   // Show match selection screen
   if (gamePhase === 'match_selection' && currentUserId) {
-    console.log('🎮 === RENDERING MATCH SELECTION SCREEN ===');
-    console.log('🎮 Passing participants count:', activeParticipants.length);
-    console.log('🎮 Passing participants:', activeParticipants.map(p => ({
-      user_id: p.user_id,
-      name: p.name
-    })));
+    console.log('🎮 Rendering MatchSelectionScreen');
     
     return (
       <MatchSelectionScreen
@@ -718,159 +537,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('✨ Match animation triggered for:', matchedUserId);
         }}
       />
-    );
-  }
-
-  // NEW: Show "Estoy listo para comenzar" button when in intro phase with 2+ participants
-  if (gamePhase === 'intro') {
-    console.log('🎮 === RENDERING INTRO PHASE ===');
-    const canStart = activeParticipants.length >= 2;
-    const isUserReady = currentUserId ? readyUsers.includes(currentUserId) : false;
-    const readyCount = readyUsers.length;
-    const totalParticipants = activeParticipants.length;
-
-    console.log('🎮 canStart:', canStart);
-    console.log('🎮 isUserReady:', isUserReady);
-    console.log('🎮 readyCount:', readyCount);
-    console.log('🎮 totalParticipants:', totalParticipants);
-
-    return (
-      <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoIcon}>✨</Text>
-            <Text style={styles.infoTitle}>¡Llegada confirmada!</Text>
-            <Text style={styles.infoText}>
-              Cada uno debe presionar el botón para confirmar que está listo para comenzar.
-            </Text>
-          </View>
-
-          {canStart ? (
-            <>
-              <View style={styles.participantsReadyCard}>
-                <Text style={styles.participantsReadyTitle}>Participantes confirmados</Text>
-                <Text style={styles.participantsReadyCount}>
-                  {readyCount} de {totalParticipants} listos
-                </Text>
-                
-                {activeParticipants.map((participant, index) => {
-                  const isReady = readyUsers.includes(participant.user_id);
-                  const displayName = participant.name;
-                  
-                  return (
-                    <View key={index} style={styles.participantReadyItem}>
-                      <Text style={styles.participantReadyIcon}>{isReady ? '✅' : '⬜'}</Text>
-                      <Text style={[styles.participantReadyName, isReady && styles.participantReadyNameDone]}>
-                        {displayName}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-
-              {!isUserReady && (
-                <TouchableOpacity
-                  style={[styles.readyButton, loading && styles.buttonDisabled]}
-                  onPress={handleMarkReady}
-                  disabled={loading || !currentUserId}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.readyButtonText}>
-                    ✋ Estoy listo para comenzar
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {isUserReady && (
-                <View style={styles.waitingCard}>
-                  <Text style={styles.waitingText}>
-                    ✓ Esperando a que todos estén listos...
-                  </Text>
-                </View>
-              )}
-
-              {/* CRITICAL: This is the "Iniciar Experiencia" button - ALWAYS visible when 2+ participants */}
-              <TouchableOpacity
-                style={[styles.startExperienceButton, loading && styles.buttonDisabled]}
-                onPress={handleStartDynamic}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.startExperienceButtonText}>
-                  {loading ? '⏳ Iniciando...' : '🚀 Iniciar Experiencia'}
-                </Text>
-              </TouchableOpacity>
-
-              {readyCount === totalParticipants && totalParticipants >= 2 && (
-                <View style={styles.autoStartCard}>
-                  <Text style={styles.autoStartText}>
-                    🎉 ¡Todos listos! Iniciando automáticamente...
-                  </Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingText}>
-                Se necesitan al menos 2 participantes confirmados
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </LinearGradient>
-    );
-  }
-
-  if (gamePhase === 'ready') {
-    const canStart = activeParticipants.length >= 2;
-    const buttonDisabled = loading || !canStart;
-
-    return (
-      <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.titleWhite}>Dinámica de Grupo</Text>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoIcon}>✨</Text>
-            <Text style={styles.infoTitle}>¡Comienza la experiencia!</Text>
-            <Text style={styles.infoText}>
-              Responden juntos, se escuchan y se conocen mejor.{'\n'}
-              El sistema elegirá quién rompe el hielo 😉
-            </Text>
-          </View>
-
-          {canStart ? (
-            <TouchableOpacity
-              style={[styles.startButton, buttonDisabled && styles.buttonDisabled]}
-              onPress={handleStartDynamic}
-              disabled={buttonDisabled}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.startButtonText}>
-                {loading ? '⏳ Iniciando...' : '🎉 Iniciar Dinámica'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingText}>
-                Se necesitan al menos 2 participantes confirmados
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </LinearGradient>
     );
   }
 
@@ -1059,164 +725,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 120,
   },
-  titleWhite: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 24,
-    marginTop: 48,
-    textAlign: 'center',
-  },
-  infoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-  },
-  infoIcon: {
-    fontSize: 48,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  infoTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  infoText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  participantsReadyCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-  },
-  participantsReadyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  participantsReadyCount: {
-    fontSize: 16,
-    color: nospiColors.purpleMid,
-    marginBottom: 16,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  participantReadyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  participantReadyIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  participantReadyName: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  participantReadyNameDone: {
-    opacity: 0.6,
-  },
-  readyButton: {
-    backgroundColor: '#FFD700',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-    marginBottom: 16,
-  },
-  readyButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a0b2e',
-  },
-  startExperienceButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 15,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  startExperienceButtonText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  autoStartCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#10B981',
-    marginTop: 8,
-  },
-  autoStartText: {
-    fontSize: 16,
-    color: '#065F46',
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  startButton: {
-    backgroundColor: '#FFD700',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  startButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a0b2e',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  waitingCard: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#92400E',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
   levelBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
@@ -1340,6 +848,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  waitingCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#92400E',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   iceBreakCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

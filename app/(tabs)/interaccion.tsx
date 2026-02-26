@@ -195,8 +195,7 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('🔄 === LOADING ACTIVE PARTICIPANTS ===');
-      console.log('🔄 Event ID:', eventId);
+      console.log('🔄 Loading active participants for event:', eventId);
       
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
@@ -229,7 +228,6 @@ export default function InteraccionScreen() {
         }));
 
       console.log('✅ Active participants loaded:', participants.length);
-      console.log('✅ Participant user IDs:', participants.map(p => p.user_id));
       
       setActiveParticipants(participants);
     } catch (error) {
@@ -244,8 +242,7 @@ export default function InteraccionScreen() {
     }
 
     try {
-      console.log('🔄 === LOADING APPOINTMENT ===');
-      console.log('Loading appointment for user:', user.id);
+      console.log('🔄 Loading appointment for user:', user.id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -321,11 +318,7 @@ export default function InteraccionScreen() {
       const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
       
       console.log('✅ Appointment loaded:', appointmentData.id);
-      console.log('📊 Appointment status:', appointmentData.status);
-      console.log('📊 Event state from database:', {
-        game_phase: appointmentData.event?.game_phase,
-        current_level: appointmentData.event?.current_level
-      });
+      console.log('📊 Event game_phase:', appointmentData.event?.game_phase);
       
       // CRITICAL: Set game phase from database
       if (appointmentData.event?.game_phase) {
@@ -436,7 +429,7 @@ export default function InteraccionScreen() {
     setStartingExperience(true);
     
     try {
-      console.log('🎮 Updating database to start experience directly to questions...');
+      console.log('🎮 Starting experience - going directly to questions phase');
       
       // Select random starter
       const randomIndex = Math.floor(Math.random() * activeParticipants.length);
@@ -483,8 +476,7 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 === SUBSCRIBING TO EVENT_STATE CHANGES ===');
-    console.log('📡 Event ID:', appointment.event_id);
+    console.log('📡 Subscribing to event_state changes for event:', appointment.event_id);
 
     const channel = supabase
       .channel(`event_state_${appointment.event_id}`)
@@ -497,12 +489,9 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 === EVENT_STATE CHANGE DETECTED ===');
+          console.log('📡 Event_state change detected');
           const newEvent = payload.new as any;
-          console.log('📡 New state:', {
-            game_phase: newEvent.game_phase,
-            current_level: newEvent.current_level
-          });
+          console.log('📡 New game_phase:', newEvent.game_phase);
           
           // CRITICAL: Update game phase from database
           if (newEvent.game_phase) {
@@ -540,7 +529,7 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 === SCREEN FOCUSED ===');
+      console.log('🔄 Screen focused');
       
       if (user) {
         loadAppointment();
@@ -666,15 +655,10 @@ export default function InteraccionScreen() {
   }
 
   // CRITICAL: Show game dynamics based on game_phase from database
-  if (gamePhase === 'ready' || gamePhase === 'question_active' || gamePhase === 'questions' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
-    console.log('🎮 === RENDERING GAME DYNAMICS SCREEN ===');
-    console.log('🎮 Game phase:', gamePhase);
+  // Skip 'intro' and 'ready' phases - go directly to questions, match_selection, or free_phase
+  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'match_selection' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+    console.log('🎮 Rendering GameDynamicsScreen with phase:', gamePhase);
     console.log('🎮 Active participants count:', activeParticipants.length);
-    console.log('🎮 Active participants:', activeParticipants.map(p => ({
-      user_id: p.user_id,
-      name: p.profiles?.name,
-      confirmed: p.confirmed
-    })));
     
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
@@ -686,8 +670,6 @@ export default function InteraccionScreen() {
       check_in_time: p.check_in_time,
       presented: p.is_presented
     }));
-    
-    console.log('🎮 Transformed participants count:', transformedParticipants.length);
     
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
   }
@@ -808,7 +790,7 @@ export default function InteraccionScreen() {
                     ✨ Hay {activeParticipants.length} participantes confirmados
                   </Text>
                   <Text style={styles.infoTextSecondary}>
-                    Presiona "Continuar" para iniciar la experiencia
+                    Presiona &quot;Continuar&quot; para iniciar la experiencia
                   </Text>
                 </View>
 
