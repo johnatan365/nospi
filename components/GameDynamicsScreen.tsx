@@ -266,7 +266,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment?.event_id, activeParticipants]);
 
   const handleContinue = useCallback(async () => {
-    console.log('➡️ Continuing to next question');
+    console.log('➡️ User pressed Continuar button in questions phase');
     
     if (!appointment?.event_id) return;
 
@@ -294,10 +294,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (error) {
           console.error('❌ Error advancing question:', error);
+          setLoading(false);
           return;
         }
 
-        console.log('✅ Advanced to next question');
+        console.log('✅ Advanced to next question - IMMEDIATELY updating local state');
+        
+        // CRITICAL FIX: Immediately update local state after successful database write
+        setCurrentQuestionIndex(nextQuestionIndex);
+        setCurrentQuestion(nextQuestion);
+        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+        setStarterParticipant(newStarter || null);
+        
       } else {
         // MATCH SELECTION DISABLED - Skip directly to next level or free phase
         console.log('⚡ Level finished - skipping match selection');
@@ -329,10 +337,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error starting next level:', error);
+            setLoading(false);
             return;
           }
 
-          console.log('✅ Started next level:', nextLevel);
+          console.log('✅ Started next level - IMMEDIATELY updating local state');
+          
+          // CRITICAL FIX: Immediately update local state after successful database write
+          setGamePhase('questions');
+          setCurrentLevel(nextLevel);
+          setCurrentQuestionIndex(0);
+          setCurrentQuestion(firstQuestion);
+          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+          setStarterParticipant(newStarter || null);
+          
         } else {
           // All levels complete - go to free phase
           console.log('🏁 All levels complete - transitioning to free_phase');
@@ -347,10 +365,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           if (error) {
             console.error('❌ Error ending game:', error);
+            setLoading(false);
             return;
           }
 
-          console.log('✅ Game ended');
+          console.log('✅ Game ended - IMMEDIATELY updating local state');
+          
+          // CRITICAL FIX: Immediately update local state after successful database write
+          setGamePhase('free_phase');
         }
       }
     } catch (error) {
@@ -405,9 +427,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentUserId]);
 
   const handleFinishEvent = useCallback(async () => {
+    console.log('🏁 User pressed Finalizar button');
+    
     if (!appointment?.event_id || !currentUserId) return;
 
-    console.log('🏁 User finishing event individually - moving ONLY this user\'s appointment to anterior');
+    console.log('🏁 Finishing event individually - moving ONLY this user\'s appointment to anterior');
     setLoading(true);
 
     try {
@@ -422,11 +446,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
       if (appointmentError) {
         console.error('❌ Error updating user appointment to anterior:', appointmentError);
-      } else {
-        console.log('✅ User appointment moved to anterior status - event continues for other users');
+        setLoading(false);
+        return;
       }
-
+      
+      console.log('✅ User appointment moved to anterior status - event continues for other users');
       console.log('✅ User finished event individually - they will no longer see this event');
+      
+      // CRITICAL FIX: The appointment status change will be detected by the realtime subscription
+      // in interaccion.tsx, which will clear the appointment from view
+      // No need to navigate or update state here - the parent component handles it
+      
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
     } finally {

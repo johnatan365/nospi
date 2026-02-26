@@ -369,6 +369,8 @@ export default function InteraccionScreen() {
   }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
 
   const handleCodeConfirmation = useCallback(async () => {
+    console.log('🔐 User pressed Confirmar Código button');
+    
     if (!appointment || !user) return;
 
     const enteredCode = confirmationCode.trim();
@@ -425,13 +427,15 @@ export default function InteraccionScreen() {
         location_confirmed: true,
       }));
       
+      // CRITICAL FIX: Immediately update UI state after successful code confirmation
+      console.log('✅ Immediately transitioning to confirmed phase');
       setCheckInPhase('confirmed');
       setConfirmationCode('');
       
-      // CRITICAL FIX: After confirming location, set game phase to current event phase
-      // This allows the user to join the game that's already in progress
+      // CRITICAL FIX: After confirming location, immediately set game phase to current event phase
+      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
       if (appointment.event?.game_phase) {
-        console.log('🎮 User confirmed location - setting game phase to current event phase:', appointment.event.game_phase);
+        console.log('🎮 User confirmed location - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
         setGamePhase(appointment.event.game_phase);
       }
       
