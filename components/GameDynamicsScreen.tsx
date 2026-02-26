@@ -407,13 +407,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleFinishEvent = useCallback(async () => {
     if (!appointment?.event_id) return;
 
-    console.log('🏁 Finishing event');
+    console.log('🏁 Finishing event - closing event and moving appointments to anterior');
     setLoading(true);
 
     try {
+      // Step 1: Fetch all appointments for this event
       const { data: allAppointments, error: fetchError } = await supabase
         .from('appointments')
-        .select('id')
+        .select('id, status')
         .eq('event_id', appointment.event_id);
 
       if (fetchError) {
@@ -421,18 +422,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else {
         console.log('📊 Found appointments to update:', allAppointments?.length || 0);
         
+        // Step 2: Move ALL appointments (confirmadas) to anterior status
         const { error: appointmentsError } = await supabase
           .from('appointments')
           .update({ status: 'anterior' })
-          .eq('event_id', appointment.event_id);
+          .eq('event_id', appointment.event_id)
+          .eq('status', 'confirmada');
 
         if (appointmentsError) {
-          console.error('❌ Error updating appointments:', appointmentsError);
+          console.error('❌ Error updating appointments to anterior:', appointmentsError);
         } else {
-          console.log('✅ Moved ALL appointments to anterior status');
+          console.log('✅ Moved ALL confirmadas appointments to anterior status');
         }
       }
 
+      // Step 3: Close the event by resetting game state
       const { error: eventError } = await supabase
         .from('events')
         .update({
@@ -443,17 +447,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           current_question: null,
           current_question_starter_id: null,
           ready_users: [],
+          event_status: 'closed',
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
 
       if (eventError) {
-        console.error('❌ Error resetting event:', eventError);
+        console.error('❌ Error closing event:', eventError);
       } else {
-        console.log('✅ Event reset successfully');
+        console.log('✅ Event closed successfully');
       }
 
-      console.log('✅ Event finished successfully');
+      console.log('✅ Event finished successfully - appointments moved to anteriores tab');
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
     } finally {
