@@ -115,23 +115,32 @@ export default function InteraccionScreen() {
   const updateCountdown = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
-    eventDate.setMinutes(eventDate.getMinutes() + 10);
-    const diff = eventDate.getTime() - now.getTime();
+    
+    // Calculate time until exact appointment time (for code entry)
+    const diffToEventTime = eventDate.getTime() - now.getTime();
+    
+    // Calculate time until 10 minutes after appointment (for "Continuar" button)
+    const eventDatePlus10 = new Date(startTime);
+    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 10);
+    const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
 
-    setCountdown(diff);
+    setCountdown(diffToPlus10);
 
-    if (diff <= 0) {
+    // CRITICAL: Show code entry at EXACT appointment time
+    if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
+      console.log('⏰ Exact appointment time reached - showing code entry');
+      setCheckInPhase('code_entry');
+    }
+
+    // Display countdown to 10 minutes after appointment
+    if (diffToPlus10 <= 0) {
       setCountdownDisplay('¡Es hora!');
-      
-      if (!appointment?.location_confirmed && checkInPhase === 'waiting') {
-        setCheckInPhase('code_entry');
-      }
       return;
     }
 
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    const hours = Math.floor(diffToPlus10 / (1000 * 60 * 60));
+    const minutes = Math.floor((diffToPlus10 % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffToPlus10 % (1000 * 60)) / 1000);
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
@@ -667,6 +676,7 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
+  // CRITICAL: "Continuar" button only appears when countdown reaches 0 (10 minutes after appointment)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
@@ -799,7 +809,9 @@ export default function InteraccionScreen() {
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
         <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>Tiempo para el inicio</Text>
+          <Text style={styles.countdownLabel}>
+            {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
+          </Text>
           <Text style={styles.countdownTime}>{countdownDisplay}</Text>
         </View>
 
@@ -886,6 +898,17 @@ export default function InteraccionScreen() {
                 </View>
               )}
             </View>
+
+            {!canStartExperience && countdown > 0 && (
+              <View style={styles.infoCard}>
+                <Text style={styles.infoText}>
+                  ⏰ Esperando el momento de inicio
+                </Text>
+                <Text style={styles.infoTextSecondary}>
+                  El botón &quot;Continuar&quot; aparecerá cuando termine el conteo (10 minutos después de la hora de la cita)
+                </Text>
+              </View>
+            )}
 
             {canStartExperience && (
               <>
