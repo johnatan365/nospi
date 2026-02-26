@@ -391,6 +391,27 @@ export default function InteraccionScreen() {
     try {
       const confirmedAt = new Date().toISOString();
 
+      // CRITICAL FIX: Immediately update UI state BEFORE database calls for instant responsiveness
+      console.log('✅ IMMEDIATELY transitioning to confirmed phase (optimistic update)');
+      setCheckInPhase('confirmed');
+      setConfirmationCode('');
+      
+      // CRITICAL FIX: Immediately update appointment state with location_confirmed = true
+      setAppointment(prev => ({
+        ...prev!,
+        arrival_status: 'on_time',
+        checked_in_at: confirmedAt,
+        location_confirmed: true,
+      }));
+      
+      // CRITICAL FIX: Immediately set game phase to current event phase
+      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
+      if (appointment.event?.game_phase) {
+        console.log('🎮 User confirmed location - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
+        setGamePhase(appointment.event.game_phase);
+      }
+      
+      // Now perform database updates in the background
       const { error: updateError } = await supabase
         .from('event_participants')
         .upsert({
@@ -404,11 +425,13 @@ export default function InteraccionScreen() {
 
       if (updateError) {
         console.error('Error updating event_participants:', updateError);
+        // Revert optimistic update on error
+        setCheckInPhase('code_entry');
         setCodeError('No se pudo registrar tu llegada.');
         return;
       }
 
-      console.log('✅ Check-in successful');
+      console.log('✅ Check-in successful in database');
       
       await supabase
         .from('appointments')
@@ -419,29 +442,11 @@ export default function InteraccionScreen() {
         })
         .eq('id', appointment.id);
       
-      // CRITICAL FIX: Update appointment state with location_confirmed = true
-      setAppointment(prev => ({
-        ...prev!,
-        arrival_status: 'on_time',
-        checked_in_at: confirmedAt,
-        location_confirmed: true,
-      }));
-      
-      // CRITICAL FIX: Immediately update UI state after successful code confirmation
-      console.log('✅ Immediately transitioning to confirmed phase');
-      setCheckInPhase('confirmed');
-      setConfirmationCode('');
-      
-      // CRITICAL FIX: After confirming location, immediately set game phase to current event phase
-      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
-      if (appointment.event?.game_phase) {
-        console.log('🎮 User confirmed location - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
-        setGamePhase(appointment.event.game_phase);
-      }
-      
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error during check-in:', error);
+      // Revert optimistic update on error
+      setCheckInPhase('code_entry');
       setCodeError('Ocurrió un error.');
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);

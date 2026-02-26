@@ -432,10 +432,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     if (!appointment?.event_id || !currentUserId) return;
 
     console.log('🏁 Finishing event individually - moving ONLY this user\'s appointment to anterior');
+    
+    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
 
     try {
-      // CRITICAL FIX: Only update THIS user's appointment to 'anterior'
+      // CRITICAL FIX: Perform database update
+      // Only update THIS user's appointment to 'anterior'
       // Do NOT close the event or affect other users
       const { error: appointmentError } = await supabase
         .from('appointments')
@@ -455,13 +458,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       
       // CRITICAL FIX: The appointment status change will be detected by the realtime subscription
       // in interaccion.tsx, which will clear the appointment from view
-      // No need to navigate or update state here - the parent component handles it
+      // Keep loading state true so user sees feedback while realtime processes
       
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
-    } finally {
       setLoading(false);
     }
+    // Note: We keep loading=true because the realtime subscription will handle the UI transition
   }, [appointment, currentUserId]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
