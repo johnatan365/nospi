@@ -77,6 +77,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -104,22 +105,25 @@ export default function ProfileScreen() {
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       console.log('🔄 Loading user profile for user:', user?.id);
       
       if (!user?.id) {
         console.log('❌ No user ID available');
+        setError('No se encontró información de usuario');
         setLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('❌ Error loading profile:', error);
+      if (fetchError) {
+        console.error('❌ Error loading profile:', fetchError);
+        setError('Error al cargar el perfil: ' + fetchError.message);
         setLoading(false);
         return;
       }
@@ -139,8 +143,8 @@ export default function ProfileScreen() {
           id: user.id,
           email: user.email || '',
           name: fullName,
-          birthdate: '',
-          age: 18,
+          birthdate: '2000-01-01',
+          age: 24,
           gender: 'hombre',
           interested_in: 'ambos',
           age_range_min: 18,
@@ -168,19 +172,22 @@ export default function ProfileScreen() {
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
-        } else {
-          console.log('✅ Default profile created');
-          setProfile(defaultProfile);
-          setEditName(defaultProfile.name);
-          setEditPhone(defaultProfile.phone);
-          setEditCountry(defaultProfile.country);
-          setEditCity(defaultProfile.city);
-          setEditInterestedIn(defaultProfile.interested_in);
-          setEditAgeRangeMin(defaultProfile.age_range_min);
-          setEditAgeRangeMax(defaultProfile.age_range_max);
-          setEditInterests(defaultProfile.interests);
-          setEditPersonality(defaultProfile.personality_traits);
+          setError('Error al crear el perfil: ' + insertError.message);
+          setLoading(false);
+          return;
         }
+
+        console.log('✅ Default profile created');
+        setProfile(defaultProfile);
+        setEditName(defaultProfile.name);
+        setEditPhone(defaultProfile.phone);
+        setEditCountry(defaultProfile.country);
+        setEditCity(defaultProfile.city);
+        setEditInterestedIn(defaultProfile.interested_in);
+        setEditAgeRangeMin(defaultProfile.age_range_min);
+        setEditAgeRangeMax(defaultProfile.age_range_max);
+        setEditInterests(defaultProfile.interests);
+        setEditPersonality(defaultProfile.personality_traits);
         
         setLoading(false);
         return;
@@ -209,6 +216,7 @@ export default function ProfileScreen() {
       setEditPersonality(profileData.personality_traits || []);
     } catch (error) {
       console.error('❌ Failed to load profile:', error);
+      setError('Error inesperado al cargar el perfil');
     } finally {
       setLoading(false);
     }
@@ -534,7 +542,8 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!profile) {
+  if (error || !profile) {
+    const errorMessage = error || 'Error al cargar el perfil';
     return (
       <LinearGradient
         colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
@@ -543,7 +552,7 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>Error al cargar el perfil</Text>
+          <Text style={styles.errorText}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
