@@ -60,19 +60,95 @@ export default function AuthCallbackScreen() {
 
             console.log('AuthCallbackScreen: Extracted data - Name:', fullName, 'Email:', email, 'Photo:', profilePhotoUrl);
 
-            // Check if user profile exists
-            const { data: existingProfile, error: profileError } = await supabase
+            // Check if user profile exists by ID first (primary check)
+            const { data: existingProfileById, error: profileByIdError } = await supabase
               .from('users')
               .select('*')
               .eq('id', googleUser.id)
               .maybeSingle();
 
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('AuthCallbackScreen: Error checking profile:', profileError);
+            if (profileByIdError && profileByIdError.code !== 'PGRST116') {
+              console.error('AuthCallbackScreen: Error checking profile by ID:', profileByIdError);
             }
 
-            // If profile doesn't exist, create it with Google data
-            if (!existingProfile) {
+            // Also check if a profile exists with this email (to handle edge cases)
+            const { data: existingProfileByEmail, error: profileByEmailError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', email)
+              .maybeSingle();
+
+            if (profileByEmailError && profileByEmailError.code !== 'PGRST116') {
+              console.error('AuthCallbackScreen: Error checking profile by email:', profileByEmailError);
+            }
+
+            // If profile exists by ID, update it
+            if (existingProfileById) {
+              console.log('AuthCallbackScreen: Profile exists by ID, updating Google data');
+              
+              const updateData: any = {};
+              
+              // Only update name if it's empty or default
+              if (!existingProfileById.name || existingProfileById.name === 'Usuario' || existingProfileById.name === '') {
+                updateData.name = fullName;
+              }
+              
+              // Always update photo from Google if available
+              if (profilePhotoUrl) {
+                updateData.profile_photo_url = profilePhotoUrl;
+              }
+
+              // Only update if there's something to update
+              if (Object.keys(updateData).length > 0) {
+                console.log('AuthCallbackScreen: Updating profile with:', updateData);
+                
+                const { error: updateError } = await supabase
+                  .from('users')
+                  .update(updateData)
+                  .eq('id', googleUser.id);
+
+                if (updateError) {
+                  console.error('AuthCallbackScreen: Error updating profile:', updateError);
+                } else {
+                  console.log('AuthCallbackScreen: Profile updated successfully');
+                }
+              }
+            } 
+            // If profile exists by email but not by ID, this is a duplicate email situation
+            else if (existingProfileByEmail) {
+              console.log('AuthCallbackScreen: Profile exists with this email but different ID - updating existing profile');
+              
+              // Update the existing profile to use the new auth ID
+              const updateData: any = {
+                id: googleUser.id, // Update to new auth ID
+              };
+              
+              // Only update name if it's empty or default
+              if (!existingProfileByEmail.name || existingProfileByEmail.name === 'Usuario' || existingProfileByEmail.name === '') {
+                updateData.name = fullName;
+              }
+              
+              // Always update photo from Google if available
+              if (profilePhotoUrl) {
+                updateData.profile_photo_url = profilePhotoUrl;
+              }
+
+              console.log('AuthCallbackScreen: Updating existing profile with new auth ID:', updateData);
+              
+              const { error: updateError } = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('email', email);
+
+              if (updateError) {
+                console.error('AuthCallbackScreen: Error updating existing profile:', updateError);
+                setStatus('Error al actualizar el perfil');
+              } else {
+                console.log('AuthCallbackScreen: Existing profile updated successfully');
+              }
+            }
+            // No profile exists, create a new one
+            else {
               console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
               
               const newProfile = {
@@ -108,41 +184,10 @@ export default function AuthCallbackScreen() {
 
               if (createProfileError) {
                 console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
-                setStatus('Error al crear el perfil');
+                setStatus(`Error al crear el perfil: ${createProfileError.message}`);
               } else {
                 console.log('AuthCallbackScreen: Profile created successfully');
                 setStatus('Perfil creado correctamente');
-              }
-            } else {
-              console.log('AuthCallbackScreen: Profile already exists, updating Google data');
-              
-              // Update existing profile with Google photo if available
-              const updateData: any = {};
-              
-              // Only update name if it's empty or default
-              if (!existingProfile.name || existingProfile.name === 'Usuario' || existingProfile.name === '') {
-                updateData.name = fullName;
-              }
-              
-              // Always update photo from Google if available
-              if (profilePhotoUrl) {
-                updateData.profile_photo_url = profilePhotoUrl;
-              }
-
-              // Only update if there's something to update
-              if (Object.keys(updateData).length > 0) {
-                console.log('AuthCallbackScreen: Updating profile with:', updateData);
-                
-                const { error: updateError } = await supabase
-                  .from('users')
-                  .update(updateData)
-                  .eq('id', googleUser.id);
-
-                if (updateError) {
-                  console.error('AuthCallbackScreen: Error updating profile:', updateError);
-                } else {
-                  console.log('AuthCallbackScreen: Profile updated successfully');
-                }
               }
             }
 
@@ -185,19 +230,92 @@ export default function AuthCallbackScreen() {
 
           console.log('AuthCallbackScreen: Extracted data - Name:', fullName, 'Email:', email, 'Photo:', profilePhotoUrl);
 
-          // Check if user profile exists
-          const { data: existingProfile, error: profileError } = await supabase
+          // Check if user profile exists by ID first
+          const { data: existingProfileById, error: profileByIdError } = await supabase
             .from('users')
             .select('*')
             .eq('id', googleUser.id)
             .maybeSingle();
 
-          if (profileError && profileError.code !== 'PGRST116') {
-            console.error('AuthCallbackScreen: Error checking profile:', profileError);
+          if (profileByIdError && profileByIdError.code !== 'PGRST116') {
+            console.error('AuthCallbackScreen: Error checking profile by ID:', profileByIdError);
           }
 
-          // If profile doesn't exist, create it with Google data
-          if (!existingProfile) {
+          // Also check by email
+          const { data: existingProfileByEmail, error: profileByEmailError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+          if (profileByEmailError && profileByEmailError.code !== 'PGRST116') {
+            console.error('AuthCallbackScreen: Error checking profile by email:', profileByEmailError);
+          }
+
+          // If profile exists by ID, update it
+          if (existingProfileById) {
+            console.log('AuthCallbackScreen: Profile exists by ID, updating Google data');
+            
+            const updateData: any = {};
+            
+            // Only update name if it's empty or default
+            if (!existingProfileById.name || existingProfileById.name === 'Usuario' || existingProfileById.name === '') {
+              updateData.name = fullName;
+            }
+            
+            // Always update photo from Google if available
+            if (profilePhotoUrl) {
+              updateData.profile_photo_url = profilePhotoUrl;
+            }
+
+            // Only update if there's something to update
+            if (Object.keys(updateData).length > 0) {
+              console.log('AuthCallbackScreen: Updating profile with:', updateData);
+              
+              const { error: updateError } = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('id', googleUser.id);
+
+              if (updateError) {
+                console.error('AuthCallbackScreen: Error updating profile:', updateError);
+              } else {
+                console.log('AuthCallbackScreen: Profile updated successfully');
+              }
+            }
+          }
+          // If profile exists by email but not by ID
+          else if (existingProfileByEmail) {
+            console.log('AuthCallbackScreen: Profile exists with this email but different ID - updating existing profile');
+            
+            const updateData: any = {
+              id: googleUser.id,
+            };
+            
+            if (!existingProfileByEmail.name || existingProfileByEmail.name === 'Usuario' || existingProfileByEmail.name === '') {
+              updateData.name = fullName;
+            }
+            
+            if (profilePhotoUrl) {
+              updateData.profile_photo_url = profilePhotoUrl;
+            }
+
+            console.log('AuthCallbackScreen: Updating existing profile with new auth ID:', updateData);
+            
+            const { error: updateError } = await supabase
+              .from('users')
+              .update(updateData)
+              .eq('email', email);
+
+            if (updateError) {
+              console.error('AuthCallbackScreen: Error updating existing profile:', updateError);
+              setStatus('Error al actualizar el perfil');
+            } else {
+              console.log('AuthCallbackScreen: Existing profile updated successfully');
+            }
+          }
+          // No profile exists, create new one
+          else {
             console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
             
             const newProfile = {
@@ -233,41 +351,10 @@ export default function AuthCallbackScreen() {
 
             if (createProfileError) {
               console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
-              setStatus('Error al crear el perfil');
+              setStatus(`Error al crear el perfil: ${createProfileError.message}`);
             } else {
               console.log('AuthCallbackScreen: Profile created successfully');
               setStatus('Perfil creado correctamente');
-            }
-          } else {
-            console.log('AuthCallbackScreen: Profile already exists, updating Google data');
-            
-            // Update existing profile with Google photo if available
-            const updateData: any = {};
-            
-            // Only update name if it's empty or default
-            if (!existingProfile.name || existingProfile.name === 'Usuario' || existingProfile.name === '') {
-              updateData.name = fullName;
-            }
-            
-            // Always update photo from Google if available
-            if (profilePhotoUrl) {
-              updateData.profile_photo_url = profilePhotoUrl;
-            }
-
-            // Only update if there's something to update
-            if (Object.keys(updateData).length > 0) {
-              console.log('AuthCallbackScreen: Updating profile with:', updateData);
-              
-              const { error: updateError } = await supabase
-                .from('users')
-                .update(updateData)
-                .eq('id', googleUser.id);
-
-              if (updateError) {
-                console.error('AuthCallbackScreen: Error updating profile:', updateError);
-              } else {
-                console.log('AuthCallbackScreen: Profile updated successfully');
-              }
             }
           }
 
