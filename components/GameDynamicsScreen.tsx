@@ -6,7 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'free_phase';
+type GamePhase = 'questions' | 'participant_selection' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -69,11 +69,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
   
+  // Participant selection state
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [hasConfirmedSelection, setHasConfirmedSelection] = useState(false);
+  const [waitingForOthers, setWaitingForOthers] = useState(false);
+  const [showMatchAnimation, setShowMatchAnimation] = useState(false);
+  const [matchedParticipantName, setMatchedParticipantName] = useState<string>('');
+  const [selectionTimer, setSelectionTimer] = useState(20);
+  
   // Level transition animation state
   const [showLevelTransition, setShowLevelTransition] = useState(false);
   const [transitionLevel, setTransitionLevel] = useState<QuestionLevel | null>(null);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // Match animation state
+  const matchScaleAnim = useRef(new Animated.Value(0)).current;
+  const matchFadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -412,30 +424,30 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           console.log('✅ Started next level in database');
           
         } else {
-          // All levels complete - go to free phase
-          console.log('🏁 All levels complete - transitioning to free_phase');
+          // All levels complete - go to participant selection
+          console.log('🏁 All levels complete - transitioning to participant_selection');
           
           // CRITICAL FIX: Immediately update local state BEFORE database call
-          console.log('✅ IMMEDIATELY transitioning to free_phase (optimistic update)');
-          setGamePhase('free_phase');
+          console.log('✅ IMMEDIATELY transitioning to participant_selection (optimistic update)');
+          setGamePhase('participant_selection');
           
           const { error } = await supabase
             .from('events')
             .update({
-              game_phase: 'free_phase',
+              game_phase: 'participant_selection',
               updated_at: new Date().toISOString(),
             })
             .eq('id', appointment.event_id);
 
           if (error) {
-            console.error('❌ Error ending game:', error);
+            console.error('❌ Error transitioning to participant selection:', error);
             // Revert optimistic update on error
             setGamePhase('questions');
             setLoading(false);
             return;
           }
 
-          console.log('✅ Game ended in database');
+          console.log('✅ Transitioned to participant_selection in database');
         }
       }
     } catch (error) {
@@ -483,6 +495,168 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     }
   }, [appointment, currentUserId]);
 
+  const handleSelectParticipant = useCallback((participantId: string | null) => {
+    console.log('👤 User selected participant:', participantId);
+    setSelectedParticipantId(participantId);
+  }, []);
+
+  const handleConfirmSelection = useCallback(async () => {
+    console.log('✅ User confirmed selection');
+    
+    if (!appointment?.event_id || !currentUserId || hasConfirmedSelection) return;
+
+    setHasConfirmedSelection(true);
+    setWaitingForOthers(true);
+
+    try {
+      // Save selection to database
+      const { error } = await supabase
+        .from('participant_selections')
+        .upsert({
+          event_id: appointment.event_id,
+          selector_user_id: currentUserId,
+          selected_user_id: selectedParticipantId,
+          created_at: new Date().toISOString(),
+        }, {
+          onConflict: 'event_id,selector_user_id'
+        });
+
+      if (error) {
+        console.error('❌ Error saving selection:', error);
+        setHasConfirmedSelection(false);
+        setWaitingForOthers(false);
+        return;
+      }
+
+      console.log('✅ Selection saved successfully');
+      
+      // Check for matches
+      await checkForMatches();
+    } catch (error) {
+      console.error('❌ Failed to save selection:', error);
+      setHasConfirmedSelection(false);
+      setWaitingForOthers(false);
+    }
+  }, [appointment, currentUserId, selectedParticipantId, hasConfirmedSelection]);
+
+  const checkForMatches = useCallback(async () => {
+    if (!appointment?.event_id || !currentUserId) return;
+
+    try {
+      // Get all selections for this event
+      const { data: selections, error } = await supabase
+        .from('participant_selections')
+        .select('*')
+        .eq('event_id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error fetching selections:', error);
+        return;
+      }
+
+      if (!selections) return;
+
+      // Check if current user has a mutual match
+      const mySelection = selections.find(s => s.selector_user_id === currentUserId);
+      if (!mySelection || !mySelection.selected_user_id) return;
+
+      const theirSelection = selections.find(
+        s => s.selector_user_id === mySelection.selected_user_id && 
+             s.selected_user_id === currentUserId
+      );
+
+      if (theirSelection) {
+        // We have a match!
+        console.log('💕 MATCH FOUND!');
+        
+        const matchedParticipant = activeParticipants.find(
+          p => p.user_id === mySelection.selected_user_id
+        );
+        
+        if (matchedParticipant) {
+          const matchedName = matchedParticipant.profiles?.name || 'Participante';
+          setMatchedParticipantName(matchedName);
+          showMatchAnimationSequence();
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to check for matches:', error);
+    }
+  }, [appointment, currentUserId, activeParticipants]);
+
+  const showMatchAnimationSequence = useCallback(() => {
+    console.log('🎬 Showing match animation');
+    
+    setShowMatchAnimation(true);
+    
+    // Reset animations
+    matchScaleAnim.setValue(0);
+    matchFadeAnim.setValue(0);
+    
+    // Animate in
+    Animated.parallel([
+      Animated.spring(matchScaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(matchFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Hold for 5 seconds
+      setTimeout(() => {
+        // Animate out
+        Animated.parallel([
+          Animated.timing(matchScaleAnim, {
+            toValue: 1.2,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(matchFadeAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowMatchAnimation(false);
+          // Transition to free phase after match animation
+          transitionToFreePhase();
+        });
+      }, 5000);
+    });
+  }, [matchScaleAnim, matchFadeAnim]);
+
+  const transitionToFreePhase = useCallback(async () => {
+    if (!appointment?.event_id) return;
+
+    console.log('🏁 Transitioning to free_phase after participant selection');
+    
+    setGamePhase('free_phase');
+    
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'free_phase',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error transitioning to free_phase:', error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to transition to free_phase:', error);
+    }
+  }, [appointment]);
+
   const handleFinishEvent = useCallback(async () => {
     console.log('🏁 User pressed Finalizar button');
     
@@ -526,6 +700,69 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       setLoading(false);
     }
   }, [appointment, currentUserId, loading]);
+
+  // Subscribe to participant selections for match detection
+  useEffect(() => {
+    if (!appointment?.event_id || !currentUserId || gamePhase !== 'participant_selection') return;
+
+    console.log('📡 Subscribing to participant_selections');
+
+    const channel = supabase
+      .channel(`selections_${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'participant_selections',
+          filter: `event_id=eq.${appointment.event_id}`,
+        },
+        () => {
+          console.log('📡 Selection update detected - checking for matches');
+          checkForMatches();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [appointment?.event_id, currentUserId, gamePhase, checkForMatches]);
+
+  // Reset timer when entering participant_selection phase
+  useEffect(() => {
+    if (gamePhase === 'participant_selection') {
+      console.log('⏱️ Resetting timer to 20 seconds');
+      setSelectionTimer(20);
+      setHasConfirmedSelection(false);
+      setWaitingForOthers(false);
+      // Initialize with "Ninguno por ahora" selected
+      if (selectedParticipantId === undefined) {
+        setSelectedParticipantId(null);
+      }
+    }
+  }, [gamePhase]);
+
+  // Timer for participant selection (20 seconds)
+  useEffect(() => {
+    if (gamePhase !== 'participant_selection' || hasConfirmedSelection) return;
+
+    console.log('⏱️ Starting 20-second timer for participant selection');
+    
+    const interval = setInterval(() => {
+      setSelectionTimer(prev => {
+        if (prev <= 1) {
+          console.log('⏱️ Timer expired - auto-transitioning to free phase');
+          clearInterval(interval);
+          transitionToFreePhase();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [gamePhase, hasConfirmedSelection, transitionToFreePhase]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
@@ -595,6 +832,137 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
               <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
               <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
+            </Animated.View>
+          </View>
+        )}
+      </LinearGradient>
+    );
+  }
+
+  if (gamePhase === 'participant_selection') {
+    const timerText = selectionTimer.toString();
+    
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <View style={styles.selectionHeaderCard}>
+            <Text style={styles.selectionIcon}>💕</Text>
+            <Text style={styles.selectionTitle}>¿Alguien te llamó la atención?</Text>
+            <Text style={styles.selectionPrivacyText}>
+              🔒 Tu elección es privada. Si coinciden, solo ustedes dos lo sabrán.
+            </Text>
+          </View>
+
+          <View style={styles.timerCard}>
+            <Text style={styles.timerLabel}>Tiempo restante</Text>
+            <Text style={styles.timerValue}>{timerText}s</Text>
+          </View>
+
+          {!hasConfirmedSelection && (
+            <>
+              <View style={styles.participantsSelectionList}>
+                {activeParticipants
+                  .filter((p) => p.user_id !== currentUserId)
+                  .map((participant, index) => {
+                    const displayName = participant.name;
+                    const isSelected = selectedParticipantId === participant.user_id;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.participantSelectionCard,
+                          isSelected && styles.participantSelectionCardSelected
+                        ]}
+                        onPress={() => handleSelectParticipant(participant.user_id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.participantSelectionHeader}>
+                          {participant.profile_photo_url ? (
+                            <Image
+                              source={{ uri: participant.profile_photo_url }}
+                              style={styles.participantSelectionPhoto}
+                            />
+                          ) : (
+                            <View style={styles.participantSelectionPhotoPlaceholder}>
+                              <Text style={styles.participantSelectionPhotoText}>
+                                {displayName.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          <Text style={styles.participantSelectionName}>{displayName}</Text>
+                        </View>
+                        {isSelected && (
+                          <View style={styles.selectedBadge}>
+                            <Text style={styles.selectedBadgeText}>✓ Seleccionado</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                
+                <TouchableOpacity
+                  style={[
+                    styles.participantSelectionCard,
+                    selectedParticipantId === null && styles.participantSelectionCardSelected
+                  ]}
+                  onPress={() => handleSelectParticipant(null)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.participantSelectionHeader}>
+                    <View style={styles.participantSelectionPhotoPlaceholder}>
+                      <Text style={styles.participantSelectionPhotoText}>—</Text>
+                    </View>
+                    <Text style={styles.participantSelectionName}>Ninguno por ahora</Text>
+                  </View>
+                  {selectedParticipantId === null && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>✓ Seleccionado</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.confirmSelectionButton}
+                onPress={handleConfirmSelection}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmSelectionButtonText}>Confirmar</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {waitingForOthers && (
+            <View style={styles.waitingCard}>
+              <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+              <Text style={styles.waitingText}>Esperando elección demás participantes...</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Match Animation Overlay */}
+        {showMatchAnimation && (
+          <View style={styles.matchOverlay}>
+            <Animated.View
+              style={[
+                styles.matchCard,
+                {
+                  transform: [{ scale: matchScaleAnim }],
+                  opacity: matchFadeAnim,
+                },
+              ]}
+            >
+              <Text style={styles.matchEmoji}>💕✨</Text>
+              <Text style={styles.matchTitle}>¡Hicieron Match!</Text>
+              <Text style={styles.matchText}>
+                Tú y {matchedParticipantName} hicieron match
+              </Text>
             </Animated.View>
           </View>
         )}
@@ -975,5 +1343,181 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  selectionHeaderCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 28,
+    marginTop: 60,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  selectionIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  selectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  selectionPrivacyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  timerCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  timerLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  timerValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantsSelectionList: {
+    marginBottom: 16,
+  },
+  participantSelectionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  participantSelectionCardSelected: {
+    borderColor: nospiColors.purpleMid,
+    backgroundColor: 'rgba(233, 213, 255, 0.8)',
+  },
+  participantSelectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  participantSelectionPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  participantSelectionPhotoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: nospiColors.purpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  participantSelectionPhotoText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  participantSelectionName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    flex: 1,
+  },
+  selectedBadge: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  selectedBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  confirmSelectionButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  confirmSelectionButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  waitingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+  },
+  waitingText: {
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
+    marginTop: 16,
+    fontWeight: '600',
+  },
+  matchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  matchCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    padding: 48,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 20,
+    minWidth: 300,
+  },
+  matchEmoji: {
+    fontSize: 100,
+    marginBottom: 24,
+  },
+  matchTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  matchText: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 26,
   },
 });

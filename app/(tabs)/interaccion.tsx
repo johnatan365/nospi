@@ -25,7 +25,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished' | 'free_phase' | 'questions' | 'participant_selection';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
@@ -581,6 +581,11 @@ export default function InteraccionScreen() {
             if (prev.location_confirmed && newEvent.game_phase) {
               console.log('🎮 User has confirmed location - updating game phase from realtime:', newEvent.game_phase);
               setGamePhase(newEvent.game_phase);
+              
+              // Special handling for participant_selection phase
+              if (newEvent.game_phase === 'participant_selection') {
+                console.log('💕 Entering participant selection phase');
+              }
             } else {
               console.log('🚨 User has NOT confirmed location - keeping in code_entry phase');
             }
@@ -771,7 +776,7 @@ export default function InteraccionScreen() {
 
   // CRITICAL: Show game dynamics based on game_phase from database
   // MATCH SELECTION DISABLED - Skip 'intro', 'ready', and 'match_selection' phases
-  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'participant_selection' || gamePhase === 'free_phase') {
     console.log('🎮 Rendering GameDynamicsScreen with phase:', gamePhase);
     console.log('🎮 Active participants count:', activeParticipants.length);
     
