@@ -497,18 +497,26 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           try {
             console.log('📤 Sending database update to set game_phase = participant_selection');
             
-            const { data, error } = await supabase
+            // CRITICAL FIX: Remove .select() to avoid constraint check timing issues
+            const { error } = await supabase
               .from('events')
               .update({
                 game_phase: 'participant_selection',
+                current_level: null,
+                current_question_index: null,
+                current_question: null,
+                current_question_starter_id: null,
+                answered_users: [],
                 updated_at: new Date().toISOString(),
               })
-              .eq('id', appointment.event_id)
-              .select();
+              .eq('id', appointment.event_id);
 
             if (error) {
               console.error('❌ Database error transitioning to participant selection:', error);
-              console.error('❌ Error details:', JSON.stringify(error, null, 2));
+              console.error('❌ Error code:', error.code);
+              console.error('❌ Error message:', error.message);
+              console.error('❌ Error details:', error.details);
+              console.error('❌ Error hint:', error.hint);
               // Revert optimistic update on error
               setGamePhase('questions');
               setLoading(false);
@@ -516,10 +524,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             }
 
             console.log('✅ Database update successful');
-            console.log('✅ Updated event data:', JSON.stringify(data, null, 2));
             console.log('✅ Transitioned to participant_selection in database');
             console.log('🎉 User should now see the participant selection screen!');
-            console.log('🎉 Current local gamePhase:', gamePhase);
           } catch (err) {
             console.error('❌ Unexpected error during database update:', err);
             // Revert optimistic update on error
