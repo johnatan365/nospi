@@ -502,11 +502,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setLoading(true);
 
     try {
-      // CRITICAL FIX: Immediately update local state BEFORE database call (optimistic update)
-      console.log('✅ IMMEDIATELY showing finalization feedback (optimistic update)');
-      
-      // Perform database update
-      // Only update THIS user's appointment to 'anterior'
+      // CRITICAL FIX: Update ONLY this user's appointment to 'anterior'
       // Do NOT close the event or affect other users
       const { error: appointmentError } = await supabase
         .from('appointments')
@@ -524,12 +520,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ User appointment moved to anterior status - event continues for other users');
       console.log('✅ User finished event individually - they will no longer see this event');
       
-      // CRITICAL FIX: After successful database update, wait a moment for realtime to propagate
-      // Then reset loading state so the UI can transition properly
-      setTimeout(() => {
-        console.log('✅ Resetting loading state after successful finalization');
-        setLoading(false);
-      }, 1500);
+      // The realtime subscription in interaccion.tsx will detect this change
+      // and automatically clear the appointment from view for this user
+      // No need to manually navigate or clear state here
       
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);

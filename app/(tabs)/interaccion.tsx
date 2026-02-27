@@ -530,7 +530,7 @@ export default function InteraccionScreen() {
 
   // CRITICAL: Subscribe to event_state changes AND appointment status changes
   useEffect(() => {
-    if (!appointment?.event_id || !user) return;
+    if (!appointment?.event_id || !appointment?.id || !user) return;
 
     console.log('📡 Subscribing to event_state and appointment changes for event:', appointment.event_id);
 

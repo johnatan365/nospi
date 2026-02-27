@@ -412,7 +412,7 @@ export default function AppointmentsScreen() {
                   <>
                     <View style={styles.refundInfoCard}>
                       <Text style={styles.refundInfoText}>
-                        💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia de otro evento.
+                        💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
                       </Text>
                     </View>
                     
