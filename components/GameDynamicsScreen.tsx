@@ -371,16 +371,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         console.log('✅ Advanced to next question in database');
         
       } else {
-        // Level completed - advance to next level or free phase
-        console.log('⚡ Level finished - advancing to next level');
+        // Level completed - advance to next level or participant selection
+        console.log('⚡ Level finished - checking what comes next');
 
-        const nextLevel: QuestionLevel = 
-          currentLevel === 'divertido' ? 'sensual' :
-          currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
-
-        if (currentLevel === 'divertido' || currentLevel === 'sensual') {
-          // Advance to next level
-          console.log('➡️ Advancing to level', nextLevel);
+        if (currentLevel === 'divertido') {
+          // Advance to sensual level
+          const nextLevel: QuestionLevel = 'sensual';
+          console.log('➡️ Advancing from divertido to sensual');
           
           // CRITICAL: Show level transition animation BEFORE updating database
           showLevelTransitionAnimation(nextLevel);
@@ -390,7 +387,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const firstQuestion = QUESTIONS[nextLevel][0];
 
           // CRITICAL FIX: Immediately update local state BEFORE database call
-          console.log('✅ IMMEDIATELY transitioning to next level (optimistic update)');
+          console.log('✅ IMMEDIATELY transitioning to sensual level (optimistic update)');
           setGamePhase('questions');
           setCurrentLevel(nextLevel);
           setCurrentQuestionIndex(0);
@@ -412,20 +409,66 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             .eq('id', appointment.event_id);
 
           if (error) {
-            console.error('❌ Error starting next level:', error);
+            console.error('❌ Error starting sensual level:', error);
             // Revert optimistic update on error
             setGamePhase('questions');
-            setCurrentLevel(currentLevel);
-            setCurrentQuestionIndex(questionsForLevel.length - 1);
+            setCurrentLevel('divertido');
+            setCurrentQuestionIndex(QUESTIONS.divertido.length - 1);
             setLoading(false);
             return;
           }
 
-          console.log('✅ Started next level in database');
+          console.log('✅ Started sensual level in database');
           
-        } else {
+        } else if (currentLevel === 'sensual') {
+          // Advance to atrevido level
+          const nextLevel: QuestionLevel = 'atrevido';
+          console.log('➡️ Advancing from sensual to atrevido');
+          
+          // CRITICAL: Show level transition animation BEFORE updating database
+          showLevelTransitionAnimation(nextLevel);
+          
+          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+          const newStarterUserId = activeParticipants[randomIndex].user_id;
+          const firstQuestion = QUESTIONS[nextLevel][0];
+
+          // CRITICAL FIX: Immediately update local state BEFORE database call
+          console.log('✅ IMMEDIATELY transitioning to atrevido level (optimistic update)');
+          setGamePhase('questions');
+          setCurrentLevel(nextLevel);
+          setCurrentQuestionIndex(0);
+          setCurrentQuestion(firstQuestion);
+          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
+          setStarterParticipant(newStarter || null);
+
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'questions',
+              current_level: nextLevel,
+              current_question_index: 0,
+              answered_users: [],
+              current_question: firstQuestion,
+              current_question_starter_id: newStarterUserId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error starting atrevido level:', error);
+            // Revert optimistic update on error
+            setGamePhase('questions');
+            setCurrentLevel('sensual');
+            setCurrentQuestionIndex(QUESTIONS.sensual.length - 1);
+            setLoading(false);
+            return;
+          }
+
+          console.log('✅ Started atrevido level in database');
+          
+        } else if (currentLevel === 'atrevido') {
           // All levels complete - go to participant selection
-          console.log('🏁 All levels complete - transitioning to participant_selection');
+          console.log('🏁 All levels complete (atrevido finished) - transitioning to participant_selection');
           
           // CRITICAL FIX: Immediately update local state BEFORE database call
           console.log('✅ IMMEDIATELY transitioning to participant_selection (optimistic update)');
