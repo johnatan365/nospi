@@ -16,6 +16,7 @@ interface Event {
   time: string;
   max_participants: number;
   event_status: 'draft' | 'published' | 'closed';
+  is_full: boolean;
 }
 
 export default function EventsScreen() {
@@ -65,7 +66,7 @@ export default function EventsScreen() {
       // Load all published events
       const { data, error } = await supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
         .eq('event_status', 'published')
         .order('date', { ascending: true });
 
@@ -74,11 +75,13 @@ export default function EventsScreen() {
         return;
       }
 
-      // Filter out events the user has already purchased
-      const availableEvents = (data || []).filter(event => !purchasedEventIds.includes(event.id));
+      // Filter out events the user has already purchased AND events marked as full
+      const availableEvents = (data || []).filter(event => 
+        !purchasedEventIds.includes(event.id) && !event.is_full
+      );
       
       console.log('Total published events:', data?.length || 0);
-      console.log('Available events (not purchased):', availableEvents.length);
+      console.log('Available events (not purchased and not full):', availableEvents.length);
       
       setEvents(availableEvents);
     } catch (error) {

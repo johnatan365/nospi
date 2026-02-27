@@ -360,9 +360,14 @@ export default function AppointmentsScreen() {
             
             // Show location if revealed
             const locationRevealed = appointment.event.is_location_revealed || false;
+            
+            // CRITICAL FIX: Hide "48 hours" text for anteriores and canceladas
+            const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
+            const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
+            
             const eventLocation = locationRevealed && appointment.event.location_name 
               ? appointment.event.location_name 
-              : 'Ubicación se revelará 48 horas antes del evento';
+              : '';
             
             const eventAddress = locationRevealed && appointment.event.location_address
               ? appointment.event.location_address
@@ -393,8 +398,8 @@ export default function AppointmentsScreen() {
                 <Text style={styles.appointmentDate}>{dateText}</Text>
                 <Text style={styles.appointmentTime}>{eventTime}</Text>
                 
-                {!locationRevealed && (
-                  <Text style={styles.appointmentLocation}>{eventLocation}</Text>
+                {shouldShowLocationPlaceholder && (
+                  <Text style={styles.appointmentLocation}>Ubicación se revelará 48 horas antes del evento</Text>
                 )}
                 
                 {locationRevealed && (

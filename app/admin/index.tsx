@@ -20,6 +20,7 @@ interface Event {
   location_address: string;
   maps_link: string;
   is_location_revealed: boolean;
+  is_full: boolean;
   address: string | null;
   start_time: string | null;
   max_participants: number;
@@ -137,7 +138,7 @@ export default function AdminPanelScreen() {
       // Load events
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, address, start_time, max_participants, current_participants, status, event_status, confirmation_code')
+        .select('id, name, city, description, type, date, time, location, location_name, location_address, maps_link, is_location_revealed, is_full, address, start_time, max_participants, current_participants, status, event_status, confirmation_code')
         .order('date', { ascending: false });
 
       if (eventsError) {
@@ -487,6 +488,111 @@ export default function AdminPanelScreen() {
     }
   };
 
+  const handleRevealLocation = async (eventId: string) => {
+    Alert.alert(
+      'Revelar Ubicación',
+      '¿Revelar la ubicación de este evento a todos los participantes?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Revelar',
+          onPress: async () => {
+            try {
+              console.log('Revealing location for event:', eventId);
+              const { error } = await supabase
+                .from('events')
+                .update({ is_location_revealed: true })
+                .eq('id', eventId);
+
+              if (error) {
+                console.error('Error revealing location:', error);
+                Alert.alert('Error', 'Error al revelar ubicación: ' + error.message);
+                return;
+              }
+
+              console.log('Location revealed successfully');
+              Alert.alert('Éxito', 'Ubicación revelada exitosamente');
+              loadDashboardData();
+            } catch (error) {
+              console.error('Failed to reveal location:', error);
+              Alert.alert('Error', 'Error inesperado al revelar ubicación');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMarkEventFull = async (eventId: string) => {
+    Alert.alert(
+      'Marcar Evento Full',
+      'Este evento desaparecerá de la lista pública pero seguirá visible para usuarios ya inscritos. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Marcar Full',
+          onPress: async () => {
+            try {
+              console.log('Marking event as full:', eventId);
+              const { error } = await supabase
+                .from('events')
+                .update({ is_full: true })
+                .eq('id', eventId);
+
+              if (error) {
+                console.error('Error marking event as full:', error);
+                Alert.alert('Error', 'Error al marcar evento como full: ' + error.message);
+                return;
+              }
+
+              console.log('Event marked as full successfully');
+              Alert.alert('Éxito', 'Evento marcado como Full. Ya no aparecerá en la lista pública.');
+              loadDashboardData();
+            } catch (error) {
+              console.error('Failed to mark event as full:', error);
+              Alert.alert('Error', 'Error inesperado');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleShowEventAgain = async (eventId: string) => {
+    Alert.alert(
+      'Volver a Mostrar Evento',
+      '¿Volver a mostrar este evento en la lista pública?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Mostrar',
+          onPress: async () => {
+            try {
+              console.log('Showing event again:', eventId);
+              const { error } = await supabase
+                .from('events')
+                .update({ is_full: false })
+                .eq('id', eventId);
+
+              if (error) {
+                console.error('Error showing event again:', error);
+                Alert.alert('Error', 'Error al mostrar evento: ' + error.message);
+                return;
+              }
+
+              console.log('Event shown again successfully');
+              Alert.alert('Éxito', 'Evento visible nuevamente en la lista pública');
+              loadDashboardData();
+            } catch (error) {
+              console.error('Failed to show event again:', error);
+              Alert.alert('Error', 'Error inesperado');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -550,6 +656,8 @@ export default function AdminPanelScreen() {
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const confirmationCode = event.confirmation_code || '1986';
+          const locationRevealed = event.is_location_revealed || false;
+          const isFull = event.is_full || false;
           
           const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
@@ -574,12 +682,51 @@ export default function AdminPanelScreen() {
                 <Text style={styles.codeValue}>{confirmationCode}</Text>
               </View>
               
+              {isFull && (
+                <View style={styles.fullBadge}>
+                  <Text style={styles.fullBadgeText}>🚫 EVENTO FULL - Oculto de lista pública</Text>
+                </View>
+              )}
+              
+              {locationRevealed && (
+                <View style={styles.revealedBadge}>
+                  <Text style={styles.revealedBadgeText}>📍 Ubicación revelada</Text>
+                </View>
+              )}
+              
               <TouchableOpacity
                 style={styles.viewAttendeesButton}
                 onPress={() => handleViewAttendees(event)}
               >
                 <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
               </TouchableOpacity>
+              
+              {!locationRevealed && (
+                <TouchableOpacity
+                  style={styles.revealLocationButton}
+                  onPress={() => handleRevealLocation(event.id)}
+                >
+                  <Text style={styles.revealLocationButtonText}>📍 Revelar Ubicación</Text>
+                </TouchableOpacity>
+              )}
+              
+              {!isFull && (
+                <TouchableOpacity
+                  style={styles.markFullButton}
+                  onPress={() => handleMarkEventFull(event.id)}
+                >
+                  <Text style={styles.markFullButtonText}>🚫 Marcar Evento Full</Text>
+                </TouchableOpacity>
+              )}
+              
+              {isFull && (
+                <TouchableOpacity
+                  style={styles.showAgainButton}
+                  onPress={() => handleShowEventAgain(event.id)}
+                >
+                  <Text style={styles.showAgainButtonText}>✅ Volver a Mostrar Evento</Text>
+                </TouchableOpacity>
+              )}
               
               <TouchableOpacity
                 style={styles.sendNotificationButton}
@@ -1402,6 +1549,70 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  revealLocationButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  revealLocationButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  markFullButton: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  markFullButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  showAgainButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  showAgainButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  fullBadge: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  fullBadgeText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#92400E',
+    textAlign: 'center',
+  },
+  revealedBadge: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+  },
+  revealedBadgeText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,

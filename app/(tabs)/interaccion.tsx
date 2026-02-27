@@ -813,10 +813,12 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   
+  // CRITICAL FIX: Hide location text when location is revealed
   const locationRevealed = appointment.event.is_location_revealed || false;
+  const shouldShowLocationText = !locationRevealed;
   const locationText = locationRevealed && appointment.event.location_name
     ? appointment.event.location_name
-    : 'Ubicación se revelará 48 horas antes del evento';
+    : '';
   
   const participantCountText = activeParticipants.length.toString();
 
@@ -846,10 +848,10 @@ export default function InteraccionScreen() {
               <Text style={styles.eventTime}>{appointment.event.time}</Text>
             </View>
           </View>
-          {!locationRevealed && (
-            <Text style={styles.eventLocation}>{locationText}</Text>
+          {shouldShowLocationText && (
+            <Text style={styles.eventLocation}>Ubicación se revelará 48 horas antes del evento</Text>
           )}
-          {locationRevealed && (
+          {locationRevealed && locationText && (
             <Text style={styles.eventLocation}>{locationText}</Text>
           )}
         </View>
