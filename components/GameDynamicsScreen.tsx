@@ -58,7 +58,12 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 GameDynamicsScreen render - activeParticipants:', activeParticipants.length);
+  console.log('🎮 ========================================');
+  console.log('🎮 GameDynamicsScreen COMPONENT RENDER');
+  console.log('🎮 Active participants:', activeParticipants.length);
+  console.log('🎮 Event ID:', appointment.event_id);
+  console.log('🎮 Event game_phase from props:', appointment.event?.game_phase);
+  console.log('🎮 ========================================');
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
@@ -325,11 +330,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const handleContinue = useCallback(async () => {
     console.log('➡️ User pressed Continuar button in questions phase');
+    console.log('📊 Current state - Level:', currentLevel, 'Question Index:', currentQuestionIndex);
     
-    if (!appointment?.event_id || loading) return;
+    if (!appointment?.event_id || loading) {
+      console.warn('⚠️ Cannot continue - loading or no event');
+      return;
+    }
 
     const questionsForLevel = QUESTIONS[currentLevel];
+    console.log('📚 Questions for', currentLevel, 'level:', questionsForLevel.length, 'total questions');
+    
     const nextQuestionIndex = currentQuestionIndex + 1;
+    console.log('📊 Next question index would be:', nextQuestionIndex);
 
     // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
@@ -337,12 +349,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
         // Continue to next question in same level
+        console.log('➡️ Advancing to next question within', currentLevel, 'level');
+        
         const randomIndex = Math.floor(Math.random() * activeParticipants.length);
         const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
 
         // CRITICAL FIX: Immediately update local state BEFORE database call
         console.log('✅ IMMEDIATELY advancing to next question (optimistic update)');
+        console.log('📝 Next question:', nextQuestion);
         setCurrentQuestionIndex(nextQuestionIndex);
         setCurrentQuestion(nextQuestion);
         const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
@@ -373,6 +388,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       } else {
         // Level completed - advance to next level or participant selection
         console.log('⚡ Level finished - checking what comes next');
+        console.log('📊 Current level:', currentLevel);
 
         if (currentLevel === 'divertido') {
           // Advance to sensual level
@@ -468,7 +484,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           
         } else if (currentLevel === 'atrevido') {
           // All levels complete - go to participant selection
-          console.log('🏁 All levels complete (atrevido finished) - transitioning to participant_selection');
+          console.log('🏁🏁🏁 ALL LEVELS COMPLETE (atrevido finished) - transitioning to participant_selection 🏁🏁🏁');
+          console.log('💕 Moving to participant selection screen where users can choose who they liked');
           
           // CRITICAL FIX: Immediately update local state BEFORE database call
           console.log('✅ IMMEDIATELY transitioning to participant_selection (optimistic update)');
@@ -491,6 +508,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           }
 
           console.log('✅ Transitioned to participant_selection in database');
+          console.log('🎉 User should now see the participant selection screen!');
         }
       }
     } catch (error) {
@@ -772,10 +790,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     };
   }, [appointment?.event_id, currentUserId, gamePhase, checkForMatches]);
 
+  // Log whenever gamePhase changes
+  useEffect(() => {
+    console.log('🔄 ========================================');
+    console.log('🔄 GAME PHASE STATE CHANGED');
+    console.log('🔄 New gamePhase:', gamePhase);
+    console.log('🔄 ========================================');
+  }, [gamePhase]);
+
   // Reset timer when entering participant_selection phase
   useEffect(() => {
     if (gamePhase === 'participant_selection') {
+      console.log('⏱️ ========================================');
+      console.log('⏱️ ENTERING PARTICIPANT SELECTION PHASE');
       console.log('⏱️ Resetting timer to 20 seconds');
+      console.log('⏱️ ========================================');
       setSelectionTimer(20);
       setHasConfirmedSelection(false);
       setWaitingForOthers(false);
@@ -813,7 +842,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  console.log('🎮 Rendering decision - gamePhase:', gamePhase);
+  console.log('🎮 ========================================');
+  console.log('🎮 RENDERING DECISION');
+  console.log('🎮 Current gamePhase:', gamePhase);
+  console.log('🎮 Current level:', currentLevel);
+  console.log('🎮 Current question index:', currentQuestionIndex);
+  console.log('🎮 Current question:', currentQuestion);
+  console.log('🎮 ========================================');
 
   if (gamePhase === 'questions' && currentQuestion) {
     const starterName = starterParticipant?.name || 'Alguien';
