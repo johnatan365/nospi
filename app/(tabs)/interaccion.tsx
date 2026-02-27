@@ -605,20 +605,33 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.id}`,
         },
         (payload) => {
-          console.log('📡 Appointment status change detected');
+          console.log('📡 ========================================');
+          console.log('📡 APPOINTMENT STATUS CHANGE DETECTED');
+          console.log('📡 ========================================');
           const newAppointment = payload.new as any;
-          console.log('📡 New appointment status:', newAppointment.status);
+          console.log('📡 Old status:', payload.old);
+          console.log('📡 New status:', newAppointment.status);
+          console.log('📡 Full payload:', JSON.stringify(payload, null, 2));
           
           // CRITICAL: If this user's appointment changed to 'anterior', hide the event
           if (newAppointment.status === 'anterior') {
-            console.log('🚫 User appointment moved to anterior - clearing appointment from view');
+            console.log('🚫 ========================================');
+            console.log('🚫 USER APPOINTMENT MOVED TO ANTERIOR');
+            console.log('🚫 CLEARING APPOINTMENT FROM VIEW NOW');
+            console.log('🚫 ========================================');
             setAppointment(null);
+            setLoading(false);
             return;
           }
+          
+          console.log('📡 Status is not anterior, keeping appointment visible');
         }
       )
       .subscribe((status) => {
         console.log('📡 appointment subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to appointment changes for ID:', appointment.id);
+        }
       });
 
     return () => {
@@ -802,7 +815,7 @@ export default function InteraccionScreen() {
   
   const locationText = appointment.event.is_location_revealed && appointment.event.location_name
     ? appointment.event.location_name
-    : 'Ubicación se revelará próximamente';
+    : 'Ubicación se revelará 48 horas antes del evento';
   
   const participantCountText = activeParticipants.length.toString();
 

@@ -517,7 +517,7 @@ export default function ProfileScreen() {
                 <Image 
                   source={{ uri: profile.profile_photo_url }} 
                   style={styles.profilePhoto}
-                  key={profile.profile_photo_url} // FIX: Force re-render when URL changes
+                  key={profile.profile_photo_url}
                 />
                 {uploadingPhoto && (
                   <View style={styles.photoOverlay}>

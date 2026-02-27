@@ -241,7 +241,7 @@ export default function EventDetailsScreen() {
               </>
             ) : (
               <Text style={styles.locationPlaceholder}>
-                Se revelará próximamente
+                Ubicación se revelará 48 horas antes del evento
               </Text>
             )}
           </View>

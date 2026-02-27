@@ -502,11 +502,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     setLoading(true);
 
     try {
+      console.log('📤 Updating appointment status to anterior in database...');
+      
       // CRITICAL FIX: Update ONLY this user's appointment to 'anterior'
       // Do NOT close the event or affect other users
       const { error: appointmentError } = await supabase
         .from('appointments')
-        .update({ status: 'anterior' })
+        .update({ 
+          status: 'anterior',
+          updated_at: new Date().toISOString()
+        })
         .eq('event_id', appointment.event_id)
         .eq('user_id', currentUserId)
         .eq('status', 'confirmada');
@@ -519,10 +524,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       
       console.log('✅ User appointment moved to anterior status - event continues for other users');
       console.log('✅ User finished event individually - they will no longer see this event');
+      console.log('📡 Realtime subscription in interaccion.tsx will detect this change and clear the view');
       
-      // The realtime subscription in interaccion.tsx will detect this change
-      // and automatically clear the appointment from view for this user
-      // No need to manually navigate or clear state here
+      // Keep loading state true - the realtime subscription will handle the UI update
+      // and the component will unmount when appointment is cleared
       
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
