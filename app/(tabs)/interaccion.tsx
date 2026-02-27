@@ -813,7 +813,8 @@ export default function InteraccionScreen() {
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   
-  const locationText = appointment.event.is_location_revealed && appointment.event.location_name
+  const locationRevealed = appointment.event.is_location_revealed || false;
+  const locationText = locationRevealed && appointment.event.location_name
     ? appointment.event.location_name
     : 'Ubicación se revelará 48 horas antes del evento';
   
@@ -845,7 +846,12 @@ export default function InteraccionScreen() {
               <Text style={styles.eventTime}>{appointment.event.time}</Text>
             </View>
           </View>
-          <Text style={styles.eventLocation}>{locationText}</Text>
+          {!locationRevealed && (
+            <Text style={styles.eventLocation}>{locationText}</Text>
+          )}
+          {locationRevealed && (
+            <Text style={styles.eventLocation}>{locationText}</Text>
+          )}
         </View>
 
         {checkInPhase === 'code_entry' && (

@@ -362,7 +362,7 @@ export default function AppointmentsScreen() {
             const locationRevealed = appointment.event.is_location_revealed || false;
             const eventLocation = locationRevealed && appointment.event.location_name 
               ? appointment.event.location_name 
-              : 'Ubicación se revelará próximamente';
+              : 'Ubicación se revelará 48 horas antes del evento';
             
             const eventAddress = locationRevealed && appointment.event.location_address
               ? appointment.event.location_address
@@ -392,20 +392,27 @@ export default function AppointmentsScreen() {
 
                 <Text style={styles.appointmentDate}>{dateText}</Text>
                 <Text style={styles.appointmentTime}>{eventTime}</Text>
-                <Text style={styles.appointmentLocation}>{eventLocation}</Text>
                 
-                {eventAddress && (
-                  <Text style={styles.appointmentAddress}>{eventAddress}</Text>
+                {!locationRevealed && (
+                  <Text style={styles.appointmentLocation}>{eventLocation}</Text>
                 )}
-
-                {mapsLink && (
-                  <TouchableOpacity
-                    style={styles.mapsButton}
-                    onPress={() => handleOpenMaps(mapsLink)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
-                  </TouchableOpacity>
+                
+                {locationRevealed && (
+                  <>
+                    <Text style={styles.appointmentLocation}>{eventLocation}</Text>
+                    {eventAddress && (
+                      <Text style={styles.appointmentAddress}>{eventAddress}</Text>
+                    )}
+                    {mapsLink && (
+                      <TouchableOpacity
+                        style={styles.mapsButton}
+                        onPress={() => handleOpenMaps(mapsLink)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
                 )}
 
                 {isConfirmed && (

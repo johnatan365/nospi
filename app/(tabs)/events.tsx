@@ -158,7 +158,7 @@ export default function EventsScreen() {
                 <Text style={styles.eventDescription}>{event.description}</Text>
               )}
               <Text style={styles.eventParticipants}>{participantsText}</Text>
-              <Text style={styles.locationPlaceholder}>Ubicación se revelará próximamente.</Text>
+              <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
             </TouchableOpacity>
           );
         })}
