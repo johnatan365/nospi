@@ -147,19 +147,48 @@ export default function AuthCallbackScreen() {
                 console.log('AuthCallbackScreen: Existing profile updated successfully');
               }
             }
-            // No profile exists - user must register first
+            // No profile exists, create a new one
             else {
-              console.log('AuthCallbackScreen: No profile found - user must register through the app first');
+              console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
               
-              // Sign out the user since they haven't registered
-              await supabase.auth.signOut();
-              
-              setStatus('Debes registrarte primero en la aplicación antes de iniciar sesión con Google');
-              
-              setTimeout(() => {
-                router.replace('/onboarding/register');
-              }, 2500);
-              return;
+              const newProfile = {
+                id: googleUser.id,
+                email: email,
+                name: fullName,
+                birthdate: '',
+                age: 18,
+                gender: 'hombre',
+                interested_in: 'ambos',
+                age_range_min: 18,
+                age_range_max: 60,
+                country: 'Colombia',
+                city: 'Medellín',
+                phone: '',
+                profile_photo_url: profilePhotoUrl,
+                interests: [],
+                personality_traits: [],
+                compatibility_percentage: 95,
+                notification_preferences: {
+                  whatsapp: false,
+                  email: true,
+                  sms: false,
+                  push: true,
+                },
+              };
+
+              console.log('AuthCallbackScreen: Inserting profile:', newProfile);
+
+              const { error: createProfileError } = await supabase
+                .from('users')
+                .insert(newProfile);
+
+              if (createProfileError) {
+                console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
+                setStatus(`Error al crear el perfil: ${createProfileError.message}`);
+              } else {
+                console.log('AuthCallbackScreen: Profile created successfully');
+                setStatus('Perfil creado correctamente');
+              }
             }
 
             // Navigate to events screen
@@ -285,19 +314,48 @@ export default function AuthCallbackScreen() {
               console.log('AuthCallbackScreen: Existing profile updated successfully');
             }
           }
-          // No profile exists - user must register first
+          // No profile exists, create new one
           else {
-            console.log('AuthCallbackScreen: No profile found - user must register through the app first');
+            console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
             
-            // Sign out the user since they haven't registered
-            await supabase.auth.signOut();
-            
-            setStatus('Debes registrarte primero en la aplicación antes de iniciar sesión con Google');
-            
-            setTimeout(() => {
-              router.replace('/onboarding/register');
-            }, 2500);
-            return;
+            const newProfile = {
+              id: googleUser.id,
+              email: email,
+              name: fullName,
+              birthdate: '',
+              age: 18,
+              gender: 'hombre',
+              interested_in: 'ambos',
+              age_range_min: 18,
+              age_range_max: 60,
+              country: 'Colombia',
+              city: 'Medellín',
+              phone: '',
+              profile_photo_url: profilePhotoUrl,
+              interests: [],
+              personality_traits: [],
+              compatibility_percentage: 95,
+              notification_preferences: {
+                whatsapp: false,
+                email: true,
+                sms: false,
+                push: true,
+              },
+            };
+
+            console.log('AuthCallbackScreen: Inserting profile:', newProfile);
+
+            const { error: createProfileError } = await supabase
+              .from('users')
+              .insert(newProfile);
+
+            if (createProfileError) {
+              console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
+              setStatus(`Error al crear el perfil: ${createProfileError.message}`);
+            } else {
+              console.log('AuthCallbackScreen: Profile created successfully');
+              setStatus('Perfil creado correctamente');
+            }
           }
 
           // Navigate to events screen
