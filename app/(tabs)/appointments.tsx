@@ -409,12 +409,20 @@ export default function AppointmentsScreen() {
                 )}
 
                 {isConfirmed && (
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => handleCancelPress(appointment)}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
-                  </TouchableOpacity>
+                  <>
+                    <View style={styles.refundInfoCard}>
+                      <Text style={styles.refundInfoText}>
+                        💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia de otro evento.
+                      </Text>
+                    </View>
+                    
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => handleCancelPress(appointment)}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
             );
@@ -680,6 +688,22 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  refundInfoCard: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  refundInfoText: {
+    fontSize: 13,
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 20,
+    fontWeight: '500',
   },
   cancelButton: {
     backgroundColor: '#EF4444',

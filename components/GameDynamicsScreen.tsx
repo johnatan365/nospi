@@ -524,15 +524,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       console.log('✅ User appointment moved to anterior status - event continues for other users');
       console.log('✅ User finished event individually - they will no longer see this event');
       
-      // CRITICAL FIX: The appointment status change will be detected by the realtime subscription
-      // in interaccion.tsx, which will clear the appointment from view
-      // Keep loading state true so user sees feedback while realtime processes
+      // CRITICAL FIX: After successful database update, wait a moment for realtime to propagate
+      // Then reset loading state so the UI can transition properly
+      setTimeout(() => {
+        console.log('✅ Resetting loading state after successful finalization');
+        setLoading(false);
+      }, 1500);
       
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
       setLoading(false);
     }
-    // Note: We keep loading=true because the realtime subscription will handle the UI transition
   }, [appointment, currentUserId, loading]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';

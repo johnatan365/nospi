@@ -22,14 +22,47 @@ export default function EventsScreen() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadEvents();
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        console.log('Current user ID:', user.id);
+      }
+    };
+    getCurrentUser();
   }, []);
 
+  useEffect(() => {
+    if (currentUserId) {
+      loadEvents();
+    }
+  }, [currentUserId]);
+
   const loadEvents = async () => {
+    if (!currentUserId) return;
+
     try {
-      console.log('Loading published events...');
+      console.log('Loading published events for user:', currentUserId);
+      
+      // First, get all events the user has already purchased/confirmed
+      const { data: userAppointments, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('event_id')
+        .eq('user_id', currentUserId)
+        .in('status', ['confirmada', 'anterior'])
+        .eq('payment_status', 'completed');
+
+      if (appointmentsError) {
+        console.error('Error loading user appointments:', appointmentsError);
+      }
+
+      const purchasedEventIds = userAppointments?.map(apt => apt.event_id) || [];
+      console.log('User has purchased events:', purchasedEventIds);
+
+      // Load all published events
       const { data, error } = await supabase
         .from('events')
         .select('id, name, city, description, type, date, time, max_participants, event_status')
@@ -41,8 +74,13 @@ export default function EventsScreen() {
         return;
       }
 
-      console.log('Published events loaded:', data?.length || 0);
-      setEvents(data || []);
+      // Filter out events the user has already purchased
+      const availableEvents = (data || []).filter(event => !purchasedEventIds.includes(event.id));
+      
+      console.log('Total published events:', data?.length || 0);
+      console.log('Available events (not purchased):', availableEvents.length);
+      
+      setEvents(availableEvents);
     } catch (error) {
       console.error('Failed to load events:', error);
     } finally {
