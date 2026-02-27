@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -20,6 +20,23 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    // Listen for deep link events (OAuth callback)
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('RegisterScreen: Received URL callback:', url);
+      
+      // Check if this is an OAuth callback
+      if (url.includes('auth/callback')) {
+        console.log('RegisterScreen: OAuth callback detected, navigating to callback screen');
+        // The callback screen will handle the session
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
     setLoading(true);
@@ -39,7 +56,7 @@ export default function RegisterScreen() {
 
       if (error) {
         console.error('Apple OAuth error:', error);
-        setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+        setError('Error al conectar con Apple. Por favor intenta de nuevo.');
         setLoading(false);
         return;
       }
@@ -51,12 +68,34 @@ export default function RegisterScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('RegisterScreen: WebBrowser result:', result);
         
-        // The callback screen will handle the session
-        if (result.type === 'success') {
-          console.log('RegisterScreen: OAuth completed successfully');
+        if (result.type === 'success' && result.url) {
+          console.log('RegisterScreen: OAuth success, callback URL:', result.url);
+          const callbackUrl = result.url;
+          
+          const url = new URL(callbackUrl);
+          const accessToken = url.searchParams.get('access_token');
+          const refreshToken = url.searchParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
+            });
+          } else {
+            console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
+            router.push('/auth/callback');
+          }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');
           setError('Registro cancelado');
+          setLoading(false);
+        } else {
+          console.log('RegisterScreen: OAuth result type:', result.type);
           setLoading(false);
         }
       }
@@ -81,12 +120,16 @@ export default function RegisterScreen() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
       if (error) {
         console.error('Google OAuth error:', error);
-        setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+        setError('Error al conectar con Google. Por favor intenta de nuevo.');
         setLoading(false);
         return;
       }
@@ -98,12 +141,35 @@ export default function RegisterScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('RegisterScreen: WebBrowser result:', result);
         
-        // The callback screen will handle the session
-        if (result.type === 'success') {
-          console.log('RegisterScreen: OAuth completed successfully');
+        if (result.type === 'success' && result.url) {
+          console.log('RegisterScreen: OAuth success, callback URL:', result.url);
+          const callbackUrl = result.url;
+          
+          // Parse the URL to extract tokens
+          const url = new URL(callbackUrl);
+          const accessToken = url.searchParams.get('access_token');
+          const refreshToken = url.searchParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
+            });
+          } else {
+            console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
+            router.push('/auth/callback');
+          }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');
           setError('Registro cancelado');
+          setLoading(false);
+        } else {
+          console.log('RegisterScreen: OAuth result type:', result.type);
           setLoading(false);
         }
       }

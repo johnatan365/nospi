@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -16,6 +16,23 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Listen for deep link events (OAuth callback)
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('LoginScreen: Received URL callback:', url);
+      
+      // Check if this is an OAuth callback
+      if (url.includes('auth/callback')) {
+        console.log('LoginScreen: OAuth callback detected, navigating to callback screen');
+        // The callback screen will handle the session
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -55,6 +72,7 @@ export default function LoginScreen() {
     setError('');
 
     try {
+      // Create the redirect URL using the app scheme
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
 
@@ -63,12 +81,16 @@ export default function LoginScreen() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
       if (error) {
         console.error('Google OAuth error:', error);
-        setError('Error al conectar con Google. Asegúrate de que Google OAuth esté habilitado en Supabase.');
+        setError('Error al conectar con Google. Por favor intenta de nuevo.');
         setLoading(false);
         return;
       }
@@ -80,12 +102,37 @@ export default function LoginScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // The callback screen will handle the session
-        if (result.type === 'success') {
-          console.log('LoginScreen: OAuth completed successfully');
+        if (result.type === 'success' && result.url) {
+          console.log('LoginScreen: OAuth success, callback URL:', result.url);
+          // Extract the callback URL and navigate to it
+          const callbackUrl = result.url;
+          
+          // Parse the URL to extract tokens
+          const url = new URL(callbackUrl);
+          const accessToken = url.searchParams.get('access_token');
+          const refreshToken = url.searchParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
+            // Navigate to callback screen with tokens
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
+            });
+          } else {
+            console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
+            router.push('/auth/callback');
+          }
         } else if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled OAuth');
           setError('Inicio de sesión cancelado');
+          setLoading(false);
+        } else {
+          console.log('LoginScreen: OAuth result type:', result.type);
           setLoading(false);
         }
       }
@@ -115,7 +162,7 @@ export default function LoginScreen() {
 
       if (error) {
         console.error('Apple OAuth error:', error);
-        setError('Error al conectar con Apple. Asegúrate de que Apple OAuth esté habilitado en Supabase.');
+        setError('Error al conectar con Apple. Por favor intenta de nuevo.');
         setLoading(false);
         return;
       }
@@ -127,12 +174,34 @@ export default function LoginScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('LoginScreen: WebBrowser result:', result);
         
-        // The callback screen will handle the session
-        if (result.type === 'success') {
-          console.log('LoginScreen: OAuth completed successfully');
+        if (result.type === 'success' && result.url) {
+          console.log('LoginScreen: OAuth success, callback URL:', result.url);
+          const callbackUrl = result.url;
+          
+          const url = new URL(callbackUrl);
+          const accessToken = url.searchParams.get('access_token');
+          const refreshToken = url.searchParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
+            });
+          } else {
+            console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
+            router.push('/auth/callback');
+          }
         } else if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled OAuth');
           setError('Inicio de sesión cancelado');
+          setLoading(false);
+        } else {
+          console.log('LoginScreen: OAuth result type:', result.type);
           setLoading(false);
         }
       }
