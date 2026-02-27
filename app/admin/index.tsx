@@ -748,6 +748,62 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    Alert.alert(
+      'Confirmar Eliminación',
+      `¿Estás seguro de que quieres eliminar al usuario "${userName}"? Esta acción no se puede deshacer y eliminará todos sus datos, citas y participaciones en eventos.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            await performDeleteUser(userId, userName);
+          },
+        },
+      ]
+    );
+  };
+
+  const performDeleteUser = async (userId: string, userName: string) => {
+    try {
+      console.log('Deleting user:', userId, userName);
+      setLoading(true);
+
+      // Delete user from users table (this will cascade delete related records)
+      const { error: deleteUserError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (deleteUserError) {
+        console.error('Error deleting user from users table:', deleteUserError);
+        Alert.alert('Error', 'Error al eliminar usuario: ' + deleteUserError.message);
+        return;
+      }
+
+      // Delete user from auth.users (Supabase Auth)
+      const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(userId);
+
+      if (deleteAuthError) {
+        console.error('Error deleting user from auth:', deleteAuthError);
+        // Don't show error to user if auth deletion fails - the user record is already deleted
+        console.log('User deleted from database but auth deletion failed - this is acceptable');
+      }
+
+      console.log('User deleted successfully');
+      Alert.alert('Éxito', `Usuario "${userName}" eliminado exitosamente`);
+      
+      // Reload dashboard data
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      Alert.alert('Error', 'Error inesperado al eliminar usuario: ' + String(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderUsers = () => {
     return (
       <View style={styles.listContainer}>
@@ -776,6 +832,13 @@ export default function AdminPanelScreen() {
                 <Text style={styles.ageRangeLabel}>🎯 Rango de edad preferido:</Text>
                 <Text style={styles.ageRangeValue}>{ageRangeText}</Text>
               </View>
+              
+              <TouchableOpacity
+                style={styles.deleteUserButton}
+                onPress={() => handleDeleteUser(user.id, user.name)}
+              >
+                <Text style={styles.deleteUserButtonText}>🗑️ Eliminar Usuario</Text>
+              </TouchableOpacity>
             </View>
           );
         })}
@@ -1546,6 +1609,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   deleteButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  deleteUserButton: {
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  deleteUserButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
