@@ -104,10 +104,10 @@ export default function ProfileScreen() {
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Loading user profile...');
+      console.log('🔄 Loading user profile for user:', user?.id);
       
       if (!user?.id) {
-        console.log('No user ID available');
+        console.log('❌ No user ID available');
         setLoading(false);
         return;
       }
@@ -116,26 +116,81 @@ export default function ProfileScreen() {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .limit(1);
+        .maybeSingle();
 
       if (error) {
-        console.error('Error loading profile:', error);
+        console.error('❌ Error loading profile:', error);
         setLoading(false);
         return;
       }
 
-      if (!data || data.length === 0) {
-        console.log('No profile data found');
+      if (!data) {
+        console.log('⚠️ No profile data found, creating default profile');
+        
+        // Get user metadata from auth
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const metadata = authUser?.user_metadata || {};
+        
+        const fullName = metadata.full_name || metadata.name || authUser?.email?.split('@')[0] || 'Usuario';
+        const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
+        
+        // Create a default profile
+        const defaultProfile = {
+          id: user.id,
+          email: user.email || '',
+          name: fullName,
+          birthdate: '',
+          age: 18,
+          gender: 'hombre',
+          interested_in: 'ambos',
+          age_range_min: 18,
+          age_range_max: 60,
+          country: 'Colombia',
+          city: 'Medellín',
+          phone: '',
+          profile_photo_url: profilePhotoUrl,
+          interests: [],
+          personality_traits: [],
+          compatibility_percentage: 95,
+          notification_preferences: {
+            whatsapp: false,
+            email: true,
+            sms: false,
+            push: true,
+          },
+        };
+
+        console.log('📝 Creating default profile:', defaultProfile);
+
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert(defaultProfile);
+
+        if (insertError) {
+          console.error('❌ Error creating default profile:', insertError);
+        } else {
+          console.log('✅ Default profile created');
+          setProfile(defaultProfile);
+          setEditName(defaultProfile.name);
+          setEditPhone(defaultProfile.phone);
+          setEditCountry(defaultProfile.country);
+          setEditCity(defaultProfile.city);
+          setEditInterestedIn(defaultProfile.interested_in);
+          setEditAgeRangeMin(defaultProfile.age_range_min);
+          setEditAgeRangeMax(defaultProfile.age_range_max);
+          setEditInterests(defaultProfile.interests);
+          setEditPersonality(defaultProfile.personality_traits);
+        }
+        
         setLoading(false);
         return;
       }
 
-      const profileData = data[0];
-      console.log('✅ Profile loaded successfully');
+      const profileData = data;
+      console.log('✅ Profile loaded successfully:', profileData.name);
       
-      // CRITICAL FIX: Always add cache-busting to profile photo URL when loading
+      // Add cache-busting to profile photo URL when loading
       if (profileData.profile_photo_url) {
-        // Remove any existing cache-busting parameter first
         const baseUrl = profileData.profile_photo_url.split('?')[0];
         const cacheBustedUrl = `${baseUrl}?t=${Date.now()}`;
         console.log('🔄 Cache-busted photo URL:', cacheBustedUrl);
@@ -153,11 +208,11 @@ export default function ProfileScreen() {
       setEditInterests(profileData.interests || []);
       setEditPersonality(profileData.personality_traits || []);
     } catch (error) {
-      console.error('Failed to load profile:', error);
+      console.error('❌ Failed to load profile:', error);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (user) {
@@ -223,7 +278,7 @@ export default function ProfileScreen() {
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
-      // CRITICAL FIX: Delete ALL old photos first to ensure clean upload
+      // Delete old photos first
       console.log('🗑️ Deleting old photos...');
       const { data: existingFiles } = await supabase.storage
         .from('profile-photos')
@@ -249,8 +304,8 @@ export default function ProfileScreen() {
         .from('profile-photos')
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
-          cacheControl: '0', // Disable caching
-          upsert: false, // Always create new file
+          cacheControl: '0',
+          upsert: false,
         });
 
       if (uploadError) {
@@ -269,7 +324,7 @@ export default function ProfileScreen() {
       const basePhotoUrl = urlData.publicUrl;
       console.log('🔗 Base public URL:', basePhotoUrl);
 
-      // Update database with base URL (no cache-busting in DB)
+      // Update database with base URL
       const { error: updateError } = await supabase
         .from('users')
         .update({ profile_photo_url: basePhotoUrl })
@@ -283,7 +338,7 @@ export default function ProfileScreen() {
 
       console.log('✅ Database updated successfully');
       
-      // CRITICAL FIX: Force immediate UI update with cache-busted URL
+      // Force immediate UI update with cache-busted URL
       const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
       console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
       
@@ -473,6 +528,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <Text style={styles.loadingText}>Cargando perfil...</Text>
         </View>
       </LinearGradient>
     );
@@ -488,6 +544,9 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Error al cargar el perfil</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -561,7 +620,7 @@ export default function ProfileScreen() {
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Teléfono:</Text>
-            <Text style={styles.infoValue}>{profile.phone}</Text>
+            <Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text>
           </View>
 
           <View style={styles.infoRow}>
@@ -588,22 +647,30 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Intereses</Text>
           <View style={styles.tagsContainer}>
-            {profile.interests.map((interest, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{interest}</Text>
-              </View>
-            ))}
+            {profile.interests.length > 0 ? (
+              profile.interests.map((interest, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>{interest}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No has agregado intereses aún</Text>
+            )}
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personalidad</Text>
           <View style={styles.tagsContainer}>
-            {profile.personality_traits.map((trait, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{trait}</Text>
-              </View>
-            ))}
+            {profile.personality_traits.length > 0 ? (
+              profile.personality_traits.map((trait, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>{trait}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No has agregado rasgos de personalidad aún</Text>
+            )}
           </View>
         </View>
 
@@ -1023,11 +1090,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: nospiColors.purpleDark,
+    textAlign: 'center',
   },
   errorText: {
     fontSize: 16,
     color: nospiColors.purpleDark,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     alignItems: 'center',
@@ -1158,6 +1244,11 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     fontSize: 14,
     fontWeight: '600',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
   signOutButton: {
     backgroundColor: '#F44336',
