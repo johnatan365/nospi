@@ -486,29 +486,47 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           // All levels complete - go to participant selection
           console.log('🏁🏁🏁 ALL LEVELS COMPLETE (atrevido finished) - transitioning to participant_selection 🏁🏁🏁');
           console.log('💕 Moving to participant selection screen where users can choose who they liked');
+          console.log('📊 Current appointment event_id:', appointment.event_id);
+          console.log('📊 Current gamePhase before update:', gamePhase);
           
           // CRITICAL FIX: Immediately update local state BEFORE database call
           console.log('✅ IMMEDIATELY transitioning to participant_selection (optimistic update)');
           setGamePhase('participant_selection');
+          console.log('✅ Local gamePhase state updated to: participant_selection');
           
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'participant_selection',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
+          try {
+            console.log('📤 Sending database update to set game_phase = participant_selection');
+            
+            const { data, error } = await supabase
+              .from('events')
+              .update({
+                game_phase: 'participant_selection',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', appointment.event_id)
+              .select();
 
-          if (error) {
-            console.error('❌ Error transitioning to participant selection:', error);
+            if (error) {
+              console.error('❌ Database error transitioning to participant selection:', error);
+              console.error('❌ Error details:', JSON.stringify(error, null, 2));
+              // Revert optimistic update on error
+              setGamePhase('questions');
+              setLoading(false);
+              return;
+            }
+
+            console.log('✅ Database update successful');
+            console.log('✅ Updated event data:', JSON.stringify(data, null, 2));
+            console.log('✅ Transitioned to participant_selection in database');
+            console.log('🎉 User should now see the participant selection screen!');
+            console.log('🎉 Current local gamePhase:', gamePhase);
+          } catch (err) {
+            console.error('❌ Unexpected error during database update:', err);
             // Revert optimistic update on error
             setGamePhase('questions');
             setLoading(false);
             return;
           }
-
-          console.log('✅ Transitioned to participant_selection in database');
-          console.log('🎉 User should now see the participant selection screen!');
         }
       }
     } catch (error) {
@@ -793,9 +811,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   // Log whenever gamePhase changes
   useEffect(() => {
     console.log('🔄 ========================================');
-    console.log('🔄 GAME PHASE STATE CHANGED');
+    console.log('🔄 GAME PHASE STATE CHANGED IN useEffect');
     console.log('🔄 New gamePhase:', gamePhase);
+    console.log('🔄 Component will re-render with this phase');
     console.log('🔄 ========================================');
+    
+    // Force a small delay to ensure state is propagated
+    if (gamePhase === 'participant_selection') {
+      console.log('💕 Detected participant_selection phase - component should render selection screen');
+    }
   }, [gamePhase]);
 
   // Reset timer when entering participant_selection phase
@@ -843,11 +867,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
   console.log('🎮 ========================================');
-  console.log('🎮 RENDERING DECISION');
+  console.log('🎮 RENDERING DECISION - FINAL CHECK');
   console.log('🎮 Current gamePhase:', gamePhase);
   console.log('🎮 Current level:', currentLevel);
   console.log('🎮 Current question index:', currentQuestionIndex);
   console.log('🎮 Current question:', currentQuestion);
+  console.log('🎮 Will render questions screen?', gamePhase === 'questions' && currentQuestion);
+  console.log('🎮 Will render participant_selection screen?', gamePhase === 'participant_selection');
+  console.log('🎮 Will render free_phase screen?', gamePhase === 'free_phase');
   console.log('🎮 ========================================');
 
   if (gamePhase === 'questions' && currentQuestion) {
@@ -918,6 +945,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }
 
   if (gamePhase === 'participant_selection') {
+    console.log('🎨 ========================================');
+    console.log('🎨 RENDERING PARTICIPANT SELECTION SCREEN');
+    console.log('🎨 gamePhase:', gamePhase);
+    console.log('🎨 selectionTimer:', selectionTimer);
+    console.log('🎨 hasConfirmedSelection:', hasConfirmedSelection);
+    console.log('🎨 selectedParticipantId:', selectedParticipantId);
+    console.log('🎨 activeParticipants count:', activeParticipants.length);
+    console.log('🎨 ========================================');
+    
     const timerText = selectionTimer.toString();
     
     return (
