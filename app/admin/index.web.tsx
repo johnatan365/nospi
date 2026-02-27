@@ -74,7 +74,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime';
+type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime' | 'matches';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -182,10 +182,11 @@ export default function AdminPanelScreen() {
   const [newQuestionText, setNewQuestionText] = useState('');
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
 
-  // Ratings only (matches removed)
-  const [selectedEventForRatings, setSelectedEventForRatings] = useState<string | null>(null);
+  // Matches and ratings
+  const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
+  const [eventMatches, setEventMatches] = useState<any[]>([]);
   const [eventRatings, setEventRatings] = useState<any[]>([]);
-  const [loadingRatings, setLoadingRatings] = useState(false);
+  const [loadingMatches, setLoadingMatches] = useState(false);
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
@@ -1227,10 +1228,28 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     }
   };
 
-  const loadEventRatings = async (eventId: string) => {
-    setLoadingRatings(true);
+  const loadEventMatchesAndRatings = async (eventId: string) => {
+    setLoadingMatches(true);
     try {
-      // Load ratings only (matches functionality removed)
+      // Load matches
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('event_matches')
+        .select(`
+          *,
+          user1:users!event_matches_user1_id_fkey(id, name, email),
+          user2:users!event_matches_user2_id_fkey(id, name, email)
+        `)
+        .eq('event_id', eventId)
+        .order('level', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (matchesError) {
+        console.error('Error loading matches:', matchesError);
+      } else {
+        setEventMatches(matchesData || []);
+      }
+
+      // Load ratings
       const { data: ratingsData, error: ratingsError } = await supabase
         .from('event_ratings')
         .select(`
@@ -1247,9 +1266,9 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         setEventRatings(ratingsData || []);
       }
     } catch (error) {
-      console.error('Failed to load ratings:', error);
+      console.error('Failed to load matches and ratings:', error);
     } finally {
-      setLoadingRatings(false);
+      setLoadingMatches(false);
     }
   };
 
@@ -1516,7 +1535,105 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     );
   };
 
+  const renderMatches = () => {
+    const selectedEvent = events.find(e => e.id === selectedEventForMatches);
+    
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Matches y Calificaciones</Text>
+        
+        {!selectedEventForMatches ? (
+          <View style={styles.realtimeInfo}>
+            <Text style={styles.realtimeInfoText}>
+              Selecciona un evento desde la vista de Eventos para ver los matches y calificaciones
+            </Text>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setCurrentView('events')}
+            >
+              <Text style={styles.actionButtonText}>Ir a Eventos</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {selectedEvent && (
+              <View style={styles.eventInfoSection}>
+                <Text style={styles.eventInfoTitle}>
+                  {selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}
+                </Text>
+                <Text style={styles.eventInfoDetail}>
+                  📅 {selectedEvent.date} a las {selectedEvent.time}
+                </Text>
+              </View>
+            )}
 
+            {loadingMatches ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+                <Text style={styles.loadingText}>Cargando datos...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.matchesSection}>
+                  <Text style={styles.subsectionTitle}>💜 Matches por Nivel ({eventMatches.length})</Text>
+                  {eventMatches.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay matches registrados para este evento</Text>
+                  ) : (
+                    eventMatches.map((match) => {
+                      const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '😘' : '🔥';
+                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      
+                      return (
+                        <View key={match.id} style={styles.matchItem}>
+                          <View style={styles.matchHeader}>
+                            <Text style={styles.matchLevel}>{levelEmoji} {levelText}</Text>
+                            <Text style={styles.matchDate}>
+                              {new Date(match.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.matchUsers}>
+                            👤 {match.user1?.name || 'Usuario 1'} ↔️ {match.user2?.name || 'Usuario 2'}
+                          </Text>
+                          <Text style={styles.matchEmails}>
+                            📧 {match.user1?.email || 'N/A'} ↔️ {match.user2?.email || 'N/A'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={styles.ratingsSection}>
+                  <Text style={styles.subsectionTitle}>⭐ Calificaciones ({eventRatings.length})</Text>
+                  {eventRatings.length === 0 ? (
+                    <Text style={styles.emptyText}>No hay calificaciones registradas para este evento</Text>
+                  ) : (
+                    eventRatings.map((rating) => {
+                      const stars = '⭐'.repeat(rating.rating);
+                      
+                      return (
+                        <View key={rating.id} style={styles.ratingItem}>
+                          <View style={styles.ratingHeader}>
+                            <Text style={styles.ratingStars}>{stars} ({rating.rating}/5)</Text>
+                            <Text style={styles.ratingDate}>
+                              {new Date(rating.created_at).toLocaleString('es-ES')}
+                            </Text>
+                          </View>
+                          <Text style={styles.ratingUsers}>
+                            👤 {rating.rater?.name || 'Usuario'} calificó a {rating.rated?.name || 'Usuario'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </>
+            )}
+          </>
+        )}
+      </View>
+    );
+  };
 
   // Password modal
   if (showPasswordModal) {
@@ -1608,7 +1725,14 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
               🔴 En Vivo
             </Text>
           </TouchableOpacity>
-
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'matches' && styles.tabActive]}
+            onPress={() => setCurrentView('matches')}
+          >
+            <Text style={[styles.tabText, currentView === 'matches' && styles.tabTextActive]}>
+              💜 Matches
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content */}
@@ -1618,6 +1742,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           {currentView === 'users' && renderUsers()}
           {currentView === 'appointments' && renderAppointments()}
           {currentView === 'realtime' && renderRealtime()}
+          {currentView === 'matches' && renderMatches()}
         </ScrollView>
       </View>
 
@@ -2644,6 +2769,9 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 4,
   },
+  matchesSection: {
+    marginBottom: 32,
+  },
   ratingsSection: {
     marginBottom: 32,
   },
@@ -2659,6 +2787,41 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     padding: 20,
+  },
+  matchItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  matchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  matchLevel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  matchDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  matchUsers: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  matchEmails: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   ratingItem: {
     backgroundColor: 'white',
