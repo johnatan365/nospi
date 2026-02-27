@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -16,108 +16,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    console.log('LoginScreen: Setting up OAuth callback listener');
-    
-    // Handle OAuth callback
-    const handleUrl = async (event: { url: string }) => {
-      console.log('LoginScreen: Received URL callback:', event.url);
-      
-      if (event.url.includes('#access_token=')) {
-        console.log('LoginScreen: OAuth callback detected, processing...');
-        setLoading(true);
-        
-        try {
-          // Extract the session from the URL
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('LoginScreen: Error getting session after OAuth:', error);
-            setError('Error al completar el inicio de sesión con OAuth');
-            setLoading(false);
-            return;
-          }
-
-          if (data.session) {
-            console.log('LoginScreen: OAuth session established, user:', data.session.user.id);
-            
-            // Check if user profile exists
-            const { data: existingProfile, error: profileError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', data.session.user.id)
-              .maybeSingle();
-
-            if (profileError) {
-              console.error('LoginScreen: Error checking profile:', profileError);
-            }
-
-            // If profile doesn't exist, create a basic one
-            if (!existingProfile) {
-              console.log('LoginScreen: Creating new profile for OAuth user');
-              
-              const { error: createProfileError } = await supabase
-                .from('users')
-                .insert({
-                  id: data.session.user.id,
-                  email: data.session.user.email,
-                  name: data.session.user.user_metadata?.full_name || '',
-                  birthdate: '',
-                  age: 18,
-                  gender: 'hombre',
-                  interested_in: 'ambos',
-                  age_range_min: 18,
-                  age_range_max: 60,
-                  country: 'Colombia',
-                  city: 'Medellín',
-                  phone: '',
-                  profile_photo_url: data.session.user.user_metadata?.avatar_url || null,
-                  interests: [],
-                  personality_traits: [],
-                  compatibility_percentage: 95,
-                  notification_preferences: {
-                    whatsapp: false,
-                    email: true,
-                    sms: false,
-                    push: true,
-                  },
-                });
-
-              if (createProfileError) {
-                console.error('LoginScreen: Error creating profile:', createProfileError);
-              }
-            }
-
-            // Navigate to events screen
-            console.log('LoginScreen: Navigating to events screen');
-            router.replace('/(tabs)/events');
-          }
-        } catch (error) {
-          console.error('LoginScreen: OAuth callback processing failed:', error);
-          setError('Error al procesar el inicio de sesión');
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Add URL listener
-    const subscription = Linking.addEventListener('url', handleUrl);
-
-    // Check if app was opened with a URL
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('LoginScreen: App opened with URL:', url);
-        handleUrl({ url });
-      }
-    });
-
-    return () => {
-      console.log('LoginScreen: Cleaning up URL listener');
-      subscription.remove();
-    };
-  }, [router]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -179,7 +77,17 @@ export default function LoginScreen() {
       
       if (data.url) {
         console.log('LoginScreen: Opening Google OAuth URL');
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: WebBrowser result:', result);
+        
+        // The callback screen will handle the session
+        if (result.type === 'success') {
+          console.log('LoginScreen: OAuth completed successfully');
+        } else if (result.type === 'cancel') {
+          console.log('LoginScreen: User cancelled OAuth');
+          setError('Inicio de sesión cancelado');
+          setLoading(false);
+        }
       }
     } catch (error) {
       console.error('Google login failed:', error);
@@ -216,7 +124,17 @@ export default function LoginScreen() {
       
       if (data.url) {
         console.log('LoginScreen: Opening Apple OAuth URL');
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: WebBrowser result:', result);
+        
+        // The callback screen will handle the session
+        if (result.type === 'success') {
+          console.log('LoginScreen: OAuth completed successfully');
+        } else if (result.type === 'cancel') {
+          console.log('LoginScreen: User cancelled OAuth');
+          setError('Inicio de sesión cancelado');
+          setLoading(false);
+        }
       }
     } catch (error) {
       console.error('Apple login failed:', error);

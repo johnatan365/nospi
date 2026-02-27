@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -19,159 +19,6 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    console.log('RegisterScreen: Setting up OAuth callback listener');
-    
-    // Handle OAuth callback
-    const handleUrl = async (event: { url: string }) => {
-      console.log('RegisterScreen: Received URL callback:', event.url);
-      
-      if (event.url.includes('#access_token=')) {
-        console.log('RegisterScreen: OAuth callback detected, processing...');
-        setLoading(true);
-        
-        try {
-          // Extract the session from the URL
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('RegisterScreen: Error getting session after OAuth:', error);
-            setError('Error al completar el registro con OAuth');
-            setLoading(false);
-            return;
-          }
-
-          if (data.session) {
-            console.log('RegisterScreen: OAuth session established, user:', data.session.user.id);
-            
-            // Check if user profile exists
-            const { data: existingProfile, error: profileError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', data.session.user.id)
-              .maybeSingle();
-
-            if (profileError) {
-              console.error('RegisterScreen: Error checking profile:', profileError);
-            }
-
-            // If profile doesn't exist, create it with OAuth data
-            if (!existingProfile) {
-              console.log('RegisterScreen: Creating new profile for OAuth user');
-              
-              // Get onboarding data from AsyncStorage
-              const interestsData = await AsyncStorage.getItem('onboarding_interests');
-              const personalityData = await AsyncStorage.getItem('onboarding_personality');
-              const nameData = await AsyncStorage.getItem('onboarding_name');
-              const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
-              const ageData = await AsyncStorage.getItem('onboarding_age');
-              const genderData = await AsyncStorage.getItem('onboarding_gender');
-              const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
-              const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
-              const countryData = await AsyncStorage.getItem('onboarding_country');
-              const cityData = await AsyncStorage.getItem('onboarding_city');
-              const phoneData = await AsyncStorage.getItem('onboarding_phone');
-              const photoData = await AsyncStorage.getItem('onboarding_photo');
-              const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
-
-              const interests = interestsData ? JSON.parse(interestsData) : [];
-              const personality = personalityData ? JSON.parse(personalityData) : [];
-              const name = nameData || data.session.user.user_metadata?.full_name || '';
-              const birthdate = birthdateData || '';
-              const age = ageData ? parseInt(ageData) : 18;
-              const gender = genderData || 'hombre';
-              const interestedIn = interestedInData || 'ambos';
-              const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
-              const country = countryData || 'Colombia';
-              const city = cityData || 'Medellín';
-              const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-              const photo = photoData || data.session.user.user_metadata?.avatar_url || null;
-              const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
-
-              const { error: createProfileError } = await supabase
-                .from('users')
-                .insert({
-                  id: data.session.user.id,
-                  email: data.session.user.email,
-                  name,
-                  birthdate,
-                  age,
-                  gender,
-                  interested_in: interestedIn,
-                  age_range_min: ageRange.min,
-                  age_range_max: ageRange.max,
-                  country,
-                  city,
-                  phone: phoneInfo.phoneNumber,
-                  profile_photo_url: photo,
-                  interests: interests,
-                  personality_traits: personality,
-                  compatibility_percentage: compatibility,
-                  notification_preferences: {
-                    whatsapp: false,
-                    email: true,
-                    sms: false,
-                    push: true,
-                  },
-                });
-
-              if (createProfileError) {
-                console.error('RegisterScreen: Error creating profile:', createProfileError);
-                setError('Error al crear el perfil');
-                setLoading(false);
-                return;
-              }
-
-              console.log('RegisterScreen: Profile created successfully');
-
-              // Clear onboarding data
-              await AsyncStorage.multiRemove([
-                'onboarding_interests',
-                'onboarding_personality',
-                'onboarding_name',
-                'onboarding_birthdate',
-                'onboarding_age',
-                'onboarding_gender',
-                'onboarding_interested_in',
-                'onboarding_age_range',
-                'onboarding_country',
-                'onboarding_city',
-                'onboarding_phone',
-                'onboarding_photo',
-                'onboarding_compatibility',
-              ]);
-            }
-
-            // Navigate to events screen
-            console.log('RegisterScreen: Navigating to events screen');
-            router.replace('/(tabs)/events');
-          }
-        } catch (error) {
-          console.error('RegisterScreen: OAuth callback processing failed:', error);
-          setError('Error al procesar el registro');
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Add URL listener
-    const subscription = Linking.addEventListener('url', handleUrl);
-
-    // Check if app was opened with a URL
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('RegisterScreen: App opened with URL:', url);
-        handleUrl({ url });
-      }
-    });
-
-    return () => {
-      console.log('RegisterScreen: Cleaning up URL listener');
-      subscription.remove();
-    };
-  }, [router]);
 
   const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
@@ -201,7 +48,17 @@ export default function RegisterScreen() {
       
       if (data.url) {
         console.log('RegisterScreen: Opening Apple OAuth URL');
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('RegisterScreen: WebBrowser result:', result);
+        
+        // The callback screen will handle the session
+        if (result.type === 'success') {
+          console.log('RegisterScreen: OAuth completed successfully');
+        } else if (result.type === 'cancel') {
+          console.log('RegisterScreen: User cancelled OAuth');
+          setError('Registro cancelado');
+          setLoading(false);
+        }
       }
     } catch (error) {
       console.error('Apple sign-up failed:', error);
@@ -238,7 +95,17 @@ export default function RegisterScreen() {
       
       if (data.url) {
         console.log('RegisterScreen: Opening Google OAuth URL');
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('RegisterScreen: WebBrowser result:', result);
+        
+        // The callback screen will handle the session
+        if (result.type === 'success') {
+          console.log('RegisterScreen: OAuth completed successfully');
+        } else if (result.type === 'cancel') {
+          console.log('RegisterScreen: User cancelled OAuth');
+          setError('Registro cancelado');
+          setLoading(false);
+        }
       }
     } catch (error) {
       console.error('Google sign-up failed:', error);
