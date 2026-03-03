@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 
 // Get Supabase credentials from app.json extra config
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
@@ -22,7 +23,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true, // Enable URL session detection for OAuth
+    detectSessionInUrl: Platform.OS === 'web', // Only enable on web, native uses manual token extraction
     flowType: 'pkce', // Use PKCE flow for better security
   },
 });

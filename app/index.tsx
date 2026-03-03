@@ -1,7 +1,7 @@
 
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Alert } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Alert, Platform } from 'react-native';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -31,7 +31,13 @@ export default function Index() {
 
             if (profileError && profileError.code !== 'PGRST116') {
               console.error('Index: Error checking profile:', profileError);
-              Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              
+              if (Platform.OS === 'web') {
+                window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              } else {
+                Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              }
+              
               await supabase.auth.signOut();
               router.replace('/welcome');
               return;
@@ -41,11 +47,23 @@ export default function Index() {
               // User authenticated via Google but no profile in users table
               console.log('Index: Google user authenticated but no profile found. Signing out.');
               await supabase.auth.signOut();
-              Alert.alert(
-                'Registro Requerido',
-                'Debes registrarte primero en la aplicación antes de iniciar sesión con Google.',
-                [{ text: 'OK', onPress: () => router.replace('/onboarding/register') }]
-              );
+              
+              if (Platform.OS === 'web') {
+                const shouldRegister = window.confirm(
+                  'Debes registrarte primero en la aplicación antes de iniciar sesión con Google.\n\n¿Ir a registro?'
+                );
+                if (shouldRegister) {
+                  router.replace('/onboarding/register');
+                } else {
+                  router.replace('/welcome');
+                }
+              } else {
+                Alert.alert(
+                  'Registro Requerido',
+                  'Debes registrarte primero en la aplicación antes de iniciar sesión con Google.',
+                  [{ text: 'OK', onPress: () => router.replace('/onboarding/register') }]
+                );
+              }
               return;
             }
 
@@ -53,7 +71,13 @@ export default function Index() {
             router.replace('/(tabs)/events');
           } catch (error) {
             console.error('Index: Unexpected error during profile check:', error);
-            Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            
+            if (Platform.OS === 'web') {
+              window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            } else {
+              Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            }
+            
             await supabase.auth.signOut();
             router.replace('/welcome');
           } finally {
