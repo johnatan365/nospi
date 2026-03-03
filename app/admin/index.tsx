@@ -303,10 +303,10 @@ export default function AdminPanelScreen() {
       // Generate Excel file
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
       const fileName = `asistentes_todos_eventos_${new Date().toISOString().split('T')[0]}.xlsx`;
-      const fileUri = FileSystem.documentDirectory + fileName;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
       await FileSystem.writeAsStringAsync(fileUri, wbout, {
-        encoding: 'base64' as any,
+        encoding: FileSystem.EncodingType.Base64,
       });
 
       console.log('✅ Excel file created:', fileUri);

@@ -36,12 +36,6 @@ export default function EventsScreen() {
     getCurrentUser();
   }, []);
 
-  useEffect(() => {
-    if (currentUserId) {
-      loadEvents();
-    }
-  }, [currentUserId, loadEvents]);
-
   const loadEvents = useCallback(async () => {
     if (!currentUserId) return;
 
@@ -91,6 +85,12 @@ export default function EventsScreen() {
       setLoading(false);
     }
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (currentUserId) {
+      loadEvents();
+    }
+  }, [currentUserId, loadEvents]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

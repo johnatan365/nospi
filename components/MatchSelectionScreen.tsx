@@ -40,7 +40,7 @@ export default function MatchSelectionScreen({
   const [loading, setLoading] = useState(false);
   const [totalVotes, setTotalVotes] = useState(0);
   const [totalParticipants, setTotalParticipants] = useState(0);
-  const [allVotes, setAllVotes] = useState<Array<{ user_id: string; selected_user_id: string | null }>>([]);
+  const [allVotes, setAllVotes] = useState<{ user_id: string; selected_user_id: string | null }[]>([]);
   const [userHasVoted, setUserHasVoted] = useState(false);
   const [loadingVoteStatus, setLoadingVoteStatus] = useState(true);
   const [showMatchModal, setShowMatchModal] = useState(false);
@@ -174,7 +174,7 @@ export default function MatchSelectionScreen({
     console.log('✅ All votes received - checking for reciprocal matches');
 
     // Find reciprocal matches
-    const reciprocalMatches: Array<{ user1: string; user2: string }> = [];
+    const reciprocalMatches: { user1: string; user2: string }[] = [];
     
     allVotes.forEach((voteA) => {
       if (!voteA.selected_user_id) return; // Skip "Ninguno por ahora"

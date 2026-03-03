@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Modal, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -21,15 +21,7 @@ export default function SubscriptionPlansScreen() {
   const [virtualBalance, setVirtualBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
 
-  useEffect(() => {
-    console.log('Payment screen loaded - $5 per event');
-    setSelectedPayment(null);
-    setProcessing(false);
-    fetchExchangeRate();
-    fetchVirtualBalance();
-  }, [fetchVirtualBalance]);
-
-  const fetchVirtualBalance = async () => {
+  const fetchVirtualBalance = useCallback(async () => {
     try {
       console.log('Fetching user virtual balance');
       setLoadingBalance(true);
@@ -54,7 +46,15 @@ export default function SubscriptionPlansScreen() {
     } finally {
       setLoadingBalance(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    console.log('Payment screen loaded - $5 per event');
+    setSelectedPayment(null);
+    setProcessing(false);
+    fetchExchangeRate();
+    fetchVirtualBalance();
+  }, [fetchVirtualBalance]);
 
   const fetchExchangeRate = async () => {
     try {
