@@ -87,7 +87,7 @@
         }
       ]
     ],
-    "scheme": "nospi",
+    "scheme": "Nospi",
     "experiments": {
       "typedRoutes": true
     },
