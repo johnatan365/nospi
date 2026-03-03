@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase';
 
 // Country-specific phone validation rules
 const PHONE_VALIDATION_RULES: Record<string, { length: number; startsWith: string[] }> = {
@@ -19,6 +20,7 @@ export default function PhoneScreen() {
   const [country, setCountry] = useState('Colombia');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     // Load country from previous onboarding step
@@ -82,6 +84,34 @@ export default function PhoneScreen() {
     return { valid: true };
   };
 
+  const checkPhoneExists = async (fullPhoneNumber: string): Promise<boolean> => {
+    try {
+      console.log('Checking if phone number exists:', fullPhoneNumber);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, phone')
+        .eq('phone', fullPhoneNumber)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking phone number:', error);
+        return false;
+      }
+
+      if (data) {
+        console.log('Phone number already exists for user:', data.id);
+        return true;
+      }
+
+      console.log('Phone number is available');
+      return false;
+    } catch (error) {
+      console.error('Failed to check phone number:', error);
+      return false;
+    }
+  };
+
   const handleContinue = async () => {
     console.log('User attempting to continue with phone:', countryCode, phoneNumber);
     
@@ -96,15 +126,30 @@ export default function PhoneScreen() {
 
     console.log('✅ Phone number validated successfully');
     
+    // Check if phone number already exists
+    setChecking(true);
+    const fullPhoneNumber = countryCode + phoneNumber;
+    const phoneExists = await checkPhoneExists(fullPhoneNumber);
+    setChecking(false);
+
+    if (phoneExists) {
+      console.log('❌ Phone number already registered');
+      setErrorMessage('Este número de celular ya está registrado. Por favor usa otro número o inicia sesión con tu cuenta existente.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    console.log('✅ Phone number is available');
+    
     await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
       countryCode,
-      phoneNumber: countryCode + phoneNumber,
+      phoneNumber: fullPhoneNumber,
     }));
     
     router.push('/onboarding/photo');
   };
 
-  const canContinue = phoneNumber.trim().length >= 7;
+  const canContinue = phoneNumber.trim().length >= 7 && !checking;
 
   return (
     <LinearGradient
@@ -148,7 +193,9 @@ export default function PhoneScreen() {
             disabled={!canContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>
+              {checking ? 'Verificando...' : 'Continuar'}
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

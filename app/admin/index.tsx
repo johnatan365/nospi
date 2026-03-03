@@ -6,6 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
+import * as XLSX from 'xlsx';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 interface Event {
   id: string;
@@ -66,6 +69,7 @@ interface EventAttendee {
 }
 
 type AdminView = 'dashboard' | 'events' | 'users' | 'appointments';
+type EventTab = 'published' | 'closed' | 'draft';
 
 export default function AdminPanelScreen() {
   const router = useRouter();
@@ -74,6 +78,9 @@ export default function AdminPanelScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
+
+  // NEW: Event tab state
+  const [eventTab, setEventTab] = useState<EventTab>('published');
 
   // Dashboard stats
   const [totalEvents, setTotalEvents] = useState(0);
@@ -117,6 +124,9 @@ export default function AdminPanelScreen() {
     event_status: 'published' as 'draft' | 'published' | 'closed',
     confirmation_code: '1986',
   });
+
+  // Export state
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     console.log('Admin panel loaded (Mobile version)');
@@ -237,6 +247,83 @@ export default function AdminPanelScreen() {
       Alert.alert('Error', 'Error inesperado al cargar datos: ' + String(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NEW: Export all attendees to Excel
+  const handleExportAllAttendees = async () => {
+    try {
+      setExporting(true);
+      console.log('Exporting all attendees to Excel...');
+
+      // Fetch all attendees from all events
+      const { data: allAttendees, error } = await supabase
+        .rpc('get_all_attendees_for_export');
+
+      if (error) {
+        console.error('Error fetching attendees for export:', error);
+        Alert.alert('Error', 'No se pudieron cargar los asistentes: ' + error.message);
+        return;
+      }
+
+      if (!allAttendees || allAttendees.length === 0) {
+        Alert.alert('Información', 'No hay asistentes registrados para exportar');
+        return;
+      }
+
+      console.log('✅ Fetched attendees for export:', allAttendees.length);
+
+      // Transform data for Excel
+      const excelData = allAttendees.map((attendee: any) => ({
+        'Nombre': attendee.user_name,
+        'Email': attendee.user_email,
+        'Teléfono': attendee.user_phone,
+        'Ciudad': attendee.user_city,
+        'País': attendee.user_country,
+        'Género': attendee.user_gender === 'hombre' ? 'Hombre' : attendee.user_gender === 'mujer' ? 'Mujer' : 'No especificado',
+        'Edad': attendee.user_age || 'N/A',
+        'Interesado en': attendee.user_interested_in === 'hombres' ? 'Hombres' : attendee.user_interested_in === 'mujeres' ? 'Mujeres' : attendee.user_interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+        'Rango de edad min': attendee.user_age_range_min || 18,
+        'Rango de edad max': attendee.user_age_range_max || 99,
+        'Evento': attendee.event_name,
+        'Ciudad del evento': attendee.event_city,
+        'Tipo de evento': attendee.event_type === 'bar' ? 'Bar' : 'Restaurante',
+        'Fecha del evento': attendee.event_date,
+        'Hora del evento': attendee.event_time,
+        'Estado': attendee.status,
+        'Estado de pago': attendee.payment_status === 'paid' ? 'Pagado' : 'Pendiente',
+        'Fecha de registro': attendee.created_at,
+      }));
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(excelData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Asistentes');
+
+      // Generate Excel file
+      const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+      const fileName = `asistentes_todos_eventos_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileUri = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, wbout, {
+        encoding: 'base64' as any,
+      });
+
+      console.log('✅ Excel file created:', fileUri);
+
+      // Share the file
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        dialogTitle: 'Exportar Asistentes',
+        UTI: 'com.microsoft.excel.xlsx',
+      });
+
+      Alert.alert('Éxito', `Se exportaron ${allAttendees.length} asistentes exitosamente`);
+    } catch (error) {
+      console.error('Failed to export attendees:', error);
+      Alert.alert('Error', 'Error al exportar asistentes: ' + String(error));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -722,12 +809,24 @@ export default function AdminPanelScreen() {
           >
             <Text style={styles.actionButtonTextSecondary}>Ver Usuarios</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#10B981' }]}
+            onPress={handleExportAllAttendees}
+            disabled={exporting}
+          >
+            <Text style={styles.actionButtonText}>
+              {exporting ? 'Exportando...' : '📊 Exportar Todos los Asistentes a Excel'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   };
 
   const renderEvents = () => {
+    // Filter events based on selected tab
+    const filteredEvents = events.filter(event => event.event_status === eventTab);
+
     return (
       <View style={styles.listContainer}>
         <View style={styles.listHeader}>
@@ -740,7 +839,35 @@ export default function AdminPanelScreen() {
           </TouchableOpacity>
         </View>
 
-        {events.map((event) => {
+        {/* Event Tabs */}
+        <View style={styles.eventTabsContainer}>
+          <TouchableOpacity
+            style={[styles.eventTab, eventTab === 'published' && styles.eventTabActive]}
+            onPress={() => setEventTab('published')}
+          >
+            <Text style={[styles.eventTabText, eventTab === 'published' && styles.eventTabTextActive]}>
+              ✅ Publicados ({events.filter(e => e.event_status === 'published').length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.eventTab, eventTab === 'closed' && styles.eventTabActive]}
+            onPress={() => setEventTab('closed')}
+          >
+            <Text style={[styles.eventTabText, eventTab === 'closed' && styles.eventTabTextActive]}>
+              🔒 Cerrados ({events.filter(e => e.event_status === 'closed').length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.eventTab, eventTab === 'draft' && styles.eventTabActive]}
+            onPress={() => setEventTab('draft')}
+          >
+            <Text style={[styles.eventTabText, eventTab === 'draft' && styles.eventTabTextActive]}>
+              📝 Borradores ({events.filter(e => e.event_status === 'draft').length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {filteredEvents.map((event) => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
@@ -833,6 +960,14 @@ export default function AdminPanelScreen() {
             </View>
           );
         })}
+
+        {filteredEvents.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              No hay eventos {eventTab === 'published' ? 'publicados' : eventTab === 'closed' ? 'cerrados' : 'en borrador'}
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -1614,6 +1749,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  eventTabsContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  eventTab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventTabActive: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  eventTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  eventTabTextActive: {
+    color: 'white',
+  },
   listItem: {
     backgroundColor: 'white',
     borderRadius: 16,
@@ -1806,6 +1972,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     color: '#1E40AF',
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#9CA3AF',
     textAlign: 'center',
   },
   modalOverlay: {

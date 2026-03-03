@@ -27,7 +27,7 @@ export default function SubscriptionPlansScreen() {
     setProcessing(false);
     fetchExchangeRate();
     fetchVirtualBalance();
-  }, []);
+  }, [fetchVirtualBalance]);
 
   const fetchVirtualBalance = async () => {
     try {

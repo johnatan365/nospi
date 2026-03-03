@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -40,9 +40,9 @@ export default function EventsScreen() {
     if (currentUserId) {
       loadEvents();
     }
-  }, [currentUserId]);
+  }, [currentUserId, loadEvents]);
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     if (!currentUserId) return;
 
     try {
@@ -63,7 +63,8 @@ export default function EventsScreen() {
       const purchasedEventIds = userAppointments?.map(apt => apt.event_id) || [];
       console.log('User has purchased events:', purchasedEventIds);
 
-      // Load all published events
+      // Load only published events (exclude closed and draft events)
+      // Closed events should not appear in the app
       const { data, error } = await supabase
         .from('events')
         .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
@@ -89,7 +90,7 @@ export default function EventsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserId]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
