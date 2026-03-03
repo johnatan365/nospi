@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
@@ -57,6 +57,32 @@ export default function LoginScreen() {
       }
 
       console.log('Login successful, user:', data.user?.id);
+      
+      // Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Error checking profile:', profileError);
+        setError('Error al verificar tu perfil');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (!profile) {
+        console.log('No profile found for user, signing out');
+        await supabase.auth.signOut();
+        Alert.alert(
+          'Registro Requerido',
+          'Debes completar el proceso de registro antes de iniciar sesión.',
+          [{ text: 'OK', onPress: () => router.replace('/onboarding/register') }]
+        );
+        return;
+      }
+
       router.replace('/(tabs)/events');
     } catch (error) {
       console.error('Login failed:', error);
@@ -67,7 +93,7 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    console.log('User tapped Google login');
+    console.log('User tapped Google login from "Ya tengo una cuenta"');
     setLoading(true);
     setError('');
 
@@ -144,7 +170,7 @@ export default function LoginScreen() {
   };
 
   const handleAppleLogin = async () => {
-    console.log('User tapped Apple login');
+    console.log('User tapped Apple login from "Ya tengo una cuenta"');
     setLoading(true);
     setError('');
 
