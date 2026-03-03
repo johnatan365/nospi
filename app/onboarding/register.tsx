@@ -51,6 +51,10 @@ export default function RegisterScreen() {
     setError('');
 
     try {
+      // Store registration intent in AsyncStorage so callback knows this is a registration flow
+      await AsyncStorage.setItem('oauth_flow_type', 'register');
+      console.log('RegisterScreen: Stored oauth_flow_type as register');
+      
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
@@ -140,6 +144,10 @@ export default function RegisterScreen() {
     setError('');
 
     try {
+      // Store registration intent in AsyncStorage so callback knows this is a registration flow
+      await AsyncStorage.setItem('oauth_flow_type', 'register');
+      console.log('RegisterScreen: Stored oauth_flow_type as register');
+      
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
 

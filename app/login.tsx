@@ -7,6 +7,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -104,6 +105,10 @@ export default function LoginScreen() {
     setError('');
 
     try {
+      // Store login intent in AsyncStorage so callback knows this is a login flow
+      await AsyncStorage.setItem('oauth_flow_type', 'login');
+      console.log('LoginScreen: Stored oauth_flow_type as login');
+      
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
 
@@ -197,6 +202,10 @@ export default function LoginScreen() {
     setError('');
 
     try {
+      // Store login intent in AsyncStorage so callback knows this is a login flow
+      await AsyncStorage.setItem('oauth_flow_type', 'login');
+      console.log('LoginScreen: Stored oauth_flow_type as login');
+      
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
 
