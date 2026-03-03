@@ -40,6 +40,8 @@ interface User {
   interested_in: string;
   gender?: string;
   age?: number;
+  age_range_min?: number;
+  age_range_max?: number;
 }
 
 interface Appointment {
@@ -142,6 +144,12 @@ export default function AdminPanelScreen() {
   const [selectedEventForAttendees, setSelectedEventForAttendees] = useState<Event | null>(null);
   const [eventAttendees, setEventAttendees] = useState<EventAttendee[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+
+  // Move attendee modal
+  const [showMoveAttendeeModal, setShowMoveAttendeeModal] = useState(false);
+  const [selectedAttendeeToMove, setSelectedAttendeeToMove] = useState<EventAttendee | null>(null);
+  const [targetEventId, setTargetEventId] = useState<string>('');
+  const [movingAttendee, setMovingAttendee] = useState(false);
 
   // Event creation/edit modal
   const [showEventModal, setShowEventModal] = useState(false);
@@ -425,51 +433,124 @@ export default function AdminPanelScreen() {
   };
 
   const handleViewAttendees = async (event: Event) => {
-    console.log('Loading attendees for event:', event.id);
+    console.log('=== LOADING ATTENDEES FOR EVENT (WEB) ===');
+    console.log('Event ID:', event.id);
+    console.log('Event Name:', event.name);
+    
     setSelectedEventForAttendees(event);
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
 
     try {
-      // FIX: Query appointments table directly instead of using RPC
+      console.log('Calling get_event_attendees_for_admin RPC...');
       const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          user_id,
-          event_id,
-          status,
-          payment_status,
-          created_at,
-          users (
-            id,
-            name,
-            email,
-            phone,
-            city,
-            country,
-            interested_in,
-            gender,
-            age
-          )
-        `)
-        .eq('event_id', event.id)
-        .order('created_at', { ascending: false });
+        .rpc('get_event_attendees_for_admin', { p_event_id: event.id });
 
       if (error) {
-        console.error('Error loading event attendees:', error);
+        console.error('❌ Error loading event attendees:', error);
         window.alert('No se pudieron cargar los asistentes: ' + error.message);
         setEventAttendees([]);
       } else {
-        console.log('✅ Attendees loaded:', data?.length || 0);
-        setEventAttendees(data || []);
+        console.log('✅ Raw attendees data received:', data?.length || 0);
+        console.log('Raw data:', JSON.stringify(data, null, 2));
+        
+        // Transform the flat data structure into the nested structure
+        const transformedAttendees = data?.map((att: any) => ({
+          id: att.id,
+          user_id: att.user_id,
+          event_id: att.event_id,
+          status: att.status,
+          payment_status: att.payment_status,
+          created_at: att.created_at,
+          users: {
+            id: att.user_id,
+            name: att.user_name,
+            email: att.user_email,
+            phone: att.user_phone,
+            city: att.user_city,
+            country: att.user_country,
+            interested_in: att.user_interested_in,
+            gender: att.user_gender,
+            age: att.user_age,
+            age_range_min: att.user_age_range_min,
+            age_range_max: att.user_age_range_max,
+          },
+        })) || [];
+        
+        console.log('✅ Transformed attendees:', transformedAttendees.length);
+        console.log('Attendee names:', transformedAttendees.map(a => a.users.name).join(', '));
+        setEventAttendees(transformedAttendees);
       }
     } catch (error) {
-      console.error('Failed to load attendees:', error);
+      console.error('❌ Failed to load attendees:', error);
       window.alert('Error inesperado al cargar asistentes');
       setEventAttendees([]);
     } finally {
       setLoadingAttendees(false);
+    }
+  };
+
+  const handleOpenMoveAttendeeModal = (attendee: EventAttendee) => {
+    console.log('Opening move attendee modal for:', attendee.users.name);
+    setSelectedAttendeeToMove(attendee);
+    setTargetEventId('');
+    setShowMoveAttendeeModal(true);
+  };
+
+  const handleMoveAttendee = async () => {
+    if (!selectedAttendeeToMove || !targetEventId) {
+      window.alert('Por favor selecciona un evento de destino');
+      return;
+    }
+
+    const targetEvent = events.find(e => e.id === targetEventId);
+    if (!targetEvent) {
+      window.alert('Evento de destino no encontrado');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de que quieres mover a ${selectedAttendeeToMove.users.name} al evento "${targetEvent.name || targetEvent.type + ' - ' + targetEvent.city}"?`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setMovingAttendee(true);
+      console.log('Moving attendee:', selectedAttendeeToMove.id, 'to event:', targetEventId);
+
+      // Update the appointment to point to the new event
+      const { error } = await supabase
+        .from('appointments')
+        .update({ event_id: targetEventId, updated_at: new Date().toISOString() })
+        .eq('id', selectedAttendeeToMove.id);
+
+      if (error) {
+        console.error('Error moving attendee:', error);
+        window.alert('Error al mover asistente: ' + error.message);
+        return;
+      }
+
+      console.log('✅ Attendee moved successfully');
+      window.alert(`${selectedAttendeeToMove.users.name} ha sido movido exitosamente al nuevo evento`);
+      
+      // Close modals and reload data
+      setShowMoveAttendeeModal(false);
+      setSelectedAttendeeToMove(null);
+      setTargetEventId('');
+      
+      // Reload attendees list for current event
+      if (selectedEventForAttendees) {
+        handleViewAttendees(selectedEventForAttendees);
+      }
+      
+      // Reload dashboard data
+      loadDashboardData();
+    } catch (error) {
+      console.error('Failed to move attendee:', error);
+      window.alert('Error inesperado al mover asistente');
+    } finally {
+      setMovingAttendee(false);
     }
   };
 
@@ -1930,6 +2011,11 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                   const interestedInText = attendee.users.interested_in === 'hombres' ? 'Hombres' : attendee.users.interested_in === 'mujeres' ? 'Mujeres' : attendee.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
                   const genderText = attendee.users.gender === 'hombre' ? 'Hombre' : attendee.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
                   
+                  // Calculate age range preference display
+                  const ageRangeMin = attendee.users.age_range_min || 18;
+                  const ageRangeMax = attendee.users.age_range_max || 99;
+                  const ageRangeText = `${ageRangeMin} - ${ageRangeMax} años`;
+                  
                   return (
                     <View key={attendee.id} style={styles.attendeeItem}>
                       <View style={styles.attendeeHeader}>
@@ -1948,6 +2034,10 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                       <Text style={styles.attendeeDetail}>👤 Género: {genderText}</Text>
                       <Text style={styles.attendeeDetail}>💝 Interesado en: {interestedInText}</Text>
                       {attendee.users.age && <Text style={styles.attendeeDetail}>🎂 Edad: {attendee.users.age} años</Text>}
+                      <View style={styles.ageRangeHighlight}>
+                        <Text style={styles.ageRangeLabel}>🎯 Rango de edad preferido:</Text>
+                        <Text style={styles.ageRangeValue}>{ageRangeText}</Text>
+                      </View>
                       <View style={styles.attendeeStatusRow}>
                         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                           <Text style={styles.statusBadgeText}>{attendee.status}</Text>
@@ -1958,6 +2048,12 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                           </Text>
                         </View>
                       </View>
+                      <TouchableOpacity
+                        style={styles.moveAttendeeButton}
+                        onPress={() => handleOpenMoveAttendeeModal(attendee)}
+                      >
+                        <Text style={styles.moveAttendeeButtonText}>🔄 Mover a Otro Evento</Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 })}
@@ -2246,6 +2342,94 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                 </Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Move Attendee Modal */}
+      <Modal
+        visible={showMoveAttendeeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMoveAttendeeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.moveAttendeeModalContent}>
+            <View style={styles.moveAttendeeModalHeader}>
+              <Text style={styles.moveAttendeeModalTitle}>Mover Asistente</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowMoveAttendeeModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedAttendeeToMove && (
+              <View style={styles.moveAttendeeModalBody}>
+                <View style={styles.attendeeInfoSection}>
+                  <Text style={styles.attendeeInfoTitle}>Asistente:</Text>
+                  <Text style={styles.attendeeInfoName}>{selectedAttendeeToMove.users.name}</Text>
+                  <Text style={styles.attendeeInfoDetail}>📧 {selectedAttendeeToMove.users.email}</Text>
+                </View>
+
+                <Text style={styles.inputLabel}>Seleccionar Evento de Destino:</Text>
+                <ScrollView style={styles.eventSelectionList}>
+                  {events
+                    .filter(e => e.id !== selectedAttendeeToMove.event_id && e.event_status === 'published')
+                    .map((event) => {
+                      const eventName = event.name || `${event.type} - ${event.city}`;
+                      const eventDate = event.date;
+                      const eventTime = event.time;
+                      const isSelected = targetEventId === event.id;
+                      
+                      return (
+                        <TouchableOpacity
+                          key={event.id}
+                          style={[
+                            styles.eventSelectionItem,
+                            isSelected && styles.eventSelectionItemSelected,
+                          ]}
+                          onPress={() => setTargetEventId(event.id)}
+                        >
+                          <View style={styles.eventSelectionRadio}>
+                            {isSelected && <View style={styles.eventSelectionRadioInner} />}
+                          </View>
+                          <View style={styles.eventSelectionInfo}>
+                            <Text style={styles.eventSelectionName}>{eventName}</Text>
+                            <Text style={styles.eventSelectionDate}>📅 {eventDate} a las {eventTime}</Text>
+                            <Text style={styles.eventSelectionCity}>📍 {event.city}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </ScrollView>
+
+                <View style={styles.moveAttendeeModalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonCancel]}
+                    onPress={() => setShowMoveAttendeeModal(false)}
+                  >
+                    <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.modalButtonConfirm,
+                      (!targetEventId || movingAttendee) && styles.modalButtonDisabled,
+                    ]}
+                    onPress={handleMoveAttendee}
+                    disabled={!targetEventId || movingAttendee}
+                  >
+                    {movingAttendee ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.modalButtonTextConfirm}>Mover Asistente</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -3251,5 +3435,165 @@ const styles = StyleSheet.create({
   },
   deleteAttendeeButtonText: {
     fontSize: 16,
+  },
+  ageRangeHighlight: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: '#6366F1',
+  },
+  ageRangeLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#3730A3',
+    marginBottom: 4,
+  },
+  ageRangeValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#3730A3',
+  },
+  moveAttendeeButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  moveAttendeeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  moveAttendeeModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 600,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  moveAttendeeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  moveAttendeeModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  moveAttendeeModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  attendeeInfoSection: {
+    backgroundColor: '#F3E8FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  attendeeInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+  },
+  attendeeInfoName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  attendeeInfoDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  eventSelectionList: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  eventSelectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  eventSelectionItemSelected: {
+    backgroundColor: '#E0E7FF',
+    borderColor: nospiColors.purpleDark,
+  },
+  eventSelectionRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: nospiColors.purpleDark,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventSelectionRadioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: nospiColors.purpleDark,
+  },
+  eventSelectionInfo: {
+    flex: 1,
+  },
+  eventSelectionName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  eventSelectionDate: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  eventSelectionCity: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  moveAttendeeModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalButtonConfirm: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  modalButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
+  },
+  modalButtonTextCancel: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalButtonTextConfirm: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
