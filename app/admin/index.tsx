@@ -241,21 +241,26 @@ export default function AdminPanelScreen() {
   };
 
   const handleViewAttendees = async (event: Event) => {
-    console.log('Loading attendees for event:', event.id);
+    console.log('=== LOADING ATTENDEES FOR EVENT ===');
+    console.log('Event ID:', event.id);
+    console.log('Event Name:', event.name);
+    
     setSelectedEvent(event);
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
 
     try {
+      console.log('Calling get_event_attendees_for_admin RPC...');
       const { data, error } = await supabase
         .rpc('get_event_attendees_for_admin', { p_event_id: event.id });
 
       if (error) {
-        console.error('Error loading event attendees:', error);
+        console.error('❌ Error loading event attendees:', error);
         Alert.alert('Error', 'No se pudieron cargar los asistentes: ' + error.message);
         setEventAttendees([]);
       } else {
-        console.log('✅ Attendees loaded:', data?.length || 0);
+        console.log('✅ Raw attendees data received:', data?.length || 0);
+        console.log('Raw data:', JSON.stringify(data, null, 2));
         
         // Transform the flat data structure into the nested structure
         const transformedAttendees = data?.map((att: any) => ({
@@ -280,10 +285,12 @@ export default function AdminPanelScreen() {
           },
         })) || [];
         
+        console.log('✅ Transformed attendees:', transformedAttendees.length);
+        console.log('Attendee names:', transformedAttendees.map(a => a.users.name).join(', '));
         setEventAttendees(transformedAttendees);
       }
     } catch (error) {
-      console.error('Failed to load attendees:', error);
+      console.error('❌ Failed to load attendees:', error);
       Alert.alert('Error', 'Error inesperado al cargar asistentes');
       setEventAttendees([]);
     } finally {
