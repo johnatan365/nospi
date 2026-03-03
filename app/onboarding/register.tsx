@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -19,6 +19,8 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
 
   useEffect(() => {
     // Listen for deep link events (OAuth callback)
@@ -36,6 +38,12 @@ export default function RegisterScreen() {
       subscription.remove();
     };
   }, []);
+
+  const showErrorAlert = (title: string, message: string) => {
+    console.error(`${title}: ${message}`);
+    setErrorModalMessage(message);
+    setShowErrorModal(true);
+  };
 
   const handleAppleSignUp = async () => {
     console.log('User tapped Sign up with Apple');
@@ -56,7 +64,17 @@ export default function RegisterScreen() {
 
       if (error) {
         console.error('Apple OAuth error:', error);
-        setError('Error al conectar con Apple. Por favor intenta de nuevo.');
+        
+        // Check for specific OAuth configuration errors
+        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
+          showErrorAlert(
+            'Configuración Pendiente',
+            'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
+          );
+        } else {
+          setError('Error al conectar con Apple. Por favor intenta de nuevo.');
+        }
+        
         setLoading(false);
         return;
       }
@@ -99,9 +117,19 @@ export default function RegisterScreen() {
           setLoading(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Apple sign-up failed:', error);
-      setError('Error al registrarse con Apple');
+      
+      // Check if it's a configuration error
+      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
+        showErrorAlert(
+          'Configuración Pendiente',
+          'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
+        );
+      } else {
+        setError('Error al registrarse con Apple');
+      }
+      
       setLoading(false);
     }
   };
@@ -129,7 +157,17 @@ export default function RegisterScreen() {
 
       if (error) {
         console.error('Google OAuth error:', error);
-        setError('Error al conectar con Google. Por favor intenta de nuevo.');
+        
+        // Check for specific OAuth configuration errors
+        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
+          showErrorAlert(
+            'Configuración Pendiente',
+            'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
+          );
+        } else {
+          setError('Error al conectar con Google. Por favor intenta de nuevo.');
+        }
+        
         setLoading(false);
         return;
       }
@@ -173,9 +211,19 @@ export default function RegisterScreen() {
           setLoading(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google sign-up failed:', error);
-      setError('Error al registrarse con Google');
+      
+      // Check if it's a configuration error
+      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
+        showErrorAlert(
+          'Configuración Pendiente',
+          'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
+        );
+      } else {
+        setError('Error al registrarse con Google');
+      }
+      
       setLoading(false);
     }
   };
@@ -401,6 +449,7 @@ export default function RegisterScreen() {
         </View>
       </ScrollView>
 
+      {/* Email Registration Modal */}
       <Modal
         visible={showEmailForm}
         transparent
@@ -465,6 +514,28 @@ export default function RegisterScreen() {
               activeOpacity={0.8}
             >
               <Text style={styles.cancelButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal for OAuth Configuration Issues */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowErrorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.errorModalContent}>
+            <Text style={styles.errorModalTitle}>⚠️ Configuración Pendiente</Text>
+            <Text style={styles.errorModalText}>{errorModalMessage}</Text>
+            <TouchableOpacity
+              style={styles.errorModalButton}
+              onPress={() => setShowErrorModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.errorModalButtonText}>Entendido</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -664,5 +735,39 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorModalContent: {
+    backgroundColor: nospiColors.white,
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  errorModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorModalText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  errorModalButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  errorModalButtonText: {
+    color: nospiColors.white,
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
