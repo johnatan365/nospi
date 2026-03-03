@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text, Alert } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,11 +46,21 @@ export default function AuthCallbackScreen() {
 
           if (data.session) {
             console.log('AuthCallbackScreen: Session set successfully, user:', data.session.user.id);
-            setStatus('Verificando perfil...');
+            console.log('AuthCallbackScreen: User metadata:', data.session.user.user_metadata);
+            setStatus('Sesión establecida correctamente');
 
+            // Extract Google user data
             const googleUser = data.session.user;
+            const metadata = googleUser.user_metadata || {};
+            
+            // Google provides these fields in user_metadata
+            const fullName = metadata.full_name || metadata.name || googleUser.email?.split('@')[0] || 'Usuario';
+            const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
+            const email = googleUser.email || '';
 
-            // Check if user profile exists in users table
+            console.log('AuthCallbackScreen: Extracted data - Name:', fullName, 'Email:', email, 'Photo:', profilePhotoUrl);
+
+            // Check if user profile exists
             const { data: existingProfile, error: profileError } = await supabase
               .from('users')
               .select('*')
@@ -59,69 +69,85 @@ export default function AuthCallbackScreen() {
 
             if (profileError && profileError.code !== 'PGRST116') {
               console.error('AuthCallbackScreen: Error checking profile:', profileError);
-              setStatus('Error al verificar el perfil');
-              await supabase.auth.signOut();
-              setTimeout(() => {
-                router.replace('/welcome');
-              }, 2000);
-              return;
             }
 
-            // If profile doesn't exist, user must register first
+            // If profile doesn't exist, create it with Google data
             if (!existingProfile) {
-              console.log('AuthCallbackScreen: No profile found for Google user. User must register first.');
-              setStatus('Registro requerido');
+              console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
               
-              // Sign out the user
-              await supabase.auth.signOut();
-              
-              // Show alert and redirect to register
-              Alert.alert(
-                'Registro Requerido',
-                'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      router.replace('/onboarding/register');
-                    }
-                  }
-                ]
-              );
-              return;
-            }
+              const newProfile = {
+                id: googleUser.id,
+                email: email,
+                name: fullName,
+                birthdate: '',
+                age: 18,
+                gender: 'hombre',
+                interested_in: 'ambos',
+                age_range_min: 18,
+                age_range_max: 60,
+                country: 'Colombia',
+                city: 'Medellín',
+                phone: '',
+                profile_photo_url: profilePhotoUrl,
+                interests: [],
+                personality_traits: [],
+                compatibility_percentage: 95,
+                notification_preferences: {
+                  whatsapp: false,
+                  email: true,
+                  sms: false,
+                  push: true,
+                },
+              };
 
-            // Profile exists, update with Google data if needed
-            console.log('AuthCallbackScreen: Profile exists, updating Google data if needed');
-            const metadata = googleUser.user_metadata || {};
-            const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
-            
-            const updateData: any = {};
-            
-            // Always update photo from Google if available and different
-            if (profilePhotoUrl && profilePhotoUrl !== existingProfile.profile_photo_url) {
-              updateData.profile_photo_url = profilePhotoUrl;
-            }
+              console.log('AuthCallbackScreen: Inserting profile:', newProfile);
 
-            // Only update if there's something to update
-            if (Object.keys(updateData).length > 0) {
-              console.log('AuthCallbackScreen: Updating profile with:', updateData);
-              
-              const { error: updateError } = await supabase
+              const { error: createProfileError } = await supabase
                 .from('users')
-                .update(updateData)
-                .eq('id', googleUser.id);
+                .insert(newProfile);
 
-              if (updateError) {
-                console.error('AuthCallbackScreen: Error updating profile:', updateError);
+              if (createProfileError) {
+                console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
+                setStatus('Error al crear el perfil');
               } else {
-                console.log('AuthCallbackScreen: Profile updated successfully');
+                console.log('AuthCallbackScreen: Profile created successfully');
+                setStatus('Perfil creado correctamente');
+              }
+            } else {
+              console.log('AuthCallbackScreen: Profile already exists, updating Google data');
+              
+              // Update existing profile with Google photo if available
+              const updateData: any = {};
+              
+              // Only update name if it's empty or default
+              if (!existingProfile.name || existingProfile.name === 'Usuario' || existingProfile.name === '') {
+                updateData.name = fullName;
+              }
+              
+              // Always update photo from Google if available
+              if (profilePhotoUrl) {
+                updateData.profile_photo_url = profilePhotoUrl;
+              }
+
+              // Only update if there's something to update
+              if (Object.keys(updateData).length > 0) {
+                console.log('AuthCallbackScreen: Updating profile with:', updateData);
+                
+                const { error: updateError } = await supabase
+                  .from('users')
+                  .update(updateData)
+                  .eq('id', googleUser.id);
+
+                if (updateError) {
+                  console.error('AuthCallbackScreen: Error updating profile:', updateError);
+                } else {
+                  console.log('AuthCallbackScreen: Profile updated successfully');
+                }
               }
             }
 
             // Navigate to events screen
             console.log('AuthCallbackScreen: Navigating to events screen');
-            setStatus('¡Bienvenido!');
             setTimeout(() => {
               router.replace('/(tabs)/events');
             }, 500);
@@ -146,9 +172,18 @@ export default function AuthCallbackScreen() {
 
         if (session) {
           console.log('AuthCallbackScreen: Session found, user:', session.user.id);
-          setStatus('Verificando perfil...');
+          console.log('AuthCallbackScreen: User metadata:', session.user.user_metadata);
+          setStatus('Sesión encontrada, redirigiendo...');
           
+          // Extract Google user data
           const googleUser = session.user;
+          const metadata = googleUser.user_metadata || {};
+          
+          const fullName = metadata.full_name || metadata.name || googleUser.email?.split('@')[0] || 'Usuario';
+          const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
+          const email = googleUser.email || '';
+
+          console.log('AuthCallbackScreen: Extracted data - Name:', fullName, 'Email:', email, 'Photo:', profilePhotoUrl);
 
           // Check if user profile exists
           const { data: existingProfile, error: profileError } = await supabase
@@ -159,69 +194,85 @@ export default function AuthCallbackScreen() {
 
           if (profileError && profileError.code !== 'PGRST116') {
             console.error('AuthCallbackScreen: Error checking profile:', profileError);
-            setStatus('Error al verificar el perfil');
-            await supabase.auth.signOut();
-            setTimeout(() => {
-              router.replace('/welcome');
-            }, 2000);
-            return;
           }
 
-          // If profile doesn't exist, user must register first
+          // If profile doesn't exist, create it with Google data
           if (!existingProfile) {
-            console.log('AuthCallbackScreen: No profile found for Google user. User must register first.');
-            setStatus('Registro requerido');
+            console.log('AuthCallbackScreen: Creating new profile for Google OAuth user');
             
-            // Sign out the user
-            await supabase.auth.signOut();
-            
-            // Show alert and redirect to register
-            Alert.alert(
-              'Registro Requerido',
-              'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    router.replace('/onboarding/register');
-                  }
-                }
-              ]
-            );
-            return;
-          }
+            const newProfile = {
+              id: googleUser.id,
+              email: email,
+              name: fullName,
+              birthdate: '',
+              age: 18,
+              gender: 'hombre',
+              interested_in: 'ambos',
+              age_range_min: 18,
+              age_range_max: 60,
+              country: 'Colombia',
+              city: 'Medellín',
+              phone: '',
+              profile_photo_url: profilePhotoUrl,
+              interests: [],
+              personality_traits: [],
+              compatibility_percentage: 95,
+              notification_preferences: {
+                whatsapp: false,
+                email: true,
+                sms: false,
+                push: true,
+              },
+            };
 
-          // Profile exists, update with Google data if needed
-          console.log('AuthCallbackScreen: Profile exists, updating Google data if needed');
-          const metadata = googleUser.user_metadata || {};
-          const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
-          
-          const updateData: any = {};
-          
-          // Always update photo from Google if available and different
-          if (profilePhotoUrl && profilePhotoUrl !== existingProfile.profile_photo_url) {
-            updateData.profile_photo_url = profilePhotoUrl;
-          }
+            console.log('AuthCallbackScreen: Inserting profile:', newProfile);
 
-          // Only update if there's something to update
-          if (Object.keys(updateData).length > 0) {
-            console.log('AuthCallbackScreen: Updating profile with:', updateData);
-            
-            const { error: updateError } = await supabase
+            const { error: createProfileError } = await supabase
               .from('users')
-              .update(updateData)
-              .eq('id', googleUser.id);
+              .insert(newProfile);
 
-            if (updateError) {
-              console.error('AuthCallbackScreen: Error updating profile:', updateError);
+            if (createProfileError) {
+              console.error('AuthCallbackScreen: Error creating profile:', createProfileError);
+              setStatus('Error al crear el perfil');
             } else {
-              console.log('AuthCallbackScreen: Profile updated successfully');
+              console.log('AuthCallbackScreen: Profile created successfully');
+              setStatus('Perfil creado correctamente');
+            }
+          } else {
+            console.log('AuthCallbackScreen: Profile already exists, updating Google data');
+            
+            // Update existing profile with Google photo if available
+            const updateData: any = {};
+            
+            // Only update name if it's empty or default
+            if (!existingProfile.name || existingProfile.name === 'Usuario' || existingProfile.name === '') {
+              updateData.name = fullName;
+            }
+            
+            // Always update photo from Google if available
+            if (profilePhotoUrl) {
+              updateData.profile_photo_url = profilePhotoUrl;
+            }
+
+            // Only update if there's something to update
+            if (Object.keys(updateData).length > 0) {
+              console.log('AuthCallbackScreen: Updating profile with:', updateData);
+              
+              const { error: updateError } = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('id', googleUser.id);
+
+              if (updateError) {
+                console.error('AuthCallbackScreen: Error updating profile:', updateError);
+              } else {
+                console.log('AuthCallbackScreen: Profile updated successfully');
+              }
             }
           }
 
           // Navigate to events screen
           console.log('AuthCallbackScreen: Navigating to events screen');
-          setStatus('¡Bienvenido!');
           router.replace('/(tabs)/events');
         } else {
           console.log('AuthCallbackScreen: No session found after OAuth');
