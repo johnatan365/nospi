@@ -3437,23 +3437,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   ageRangeHighlight: {
-    backgroundColor: '#E0E7FF',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-    borderWidth: 2,
-    borderColor: '#6366F1',
+    marginTop: 4,
   },
   ageRangeLabel: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#3730A3',
-    marginBottom: 4,
+    color: '#6B7280',
+    marginBottom: 0,
   },
   ageRangeValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3730A3',
+    fontSize: 14,
+    color: '#6B7280',
   },
   moveAttendeeButton: {
     backgroundColor: '#8B5CF6',
