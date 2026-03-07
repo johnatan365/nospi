@@ -335,8 +335,8 @@ export default function ProfileScreen() {
       // Update database with base URL
       const { error: updateError } = await supabase
         .from('user_profiles')
-        .upsert({ user_id: user?.id, profile_photo_url: basePhotoUrl 
-								});
+        .update({ profile_photo_url: basePhotoUrl 
+								}).eq('user_id',user?.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
