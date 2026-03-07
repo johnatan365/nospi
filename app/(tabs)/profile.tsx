@@ -116,10 +116,10 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('users')
+        .from('users_profiles')
         .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
+        .eq('user_id', user?.id)
+        .single();
 
       if (fetchError) {
         console.error('❌ Error loading profile:', fetchError);
