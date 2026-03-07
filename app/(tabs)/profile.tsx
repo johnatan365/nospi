@@ -141,6 +141,7 @@ export default function ProfileScreen() {
         // Create a default profile
         const defaultProfile = {
           id: user.id,
+					user_id: user.id,
           email: user.email || '',
           name: fullName,
           date_of_birth: '2000-01-01',
