@@ -334,6 +334,7 @@ export default function ProfileScreen() {
       console.log('🔗 Base public URL:', basePhotoUrl);
 
       // Update database with base URL
+			const { data: {user} } = await supabase.auth.getUser();
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ profile_photo_url: basePhotoUrl 
