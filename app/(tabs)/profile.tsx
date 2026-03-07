@@ -325,33 +325,34 @@ export default function ProfileScreen() {
 
       console.log('✅ Upload successful:', uploadData);
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
+// Get public URL of uploaded photo
+const { data: urlData } = supabase.storage
+.from("profile-photos")
+.getPublicUrl(filePath);
 
-      const basePhotoUrl = urlData.publicUrl;
-      console.log('🔗 Base public URL:', basePhotoUrl);
+const photoUrl = urlData.publicUrl;
 
-			 // Get current user
-			const { data } = await supabase.auth.getUser();
-			const user = data.user;
+// Get current authenticated user
+const { data: userData } = await supabase.auth.getUser();
+const user = userData.user;
 
-			if (! user) {console.error ("Usuario no encontrado");return;}
-			
-			// Update database with base URL
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ profile_photo_url: basePhotoUrl 
-								}).eq('id',user.id);
+if (!user) {
+console.error("Usuario no autenticado");
+return;
+}
 
-      if (updateError) {
-        console.error('❌ Database update error:', updateError);
-        Alert.alert('Error', 'No se pudo actualizar el perfil');
-        return;
-      }
+// Update profile with photo URL
+const { error: updateError } = await supabase
+.from("user_profiles")
+.update({ profile_photo_url: photoUrl })
+.eq("user_id", user.id);
 
-      console.log('✅ Database updated successfully');
+if (updateError) {
+console.error("Error actualizando foto:", updateError);
+return;
+}
+
+console.log("✅ Foto guardada correctamente");
       
       // Force immediate UI update with cache-busted URL
       const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
