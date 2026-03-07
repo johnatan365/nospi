@@ -118,7 +118,7 @@ export default function ProfileScreen() {
       const { data, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', user?.id)
         .maybeSingle();
 
       if (fetchError) {
@@ -143,7 +143,7 @@ export default function ProfileScreen() {
           id: user.id,
           email: user.email || '',
           name: fullName,
-          birthdate: '2000-01-01',
+          date_of_birth: '2000-01-01',
           age: 24,
           gender: 'hombre',
           interested_in: 'ambos',
@@ -168,7 +168,7 @@ export default function ProfileScreen() {
 
         const { error: insertError } = await supabase
           .from('users')
-          .insert(defaultProfile);
+          .upsert(defaultProfile);
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
@@ -282,7 +282,7 @@ export default function ProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = fileName;
+      const filePath = `${user?.id}/${fileName}`;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
@@ -313,7 +313,7 @@ export default function ProfileScreen() {
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
           cacheControl: '0',
-          upsert: false,
+          upsert:true,
         });
 
       if (uploadError) {
@@ -324,36 +324,48 @@ export default function ProfileScreen() {
 
       console.log('✅ Upload successful:', uploadData);
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
+// Get public URL of uploaded photo
+const { data: urlData } = supabase.storage
+.from("profile-photos")
+.getPublicUrl(filePath);
 
-      const basePhotoUrl = urlData.publicUrl;
-      console.log('🔗 Base public URL:', basePhotoUrl);
+const photoUrl = urlData.publicUrl;
 
-      // Update database with base URL
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ profile_photo_url: basePhotoUrl })
-        .eq('id', user?.id);
+// Get current authenticated user
+const { data: userData } = await supabase.auth.getUser();
+const user = userData.user;
 
-      if (updateError) {
-        console.error('❌ Database update error:', updateError);
-        Alert.alert('Error', 'No se pudo actualizar el perfil');
-        return;
-      }
+if (!user) {
+console.error("Usuario no autenticado");
+return;
+}
 
-      console.log('✅ Database updated successfully');
+// Update profile with photo URL
+const { error: updateError } = await supabase
+.from("user_profiles")
+.update({ profile_photo_url: photoUrl })
+.eq("user_id", user.id);
+
+if (updateError) {
+console.error("Error actualizando foto:", updateError);
+return;
+}
+
+console.log("✅ Foto guardada correctamente");
       
-      // Force immediate UI update with cache-busted URL
-      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
-      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
-      
-      setProfile(prev => prev ? { 
-        ...prev, 
-        profile_photo_url: cacheBustedUrl 
-      } : null);
+
+// Force immediate UI update with cache-busted URL
+const cacheBustedUrl = `${photoUrl}?t=${Date.now()}`;
+console.log("Updating UI with cache-busted URL:", cacheBustedUrl);
+
+setProfile(prev =>
+prev
+? {
+...prev,
+profile_photo_url: cacheBustedUrl
+}
+: null
+);
       
       console.log('✅ === PHOTO UPLOAD COMPLETE ===');
       Alert.alert('Éxito', 'Foto de perfil actualizada');

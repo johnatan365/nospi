@@ -710,6 +710,227 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Editar Perfil</Text>
+
+              <Text style={styles.inputLabel}>Nombre</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Tu nombre"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.inputLabel}>Teléfono</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Tu teléfono"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.inputLabel}>País</Text>
+              <TouchableOpacity
+                style={styles.pickerButton}
+                onPress={() => setShowCountryPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCountry}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Ciudad</Text>
+              <TouchableOpacity
+                style={styles.pickerButton}
+                onPress={() => setShowCityPicker(true)}
+              >
+                <Text style={styles.pickerButtonText}>{editCity}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Interesado en</Text>
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'hombres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('hombres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'hombres' && styles.optionButtonTextActive]}>Hombres</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'mujeres' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('mujeres')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'mujeres' && styles.optionButtonTextActive]}>Mujeres</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.optionButton, editInterestedIn === 'ambos' && styles.optionButtonActive]}
+                  onPress={() => setEditInterestedIn('ambos')}
+                >
+                  <Text style={[styles.optionButtonText, editInterestedIn === 'ambos' && styles.optionButtonTextActive]}>Ambos</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeMin} - {editAgeRangeMax} años</Text>
+              <View style={styles.ageSliderSection}>
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
+                  <Text style={styles.ageSliderValue}>{editAgeRangeMin}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={18}
+                  maximumValue={59}
+                  step={1}
+                  value={editAgeRangeMin}
+                  onValueChange={(value) => { const v = Math.round(value); if (v < editAgeRangeMax) setEditAgeRangeMin(v); }}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+                <View style={styles.ageSliderRow}>
+                  <Text style={styles.ageSliderLabel}>Máximo</Text>
+                  <Text style={styles.ageSliderValue}>{editAgeRangeMax}</Text>
+                </View>
+                <Slider
+                  style={styles.ageSlider}
+                  minimumValue={19}
+                  maximumValue={60}
+                  step={1}
+                  value={editAgeRangeMax}
+                  onValueChange={(value) => { const v = Math.round(value); if (v > editAgeRangeMin) setEditAgeRangeMax(v); }}
+                  minimumTrackTintColor={nospiColors.purpleDark}
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor={nospiColors.purpleDark}
+                />
+              </View>
+
+              <Text style={styles.inputLabel}>Intereses</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_INTERESTS.map((interest, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
+                    onPress={() => {
+                      if (editInterests.includes(interest)) {
+                        setEditInterests(editInterests.filter(i => i !== interest));
+                      } else {
+                        setEditInterests([...editInterests, interest]);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>{interest}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Personalidad</Text>
+              <View style={styles.tagsEditContainer}>
+                {AVAILABLE_PERSONALITY.map((trait, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
+                    onPress={() => {
+                      if (editPersonality.includes(trait)) {
+                        setEditPersonality(editPersonality.filter(t => t !== trait));
+                      } else {
+                        setEditPersonality([...editPersonality, trait]);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>{trait}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEditModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCountry}
+              onValueChange={(value) => {
+                setEditCountry(value);
+                const cities = CITIES_BY_COUNTRY[value] || [];
+                if (cities.length > 0) setEditCity(cities[0]);
+              }}
+              style={styles.picker}
+            >
+              {COUNTRIES.map((country) => (
+                <Picker.Item key={country} label={country} value={country} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={styles.pickerModalClose}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={editCity}
+              onValueChange={(value) => setEditCity(value)}
+              style={styles.picker}
+            >
+              {(CITIES_BY_COUNTRY[editCountry] || []).map((city) => (
+                <Picker.Item key={city} label={city} value={city} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </Modal>
+
       {/* Password Change Modal */}
       <Modal
         visible={showPasswordModal}
@@ -911,4 +1132,29 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
   saveButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  modalScrollView: { maxHeight: '90%' },
+  modalScrollContent: { flexGrow: 1 },
+  pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8 },
+  pickerButtonText: { fontSize: 16, color: '#333' },
+  optionsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  optionButton: { flex: 1, backgroundColor: '#F5F5F5', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: '#E0E0E0' },
+  optionButtonActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  optionButtonText: { fontSize: 14, color: '#666', fontWeight: '600' },
+  optionButtonTextActive: { color: nospiColors.purpleDark },
+  ageSliderSection: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, marginBottom: 8 },
+  ageSliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  ageSliderLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
+  ageSliderValue: { fontSize: 18, color: nospiColors.purpleDark, fontWeight: 'bold' },
+  ageSlider: { width: '100%', height: 40, marginBottom: 12 },
+  tagsEditContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  tagEdit: { backgroundColor: '#F5F5F5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: '#E0E0E0' },
+  tagEditActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  tagEditText: { color: '#666', fontSize: 14, fontWeight: '600' },
+  tagEditTextActive: { color: nospiColors.purpleDark },
+  pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  pickerModalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
+  pickerModalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
+  pickerModalClose: { fontSize: 16, fontWeight: '600', color: nospiColors.purpleMid },
+  picker: { width: '100%', height: 200 },
 });
