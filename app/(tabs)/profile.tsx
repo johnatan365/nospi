@@ -282,7 +282,7 @@ export default function ProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = fileName;
+      const filePath = `${user?.id}/${fileName}`;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
@@ -335,8 +335,8 @@ export default function ProfileScreen() {
       // Update database with base URL
       const { error: updateError } = await supabase
         .from('user_profiles')
-        .upsert({ user_id: user?.id, profile_photo_url: basePhotoUrl 
-								});
+        .update({ profile_photo_url: basePhotoUrl 
+								}).eq('user_id',user?.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
