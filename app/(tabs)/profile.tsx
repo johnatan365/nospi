@@ -116,9 +116,9 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('users')
+        .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('user_id', user?.id)
         .maybeSingle();
 
       if (fetchError) {
@@ -282,7 +282,7 @@ export default function ProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = fileName;
+      const filePath = `${user?.id}/${fileName}`;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
@@ -334,9 +334,9 @@ export default function ProfileScreen() {
 
       // Update database with base URL
       const { error: updateError } = await supabase
-        .from('users')
-        .update({ profile_photo_url: basePhotoUrl })
-        .eq('id', user?.id);
+        .from('user_profiles')
+        .update({ profile_photo_url: basePhotoUrl 
+								}).eq('user_id',user?.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
