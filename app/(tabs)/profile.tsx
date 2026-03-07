@@ -119,7 +119,7 @@ export default function ProfileScreen() {
         .from('user_profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (fetchError) {
         console.error('❌ Error loading profile:', fetchError);
