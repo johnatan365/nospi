@@ -23,7 +23,7 @@ interface UserProfile {
   age_range_max: number;
   country: string;
   city: string;
-  phone_number: string;
+  phone: string;
   profile_photo_url: string | null;
   interests: string[];
   personality_traits: string[];
@@ -116,9 +116,9 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('user_profiles')
+        .from('users')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('id', user.id)
         .maybeSingle();
 
       if (fetchError) {
@@ -141,10 +141,9 @@ export default function ProfileScreen() {
         // Create a default profile
         const defaultProfile = {
           id: user.id,
-					user_id: user.id,
           email: user.email || '',
           name: fullName,
-          date_of_birth: '2000-01-01',
+          birthdate: '2000-01-01',
           age: 24,
           gender: 'hombre',
           interested_in: 'ambos',
@@ -152,7 +151,7 @@ export default function ProfileScreen() {
           age_range_max: 60,
           country: 'Colombia',
           city: 'Medellín',
-          phone_number: '',
+          phone: '',
           profile_photo_url: profilePhotoUrl,
           interests: [],
           personality_traits: [],
@@ -168,8 +167,8 @@ export default function ProfileScreen() {
         console.log('📝 Creating default profile:', defaultProfile);
 
         const { error: insertError } = await supabase
-          .from('user_profiles')
-          .upsert(defaultProfile);
+          .from('users')
+          .insert(defaultProfile);
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
@@ -272,84 +271,100 @@ export default function ProfileScreen() {
   };
 
   const uploadPhoto = async (uri: string) => {
-setUploadingPhoto(true);
+    setUploadingPhoto(true);
+    try {
+      console.log('🖼️ === UPLOADING PROFILE PHOTO ===');
+      console.log('URI:', uri);
+      
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const timestamp = Date.now();
+      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
+      const filePath = fileName;
 
-try {
-console.log("🖼️ === UPLOADING PROFILE PHOTO ===");
-console.log("URI:", uri);
+      console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
-const response = await fetch(uri);
-const blob = await response.blob();
+      // Delete old photos first
+      console.log('🗑️ Deleting old photos...');
+      const { data: existingFiles } = await supabase.storage
+        .from('profile-photos')
+        .list('', {
+          search: user?.id || '',
+        });
 
-if (!user) {
-console.error("Usuario no autenticado");
-return;
-}
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(f => f.name);
+        const { error: deleteError } = await supabase.storage
+          .from('profile-photos')
+          .remove(filesToDelete);
+        
+        if (deleteError) {
+          console.error('⚠️ Error deleting old photos:', deleteError);
+        } else {
+          console.log('✅ Deleted old photos:', filesToDelete);
+        }
+      }
 
-const fileExt = uri.split(".").pop()?.toLowerCase() || "jpg";
-const fileName = `${user.id}.jpg`;
-const filePath = fileName;
+      // Upload new photo
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
+          cacheControl: '0',
+          upsert:true,
+        });
 
-console.log("📤 Uploading to bucket profile-photos:", filePath);
+      if (uploadError) {
+        console.error('❌ Upload error:', uploadError);
+        Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
+        return;
+      }
 
-// Subir imagen (reemplaza si ya existe)
-const { error: uploadError } = await supabase.storage
-.from("profile-photos")
-.upload(filePath, blob, {
-upsert: true,
-contentType: "image/jpeg",
-});
+      console.log('✅ Upload successful:', uploadData);
 
-if (uploadError) {
-console.error("❌ Error subiendo foto:", uploadError);
-return;
-}
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
 
-console.log("✅ Upload successful");
+      const basePhotoUrl = urlData.publicUrl;
+      console.log('🔗 Base public URL:', basePhotoUrl);
 
-// Obtener URL pública
-const { data } = supabase.storage
-.from("profile-photos")
-.getPublicUrl(filePath);
+      // Update database with base URL
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ profile_photo_url: basePhotoUrl })
+        .eq('user_id', user?.id);
 
-const photoUrl = data.publicUrl;
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        Alert.alert('Error', 'No se pudo actualizar el perfil');
+        return;
+      }
 
-console.log("🔗 Public URL:", photoUrl);
+      console.log('✅ Database updated successfully');
+      
+      // Force immediate UI update with cache-busted URL
+      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
+      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
+      
+      setProfile(prev => prev ? { 
+        ...prev, 
+        profile_photo_url: cacheBustedUrl 
+      } : null);
+      
+      console.log('✅ === PHOTO UPLOAD COMPLETE ===');
+      Alert.alert('Éxito', 'Foto de perfil actualizada');
+    } catch (error) {
+      console.error('❌ Failed to upload photo:', error);
+      Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
-// Guardar URL en base de datos
-const { error: updateError } = await supabase
-.from("users")
-.update({ profile_photo_url: photoUrl })
-.eq("id", user.id);
-
-if (updateError) {
-console.error("❌ Error actualizando perfil:", updateError);
-return;
-}
-
-console.log("✅ Foto guardada correctamente");
-
-// Forzar refresco de imagen
-const refreshedUrl = `${photoUrl}?t=${Date.now()}`;
-
-setProfile(prev =>
-prev
-? {
-...prev,
-profile_photo_url: refreshedUrl,
-}
-: null
-);
-
-Alert.alert("Éxito", "Foto de perfil actualizada");
-
-} catch (error) {
-console.error("❌ Failed to upload photo:", error);
-Alert.alert("Error", "No se pudo subir la foto");
-} finally {
-setUploadingPhoto(false);
-}
-};
   const handleSaveProfile = async () => {
     if (!editName.trim() || !editPhone.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
