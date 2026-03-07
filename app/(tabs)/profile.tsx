@@ -116,10 +116,10 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('users_profiles')
+        .from('user_profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (fetchError) {
         console.error('❌ Error loading profile:', fetchError);
@@ -168,7 +168,7 @@ export default function ProfileScreen() {
 
         const { error: insertError } = await supabase
           .from('users')
-          .insert(defaultProfile);
+          .upsert(defaultProfile);
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
