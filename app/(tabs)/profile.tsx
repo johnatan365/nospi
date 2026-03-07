@@ -290,12 +290,12 @@ export default function ProfileScreen() {
       console.log('🗑️ Deleting old photos...');
       const { data: existingFiles } = await supabase.storage
         .from('profile-photos')
-        .list('', {
+        .list(user?.id || '', {
           search: user?.id || '',
         });
 
       if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map(f => f.name);
+        const filesToDelete = existingFiles.map(f => `${user?.id}/${f.name}`);
         const { error: deleteError } = await supabase.storage
           .from('profile-photos')
           .remove(filesToDelete);
@@ -331,10 +331,6 @@ const { data: urlData } = supabase.storage
 
 const photoUrl = urlData.publicUrl;
 
-// Get current authenticated user
-const { data: userData } = await supabase.auth.getUser();
-const user = userData.user;
-
 if (!user) {
 console.error("Usuario no autenticado");
 return;
@@ -342,9 +338,9 @@ return;
 
 // Update profile with photo URL
 const { error: updateError } = await supabase
-.from("user_profiles")
+.from("users")
 .update({ profile_photo_url: photoUrl })
-.eq("user_id", user.id);
+.eq("id", user.id);
 
 if (updateError) {
 console.error("Error actualizando foto:", updateError);
