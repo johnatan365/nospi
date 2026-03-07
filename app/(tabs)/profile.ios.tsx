@@ -263,26 +263,39 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
-      await uploadPhoto(result.assets[0].uri);
+      await uploadPhoto(result.assets[0].uri, result.assets[0].base64 || null);
     }
   };
 
-  const uploadPhoto = async (uri: string) => {
+  const uploadPhoto = async (uri: string, base64Data: string | null) => {
     setUploadingPhoto(true);
     try {
       console.log('🖼️ === UPLOADING PROFILE PHOTO (iOS) ===');
       console.log('URI:', uri);
       
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileExt = uri.split('.').pop()?.toLowerCase().split('?')[0] || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = fileName;
+      const filePath = `${user?.id}/${fileName}`;
+
+      // Convert base64 to ArrayBuffer for Supabase (avoids fetch+blob issues on iOS)
+      let uploadData: ArrayBuffer;
+      if (base64Data) {
+        const binaryStr = atob(base64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        uploadData = bytes.buffer;
+      } else {
+        // Fallback to fetch+blob if base64 not available
+        const response = await fetch(uri);
+        uploadData = await response.arrayBuffer();
+      }
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
@@ -290,12 +303,12 @@ export default function ProfileScreen() {
       console.log('🗑️ Deleting old photos...');
       const { data: existingFiles } = await supabase.storage
         .from('profile-photos')
-        .list('', {
+        .list(user?.id || '', {
           search: user?.id || '',
         });
 
       if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map(f => f.name);
+        const filesToDelete = existingFiles.map(f => `${user?.id}/${f.name}`);
         const { error: deleteError } = await supabase.storage
           .from('profile-photos')
           .remove(filesToDelete);
@@ -308,12 +321,12 @@ export default function ProfileScreen() {
       }
 
       // Upload new photo
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: uploadResult, error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, blob, {
+        .upload(filePath, uploadData, {
           contentType: `image/${fileExt}`,
           cacheControl: '0',
-          upsert: false,
+          upsert: true,
         });
 
       if (uploadError) {
@@ -322,7 +335,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('✅ Upload successful:', uploadData);
+      console.log('✅ Upload successful:', uploadResult);
 
       // Get public URL
       const { data: urlData } = supabase.storage
