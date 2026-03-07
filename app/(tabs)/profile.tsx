@@ -313,7 +313,7 @@ export default function ProfileScreen() {
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
           cacheControl: '0',
-          upsert: false,
+          upsert:true,
         });
 
       if (uploadError) {
