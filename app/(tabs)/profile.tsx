@@ -282,7 +282,7 @@ export default function ProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = ${user?.id}/${fileName};
+      const filePath = `${user?.id}/${fileName}`;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
