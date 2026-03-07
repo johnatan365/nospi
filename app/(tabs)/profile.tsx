@@ -354,14 +354,19 @@ return;
 
 console.log("✅ Foto guardada correctamente");
       
-      // Force immediate UI update with cache-busted URL
-      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
-      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
-      
-      setProfile(prev => prev ? { 
-        ...prev, 
-        profile_photo_url: cacheBustedUrl 
-      } : null);
+
+// Force immediate UI update with cache-busted URL
+const cacheBustedUrl = `${photoUrl}?t=${Date.now()}`;
+console.log("Updating UI with cache-busted URL:", cacheBustedUrl);
+
+setProfile(prev =>
+prev
+? {
+...prev,
+profile_photo_url: cacheBustedUrl
+}
+: null
+);
       
       console.log('✅ === PHOTO UPLOAD COMPLETE ===');
       Alert.alert('Éxito', 'Foto de perfil actualizada');
