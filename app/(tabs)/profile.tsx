@@ -116,7 +116,7 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('users_profiles')
+        .from('user_profiles')
         .select('*')
         .eq('user_id', user?.id)
         .single();
