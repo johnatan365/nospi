@@ -167,8 +167,8 @@ export default function ProfileScreen() {
         console.log('📝 Creating default profile:', defaultProfile);
 
         const { error: insertError } = await supabase
-          .from('users')
-          .insert(defaultProfile);
+          .from('user_profiles')
+          .upsert(defaultProfile);
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
