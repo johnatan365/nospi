@@ -143,7 +143,7 @@ export default function ProfileScreen() {
           id: user.id,
           email: user.email || '',
           name: fullName,
-          date_of_birth: '2000-01-01',
+          birthdate: '2000-01-01',
           age: 24,
           gender: 'hombre',
           interested_in: 'ambos',
