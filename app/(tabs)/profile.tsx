@@ -23,7 +23,7 @@ interface UserProfile {
   age_range_max: number;
   country: string;
   city: string;
-  phone: string;
+  phone_number: string;
   profile_photo_url: string | null;
   interests: string[];
   personality_traits: string[];
@@ -151,7 +151,7 @@ export default function ProfileScreen() {
           age_range_max: 60,
           country: 'Colombia',
           city: 'Medellín',
-          phone: '',
+          phone_number: '',
           profile_photo_url: profilePhotoUrl,
           interests: [],
           personality_traits: [],
