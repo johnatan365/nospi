@@ -23,7 +23,7 @@ interface UserProfile {
   age_range_max: number;
   country: string;
   city: string;
-  phone_number: string;
+  phone: string;
   profile_photo_url: string | null;
   interests: string[];
   personality_traits: string[];
@@ -116,9 +116,9 @@ export default function ProfileScreen() {
       }
 
       const { data, error: fetchError } = await supabase
-        .from('user_profiles')
+        .from('users')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('id', user.id)
         .maybeSingle();
 
       if (fetchError) {
@@ -141,10 +141,9 @@ export default function ProfileScreen() {
         // Create a default profile
         const defaultProfile = {
           id: user.id,
-					user_id: user.id,
           email: user.email || '',
           name: fullName,
-          date_of_birth: '2000-01-01',
+          birthdate: '2000-01-01',
           age: 24,
           gender: 'hombre',
           interested_in: 'ambos',
@@ -152,7 +151,7 @@ export default function ProfileScreen() {
           age_range_max: 60,
           country: 'Colombia',
           city: 'Medellín',
-          phone_number: '',
+          phone: '',
           profile_photo_url: profilePhotoUrl,
           interests: [],
           personality_traits: [],
@@ -168,8 +167,8 @@ export default function ProfileScreen() {
         console.log('📝 Creating default profile:', defaultProfile);
 
         const { error: insertError } = await supabase
-          .from('user_profiles')
-          .upsert(defaultProfile);
+          .from('users')
+          .insert(defaultProfile);
 
         if (insertError) {
           console.error('❌ Error creating default profile:', insertError);
@@ -283,7 +282,7 @@ export default function ProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
+      const filePath = fileName;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
 
@@ -314,7 +313,7 @@ export default function ProfileScreen() {
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
           cacheControl: '0',
-          upsert:true,
+          upsert: false,
         });
 
       if (uploadError) {
@@ -335,9 +334,9 @@ export default function ProfileScreen() {
 
       // Update database with base URL
       const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ profile_photo_url: basePhotoUrl 
-								}).eq('user_id',user.id);
+        .from('users')
+        .update({ profile_photo_url: basePhotoUrl })
+        .eq('id', user?.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
