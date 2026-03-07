@@ -23,7 +23,7 @@ interface UserProfile {
   age_range_max: number;
   country: string;
   city: string;
-  phone: string;
+  phone_number: string;
   profile_photo_url: string | null;
   interests: string[];
   personality_traits: string[];
@@ -141,6 +141,7 @@ export default function ProfileScreen() {
         // Create a default profile
         const defaultProfile = {
           id: user.id,
+					user_id: user.id,
           email: user.email || '',
           name: fullName,
           date_of_birth: '2000-01-01',
@@ -151,7 +152,7 @@ export default function ProfileScreen() {
           age_range_max: 60,
           country: 'Colombia',
           city: 'Medellín',
-          phone: '',
+          phone_number: '',
           profile_photo_url: profilePhotoUrl,
           interests: [],
           personality_traits: [],
@@ -336,7 +337,7 @@ export default function ProfileScreen() {
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ profile_photo_url: basePhotoUrl 
-								}).eq('user_id',user?.id);
+								}).eq('user_id',user.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
