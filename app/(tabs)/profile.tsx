@@ -333,8 +333,13 @@ export default function ProfileScreen() {
       const basePhotoUrl = urlData.publicUrl;
       console.log('🔗 Base public URL:', basePhotoUrl);
 
-      // Update database with base URL
-			const { data: {user} } = await supabase.auth.getUser();
+			 // Get current user
+			const { data } = await supabase.auth.getUser();
+			const user = data.user;
+
+			if (! user) {console.error ("Usuario no encontrado");return;}
+			
+			// Update database with base URL
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ profile_photo_url: basePhotoUrl 
