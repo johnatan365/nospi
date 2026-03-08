@@ -170,9 +170,6 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  const priceCOPText = `$${priceCOP.toLocaleString('es-CO')} COP`;
-  const priceUSDText = `$${priceUSD.toFixed(2)} USD`;
-
   return (
     <LinearGradient
       colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
