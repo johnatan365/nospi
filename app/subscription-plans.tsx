@@ -24,14 +24,11 @@ export default function SubscriptionPlansScreen() {
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [exchangeRate, setExchangeRate] = useState<number>(4200);
-  const [loadingRate, setLoadingRate] = useState(true);
   const [virtualBalance, setVirtualBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
 
-  const priceUSD = 5.00;
-  const priceCOP = Math.round(priceUSD * exchangeRate);
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -50,23 +47,9 @@ export default function SubscriptionPlansScreen() {
     }
   }, [user?.id]);
 
-  const fetchExchangeRate = useCallback(async () => {
-    try {
-      setLoadingRate(true);
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-      const data = await response.json();
-      if (data?.rates?.COP) setExchangeRate(Math.round(data.rates.COP));
-    } catch {
-      setExchangeRate(4200);
-    } finally {
-      setLoadingRate(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchExchangeRate();
     fetchVirtualBalance();
-  }, [fetchExchangeRate, fetchVirtualBalance]);
+  }, [fetchVirtualBalance]);
 
   useEffect(() => {
     const subscription = Linking.addEventListener('url', async ({ url }) => {
@@ -117,7 +100,7 @@ export default function SubscriptionPlansScreen() {
   const handlePayWithVirtualBalance = async () => {
     setProcessing(true);
     try {
-      const newBalance = virtualBalance - priceUSD;
+      const newBalance = virtualBalance - priceCOP;
       const { error } = await supabase.from('users').update({ virtual_balance: newBalance }).eq('id', user?.id);
       if (error) throw error;
       await confirmAppointment();
@@ -153,9 +136,8 @@ export default function SubscriptionPlansScreen() {
 
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia de pago');
-      
-		  const paymentUrl = data.initPoint;
 
+      const paymentUrl = data.sandboxInitPoint || data.initPoint;
       const redirectUrl = Linking.createURL('payment/success');
 
       const result = await WebBrowser.openAuthSessionAsync(paymentUrl, redirectUrl);
@@ -202,18 +184,14 @@ export default function SubscriptionPlansScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
         <Text style={styles.title}>Pago del Evento</Text>
-        <Text style={styles.subtitle}>Confirma tu asistencia pagando {priceUSDText}</Text>
+        <Text style={styles.subtitle}>Confirma tu asistencia pagando $10.000 COP</Text>
 
         {/* Precio */}
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Precio por evento</Text>
-          <Text style={styles.priceAmount}>{priceUSDText}</Text>
-          {loadingRate
-            ? <ActivityIndicator size="small" color={nospiColors.purpleMid} style={{ marginVertical: 8 }} />
-            : <Text style={styles.priceAmountCOP}>{priceCOPText}</Text>
-          }
+          <Text style={styles.priceAmount}>$10.000</Text>
+          <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
           <Text style={styles.priceDescription}>Pago único por evento. Sin suscripciones ni cargos recurrentes.</Text>
-          {!loadingRate && <Text style={styles.exchangeRateNote}>Tasa de cambio: 1 USD = {exchangeRate.toLocaleString('es-CO')} COP</Text>}
         </View>
 
         {/* Beneficios */}
@@ -239,7 +217,7 @@ export default function SubscriptionPlansScreen() {
           <Text style={styles.paymentSubtitle}>⚠️ Selecciona una opción para continuar</Text>
 
           {/* Saldo Virtual */}
-          {!loadingBalance && virtualBalance >= priceUSD && (
+          {!loadingBalance && virtualBalance >= priceCOP && (
             <TouchableOpacity
               style={[styles.paymentButton, styles.virtualBalanceButton, selectedPayment === 'virtual_balance' && styles.paymentButtonSelected]}
               onPress={() => setSelectedPayment('virtual_balance')}
@@ -313,8 +291,7 @@ export default function SubscriptionPlansScreen() {
         {/* Resumen */}
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>Total a pagar:</Text>
-          <Text style={styles.summaryAmount}>{priceUSDText}</Text>
-          {!loadingRate && <Text style={styles.summaryAmountCOP}>{priceCOPText}</Text>}
+          <Text style={styles.summaryAmount}>$1.000 COP</Text>
         </View>
 
         <TouchableOpacity
