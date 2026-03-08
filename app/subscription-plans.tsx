@@ -1,32 +1,137 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, ActivityIndicator, Modal, Alert
+  ActivityIndicator, Modal, Alert, SafeAreaView
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 
 const MP_PUBLIC_KEY = 'APP_USR-4e9db236-57b7-4258-89da-2ea273d4505f';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wWcbIx6u8ZdVf1uxuj8';
 
 type PaymentMethod = 'card' | 'nequi' | 'pse' | 'virtual_balance';
+
+function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicKey: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Pago Nospi</title>
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; padding: 16px; }
+    .header { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header h2 { color: #6B21A8; font-size: 18px; margin-bottom: 4px; }
+    .header p { color: #666; font-size: 14px; }
+    .price { font-size: 28px; font-weight: bold; color: #6B21A8; margin: 8px 0; }
+    #brick-container { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); min-height: 200px; }
+    .loading { text-align: center; padding: 40px; color: #666; font-size: 14px; }
+    .error { background: #FEE2E2; border-radius: 8px; padding: 16px; color: #DC2626; text-align: center; margin: 16px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>Pago del Evento</h2>
+    <p>Nospi — Acceso al evento</p>
+    <div class="price">$10.000 COP</div>
+  </div>
+  <div id="brick-container">
+    <div class="loading">Cargando formulario de pago...</div>
+  </div>
+
+  <script>
+    const mp = new MercadoPago('${publicKey}', { locale: 'es-CO' });
+    const bricksBuilder = mp.bricks();
+    const method = '${method}';
+
+    async function renderBrick() {
+      try {
+        if (method === 'card') {
+          await bricksBuilder.create('cardPayment', 'brick-container', {
+            initialization: { amount: 10000, payer: { email: '' } },
+            customization: {
+              visual: { style: { theme: 'default' } },
+              paymentMethods: { maxInstallments: 1 }
+            },
+            callbacks: {
+              onReady: () => {},
+              onSubmit: async (cardFormData) => {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PROCESSING' }));
+                try {
+                  const response = await fetch('${SUPABASE_URL}/functions/v1/process-card-payment', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
+                    },
+                    body: JSON.stringify({ formData: cardFormData, amount: 10000 }),
+                  });
+                  const result = await response.json();
+                  if (result.status === 'approved') {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_SUCCESS' }));
+                  } else if (result.status === 'in_process' || result.status === 'pending') {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_PENDING' }));
+                  } else {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_ERROR', message: result.message || 'Pago rechazado. Intenta con otra tarjeta.' }));
+                  }
+                } catch (err) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_ERROR', message: 'Error de conexión. Intenta de nuevo.' }));
+                }
+              },
+              onError: (error) => { console.error(error); }
+            }
+          });
+        } else {
+          // Nequi y PSE usan Wallet Brick con preferenceId
+          await bricksBuilder.create('wallet', 'brick-container', {
+            initialization: { preferenceId: '${preferenceId}', redirectMode: 'self' },
+            customization: { texts: { valueProp: 'smart_option' } },
+            callbacks: {
+              onReady: () => {},
+              onSubmit: () => {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WALLET_OPENED' }));
+              },
+              onError: (error) => { console.error(error); }
+            }
+          });
+        }
+      } catch (error) {
+        document.getElementById('brick-container').innerHTML = '<div class="error">Error al cargar el formulario. Por favor cierra e intenta de nuevo.</div>';
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'BRICK_ERROR', message: error.message }));
+      }
+    }
+
+    renderBrick();
+  </script>
+</body>
+</html>
+  `;
+}
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
+  const webViewRef = useRef<any>(null);
+
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
+  const [showWebView, setShowWebView] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [webViewLoading, setWebViewLoading] = useState(true);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [virtualBalance, setVirtualBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
+  const [bricksHTML, setBricksHTML] = useState<string>('');
+  const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
   const priceCOP = 10000;
 
@@ -50,25 +155,6 @@ export default function SubscriptionPlansScreen() {
   useEffect(() => {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
-
-  useEffect(() => {
-    const subscription = Linking.addEventListener('url', async ({ url }) => {
-      console.log('Deep link recibido:', url);
-      if (url.includes('payment/success') || url.includes('collection_status=approved')) {
-        await confirmAppointment();
-        setProcessing(false);
-        setShowSuccessModal(true);
-      } else if (url.includes('payment/failure') || url.includes('collection_status=rejected')) {
-        setProcessing(false);
-        Alert.alert('Pago fallido', 'No se pudo procesar el pago. Intenta de nuevo.');
-      } else if (url.includes('payment/pending')) {
-        setProcessing(false);
-        Alert.alert('Pago pendiente', 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
-      }
-    });
-    return () => subscription.remove();
-  }, []);
 
   const confirmAppointment = async () => {
     try {
@@ -112,7 +198,7 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  const handlePayWithMP = async (method: PaymentMethod) => {
+  const handleOpenBricks = async (method: PaymentMethod) => {
     if (!user) return;
     setProcessing(true);
     try {
@@ -135,27 +221,15 @@ export default function SubscriptionPlansScreen() {
       });
 
       const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia de pago');
+      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia');
 
-      const paymentUrl = data.initPoint;
-      const redirectUrl = Linking.createURL('payment/success');
-
-      const result = await WebBrowser.openAuthSessionAsync(paymentUrl, redirectUrl);
-
-      if (result.type === 'success') {
-        const url = result.url || '';
-        if (url.includes('payment/success') || url.includes('collection_status=approved')) {
-          await confirmAppointment();
-          setShowSuccessModal(true);
-        } else if (url.includes('collection_status=rejected')) {
-          Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta con otro método.');
-        } else {
-          Alert.alert('Pago pendiente', 'Tu pago está siendo verificado.',
-            [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
-        }
-      }
+      const html = generateBricksHTML(data.preferenceId, method, MP_PUBLIC_KEY);
+      setBricksHTML(html);
+      setCurrentMethod(method);
+      setWebViewLoading(true);
+      setShowWebView(true);
     } catch (error: any) {
-      Alert.alert('Error', `No se pudo procesar el pago: ${error.message}`);
+      Alert.alert('Error', `No se pudo iniciar el pago: ${error.message}`);
     } finally {
       setProcessing(false);
     }
@@ -166,9 +240,73 @@ export default function SubscriptionPlansScreen() {
     if (selectedPayment === 'virtual_balance') {
       await handlePayWithVirtualBalance();
     } else {
-      await handlePayWithMP(selectedPayment);
+      await handleOpenBricks(selectedPayment);
     }
   };
+
+  const handleWebViewMessage = async (event: any) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data);
+      console.log('WebView message:', message);
+
+      switch (message.type) {
+        case 'PAYMENT_SUCCESS':
+          setShowWebView(false);
+          await confirmAppointment();
+          setShowSuccessModal(true);
+          break;
+        case 'PAYMENT_PENDING':
+          setShowWebView(false);
+          Alert.alert('Pago pendiente', 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+            [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+          break;
+        case 'PAYMENT_ERROR':
+          Alert.alert('Pago rechazado', message.message || 'No se pudo procesar el pago.');
+          break;
+        case 'BRICK_ERROR':
+          setShowWebView(false);
+          Alert.alert('Error', 'No se pudo cargar el formulario de pago.');
+          break;
+      }
+    } catch (e) {
+      console.error('Error parsing WebView message:', e);
+    }
+  };
+
+  const webViewTitle = currentMethod === 'card' ? 'Pagar con Tarjeta' : currentMethod === 'nequi' ? 'Pagar con Nequi' : 'Pagar con PSE';
+
+  if (showWebView) {
+    return (
+      <SafeAreaView style={styles.webViewContainer}>
+        <Stack.Screen options={{
+          headerShown: true,
+          title: webViewTitle,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => setShowWebView(false)} style={{ paddingHorizontal: 16 }}>
+              <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+          ),
+        }} />
+        {webViewLoading && (
+          <View style={styles.webViewLoadingOverlay}>
+            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+            <Text style={styles.webViewLoadingText}>Cargando formulario de pago...</Text>
+          </View>
+        )}
+        <WebView
+          ref={webViewRef}
+          source={{ html: bricksHTML }}
+          style={styles.webView}
+          onLoadEnd={() => setWebViewLoading(false)}
+          onMessage={handleWebViewMessage}
+          javaScriptEnabled
+          domStorageEnabled
+          mixedContentMode="always"
+          originWhitelist={['*']}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <LinearGradient
@@ -183,7 +321,6 @@ export default function SubscriptionPlansScreen() {
         <Text style={styles.title}>Pago del Evento</Text>
         <Text style={styles.subtitle}>Confirma tu asistencia pagando $10.000 COP</Text>
 
-        {/* Precio */}
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Precio por evento</Text>
           <Text style={styles.priceAmount}>$10.000</Text>
@@ -191,7 +328,6 @@ export default function SubscriptionPlansScreen() {
           <Text style={styles.priceDescription}>Pago único por evento. Sin suscripciones ni cargos recurrentes.</Text>
         </View>
 
-        {/* Beneficios */}
         <View style={styles.benefitsContainer}>
           {[
             { icon: '✨', title: 'Acceso al evento', desc: 'Confirma tu lugar en el evento seleccionado' },
@@ -208,12 +344,10 @@ export default function SubscriptionPlansScreen() {
           ))}
         </View>
 
-        {/* Métodos de pago */}
         <View style={styles.paymentSection}>
           <Text style={styles.paymentTitle}>Método de Pago</Text>
           <Text style={styles.paymentSubtitle}>⚠️ Selecciona una opción para continuar</Text>
 
-          {/* Saldo Virtual */}
           {!loadingBalance && virtualBalance >= priceCOP && (
             <TouchableOpacity
               style={[styles.paymentButton, styles.virtualBalanceButton, selectedPayment === 'virtual_balance' && styles.paymentButtonSelected]}
@@ -224,13 +358,12 @@ export default function SubscriptionPlansScreen() {
                 {selectedPayment === 'virtual_balance' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
                 <View>
                   <Text style={styles.virtualBalanceTitle}>💰 Saldo Virtual</Text>
-                  <Text style={styles.virtualBalanceAmount}>Disponible: ${virtualBalance.toFixed(2)} USD</Text>
+                  <Text style={styles.virtualBalanceAmount}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
                 </View>
               </View>
             </TouchableOpacity>
           )}
 
-          {/* Tarjeta */}
           <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'card' && styles.paymentButtonSelected]}
             onPress={() => setSelectedPayment('card')}
@@ -248,7 +381,6 @@ export default function SubscriptionPlansScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Nequi */}
           <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'nequi' && styles.paymentButtonSelected]}
             onPress={() => setSelectedPayment('nequi')}
@@ -266,7 +398,6 @@ export default function SubscriptionPlansScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* PSE */}
           <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'pse' && styles.paymentButtonSelected]}
             onPress={() => setSelectedPayment('pse')}
@@ -285,7 +416,6 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Resumen */}
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>Total a pagar:</Text>
           <Text style={styles.summaryAmount}>$10.000 COP</Text>
@@ -300,7 +430,7 @@ export default function SubscriptionPlansScreen() {
           {processing
             ? <ActivityIndicator color="#fff" />
             : <Text style={styles.continueButtonText}>
-                {selectedPayment === 'virtual_balance' ? 'Pagar con Saldo Virtual' : 'Pagar con Mercado Pago'}
+                {selectedPayment === 'virtual_balance' ? 'Pagar con Saldo Virtual' : 'Continuar con el pago'}
               </Text>
           }
         </TouchableOpacity>
@@ -329,6 +459,13 @@ const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 100 },
+  webViewContainer: { flex: 1, backgroundColor: '#f5f5f5' },
+  webView: { flex: 1 },
+  webViewLoadingOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 10,
+  },
+  webViewLoadingText: { marginTop: 12, color: '#666', fontSize: 14 },
   title: { fontSize: 32, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
   subtitle: { fontSize: 16, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 32, lineHeight: 24 },
   priceCard: {
@@ -339,7 +476,6 @@ const styles = StyleSheet.create({
   priceAmount: { fontSize: 48, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
   priceAmountCOP: { fontSize: 24, fontWeight: '600', color: nospiColors.purpleMid, marginBottom: 16 },
   priceDescription: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20, marginBottom: 8 },
-  exchangeRateNote: { fontSize: 12, color: '#999', textAlign: 'center', fontStyle: 'italic' },
   benefitsContainer: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 20, marginBottom: 24 },
   benefitItem: { flexDirection: 'row', marginBottom: 20 },
   benefitIcon: { fontSize: 24, marginRight: 16 },
@@ -376,7 +512,6 @@ const styles = StyleSheet.create({
   },
   summaryText: { fontSize: 16, fontWeight: '600', color: '#666', marginBottom: 8 },
   summaryAmount: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
-  summaryAmountCOP: { fontSize: 18, fontWeight: '600', color: nospiColors.purpleMid },
   continueButton: {
     backgroundColor: nospiColors.purpleDark, paddingVertical: 18, borderRadius: 16, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, marginBottom: 12,
