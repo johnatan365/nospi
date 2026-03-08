@@ -223,11 +223,21 @@ export default function SubscriptionPlansScreen() {
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia');
 
-      const html = generateBricksHTML(data.preferenceId, method, MP_PUBLIC_KEY);
-      setBricksHTML(html);
+      const bricksParams = new URLSearchParams({
+        method,
+        preferenceId: data.preferenceId || '',
+        publicKey: MP_PUBLIC_KEY,
+        supabaseUrl: SUPABASE_URL,
+        supabaseKey: SUPABASE_ANON_KEY,
+        redirectSuccess: 'nospi://payment/success',
+        redirectFailure: 'nospi://payment/failure',
+      });
+      const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
+      setBricksHTML(bricksUrl);
       setCurrentMethod(method);
       setWebViewLoading(true);
       setShowWebView(true);
+
     } catch (error: any) {
       Alert.alert('Error', `No se pudo iniciar el pago: ${error.message}`);
     } finally {
@@ -295,10 +305,25 @@ export default function SubscriptionPlansScreen() {
         )}
         <WebView
           ref={webViewRef}
-          source={{ html: bricksHTML }}
+          source={{ uri: bricksHTML }}
           style={styles.webView}
           onLoadEnd={() => setWebViewLoading(false)}
           onMessage={handleWebViewMessage}
+          onNavigationStateChange={async (navState) => {
+            const url = navState.url || '';
+            if (url.includes('payment/success') || url.includes('collection_status=approved')) {
+              setShowWebView(false);
+              await confirmAppointment();
+              setShowSuccessModal(true);
+            } else if (url.includes('payment/failure') || url.includes('collection_status=rejected')) {
+              setShowWebView(false);
+              Alert.alert('Pago fallido', 'No se pudo procesar el pago. Intenta de nuevo.');
+            } else if (url.includes('payment/pending')) {
+              setShowWebView(false);
+              Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.',
+                [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+            }
+          }}
           javaScriptEnabled
           domStorageEnabled
           mixedContentMode="always"
