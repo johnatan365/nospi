@@ -291,7 +291,7 @@ export default function SubscriptionPlansScreen() {
         {/* Resumen */}
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>Total a pagar:</Text>
-          <Text style={styles.summaryAmount}>$1.000 COP</Text>
+          <Text style={styles.summaryAmount}>$10.000 COP</Text>
         </View>
 
         <TouchableOpacity
