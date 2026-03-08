@@ -137,7 +137,7 @@ export default function SubscriptionPlansScreen() {
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia de pago');
 
-      const paymentUrl = data.sandboxInitPoint || data.initPoint;
+      const paymentUrl = data.initPoint;
       const redirectUrl = Linking.createURL('payment/success');
 
       const result = await WebBrowser.openAuthSessionAsync(paymentUrl, redirectUrl);
