@@ -305,7 +305,7 @@ export default function SubscriptionPlansScreen() {
         )}
         <WebView
           ref={webViewRef}
-          source={{ uri: bricksHTML }}
+          source={{ uri: bricksHTML, headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }}
           style={styles.webView}
           onLoadEnd={() => setWebViewLoading(false)}
           onMessage={handleWebViewMessage}
