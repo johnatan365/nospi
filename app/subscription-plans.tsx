@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors } from '@/constants/Colors';
+import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 9900;
+  const priceCOP = PRECIO_EVENTO_COP;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {

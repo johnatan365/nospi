@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors } from '@/constants/Colors';
+import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -220,7 +220,7 @@ export default function AppointmentsScreen() {
       // If within refund window, add to virtual balance
       if (isWithinRefundWindow) {
         console.log('Adding $5 USD to virtual balance');
-        const refundAmount = 5.00; // $5 USD per event
+        const refundAmount = PRECIO_EVENTO_COP;
         
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
           user_id_param: user?.id,
@@ -563,7 +563,7 @@ export default function AppointmentsScreen() {
                 const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
                 
                 const refundMessage = isWithinRefundWindow
-                  ? '✅ Como cancelas con más de 24 horas de anticipación, recibirás $5 USD como saldo virtual que podrás usar en tu próximo evento.'
+                  ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${PRECIO_EVENTO_COP.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
                   : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
                 
                 return (
