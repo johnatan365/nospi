@@ -10,6 +10,8 @@ import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 const MP_PUBLIC_KEY = 'APP_USR-4e9db236-57b7-4258-89da-2ea273d4505f';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -238,15 +240,33 @@ export default function SubscriptionPlansScreen() {
       });
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
-      // Descargar HTML y pasarlo directamente al WebView
-      const htmlResponse = await fetch(bricksUrl, {
-        headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-      const htmlContent = await htmlResponse.text();
-      setBricksHTML(htmlContent);
-      setCurrentMethod(method);
-      setWebViewLoading(true);
-      setShowWebView(true);
+      if (method === 'card') {
+        // Tarjeta usa Bricks via WebView
+        const htmlResponse = await fetch(bricksUrl, {
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const htmlContent = await htmlResponse.text();
+        setBricksHTML(htmlContent);
+        setCurrentMethod(method);
+        setWebViewLoading(true);
+        setShowWebView(true);
+      } else {
+        // Nequi y PSE abren checkout externo directamente
+        const redirectUrl = Linking.createURL('payment/success');
+        const result = await WebBrowser.openAuthSessionAsync(data.initPoint, redirectUrl);
+        if (result.type === 'success') {
+          const url = (result as any).url || '';
+          if (url.includes('payment/success') || url.includes('collection_status=approved')) {
+            await confirmAppointment();
+            setShowSuccessModal(true);
+          } else if (url.includes('collection_status=rejected')) {
+            Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta de nuevo.');
+          } else {
+            Alert.alert('Pago pendiente', 'Tu pago esta siendo verificado.',
+              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+          }
+        }
+      }
 
     } catch (error: any) {
       Alert.alert('Error', `No se pudo iniciar el pago: ${error.message}`);
