@@ -217,9 +217,18 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleOpenBricks = async (method: PaymentMethod) => {
-    if (!user) return;
     setProcessing(true);
     try {
+      // Leer sesión directamente de Supabase — no depender del contexto
+      // que puede estar en null momentáneamente por refresh de token de Google
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      if (!currentUser) {
+        Alert.alert('Error', 'Sesión no encontrada. Por favor inicia sesión de nuevo.');
+        setProcessing(false);
+        return;
+      }
+
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
         Alert.alert('Error', 'No se encontró el evento. Por favor vuelve a la pantalla del evento e intenta de nuevo.');
@@ -235,9 +244,9 @@ export default function SubscriptionPlansScreen() {
         },
         body: JSON.stringify({
           eventId: pendingEventId || 'test-event',
-          userId: user.id,
-          userEmail: userProfile?.email || user.email || (user as any).user_metadata?.email || '',
-          userName: userProfile?.name || (user as any).user_metadata?.full_name || (user as any).user_metadata?.name || 'Usuario',
+          userId: currentUser.id,
+          userEmail: userProfile?.email || currentUser.email || (currentUser as any).user_metadata?.email || '',
+          userName: userProfile?.name || (currentUser as any).user_metadata?.full_name || (currentUser as any).user_metadata?.name || 'Usuario',
           paymentMethod: method,
           amountCOP: priceCOP,
         }),
