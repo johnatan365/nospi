@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 2000;
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -158,7 +158,24 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Nada - el check de PSE se hace en appointments.tsx al cargar
+  // Escucha deep link nospi://payment/success cuando la app se abre desde payment-return
+  useEffect(() => {
+    const handleUrl = ({ url }: { url: string }) => {
+      if (url.includes('nospi://payment/success')) {
+        AsyncStorage.setItem('pse_payment_pending', 'true');
+        router.replace('/(tabs)/appointments');
+      }
+    };
+    const sub = Linking.addEventListener('url', handleUrl);
+    // Verificar si la app fue abierta con el deep link
+    Linking.getInitialURL().then((url) => {
+      if (url && url.includes('nospi://payment/success')) {
+        AsyncStorage.setItem('pse_payment_pending', 'true');
+        router.replace('/(tabs)/appointments');
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const confirmAppointment = async () => {
     try {
