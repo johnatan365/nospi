@@ -35,7 +35,6 @@ export default function EventDetailsScreen() {
 
   const loadEvent = useCallback(async () => {
     try {
-      console.log('Loading event details:', id);
       const { data, error } = await supabase
         .from('events')
         .select('*')
@@ -47,7 +46,6 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      console.log('Event loaded successfully');
       setEvent(data);
     } catch (error) {
       console.error('Failed to load event:', error);
@@ -60,7 +58,6 @@ export default function EventDetailsScreen() {
     if (!user?.id) return;
 
     try {
-      console.log('Checking if user is enrolled in event:', id);
       const { data, error } = await supabase
         .from('appointments')
         .select('id')
@@ -74,7 +71,6 @@ export default function EventDetailsScreen() {
       }
 
       const enrolled = !!data;
-      console.log('User enrolled:', enrolled);
       setIsEnrolled(enrolled);
     } catch (error) {
       console.error('Failed to check enrollment:', error);
@@ -102,14 +98,12 @@ export default function EventDetailsScreen() {
   const handleOpenMaps = () => {
     if (!event?.maps_link) return;
     
-    console.log('Opening maps link:', event.maps_link);
     Linking.openURL(event.maps_link).catch(err => {
       console.error('Failed to open maps link:', err);
     });
   };
 
   const handleConfirm = async () => {
-    console.log('User confirmed attendance for event:', id);
     setConfirming(true);
     
     try {
@@ -121,15 +115,17 @@ export default function EventDetailsScreen() {
         .maybeSingle();
 
       if (existingAppointment) {
-        console.log('User already has an appointment for this event');
-        setConfirming(false);
-        router.push('/(tabs)/appointments');
-        return;
+        // Si ya tiene cita confirmada, ir a citas
+        if (existingAppointment.status === 'confirmada' || existingAppointment.payment_status === 'completed') {
+          setConfirming(false);
+          router.push('/(tabs)/appointments');
+          return;
+        }
+        // Si tiene cita pero pago pendiente, permitir reintentar el pago
+        // (puede pasar con PSE que queda en pending)
       }
 
-      console.log('Storing pending event and redirecting to payment screen');
       await AsyncStorage.setItem('pending_event_confirmation', id as string);
-      console.log('Stored pending event ID:', id);
       setConfirming(false);
       router.push('/subscription-plans');
     } catch (error) {
