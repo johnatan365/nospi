@@ -740,12 +740,29 @@ export default function InteraccionScreen() {
   }
 
   if (!isEventDay) {
-    const eventDateText = new Date(appointment.event.start_time!).toLocaleDateString('es-ES', {
+    const eventDate = new Date(appointment.event.start_time!);
+    const eventDateText = eventDate.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
+
+    const now = new Date();
+    const diffMs = eventDate.getTime() - now.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+    let countdownText = '';
+    if (diffDays >= 2) {
+      countdownText = `Faltan ${diffDays} días para tu experiencia`;
+    } else if (diffDays === 1) {
+      countdownText = 'Falta 1 día para tu experiencia';
+    } else if (diffHours >= 1) {
+      countdownText = `Faltan ${diffHours} horas para tu experiencia`;
+    } else {
+      countdownText = '¡Tu experiencia es muy pronto!';
+    }
 
     return (
       <LinearGradient
@@ -755,15 +772,35 @@ export default function InteraccionScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Próximo Evento</Text>
-          <Text style={styles.subtitle}>Tu experiencia Nospi</Text>
+          <Text style={styles.title}>Tu Evento Nospi</Text>
+          <Text style={styles.subtitle}>¡Se acerca una gran experiencia!</Text>
 
-          <View style={styles.eventInfoCard}>
-            <Text style={styles.eventInfoIcon}>🎉</Text>
-            <Text style={styles.eventInfoTitle}>Evento confirmado</Text>
+          {/* Countdown card */}
+          <View style={[styles.eventInfoCard, { marginBottom: 16 }]}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
+            <Text style={[styles.eventInfoTitle, { fontSize: 22, marginBottom: 6 }]}>{countdownText}</Text>
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
             <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
           </View>
+
+          {/* Puntualidad */}
+          <View style={styles.preEventTipCard}>
+            <Text style={styles.preEventTipIcon}>⏰</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.preEventTipTitle}>Llega puntual</Text>
+              <Text style={styles.preEventTipText}>El evento arranca con una dinámica para romper el hielo. No querrás perderte el inicio.</Text>
+            </View>
+          </View>
+
+          {/* Instrucción */}
+          <View style={styles.preEventTipCard}>
+            <Text style={styles.preEventTipIcon}>💬</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.preEventTipTitle}>Cuando llegues</Text>
+              <Text style={styles.preEventTipText}>Abre esta pestaña para confirmar tu asistencia e iniciar la experiencia con los demás.</Text>
+            </View>
+          </View>
+
         </ScrollView>
       </LinearGradient>
     );
@@ -1020,6 +1057,30 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
+  },
+  preEventTipCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 12,
+  },
+  preEventTipIcon: {
+    fontSize: 26,
+    marginTop: 2,
+  },
+  preEventTipTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  preEventTipText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
   },
   eventInfoIcon: {
     fontSize: 60,
