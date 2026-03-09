@@ -298,6 +298,8 @@ export default function SubscriptionPlansScreen() {
         }
         await AsyncStorage.setItem('pse_payment_pending', 'true');
         await Linking.openURL(data.initPoint);
+        // No hacemos router.replace aquí — el deep link listener
+        // se encarga de navegar cuando el usuario vuelva del pago
       }
 
     } catch (error: any) {

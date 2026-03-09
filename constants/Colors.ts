@@ -53,4 +53,4 @@ export const borderColor = (colorScheme: 'light' | 'dark') =>
   colorScheme === 'dark' ? zincColors.zinc800 : zincColors.zinc200;
 
 // Precio del evento - modificar solo aquí para que se actualice en toda la app
-export const PRECIO_EVENTO_COP = 2000;
+export const PRECIO_EVENTO_COP = 9900;
