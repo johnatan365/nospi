@@ -159,20 +159,17 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Escucha deep link nospi://payment/success cuando la app se abre desde payment-return
-  // Ignora URLs de OAuth de Google para evitar redirección involuntaria en iOS
-  useEffect(() => {
-    const handleUrl = ({ url }: { url: string }) => {
-      const isOAuth = url.includes('google') || url.includes('oauth') || url.includes('auth/callback') || url.includes('access_token') || url.includes('code=');
-      if (isOAuth) return;
-      if (url.includes('nospi://payment/success')) {
-        AsyncStorage.setItem('pse_payment_pending', 'true');
-        router.replace('/(tabs)/appointments');
-      }
-    };
-    const sub = Linking.addEventListener('url', handleUrl);
-    return () => sub.remove();
-  }, []);
+  // LISTENER DESACTIVADO TEMPORALMENTE PARA DEBUG
+  // useEffect(() => {
+  //   const handleUrl = ({ url }: { url: string }) => {
+  //     if (url.includes('nospi://payment/success')) {
+  //       AsyncStorage.setItem('pse_payment_pending', 'true');
+  //       router.replace('/(tabs)/appointments');
+  //     }
+  //   };
+  //   const sub = Linking.addEventListener('url', handleUrl);
+  //   return () => sub.remove();
+  // }, []);
 
   const confirmAppointment = async () => {
     try {
