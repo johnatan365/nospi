@@ -219,6 +219,7 @@ export default function SubscriptionPlansScreen() {
     setProcessing(true);
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      Alert.alert('DEBUG', `método: ${method}\neventId: ${pendingEventId}\nuserEmail: ${user.email || (user as any).user_metadata?.email}\nuserID: ${user.id}`);
       if (!pendingEventId) {
         Alert.alert('Error', 'No se encontró el evento. Por favor vuelve a la pantalla del evento e intenta de nuevo.');
         setProcessing(false);
