@@ -159,10 +159,11 @@ export default function SubscriptionPlansScreen() {
   }, [fetchVirtualBalance]);
 
   // Escucha deep link nospi://payment/success cuando la app se abre desde payment-return
-  // Deep link listener - solo activo DESPUES de que el browser PSE se cierra
-  // No usamos getInitialURL porque en iOS puede contener URLs viejas de OAuth de Google
+  // Ignora URLs de OAuth de Google para evitar redirección involuntaria en iOS
   useEffect(() => {
     const handleUrl = ({ url }: { url: string }) => {
+      const isOAuth = url.includes('google') || url.includes('oauth') || url.includes('auth/callback') || url.includes('access_token') || url.includes('code=');
+      if (isOAuth) return;
       if (url.includes('nospi://payment/success')) {
         AsyncStorage.setItem('pse_payment_pending', 'true');
         router.replace('/(tabs)/appointments');
@@ -215,34 +216,17 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleOpenBricks = async (method: PaymentMethod) => {
-    console.log('[BRICKS 1] handleOpenBricks iniciado. method:', method);
-    console.log('[BRICKS 1] user:', user ? `id=${user.id}, email=${user.email}` : 'NULL - SIN USUARIO');
-
-    if (!user) {
-      console.log('[BRICKS ERROR] Sin usuario — saliendo');
-      return;
-    }
+    const pendingCheck = await AsyncStorage.getItem('pending_event_confirmation');
+    Alert.alert('DEBUG', `user: ${user?.id?.slice(0,8) ?? 'NULL'}\npending: ${pendingCheck ?? 'NULL'}\nmethod: ${method}`);
+    if (!user) return;
     setProcessing(true);
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      console.log('[BRICKS 2] pending_event_confirmation en AsyncStorage:', pendingEventId);
-
       if (!pendingEventId) {
-        console.log('[BRICKS ERROR] pendingEventId es null/vacío — mostrando Alert y saliendo');
         Alert.alert('Error', 'No se encontró el evento. Por favor vuelve a la pantalla del evento e intenta de nuevo.');
         setProcessing(false);
         return;
       }
-
-      const bodyPayload = {
-        eventId: pendingEventId || 'test-event',
-        userId: user.id,
-        userEmail: userProfile?.email || user.email || (user as any).user_metadata?.email || '',
-        userName: userProfile?.name || (user as any).user_metadata?.full_name || (user as any).user_metadata?.name || 'Usuario',
-        paymentMethod: method,
-        amountCOP: priceCOP,
-      };
-      console.log('[BRICKS 3] Llamando a create-payment con body:', JSON.stringify(bodyPayload));
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
         method: 'POST',
@@ -250,24 +234,19 @@ export default function SubscriptionPlansScreen() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify(bodyPayload),
+        body: JSON.stringify({
+          eventId: pendingEventId || 'test-event',
+          userId: user.id,
+          userEmail: userProfile?.email || user.email || (user as any).user_metadata?.email || '',
+          userName: userProfile?.name || (user as any).user_metadata?.full_name || (user as any).user_metadata?.name || 'Usuario',
+          paymentMethod: method,
+          amountCOP: priceCOP,
+        }),
       });
 
-      console.log('[BRICKS 4] Respuesta HTTP de create-payment. status:', response.status, 'ok:', response.ok);
-
       const data = await response.json();
-      console.log('[BRICKS 5] Body de respuesta create-payment:', JSON.stringify(data));
-
-      if (!response.ok || data.error) {
-        console.log('[BRICKS ERROR] create-payment devolvió error:', data.error);
-        throw new Error(data.error || 'Error al crear preferencia');
-      }
-      if (!data.initPoint && !data.preferenceId) {
-        console.log('[BRICKS ERROR] Sin initPoint ni preferenceId. Keys recibidas:', Object.keys(data).join(','));
-        throw new Error('MP no devolvió URL de pago. Intenta de nuevo.');
-      }
-
-      console.log('[BRICKS 6] initPoint:', data.initPoint ?? 'N/A', '| preferenceId:', data.preferenceId ?? 'N/A');
+      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia');
+      if (!data.initPoint && !data.preferenceId) throw new Error('MP no devolvió URL de pago. Intenta de nuevo.');
 
       const bricksParams = new URLSearchParams({
         method,
@@ -281,7 +260,6 @@ export default function SubscriptionPlansScreen() {
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
       if (method === 'card') {
-        console.log('[BRICKS 7] Método TARJETA — cargando HTML desde bricksUrl');
         // Tarjeta usa Bricks via WebView
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -290,36 +268,26 @@ export default function SubscriptionPlansScreen() {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
-        console.log('[BRICKS 8] htmlResponse status:', htmlResponse.status);
         if (!htmlResponse.ok) throw new Error('No se pudo cargar la pantalla de pago. Intenta de nuevo.');
         const htmlContent = await htmlResponse.text();
-        console.log('[BRICKS 9] htmlContent length:', htmlContent?.length ?? 0);
         if (!htmlContent || htmlContent.length < 100) throw new Error('Página de pago vacía. Intenta de nuevo.');
         setBricksHTML(htmlContent);
         setCurrentMethod(method);
         setWebViewLoading(true);
         setShowWebView(true);
-        console.log('[BRICKS 10] setShowWebView(true) ejecutado — WebView debería mostrarse');
       } else {
-        console.log('[BRICKS 7] Método PSE/Bancolombia — abriendo browser con initPoint');
         // PSE/Bancolombia
         if (!data.initPoint) {
-          console.log('[BRICKS ERROR] initPoint es null para PSE. preferenceId:', data.preferenceId, 'Keys:', Object.keys(data).join(','));
           throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
         }
-        console.log('[BRICKS 8] Guardando pse_payment_pending y abriendo:', data.initPoint);
         await AsyncStorage.setItem('pse_payment_pending', 'true');
-        console.log('[BRICKS 9] Llamando WebBrowser.openBrowserAsync...');
         await WebBrowser.openBrowserAsync(data.initPoint);
-        console.log('[BRICKS 10] WebBrowser cerrado (usuario volvió). Navegando a appointments...');
         router.replace('/(tabs)/appointments');
       }
 
     } catch (error: any) {
-      console.log('[BRICKS CATCH] Error capturado:', error?.message, '| Stack:', error?.stack);
       Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);
     } finally {
-      console.log('[BRICKS FINALLY] setProcessing(false)');
       setProcessing(false);
     }
   };
