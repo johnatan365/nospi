@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 2000;
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   },
   continueButtonDisabled: { backgroundColor: '#C4B5FD', shadowOpacity: 0, elevation: 0 },
   continueButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  mpNote: { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 16 },
+  mpNote: { fontSize: 13, color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 40, width: '100%', maxWidth: 400, alignItems: 'center' },
   successIcon: { fontSize: 72, marginBottom: 24 },
