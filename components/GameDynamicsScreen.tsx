@@ -6,7 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'free_phase';
+type GamePhase = 'questions' | 'level_transition' | 'finished' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -194,6 +194,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const starter = activeParticipants.find((p) => p.user_id === data.current_question_starter_id);
           setStarterParticipant(starter || null);
         }
+      } else if (data.game_phase === 'level_transition') {
+        setGamePhase('level_transition');
+      } else if (data.game_phase === 'finished') {
+        setGamePhase('finished');
       } else if (data.game_phase === 'free_phase') {
         setGamePhase('free_phase');
       }
@@ -230,6 +234,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
+          } else if (newEvent.game_phase === 'level_transition') {
+            setGamePhase('level_transition');
+          } else if (newEvent.game_phase === 'finished') {
+            setGamePhase('finished');
           } else if (newEvent.game_phase === 'free_phase') {
             setGamePhase('free_phase');
           }
@@ -565,6 +573,36 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     );
   }
 
+  if (gamePhase === 'level_transition' || gamePhase === 'finished') {
+    const isFinished = gamePhase === 'finished';
+    const nextLevelEmoji = currentLevel === 'divertido' ? '💕' : currentLevel === 'sensual' ? '🔥' : '✨';
+    const nextLevelName = currentLevel === 'divertido' ? 'Sensual' : currentLevel === 'sensual' ? 'Atrevido' : 'Fase libre';
+
+    return (
+      <LinearGradient
+        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.transitionFullScreen}>
+          <Text style={styles.transitionFullEmoji}>
+            {isFinished ? '🎉' : nextLevelEmoji}
+          </Text>
+          <Text style={styles.transitionFullTitle}>
+            {isFinished ? '¡Lo lograron!' : 'Siguiente nivel'}
+          </Text>
+          <Text style={styles.transitionFullSubtitle}>
+            {isFinished
+              ? 'Completaron todos los niveles. Ahora disfruten la noche 💜'
+              : `Se viene el nivel ${nextLevelName}. ¡Prepárense!`}
+          </Text>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" style={{ marginTop: 32 }} />
+        </View>
+      </LinearGradient>
+    );
+  }
+
   if (gamePhase === 'free_phase') {
     return (
       <LinearGradient
@@ -769,6 +807,29 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  transitionFullScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  transitionFullEmoji: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  transitionFullTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  transitionFullSubtitle: {
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    lineHeight: 26,
   },
   transitionOverlay: {
     position: 'absolute',
