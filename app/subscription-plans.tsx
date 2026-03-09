@@ -123,6 +123,7 @@ export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
   const webViewRef = useRef<any>(null);
+  const selectedPaymentRef = useRef<PaymentMethod | null>(null);
 
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [showWebView, setShowWebView] = useState(false);
@@ -216,8 +217,6 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleOpenBricks = async (method: PaymentMethod) => {
-    const pendingCheck = await AsyncStorage.getItem('pending_event_confirmation');
-    Alert.alert('DEBUG', `user: ${user?.id?.slice(0,8) ?? 'NULL'}\npending: ${pendingCheck ?? 'NULL'}\nmethod: ${method}`);
     if (!user) return;
     setProcessing(true);
     try {
@@ -293,11 +292,12 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleContinue = async () => {
-    if (!selectedPayment) return;
-    if (selectedPayment === 'virtual_balance') {
+    const method = selectedPaymentRef.current || selectedPayment;
+    if (!method) return;
+    if (method === 'virtual_balance') {
       await handlePayWithVirtualBalance();
     } else {
-      await handleOpenBricks(selectedPayment);
+      await handleOpenBricks(method);
     }
   };
 
@@ -423,7 +423,7 @@ export default function SubscriptionPlansScreen() {
           {!loadingBalance && virtualBalance >= priceCOP && (
             <TouchableOpacity
               style={[styles.paymentButton, styles.virtualBalanceButton, selectedPayment === 'virtual_balance' && styles.paymentButtonSelected]}
-              onPress={() => setSelectedPayment('virtual_balance')}
+              onPress={() => { setSelectedPayment('virtual_balance'); selectedPaymentRef.current = 'virtual_balance'; }}
               activeOpacity={0.8}
             >
               <View style={styles.paymentButtonContent}>
@@ -438,7 +438,7 @@ export default function SubscriptionPlansScreen() {
 
           <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'card' && styles.paymentButtonSelected]}
-            onPress={() => setSelectedPayment('card')}
+            onPress={() => { setSelectedPayment('card'); selectedPaymentRef.current = 'card'; }}
             activeOpacity={0.8}
           >
             <View style={styles.paymentButtonContent}>
@@ -455,7 +455,7 @@ export default function SubscriptionPlansScreen() {
 
           <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'pse' && styles.paymentButtonSelected]}
-            onPress={() => setSelectedPayment('pse')}
+            onPress={() => { setSelectedPayment('pse'); selectedPaymentRef.current = 'pse'; }}
             activeOpacity={0.8}
           >
             <View style={styles.paymentButtonContent}>
