@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 1000;
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
