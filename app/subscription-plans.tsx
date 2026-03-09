@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 9900;
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -201,11 +201,7 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleOpenBricks = async (method: PaymentMethod) => {
-    if (!user) {
-      Alert.alert('Debug', 'Usuario no autenticado');
-      return;
-    }
-    Alert.alert('Debug', 'Iniciando pago: ' + method);
+    if (!user) return;
     setProcessing(true);
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -251,19 +247,26 @@ export default function SubscriptionPlansScreen() {
         setWebViewLoading(true);
         setShowWebView(true);
       } else {
-        // Nequi y PSE abren checkout externo directamente
-        const redirectUrl = Linking.createURL('payment/success');
-        const result = await WebBrowser.openAuthSessionAsync(data.initPoint, redirectUrl);
+        // PSE abre checkout externo - detecta resultado por collection_status en URL
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.initPoint,
+          'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/payment-callback'
+        );
         if (result.type === 'success') {
           const url = (result as any).url || '';
-          if (url.includes('payment/success') || url.includes('collection_status=approved')) {
+          if (url.includes('collection_status=approved') || url.includes('status=success')) {
             await confirmAppointment();
             setShowSuccessModal(true);
-          } else if (url.includes('collection_status=rejected')) {
+          } else if (url.includes('collection_status=rejected') || url.includes('status=failure')) {
             Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta de nuevo.');
           } else {
-            Alert.alert('Pago pendiente', 'Tu pago esta siendo verificado.',
-              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+            // Pago pendiente - confirmar igual porque PSE puede demorar
+            await confirmAppointment();
+            Alert.alert(
+              'Pago en proceso',
+              'Tu pago está siendo verificado. Tu lugar en el evento está reservado.',
+              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
+            );
           }
         }
       }
@@ -301,7 +304,8 @@ export default function SubscriptionPlansScreen() {
             [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
           break;
         case 'PAYMENT_ERROR':
-          Alert.alert('Pago rechazado', message.message || 'No se pudo procesar el pago.');
+          setShowWebView(false);
+          Alert.alert('Pago rechazado', message.message || 'No se pudo procesar el pago. Intenta con otra tarjeta.');
           break;
         case 'BRICK_ERROR':
           setShowWebView(false);
