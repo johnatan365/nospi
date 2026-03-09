@@ -451,7 +451,7 @@ export default function SubscriptionPlansScreen() {
             <View style={styles.paymentButtonContent}>
               {selectedPayment === 'pse' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
               <View style={styles.paymentMethodInfo}>
-                <Image source={require('../../assets/images/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
+                <Image source={require('@/assets/images/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
                 <View>
                   <Text style={styles.paymentMethodTitle}>PSE</Text>
                   <Text style={styles.paymentMethodSubtitle}>Transferencia bancaria — todos los bancos</Text>
