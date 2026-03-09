@@ -6,7 +6,6 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 
-console.log('Admin panel web module loaded');
 
 interface Event {
   id: string;
@@ -204,12 +203,10 @@ export default function AdminPanelScreen() {
   const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
 
   useEffect(() => {
-    console.log('Admin panel component mounted');
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
-      console.log('User authenticated, loading dashboard data');
       loadDashboardData();
     }
   }, [isAuthenticated, currentView]);
@@ -218,7 +215,6 @@ export default function AdminPanelScreen() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    console.log('=== ADMIN EVENTS REALTIME SUBSCRIPTION SETUP ===');
 
     const eventsChannel = supabase
       .channel('admin_events_changes')
@@ -230,17 +226,13 @@ export default function AdminPanelScreen() {
           table: 'events',
         },
         (payload) => {
-          console.log('=== ADMIN EVENTS REALTIME UPDATE RECEIVED ===');
-          console.log('Event:', payload.eventType);
           loadDashboardData();
         }
       )
       .subscribe((status) => {
-        console.log('Admin events realtime subscription status:', status);
       });
 
     return () => {
-      console.log('Cleaning up admin events realtime subscription');
       supabase.removeChannel(eventsChannel);
     };
   }, [isAuthenticated]);
@@ -249,8 +241,6 @@ export default function AdminPanelScreen() {
   useEffect(() => {
     if (!isAuthenticated || !selectedEventForMonitoring) return;
 
-    console.log('=== ADMIN REALTIME SUBSCRIPTION SETUP ===');
-    console.log('Monitoring event ID:', selectedEventForMonitoring);
 
     const channel = supabase
       .channel(`admin_event_${selectedEventForMonitoring}`)
@@ -263,24 +253,19 @@ export default function AdminPanelScreen() {
           filter: `event_id=eq.${selectedEventForMonitoring}`,
         },
         (payload) => {
-          console.log('=== ADMIN REALTIME UPDATE RECEIVED ===');
           loadEventParticipants(selectedEventForMonitoring);
         }
       )
       .subscribe((status) => {
-        console.log('Admin realtime subscription status:', status);
       });
 
     return () => {
-      console.log('Cleaning up admin realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [isAuthenticated, selectedEventForMonitoring]);
 
   const handlePasswordSubmit = () => {
-    console.log('Admin authentication attempt');
     if (adminPassword === 'nospi2024') {
-      console.log('Admin authenticated successfully');
       setIsAuthenticated(true);
       setShowPasswordModal(false);
       loadDashboardData();
@@ -292,7 +277,6 @@ export default function AdminPanelScreen() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      console.log('Loading admin dashboard data...');
 
       // Load events
       const { data: eventsData, error: eventsError } = await supabase
@@ -304,7 +288,6 @@ export default function AdminPanelScreen() {
         console.error('Error loading events:', eventsError);
         window.alert('Error al cargar eventos: ' + eventsError.message);
       } else {
-        console.log('✅ Events loaded successfully:', eventsData?.length || 0);
         setEvents(eventsData || []);
         setTotalEvents(eventsData?.length || 0);
         const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
@@ -312,7 +295,6 @@ export default function AdminPanelScreen() {
       }
 
       // Load users using the secure admin function
-      console.log('Loading users via admin function...');
       const { data: usersData, error: usersError } = await supabase
         .rpc('get_all_users_for_admin');
 
@@ -320,20 +302,17 @@ export default function AdminPanelScreen() {
         console.error('Error loading users:', usersError);
         window.alert('No se pudieron cargar los usuarios: ' + usersError.message);
       } else {
-        console.log('✅ Users loaded successfully:', usersData?.length || 0);
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
       }
 
       // Load appointments using the secure admin function
-      console.log('Loading appointments via admin function...');
       const { data: appointmentsRawData, error: appointmentsError } = await supabase
         .rpc('get_all_appointments_for_admin');
 
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
-        console.log('✅ Appointments loaded successfully:', appointmentsRawData?.length || 0);
         
         // Transform the flat data structure into the nested structure expected by the UI
         const transformedAppointments = appointmentsRawData?.map((apt: any) => ({
@@ -381,7 +360,6 @@ export default function AdminPanelScreen() {
         setTotalAppointments(transformedAppointments.length);
       }
 
-      console.log('Dashboard data loaded successfully');
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       window.alert('Error inesperado al cargar datos: ' + String(error));
@@ -392,8 +370,6 @@ export default function AdminPanelScreen() {
 
   const loadEventParticipants = async (eventId: string) => {
     try {
-      console.log('=== ADMIN LOADING PARTICIPANTS ===');
-      console.log('Event ID:', eventId);
       
       const { data, error } = await supabase
         .from('event_participants')
@@ -425,7 +401,6 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      console.log('Participants loaded:', data?.length);
       setEventParticipants(data || []);
     } catch (error) {
       console.error('Failed to load event participants:', error);
@@ -433,16 +408,12 @@ export default function AdminPanelScreen() {
   };
 
   const handleViewAttendees = async (event: Event) => {
-    console.log('=== LOADING ATTENDEES FOR EVENT (WEB) ===');
-    console.log('Event ID:', event.id);
-    console.log('Event Name:', event.name);
     
     setSelectedEventForAttendees(event);
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
 
     try {
-      console.log('Calling get_event_attendees_for_admin RPC...');
       const { data, error } = await supabase
         .rpc('get_event_attendees_for_admin', { p_event_id: event.id });
 
@@ -451,8 +422,6 @@ export default function AdminPanelScreen() {
         window.alert('No se pudieron cargar los asistentes: ' + error.message);
         setEventAttendees([]);
       } else {
-        console.log('✅ Raw attendees data received:', data?.length || 0);
-        console.log('Raw data:', JSON.stringify(data, null, 2));
         
         // Transform the flat data structure into the nested structure
         const transformedAttendees = data?.map((att: any) => ({
@@ -477,8 +446,6 @@ export default function AdminPanelScreen() {
           },
         })) || [];
         
-        console.log('✅ Transformed attendees:', transformedAttendees.length);
-        console.log('Attendee names:', transformedAttendees.map(a => a.users.name).join(', '));
         setEventAttendees(transformedAttendees);
       }
     } catch (error) {
@@ -491,7 +458,6 @@ export default function AdminPanelScreen() {
   };
 
   const handleOpenMoveAttendeeModal = (attendee: EventAttendee) => {
-    console.log('Opening move attendee modal for:', attendee.users.name);
     setSelectedAttendeeToMove(attendee);
     setTargetEventId('');
     setShowMoveAttendeeModal(true);
@@ -517,7 +483,6 @@ export default function AdminPanelScreen() {
 
     try {
       setMovingAttendee(true);
-      console.log('Moving attendee:', selectedAttendeeToMove.id, 'to event:', targetEventId);
 
       // Update the appointment to point to the new event
       const { error } = await supabase
@@ -531,7 +496,6 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      console.log('✅ Attendee moved successfully');
       window.alert(`${selectedAttendeeToMove.users.name} ha sido movido exitosamente al nuevo evento`);
       
       // Close modals and reload data
@@ -555,7 +519,6 @@ export default function AdminPanelScreen() {
   };
 
   const openCreateEventModal = () => {
-    console.log('Opening create event modal');
     setEditingEventId(null);
     setEventForm({
       name: '',
@@ -583,7 +546,6 @@ export default function AdminPanelScreen() {
   };
 
   const openEditEventModal = async (event: Event) => {
-    console.log('Opening edit event modal for:', event.id);
     setEditingEventId(event.id);
     
     let dateValue = '';
@@ -677,7 +639,6 @@ export default function AdminPanelScreen() {
           console.error('Error saving event questions:', error);
           window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
         } else {
-          console.log('✅ Event questions saved successfully');
         }
       }
     } catch (error) {
@@ -686,19 +647,14 @@ export default function AdminPanelScreen() {
   };
 
   const handleSaveEvent = async () => {
-    console.log('=== handleSaveEvent CALLED ===');
-    console.log('Button pressed - starting event save');
-    console.log('Event form data:', eventForm);
 
     try {
       if (!eventForm.name || !eventForm.city) {
-        console.log('❌ Validation failed - missing name or city');
         window.alert('Por favor completa el nombre y la ciudad del evento');
         return;
       }
 
       if (!eventForm.date || !eventForm.time) {
-        console.log('❌ Validation failed - missing date or time');
         window.alert('Debes seleccionar fecha y hora válidas antes de guardar el evento.');
         return;
       }
@@ -741,7 +697,6 @@ export default function AdminPanelScreen() {
         confirmation_code: finalConfirmationCode,
       };
 
-      console.log('Saving event data:', eventData);
 
       if (editingEventId) {
         const { data, error } = await supabase
@@ -756,7 +711,6 @@ export default function AdminPanelScreen() {
           return;
         }
 
-        console.log('✅ Event updated successfully:', data);
         
         // Save event questions
         await saveEventQuestions(editingEventId);
@@ -774,7 +728,6 @@ export default function AdminPanelScreen() {
           return;
         }
 
-        console.log('✅ Event created successfully:', data);
         
         // Save event questions for new event
         if (data && data[0]) {
@@ -1133,7 +1086,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             
             if (!level || !questionText) continue;
             if (!['divertido', 'sensual', 'atrevido'].includes(level)) {
-              console.warn(`Nivel inválido: ${level}`);
               continue;
             }
 
@@ -1226,7 +1178,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         }
       }
 
-      console.log('✅ Questions reordered successfully');
     } catch (error) {
       console.error('Failed to reorder questions:', error);
       window.alert('Error inesperado al reordenar preguntas');
@@ -1239,7 +1190,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     if (!confirmed) return;
 
     try {
-      console.log('Deleting attendee:', attendeeId);
       
       // Delete from appointments table
       const { error } = await supabase
@@ -1253,7 +1203,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         return;
       }
 
-      console.log('✅ Attendee deleted successfully');
       window.alert('Asistente eliminado exitosamente');
       
       // Reload attendees list
@@ -1271,7 +1220,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     if (!confirmed) return;
 
     try {
-      console.log('Sending event reminder for:', eventId);
       
       // FIX: Get all appointments for this event with status 'confirmada'
       const { data: appointmentsData, error: appointmentsError } = await supabase
@@ -1355,7 +1303,6 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
 
   // NEW: Open configuration modal
   const handleOpenConfigModal = (event: Event) => {
-    console.log('Opening configuration modal for event:', event.id);
     setSelectedEventForConfig(event);
     setShowConfigModal(true);
   };
@@ -1436,7 +1383,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
-                <Text style={styles.compactInfoText}>📅 {event.date}</Text>
+                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
                 <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
               </View>
               <View style={styles.compactInfoRow}>
@@ -1566,7 +1513,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             <option value="">-- Selecciona un evento --</option>
             {events.filter(e => e.event_status === 'published').map((event) => (
               <option key={event.id} value={event.id}>
-                {event.name || `${event.type} - ${event.city}`} - {event.date}
+                {event.name || `${event.type} - ${event.city}`} - {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : event.date}
               </option>
             ))}
           </select>
