@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 10000;
+  const priceCOP = 9900;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -374,11 +374,11 @@ export default function SubscriptionPlansScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
         <Text style={styles.title}>Pago del Evento</Text>
-        <Text style={styles.subtitle}>Confirma tu asistencia pagando $10.000 COP</Text>
+        <Text style={styles.subtitle}>{`Confirma tu asistencia pagando $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
 
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Precio por evento</Text>
-          <Text style={styles.priceAmount}>$10.000</Text>
+          <Text style={styles.priceAmount}>{`$${priceCOP.toLocaleString('es-CO')}`}</Text>
           <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
           <Text style={styles.priceDescription}>Pago único por evento. Sin suscripciones ni cargos recurrentes.</Text>
         </View>
@@ -458,7 +458,7 @@ export default function SubscriptionPlansScreen() {
 
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>Total a pagar:</Text>
-          <Text style={styles.summaryAmount}>$10.000 COP</Text>
+          <Text style={styles.summaryAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
         </View>
 
         <TouchableOpacity
