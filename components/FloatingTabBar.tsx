@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from './IconSymbol';
 import { nospiColors } from '@/constants/Colors';
 
@@ -19,6 +20,7 @@ interface FloatingTabBarProps {
 export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   const handleTabPress = (route: string) => {
     console.log('Tab pressed:', route);
@@ -26,7 +28,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const isActive = pathname === tab.route || pathname.startsWith(tab.route);
@@ -65,7 +67,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'transparent',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
+    paddingBottom: 0,
   },
   tabBar: {
     flexDirection: 'row',
