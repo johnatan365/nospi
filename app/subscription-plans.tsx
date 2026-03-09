@@ -293,7 +293,6 @@ export default function SubscriptionPlansScreen() {
   const handleWebViewMessage = async (event: any) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
-      console.log('WebView message:', message);
 
       switch (message.type) {
         case 'PAYMENT_SUCCESS':

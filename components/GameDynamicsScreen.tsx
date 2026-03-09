@@ -58,7 +58,6 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
-  console.log('🎮 GameDynamicsScreen render - activeParticipants:', activeParticipants.length);
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
@@ -80,14 +79,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
-        console.log('🎮 Current user ID:', user.id);
       }
     };
     getCurrentUser();
 
     const loadQuestions = async () => {
       try {
-        console.log('📚 Loading questions for event:', appointment.event_id);
         
         const { data: eventQuestions, error: eventError } = await supabase
           .from('event_questions')
@@ -119,12 +116,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             questionsByLevel.atrevido.length > 0
           ) {
             QUESTIONS = questionsByLevel;
-            console.log('✅ Event-specific questions loaded');
             return;
           }
         }
 
-        console.log('📚 Loading default questions');
         const { data: defaultQuestions, error: defaultError } = await supabase
           .from('event_questions')
           .select('*')
@@ -156,7 +151,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             questionsByLevel.atrevido.length > 0
           ) {
             QUESTIONS = questionsByLevel;
-            console.log('✅ Default questions loaded from database');
           }
         }
       } catch (error) {
@@ -171,7 +165,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('🔄 Restoring state from database');
     
     const restoreStateFromDatabase = async () => {
       const { data, error } = await supabase
@@ -186,23 +179,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }
 
       if (!data) {
-        console.log('❌ No event data found');
         return;
       }
 
-      console.log('✅ Event state fetched:', {
-        game_phase: data.game_phase,
-        current_level: data.current_level,
-        current_question_index: data.current_question_index,
-      });
 
       // Derive UI from event_state
       if (data.game_phase === 'match_selection') {
-        console.log('🔄 Restoring match_selection phase');
         setGamePhase('match_selection');
         setCurrentLevel(data.current_level || 'divertido');
       } else if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
-        console.log('🔄 Restoring questions phase');
         setGamePhase('questions');
         setCurrentLevel(data.current_level || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
@@ -213,7 +198,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           setStarterParticipant(starter || null);
         }
       } else if (data.game_phase === 'free_phase') {
-        console.log('🔄 Restoring free_phase');
         setGamePhase('free_phase');
       }
     };
@@ -225,7 +209,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    console.log('📡 Subscribing to event_state');
 
     const channel = supabase
       .channel(`game_${appointment.event_id}`)
@@ -238,11 +221,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 Event_state update');
           const newEvent = payload.new as any;
           
           if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
-            console.log('📡 Updating to questions phase');
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
@@ -253,11 +234,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               setStarterParticipant(starter || null);
             }
           } else if (newEvent.game_phase === 'match_selection') {
-            console.log('📡 Updating to match_selection phase');
             setGamePhase('match_selection');
             setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'free_phase') {
-            console.log('📡 Updating to free_phase');
             setGamePhase('free_phase');
           }
         }
@@ -271,7 +250,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // Level transition animation function
   const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
-    console.log('🎬 Showing level transition animation for:', level);
     
     setTransitionLevel(level);
     setShowLevelTransition(true);
@@ -320,7 +298,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [scaleAnim, fadeAnim]);
 
   const handleContinue = useCallback(async () => {
-    console.log('➡️ User pressed Continuar button in questions phase');
     
     if (!appointment?.event_id || loading) return;
 
@@ -338,7 +315,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         const nextQuestion = questionsForLevel[nextQuestionIndex];
 
         // CRITICAL FIX: Immediately update local state BEFORE database call
-        console.log('✅ IMMEDIATELY advancing to next question (optimistic update)');
         setCurrentQuestionIndex(nextQuestionIndex);
         setCurrentQuestion(nextQuestion);
         const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
@@ -364,11 +340,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           return;
         }
 
-        console.log('✅ Advanced to next question in database');
         
       } else {
         // Level completed - advance to next level or free phase
-        console.log('⚡ Level finished - advancing to next level');
 
         const nextLevel: QuestionLevel = 
           currentLevel === 'divertido' ? 'sensual' :
@@ -376,7 +350,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
         if (currentLevel === 'divertido' || currentLevel === 'sensual') {
           // Advance to next level
-          console.log('➡️ Advancing to level', nextLevel);
           
           // CRITICAL: Show level transition animation BEFORE updating database
           showLevelTransitionAnimation(nextLevel);
@@ -386,7 +359,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const firstQuestion = QUESTIONS[nextLevel][0];
 
           // CRITICAL FIX: Immediately update local state BEFORE database call
-          console.log('✅ IMMEDIATELY transitioning to next level (optimistic update)');
           setGamePhase('questions');
           setCurrentLevel(nextLevel);
           setCurrentQuestionIndex(0);
@@ -417,14 +389,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             return;
           }
 
-          console.log('✅ Started next level in database');
           
         } else {
           // All levels complete - go to free phase
-          console.log('🏁 All levels complete - transitioning to free_phase');
           
           // CRITICAL FIX: Immediately update local state BEFORE database call
-          console.log('✅ IMMEDIATELY transitioning to free_phase (optimistic update)');
           setGamePhase('free_phase');
           
           const { error } = await supabase
@@ -443,7 +412,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             return;
           }
 
-          console.log('✅ Game ended in database');
         }
       }
     } catch (error) {
@@ -456,7 +424,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
 
-    console.log('⭐ Rating user:', ratedUserId, 'with', rating, 'stars');
 
     try {
       const { error } = await supabase
@@ -480,7 +447,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
 
-      console.log('✅ Rating saved successfully');
       
       setUserRatings((prev) => ({
         ...prev,
@@ -492,17 +458,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   }, [appointment, currentUserId]);
 
   const handleFinishEvent = useCallback(async () => {
-    console.log('🏁 User pressed Finalizar button');
     
     if (!appointment?.event_id || !currentUserId || loading) return;
 
-    console.log('🏁 Finishing event individually - moving ONLY this user\'s appointment to anterior');
     
     // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
 
     try {
-      console.log('📤 Updating appointment status to anterior in database...');
       
       // CRITICAL FIX: Update ONLY this user's appointment to 'anterior'
       // Do NOT close the event or affect other users
@@ -522,9 +485,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
       
-      console.log('✅ User appointment moved to anterior status - event continues for other users');
-      console.log('✅ User finished event individually - they will no longer see this event');
-      console.log('📡 Realtime subscription in interaccion.tsx will detect this change and clear the view');
       
       // Keep loading state true - the realtime subscription will handle the UI update
       // and the component will unmount when appointment is cleared
@@ -541,11 +501,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  console.log('🎮 Rendering decision - gamePhase:', gamePhase);
 
   // MATCH SELECTION DISABLED - Skip this phase entirely
   if (gamePhase === 'match_selection') {
-    console.log('🎮 Match selection phase detected but DISABLED - showing loading');
     
     return (
       <LinearGradient

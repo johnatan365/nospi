@@ -23,7 +23,6 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
 
   const handleTabPress = (route: string) => {
-    console.log('Tab pressed:', route);
     router.push(route as any);
   };
 

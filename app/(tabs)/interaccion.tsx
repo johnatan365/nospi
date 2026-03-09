@@ -92,7 +92,6 @@ export default function InteraccionScreen() {
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   
-  // CRITICAL: Game state derived from event_state in database
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
   const checkIfEventDay = useCallback((startTime: string) => {
@@ -126,9 +125,7 @@ export default function InteraccionScreen() {
 
     setCountdown(diffToPlus10);
 
-    // CRITICAL: Show code entry at EXACT appointment time
     if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
-      console.log('⏰ Exact appointment time reached - showing code entry');
       setCheckInPhase('code_entry');
     }
 
@@ -149,13 +146,11 @@ export default function InteraccionScreen() {
   const requestNotificationPermissions = useCallback(async () => {
     // Skip on web - notifications not fully supported
     if (Platform.OS === 'web') {
-      console.log('Notifications not available on web');
       return;
     }
 
     try {
       const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission:', status);
     } catch (error) {
       console.error('Error requesting notification permissions:', error);
     }
@@ -164,7 +159,6 @@ export default function InteraccionScreen() {
   const scheduleNotifications = useCallback(async (startTime: string) => {
     // Skip on web - notifications not fully supported
     if (Platform.OS === 'web') {
-      console.log('Skipping notification scheduling on web');
       return;
     }
 
@@ -206,7 +200,6 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      console.log('🔄 Loading active participants for event:', eventId);
       
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
@@ -216,7 +209,6 @@ export default function InteraccionScreen() {
         return;
       }
 
-      // CRITICAL FIX: Only include participants who have confirmed (checked in with code)
       const participants: Participant[] = (data || [])
         .filter((item: any) => item.user_name && item.confirmed === true)
         .map((item: any) => ({
@@ -238,7 +230,6 @@ export default function InteraccionScreen() {
           }
         }));
 
-      console.log('✅ Active participants loaded:', participants.length);
       
       setActiveParticipants(participants);
     } catch (error) {
@@ -253,7 +244,6 @@ export default function InteraccionScreen() {
     }
 
     try {
-      console.log('🔄 Loading appointment for user:', user.id);
       
       const { data, error } = await supabase
         .from('appointments')
@@ -301,7 +291,6 @@ export default function InteraccionScreen() {
       }
       
       if (!data || data.length === 0) {
-        console.log('❌ No confirmed appointments found');
         setAppointment(null);
         setLoading(false);
         return;
@@ -329,15 +318,8 @@ export default function InteraccionScreen() {
 
       const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
       
-      console.log('✅ Appointment loaded:', appointmentData.id);
-      console.log('📊 Event game_phase:', appointmentData.event?.game_phase);
-      console.log('📊 Event event_status:', appointmentData.event?.event_status);
-      console.log('📊 Appointment status:', appointmentData.status);
-      console.log('📊 Location confirmed:', appointmentData.location_confirmed);
       
-      // CRITICAL FIX: Check if event is closed OR if user's appointment is 'anterior'
       if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
-        console.log('🚫 Event is closed or user finished - showing no events available');
         setAppointment(null);
         setLoading(false);
         return;
@@ -345,19 +327,14 @@ export default function InteraccionScreen() {
       
       setAppointment(appointmentData as any);
       
-      // CRITICAL FIX: ALWAYS check location_confirmed BEFORE setting game phase
       // If user hasn't confirmed location, force them to code_entry phase regardless of event's game_phase
       if (!appointmentData.location_confirmed) {
-        console.log('🚨 User has NOT confirmed location - forcing code_entry phase');
         setCheckInPhase('code_entry');
         setGamePhase('intro'); // Keep in intro phase until they confirm
       } else {
-        console.log('✅ User has confirmed location - setting check-in to confirmed');
         setCheckInPhase('confirmed');
         
-        // CRITICAL: Only set game phase from database if user has confirmed location
         if (appointmentData.event?.game_phase) {
-          console.log('🎮 Setting game phase from database:', appointmentData.event.game_phase);
           setGamePhase(appointmentData.event.game_phase);
         }
       }
@@ -378,7 +355,6 @@ export default function InteraccionScreen() {
   }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
 
   const handleCodeConfirmation = useCallback(async () => {
-    console.log('🔐 User pressed Confirmar Código button');
     
     if (!appointment || !user) return;
 
@@ -388,7 +364,6 @@ export default function InteraccionScreen() {
       ? '1986' 
       : eventCode.trim();
     
-    console.log('Code validation - Expected:', expectedCode, 'Entered:', enteredCode);
 
     if (enteredCode !== expectedCode) {
       setCodeError('Código incorrecto.');
@@ -400,12 +375,9 @@ export default function InteraccionScreen() {
     try {
       const confirmedAt = new Date().toISOString();
 
-      // CRITICAL FIX: Immediately update UI state BEFORE database calls for instant responsiveness
-      console.log('✅ IMMEDIATELY transitioning to confirmed phase (optimistic update)');
       setCheckInPhase('confirmed');
       setConfirmationCode('');
       
-      // CRITICAL FIX: Immediately update appointment state with location_confirmed = true
       setAppointment(prev => ({
         ...prev!,
         arrival_status: 'on_time',
@@ -413,10 +385,8 @@ export default function InteraccionScreen() {
         location_confirmed: true,
       }));
       
-      // CRITICAL FIX: Immediately set game phase to current event phase
       // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
       if (appointment.event?.game_phase) {
-        console.log('🎮 User confirmed location - IMMEDIATELY setting game phase to:', appointment.event.game_phase);
         setGamePhase(appointment.event.game_phase);
       }
       
@@ -440,7 +410,6 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('✅ Check-in successful in database');
       
       await supabase
         .from('appointments')
@@ -461,23 +430,18 @@ export default function InteraccionScreen() {
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(async () => {
-    console.log('🚀 User clicked Continuar button');
     
     if (!appointment?.event_id || startingExperience) {
-      console.warn('⚠️ Cannot start - already loading or no event');
       return;
     }
 
     if (activeParticipants.length < 2) {
-      console.warn('⚠️ Cannot start - need at least 2 participants');
       return;
     }
 
-    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setStartingExperience(true);
     
     try {
-      console.log('🎮 Starting experience - going directly to questions phase');
       
       // Select random starter
       const randomIndex = Math.floor(Math.random() * activeParticipants.length);
@@ -486,11 +450,7 @@ export default function InteraccionScreen() {
       // Get first question from divertido level
       const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
       
-      console.log('🎮 Starter user:', activeParticipants[randomIndex].profiles?.name);
-      console.log('🎮 First question:', firstQuestion);
       
-      // CRITICAL FIX: Immediately update local state BEFORE database call
-      console.log('✅ IMMEDIATELY transitioning to questions phase (optimistic update)');
       setGamePhase('questions');
       
       const { error } = await supabase
@@ -514,7 +474,6 @@ export default function InteraccionScreen() {
         return;
       }
 
-      console.log('✅ Successfully started experience in database');
       
     } catch (error) {
       console.error('❌ Unexpected error:', error);
@@ -528,11 +487,9 @@ export default function InteraccionScreen() {
     }
   }, [appointment, activeParticipants, startingExperience]);
 
-  // CRITICAL: Subscribe to event_state changes AND appointment status changes
   useEffect(() => {
     if (!appointment?.event_id || !appointment?.id || !user) return;
 
-    console.log('📡 Subscribing to event_state and appointment changes for event:', appointment.event_id);
 
     // Subscribe to event changes
     const eventChannel = supabase
@@ -546,19 +503,13 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('📡 Event_state change detected');
           const newEvent = payload.new as any;
-          console.log('📡 New game_phase:', newEvent.game_phase);
-          console.log('📡 New event_status:', newEvent.event_status);
           
-          // CRITICAL FIX: Check if event is closed
           if (newEvent.event_status === 'closed') {
-            console.log('🚫 Event closed via realtime - clearing appointment');
             setAppointment(null);
             return;
           }
           
-          // CRITICAL FIX: Only update game phase if user has confirmed location
           // This prevents users who haven't entered the code from seeing the game
           setAppointment(prev => {
             if (!prev) return prev;
@@ -577,12 +528,9 @@ export default function InteraccionScreen() {
               }
             };
             
-            // CRITICAL: Only update game phase state if user has confirmed location
             if (prev.location_confirmed && newEvent.game_phase) {
-              console.log('🎮 User has confirmed location - updating game phase from realtime:', newEvent.game_phase);
               setGamePhase(newEvent.game_phase);
             } else {
-              console.log('🚨 User has NOT confirmed location - keeping in code_entry phase');
             }
             
             return updatedAppointment;
@@ -590,10 +538,8 @@ export default function InteraccionScreen() {
         }
       )
       .subscribe((status) => {
-        console.log('📡 event_state subscription status:', status);
       });
 
-    // CRITICAL FIX: Subscribe to appointment status changes
     const appointmentChannel = supabase
       .channel(`appointment_${appointment.id}`)
       .on(
@@ -605,37 +551,22 @@ export default function InteraccionScreen() {
           filter: `id=eq.${appointment.id}`,
         },
         (payload) => {
-          console.log('📡 ========================================');
-          console.log('📡 APPOINTMENT STATUS CHANGE DETECTED');
-          console.log('📡 ========================================');
           const newAppointment = payload.new as any;
-          console.log('📡 Old status:', payload.old);
-          console.log('📡 New status:', newAppointment.status);
-          console.log('📡 Full payload:', JSON.stringify(payload, null, 2));
           
-          // CRITICAL: If this user's appointment changed to 'anterior', hide the event
           if (newAppointment.status === 'anterior') {
-            console.log('🚫 ========================================');
-            console.log('🚫 USER APPOINTMENT MOVED TO ANTERIOR');
-            console.log('🚫 CLEARING APPOINTMENT FROM VIEW NOW');
-            console.log('🚫 ========================================');
             setAppointment(null);
             setLoading(false);
             return;
           }
           
-          console.log('📡 Status is not anterior, keeping appointment visible');
         }
       )
       .subscribe((status) => {
-        console.log('📡 appointment subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to appointment changes for ID:', appointment.id);
         }
       });
 
     return () => {
-      console.log('📡 Unsubscribing event_state and appointment');
       supabase.removeChannel(eventChannel);
       supabase.removeChannel(appointmentChannel);
     };
@@ -643,14 +574,12 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 Screen focused');
       
       if (user) {
         loadAppointment();
       }
       
       return () => {
-        console.log('Screen unfocused');
       };
     }, [user, loadAppointment])
   );
@@ -672,7 +601,6 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    console.log('Setting up Realtime subscription for participants');
     
     loadActiveParticipants(appointment.event_id);
 
@@ -687,7 +615,6 @@ export default function InteraccionScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          console.log('Participant update:', payload.eventType);
           loadActiveParticipants(appointment.event_id);
         }
       )
@@ -698,7 +625,6 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
-  // CRITICAL: "Continuar" button only appears when countdown reaches 0 (10 minutes after appointment)
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
@@ -806,11 +732,7 @@ export default function InteraccionScreen() {
     );
   }
 
-  // CRITICAL: Show game dynamics based on game_phase from database
-  // MATCH SELECTION DISABLED - Skip 'intro', 'ready', and 'match_selection' phases
   if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
-    console.log('🎮 Rendering GameDynamicsScreen with phase:', gamePhase);
-    console.log('🎮 Active participants count:', activeParticipants.length);
     
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
@@ -826,31 +748,11 @@ export default function InteraccionScreen() {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
   }
   
-  // MATCH SELECTION DISABLED - If somehow we're in match_selection phase, show loading
-  if (gamePhase === 'match_selection') {
-    console.log('⚠️ Match selection phase detected but DISABLED - showing loading');
-    
-    return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-          <Text style={{ textAlign: 'center', marginTop: 20, color: nospiColors.purpleDark, fontSize: 16 }}>
-            Cargando siguiente nivel...
-          </Text>
-        </View>
-      </LinearGradient>
-    );
-  }
+
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
   
-  // CRITICAL FIX: Hide location text when location is revealed
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
   const locationText = locationRevealed && appointment.event.location_name

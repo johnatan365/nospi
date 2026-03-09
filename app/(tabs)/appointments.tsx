@@ -62,13 +62,11 @@ export default function AppointmentsScreen() {
 
   const loadAppointments = useCallback(async () => {
     if (!user?.id) {
-      console.log('No user ID, skipping appointment load');
       return;
     }
 
     try {
       setLoading(true);
-      console.log('Loading appointments for user:', user.id, 'filter:', filter);
 
       let statusFilter = 'confirmada';
       if (filter === 'anteriores') {
@@ -109,8 +107,6 @@ export default function AppointmentsScreen() {
         return;
       }
 
-      console.log('Appointments loaded:', data?.length || 0);
-      console.log('Raw appointments data:', JSON.stringify(data, null, 2));
       
       // Transform the data to match our interface (events -> event)
       const transformedAppointments = (data || []).map(apt => ({
@@ -118,7 +114,6 @@ export default function AppointmentsScreen() {
         event: apt.events as any
       }));
       
-      console.log('Transformed appointments:', transformedAppointments.length);
       setAppointments(transformedAppointments as Appointment[]);
     } catch (error) {
       console.error('Failed to load appointments:', error);
@@ -129,7 +124,6 @@ export default function AppointmentsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('Appointments screen focused, loading appointments');
       loadAppointments();
       // Verificar si viene de un pago PSE exitoso
       AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {
@@ -176,7 +170,6 @@ export default function AppointmentsScreen() {
   };
 
   const handleCancelPress = (appointment: Appointment) => {
-    console.log('User requested to cancel appointment:', appointment.id);
     setAppointmentToCancel(appointment);
     setShowCancelModal(true);
   };
@@ -185,7 +178,6 @@ export default function AppointmentsScreen() {
     if (!appointmentToCancel || !appointmentToCancel.event) return;
 
     try {
-      console.log('Cancelling appointment:', appointmentToCancel.id);
       
       // Calculate if cancellation is 24 hours before event
       const eventStartTime = appointmentToCancel.event.start_time 
@@ -198,10 +190,6 @@ export default function AppointmentsScreen() {
       
       const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
       
-      console.log('Event start time:', eventStartTime);
-      console.log('Current time:', now);
-      console.log('Time difference (hours):', timeDifferenceMs / (60 * 60 * 1000));
-      console.log('Within refund window (>24h):', isWithinRefundWindow);
       
       // Update appointment status to cancelada
       const { error: appointmentError } = await supabase
@@ -219,7 +207,6 @@ export default function AppointmentsScreen() {
 
       // If within refund window, add to virtual balance
       if (isWithinRefundWindow) {
-        console.log('Adding $5 USD to virtual balance');
         const refundAmount = PRECIO_EVENTO_COP;
         
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
@@ -244,13 +231,10 @@ export default function AppointmentsScreen() {
             .update({ virtual_balance: newBalance })
             .eq('id', user?.id);
           
-          console.log('Virtual balance updated via fallback:', newBalance);
         } else {
-          console.log('Virtual balance updated successfully');
         }
       }
 
-      console.log('Appointment cancelled successfully');
       setShowCancelModal(false);
       setAppointmentToCancel(null);
       loadAppointments();
@@ -260,7 +244,6 @@ export default function AppointmentsScreen() {
   };
 
   const toggleNotification = (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
-    console.log('Toggling notification preference:', type);
     setNotificationPreferences(prev => ({
       ...prev,
       [type]: !prev[type],
@@ -269,7 +252,6 @@ export default function AppointmentsScreen() {
 
   const saveNotificationPreferences = async () => {
     try {
-      console.log('Saving notification preferences:', notificationPreferences);
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: notificationPreferences })
@@ -280,7 +262,6 @@ export default function AppointmentsScreen() {
         return;
       }
 
-      console.log('Notification preferences saved successfully');
       setShowNotificationModal(false);
     } catch (error) {
       console.error('Failed to save notification preferences:', error);
@@ -306,7 +287,6 @@ export default function AppointmentsScreen() {
   };
 
   const handleOpenMaps = (mapsLink: string) => {
-    console.log('Opening maps link:', mapsLink);
     Linking.openURL(mapsLink).catch(err => {
       console.error('Failed to open maps link:', err);
     });
@@ -370,7 +350,6 @@ export default function AppointmentsScreen() {
             // ATOMIC JSX: Extract all logic and conditionals BEFORE the return
             // Defensive check: Skip if event is null or undefined
             if (!appointment.event) {
-              console.warn('Appointment missing event data:', appointment.id);
               return null;
             }
 
@@ -385,7 +364,6 @@ export default function AppointmentsScreen() {
             // Show location if revealed
             const locationRevealed = appointment.event.is_location_revealed || false;
             
-            // CRITICAL FIX: Hide "48 hours" text for anteriores and canceladas
             const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
             const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
             
