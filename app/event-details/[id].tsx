@@ -107,24 +107,19 @@ export default function EventDetailsScreen() {
     setConfirming(true);
     
     try {
-      Alert.alert('DEBUG 1', `userId: ${user?.id}\neventId: ${id}`);
-      const { data: existingAppointment, error: apptError } = await supabase
+      const { data: existingAppointment } = await supabase
         .from('appointments')
         .select('*')
         .eq('user_id', user?.id)
         .eq('event_id', id)
         .maybeSingle();
-      Alert.alert('DEBUG 2', `existingAppt: ${JSON.stringify(existingAppointment)}\nerror: ${JSON.stringify(apptError)}`);
 
       if (existingAppointment) {
-        // Si ya tiene cita confirmada, ir a citas
         if (existingAppointment.status === 'confirmada' || existingAppointment.payment_status === 'completed') {
           setConfirming(false);
           router.push('/(tabs)/appointments');
           return;
         }
-        // Si tiene cita pero pago pendiente, permitir reintentar el pago
-        // (puede pasar con PSE que queda en pending)
       }
 
       await AsyncStorage.setItem('pending_event_confirmation', id as string);
