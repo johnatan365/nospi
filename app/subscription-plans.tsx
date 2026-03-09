@@ -224,6 +224,11 @@ export default function SubscriptionPlansScreen() {
     setProcessing(true);
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      if (!pendingEventId) {
+        Alert.alert('Error', 'No se encontró el evento. Por favor vuelve a la pantalla del evento e intenta de nuevo.');
+        setProcessing(false);
+        return;
+      }
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
         method: 'POST',
@@ -234,8 +239,8 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({
           eventId: pendingEventId || 'test-event',
           userId: user.id,
-          userEmail: userProfile?.email || user.email,
-          userName: userProfile?.name || 'Usuario',
+          userEmail: userProfile?.email || user.email || (user as any).user_metadata?.email || '',
+          userName: userProfile?.name || (user as any).user_metadata?.full_name || (user as any).user_metadata?.name || 'Usuario',
           paymentMethod: method,
           amountCOP: priceCOP,
         }),
