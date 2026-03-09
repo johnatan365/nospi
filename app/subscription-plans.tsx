@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView, AppState
+  ActivityIndicator, Modal, Alert, SafeAreaView, AppState, Image
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 10000;
+  const priceCOP = 2000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -451,9 +451,7 @@ export default function SubscriptionPlansScreen() {
             <View style={styles.paymentButtonContent}>
               {selectedPayment === 'pse' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
               <View style={styles.paymentMethodInfo}>
-                <View style={styles.pseLogoContainer}>
-                  <Text style={styles.pseLogoText}>PSE</Text>
-                </View>
+                <Image source={require('../assets/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
                 <View>
                   <Text style={styles.paymentMethodTitle}>PSE</Text>
                   <Text style={styles.paymentMethodSubtitle}>Transferencia bancaria — todos los bancos</Text>
@@ -551,11 +549,9 @@ const styles = StyleSheet.create({
   paymentMethodTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
   paymentMethodSubtitle: { fontSize: 13, color: '#888', marginTop: 2 },
   virtualBalanceButton: { backgroundColor: 'rgba(147,51,234,0.08)', borderColor: nospiColors.purpleMid },
-  pseLogoContainer: {
-    width: 48, height: 32, backgroundColor: '#1A3F6F', borderRadius: 6,
-    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  pseLogoImage: {
+    width: 48, height: 48, marginRight: 14, borderRadius: 24,
   },
-  pseLogoText: { color: '#F5A623', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
   virtualBalanceTitle: { fontSize: 16, fontWeight: 'bold', color: nospiColors.purpleDark },
   virtualBalanceAmount: { fontSize: 13, color: nospiColors.purpleMid, marginTop: 2 },
   summaryContainer: {
