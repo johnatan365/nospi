@@ -158,6 +158,30 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
+  // Escucha deep links de retorno de pago PSE
+  useEffect(() => {
+    const handleUrl = async (event: { url: string }) => {
+      const url = event.url;
+      if (url.includes('nospi://payment/')) {
+        if (url.includes('success') || url.includes('approved')) {
+          await confirmAppointment();
+          setShowSuccessModal(true);
+        } else if (url.includes('pending')) {
+          await confirmAppointment();
+          Alert.alert(
+            'Pago en proceso',
+            'Tu pago esta siendo verificado. Tu lugar en el evento esta reservado.',
+            [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
+          );
+        } else if (url.includes('failure') || url.includes('rejected')) {
+          Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta de nuevo.');
+        }
+      }
+    };
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
+
   const confirmAppointment = async () => {
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -247,28 +271,10 @@ export default function SubscriptionPlansScreen() {
         setWebViewLoading(true);
         setShowWebView(true);
       } else {
-        // PSE abre checkout externo - detecta resultado por collection_status en URL
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.initPoint,
-          'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/payment-callback'
-        );
-        if (result.type === 'success') {
-          const url = (result as any).url || '';
-          if (url.includes('collection_status=approved') || url.includes('status=success')) {
-            await confirmAppointment();
-            setShowSuccessModal(true);
-          } else if (url.includes('collection_status=rejected') || url.includes('status=failure')) {
-            Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta de nuevo.');
-          } else {
-            // Pago pendiente - confirmar igual porque PSE puede demorar
-            await confirmAppointment();
-            Alert.alert(
-              'Pago en proceso',
-              'Tu pago está siendo verificado. Tu lugar en el evento está reservado.',
-              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
-            );
-          }
-        }
+        // PSE/Bancolombia: abre checkout externo
+        // El resultado llega via deep link nospi://payment/success|pending|failure
+        // capturado por el listener de Linking arriba
+        await WebBrowser.openBrowserAsync(data.initPoint);
       }
 
     } catch (error: any) {
