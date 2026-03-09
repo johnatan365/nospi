@@ -243,6 +243,7 @@ export default function SubscriptionPlansScreen() {
 
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia');
+      if (!data.initPoint && !data.preferenceId) throw new Error('MP no devolvió URL de pago. Intenta de nuevo.');
 
       const bricksParams = new URLSearchParams({
         method,
@@ -257,10 +258,16 @@ export default function SubscriptionPlansScreen() {
       
       if (method === 'card') {
         // Tarjeta usa Bricks via WebView
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         const htmlResponse = await fetch(bricksUrl, {
-          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
+        if (!htmlResponse.ok) throw new Error('No se pudo cargar la pantalla de pago. Intenta de nuevo.');
         const htmlContent = await htmlResponse.text();
+        if (!htmlContent || htmlContent.length < 100) throw new Error('Página de pago vacía. Intenta de nuevo.');
         setBricksHTML(htmlContent);
         setCurrentMethod(method);
         setWebViewLoading(true);
