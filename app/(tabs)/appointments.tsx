@@ -46,6 +46,7 @@ export default function AppointmentsScreen() {
   });
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
 
   const checkFirstTimeNotificationPrompt = useCallback(async () => {
     try {
@@ -130,7 +131,30 @@ export default function AppointmentsScreen() {
     useCallback(() => {
       console.log('Appointments screen focused, loading appointments');
       loadAppointments();
-    }, [loadAppointments])
+      // Verificar si viene de un pago PSE exitoso
+      AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {
+        if (pending === 'true') {
+          await AsyncStorage.removeItem('pse_payment_pending');
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          if (pendingEventId && user?.id) {
+            // Esperar un poco para que el callback de MP haya procesado
+            setTimeout(async () => {
+              const { data: existing } = await supabase
+                .from('appointments')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('event_id', pendingEventId)
+                .maybeSingle();
+              if (existing) {
+                await AsyncStorage.removeItem('pending_event_confirmation');
+                setShowPaymentSuccessModal(true);
+                loadAppointments();
+              }
+            }, 2000);
+          }
+        }
+      });
+    }, [loadAppointments, user?.id])
   );
 
   useEffect(() => {
@@ -563,6 +587,27 @@ export default function AppointmentsScreen() {
                   <Text style={styles.modalButtonTextPrimary}>Sí, cancelar</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal de exito de pago PSE */}
+        <Modal visible={showPaymentSuccessModal} transparent animationType="fade">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 32, alignItems: 'center', width: '100%', maxWidth: 340 }}>
+              <Text style={{ fontSize: 64, marginBottom: 16 }}>🎉</Text>
+              <Text style={{ fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 8, textAlign: 'center' }}>
+                ¡Pago exitoso!
+              </Text>
+              <Text style={{ fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                Tu asistencia al evento ha sido confirmada. ¡Nos vemos pronto!
+              </Text>
+              <TouchableOpacity
+                style={{ backgroundColor: nospiColors.purpleDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%' }}
+                onPress={() => setShowPaymentSuccessModal(false)}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>Ver mi cita</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

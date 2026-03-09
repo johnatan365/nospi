@@ -158,38 +158,7 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Cuando la app vuelve al primer plano tras pago PSE, verifica si la cita quedó registrada
-  useEffect(() => {
-    let psePaymentPending = false;
-    const sub = AppState.addEventListener('change', async (state) => {
-      if (state === 'active' && psePaymentPending) {
-        psePaymentPending = false;
-        try {
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          if (!pendingEventId || !user?.id) return;
-          const { data: existing } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('event_id', pendingEventId)
-            .maybeSingle();
-          if (existing) {
-            await AsyncStorage.removeItem('pending_event_confirmation');
-            setShowSuccessModal(true);
-          } else {
-            Alert.alert(
-              'Verificando pago',
-              'Tu pago PSE puede demorar unos minutos. Revisa tus citas en un momento.',
-              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
-            );
-          }
-        } catch (e) { console.error(e); }
-      }
-    });
-    // Exponer setter para que PSE lo active
-    (global as any).__setPsePaymentPending = () => { psePaymentPending = true; };
-    return () => sub.remove();
-  }, [user?.id]);
+  // Nada - el check de PSE se hace en appointments.tsx al cargar
 
   const confirmAppointment = async () => {
     try {
@@ -280,10 +249,12 @@ export default function SubscriptionPlansScreen() {
         setWebViewLoading(true);
         setShowWebView(true);
       } else {
-        // PSE/Bancolombia: marca que hay pago pendiente y abre browser
-        // Al volver a la app, AppState listener verifica si la cita quedó registrada
-        (global as any).__setPsePaymentPending?.();
+        // PSE/Bancolombia: guarda flag y abre browser
+        // Al volver, appointments.tsx detecta el flag y muestra modal de exito
+        await AsyncStorage.setItem('pse_payment_pending', 'true');
         await WebBrowser.openBrowserAsync(data.initPoint);
+        // Cuando openBrowserAsync retorna (usuario cerro el browser), navegar a citas
+        router.replace('/(tabs)/appointments');
       }
 
     } catch (error: any) {
