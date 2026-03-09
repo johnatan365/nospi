@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 10000;
+  const priceCOP = 9900;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -451,7 +451,7 @@ export default function SubscriptionPlansScreen() {
             <View style={styles.paymentButtonContent}>
               {selectedPayment === 'pse' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
               <View style={styles.paymentMethodInfo}>
-                <Image source={require('../../assets/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
+                <Image source={require('../../assets/images/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
                 <View>
                   <Text style={styles.paymentMethodTitle}>PSE</Text>
                   <Text style={styles.paymentMethodSubtitle}>Transferencia bancaria — todos los bancos</Text>
