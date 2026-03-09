@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView
+  ActivityIndicator, Modal, Alert, SafeAreaView, AppState
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -135,7 +135,7 @@ export default function SubscriptionPlansScreen() {
   const [bricksHTML, setBricksHTML] = useState<string>('');
   const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
 
-  const priceCOP = 2000;
+  const priceCOP = 10000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -158,29 +158,38 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Escucha deep links de retorno de pago PSE
+  // Cuando la app vuelve al primer plano tras pago PSE, verifica si la cita quedó registrada
   useEffect(() => {
-    const handleUrl = async (event: { url: string }) => {
-      const url = event.url;
-      if (url.includes('nospi://payment/')) {
-        if (url.includes('success') || url.includes('approved')) {
-          await confirmAppointment();
-          setShowSuccessModal(true);
-        } else if (url.includes('pending')) {
-          await confirmAppointment();
-          Alert.alert(
-            'Pago en proceso',
-            'Tu pago esta siendo verificado. Tu lugar en el evento esta reservado.',
-            [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
-          );
-        } else if (url.includes('failure') || url.includes('rejected')) {
-          Alert.alert('Pago rechazado', 'El pago no fue aprobado. Intenta de nuevo.');
-        }
+    let psePaymentPending = false;
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'active' && psePaymentPending) {
+        psePaymentPending = false;
+        try {
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          if (!pendingEventId || !user?.id) return;
+          const { data: existing } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('event_id', pendingEventId)
+            .maybeSingle();
+          if (existing) {
+            await AsyncStorage.removeItem('pending_event_confirmation');
+            setShowSuccessModal(true);
+          } else {
+            Alert.alert(
+              'Verificando pago',
+              'Tu pago PSE puede demorar unos minutos. Revisa tus citas en un momento.',
+              [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]
+            );
+          }
+        } catch (e) { console.error(e); }
       }
-    };
-    const sub = Linking.addEventListener('url', handleUrl);
+    });
+    // Exponer setter para que PSE lo active
+    (global as any).__setPsePaymentPending = () => { psePaymentPending = true; };
     return () => sub.remove();
-  }, []);
+  }, [user?.id]);
 
   const confirmAppointment = async () => {
     try {
@@ -271,9 +280,9 @@ export default function SubscriptionPlansScreen() {
         setWebViewLoading(true);
         setShowWebView(true);
       } else {
-        // PSE/Bancolombia: abre checkout externo
-        // El resultado llega via deep link nospi://payment/success|pending|failure
-        // capturado por el listener de Linking arriba
+        // PSE/Bancolombia: marca que hay pago pendiente y abre browser
+        // Al volver a la app, AppState listener verifica si la cita quedó registrada
+        (global as any).__setPsePaymentPending?.();
         await WebBrowser.openBrowserAsync(data.initPoint);
       }
 
