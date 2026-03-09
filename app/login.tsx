@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   googleIcon: {
-    fontSize: 18,
+    fontSize: 24,
     color: '#4285F4',
     fontWeight: 'bold',
   },
