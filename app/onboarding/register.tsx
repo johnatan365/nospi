@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
+import { Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -416,7 +417,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               <View style={styles.appleIconContainer}>
-                <Image source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
+                <RNImage source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.buttonTextDark}>Regístrate con Apple</Text>
             </TouchableOpacity>

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
+import { Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -371,7 +372,7 @@ export default function LoginScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.appleIconContainer}>
-                  <Image source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
+                  <RNImage source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
                 </View>
                 <Text style={styles.socialButtonText}>Apple</Text>
               </TouchableOpacity>
