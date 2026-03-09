@@ -289,7 +289,14 @@ export default function SubscriptionPlansScreen() {
           throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
         }
         await AsyncStorage.setItem('pse_payment_pending', 'true');
-        await WebBrowser.openBrowserAsync(data.initPoint);
+        // En iOS con Google, WebBrowser es interceptado por la sesión OAuth
+        // Usar Linking.openURL abre el browser del sistema sin ese conflicto
+        const { Platform } = require('react-native');
+        if (Platform.OS === 'ios') {
+          await Linking.openURL(data.initPoint);
+        } else {
+          await WebBrowser.openBrowserAsync(data.initPoint);
+        }
         router.replace('/(tabs)/appointments');
       }
 
