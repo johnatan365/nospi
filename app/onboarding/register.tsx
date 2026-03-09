@@ -622,6 +622,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  appleIconImage: {
+    width: 20,
+    height: 20,
+  },
   appleIconContainer: {
     width: 24,
     height: 24,

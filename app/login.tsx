@@ -537,6 +537,10 @@ const styles = StyleSheet.create({
     color: '#4285F4',
     fontWeight: 'bold',
   },
+  appleIconImage: {
+    width: 20,
+    height: 20,
+  },
   appleIconContainer: {
     width: 24,
     height: 24,
