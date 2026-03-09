@@ -237,7 +237,13 @@ export default function SubscriptionPlansScreen() {
         redirectFailure: 'nospi://payment/failure',
       });
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
-      setBricksHTML(bricksUrl);
+      
+      // Descargar HTML y pasarlo directamente al WebView
+      const htmlResponse = await fetch(bricksUrl, {
+        headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const htmlContent = await htmlResponse.text();
+      setBricksHTML(htmlContent);
       setCurrentMethod(method);
       setWebViewLoading(true);
       setShowWebView(true);
@@ -309,7 +315,7 @@ export default function SubscriptionPlansScreen() {
         )}
         <WebView
           ref={webViewRef}
-          source={{ uri: bricksHTML, headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }}
+          source={{ html: bricksHTML }}
           style={styles.webView}
           onLoadEnd={() => setWebViewLoading(false)}
           onMessage={handleWebViewMessage}
