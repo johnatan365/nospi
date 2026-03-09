@@ -8,19 +8,19 @@ export default function TabLayout() {
     {
       name: 'events',
       route: '/(tabs)/events',
-      icon: 'calendar-today',
+      icon: 'event',
       label: 'Eventos',
     },
     {
       name: 'appointments',
       route: '/(tabs)/appointments',
-      icon: 'check-circle',
+      icon: 'bookmark',
       label: 'Citas',
     },
     {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
-      icon: 'chat',
+      icon: 'forum',
       label: 'Interacción',
     },
     {
