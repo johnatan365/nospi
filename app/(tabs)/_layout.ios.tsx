@@ -8,7 +8,7 @@ export default function TabLayout() {
     {
       name: 'events',
       route: '/(tabs)/events',
-      icon: 'today',
+      icon: 'local-activity',
       label: 'Eventos',
     },
     {
