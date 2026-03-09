@@ -437,23 +437,6 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.paymentButton, selectedPayment === 'nequi' && styles.paymentButtonSelected]}
-            onPress={() => setSelectedPayment('nequi')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.paymentButtonContent}>
-              {selectedPayment === 'nequi' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
-              <View style={styles.paymentMethodInfo}>
-                <Text style={styles.paymentMethodIcon}>📱</Text>
-                <View>
-                  <Text style={styles.paymentMethodTitle}>Nequi</Text>
-                  <Text style={styles.paymentMethodSubtitle}>Billetera digital</Text>
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.paymentButton, selectedPayment === 'pse' && styles.paymentButtonSelected]}
             onPress={() => setSelectedPayment('pse')}
             activeOpacity={0.8}
@@ -461,10 +444,12 @@ export default function SubscriptionPlansScreen() {
             <View style={styles.paymentButtonContent}>
               {selectedPayment === 'pse' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
               <View style={styles.paymentMethodInfo}>
-                <Text style={styles.paymentMethodIcon}>🏦</Text>
+                <View style={styles.pseLogoContainer}>
+                  <Text style={styles.pseLogoText}>PSE</Text>
+                </View>
                 <View>
                   <Text style={styles.paymentMethodTitle}>PSE</Text>
-                  <Text style={styles.paymentMethodSubtitle}>Débito bancario — todos los bancos</Text>
+                  <Text style={styles.paymentMethodSubtitle}>Transferencia bancaria — todos los bancos</Text>
                 </View>
               </View>
             </View>
@@ -559,6 +544,11 @@ const styles = StyleSheet.create({
   paymentMethodTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
   paymentMethodSubtitle: { fontSize: 13, color: '#888', marginTop: 2 },
   virtualBalanceButton: { backgroundColor: 'rgba(147,51,234,0.08)', borderColor: nospiColors.purpleMid },
+  pseLogoContainer: {
+    width: 48, height: 32, backgroundColor: '#1A3F6F', borderRadius: 6,
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  pseLogoText: { color: '#F5A623', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
   virtualBalanceTitle: { fontSize: 16, fontWeight: 'bold', color: nospiColors.purpleDark },
   virtualBalanceAmount: { fontSize: 13, color: nospiColors.purpleMid, marginTop: 2 },
   summaryContainer: {
