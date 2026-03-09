@@ -538,17 +538,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   appleIconImage: {
-    width: 20,
-    height: 20,
+    width: 28,
+    height: 28,
   },
   appleIconContainer: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
-    borderRadius: 12,
   },
   appleIcon: {
     fontSize: 18,
