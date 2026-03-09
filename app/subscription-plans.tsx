@@ -297,9 +297,13 @@ export default function SubscriptionPlansScreen() {
           throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
         }
         await AsyncStorage.setItem('pse_payment_pending', 'true');
-        await Linking.openURL(data.initPoint);
-        // No hacemos router.replace aquí — el deep link listener
-        // se encarga de navegar cuando el usuario vuelva del pago
+        // Abrir como modal sobre la app — evita que iOS cierre la sesión
+        await WebBrowser.openBrowserAsync(data.initPoint, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        });
+        // El browser se cerró — navegar a citas
+        router.replace('/(tabs)/appointments');
       }
 
     } catch (error: any) {
