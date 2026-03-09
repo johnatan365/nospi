@@ -183,7 +183,7 @@ export default function InteraccionScreen() {
               body: 'Faltan 6 horas para tu evento. ¡Prepárate!',
               sound: true,
             },
-            trigger: sixHoursBefore,
+            trigger: { type: 'date', date: sixHoursBefore },
           });
         }
 
@@ -195,7 +195,7 @@ export default function InteraccionScreen() {
               body: 'Falta 1 hora.',
               sound: true,
             },
-            trigger: oneHourBefore,
+            trigger: { type: 'date', date: oneHourBefore },
           });
         }
       }
