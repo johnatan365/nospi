@@ -159,17 +159,28 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // LISTENER DESACTIVADO TEMPORALMENTE PARA DEBUG
-  // useEffect(() => {
-  //   const handleUrl = ({ url }: { url: string }) => {
-  //     if (url.includes('nospi://payment/success')) {
-  //       AsyncStorage.setItem('pse_payment_pending', 'true');
-  //       router.replace('/(tabs)/appointments');
-  //     }
-  //   };
-  //   const sub = Linking.addEventListener('url', handleUrl);
-  //   return () => sub.remove();
-  // }, []);
+  // Detecta cuando la app vuelve al primer plano después del pago PSE
+  // Usa AppState en lugar de deep link para evitar conflictos con OAuth de Google en iOS
+  useEffect(() => {
+    let appWasBackground = false;
+
+    const handleAppStateChange = (nextState: string) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        appWasBackground = true;
+      } else if (nextState === 'active' && appWasBackground) {
+        appWasBackground = false;
+        // Verificar si hay un pago PSE pendiente
+        AsyncStorage.getItem('pse_payment_pending').then((pending) => {
+          if (pending === 'true') {
+            router.replace('/(tabs)/appointments');
+          }
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, []);
 
   const confirmAppointment = async () => {
     try {

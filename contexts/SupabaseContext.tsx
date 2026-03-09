@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 
@@ -38,9 +39,18 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Refrescar sesión cuando la app vuelve al primer plano
+    // Esto evita que usuarios de Google pierdan sesión al volver de Safari
+    const handleAppState = AppState.addEventListener('change', async (state) => {
+      if (state === 'active') {
+        await supabase.auth.getSession();
+      }
+    });
+
     return () => {
       console.log('SupabaseProvider: Cleaning up auth listener');
       subscription.unsubscribe();
+      handleAppState.remove();
     };
   }, []);
 
