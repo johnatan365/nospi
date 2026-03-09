@@ -416,7 +416,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               <View style={styles.appleIconContainer}>
-                <Text style={styles.appleIcon}>{appleIconText}</Text>
+                <Image source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.buttonTextDark}>Regístrate con Apple</Text>
             </TouchableOpacity>

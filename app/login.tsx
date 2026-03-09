@@ -371,7 +371,7 @@ export default function LoginScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.appleIconContainer}>
-                  <Text style={styles.appleIcon}>{appleIconText}</Text>
+                  <Image source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
                 </View>
                 <Text style={styles.socialButtonText}>Apple</Text>
               </TouchableOpacity>
