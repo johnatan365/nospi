@@ -159,6 +159,8 @@ export default function SubscriptionPlansScreen() {
   }, [fetchVirtualBalance]);
 
   // Escucha deep link nospi://payment/success cuando la app se abre desde payment-return
+  // Deep link listener - solo activo DESPUES de que el browser PSE se cierra
+  // No usamos getInitialURL porque en iOS puede contener URLs viejas de OAuth de Google
   useEffect(() => {
     const handleUrl = ({ url }: { url: string }) => {
       if (url.includes('nospi://payment/success')) {
@@ -167,13 +169,6 @@ export default function SubscriptionPlansScreen() {
       }
     };
     const sub = Linking.addEventListener('url', handleUrl);
-    // Verificar si la app fue abierta con el deep link
-    Linking.getInitialURL().then((url) => {
-      if (url && url.includes('nospi://payment/success')) {
-        AsyncStorage.setItem('pse_payment_pending', 'true');
-        router.replace('/(tabs)/appointments');
-      }
-    });
     return () => sub.remove();
   }, []);
 
