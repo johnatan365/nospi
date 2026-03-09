@@ -44,7 +44,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
   <div class="header">
     <h2>Pago del Evento</h2>
     <p>Nospi — Acceso al evento</p>
-    <div class="price">$10.000 COP</div>
+    <div class="price">$${PRECIO_EVENTO_COP.toLocaleString('es-CO')} COP</div>
   </div>
   <div id="brick-container">
     <div class="loading">Cargando formulario de pago...</div>
@@ -59,7 +59,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
       try {
         if (method === 'card') {
           await bricksBuilder.create('cardPayment', 'brick-container', {
-            initialization: { amount: 10000, payer: { email: '' } },
+            initialization: { amount: PRECIO_EVENTO_COP, payer: { email: '' } },
             customization: {
               visual: { style: { theme: 'default' } },
               paymentMethods: { maxInstallments: 1 }
@@ -75,7 +75,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
                       'Content-Type': 'application/json',
                       'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
                     },
-                    body: JSON.stringify({ formData: cardFormData, amount: 10000 }),
+                    body: JSON.stringify({ formData: cardFormData, amount: PRECIO_EVENTO_COP }),
                   });
                   const result = await response.json();
                   if (result.status === 'approved') {
