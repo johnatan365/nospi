@@ -278,16 +278,17 @@ export default function SubscriptionPlansScreen() {
         setWebViewLoading(true);
         setShowWebView(true);
       } else {
-        // PSE/Bancolombia: guarda flag y abre browser
-        // Al volver, appointments.tsx detecta el flag y muestra modal de exito
+        // PSE/Bancolombia
+        if (!data.initPoint) {
+          throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
+        }
         await AsyncStorage.setItem('pse_payment_pending', 'true');
         await WebBrowser.openBrowserAsync(data.initPoint);
-        // Cuando openBrowserAsync retorna (usuario cerro el browser), navegar a citas
         router.replace('/(tabs)/appointments');
       }
 
     } catch (error: any) {
-      Alert.alert('Error', `No se pudo iniciar el pago: ${error.message}`);
+      Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);
     } finally {
       setProcessing(false);
     }
