@@ -276,17 +276,8 @@ export default function SubscriptionPlansScreen() {
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
       if (method === 'card') {
-        // Tarjeta usa Bricks via WebView
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        const htmlResponse = await fetch(bricksUrl, {
-          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!htmlResponse.ok) throw new Error('No se pudo cargar la pantalla de pago. Intenta de nuevo.');
-        const htmlContent = await htmlResponse.text();
-        if (!htmlContent || htmlContent.length < 100) throw new Error('Página de pago vacía. Intenta de nuevo.');
+        // Tarjeta usa Bricks via WebView — HTML generado localmente
+        const htmlContent = generateBricksHTML(data.preferenceId || '', method, MP_PUBLIC_KEY);
         setBricksHTML(htmlContent);
         setCurrentMethod(method);
         setWebViewLoading(true);
