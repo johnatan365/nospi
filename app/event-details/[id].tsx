@@ -107,12 +107,14 @@ export default function EventDetailsScreen() {
     setConfirming(true);
     
     try {
-      const { data: existingAppointment } = await supabase
+      Alert.alert('DEBUG 1', `userId: ${user?.id}\neventId: ${id}`);
+      const { data: existingAppointment, error: apptError } = await supabase
         .from('appointments')
         .select('*')
         .eq('user_id', user?.id)
         .eq('event_id', id)
         .maybeSingle();
+      Alert.alert('DEBUG 2', `existingAppt: ${JSON.stringify(existingAppointment)}\nerror: ${JSON.stringify(apptError)}`);
 
       if (existingAppointment) {
         // Si ya tiene cita confirmada, ir a citas
