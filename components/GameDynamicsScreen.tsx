@@ -6,7 +6,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'match_selection' | 'free_phase';
+type GamePhase = 'questions' | 'free_phase';
 
 interface Participant {
   id: string;
@@ -184,10 +184,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
 
       // Derive UI from event_state
-      if (data.game_phase === 'match_selection') {
-        setGamePhase('match_selection');
-        setCurrentLevel(data.current_level || 'divertido');
-      } else if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
+      if (data.game_phase === 'question_active' || data.game_phase === 'questions') {
         setGamePhase('questions');
         setCurrentLevel(data.current_level || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
@@ -233,9 +230,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
               const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
-          } else if (newEvent.game_phase === 'match_selection') {
-            setGamePhase('match_selection');
-            setCurrentLevel(newEvent.current_level || 'divertido');
           } else if (newEvent.game_phase === 'free_phase') {
             setGamePhase('free_phase');
           }
@@ -502,25 +496,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
 
-  // MATCH SELECTION DISABLED - Skip this phase entirely
-  if (gamePhase === 'match_selection') {
-    
-    return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.container}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-          <Text style={{ textAlign: 'center', marginTop: 20, color: nospiColors.purpleDark }}>
-            Cargando...
-          </Text>
-        </View>
-      </LinearGradient>
-    );
-  }
+
 
   if (gamePhase === 'questions' && currentQuestion) {
     const starterName = starterParticipant?.name || 'Alguien';

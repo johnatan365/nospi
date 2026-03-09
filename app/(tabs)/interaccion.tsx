@@ -25,7 +25,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'match_selection' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
