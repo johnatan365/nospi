@@ -36,14 +36,6 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
           const labelColor = isActive ? '#FFFFFF' : '#6B7280';
           const backgroundColor = isActive ? nospiColors.purpleDark : 'transparent';
 
-          const emojiIcons: Record<string, string> = {
-            events: '📅',
-            appointments: '',
-            interaccion: '',
-            profile: '',
-          };
-          const useEmoji = tab.name === 'events';
-
           return (
             <TouchableOpacity
               key={tab.name}
@@ -52,16 +44,12 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
               activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
-                {useEmoji ? (
-                  <Text style={{ fontSize: 22 }}>{emojiIcons[tab.name]}</Text>
-                ) : (
-                  <IconSymbol
-                    ios_icon_name={tab.icon}
-                    android_material_icon_name={tab.icon}
-                    size={26}
-                    color={iconColor}
-                  />
-                )}
+                <IconSymbol
+                  ios_icon_name={tab.icon}
+                  android_material_icon_name={tab.icon}
+                  size={26}
+                  color={iconColor}
+                />
               </View>
               <Text style={[styles.label, { color: labelColor }]}>{tab.label}</Text>
             </TouchableOpacity>
