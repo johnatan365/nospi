@@ -199,7 +199,11 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleOpenBricks = async (method: PaymentMethod) => {
-    if (!user) return;
+    if (!user) {
+      Alert.alert('Debug', 'Usuario no autenticado');
+      return;
+    }
+    Alert.alert('Debug', 'Iniciando pago: ' + method);
     setProcessing(true);
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
