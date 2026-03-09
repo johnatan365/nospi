@@ -8,7 +8,7 @@ export default function TabLayout() {
     {
       name: 'events',
       route: '/(tabs)/events',
-      icon: 'event',
+      icon: 'date-range',
       label: 'Eventos',
     },
     {
@@ -20,7 +20,7 @@ export default function TabLayout() {
     {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
-      icon: 'forum',
+      icon: 'message',
       label: 'Interacción',
     },
     {
