@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
@@ -17,8 +17,6 @@ const WOMPI_API_URL = 'https://sandbox.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
-type PaymentMethod = 'card' | 'nequi' | 'pse' | 'bancolombia' | 'virtual_balance';
-
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
@@ -26,6 +24,7 @@ export default function SubscriptionPlansScreen() {
   const [processingMethod, setProcessingMethod] = useState<string | null>(null);
   const processing = processingMethod !== null;
   const isProcessing = (m: string) => processingMethod === m;
+
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -58,7 +57,6 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  // AppState listener para PSE y Bancolombia (abren navegador)
   useEffect(() => {
     let appWasBackground = false;
     const handleAppStateChange = async (nextState: string) => {
@@ -69,10 +67,7 @@ export default function SubscriptionPlansScreen() {
         const pending = await AsyncStorage.getItem('pse_payment_pending');
         if (pending !== 'true') return;
         await AsyncStorage.removeItem('pse_payment_pending');
-        try {
-          const { data } = await supabase.auth.refreshSession();
-          if (data?.session) { await confirmAppointment(); router.replace('/(tabs)/appointments'); return; }
-        } catch (e) {}
+        try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
         router.replace('/(tabs)/appointments');
       }
@@ -107,9 +102,10 @@ export default function SubscriptionPlansScreen() {
   const getWompiTokens = async () => {
     const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
     const data = await res.json();
-    const acceptanceToken = data.data?.presigned_acceptance?.acceptance_token;
-    const personalDataToken = data.data?.presigned_personal_data_auth?.acceptance_token;
-    return { acceptanceToken, personalDataToken };
+    return {
+      acceptanceToken: data.data?.presigned_acceptance?.acceptance_token,
+      personalDataToken: data.data?.presigned_personal_data_auth?.acceptance_token,
+    };
   };
 
   // ─── VIRTUAL BALANCE ─────────────────────────────────────────
@@ -124,38 +120,38 @@ export default function SubscriptionPlansScreen() {
 
   // ─── TARJETA ─────────────────────────────────────────────────
   const handleCardPayment = async () => {
+    Alert.alert('Iniciando pago...', 'Procesando tarjeta');
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
       Alert.alert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
     }
     setProcessingMethod('card');
     try {
-      // DEBUG 1 - sesión
       const currentUser = await getSession();
-      if (!currentUser) throw new Error('DEBUG: Sesión no encontrada');
-
-      // DEBUG 2 - evento pendiente
+      if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('DEBUG: pending_event_confirmation vacío en AsyncStorage');
+      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
-      Alert.alert('DEBUG paso 1', `Usuario: ${currentUser.email}\nEvento: ${pendingEventId}\nTarjeta: ${cardNumber.replace(/\s/g,'').slice(0,4)}...`);
-
-      // Tokenizar tarjeta
       const [expMonth, expYear] = cardExpiry.split('/');
       const expYearFull = expYear?.trim().length === 2 ? '20' + expYear.trim() : expYear?.trim();
+
       const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYearFull, cvc: cardCvc, card_holder: cardHolder }),
+        body: JSON.stringify({
+          number: cardNumber.replace(/\s/g, ''),
+          exp_month: expMonth?.trim(),
+          exp_year: expYearFull,
+          cvc: cardCvc,
+          card_holder: cardHolder,
+        }),
       });
       const tokenData = await tokenRes.json();
-      Alert.alert('DEBUG paso 2 - Token', `status: ${tokenRes.status}\ntoken_id: ${tokenData.data?.id || 'null'}\nerror: ${JSON.stringify(tokenData.error || 'ninguno')}`);
-      if (!tokenRes.ok || !tokenData.data?.id) throw new Error('Error al tokenizar: ' + JSON.stringify(tokenData.error));
+      if (!tokenRes.ok || !tokenData.data?.id) throw new Error('Error al tokenizar tarjeta: ' + JSON.stringify(tokenData.error));
       const cardToken = tokenData.data.id;
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      Alert.alert('DEBUG paso 3 - Tokens Wompi', `acceptance: ${acceptanceToken ? 'OK' : 'FALTA'}\npersonalData: ${personalDataToken ? 'OK' : 'FALTA'}`);
-      if (!acceptanceToken) throw new Error('No se pudo obtener acceptance token');
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación de Wompi');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
         method: 'POST',
@@ -163,7 +159,6 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
-      Alert.alert('DEBUG paso 4 - Edge Function', `HTTP: ${response.status}\nstatus: ${result.status}\nerror: ${result.error || 'ninguno'}\ntxId: ${result.transactionId || 'null'}`);
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
 
       if (result.status === 'APPROVED') {
@@ -173,7 +168,7 @@ export default function SubscriptionPlansScreen() {
         setShowCardForm(false);
         Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.', [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
       } else {
-        throw new Error(result.message || 'Pago rechazado: ' + result.status);
+        throw new Error('Pago rechazado: ' + (result.message || result.status));
       }
     } catch (error: any) {
       Alert.alert('Error en tarjeta', error.message);
@@ -189,7 +184,7 @@ export default function SubscriptionPlansScreen() {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento');
+      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
@@ -200,10 +195,9 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
+      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Nequi');
 
       setNequiStatus('waiting');
-      // Polling
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
@@ -221,12 +215,12 @@ export default function SubscriptionPlansScreen() {
             clearInterval(poll);
             setProcessingMethod(null);
             setNequiStatus('idle');
-            Alert.alert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado. Intenta de nuevo.');
+            Alert.alert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado.');
           }
         } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
       }, 5000);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error Nequi', error.message);
       setProcessingMethod(null);
     }
   };
@@ -238,7 +232,7 @@ export default function SubscriptionPlansScreen() {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento');
+      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
@@ -249,13 +243,13 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({ acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar pago');
+      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
       if (!result.redirectUrl) throw new Error('No se obtuvo URL de Bancolombia');
 
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error Bancolombia', error.message);
     } finally { setProcessingMethod(null); }
   };
 
@@ -266,7 +260,7 @@ export default function SubscriptionPlansScreen() {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento');
+      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
@@ -274,14 +268,7 @@ export default function SubscriptionPlansScreen() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          acceptanceToken,
-          personalDataToken,
-          amountCOP: priceCOP,
-          userEmail: userProfile?.email || currentUser.email || '',
-          userId: currentUser.id,
-          eventId: pendingEventId,
-        }),
+        body: JSON.stringify({ acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
@@ -290,11 +277,11 @@ export default function SubscriptionPlansScreen() {
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error PSE', error.message);
     } finally { setProcessingMethod(null); }
   };
 
-  // ─── CARD FORM SCREEN ─────────────────────────────────────────
+  // ─── CARD FORM ────────────────────────────────────────────────
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -304,28 +291,28 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         )}} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.formContent}>
+          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
               <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
               <Text style={styles.inputLabel}>Nombre del titular</Text>
-              <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" />
+              <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
               <Text style={styles.inputLabel}>Número de tarjeta</Text>
               <TextInput style={styles.input} placeholder="0000 0000 0000 0000" value={cardNumber}
                 onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
-                keyboardType="numeric" maxLength={19} />
+                keyboardType="numeric" maxLength={19} returnKeyType="next" />
               <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.inputLabel}>Vencimiento</Text>
                   <TextInput style={styles.input} placeholder="MM/AA" value={cardExpiry}
                     onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(c.length >= 2 ? c.slice(0, 2) + '/' + c.slice(2) : c); }}
-                    keyboardType="numeric" maxLength={5} />
+                    keyboardType="numeric" maxLength={5} returnKeyType="next" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>CVV</Text>
                   <TextInput style={styles.input} placeholder="123" value={cardCvc}
                     onChangeText={(t) => setCardCvc(t.replace(/\D/g, '').slice(0, 4))}
-                    keyboardType="numeric" maxLength={4} secureTextEntry />
+                    keyboardType="numeric" maxLength={4} secureTextEntry returnKeyType="done" />
                 </View>
               </View>
               <Text style={styles.inputLabel}>Cuotas</Text>
@@ -336,8 +323,13 @@ export default function SubscriptionPlansScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity style={[styles.payBtn, processing && styles.payBtnDisabled]} onPress={handleCardPayment} disabled={processing}>
-                {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Pagar ${priceCOP.toLocaleString('es-CO')} COP</Text>}
+              <TouchableOpacity
+                style={[styles.payBtn, isProcessing('card') && styles.payBtnDisabled]}
+                onPress={handleCardPayment}
+                disabled={isProcessing('card')}
+                activeOpacity={0.7}
+              >
+                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Pagar ${priceCOP.toLocaleString('es-CO')} COP</Text>}
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
             </View>
@@ -347,7 +339,7 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  // ─── NEQUI FORM SCREEN ────────────────────────────────────────
+  // ─── NEQUI FORM ───────────────────────────────────────────────
   if (showNequiForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -356,19 +348,24 @@ export default function SubscriptionPlansScreen() {
             <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
           </TouchableOpacity>
         )}} />
-        <ScrollView contentContainerStyle={styles.formContent}>
+        <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
           <View style={styles.formCard}>
             {nequiStatus === 'idle' ? (
               <>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
                 <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
-                <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago sin salir de tu app.</Text>
+                <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago.</Text>
                 <Text style={styles.inputLabel}>Número de celular Nequi</Text>
                 <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
                   onChangeText={(t) => setNequiPhone(t.replace(/\D/g, '').slice(0, 10))}
                   keyboardType="phone-pad" maxLength={10} />
-                <TouchableOpacity style={[styles.payBtn, { backgroundColor: '#7C3AED' }, processing && styles.payBtnDisabled]} onPress={handleNequiPayment} disabled={processing}>
-                  {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Enviar solicitud de pago</Text>}
+                <TouchableOpacity
+                  style={[styles.payBtn, { backgroundColor: '#7C3AED' }, isProcessing('nequi') && styles.payBtnDisabled]}
+                  onPress={handleNequiPayment}
+                  disabled={isProcessing('nequi')}
+                  activeOpacity={0.7}
+                >
+                  {isProcessing('nequi') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Enviar solicitud de pago</Text>}
                 </TouchableOpacity>
                 <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
               </>
@@ -376,7 +373,7 @@ export default function SubscriptionPlansScreen() {
               <View style={styles.waitingContainer}>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
                 <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
-                <Text style={styles.waitingDesc}>Te enviamos una notificación push. Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>${priceCOP.toLocaleString('es-CO')} COP</Text> desde tu app Nequi.</Text>
+                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>${priceCOP.toLocaleString('es-CO')} COP</Text> desde tu app Nequi.</Text>
                 <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
                 <Text style={styles.waitingHint}>Esperando confirmación...</Text>
               </View>
@@ -387,7 +384,7 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  // ─── MAIN SCREEN ──────────────────────────────────────────────
+  // ─── PANTALLA PRINCIPAL ───────────────────────────────────────
   return (
     <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
@@ -402,7 +399,6 @@ export default function SubscriptionPlansScreen() {
           <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
         </View>
 
-        {/* Beneficios */}
         <View style={styles.benefitsCard}>
           <View style={styles.benefitRow}>
             <Text style={styles.benefitIcon}>🌟</Text>
@@ -442,7 +438,6 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Tarjeta */}
         <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowCardForm(true)} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Text style={styles.btnIcon}>💳</Text>
@@ -454,7 +449,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Nequi */}
         <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowNequiForm(true)} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo-nequi.png')} style={styles.btnLogo} resizeMode="contain" />
@@ -466,7 +460,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Bancolombia */}
         <TouchableOpacity style={styles.paymentBtn} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
@@ -478,7 +471,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* PSE */}
         <TouchableOpacity style={styles.paymentBtn} onPress={handlePSEPayment} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
@@ -538,17 +530,17 @@ const styles = StyleSheet.create({
   waitingHint: { fontSize: 13, color: '#999', marginTop: 12 },
   title: { fontSize: 30, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
   subtitle: { fontSize: 15, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 24, lineHeight: 22 },
-  priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 28, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
+  priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
   priceLabel: { fontSize: 15, color: '#666', marginBottom: 6 },
   priceAmount: { fontSize: 44, fontWeight: 'bold', color: nospiColors.purpleDark },
   priceAmountCOP: { fontSize: 18, fontWeight: '600', color: nospiColors.purpleMid, marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 14 },
   benefitsCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 20, marginBottom: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   benefitRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3E8FF' },
   benefitIcon: { fontSize: 28, marginRight: 16 },
   benefitTextWrap: { flex: 1 },
   benefitTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
   benefitDesc: { fontSize: 13, color: '#666', lineHeight: 18 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 14 },
   paymentBtn: { borderRadius: 16, marginBottom: 12, paddingVertical: 16, paddingHorizontal: 18, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
   btnInner: { flexDirection: 'row', alignItems: 'center' },
   btnLogo: { width: 44, height: 44, marginRight: 14, borderRadius: 8 },
