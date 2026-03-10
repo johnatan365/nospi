@@ -104,10 +104,12 @@ export default function SubscriptionPlansScreen() {
     return session?.user ?? user;
   };
 
-  const getAcceptanceToken = async () => {
+  const getWompiTokens = async () => {
     const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
     const data = await res.json();
-    return data.data?.presigned_acceptance?.acceptance_token;
+    const acceptanceToken = data.data?.presigned_acceptance?.acceptance_token;
+    const personalDataToken = data.data?.presigned_personal_data_auth?.acceptance_token;
+    return { acceptanceToken, personalDataToken };
   };
 
   // ─── VIRTUAL BALANCE ─────────────────────────────────────────
@@ -138,19 +140,19 @@ export default function SubscriptionPlansScreen() {
       const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYear?.trim(), cvc: cardCvc, card_holder: cardHolder }),
+        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYear?.trim().length === 2 ? '20' + expYear?.trim() : expYear?.trim(), cvc: cardCvc, card_holder: cardHolder }),
       });
       const tokenData = await tokenRes.json();
       if (!tokenRes.ok || !tokenData.data?.id) throw new Error(tokenData.error?.messages?.join(', ') || 'Error al procesar la tarjeta');
       const cardToken = tokenData.data.id;
 
-      const acceptanceToken = await getAcceptanceToken();
+      const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ cardToken, acceptanceToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
@@ -180,13 +182,13 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento');
 
-      const acceptanceToken = await getAcceptanceToken();
+      const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-nequi-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
@@ -229,13 +231,13 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento');
 
-      const acceptanceToken = await getAcceptanceToken();
+      const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ acceptanceToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({ acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar pago');
@@ -257,7 +259,7 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento');
 
-      const acceptanceToken = await getAcceptanceToken();
+      const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
@@ -265,6 +267,7 @@ export default function SubscriptionPlansScreen() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({
           acceptanceToken,
+          personalDataToken,
           amountCOP: priceCOP,
           userEmail: userProfile?.email || currentUser.email || '',
           userId: currentUser.id,
