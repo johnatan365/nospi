@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Alert, Platform } from 'react-native';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { nospiColors } from '@/constants/Colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
 export default function Index() {
@@ -18,13 +17,6 @@ export default function Index() {
     
     const checkProfileAndNavigate = async () => {
       if (!loading) {
-        // Si hay un pago pendiente, no interrumpir — subscription-plans maneja la navegación
-        const paymentPending = await AsyncStorage.getItem('pse_payment_pending');
-        if (paymentPending === 'true') {
-          setInitialCheckDone(true);
-          return;
-        }
-
         if (user) {
           console.log('Index: User authenticated, checking profile existence');
           setIsCheckingProfile(true);
