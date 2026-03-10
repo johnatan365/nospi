@@ -159,8 +159,35 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Detecta cuando la app vuelve al primer plano después del pago PSE
-  // Usa AppState en lugar de deep link para evitar conflictos con OAuth de Google en iOS
+  // Escucha deep links de retorno de MercadoPago
+  useEffect(() => {
+    const handleUrl = ({ url }: { url: string }) => {
+      // Ignorar URLs de OAuth de Google
+      const isOAuth = url.includes('google') || url.includes('oauth') || 
+                      url.includes('auth/callback') || url.includes('access_token') || 
+                      url.includes('code=');
+      if (isOAuth) return;
+
+      if (url.includes('nospi://payment/success')) {
+        AsyncStorage.removeItem('pse_payment_pending');
+        confirmAppointment().then(() => {
+          router.replace('/(tabs)/appointments');
+        });
+      } else if (url.includes('nospi://payment/failure')) {
+        AsyncStorage.removeItem('pse_payment_pending');
+        Alert.alert('Pago fallido', 'No se pudo procesar el pago. Intenta de nuevo.');
+      } else if (url.includes('nospi://payment/pending')) {
+        AsyncStorage.removeItem('pse_payment_pending');
+        Alert.alert('Pago pendiente', 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+      }
+    };
+
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
+
+  // Detecta cuando la app vuelve al primer plano (fallback para casos sin deep link)
   useEffect(() => {
     let appWasBackground = false;
 
@@ -169,7 +196,6 @@ export default function SubscriptionPlansScreen() {
         appWasBackground = true;
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
-        // Verificar si hay un pago PSE pendiente
         AsyncStorage.getItem('pse_payment_pending').then((pending) => {
           if (pending === 'true') {
             router.replace('/(tabs)/appointments');
