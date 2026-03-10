@@ -59,7 +59,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
       try {
         if (method === 'card') {
           await bricksBuilder.create('cardPayment', 'brick-container', {
-            initialization: { amount: ${PRECIO_EVENTO_COP}, payer: { email: '' } },
+            initialization: { amount: PRECIO_EVENTO_COP, payer: { email: '' } },
             customization: {
               visual: { style: { theme: 'default' } },
               paymentMethods: { maxInstallments: 1 }
@@ -75,7 +75,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
                       'Content-Type': 'application/json',
                       'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
                     },
-                    body: JSON.stringify({ formData: cardFormData, amount: ${PRECIO_EVENTO_COP} }),
+                    body: JSON.stringify({ formData: cardFormData, amount: PRECIO_EVENTO_COP }),
                   });
                   const result = await response.json();
                   if (result.status === 'approved') {
@@ -159,66 +159,22 @@ export default function SubscriptionPlansScreen() {
     fetchVirtualBalance();
   }, [fetchVirtualBalance]);
 
-  // Escucha deep links de retorno de MercadoPago
-  useEffect(() => {
-    const handleUrl = ({ url }: { url: string }) => {
-      // Ignorar URLs de OAuth de Google
-      const isOAuth = url.includes('google') || url.includes('oauth') || 
-                      url.includes('auth/callback') || url.includes('access_token') || 
-                      url.includes('code=');
-      if (isOAuth) return;
-
-      if (url.includes('nospi://payment/success')) {
-        AsyncStorage.removeItem('pse_payment_pending');
-        confirmAppointment().then(() => {
-          router.replace('/(tabs)/appointments');
-        });
-      } else if (url.includes('nospi://payment/failure')) {
-        AsyncStorage.removeItem('pse_payment_pending');
-        Alert.alert('Pago fallido', 'No se pudo procesar el pago. Intenta de nuevo.');
-      } else if (url.includes('nospi://payment/pending')) {
-        AsyncStorage.removeItem('pse_payment_pending');
-        Alert.alert('Pago pendiente', 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
-      }
-    };
-
-    const sub = Linking.addEventListener('url', handleUrl);
-    return () => sub.remove();
-  }, []);
-
-  // Detecta cuando la app vuelve al primer plano después del pago
+  // Detecta cuando la app vuelve al primer plano después del pago PSE
+  // Usa AppState en lugar de deep link para evitar conflictos con OAuth de Google en iOS
   useEffect(() => {
     let appWasBackground = false;
 
-    const handleAppStateChange = async (nextState: string) => {
+    const handleAppStateChange = (nextState: string) => {
       if (nextState === 'background' || nextState === 'inactive') {
         appWasBackground = true;
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
-
-        const pending = await AsyncStorage.getItem('pse_payment_pending');
-        if (pending !== 'true') return;
-
-        // Marcar como procesado ANTES de navegar para evitar loops
-        await AsyncStorage.removeItem('pse_payment_pending');
-
-        // Refrescar sesión antes de confirmar y navegar
-        try {
-          const { data: refreshData } = await supabase.auth.refreshSession();
-          if (refreshData?.session) {
-            await confirmAppointment();
+        // Verificar si hay un pago PSE pendiente
+        AsyncStorage.getItem('pse_payment_pending').then((pending) => {
+          if (pending === 'true') {
             router.replace('/(tabs)/appointments');
-            return;
           }
-        } catch (e) {}
-
-        // Fallback: getSession
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await confirmAppointment();
-        }
-        router.replace('/(tabs)/appointments');
+        });
       }
     };
 
@@ -319,12 +275,32 @@ export default function SubscriptionPlansScreen() {
       });
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
-      // Tanto tarjeta como PSE usan Linking.openURL — abre Safari directamente
-      if (!data.initPoint) {
-        throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
+      if (method === 'card') {
+        // Tarjeta usa Bricks via WebView
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const htmlResponse = await fetch(bricksUrl, {
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!htmlResponse.ok) throw new Error('No se pudo cargar la pantalla de pago. Intenta de nuevo.');
+        const htmlContent = await htmlResponse.text();
+        if (!htmlContent || htmlContent.length < 100) throw new Error('Página de pago vacía. Intenta de nuevo.');
+        setBricksHTML(htmlContent);
+        setCurrentMethod(method);
+        setWebViewLoading(true);
+        setShowWebView(true);
+      } else {
+        // PSE/Bancolombia
+        if (!data.initPoint) {
+          throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
+        }
+        await AsyncStorage.setItem('pse_payment_pending', 'true');
+        await Linking.openURL(data.initPoint);
+        // No hacemos router.replace aquí — el deep link listener
+        // se encarga de navegar cuando el usuario vuelva del pago
       }
-      await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await Linking.openURL(data.initPoint);
 
     } catch (error: any) {
       Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);

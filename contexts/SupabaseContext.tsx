@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
@@ -18,8 +19,11 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('SupabaseProvider: Initializing auth state');
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('SupabaseProvider: Initial session loaded', session ? 'User logged in' : 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -28,48 +32,23 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
-        // Ignorar eventos SIGNED_OUT si vinieron de un refresh fallido
-        // para no cerrar sesión al volver de Safari
-        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false);
-        } else if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUser(null);
-          setLoading(false);
-        } else {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false);
-        }
+        console.log('SupabaseProvider: Auth state changed', event, session ? 'User logged in' : 'No session');
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
       }
     );
 
     // Refrescar sesión cuando la app vuelve al primer plano
+    // Esto evita que usuarios de Google pierdan sesión al volver de Safari
     const handleAppState = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
-        try {
-          const { data, error } = await supabase.auth.refreshSession();
-          if (data?.session) {
-            setSession(data.session);
-            setUser(data.session.user);
-          } else if (!error) {
-            // No hay sesión activa — verificar con getSession
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-              setSession(session);
-              setUser(session.user);
-            }
-          }
-          // Si hay error de refresh, mantener la sesión actual sin cambios
-        } catch (e) {
-          // Mantener sesión actual
-        }
+        await supabase.auth.getSession();
       }
     });
 
     return () => {
+      console.log('SupabaseProvider: Cleaning up auth listener');
       subscription.unsubscribe();
       handleAppState.remove();
     };
@@ -77,16 +56,28 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
+      console.log('SupabaseProvider: Signing out user');
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      if (error) {
+        console.error('Sign out error:', error.message);
+        throw error;
+      }
+      console.log('SupabaseProvider: User signed out successfully');
     } catch (error) {
       console.error('Sign out failed:', error);
       throw error;
     }
   };
 
+  const value = {
+    session,
+    user,
+    loading,
+    signOut,
+  };
+
   return (
-    <SupabaseContext.Provider value={{ session, user, loading, signOut }}>
+    <SupabaseContext.Provider value={value}>
       {children}
     </SupabaseContext.Provider>
   );
