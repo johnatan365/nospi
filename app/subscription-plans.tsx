@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
-  Image, TextInput, KeyboardAvoidingView, Platform
+  Image, TextInput, KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
@@ -325,7 +325,7 @@ export default function SubscriptionPlansScreen() {
               </View>
               <TouchableOpacity
                 style={[styles.payBtn, isProcessing('card') && styles.payBtnDisabled]}
-                onPress={handleCardPayment}
+                onPress={() => { Keyboard.dismiss(); handleCardPayment(); }}
                 disabled={isProcessing('card')}
                 activeOpacity={0.7}
               >
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 60 },
   formContainer: { flex: 1, backgroundColor: '#f5f5f5' },
-  formContent: { padding: 20, paddingBottom: 60 },
+  formContent: { padding: 20, paddingBottom: 120 },
   formCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
   formTitle: { fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 4 },
   formAmount: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 20 },
