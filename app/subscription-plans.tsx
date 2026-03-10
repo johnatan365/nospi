@@ -130,24 +130,32 @@ export default function SubscriptionPlansScreen() {
     }
     setProcessingMethod('card');
     try {
+      // DEBUG 1 - sesión
       const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      if (!currentUser) throw new Error('DEBUG: Sesión no encontrada');
+
+      // DEBUG 2 - evento pendiente
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento');
+      if (!pendingEventId) throw new Error('DEBUG: pending_event_confirmation vacío en AsyncStorage');
+
+      Alert.alert('DEBUG paso 1', `Usuario: ${currentUser.email}\nEvento: ${pendingEventId}\nTarjeta: ${cardNumber.replace(/\s/g,'').slice(0,4)}...`);
 
       // Tokenizar tarjeta
       const [expMonth, expYear] = cardExpiry.split('/');
+      const expYearFull = expYear?.trim().length === 2 ? '20' + expYear.trim() : expYear?.trim();
       const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYear?.trim().length === 2 ? '20' + expYear?.trim() : expYear?.trim(), cvc: cardCvc, card_holder: cardHolder }),
+        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYearFull, cvc: cardCvc, card_holder: cardHolder }),
       });
       const tokenData = await tokenRes.json();
-      if (!tokenRes.ok || !tokenData.data?.id) throw new Error(tokenData.error?.messages?.join(', ') || 'Error al procesar la tarjeta');
+      Alert.alert('DEBUG paso 2 - Token', `status: ${tokenRes.status}\ntoken_id: ${tokenData.data?.id || 'null'}\nerror: ${JSON.stringify(tokenData.error || 'ninguno')}`);
+      if (!tokenRes.ok || !tokenData.data?.id) throw new Error('Error al tokenizar: ' + JSON.stringify(tokenData.error));
       const cardToken = tokenData.data.id;
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+      Alert.alert('DEBUG paso 3 - Tokens Wompi', `acceptance: ${acceptanceToken ? 'OK' : 'FALTA'}\npersonalData: ${personalDataToken ? 'OK' : 'FALTA'}`);
+      if (!acceptanceToken) throw new Error('No se pudo obtener acceptance token');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
         method: 'POST',
@@ -155,6 +163,7 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
+      Alert.alert('DEBUG paso 4 - Edge Function', `HTTP: ${response.status}\nstatus: ${result.status}\nerror: ${result.error || 'ninguno'}\ntxId: ${result.transactionId || 'null'}`);
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
 
       if (result.status === 'APPROVED') {
@@ -164,10 +173,10 @@ export default function SubscriptionPlansScreen() {
         setShowCardForm(false);
         Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.', [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
       } else {
-        throw new Error(result.message || 'Pago rechazado. Intenta con otra tarjeta.');
+        throw new Error(result.message || 'Pago rechazado: ' + result.status);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error en tarjeta', error.message);
     } finally { setProcessingMethod(null); }
   };
 
