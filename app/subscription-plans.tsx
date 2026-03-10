@@ -1,183 +1,80 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView, AppState, Image
+  ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
+  Image, TextInput, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
-const MP_PUBLIC_KEY = 'APP_USR-4e9db236-57b7-4258-89da-2ea273d4505f';
+const WOMPI_PUBLIC_KEY = 'pub_test_BywxIX766MrxrZAm8Uum28Pe39e1D4nW';
+const WOMPI_API_URL = 'https://sandbox.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
-type PaymentMethod = 'card' | 'nequi' | 'pse' | 'virtual_balance';
-
-function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicKey: string): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Pago Nospi</title>
-  <script src="https://sdk.mercadopago.com/js/v2"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; padding: 16px; }
-    .header { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .header h2 { color: #6B21A8; font-size: 18px; margin-bottom: 4px; }
-    .header p { color: #666; font-size: 14px; }
-    .price { font-size: 28px; font-weight: bold; color: #6B21A8; margin: 8px 0; }
-    #brick-container { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); min-height: 200px; }
-    .loading { text-align: center; padding: 40px; color: #666; font-size: 14px; }
-    .error { background: #FEE2E2; border-radius: 8px; padding: 16px; color: #DC2626; text-align: center; margin: 16px 0; font-size: 14px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h2>Pago del Evento</h2>
-    <p>Nospi — Acceso al evento</p>
-    <div class="price">$${PRECIO_EVENTO_COP.toLocaleString('es-CO')} COP</div>
-  </div>
-  <div id="brick-container">
-    <div class="loading">Cargando formulario de pago...</div>
-  </div>
-
-  <script>
-    const mp = new MercadoPago('${publicKey}', { locale: 'es-CO' });
-    const bricksBuilder = mp.bricks();
-    const method = '${method}';
-
-    async function renderBrick() {
-      try {
-        if (method === 'card') {
-          await bricksBuilder.create('cardPayment', 'brick-container', {
-            initialization: { amount: ${PRECIO_EVENTO_COP}, payer: { email: '' } },
-            customization: {
-              visual: { style: { theme: 'default' } },
-              paymentMethods: { maxInstallments: 1 }
-            },
-            callbacks: {
-              onReady: () => {},
-              onSubmit: async (cardFormData) => {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PROCESSING' }));
-                try {
-                  const response = await fetch('${SUPABASE_URL}/functions/v1/process-card-payment', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
-                    },
-                    body: JSON.stringify({ formData: cardFormData, amount: ${PRECIO_EVENTO_COP} }),
-                  });
-                  const result = await response.json();
-                  if (result.status === 'approved') {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_SUCCESS' }));
-                  } else if (result.status === 'in_process' || result.status === 'pending') {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_PENDING' }));
-                  } else {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_ERROR', message: result.message || 'Pago rechazado. Intenta con otra tarjeta.' }));
-                  }
-                } catch (err) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAYMENT_ERROR', message: 'Error de conexión. Intenta de nuevo.' }));
-                }
-              },
-              onError: (error) => { console.error(error); }
-            }
-          });
-        } else {
-          // Nequi y PSE usan Wallet Brick con preferenceId
-          await bricksBuilder.create('wallet', 'brick-container', {
-            initialization: { preferenceId: '${preferenceId}', redirectMode: 'self' },
-            customization: { texts: { valueProp: 'smart_option' } },
-            callbacks: {
-              onReady: () => {},
-              onSubmit: () => {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WALLET_OPENED' }));
-              },
-              onError: (error) => { console.error(error); }
-            }
-          });
-        }
-      } catch (error) {
-        document.getElementById('brick-container').innerHTML = '<div class="error">Error al cargar el formulario. Por favor cierra e intenta de nuevo.</div>';
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'BRICK_ERROR', message: error.message }));
-      }
-    }
-
-    renderBrick();
-  </script>
-</body>
-</html>
-  `;
-}
+type PaymentMethod = 'card' | 'nequi' | 'pse' | 'bancolombia' | 'virtual_balance';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
-  const webViewRef = useRef<any>(null);
-  const selectedPaymentRef = useRef<PaymentMethod | null>(null);
 
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
-  const [showWebView, setShowWebView] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [webViewLoading, setWebViewLoading] = useState(true);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [virtualBalance, setVirtualBalance] = useState<number>(0);
+  const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
-  const [bricksHTML, setBricksHTML] = useState<string>('');
-  const [currentMethod, setCurrentMethod] = useState<PaymentMethod | null>(null);
+
+  // Card form
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardInstallments, setCardInstallments] = useState('1');
+
+  // Nequi form
+  const [showNequiForm, setShowNequiForm] = useState(false);
+  const [nequiPhone, setNequiPhone] = useState('');
+  const [nequiStatus, setNequiStatus] = useState<'idle' | 'waiting'>('idle');
 
   const priceCOP = PRECIO_EVENTO_COP;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
       setLoadingBalance(true);
-      const { data } = await supabase
-        .from('users')
-        .select('virtual_balance, email, name')
-        .eq('id', user?.id)
-        .single();
+      const { data } = await supabase.from('users').select('virtual_balance, email, name').eq('id', user?.id).single();
       setVirtualBalance(data?.virtual_balance || 0);
       if (data) setUserProfile({ email: data.email || '', name: data.name || '' });
-    } catch {
-      setVirtualBalance(0);
-    } finally {
-      setLoadingBalance(false);
-    }
+    } catch { setVirtualBalance(0); }
+    finally { setLoadingBalance(false); }
   }, [user?.id]);
 
-  useEffect(() => {
-    fetchVirtualBalance();
-  }, [fetchVirtualBalance]);
+  useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  // Detecta cuando la app vuelve al primer plano después del pago PSE
-  // Usa AppState en lugar de deep link para evitar conflictos con OAuth de Google en iOS
+  // AppState listener para PSE y Bancolombia (abren navegador)
   useEffect(() => {
     let appWasBackground = false;
-
-    const handleAppStateChange = (nextState: string) => {
+    const handleAppStateChange = async (nextState: string) => {
       if (nextState === 'background' || nextState === 'inactive') {
         appWasBackground = true;
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
-        // Verificar si hay un pago PSE pendiente
-        AsyncStorage.getItem('pse_payment_pending').then((pending) => {
-          if (pending === 'true') {
-            router.replace('/(tabs)/appointments');
-          }
-        });
+        const pending = await AsyncStorage.getItem('pse_payment_pending');
+        if (pending !== 'true') return;
+        await AsyncStorage.removeItem('pse_payment_pending');
+        try {
+          const { data } = await supabase.auth.refreshSession();
+          if (data?.session) { await confirmAppointment(); router.replace('/(tabs)/appointments'); return; }
+        } catch (e) {}
+        await confirmAppointment();
+        router.replace('/(tabs)/appointments');
       }
     };
-
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
   }, []);
@@ -186,205 +83,290 @@ export default function SubscriptionPlansScreen() {
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return;
-
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', user?.id)
-        .eq('event_id', pendingEventId)
-        .maybeSingle();
-
+      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', user?.id).eq('event_id', pendingEventId).maybeSingle();
       if (!existing) {
-        await supabase.from('appointments').insert({
-          user_id: user?.id,
-          event_id: pendingEventId,
-          status: 'confirmada',
-          payment_status: 'completed',
-        });
+        await supabase.from('appointments').insert({ user_id: user?.id, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' });
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
-    } catch (error) {
-      console.error('Error confirmando cita:', error);
-    }
+    } catch (e) { console.error('Error confirmando cita:', e); }
   };
 
+  const handleSuccess = async () => {
+    await confirmAppointment();
+    setShowSuccessModal(true);
+  };
+
+  const getSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user ?? user;
+  };
+
+  const getAcceptanceToken = async () => {
+    const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
+    const data = await res.json();
+    return data.data?.presigned_acceptance?.acceptance_token;
+  };
+
+  // ─── VIRTUAL BALANCE ─────────────────────────────────────────
   const handlePayWithVirtualBalance = async () => {
     setProcessing(true);
     try {
-      const newBalance = virtualBalance - priceCOP;
-      const { error } = await supabase.from('users').update({ virtual_balance: newBalance }).eq('id', user?.id);
-      if (error) throw error;
-      await confirmAppointment();
-      setShowSuccessModal(true);
-    } catch {
-      Alert.alert('Error', 'No se pudo procesar el pago con saldo virtual.');
-    } finally {
+      await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
+      await handleSuccess();
+    } catch { Alert.alert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
+    finally { setProcessing(false); }
+  };
+
+  // ─── TARJETA ─────────────────────────────────────────────────
+  const handleCardPayment = async () => {
+    if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
+      Alert.alert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const currentUser = await getSession();
+      if (!currentUser) throw new Error('Sesión no encontrada');
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      if (!pendingEventId) throw new Error('No se encontró el evento');
+
+      // Tokenizar tarjeta
+      const [expMonth, expYear] = cardExpiry.split('/');
+      const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
+        body: JSON.stringify({ number: cardNumber.replace(/\s/g, ''), exp_month: expMonth?.trim(), exp_year: expYear?.trim(), cvc: cardCvc, card_holder: cardHolder }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.data?.id) throw new Error(tokenData.error?.messages?.join(', ') || 'Error al procesar la tarjeta');
+      const cardToken = tokenData.data.id;
+
+      const acceptanceToken = await getAcceptanceToken();
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ cardToken, acceptanceToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
+
+      if (result.status === 'APPROVED') {
+        setShowCardForm(false);
+        await handleSuccess();
+      } else if (result.status === 'PENDING') {
+        setShowCardForm(false);
+        Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.', [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+      } else {
+        throw new Error(result.message || 'Pago rechazado. Intenta con otra tarjeta.');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally { setProcessing(false); }
+  };
+
+  // ─── NEQUI ───────────────────────────────────────────────────
+  const handleNequiPayment = async () => {
+    const cleanPhone = nequiPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) { Alert.alert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
+    setProcessing(true);
+    try {
+      const currentUser = await getSession();
+      if (!currentUser) throw new Error('Sesión no encontrada');
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      if (!pendingEventId) throw new Error('No se encontró el evento');
+
+      const acceptanceToken = await getAcceptanceToken();
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-nequi-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
+
+      setNequiStatus('waiting');
+      // Polling
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
+          const data = await res.json();
+          const status = data.data?.status;
+          if (status === 'APPROVED') {
+            clearInterval(poll);
+            setProcessing(false);
+            setShowNequiForm(false);
+            setNequiStatus('idle');
+            await handleSuccess();
+          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
+            clearInterval(poll);
+            setProcessing(false);
+            setNequiStatus('idle');
+            Alert.alert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado. Intenta de nuevo.');
+          }
+        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessing(false); setNequiStatus('idle'); } }
+      }, 5000);
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
       setProcessing(false);
     }
   };
 
-  const handleOpenBricks = async (method: PaymentMethod) => {
+  // ─── BANCOLOMBIA ─────────────────────────────────────────────
+  const handleBancolombiaPayment = async () => {
     setProcessing(true);
     try {
-      // Leer sesión directamente de Supabase — no depender del contexto
-      // que puede estar en null momentáneamente por refresh de token de Google
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? user;
-      if (!currentUser) {
-        Alert.alert('Error', 'Sesión no encontrada. Por favor inicia sesión de nuevo.');
-        setProcessing(false);
-        return;
-      }
-
+      const currentUser = await getSession();
+      if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        Alert.alert('Error', 'No se encontró el evento. Por favor vuelve a la pantalla del evento e intenta de nuevo.');
-        setProcessing(false);
-        return;
-      }
+      if (!pendingEventId) throw new Error('No se encontró el evento');
+
+      const acceptanceToken = await getAcceptanceToken();
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ acceptanceToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar pago');
+      if (!result.redirectUrl) throw new Error('No se obtuvo URL de Bancolombia');
+
+      await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await Linking.openURL(result.redirectUrl);
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally { setProcessing(false); }
+  };
+
+  // ─── PSE ─────────────────────────────────────────────────────
+  const handlePSEPayment = async () => {
+    setProcessing(true);
+    try {
+      const currentUser = await getSession();
+      if (!currentUser) throw new Error('Sesión no encontrada');
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      if (!pendingEventId) throw new Error('No se encontró el evento');
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          eventId: pendingEventId || 'test-event',
-          userId: currentUser.id,
-          userEmail: userProfile?.email || currentUser.email || (currentUser as any).user_metadata?.email || '',
-          userName: userProfile?.name || (currentUser as any).user_metadata?.full_name || (currentUser as any).user_metadata?.name || 'Usuario',
-          paymentMethod: method,
-          amountCOP: priceCOP,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ eventId: pendingEventId, userId: currentUser.id, userEmail: userProfile?.email || currentUser.email || '', userName: userProfile?.name || '', paymentMethod: 'pse', amountCOP: priceCOP }),
       });
-
       const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear preferencia');
-      if (!data.initPoint && !data.preferenceId) throw new Error('MP no devolvió URL de pago. Intenta de nuevo.');
+      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
+      if (!data.initPoint) throw new Error('No se obtuvo URL de pago PSE');
 
-      const bricksParams = new URLSearchParams({
-        method,
-        preferenceId: data.preferenceId || '',
-        publicKey: MP_PUBLIC_KEY,
-        supabaseUrl: SUPABASE_URL,
-        supabaseKey: SUPABASE_ANON_KEY,
-        redirectSuccess: 'nospi://payment/success',
-        redirectFailure: 'nospi://payment/failure',
-      });
-      const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
-      
-      // Tanto tarjeta como PSE usan Linking.openURL — abre Safari directamente
-      if (!data.initPoint) {
-        throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
-      }
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await Linking.openURL(data.initPoint);
-
     } catch (error: any) {
-      Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);
-    } finally {
-      setProcessing(false);
-    }
+      Alert.alert('Error', error.message);
+    } finally { setProcessing(false); }
   };
 
-  const handleContinue = async () => {
-    const method = selectedPaymentRef.current || selectedPayment;
-    if (!method) return;
-    if (method === 'virtual_balance') {
-      await handlePayWithVirtualBalance();
-    } else {
-      await handleOpenBricks(method);
-    }
-  };
-
-  const handleWebViewMessage = async (event: any) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-
-      switch (message.type) {
-        case 'PAYMENT_SUCCESS':
-          setShowWebView(false);
-          await confirmAppointment();
-          setShowSuccessModal(true);
-          break;
-        case 'PAYMENT_PENDING':
-          setShowWebView(false);
-          Alert.alert('Pago pendiente', 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-            [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
-          break;
-        case 'PAYMENT_ERROR':
-          setShowWebView(false);
-          Alert.alert('Pago rechazado', message.message || 'No se pudo procesar el pago. Intenta con otra tarjeta.');
-          break;
-        case 'BRICK_ERROR':
-          setShowWebView(false);
-          Alert.alert('Error', 'No se pudo cargar el formulario de pago.');
-          break;
-      }
-    } catch (e) {
-      console.error('Error parsing WebView message:', e);
-    }
-  };
-
-  const webViewTitle = currentMethod === 'card' ? 'Pagar con Tarjeta' : currentMethod === 'nequi' ? 'Pagar con Nequi' : 'Pagar con PSE';
-
-  if (showWebView) {
+  // ─── CARD FORM SCREEN ─────────────────────────────────────────
+  if (showCardForm) {
     return (
-      <SafeAreaView style={styles.webViewContainer}>
-        <Stack.Screen options={{
-          headerShown: true,
-          title: webViewTitle,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => setShowWebView(false)} style={{ paddingHorizontal: 16 }}>
-              <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
-            </TouchableOpacity>
-          ),
-        }} />
-        {webViewLoading && (
-          <View style={styles.webViewLoadingOverlay}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-            <Text style={styles.webViewLoadingText}>Cargando formulario de pago...</Text>
-          </View>
-        )}
-        <WebView
-          ref={webViewRef}
-          source={{ html: bricksHTML }}
-          style={styles.webView}
-          onLoadEnd={() => setWebViewLoading(false)}
-          onMessage={handleWebViewMessage}
-          onNavigationStateChange={async (navState) => {
-            const url = navState.url || '';
-            if (url.includes('payment/success') || url.includes('collection_status=approved')) {
-              setShowWebView(false);
-              await confirmAppointment();
-              setShowSuccessModal(true);
-            } else if (url.includes('payment/failure') || url.includes('collection_status=rejected')) {
-              setShowWebView(false);
-              Alert.alert('Pago fallido', 'No se pudo procesar el pago. Intenta de nuevo.');
-            } else if (url.includes('payment/pending')) {
-              setShowWebView(false);
-              Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.',
-                [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
-            }
-          }}
-          javaScriptEnabled
-          domStorageEnabled
-          mixedContentMode="always"
-          originWhitelist={['*']}
-        />
+      <SafeAreaView style={styles.formContainer}>
+        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Tarjeta', headerLeft: () => (
+          <TouchableOpacity onPress={() => setShowCardForm(false)} style={{ paddingHorizontal: 16 }}>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+          </TouchableOpacity>
+        )}} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.formContent}>
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
+              <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
+              <Text style={styles.inputLabel}>Nombre del titular</Text>
+              <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" />
+              <Text style={styles.inputLabel}>Número de tarjeta</Text>
+              <TextInput style={styles.input} placeholder="0000 0000 0000 0000" value={cardNumber}
+                onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
+                keyboardType="numeric" maxLength={19} />
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.inputLabel}>Vencimiento</Text>
+                  <TextInput style={styles.input} placeholder="MM/AA" value={cardExpiry}
+                    onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(c.length >= 2 ? c.slice(0, 2) + '/' + c.slice(2) : c); }}
+                    keyboardType="numeric" maxLength={5} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>CVV</Text>
+                  <TextInput style={styles.input} placeholder="123" value={cardCvc}
+                    onChangeText={(t) => setCardCvc(t.replace(/\D/g, '').slice(0, 4))}
+                    keyboardType="numeric" maxLength={4} secureTextEntry />
+                </View>
+              </View>
+              <Text style={styles.inputLabel}>Cuotas</Text>
+              <View style={styles.installmentsContainer}>
+                {['1', '3', '6', '12'].map((q) => (
+                  <TouchableOpacity key={q} style={[styles.installmentBtn, cardInstallments === q && styles.installmentBtnSelected]} onPress={() => setCardInstallments(q)}>
+                    <Text style={[styles.installmentText, cardInstallments === q && styles.installmentTextSelected]}>{q === '1' ? 'Sin cuotas' : `${q} cuotas`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={[styles.payBtn, processing && styles.payBtnDisabled]} onPress={handleCardPayment} disabled={processing}>
+                {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Pagar ${priceCOP.toLocaleString('es-CO')} COP</Text>}
+              </TouchableOpacity>
+              <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
+  // ─── NEQUI FORM SCREEN ────────────────────────────────────────
+  if (showNequiForm) {
+    return (
+      <SafeAreaView style={styles.formContainer}>
+        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Nequi', headerLeft: () => (
+          <TouchableOpacity onPress={() => { setShowNequiForm(false); setNequiStatus('idle'); setProcessing(false); }} style={{ paddingHorizontal: 16 }}>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+          </TouchableOpacity>
+        )}} />
+        <ScrollView contentContainerStyle={styles.formContent}>
+          <View style={styles.formCard}>
+            {nequiStatus === 'idle' ? (
+              <>
+                <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
+                <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
+                <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago sin salir de tu app.</Text>
+                <Text style={styles.inputLabel}>Número de celular Nequi</Text>
+                <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
+                  onChangeText={(t) => setNequiPhone(t.replace(/\D/g, '').slice(0, 10))}
+                  keyboardType="phone-pad" maxLength={10} />
+                <TouchableOpacity style={[styles.payBtn, { backgroundColor: '#7C3AED' }, processing && styles.payBtnDisabled]} onPress={handleNequiPayment} disabled={processing}>
+                  {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Enviar solicitud de pago</Text>}
+                </TouchableOpacity>
+                <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+              </>
+            ) : (
+              <View style={styles.waitingContainer}>
+                <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
+                <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
+                <Text style={styles.waitingDesc}>Te enviamos una notificación push. Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>${priceCOP.toLocaleString('es-CO')} COP</Text> desde tu app Nequi.</Text>
+                <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
+                <Text style={styles.waitingHint}>Esperando confirmación...</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── MAIN SCREEN ──────────────────────────────────────────────
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
+    <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
@@ -392,113 +374,84 @@ export default function SubscriptionPlansScreen() {
         <Text style={styles.subtitle}>{`Confirma tu asistencia pagando $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
 
         <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Precio por evento</Text>
+          <Text style={styles.priceLabel}>Total a pagar</Text>
           <Text style={styles.priceAmount}>{`$${priceCOP.toLocaleString('es-CO')}`}</Text>
           <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
-          <Text style={styles.priceDescription}>Pago único por evento. Sin suscripciones ni cargos recurrentes.</Text>
         </View>
 
-        <View style={styles.benefitsContainer}>
-          {[
-            { icon: '✨', title: 'Acceso al evento', desc: 'Confirma tu lugar en el evento seleccionado' },
-            { icon: '🎉', title: 'Conoce gente nueva', desc: 'Conecta con personas afines en un ambiente relajado' },
-            { icon: '💜', title: 'Experiencia única', desc: 'Disfruta de una experiencia social inolvidable' },
-          ].map((b, i) => (
-            <View key={i} style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>{b.icon}</Text>
-              <View style={styles.benefitText}>
-                <Text style={styles.benefitTitle}>{b.title}</Text>
-                <Text style={styles.benefitDescription}>{b.desc}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+        <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
 
-        <View style={styles.paymentSection}>
-          <Text style={styles.paymentTitle}>Método de Pago</Text>
-          <Text style={styles.paymentSubtitle}>⚠️ Selecciona una opción para continuar</Text>
-
-          {!loadingBalance && virtualBalance >= priceCOP && (
-            <TouchableOpacity
-              style={[styles.paymentButton, styles.virtualBalanceButton, selectedPayment === 'virtual_balance' && styles.paymentButtonSelected]}
-              onPress={() => { setSelectedPayment('virtual_balance'); selectedPaymentRef.current = 'virtual_balance'; }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.paymentButtonContent}>
-                {selectedPayment === 'virtual_balance' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
-                <View>
-                  <Text style={styles.virtualBalanceTitle}>💰 Saldo Virtual</Text>
-                  <Text style={styles.virtualBalanceAmount}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
-                </View>
+        {!loadingBalance && virtualBalance >= priceCOP && (
+          <TouchableOpacity style={[styles.paymentBtn, styles.btnVirtual]} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
+            <View style={styles.btnInner}>
+              <Text style={styles.btnIcon}>💰</Text>
+              <View style={styles.btnTextWrap}>
+                <Text style={styles.btnTitle}>Saldo Virtual</Text>
+                <Text style={styles.btnSub}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
               </View>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.paymentButton, selectedPayment === 'card' && styles.paymentButtonSelected]}
-            onPress={() => { setSelectedPayment('card'); selectedPaymentRef.current = 'card'; }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.paymentButtonContent}>
-              {selectedPayment === 'card' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
-              <View style={styles.paymentMethodInfo}>
-                <Text style={styles.paymentMethodIcon}>💳</Text>
-                <View>
-                  <Text style={styles.paymentMethodTitle}>Tarjeta Crédito / Débito</Text>
-                  <Text style={styles.paymentMethodSubtitle}>Visa, Mastercard, Amex</Text>
-                </View>
-              </View>
+              {processing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
             </View>
           </TouchableOpacity>
+        )}
 
-          <TouchableOpacity
-            style={[styles.paymentButton, selectedPayment === 'pse' && styles.paymentButtonSelected]}
-            onPress={() => { setSelectedPayment('pse'); selectedPaymentRef.current = 'pse'; }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.paymentButtonContent}>
-              {selectedPayment === 'pse' && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
-              <View style={styles.paymentMethodInfo}>
-                <Image source={require('@/assets/images/logo_380.png')} style={styles.pseLogoImage} resizeMode="contain" />
-                <View>
-                  <Text style={styles.paymentMethodTitle}>PSE</Text>
-                  <Text style={styles.paymentMethodSubtitle}>Transferencia bancaria — todos los bancos</Text>
-                </View>
-              </View>
+        {/* Tarjeta */}
+        <TouchableOpacity style={[styles.paymentBtn, styles.btnCard]} onPress={() => setShowCardForm(true)} disabled={processing} activeOpacity={0.85}>
+          <View style={styles.btnInner}>
+            <Text style={styles.btnIcon}>💳</Text>
+            <View style={styles.btnTextWrap}>
+              <Text style={styles.btnTitle}>Tarjeta de Crédito</Text>
+              <Text style={styles.btnSub}>Visa • Mastercard • Amex</Text>
             </View>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.summaryContainer}>
-          <Text style={styles.summaryText}>Total a pagar:</Text>
-          <Text style={styles.summaryAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.continueButton, (!selectedPayment || processing) && styles.continueButtonDisabled]}
-          onPress={handleContinue}
-          disabled={!selectedPayment || processing}
-          activeOpacity={0.8}
-        >
-          {processing
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.continueButtonText}>
-                {selectedPayment === 'virtual_balance' ? 'Pagar con Saldo Virtual' : 'Continuar con el pago'}
-              </Text>
-          }
+            <Text style={styles.btnArrow}>›</Text>
+          </View>
         </TouchableOpacity>
 
-        <Text style={styles.mpNote}>🔒 Pagos procesados de forma segura por Mercado Pago</Text>
+        {/* Nequi */}
+        <TouchableOpacity style={[styles.paymentBtn, styles.btnNequi]} onPress={() => setShowNequiForm(true)} disabled={processing} activeOpacity={0.85}>
+          <View style={styles.btnInner}>
+            <Image source={require('@/assets/images/logo-nequi.png')} style={styles.btnLogo} resizeMode="contain" />
+            <View style={styles.btnTextWrap}>
+              <Text style={styles.btnTitle}>Nequi</Text>
+              <Text style={styles.btnSub}>Sin salir de la app</Text>
+            </View>
+            <Text style={styles.btnArrow}>›</Text>
+          </View>
+        </TouchableOpacity>
 
+        {/* Bancolombia */}
+        <TouchableOpacity style={[styles.paymentBtn, styles.btnBancolombia]} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
+          <View style={styles.btnInner}>
+            <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
+            <View style={styles.btnTextWrap}>
+              <Text style={[styles.btnTitle, { color: '#1a1a1a' }]}>Bancolombia</Text>
+              <Text style={[styles.btnSub, { color: '#444' }]}>Transferencia desde tu app</Text>
+            </View>
+            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={[styles.btnArrow, { color: '#1a1a1a' }]}>›</Text>}
+          </View>
+        </TouchableOpacity>
+
+        {/* PSE */}
+        <TouchableOpacity style={[styles.paymentBtn, styles.btnPSE]} onPress={handlePSEPayment} disabled={processing} activeOpacity={0.85}>
+          <View style={styles.btnInner}>
+            <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
+            <View style={styles.btnTextWrap}>
+              <Text style={[styles.btnTitle, { color: '#1a1a1a' }]}>PSE</Text>
+              <Text style={[styles.btnSub, { color: '#444' }]}>Todos los bancos colombianos</Text>
+            </View>
+            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={[styles.btnArrow, { color: '#1a1a1a' }]}>›</Text>}
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
       </ScrollView>
 
-      <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
+      <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
             <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
-            <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
           </View>
@@ -511,70 +464,51 @@ export default function SubscriptionPlansScreen() {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1 },
-  contentContainer: { padding: 24, paddingBottom: 100 },
-  webViewContainer: { flex: 1, backgroundColor: '#f5f5f5' },
-  webView: { flex: 1 },
-  webViewLoadingOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 10,
-  },
-  webViewLoadingText: { marginTop: 12, color: '#666', fontSize: 14 },
-  title: { fontSize: 32, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
-  subtitle: { fontSize: 16, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 32, lineHeight: 24 },
-  priceCard: {
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 32, marginBottom: 24, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5,
-  },
-  priceLabel: { fontSize: 16, color: '#666', marginBottom: 8 },
-  priceAmount: { fontSize: 48, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
-  priceAmountCOP: { fontSize: 24, fontWeight: '600', color: nospiColors.purpleMid, marginBottom: 16 },
-  priceDescription: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20, marginBottom: 8 },
-  benefitsContainer: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 20, marginBottom: 24 },
-  benefitItem: { flexDirection: 'row', marginBottom: 20 },
-  benefitIcon: { fontSize: 24, marginRight: 16 },
-  benefitText: { flex: 1 },
-  benefitTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 },
-  benefitDescription: { fontSize: 14, color: '#666', lineHeight: 20 },
-  paymentSection: {
-    marginBottom: 24, backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 20, padding: 20, borderWidth: 2, borderColor: nospiColors.purpleLight,
-  },
-  paymentTitle: { fontSize: 20, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
-  paymentSubtitle: { fontSize: 13, fontWeight: '600', color: '#92400E', marginBottom: 16 },
-  paymentButton: {
-    backgroundColor: '#F9F9F9', paddingVertical: 16, paddingHorizontal: 20,
-    borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#E5E7EB',
-  },
-  paymentButtonSelected: { borderColor: nospiColors.purpleDark, backgroundColor: '#F3E8FF' },
-  paymentButtonContent: { flexDirection: 'row', alignItems: 'center' },
-  checkmark: {
-    width: 24, height: 24, borderRadius: 12, backgroundColor: nospiColors.purpleDark,
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
-  },
-  checkmarkText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  paymentMethodInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  paymentMethodIcon: { fontSize: 28, marginRight: 14 },
-  paymentMethodTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
-  paymentMethodSubtitle: { fontSize: 13, color: '#888', marginTop: 2 },
-  virtualBalanceButton: { backgroundColor: 'rgba(147,51,234,0.08)', borderColor: nospiColors.purpleMid },
-  pseLogoImage: {
-    width: 48, height: 48, marginRight: 14, borderRadius: 24,
-  },
-  virtualBalanceTitle: { fontSize: 16, fontWeight: 'bold', color: nospiColors.purpleDark },
-  virtualBalanceAmount: { fontSize: 13, color: nospiColors.purpleMid, marginTop: 2 },
-  summaryContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16,
-    padding: 16, marginBottom: 16, alignItems: 'center',
-  },
-  summaryText: { fontSize: 16, fontWeight: '600', color: '#666', marginBottom: 8 },
-  summaryAmount: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
-  continueButton: {
-    backgroundColor: nospiColors.purpleDark, paddingVertical: 18, borderRadius: 16, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, marginBottom: 12,
-  },
-  continueButtonDisabled: { backgroundColor: '#C4B5FD', shadowOpacity: 0, elevation: 0 },
-  continueButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  mpNote: { fontSize: 13, color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
+  contentContainer: { padding: 24, paddingBottom: 60 },
+  formContainer: { flex: 1, backgroundColor: '#f5f5f5' },
+  formContent: { padding: 20, paddingBottom: 60 },
+  formCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  formTitle: { fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 4 },
+  formAmount: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#444', marginBottom: 6, marginTop: 12 },
+  input: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA', color: '#111' },
+  row: { flexDirection: 'row' },
+  installmentsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  installmentBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#F9F9F9' },
+  installmentBtnSelected: { borderColor: nospiColors.purpleDark, backgroundColor: '#F3E8FF' },
+  installmentText: { fontSize: 13, color: '#666', fontWeight: '600' },
+  installmentTextSelected: { color: nospiColors.purpleDark },
+  payBtn: { backgroundColor: nospiColors.purpleDark, paddingVertical: 18, borderRadius: 14, alignItems: 'center', marginTop: 24 },
+  payBtnDisabled: { backgroundColor: '#C4B5FD' },
+  payBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  secureNote: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 12 },
+  methodLogoLarge: { width: 120, height: 60, alignSelf: 'center', marginBottom: 12 },
+  nequiDescription: { fontSize: 14, color: '#666', lineHeight: 22, marginBottom: 8 },
+  waitingContainer: { alignItems: 'center', padding: 16 },
+  waitingTitle: { fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 12 },
+  waitingDesc: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 24 },
+  waitingHint: { fontSize: 13, color: '#999', marginTop: 12 },
+  title: { fontSize: 30, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
+  subtitle: { fontSize: 15, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 24, lineHeight: 22 },
+  priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 28, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
+  priceLabel: { fontSize: 15, color: '#666', marginBottom: 6 },
+  priceAmount: { fontSize: 44, fontWeight: 'bold', color: nospiColors.purpleDark },
+  priceAmountCOP: { fontSize: 18, fontWeight: '600', color: nospiColors.purpleMid, marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 14 },
+  paymentBtn: { borderRadius: 16, marginBottom: 12, paddingVertical: 16, paddingHorizontal: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3 },
+  btnInner: { flexDirection: 'row', alignItems: 'center' },
+  btnLogo: { width: 44, height: 44, marginRight: 14, borderRadius: 8 },
+  btnTextWrap: { flex: 1 },
+  btnTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  btnSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  btnArrow: { fontSize: 26, color: '#fff', fontWeight: '300' },
+  btnIcon: { fontSize: 32, marginRight: 14 },
+  btnVirtual: { backgroundColor: '#7C3AED' },
+  btnCard: { backgroundColor: '#6B21A8' },
+  btnNequi: { backgroundColor: '#7C3AED' },
+  btnBancolombia: { backgroundColor: '#FDDA24' },
+  btnPSE: { backgroundColor: '#F3F4F6', borderWidth: 1.5, borderColor: '#D1D5DB' },
+  secureFooter: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 40, width: '100%', maxWidth: 400, alignItems: 'center' },
   successIcon: { fontSize: 72, marginBottom: 24 },
