@@ -255,17 +255,26 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento');
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
+      const acceptanceToken = await getAcceptanceToken();
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ eventId: pendingEventId, userId: currentUser.id, userEmail: userProfile?.email || currentUser.email || '', userName: userProfile?.name || '', paymentMethod: 'pse', amountCOP: priceCOP }),
+        body: JSON.stringify({
+          acceptanceToken,
+          amountCOP: priceCOP,
+          userEmail: userProfile?.email || currentUser.email || '',
+          userId: currentUser.id,
+          eventId: pendingEventId,
+        }),
       });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
-      if (!data.initPoint) throw new Error('No se obtuvo URL de pago PSE');
+      if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
 
       await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await Linking.openURL(data.initPoint);
+      await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally { setProcessing(false); }
@@ -379,23 +388,48 @@ export default function SubscriptionPlansScreen() {
           <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
         </View>
 
+        {/* Beneficios */}
+        <View style={styles.benefitsCard}>
+          <View style={styles.benefitRow}>
+            <Text style={styles.benefitIcon}>🌟</Text>
+            <View style={styles.benefitTextWrap}>
+              <Text style={styles.benefitTitle}>Acceso al evento</Text>
+              <Text style={styles.benefitDesc}>Confirma tu lugar en el evento seleccionado</Text>
+            </View>
+          </View>
+          <View style={styles.benefitRow}>
+            <Text style={styles.benefitIcon}>🎉</Text>
+            <View style={styles.benefitTextWrap}>
+              <Text style={styles.benefitTitle}>Conoce gente nueva</Text>
+              <Text style={styles.benefitDesc}>Conecta con personas afines en un ambiente relajado.</Text>
+            </View>
+          </View>
+          <View style={[styles.benefitRow, { borderBottomWidth: 0 }]}>
+            <Text style={styles.benefitIcon}>💜</Text>
+            <View style={styles.benefitTextWrap}>
+              <Text style={styles.benefitTitle}>Experiencia única</Text>
+              <Text style={styles.benefitDesc}>Disfruta de una experiencia social inolvidable.</Text>
+            </View>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
 
         {!loadingBalance && virtualBalance >= priceCOP && (
-          <TouchableOpacity style={[styles.paymentBtn, styles.btnVirtual]} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.paymentBtn} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
             <View style={styles.btnInner}>
               <Text style={styles.btnIcon}>💰</Text>
               <View style={styles.btnTextWrap}>
                 <Text style={styles.btnTitle}>Saldo Virtual</Text>
                 <Text style={styles.btnSub}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
               </View>
-              {processing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
+              {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
             </View>
           </TouchableOpacity>
         )}
 
         {/* Tarjeta */}
-        <TouchableOpacity style={[styles.paymentBtn, styles.btnCard]} onPress={() => setShowCardForm(true)} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowCardForm(true)} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Text style={styles.btnIcon}>💳</Text>
             <View style={styles.btnTextWrap}>
@@ -407,7 +441,7 @@ export default function SubscriptionPlansScreen() {
         </TouchableOpacity>
 
         {/* Nequi */}
-        <TouchableOpacity style={[styles.paymentBtn, styles.btnNequi]} onPress={() => setShowNequiForm(true)} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowNequiForm(true)} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo-nequi.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
@@ -419,26 +453,26 @@ export default function SubscriptionPlansScreen() {
         </TouchableOpacity>
 
         {/* Bancolombia */}
-        <TouchableOpacity style={[styles.paymentBtn, styles.btnBancolombia]} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
-              <Text style={[styles.btnTitle, { color: '#1a1a1a' }]}>Bancolombia</Text>
-              <Text style={[styles.btnSub, { color: '#444' }]}>Transferencia desde tu app</Text>
+              <Text style={styles.btnTitle}>Bancolombia</Text>
+              <Text style={styles.btnSub}>Transferencia desde tu app</Text>
             </View>
-            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={[styles.btnArrow, { color: '#1a1a1a' }]}>›</Text>}
+            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
 
         {/* PSE */}
-        <TouchableOpacity style={[styles.paymentBtn, styles.btnPSE]} onPress={handlePSEPayment} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={handlePSEPayment} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
-              <Text style={[styles.btnTitle, { color: '#1a1a1a' }]}>PSE</Text>
-              <Text style={[styles.btnSub, { color: '#444' }]}>Todos los bancos colombianos</Text>
+              <Text style={styles.btnTitle}>PSE</Text>
+              <Text style={styles.btnSub}>Todos los bancos colombianos</Text>
             </View>
-            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={[styles.btnArrow, { color: '#1a1a1a' }]}>›</Text>}
+            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
 
@@ -495,19 +529,20 @@ const styles = StyleSheet.create({
   priceAmount: { fontSize: 44, fontWeight: 'bold', color: nospiColors.purpleDark },
   priceAmountCOP: { fontSize: 18, fontWeight: '600', color: nospiColors.purpleMid, marginTop: 4 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 14 },
-  paymentBtn: { borderRadius: 16, marginBottom: 12, paddingVertical: 16, paddingHorizontal: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3 },
+  benefitsCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 20, marginBottom: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3E8FF' },
+  benefitIcon: { fontSize: 28, marginRight: 16 },
+  benefitTextWrap: { flex: 1 },
+  benefitTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
+  benefitDesc: { fontSize: 13, color: '#666', lineHeight: 18 },
+  paymentBtn: { borderRadius: 16, marginBottom: 12, paddingVertical: 16, paddingHorizontal: 18, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
   btnInner: { flexDirection: 'row', alignItems: 'center' },
   btnLogo: { width: 44, height: 44, marginRight: 14, borderRadius: 8 },
   btnTextWrap: { flex: 1 },
-  btnTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  btnSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  btnArrow: { fontSize: 26, color: '#fff', fontWeight: '300' },
+  btnTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
+  btnSub: { fontSize: 13, color: '#666', marginTop: 2 },
+  btnArrow: { fontSize: 26, color: '#999', fontWeight: '300' },
   btnIcon: { fontSize: 32, marginRight: 14 },
-  btnVirtual: { backgroundColor: '#7C3AED' },
-  btnCard: { backgroundColor: '#6B21A8' },
-  btnNequi: { backgroundColor: '#7C3AED' },
-  btnBancolombia: { backgroundColor: '#FDDA24' },
-  btnPSE: { backgroundColor: '#F3F4F6', borderWidth: 1.5, borderColor: '#D1D5DB' },
   secureFooter: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 40, width: '100%', maxWidth: 400, alignItems: 'center' },
