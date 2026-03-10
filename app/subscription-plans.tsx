@@ -187,20 +187,42 @@ export default function SubscriptionPlansScreen() {
     return () => sub.remove();
   }, []);
 
-  // Detecta cuando la app vuelve al primer plano (fallback para casos sin deep link)
+  // Detecta cuando la app vuelve al primer plano después del pago
   useEffect(() => {
     let appWasBackground = false;
 
-    const handleAppStateChange = (nextState: string) => {
+    const handleAppStateChange = async (nextState: string) => {
       if (nextState === 'background' || nextState === 'inactive') {
         appWasBackground = true;
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
-        AsyncStorage.getItem('pse_payment_pending').then((pending) => {
-          if (pending === 'true') {
+
+        const pending = await AsyncStorage.getItem('pse_payment_pending');
+        if (pending !== 'true') return;
+
+        // Marcar como procesado ANTES de navegar para evitar loops
+        await AsyncStorage.removeItem('pse_payment_pending');
+
+        // Refrescar sesión antes de confirmar y navegar
+        try {
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData?.session) {
+            // Sesión refrescada, confirmar cita y navegar
+            await confirmAppointment();
             router.replace('/(tabs)/appointments');
+            return;
           }
-        });
+        } catch (e) {}
+
+        // Fallback: getSession
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await confirmAppointment();
+          router.replace('/(tabs)/appointments');
+        } else {
+          // Sin sesión — navegar igual, index.tsx manejará el estado
+          router.replace('/(tabs)/appointments');
+        }
       }
     };
 
