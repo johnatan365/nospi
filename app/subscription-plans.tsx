@@ -275,23 +275,12 @@ export default function SubscriptionPlansScreen() {
       });
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
-      if (method === 'card') {
-        // Tarjeta usa Bricks via WebView — HTML generado localmente
-        const htmlContent = generateBricksHTML(data.preferenceId || '', method, MP_PUBLIC_KEY);
-        setBricksHTML(htmlContent);
-        setCurrentMethod(method);
-        setWebViewLoading(true);
-        setShowWebView(true);
-      } else {
-        // PSE/Bancolombia
-        if (!data.initPoint) {
-          throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
-        }
-        await AsyncStorage.setItem('pse_payment_pending', 'true');
-        await Linking.openURL(data.initPoint);
-        // No hacemos router.replace aquí — el deep link listener
-        // se encarga de navegar cuando el usuario vuelva del pago
+      // Tanto tarjeta como PSE usan Linking.openURL — abre Safari directamente
+      if (!data.initPoint) {
+        throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
       }
+      await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await Linking.openURL(data.initPoint);
 
     } catch (error: any) {
       Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);
