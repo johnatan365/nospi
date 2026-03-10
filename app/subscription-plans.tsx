@@ -59,7 +59,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
       try {
         if (method === 'card') {
           await bricksBuilder.create('cardPayment', 'brick-container', {
-            initialization: { amount: PRECIO_EVENTO_COP, payer: { email: '' } },
+            initialization: { amount: ${PRECIO_EVENTO_COP}, payer: { email: '' } },
             customization: {
               visual: { style: { theme: 'default' } },
               paymentMethods: { maxInstallments: 1 }
@@ -75,7 +75,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
                       'Content-Type': 'application/json',
                       'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
                     },
-                    body: JSON.stringify({ formData: cardFormData, amount: PRECIO_EVENTO_COP }),
+                    body: JSON.stringify({ formData: cardFormData, amount: ${PRECIO_EVENTO_COP} }),
                   });
                   const result = await response.json();
                   if (result.status === 'approved') {
@@ -275,32 +275,12 @@ export default function SubscriptionPlansScreen() {
       });
       const bricksUrl = `${SUPABASE_URL}/functions/v1/payment-page?${bricksParams.toString()}`;
       
-      if (method === 'card') {
-        // Tarjeta usa Bricks via WebView
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        const htmlResponse = await fetch(bricksUrl, {
-          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!htmlResponse.ok) throw new Error('No se pudo cargar la pantalla de pago. Intenta de nuevo.');
-        const htmlContent = await htmlResponse.text();
-        if (!htmlContent || htmlContent.length < 100) throw new Error('Página de pago vacía. Intenta de nuevo.');
-        setBricksHTML(htmlContent);
-        setCurrentMethod(method);
-        setWebViewLoading(true);
-        setShowWebView(true);
-      } else {
-        // PSE/Bancolombia
-        if (!data.initPoint) {
-          throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
-        }
-        await AsyncStorage.setItem('pse_payment_pending', 'true');
-        await Linking.openURL(data.initPoint);
-        // No hacemos router.replace aquí — el deep link listener
-        // se encarga de navegar cuando el usuario vuelva del pago
+      // Tanto tarjeta como PSE usan Linking.openURL — abre Safari directamente
+      if (!data.initPoint) {
+        throw new Error(`MP no devolvió URL. preferenceId: ${data.preferenceId}, keys: ${Object.keys(data).join(',')}`);
       }
+      await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await Linking.openURL(data.initPoint);
 
     } catch (error: any) {
       Alert.alert('Error de pago', `${error.message}\n\nDetalles: ${JSON.stringify(error)}`);
