@@ -59,7 +59,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
       try {
         if (method === 'card') {
           await bricksBuilder.create('cardPayment', 'brick-container', {
-            initialization: { amount: PRECIO_EVENTO_COP, payer: { email: '' } },
+            initialization: { amount: ${PRECIO_EVENTO_COP}, payer: { email: '' } },
             customization: {
               visual: { style: { theme: 'default' } },
               paymentMethods: { maxInstallments: 1 }
@@ -75,7 +75,7 @@ function generateBricksHTML(preferenceId: string, method: PaymentMethod, publicK
                       'Content-Type': 'application/json',
                       'Authorization': 'Bearer ${SUPABASE_ANON_KEY}',
                     },
-                    body: JSON.stringify({ formData: cardFormData, amount: PRECIO_EVENTO_COP }),
+                    body: JSON.stringify({ formData: cardFormData, amount: ${PRECIO_EVENTO_COP} }),
                   });
                   const result = await response.json();
                   if (result.status === 'approved') {
