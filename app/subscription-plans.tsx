@@ -23,7 +23,9 @@ export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
 
-  const [processing, setProcessing] = useState(false);
+  const [processingMethod, setProcessingMethod] = useState<string | null>(null);
+  const processing = processingMethod !== null;
+  const isProcessing = (m: string) => processingMethod === m;
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -110,12 +112,12 @@ export default function SubscriptionPlansScreen() {
 
   // ─── VIRTUAL BALANCE ─────────────────────────────────────────
   const handlePayWithVirtualBalance = async () => {
-    setProcessing(true);
+    setProcessingMethod('virtual');
     try {
       await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
       await handleSuccess();
     } catch { Alert.alert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
-    finally { setProcessing(false); }
+    finally { setProcessingMethod(null); }
   };
 
   // ─── TARJETA ─────────────────────────────────────────────────
@@ -124,7 +126,7 @@ export default function SubscriptionPlansScreen() {
       Alert.alert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
     }
-    setProcessing(true);
+    setProcessingMethod('card');
     try {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
@@ -164,14 +166,14 @@ export default function SubscriptionPlansScreen() {
       }
     } catch (error: any) {
       Alert.alert('Error', error.message);
-    } finally { setProcessing(false); }
+    } finally { setProcessingMethod(null); }
   };
 
   // ─── NEQUI ───────────────────────────────────────────────────
   const handleNequiPayment = async () => {
     const cleanPhone = nequiPhone.replace(/\D/g, '');
     if (cleanPhone.length !== 10) { Alert.alert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
-    setProcessing(true);
+    setProcessingMethod('nequi');
     try {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
@@ -200,27 +202,27 @@ export default function SubscriptionPlansScreen() {
           const status = data.data?.status;
           if (status === 'APPROVED') {
             clearInterval(poll);
-            setProcessing(false);
+            setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
             await handleSuccess();
           } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
             clearInterval(poll);
-            setProcessing(false);
+            setProcessingMethod(null);
             setNequiStatus('idle');
             Alert.alert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado. Intenta de nuevo.');
           }
-        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessing(false); setNequiStatus('idle'); } }
+        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
       }, 5000);
     } catch (error: any) {
       Alert.alert('Error', error.message);
-      setProcessing(false);
+      setProcessingMethod(null);
     }
   };
 
   // ─── BANCOLOMBIA ─────────────────────────────────────────────
   const handleBancolombiaPayment = async () => {
-    setProcessing(true);
+    setProcessingMethod('bancolombia');
     try {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
@@ -243,12 +245,12 @@ export default function SubscriptionPlansScreen() {
       await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
       Alert.alert('Error', error.message);
-    } finally { setProcessing(false); }
+    } finally { setProcessingMethod(null); }
   };
 
   // ─── PSE ─────────────────────────────────────────────────────
   const handlePSEPayment = async () => {
-    setProcessing(true);
+    setProcessingMethod('pse');
     try {
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
@@ -277,7 +279,7 @@ export default function SubscriptionPlansScreen() {
       await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
       Alert.alert('Error', error.message);
-    } finally { setProcessing(false); }
+    } finally { setProcessingMethod(null); }
   };
 
   // ─── CARD FORM SCREEN ─────────────────────────────────────────
@@ -338,7 +340,7 @@ export default function SubscriptionPlansScreen() {
     return (
       <SafeAreaView style={styles.formContainer}>
         <Stack.Screen options={{ headerShown: true, title: 'Pagar con Nequi', headerLeft: () => (
-          <TouchableOpacity onPress={() => { setShowNequiForm(false); setNequiStatus('idle'); setProcessing(false); }} style={{ paddingHorizontal: 16 }}>
+          <TouchableOpacity onPress={() => { setShowNequiForm(false); setNequiStatus('idle'); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
             <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
           </TouchableOpacity>
         )}} />
@@ -423,7 +425,7 @@ export default function SubscriptionPlansScreen() {
                 <Text style={styles.btnTitle}>Saldo Virtual</Text>
                 <Text style={styles.btnSub}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
               </View>
-              {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
+              {isProcessing('virtual') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
             </View>
           </TouchableOpacity>
         )}
@@ -460,7 +462,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.btnTitle}>Bancolombia</Text>
               <Text style={styles.btnSub}>Transferencia desde tu app</Text>
             </View>
-            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
+            {isProcessing('bancolombia') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
 
@@ -472,7 +474,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.btnTitle}>PSE</Text>
               <Text style={styles.btnSub}>Todos los bancos colombianos</Text>
             </View>
-            {processing ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
+            {isProcessing('pse') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
 
