@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Image as RNImage } from 'react-native';
@@ -153,43 +152,23 @@ export default function LoginScreen() {
           console.log('LoginScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          // Supabase devuelve los tokens en el hash fragment (#), no en query params
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          // Intentar extraer desde hash fragment primero
-          const hashIndex = callbackUrl.indexOf('#');
-          if (hashIndex !== -1) {
-            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
-            accessToken = hashParams.get('access_token');
-            refreshToken = hashParams.get('refresh_token');
-          }
-
-          // Fallback: intentar desde query params
-          if (!accessToken || !refreshToken) {
-            const url = new URL(callbackUrl);
-            accessToken = url.searchParams.get('access_token');
-            refreshToken = url.searchParams.get('refresh_token');
-          }
+          const url = new URL(callbackUrl);
+          const accessToken = url.searchParams.get('access_token');
+          const refreshToken = url.searchParams.get('refresh_token');
           
           if (accessToken && refreshToken) {
-            console.log('LoginScreen: Tokens found, setting session directly');
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
+            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
             });
-
-            if (sessionError) {
-              console.error('LoginScreen: Error setting session:', sessionError);
-              setError('Error al iniciar sesión. Intenta de nuevo.');
-              setLoading(false);
-            } else {
-              console.log('LoginScreen: Session set, navigating to callback');
-              router.replace('/auth/callback');
-            }
           } else {
             console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
-            router.replace('/auth/callback');
+            router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled OAuth');
@@ -546,16 +525,18 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   googleIconContainer: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   googleIcon: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#4285F4',
     fontWeight: 'bold',
+    lineHeight: 24,
+    marginBottom: 3,
   },
   appleIconImage: {
     width: 28,
