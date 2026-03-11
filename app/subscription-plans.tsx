@@ -258,7 +258,14 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
-      // Sandbox: hacer polling igual que Nequi
+      // Sandbox con sandbox_status: APPROVED devuelve APPROVED de inmediato
+      if (result.status === 'APPROVED') {
+        setProcessingMethod(null);
+        await handleSuccess();
+        return;
+      }
+
+      // Por si acaso queda PENDING, hacer polling
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
