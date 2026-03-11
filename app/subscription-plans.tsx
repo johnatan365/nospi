@@ -257,13 +257,31 @@ export default function SubscriptionPlansScreen() {
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
-      if (!result.redirectUrl) throw new Error('No se obtuvo URL de Bancolombia');
 
-      await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await Linking.openURL(result.redirectUrl);
+      // Sandbox: hacer polling igual que Nequi
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
+          const data = await res.json();
+          const status = data.data?.status;
+          if (status === 'APPROVED') {
+            clearInterval(poll);
+            setProcessingMethod(null);
+            await handleSuccess();
+          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
+            clearInterval(poll);
+            setProcessingMethod(null);
+            showAlert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado',
+              attempts >= 24 ? 'No se recibió confirmación de Bancolombia.' : 'El pago fue rechazado.');
+          }
+        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); } }
+      }, 5000);
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
-    } finally { setProcessingMethod(null); }
+      setProcessingMethod(null);
+    }
   };
 
   // ─── PSE ─────────────────────────────────────────────────────
