@@ -21,8 +21,8 @@ const showAlert = (title: string, message?: string) => {
   }
 };
 
-const WOMPI_PUBLIC_KEY = 'pub_test_BywxIX766MrxrZAm8Uum28Pe39e1D4nW';
-const WOMPI_API_URL = 'https://sandbox.wompi.co/v1';
+const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ij106L';
+const WOMPI_API_URL = 'https://api.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
