@@ -23,7 +23,6 @@ const showAlert = (title: string, message?: string) => {
 
 const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ij106L';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
-const WOMPI_TOKENS_URL = 'https://api.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
@@ -148,7 +147,7 @@ export default function SubscriptionPlansScreen() {
       const [expMonth, expYear] = cardExpiry.split('/');
       const expYearFull = expYear?.trim().length === 4 ? expYear.trim().slice(2) : expYear?.trim();
 
-      const tokenRes = await fetch(`${WOMPI_TOKENS_URL}/tokens/cards`, {
+      const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
         body: JSON.stringify({
