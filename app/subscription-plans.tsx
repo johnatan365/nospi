@@ -159,7 +159,11 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const tokenData = await tokenRes.json();
-      if (!tokenRes.ok || !tokenData.data?.id) throw new Error('Error al tokenizar tarjeta: ' + JSON.stringify(tokenData.error));
+      if (!tokenRes.ok || !tokenData.data?.id) {
+        const msgs = tokenData.error?.messages;
+        const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
+        throw new Error(readable || 'Datos de tarjeta inválidos');
+      }
       const cardToken = tokenData.data.id;
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
