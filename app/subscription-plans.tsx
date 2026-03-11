@@ -134,6 +134,10 @@ export default function SubscriptionPlansScreen() {
       showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
     }
+    if (cardHolder.trim().length < 5) {
+      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      return;
+    }
     setProcessingMethod('card');
     try {
       const currentUser = await getSession();
@@ -142,7 +146,7 @@ export default function SubscriptionPlansScreen() {
       if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
       const [expMonth, expYear] = cardExpiry.split('/');
-      const expYearFull = expYear?.trim().length === 2 ? '20' + expYear.trim() : expYear?.trim();
+      const expYearFull = expYear?.trim().length === 4 ? expYear.trim().slice(2) : expYear?.trim();
 
       const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
