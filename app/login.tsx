@@ -156,16 +156,39 @@ export default function LoginScreen() {
           const accessToken = url.searchParams.get('access_token');
           const refreshToken = url.searchParams.get('refresh_token');
           
-          if (accessToken && refreshToken) {
-            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: 'recovery',
-              },
+          // Tokens can be in query params OR hash fragment (Android sends them in hash)
+          let finalAccessToken = accessToken;
+          let finalRefreshToken = refreshToken;
+
+          if (!finalAccessToken || !finalRefreshToken) {
+            // Try hash fragment (#access_token=...&refresh_token=...)
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            finalAccessToken = finalAccessToken || hashParams.get('access_token');
+            finalRefreshToken = finalRefreshToken || hashParams.get('refresh_token');
+          }
+
+          if (finalAccessToken && finalRefreshToken) {
+            console.log('LoginScreen: Tokens found, setting session directly');
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: finalAccessToken,
+              refresh_token: finalRefreshToken,
             });
+            if (sessionError) {
+              console.error('LoginScreen: Error setting session:', sessionError);
+              setError('Error al establecer la sesión. Intenta de nuevo.');
+              setLoading(false);
+            } else if (sessionData.session) {
+              console.log('LoginScreen: Session set, navigating to callback');
+              router.push({
+                pathname: '/auth/callback',
+                params: {
+                  access_token: finalAccessToken,
+                  refresh_token: finalRefreshToken,
+                  type: 'recovery',
+                },
+              });
+            }
           } else {
             console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
             router.push('/auth/callback');
@@ -249,16 +272,39 @@ export default function LoginScreen() {
           const accessToken = url.searchParams.get('access_token');
           const refreshToken = url.searchParams.get('refresh_token');
           
-          if (accessToken && refreshToken) {
-            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: 'recovery',
-              },
+          // Tokens can be in query params OR hash fragment (Android sends them in hash)
+          let finalAccessToken = accessToken;
+          let finalRefreshToken = refreshToken;
+
+          if (!finalAccessToken || !finalRefreshToken) {
+            // Try hash fragment (#access_token=...&refresh_token=...)
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            finalAccessToken = finalAccessToken || hashParams.get('access_token');
+            finalRefreshToken = finalRefreshToken || hashParams.get('refresh_token');
+          }
+
+          if (finalAccessToken && finalRefreshToken) {
+            console.log('LoginScreen: Tokens found, setting session directly');
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: finalAccessToken,
+              refresh_token: finalRefreshToken,
             });
+            if (sessionError) {
+              console.error('LoginScreen: Error setting session:', sessionError);
+              setError('Error al establecer la sesión. Intenta de nuevo.');
+              setLoading(false);
+            } else if (sessionData.session) {
+              console.log('LoginScreen: Session set, navigating to callback');
+              router.push({
+                pathname: '/auth/callback',
+                params: {
+                  access_token: finalAccessToken,
+                  refresh_token: finalRefreshToken,
+                  type: 'recovery',
+                },
+              });
+            }
           } else {
             console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
             router.push('/auth/callback');

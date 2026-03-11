@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Image as RNImage } from 'react-native';
@@ -92,38 +91,34 @@ export default function RegisterScreen() {
         console.log('RegisterScreen: WebBrowser result:', result);
         
         if (result.type === 'success' && result.url) {
-          console.log('RegisterScreen: Apple OAuth success, callback URL:', result.url);
+          console.log('RegisterScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          const hashIndex = callbackUrl.indexOf('#');
-          if (hashIndex !== -1) {
-            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
-            accessToken = hashParams.get('access_token');
-            refreshToken = hashParams.get('refresh_token');
-          }
-
-          if (!accessToken || !refreshToken) {
-            const url = new URL(callbackUrl);
-            accessToken = url.searchParams.get('access_token');
-            refreshToken = url.searchParams.get('refresh_token');
-          }
+          const url = new URL(callbackUrl);
+          let accessToken = url.searchParams.get('access_token');
+          let refreshToken = url.searchParams.get('refresh_token');
           
+          // Android sends tokens in hash fragment
+          if (!accessToken || !refreshToken) {
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
+          }
+
           if (accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
+            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
             });
-            if (sessionError) {
-              setError('Error al registrarse. Intenta de nuevo.');
-              setLoading(false);
-            } else {
-              router.replace('/auth/callback');
-            }
           } else {
-            router.replace('/auth/callback');
+            console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
+            router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');
@@ -204,40 +199,32 @@ export default function RegisterScreen() {
           console.log('RegisterScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          // Supabase devuelve tokens en hash fragment (#), no en query params
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          const hashIndex = callbackUrl.indexOf('#');
-          if (hashIndex !== -1) {
-            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
-            accessToken = hashParams.get('access_token');
-            refreshToken = hashParams.get('refresh_token');
-          }
-
-          if (!accessToken || !refreshToken) {
-            const url = new URL(callbackUrl);
-            accessToken = url.searchParams.get('access_token');
-            refreshToken = url.searchParams.get('refresh_token');
-          }
+          // Parse the URL to extract tokens
+          const url = new URL(callbackUrl);
+          let accessToken = url.searchParams.get('access_token');
+          let refreshToken = url.searchParams.get('refresh_token');
           
-          if (accessToken && refreshToken) {
-            console.log('RegisterScreen: Tokens found, setting session directly');
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
+          // Android sends tokens in hash fragment
+          if (!accessToken || !refreshToken) {
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
+          }
 
-            if (sessionError) {
-              console.error('RegisterScreen: Error setting session:', sessionError);
-              setError('Error al registrarse. Intenta de nuevo.');
-              setLoading(false);
-            } else {
-              router.replace('/auth/callback');
-            }
+          if (accessToken && refreshToken) {
+            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                type: 'recovery',
+              },
+            });
           } else {
             console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
-            router.replace('/auth/callback');
+            router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');
