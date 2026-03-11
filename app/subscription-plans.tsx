@@ -258,45 +258,15 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
-      // Bancolombia: la transacción se crea como PENDING
-      // En sandbox hacemos polling por 3 intentos y si sigue PENDING lo aprobamos
-      // (Wompi sandbox no cambia BANCOLOMBIA_TRANSFER automáticamente)
-      if (result.status === 'APPROVED') {
-        setProcessingMethod(null);
-        await handleSuccess();
-        return;
-      }
-
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
-          const data = await res.json();
-          const status = data.data?.status;
-          if (status === 'APPROVED') {
-            clearInterval(poll);
-            setProcessingMethod(null);
-            await handleSuccess();
-          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status)) {
-            clearInterval(poll);
-            setProcessingMethod(null);
-            showAlert('Pago rechazado', 'El pago fue rechazado por Bancolombia.');
-          } else if (attempts >= 3) {
-            // Sandbox: PENDING después de 3 intentos = aprobar para pruebas
-            clearInterval(poll);
-            setProcessingMethod(null);
-            await handleSuccess();
-          }
-        } catch (e) { if (attempts >= 3) { clearInterval(poll); setProcessingMethod(null); } }
-      }, 3000);
+      // Abrir URL de Bancolombia en navegador externo
+      await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
-      setProcessingMethod(null);
-    }
+    } finally { setProcessingMethod(null); }
   };
 
-  // ─── PSE ─────────────────────────────────────────────────────
+    // ─── PSE ─────────────────────────────────────────────────────
   const handlePSEPayment = async () => {
     setProcessingMethod('pse');
     try {
