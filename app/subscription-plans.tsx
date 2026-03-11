@@ -12,6 +12,15 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 
+// Funciona en web Y en nativo
+const showAlert = (title: string, message?: string) => {
+  if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
+    window.alert(title + (message ? '\n\n' + message : ''));
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 const WOMPI_PUBLIC_KEY = 'pub_test_BywxIX766MrxrZAm8Uum28Pe39e1D4nW';
 const WOMPI_API_URL = 'https://sandbox.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -114,15 +123,15 @@ export default function SubscriptionPlansScreen() {
     try {
       await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
       await handleSuccess();
-    } catch { Alert.alert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
+    } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
     finally { setProcessingMethod(null); }
   };
 
   // ─── TARJETA ─────────────────────────────────────────────────
   const handleCardPayment = async () => {
-    Alert.alert('Iniciando pago...', 'Procesando tarjeta');
+    showAlert('Iniciando pago...', 'Procesando tarjeta');
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      Alert.alert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
     }
     setProcessingMethod('card');
@@ -166,19 +175,19 @@ export default function SubscriptionPlansScreen() {
         await handleSuccess();
       } else if (result.status === 'PENDING') {
         setShowCardForm(false);
-        Alert.alert('Pago pendiente', 'Tu pago está siendo procesado.', [{ text: 'OK', onPress: () => router.replace('/(tabs)/appointments') }]);
+        showAlert('Pago pendiente', 'Tu pago está siendo procesado.'); router.replace('/(tabs)/appointments');
       } else {
         throw new Error('Pago rechazado: ' + (result.message || result.status));
       }
     } catch (error: any) {
-      Alert.alert('Error en tarjeta', error.message);
+      showAlert('Error en tarjeta', error.message);
     } finally { setProcessingMethod(null); }
   };
 
   // ─── NEQUI ───────────────────────────────────────────────────
   const handleNequiPayment = async () => {
     const cleanPhone = nequiPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) { Alert.alert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
+    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
     setProcessingMethod('nequi');
     try {
       const currentUser = await getSession();
@@ -215,12 +224,12 @@ export default function SubscriptionPlansScreen() {
             clearInterval(poll);
             setProcessingMethod(null);
             setNequiStatus('idle');
-            Alert.alert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado.');
+            showAlert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado.');
           }
         } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
       }, 5000);
     } catch (error: any) {
-      Alert.alert('Error Nequi', error.message);
+      showAlert('Error Nequi', error.message);
       setProcessingMethod(null);
     }
   };
@@ -249,7 +258,7 @@ export default function SubscriptionPlansScreen() {
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
-      Alert.alert('Error Bancolombia', error.message);
+      showAlert('Error Bancolombia', error.message);
     } finally { setProcessingMethod(null); }
   };
 
@@ -277,7 +286,7 @@ export default function SubscriptionPlansScreen() {
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
-      Alert.alert('Error PSE', error.message);
+      showAlert('Error PSE', error.message);
     } finally { setProcessingMethod(null); }
   };
 
@@ -294,7 +303,7 @@ export default function SubscriptionPlansScreen() {
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
-              <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
+              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
               <Text style={styles.inputLabel}>Nombre del titular</Text>
               <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
               <Text style={styles.inputLabel}>Número de tarjeta</Text>
@@ -329,7 +338,7 @@ export default function SubscriptionPlansScreen() {
                 disabled={isProcessing('card')}
                 activeOpacity={0.7}
               >
-                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Pagar ${priceCOP.toLocaleString('es-CO')} COP</Text>}
+                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{`Pagar $${priceCOP.toLocaleString('es-CO')} COP`}</Text>}
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
             </View>
@@ -353,7 +362,7 @@ export default function SubscriptionPlansScreen() {
             {nequiStatus === 'idle' ? (
               <>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.formAmount}>${priceCOP.toLocaleString('es-CO')} COP</Text>
+                <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
                 <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago.</Text>
                 <Text style={styles.inputLabel}>Número de celular Nequi</Text>
                 <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
@@ -373,7 +382,7 @@ export default function SubscriptionPlansScreen() {
               <View style={styles.waitingContainer}>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
                 <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
-                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>${priceCOP.toLocaleString('es-CO')} COP</Text> desde tu app Nequi.</Text>
+                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text> desde tu app Nequi.</Text>
                 <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
                 <Text style={styles.waitingHint}>Esperando confirmación...</Text>
               </View>
@@ -431,7 +440,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.btnIcon}>💰</Text>
               <View style={styles.btnTextWrap}>
                 <Text style={styles.btnTitle}>Saldo Virtual</Text>
-                <Text style={styles.btnSub}>Disponible: ${virtualBalance.toLocaleString('es-CO')} COP</Text>
+                <Text style={styles.btnSub}>{`Disponible: $${virtualBalance.toLocaleString('es-CO')} COP`}</Text>
               </View>
               {isProcessing('virtual') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
             </View>
