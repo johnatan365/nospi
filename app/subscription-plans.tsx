@@ -129,7 +129,6 @@ export default function SubscriptionPlansScreen() {
 
   // ─── TARJETA ─────────────────────────────────────────────────
   const handleCardPayment = async () => {
-    showAlert('Iniciando pago...', 'Procesando tarjeta');
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
       showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
