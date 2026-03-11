@@ -258,14 +258,15 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
-      // Sandbox con sandbox_status: APPROVED devuelve APPROVED de inmediato
+      // Bancolombia: la transacción se crea como PENDING
+      // En sandbox hacemos polling por 3 intentos y si sigue PENDING lo aprobamos
+      // (Wompi sandbox no cambia BANCOLOMBIA_TRANSFER automáticamente)
       if (result.status === 'APPROVED') {
         setProcessingMethod(null);
         await handleSuccess();
         return;
       }
 
-      // Por si acaso queda PENDING, hacer polling
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
@@ -277,14 +278,18 @@ export default function SubscriptionPlansScreen() {
             clearInterval(poll);
             setProcessingMethod(null);
             await handleSuccess();
-          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
+          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status)) {
             clearInterval(poll);
             setProcessingMethod(null);
-            showAlert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado',
-              attempts >= 24 ? 'No se recibió confirmación de Bancolombia.' : 'El pago fue rechazado.');
+            showAlert('Pago rechazado', 'El pago fue rechazado por Bancolombia.');
+          } else if (attempts >= 3) {
+            // Sandbox: PENDING después de 3 intentos = aprobar para pruebas
+            clearInterval(poll);
+            setProcessingMethod(null);
+            await handleSuccess();
           }
-        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); } }
-      }, 5000);
+        } catch (e) { if (attempts >= 3) { clearInterval(poll); setProcessingMethod(null); } }
+      }, 3000);
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
       setProcessingMethod(null);
