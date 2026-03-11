@@ -177,14 +177,11 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
 
-      if (result.status === 'APPROVED') {
+      if (result.status === 'APPROVED' || result.status === 'PENDING') {
         setShowCardForm(false);
         await handleSuccess();
-      } else if (result.status === 'PENDING') {
-        setShowCardForm(false);
-        showAlert('Pago pendiente', 'Tu pago está siendo procesado.'); router.replace('/(tabs)/appointments');
       } else {
-        throw new Error('Pago rechazado: ' + (result.message || result.status));
+        throw new Error('Pago rechazado. Intenta con otra tarjeta.');
       }
     } catch (error: any) {
       showAlert('Error en tarjeta', error.message);
