@@ -92,26 +92,38 @@ export default function RegisterScreen() {
         console.log('RegisterScreen: WebBrowser result:', result);
         
         if (result.type === 'success' && result.url) {
-          console.log('RegisterScreen: OAuth success, callback URL:', result.url);
+          console.log('RegisterScreen: Apple OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          const url = new URL(callbackUrl);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+
+          const hashIndex = callbackUrl.indexOf('#');
+          if (hashIndex !== -1) {
+            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
+            accessToken = hashParams.get('access_token');
+            refreshToken = hashParams.get('refresh_token');
+          }
+
+          if (!accessToken || !refreshToken) {
+            const url = new URL(callbackUrl);
+            accessToken = url.searchParams.get('access_token');
+            refreshToken = url.searchParams.get('refresh_token');
+          }
           
           if (accessToken && refreshToken) {
-            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: 'recovery',
-              },
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
             });
+            if (sessionError) {
+              setError('Error al registrarse. Intenta de nuevo.');
+              setLoading(false);
+            } else {
+              router.replace('/auth/callback');
+            }
           } else {
-            console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
+            router.replace('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');
@@ -192,24 +204,40 @@ export default function RegisterScreen() {
           console.log('RegisterScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          // Parse the URL to extract tokens
-          const url = new URL(callbackUrl);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
+          // Supabase devuelve tokens en hash fragment (#), no en query params
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+
+          const hashIndex = callbackUrl.indexOf('#');
+          if (hashIndex !== -1) {
+            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
+            accessToken = hashParams.get('access_token');
+            refreshToken = hashParams.get('refresh_token');
+          }
+
+          if (!accessToken || !refreshToken) {
+            const url = new URL(callbackUrl);
+            accessToken = url.searchParams.get('access_token');
+            refreshToken = url.searchParams.get('refresh_token');
+          }
           
           if (accessToken && refreshToken) {
-            console.log('RegisterScreen: Tokens found in callback URL, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: 'recovery',
-              },
+            console.log('RegisterScreen: Tokens found, setting session directly');
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
             });
+
+            if (sessionError) {
+              console.error('RegisterScreen: Error setting session:', sessionError);
+              setError('Error al registrarse. Intenta de nuevo.');
+              setLoading(false);
+            } else {
+              router.replace('/auth/callback');
+            }
           } else {
             console.log('RegisterScreen: No tokens in URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
+            router.replace('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled OAuth');

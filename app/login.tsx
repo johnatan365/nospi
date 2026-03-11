@@ -153,23 +153,43 @@ export default function LoginScreen() {
           console.log('LoginScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
           
-          const url = new URL(callbackUrl);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
+          // Supabase devuelve los tokens en el hash fragment (#), no en query params
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+
+          // Intentar extraer desde hash fragment primero
+          const hashIndex = callbackUrl.indexOf('#');
+          if (hashIndex !== -1) {
+            const hashParams = new URLSearchParams(callbackUrl.substring(hashIndex + 1));
+            accessToken = hashParams.get('access_token');
+            refreshToken = hashParams.get('refresh_token');
+          }
+
+          // Fallback: intentar desde query params
+          if (!accessToken || !refreshToken) {
+            const url = new URL(callbackUrl);
+            accessToken = url.searchParams.get('access_token');
+            refreshToken = url.searchParams.get('refresh_token');
+          }
           
           if (accessToken && refreshToken) {
-            console.log('LoginScreen: Tokens found in callback URL, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: 'recovery',
-              },
+            console.log('LoginScreen: Tokens found, setting session directly');
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
             });
+
+            if (sessionError) {
+              console.error('LoginScreen: Error setting session:', sessionError);
+              setError('Error al iniciar sesión. Intenta de nuevo.');
+              setLoading(false);
+            } else {
+              console.log('LoginScreen: Session set, navigating to callback');
+              router.replace('/auth/callback');
+            }
           } else {
             console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
+            router.replace('/auth/callback');
           }
         } else if (result.type === 'cancel') {
           console.log('LoginScreen: User cancelled OAuth');
