@@ -74,7 +74,7 @@ export default function SubscriptionPlansScreen() {
     if (payment_status === 'success') {
       const handleWebPaymentReturn = async () => {
         // Get transactionId from localStorage (persists across page reloads)
-        let transactionId = typeof window !== 'undefined'
+        let transactionId = (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage)
           ? window.localStorage.getItem('wompi_transaction_id')
           : await AsyncStorage.getItem('wompi_transaction_id');
 
@@ -94,7 +94,7 @@ export default function SubscriptionPlansScreen() {
             // Clean up flags
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
-            if (typeof window !== 'undefined') {
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
               window.localStorage.removeItem('pse_payment_pending');
               window.localStorage.removeItem('wompi_transaction_id');
             }
@@ -110,7 +110,7 @@ export default function SubscriptionPlansScreen() {
         // Payment verified — confirm appointment
         await AsyncStorage.removeItem('pse_payment_pending');
         await AsyncStorage.removeItem('wompi_transaction_id');
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.removeItem('pse_payment_pending');
           window.localStorage.removeItem('wompi_transaction_id');
         }
@@ -341,7 +341,7 @@ export default function SubscriptionPlansScreen() {
       // Abrir URL de Bancolombia en navegador externo
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await AsyncStorage.setItem('wompi_transaction_id', result.transactionId);
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', result.transactionId);
       }
@@ -378,7 +378,7 @@ export default function SubscriptionPlansScreen() {
 
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await AsyncStorage.setItem('wompi_transaction_id', data.transactionId);
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
