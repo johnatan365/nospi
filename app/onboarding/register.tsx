@@ -374,7 +374,13 @@ export default function RegisterScreen() {
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
-        setError(`Error al crear el perfil: ${profileError.message}`);
+        if (profileError.message.includes('users_phone_key') || profileError.message.includes('duplicate key')) {
+          setError('Este número de celular ya está registrado. Por favor usa otro número o inicia sesión con tu cuenta existente.');
+        } else if (profileError.message.includes('users_email_key') || profileError.message.includes('email')) {
+          setError('Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.');
+        } else {
+          setError('Error al crear el perfil. Por favor intenta de nuevo.');
+        }
         return;
       }
 
