@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
       "resizeMode": "contain",
@@ -14,14 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nospi.app",
-      "buildNumber": "1.0.0",
+      "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
-        "NSCameraUsageDescription": "Nospi necesita acceso a tu c\u00e1mara para tomar fotos de perfil.",
-        "NSPhotoLibraryUsageDescription": "Nospi necesita acceso a tu galer\u00eda para seleccionar fotos de perfil.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -36,15 +33,12 @@
         "foregroundImage": "./assets/images/28862883-193a-4459-9ff6-e47c925d5b63.png",
         "backgroundColor": "#E9D5FF"
       },
-      "package": "com.jaxper.jaxper",
-      "versionCode": 1,
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.nospi",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
+        "FOREGROUND_SERVICE",
         "POST_NOTIFICATIONS"
       ],
       "intentFilters": [
@@ -77,18 +71,11 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Nospi necesita acceso a tu galer\u00eda para seleccionar fotos de perfil.",
-          "cameraPermission": "Nospi necesita acceso a tu c\u00e1mara para tomar fotos de perfil."
-        }
-      ],
+      "expo-web-browser",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
-          "locationWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento."
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
         }
       ],
       [
@@ -98,20 +85,14 @@
           "color": "#E9D5FF",
           "sounds": []
         }
-      ],
-      "expo-secure-store"
+      ]
     ],
     "scheme": "nospi",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {
-        "origin": false
-      },
-      "eas": {
-        "projectId": "nospi-app"
-      },
+      "router": {},
       "supabaseUrl": "https://wjdiraurfbawotlcndmk.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8",
       "backendUrl": "https://pkmmkvxxec6pq2yagafutursvswbt8aj.app.specular.dev"
