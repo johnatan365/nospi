@@ -340,15 +340,57 @@ export default function SubscriptionPlansScreen() {
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
       // Guardar transactionId antes de abrir navegador
+      const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await AsyncStorage.setItem('wompi_transaction_id', result.transactionId);
+      await AsyncStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('pse_payment_pending', 'true');
-        window.localStorage.setItem('wompi_transaction_id', result.transactionId);
+        window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
       }
 
       // Abrir URL de Bancolombia en navegador externo
       await Linking.openURL(result.redirectUrl);
+
+      // En nativo: iniciar polling para detectar cuando el pago sea aprobado
+      // (AppState puede no dispararse en Expo Go)
+      if (Platform.OS !== 'web' && bancolombiaTransactionId) {
+        let pollAttempts = 0;
+        const maxAttempts = 24; // 2 minutos
+        const pollInterval = setInterval(async () => {
+          pollAttempts++;
+          try {
+            const pending = await AsyncStorage.getItem('pse_payment_pending');
+            if (pending !== 'true') { clearInterval(pollInterval); return; }
+
+            const res = await fetch(`${WOMPI_API_URL}/transactions/${bancolombiaTransactionId}`);
+            const data = await res.json();
+            const status = data.data?.status;
+
+            if (status === 'APPROVED') {
+              clearInterval(pollInterval);
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              try { await supabase.auth.refreshSession(); } catch {}
+              await confirmAppointment();
+              setProcessingMethod(null);
+              setShowSuccessModal(true);
+            } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || pollAttempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              setProcessingMethod(null);
+              if (pollAttempts < maxAttempts) {
+                showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
+              }
+            }
+          } catch (e) {
+            if (pollAttempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setProcessingMethod(null);
+            }
+          }
+        }, 5000);
+      }
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
     } finally { setProcessingMethod(null); }
