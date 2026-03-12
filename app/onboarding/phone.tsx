@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Modal, FlatList, SafeAreaView,
@@ -46,7 +46,25 @@ export default function PhoneScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [checking, setChecking] = useState(false);
+  const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const debounceRef = useRef<any>(null);
   const [search, setSearch] = useState('');
+
+  // Realtime duplicate check when number is complete
+  useEffect(() => {
+    if (cleanNumber.length !== selectedCountry.digits) {
+      setPhoneStatus('idle');
+      return;
+    }
+    setPhoneStatus('checking');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      const full = selectedCountry.code + cleanNumber;
+      const exists = await checkPhoneExists(full);
+      setPhoneStatus(exists ? 'taken' : 'available');
+    }, 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [cleanNumber, selectedCountry]);
 
   const filteredCountries = COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -56,9 +74,13 @@ export default function PhoneScreen() {
   const cleanNumber = phoneNumber.replace(/\D/g, '');
 
   // Button enabled only when exact digit count is reached
-  const canContinue = cleanNumber.length === selectedCountry.digits && !checking;
+  const canContinue = cleanNumber.length === selectedCountry.digits && !checking && phoneStatus !== "taken" && phoneStatus !== "checking";
 
-  const hintText = `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
+  const hintText =
+    phoneStatus === 'taken'    ? '❌ Este número ya está registrado' :
+    phoneStatus === 'available'? '✅ Número disponible' :
+    phoneStatus === 'checking' ? '🔍 Verificando...' :
+    `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
 
   const checkPhoneExists = async (full: string): Promise<boolean> => {
     try {
@@ -262,6 +284,7 @@ const styles = StyleSheet.create({
 
   hint: { fontSize: 13, color: nospiColors.purpleDark, opacity: 0.6, marginBottom: 24, textAlign: 'center' },
   hintDone: { color: '#16a34a', opacity: 1, fontWeight: '600' },
+  hintTaken: { color: '#dc2626', opacity: 1, fontWeight: '600' },
 
   // Continue button
   continueButton: {
