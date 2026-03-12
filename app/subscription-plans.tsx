@@ -72,20 +72,46 @@ export default function SubscriptionPlansScreen() {
   useEffect(() => {
     if (payment_status === 'success') {
       const handleWebPaymentReturn = async () => {
-        // In web, AsyncStorage may not persist across full page reloads
-        // So we check both AsyncStorage and localStorage
-        let pending = await AsyncStorage.getItem('pse_payment_pending');
-        if (!pending && typeof window !== 'undefined') {
-          pending = window.localStorage.getItem('pse_payment_pending');
+        // Get transactionId from localStorage (persists across page reloads)
+        let transactionId = typeof window !== 'undefined'
+          ? window.localStorage.getItem('wompi_transaction_id')
+          : await AsyncStorage.getItem('wompi_transaction_id');
+
+        if (!transactionId) {
+          showAlert('Error', 'No se encontró la transacción. Contacta soporte.');
+          return;
         }
-        if (pending !== 'true') {
-          // Even without the flag, if payment_status=success we should confirm
-          // This handles the case where the page reloaded and lost the flag
-          pending = 'true';
+
+        // Verify transaction status with Wompi before confirming
+        try {
+          const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
+          const data = await res.json();
+          const status = data.data?.status;
+          console.log('Bancolombia transaction status:', status);
+
+          if (status !== 'APPROVED') {
+            // Clean up flags
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            if (typeof window !== 'undefined') {
+              window.localStorage.removeItem('pse_payment_pending');
+              window.localStorage.removeItem('wompi_transaction_id');
+            }
+            showAlert('Pago no completado', 'El pago no fue aprobado. Estado: ' + (status || 'desconocido'));
+            return;
+          }
+        } catch (e) {
+          console.error('Error verifying transaction:', e);
+          showAlert('Error', 'No se pudo verificar el pago. Contacta soporte.');
+          return;
         }
+
+        // Payment verified — confirm appointment
         await AsyncStorage.removeItem('pse_payment_pending');
+        await AsyncStorage.removeItem('wompi_transaction_id');
         if (typeof window !== 'undefined') {
           window.localStorage.removeItem('pse_payment_pending');
+          window.localStorage.removeItem('wompi_transaction_id');
         }
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
@@ -104,7 +130,27 @@ export default function SubscriptionPlansScreen() {
         appWasBackground = false;
         const pending = await AsyncStorage.getItem('pse_payment_pending');
         if (pending !== 'true') return;
+
+        // Verify transaction before confirming
+        const transactionId = await AsyncStorage.getItem('wompi_transaction_id');
+        if (transactionId) {
+          try {
+            const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
+            const data = await res.json();
+            const status = data.data?.status;
+            if (status !== 'APPROVED') {
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              showAlert('Pago no completado', 'El pago no fue aprobado.');
+              return;
+            }
+          } catch (e) {
+            console.error('Error verifying transaction on AppState:', e);
+          }
+        }
+
         await AsyncStorage.removeItem('pse_payment_pending');
+        await AsyncStorage.removeItem('wompi_transaction_id');
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
         router.replace('/(tabs)/appointments');
@@ -293,8 +339,10 @@ export default function SubscriptionPlansScreen() {
 
       // Abrir URL de Bancolombia en navegador externo
       await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await AsyncStorage.setItem('wompi_transaction_id', result.transactionId);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('pse_payment_pending', 'true');
+        window.localStorage.setItem('wompi_transaction_id', result.transactionId);
       }
       await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
@@ -324,6 +372,11 @@ export default function SubscriptionPlansScreen() {
       if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
 
       await AsyncStorage.setItem('pse_payment_pending', 'true');
+      await AsyncStorage.setItem('wompi_transaction_id', data.transactionId);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('pse_payment_pending', 'true');
+        window.localStorage.setItem('wompi_transaction_id', data.transactionId);
+      }
       await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
       showAlert('Error PSE', error.message);
