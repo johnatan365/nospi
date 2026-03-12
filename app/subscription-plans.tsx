@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -344,7 +345,11 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', result.transactionId);
       }
-      await Linking.openURL(result.redirectUrl);
+      if (Platform.OS === 'web') {
+        await Linking.openURL(result.redirectUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(result.redirectUrl);
+      }
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
     } finally { setProcessingMethod(null); }
@@ -377,7 +382,11 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
-      await Linking.openURL(data.redirectUrl);
+      if (Platform.OS === 'web') {
+        await Linking.openURL(data.redirectUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(data.redirectUrl);
+      }
     } catch (error: any) {
       showAlert('Error PSE', error.message);
     } finally { setProcessingMethod(null); }
