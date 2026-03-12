@@ -323,7 +323,11 @@ export default function AppointmentsScreen() {
             style={[styles.filterButton, filter === 'confirmadas' && styles.filterButtonActive]}
             onPress={() => setFilter('confirmadas')}
           >
-            <Text style={[styles.filterText, filter === 'confirmadas' && styles.filterTextActive]}>
+            <Text 
+              style={[styles.filterText, filter === 'confirmadas' && styles.filterTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               Confirmadas
             </Text>
           </TouchableOpacity>
@@ -331,7 +335,11 @@ export default function AppointmentsScreen() {
             style={[styles.filterButton, filter === 'canceladas' && styles.filterButtonActive]}
             onPress={() => setFilter('canceladas')}
           >
-            <Text style={[styles.filterText, filter === 'canceladas' && styles.filterTextActive]}>
+            <Text 
+              style={[styles.filterText, filter === 'canceladas' && styles.filterTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               Canceladas
             </Text>
           </TouchableOpacity>
@@ -339,7 +347,11 @@ export default function AppointmentsScreen() {
             style={[styles.filterButton, filter === 'anteriores' && styles.filterButtonActive]}
             onPress={() => setFilter('anteriores')}
           >
-            <Text style={[styles.filterText, filter === 'anteriores' && styles.filterTextActive]}>
+            <Text 
+              style={[styles.filterText, filter === 'anteriores' && styles.filterTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               Anteriores
             </Text>
           </TouchableOpacity>
@@ -618,23 +630,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 24,
     marginBottom: 24,
-    gap: 12,
+    gap: 8,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
   },
   filterButtonActive: {
     backgroundColor: nospiColors.purpleDark,
   },
   filterText: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
     color: nospiColors.purpleDark,
+    textAlign: 'center',
   },
   filterTextActive: {
     color: 'white',
