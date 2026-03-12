@@ -1,12 +1,12 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Linking } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
-import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSupabase } from '@/contexts/SupabaseContext';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Linking, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Appointment {
   id: string;
@@ -30,59 +30,40 @@ interface Appointment {
   } | null;
 }
 
-type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
+type FilterType = 'all' | 'upcoming' | 'past';
 
 export default function AppointmentsScreen() {
   const { user } = useSupabase();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterType>('confirmadas');
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState({
     whatsapp: false,
-    email: true,
+    email: false,
     sms: false,
-    push: true,
+    push: false,
   });
-  const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
-
-  const checkFirstTimeNotificationPrompt = useCallback(async () => {
-    try {
-      const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
-      if (!hasSeenPrompt) {
-        setShowNotificationModal(true);
-        await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
-      }
-    } catch (error) {
-      console.error('Error checking notification prompt:', error);
-    }
-  }, []);
 
   const loadAppointments = useCallback(async () => {
-    if (!user?.id) {
+    if (!user) {
+      console.log('No user, skipping appointments load');
       return;
     }
 
+    console.log('Loading appointments for user:', user.id, 'Filter:', filter);
+    setLoading(true);
     try {
-      setLoading(true);
-
-      let statusFilter = 'confirmada';
-      if (filter === 'anteriores') {
-        statusFilter = 'anterior';
-      } else if (filter === 'canceladas') {
-        statusFilter = 'cancelada';
-      }
-
-      const { data, error } = await supabase
+      let query = supabase
         .from('appointments')
         .select(`
           id,
           status,
           payment_status,
           created_at,
-          events!inner (
+          events:event_id (
             id,
             name,
             city,
@@ -99,755 +80,559 @@ export default function AppointmentsScreen() {
           )
         `)
         .eq('user_id', user.id)
-        .eq('status', statusFilter)
         .order('created_at', { ascending: false });
+
+      if (filter === 'upcoming') {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.gte('events.date', today);
+      } else if (filter === 'past') {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.lt('events.date', today);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error loading appointments:', error);
         return;
       }
 
-      
-      // Transform the data to match our interface (events -> event)
-      const transformedAppointments = (data || []).map(apt => ({
-        ...apt,
-        event: apt.events as any
-      }));
-      
-      setAppointments(transformedAppointments as Appointment[]);
-    } catch (error) {
-      console.error('Failed to load appointments:', error);
+      console.log('Appointments loaded:', data?.length || 0);
+      setAppointments(data || []);
+    } catch (err) {
+      console.error('Exception loading appointments:', err);
     } finally {
       setLoading(false);
     }
   }, [user, filter]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadAppointments();
-      // Verificar si viene de un pago PSE exitoso
-      AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {
-        if (pending === 'true') {
-          await AsyncStorage.removeItem('pse_payment_pending');
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          if (pendingEventId && user?.id) {
-            // Esperar un poco para que el callback de MP haya procesado
-            setTimeout(async () => {
-              const { data: existing } = await supabase
-                .from('appointments')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('event_id', pendingEventId)
-                .maybeSingle();
-              if (existing) {
-                await AsyncStorage.removeItem('pending_event_confirmation');
-                setShowPaymentSuccessModal(true);
-                loadAppointments();
-              }
-            }, 2000);
-          }
-        }
-      });
-    }, [loadAppointments, user?.id])
-  );
+  const checkFirstTimeNotificationPrompt = useCallback(async () => {
+    if (!user) return;
+
+    console.log('Checking first-time notification prompt');
+    try {
+      const hasSeen = await AsyncStorage.getItem('has_seen_notification_prompt');
+      const hasConfirmedFirstEvent = await AsyncStorage.getItem('has_confirmed_first_event');
+
+      if (!hasSeen && hasConfirmedFirstEvent && appointments.length > 0) {
+        console.log('Showing notification preferences modal (first time)');
+        setShowNotificationModal(true);
+        await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+      }
+    } catch (err) {
+      console.error('Error checking notification prompt:', err);
+    }
+  }, [user, appointments.length]);
 
   useEffect(() => {
-    if (user) {
+    loadAppointments();
+  }, [user, filter, loadAppointments, checkFirstTimeNotificationPrompt]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('AppointmentsScreen focused, reloading appointments');
       loadAppointments();
       checkFirstTimeNotificationPrompt();
-    }
-  }, [user, filter, loadAppointments, checkFirstTimeNotificationPrompt]);
+    }, [loadAppointments, checkFirstTimeNotificationPrompt])
+  );
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('es-ES', options);
+    return date.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
 
   const handleCancelPress = (appointment: Appointment) => {
-    setAppointmentToCancel(appointment);
+    console.log('User pressed cancel for appointment:', appointment.id);
+    setSelectedAppointment(appointment);
     setShowCancelModal(true);
   };
 
   const confirmCancel = async () => {
-    if (!appointmentToCancel || !appointmentToCancel.event) return;
+    if (!selectedAppointment) return;
 
+    console.log('User confirmed cancellation for appointment:', selectedAppointment.id);
     try {
-      
-      // Calculate if cancellation is 24 hours before event
-      const eventStartTime = appointmentToCancel.event.start_time 
-        ? new Date(appointmentToCancel.event.start_time) 
-        : new Date(appointmentToCancel.event.date);
-      
-      const now = new Date();
-      const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
-      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-      
-      const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
-      
-      
-      // Update appointment status to cancelada
-      const { error: appointmentError } = await supabase
+      const { error } = await supabase
         .from('appointments')
-        .update({ 
-          status: 'cancelada',
-          payment_status: isWithinRefundWindow ? 'refunded' : 'completed'
-        })
-        .eq('id', appointmentToCancel.id);
+        .update({ status: 'cancelled' })
+        .eq('id', selectedAppointment.id);
 
-      if (appointmentError) {
-        console.error('Error cancelling appointment:', appointmentError);
+      if (error) {
+        console.error('Error cancelling appointment:', error);
         return;
       }
 
-      // If within refund window, add to virtual balance
-      if (isWithinRefundWindow) {
-        const refundAmount = PRECIO_EVENTO_COP;
-        
-        const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
-          user_id_param: user?.id,
-          amount_param: refundAmount
-        });
-
-        if (balanceError) {
-          console.error('Error updating virtual balance:', balanceError);
-          // Try direct update as fallback
-          const { data: userData } = await supabase
-            .from('users')
-            .select('virtual_balance')
-            .eq('id', user?.id)
-            .single();
-          
-          const currentBalance = userData?.virtual_balance || 0;
-          const newBalance = currentBalance + refundAmount;
-          
-          await supabase
-            .from('users')
-            .update({ virtual_balance: newBalance })
-            .eq('id', user?.id);
-          
-        } else {
-        }
-      }
-
+      console.log('Appointment cancelled successfully');
       setShowCancelModal(false);
-      setAppointmentToCancel(null);
+      setSelectedAppointment(null);
       loadAppointments();
-    } catch (error) {
-      console.error('Failed to cancel appointment:', error);
+    } catch (err) {
+      console.error('Exception cancelling appointment:', err);
     }
   };
 
   const toggleNotification = (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
-    setNotificationPreferences(prev => ({
+    console.log('User toggled notification preference:', type);
+    setNotificationPreferences((prev) => ({
       ...prev,
       [type]: !prev[type],
     }));
   };
 
   const saveNotificationPreferences = async () => {
+    if (!user) return;
+
+    console.log('Saving notification preferences:', notificationPreferences);
     try {
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: notificationPreferences })
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (error) {
         console.error('Error saving notification preferences:', error);
         return;
       }
 
+      console.log('Notification preferences saved successfully');
       setShowNotificationModal(false);
-    } catch (error) {
-      console.error('Failed to save notification preferences:', error);
+    } catch (err) {
+      console.error('Exception saving notification preferences:', err);
     }
   };
 
   const getStatusColor = (status: string) => {
-    const statusColorMap: Record<string, string> = {
-      confirmada: '#10B981',
-      cancelada: '#EF4444',
-      anterior: '#6B7280',
-    };
-    return statusColorMap[status] || '#6B7280';
+    switch (status) {
+      case 'confirmed':
+        return '#4CAF50';
+      case 'pending':
+        return '#FF9800';
+      case 'cancelled':
+        return '#F44336';
+      default:
+        return '#9E9E9E';
+    }
   };
 
   const getStatusText = (status: string) => {
-    const statusTextMap: Record<string, string> = {
-      confirmada: 'Confirmada',
-      cancelada: 'Cancelada',
-      anterior: 'Anterior',
-    };
-    return statusTextMap[status] || status;
+    switch (status) {
+      case 'confirmed':
+        return 'Confirmada';
+      case 'pending':
+        return 'Pendiente';
+      case 'cancelled':
+        return 'Cancelada';
+      default:
+        return status;
+    }
   };
 
   const handleOpenMaps = (mapsLink: string) => {
-    Linking.openURL(mapsLink).catch(err => {
-      console.error('Failed to open maps link:', err);
-    });
+    console.log('User opening maps link:', mapsLink);
+    Linking.openURL(mapsLink);
   };
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-        </View>
-      </LinearGradient>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={nospiColors.primary} />
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Mis Citas</Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[nospiColors.primary, nospiColors.secondary]}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Mis Citas</Text>
+      </LinearGradient>
 
-        {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterButton, filter === 'confirmadas' && styles.filterButtonActive]}
-            onPress={() => setFilter('confirmadas')}
-          >
-            <Text 
-              style={[styles.filterText, filter === 'confirmadas' && styles.filterTextActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              Confirmadas
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, filter === 'canceladas' && styles.filterButtonActive]}
-            onPress={() => setFilter('canceladas')}
-          >
-            <Text 
-              style={[styles.filterText, filter === 'canceladas' && styles.filterTextActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              Canceladas
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, filter === 'anteriores' && styles.filterButtonActive]}
-            onPress={() => setFilter('anteriores')}
-          >
-            <Text 
-              style={[styles.filterText, filter === 'anteriores' && styles.filterTextActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              Anteriores
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
+            Todas
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'upcoming' && styles.filterButtonActive]}
+          onPress={() => setFilter('upcoming')}
+        >
+          <Text style={[styles.filterText, filter === 'upcoming' && styles.filterTextActive]}>
+            Próximas
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'past' && styles.filterButtonActive]}
+          onPress={() => setFilter('past')}
+        >
+          <Text style={[styles.filterText, filter === 'past' && styles.filterTextActive]}>
+            Pasadas
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-          {appointments.map((appointment) => {
-            // ATOMIC JSX: Extract all logic and conditionals BEFORE the return
-            // Defensive check: Skip if event is null or undefined
-            if (!appointment.event) {
-              return null;
-            }
-
-            const eventType = appointment.event.type || 'restaurant';
-            const eventTypeText = eventType === 'bar' ? 'Bar' : 'Restaurante';
-            const eventIcon = eventType === 'bar' ? '🍸' : '🍽️';
-            const eventName = appointment.event.name || eventTypeText;
-            const eventCity = appointment.event.city || '';
-            const eventDate = appointment.event.date || '';
-            const eventTime = appointment.event.time || '';
-            
-            // Show location if revealed
-            const locationRevealed = appointment.event.is_location_revealed || false;
-            
-            const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
-            const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
-            
-            const eventLocation = locationRevealed && appointment.event.location_name 
-              ? appointment.event.location_name 
-              : '';
-            
-            const eventAddress = locationRevealed && appointment.event.location_address
-              ? appointment.event.location_address
-              : null;
-            
-            const mapsLink = locationRevealed && appointment.event.maps_link
-              ? appointment.event.maps_link
-              : null;
-            
-            const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
-            const statusColor = getStatusColor(appointment.status);
-            const statusText = getStatusText(appointment.status);
-            const isConfirmed = appointment.status === 'confirmada';
-
-            return (
-              <View key={appointment.id} style={styles.appointmentCard}>
-                <View style={styles.appointmentHeader}>
-                  <Text style={styles.appointmentIcon}>{eventIcon}</Text>
-                  <View style={styles.appointmentHeaderText}>
-                    <Text style={styles.appointmentName}>{eventName}</Text>
-                    <Text style={styles.appointmentCity}>{eventCity}</Text>
+      <ScrollView style={styles.content}>
+        {appointments.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No tienes citas {filter === 'all' ? '' : filter === 'upcoming' ? 'próximas' : 'pasadas'}</Text>
+          </View>
+        ) : (
+          appointments.map((appointment) => (
+            <View key={appointment.id} style={styles.appointmentCard}>
+              {appointment.event && (
+                <>
+                  <View style={styles.appointmentHeader}>
+                    <Text style={styles.eventName}>{appointment.event.name}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(appointment.status) },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{getStatusText(appointment.status)}</Text>
+                    </View>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.statusText}>{statusText}</Text>
-                  </View>
-                </View>
 
-                <Text style={styles.appointmentDate}>{dateText}</Text>
-                <Text style={styles.appointmentTime}>{eventTime}</Text>
-                
-                {shouldShowLocationPlaceholder && (
-                  <Text style={styles.appointmentLocation}>Ubicación se revelará 48 horas antes del evento</Text>
-                )}
-                
-                {locationRevealed && (
-                  <>
-                    <Text style={styles.appointmentLocation}>{eventLocation}</Text>
-                    {eventAddress && (
-                      <Text style={styles.appointmentAddress}>{eventAddress}</Text>
-                    )}
-                    {mapsLink && (
+                  <Text style={styles.eventType}>{appointment.event.type}</Text>
+                  <Text style={styles.eventDate}>{formatDate(appointment.event.date)}</Text>
+                  <Text style={styles.eventTime}>{appointment.event.time}</Text>
+
+                  {appointment.event.is_location_revealed && (
+                    <View style={styles.locationContainer}>
+                      <Text style={styles.locationName}>{appointment.event.location_name}</Text>
+                      <Text style={styles.locationAddress}>
+                        {appointment.event.location_address}
+                      </Text>
                       <TouchableOpacity
                         style={styles.mapsButton}
-                        onPress={() => handleOpenMaps(mapsLink)}
-                        activeOpacity={0.8}
+                        onPress={() => handleOpenMaps(appointment.event!.maps_link)}
                       >
-                        <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                        <Text style={styles.mapsButtonText}>Ver en Mapa</Text>
                       </TouchableOpacity>
-                    )}
-                  </>
-                )}
-
-                {isConfirmed && (
-                  <>
-                    <View style={styles.refundInfoCard}>
-                      <Text style={styles.refundInfoText}>
-                        💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
-                      </Text>
                     </View>
-                    
+                  )}
+
+                  {appointment.status === 'confirmed' && (
                     <TouchableOpacity
                       style={styles.cancelButton}
                       onPress={() => handleCancelPress(appointment)}
                     >
                       <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
                     </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            );
-          })}
-
-          {appointments.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {filter === 'confirmadas' 
-                  ? 'No tienes citas confirmadas' 
-                  : filter === 'canceladas'
-                  ? 'No tienes citas canceladas'
-                  : 'No tienes citas anteriores'}
-              </Text>
+                  )}
+                </>
+              )}
             </View>
-          )}
-        </ScrollView>
+          ))
+        )}
+      </ScrollView>
 
-        {/* Notification Preferences Modal */}
-        <Modal
-          visible={showNotificationModal}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowNotificationModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Preferencias de Notificación</Text>
-              <Text style={styles.modalSubtitle}>
-                ¿Cómo te gustaría recibir recordatorios de tus citas?
-              </Text>
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
+            <Text style={styles.modalText}>
+              ¿Estás seguro de que deseas cancelar esta cita? Esta acción no se puede deshacer.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowCancelModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>No</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={confirmCancel}
+              >
+                <Text style={styles.modalButtonTextConfirm}>Sí, Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-              <View style={styles.notificationOptions}>
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('whatsapp')}
+      {/* Notification Preferences Modal */}
+      <Modal
+        visible={showNotificationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNotificationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.modalText}>
+              Elige cómo quieres recibir notificaciones sobre tus citas:
+            </Text>
+
+            <View style={styles.notificationOptions}>
+              <TouchableOpacity
+                style={styles.notificationOption}
+                onPress={() => toggleNotification('whatsapp')}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    notificationPreferences.whatsapp && styles.checkboxChecked,
+                  ]}
                 >
-                  <Text style={styles.notificationOptionText}>📱 WhatsApp</Text>
-                  <View style={[styles.checkbox, notificationPreferences.whatsapp && styles.checkboxActive]}>
-                    {notificationPreferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
+                  {notificationPreferences.whatsapp && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </View>
+                <Text style={styles.notificationLabel}>WhatsApp</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('email')}
+              <TouchableOpacity
+                style={styles.notificationOption}
+                onPress={() => toggleNotification('email')}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    notificationPreferences.email && styles.checkboxChecked,
+                  ]}
                 >
-                  <Text style={styles.notificationOptionText}>📧 Email</Text>
-                  <View style={[styles.checkbox, notificationPreferences.email && styles.checkboxActive]}>
-                    {notificationPreferences.email && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
+                  {notificationPreferences.email && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.notificationLabel}>Email</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('sms')}
+              <TouchableOpacity
+                style={styles.notificationOption}
+                onPress={() => toggleNotification('sms')}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    notificationPreferences.sms && styles.checkboxChecked,
+                  ]}
                 >
-                  <Text style={styles.notificationOptionText}>💬 SMS</Text>
-                  <View style={[styles.checkbox, notificationPreferences.sms && styles.checkboxActive]}>
-                    {notificationPreferences.sms && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
+                  {notificationPreferences.sms && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.notificationLabel}>SMS</Text>
+              </TouchableOpacity>
 
+              {/* 🚨 MODIFIED: Only show push notifications option in development builds */}
+              {!(__DEV__ && Platform.OS === 'android') && (
                 <TouchableOpacity
                   style={styles.notificationOption}
                   onPress={() => toggleNotification('push')}
                 >
-                  <Text style={styles.notificationOptionText}>🔔 Notificaciones Push</Text>
-                  <View style={[styles.checkbox, notificationPreferences.push && styles.checkboxActive]}>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      notificationPreferences.push && styles.checkboxChecked,
+                    ]}
+                  >
                     {notificationPreferences.push && <Text style={styles.checkmark}>✓</Text>}
                   </View>
+                  <Text style={styles.notificationLabel}>Notificaciones Push</Text>
                 </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={saveNotificationPreferences}
-              >
-                <Text style={styles.saveButtonText}>Guardar Preferencias</Text>
-              </TouchableOpacity>
+              )}
             </View>
-          </View>
-        </Modal>
 
-        {/* Cancel Confirmation Modal */}
-        <Modal
-          visible={showCancelModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowCancelModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
-              {appointmentToCancel && appointmentToCancel.event && (() => {
-                const eventStartTime = appointmentToCancel.event.start_time 
-                  ? new Date(appointmentToCancel.event.start_time) 
-                  : new Date(appointmentToCancel.event.date);
-                const now = new Date();
-                const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
-                const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-                const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
-                
-                const refundMessage = isWithinRefundWindow
-                  ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${PRECIO_EVENTO_COP.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
-                  : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
-                
-                return (
-                  <Text style={styles.modalSubtitle}>
-                    {refundMessage}
-                  </Text>
-                );
-              })()}
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={() => setShowCancelModal(false)}
-                >
-                  <Text style={styles.modalButtonTextSecondary}>No, mantener</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={confirmCancel}
-                >
-                  <Text style={styles.modalButtonTextPrimary}>Sí, cancelar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={saveNotificationPreferences}
+            >
+              <Text style={styles.saveButtonText}>Guardar Preferencias</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
-
-        {/* Modal de exito de pago PSE */}
-        <Modal visible={showPaymentSuccessModal} transparent animationType="fade">
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 32, alignItems: 'center', width: '100%', maxWidth: 340 }}>
-              <Text style={{ fontSize: 64, marginBottom: 16 }}>🎉</Text>
-              <Text style={{ fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 8, textAlign: 'center' }}>
-                ¡Pago exitoso!
-              </Text>
-              <Text style={{ fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                Tu asistencia al evento ha sido confirmada. ¡Nos vemos pronto!
-              </Text>
-              <TouchableOpacity
-                style={{ backgroundColor: nospiColors.purpleDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%' }}
-                onPress={() => setShowPaymentSuccessModal(false)}
-              >
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>Ver mi cita</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    </LinearGradient>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    paddingTop: 48,
+    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 32,
+  header: {
+    padding: 24,
+    paddingTop: 60,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 24,
-    paddingHorizontal: 24,
+    color: '#fff',
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    padding: 16,
     gap: 8,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 40,
   },
   filterButtonActive: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: nospiColors.primary,
   },
   filterText: {
-    fontSize: 13,
+    fontSize: 14,
+    color: '#666',
     fontWeight: '600',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
   },
   filterTextActive: {
-    color: 'white',
+    color: '#fff',
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 100,
-  },
-  appointmentCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  appointmentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  appointmentIcon: {
-    fontSize: 40,
-    marginRight: 12,
-  },
-  appointmentHeaderText: {
-    flex: 1,
-  },
-  appointmentName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-  },
-  appointmentCity: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  appointmentDate: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  appointmentTime: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  appointmentLocation: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  appointmentAddress: {
-    fontSize: 13,
-    color: '#888',
-    marginBottom: 12,
-  },
-  mapsButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  mapsButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  refundInfoCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 12,
     padding: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  refundInfoText: {
-    fontSize: 13,
-    color: '#065F46',
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  cancelButton: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  cancelButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   emptyContainer: {
-    padding: 40,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 60,
   },
   emptyText: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#999',
     textAlign: 'center',
-    opacity: 0.7,
+  },
+  appointmentCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  appointmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  eventName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  eventType: {
+    fontSize: 16,
+    color: nospiColors.primary,
+    marginBottom: 4,
+  },
+  eventDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  eventTime: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  locationContainer: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  mapsButton: {
+    backgroundColor: nospiColors.primary,
+    borderRadius: 6,
+    padding: 8,
+    alignItems: 'center',
+  },
+  mapsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 32,
-    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
     maxWidth: 400,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#333',
     marginBottom: 12,
     textAlign: 'center',
   },
-  modalSubtitle: {
+  modalText: {
     fontSize: 16,
     color: '#666',
     marginBottom: 24,
     textAlign: 'center',
-  },
-  notificationOptions: {
-    marginBottom: 24,
-  },
-  notificationOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  notificationOptionText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: nospiColors.purpleDark,
-    borderColor: nospiColors.purpleDark,
-  },
-  checkmark: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  saveButton: {
-    backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -855,23 +640,65 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  modalButtonSecondary: {
-    backgroundColor: '#F3F4F6',
+  modalButtonCancel: {
+    backgroundColor: '#f0f0f0',
   },
-  modalButtonPrimary: {
-    backgroundColor: '#EF4444',
+  modalButtonConfirm: {
+    backgroundColor: '#F44336',
   },
-  modalButtonTextSecondary: {
-    color: '#6B7280',
+  modalButtonTextCancel: {
+    color: '#333',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  modalButtonTextPrimary: {
-    color: 'white',
+  modalButtonTextConfirm: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  notificationOptions: {
+    marginBottom: 24,
+  },
+  notificationOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: nospiColors.primary,
+    borderColor: nospiColors.primary,
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  notificationLabel: {
+    fontSize: 16,
+    color: '#333',
+  },
+  saveButton: {
+    backgroundColor: nospiColors.primary,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },

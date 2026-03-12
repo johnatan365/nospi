@@ -1,13 +1,13 @@
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
+import { nospiColors } from '@/constants/Colors';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 interface Event {
   id: string;
@@ -65,186 +65,66 @@ interface Participant {
   profiles: Profile | null;
 }
 
-type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
-
-// Only set notification handler on native platforms
-if (Platform.OS !== 'web') {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-}
+type CheckInPhase = 'not_started' | 'location_confirmation' | 'arrival_confirmation' | 'completed';
 
 export default function InteraccionScreen() {
   const { user } = useSupabase();
-  const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [countdown, setCountdown] = useState<number>(0);
-  const [countdownDisplay, setCountdownDisplay] = useState<string>('');
-  const [isEventDay, setIsEventDay] = useState(false);
-  const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
-  const [confirmationCode, setConfirmationCode] = useState('');
-  const [codeError, setCodeError] = useState('');
-  const [startingExperience, setStartingExperience] = useState(false);
-  
+  const [loading, setLoading] = useState(true);
+  const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('not_started');
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
-  
-  const [gamePhase, setGamePhase] = useState<string>('intro');
+  const [countdown, setCountdown] = useState<string>('');
+  const [showGameDynamics, setShowGameDynamics] = useState(false);
 
-  const checkIfEventDay = useCallback((startTime: string) => {
-    const now = new Date();
-    const eventDate = new Date(startTime);
-    
-    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
-    
-    const isSameDay = 
-      now.getFullYear() === eventDate.getFullYear() &&
-      now.getMonth() === eventDate.getMonth() &&
-      now.getDate() === eventDate.getDate();
-    
-    const isAfterMidnight = now >= eventDayStart;
-    
-    const isToday = isSameDay && isAfterMidnight;
-    setIsEventDay(isToday);
-  }, []);
+  const loadActiveParticipants = useCallback(async () => {
+    if (!appointment?.event_id) return;
 
-  const updateCountdown = useCallback((startTime: string) => {
-    const now = new Date();
-    const eventDate = new Date(startTime);
-    
-    // Calculate time until exact appointment time (for code entry)
-    const diffToEventTime = eventDate.getTime() - now.getTime();
-    
-    // Calculate time until 10 minutes after appointment (for "Continuar" button)
-    const eventDatePlus10 = new Date(startTime);
-    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 10);
-    const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
-
-    setCountdown(diffToPlus10);
-
-    if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
-      setCheckInPhase('code_entry');
-    }
-
-    // Display countdown to 10 minutes after appointment
-    if (diffToPlus10 <= 0) {
-      setCountdownDisplay('¡Es hora!');
-      return;
-    }
-
-    const hours = Math.floor(diffToPlus10 / (1000 * 60 * 60));
-    const minutes = Math.floor((diffToPlus10 % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffToPlus10 % (1000 * 60)) / 1000);
-
-    const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    setCountdownDisplay(countdownText);
-  }, [appointment, checkInPhase]);
-
-  const requestNotificationPermissions = useCallback(async () => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      return;
-    }
-
+    console.log('Loading active participants for event:', appointment.event_id);
     try {
-      const { status } = await Notifications.requestPermissionsAsync();
-    } catch (error) {
-      console.error('Error requesting notification permissions:', error);
-    }
-  }, []);
-
-  const scheduleNotifications = useCallback(async (startTime: string) => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    try {
-      const eventDate = new Date(startTime);
-      const now = new Date();
-
-      await Notifications.cancelAllScheduledNotificationsAsync();
-
-      if (eventDate > now) {
-        const sixHoursBefore = new Date(eventDate.getTime() - 6 * 60 * 60 * 1000);
-        if (sixHoursBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Tu experiencia Nospi está cerca',
-              body: 'Faltan 6 horas para tu evento. ¡Prepárate!',
-              sound: true,
-            },
-            trigger: { type: 'date', date: sixHoursBefore },
-          });
-        }
-
-        const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
-        if (oneHourBefore > now) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Tu experiencia Nospi comienza pronto',
-              body: 'Falta 1 hora.',
-              sound: true,
-            },
-            trigger: { type: 'date', date: oneHourBefore },
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error scheduling notifications:', error);
-    }
-  }, []);
-
-  const loadActiveParticipants = useCallback(async (eventId: string) => {
-    try {
-      
       const { data, error } = await supabase
-        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
+        .from('event_participants')
+        .select(`
+          id,
+          user_id,
+          event_id,
+          confirmed,
+          check_in_time,
+          is_presented,
+          presented_at,
+          profiles:user_id (
+            id,
+            name,
+            email,
+            phone,
+            city,
+            profile_photo_url,
+            interested_in
+          )
+        `)
+        .eq('event_id', appointment.event_id)
+        .eq('confirmed', true);
 
       if (error) {
-        console.error('❌ Error loading participants:', error);
+        console.error('Error loading participants:', error);
         return;
       }
 
-      const participants: Participant[] = (data || [])
-        .filter((item: any) => item.user_name && item.confirmed === true)
-        .map((item: any) => ({
-          id: item.id,
-          user_id: item.user_id,
-          event_id: item.event_id,
-          confirmed: item.confirmed,
-          check_in_time: item.check_in_time,
-          is_presented: item.is_presented || false,
-          presented_at: item.presented_at || null,
-          profiles: {
-            id: item.user_id,
-            name: item.user_name,
-            email: item.user_email || '',
-            phone: item.user_phone || '',
-            city: item.user_city || '',
-            profile_photo_url: item.user_profile_photo_url || null,
-            interested_in: item.user_interested_in || ''
-          }
-        }));
-
-      
-      setActiveParticipants(participants);
-    } catch (error) {
-      console.error('❌ Failed to load participants:', error);
+      console.log('Active participants loaded:', data?.length || 0);
+      setActiveParticipants(data || []);
+    } catch (err) {
+      console.error('Exception loading participants:', err);
     }
-  }, []);
+  }, [appointment?.event_id]);
 
   const loadAppointment = useCallback(async () => {
     if (!user) {
-      setLoading(false);
+      console.log('No user, skipping appointment load');
       return;
     }
 
+    console.log('Loading appointment for user:', user.id);
+    setLoading(true);
     try {
-      
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -254,7 +134,7 @@ export default function InteraccionScreen() {
           checked_in_at,
           location_confirmed,
           status,
-          event:events!inner (
+          events:event_id (
             id,
             type,
             date,
@@ -280,332 +160,113 @@ export default function InteraccionScreen() {
           )
         `)
         .eq('user_id', user.id)
-        .eq('status', 'confirmada')
-        .eq('payment_status', 'completed')
-        .order('created_at', { ascending: false });
+        .eq('status', 'confirmed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
       if (error) {
-        console.error('❌ Error loading appointment:', error);
-        setLoading(false);
-        return;
-      }
-      
-      if (!data || data.length === 0) {
+        console.error('Error loading appointment:', error);
         setAppointment(null);
-        setLoading(false);
         return;
       }
 
-      const now = new Date();
-      
-      const todayConfirmedAppointment = data.find(apt => {
-        if (apt.status !== 'confirmada') return false;
-        if (!apt.event?.start_time) return false;
-        const eventDate = new Date(apt.event.start_time);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        return eventDayStart.getTime() === todayStart.getTime();
-      });
+      if (data && data.events) {
+        console.log('Appointment loaded:', data.id, 'Event:', data.events.id);
+        const appointmentData: Appointment = {
+          id: data.id,
+          event_id: data.event_id,
+          arrival_status: data.arrival_status || 'pending',
+          checked_in_at: data.checked_in_at,
+          location_confirmed: data.location_confirmed || false,
+          status: data.status,
+          event: data.events as Event,
+        };
+        setAppointment(appointmentData);
 
-      const upcomingAppointment = data.find(apt => {
-        if (apt.status !== 'confirmada') return false;
-        if (!apt.event?.start_time) return false;
-        const eventDate = new Date(apt.event.start_time);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        return eventDayStart >= todayStart;
-      });
-
-      const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
-      
-      
-      if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
-        setAppointment(null);
-        setLoading(false);
-        return;
-      }
-      
-      setAppointment(appointmentData as any);
-      
-      // If user hasn't confirmed location, force them to code_entry phase regardless of event's game_phase
-      if (!appointmentData.location_confirmed) {
-        setCheckInPhase('code_entry');
-        setGamePhase('intro'); // Keep in intro phase until they confirm
-      } else {
-        setCheckInPhase('confirmed');
-        
-        if (appointmentData.event?.game_phase) {
-          setGamePhase(appointmentData.event.game_phase);
+        // Determine check-in phase
+        if (!appointmentData.location_confirmed) {
+          setCheckInPhase('location_confirmation');
+        } else if (appointmentData.arrival_status === 'pending') {
+          setCheckInPhase('arrival_confirmation');
+        } else if (appointmentData.arrival_status === 'arrived') {
+          setCheckInPhase('completed');
+          setShowGameDynamics(true);
         }
+      } else {
+        console.log('No active appointment found');
+        setAppointment(null);
       }
-      
-      if (appointmentData.event && appointmentData.event.start_time) {
-        checkIfEventDay(appointmentData.event.start_time);
-        scheduleNotifications(appointmentData.event.start_time);
-      }
-      
-      if (appointmentData.event_id) {
-        loadActiveParticipants(appointmentData.event_id);
-      }
-    } catch (error) {
-      console.error('Failed to load appointment:', error);
+    } catch (err) {
+      console.error('Exception loading appointment:', err);
+      setAppointment(null);
     } finally {
       setLoading(false);
     }
-  }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
+  }, [user]);
 
-  const handleCodeConfirmation = useCallback(async () => {
-    
-    if (!appointment || !user) return;
-
-    const enteredCode = confirmationCode.trim();
-    const eventCode = appointment.event.confirmation_code;
-    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
-      ? '1986' 
-      : eventCode.trim();
-    
-
-    if (enteredCode !== expectedCode) {
-      setCodeError('Código incorrecto.');
+  // 🚨 MODIFIED: Only request notification permissions in development builds, not Expo Go
+  const requestNotificationPermissions = useCallback(async () => {
+    // Skip notification setup in Expo Go to avoid the warning
+    if (__DEV__ && Platform.OS === 'android') {
+      console.log('Skipping notification permissions in Expo Go (Android)');
       return;
     }
 
-    setCodeError('');
-
     try {
-      const confirmedAt = new Date().toISOString();
+      console.log('Requesting notification permissions');
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
 
-      setCheckInPhase('confirmed');
-      setConfirmationCode('');
-      
-      setAppointment(prev => ({
-        ...prev!,
-        arrival_status: 'on_time',
-        checked_in_at: confirmedAt,
-        location_confirmed: true,
-      }));
-      
-      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
-      if (appointment.event?.game_phase) {
-        setGamePhase(appointment.event.game_phase);
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
       }
-      
-      // Now perform database updates in the background
-      const { error: updateError } = await supabase
-        .from('event_participants')
-        .upsert({
-          event_id: appointment.event_id,
-          user_id: user.id,
-          confirmed: true,
-          check_in_time: confirmedAt,
-        }, {
-          onConflict: 'event_id,user_id'
-        });
 
-      if (updateError) {
-        console.error('Error updating event_participants:', updateError);
-        // Revert optimistic update on error
-        setCheckInPhase('code_entry');
-        setCodeError('No se pudo registrar tu llegada.');
+      if (finalStatus !== 'granted') {
+        console.log('Notification permissions not granted');
         return;
       }
 
-      
-      await supabase
-        .from('appointments')
-        .update({
-          arrival_status: 'on_time',
-          checked_in_at: confirmedAt,
-          location_confirmed: true,
-        })
-        .eq('id', appointment.id);
-      
-      loadActiveParticipants(appointment.event_id);
+      console.log('Notification permissions granted');
     } catch (error) {
-      console.error('Error during check-in:', error);
-      // Revert optimistic update on error
-      setCheckInPhase('code_entry');
-      setCodeError('Ocurrió un error.');
+      console.error('Error requesting notification permissions:', error);
     }
-  }, [appointment, user, confirmationCode, loadActiveParticipants]);
-
-  const handleStartExperience = useCallback(async () => {
-    
-    if (!appointment?.event_id || startingExperience) {
-      return;
-    }
-
-    if (activeParticipants.length < 2) {
-      return;
-    }
-
-    setStartingExperience(true);
-    
-    try {
-      
-      // Select random starter
-      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-      const starterUserId = activeParticipants[randomIndex].user_id;
-      
-      // Get first question from divertido level
-      const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
-      
-      
-      setGamePhase('questions');
-      
-      const { error } = await supabase
-        .from('events')
-        .update({
-          game_phase: 'questions',
-          current_level: 'divertido',
-          current_question_index: 0,
-          answered_users: [],
-          current_question: firstQuestion,
-          current_question_starter_id: starterUserId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appointment.event_id);
-
-      if (error) {
-        console.error('❌ Error starting experience:', error);
-        // Revert optimistic update on error
-        setGamePhase('intro');
-        setStartingExperience(false);
-        return;
-      }
-
-      
-    } catch (error) {
-      console.error('❌ Unexpected error:', error);
-      // Revert optimistic update on error
-      setGamePhase('intro');
-      setStartingExperience(false);
-    } finally {
-      setTimeout(() => {
-        setStartingExperience(false);
-      }, 1000);
-    }
-  }, [appointment, activeParticipants, startingExperience]);
-
-  useEffect(() => {
-    if (!appointment?.event_id || !appointment?.id || !user) return;
-
-
-    // Subscribe to event changes
-    const eventChannel = supabase
-      .channel(`event_state_${appointment.event_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
-        },
-        (payload) => {
-          const newEvent = payload.new as any;
-          
-          if (newEvent.event_status === 'closed') {
-            setAppointment(null);
-            return;
-          }
-          
-          // This prevents users who haven't entered the code from seeing the game
-          setAppointment(prev => {
-            if (!prev) return prev;
-            
-            const updatedAppointment = {
-              ...prev,
-              event: {
-                ...prev.event,
-                game_phase: newEvent.game_phase,
-                current_level: newEvent.current_level,
-                current_question_index: newEvent.current_question_index,
-                answered_users: newEvent.answered_users,
-                current_question: newEvent.current_question,
-                current_question_starter_id: newEvent.current_question_starter_id,
-                event_status: newEvent.event_status
-              }
-            };
-            
-            if (prev.location_confirmed && newEvent.game_phase) {
-              setGamePhase(newEvent.game_phase);
-            } else {
-            }
-            
-            return updatedAppointment;
-          });
-        }
-      )
-      .subscribe((status) => {
-      });
-
-    const appointmentChannel = supabase
-      .channel(`appointment_${appointment.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'appointments',
-          filter: `id=eq.${appointment.id}`,
-        },
-        (payload) => {
-          const newAppointment = payload.new as any;
-          
-          if (newAppointment.status === 'anterior') {
-            setAppointment(null);
-            setLoading(false);
-            return;
-          }
-          
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(eventChannel);
-      supabase.removeChannel(appointmentChannel);
-    };
-  }, [appointment?.event_id, appointment?.id, user]);
-
-  useFocusEffect(
-    useCallback(() => {
-      
-      if (user) {
-        loadAppointment();
-      }
-      
-      return () => {
-      };
-    }, [user, loadAppointment])
-  );
-
-  useEffect(() => {
-    if (appointment && appointment.event.start_time) {
-      const interval = setInterval(() => {
-        updateCountdown(appointment.event.start_time!);
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [appointment, updateCountdown]);
+  }, []);
 
   useEffect(() => {
     requestNotificationPermissions();
   }, [requestNotificationPermissions]);
 
   useEffect(() => {
-    if (!appointment || !user) return;
+    loadAppointment();
+  }, [loadAppointment]);
 
-    
-    loadActiveParticipants(appointment.event_id);
+  useEffect(() => {
+    loadActiveParticipants();
+  }, [appointment, user, loadActiveParticipants]);
 
-    const channel = supabase
-      .channel(`participants_${appointment.event_id}`)
+  // Subscribe to realtime updates
+  useEffect(() => {
+    if (!appointment?.event_id || !appointment?.id || !user) return;
+
+    console.log('Setting up realtime subscription for event:', appointment.event_id);
+
+    const eventChannel = supabase
+      .channel(`event-${appointment.event_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${appointment.event_id}`,
+        },
+        (payload) => {
+          console.log('Event update received:', payload);
+          loadAppointment();
+        }
+      )
       .on(
         'postgres_changes',
         {
@@ -615,615 +276,318 @@ export default function InteraccionScreen() {
           filter: `event_id=eq.${appointment.event_id}`,
         },
         (payload) => {
-          loadActiveParticipants(appointment.event_id);
+          console.log('Participant update received:', payload);
+          loadActiveParticipants();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      console.log('Cleaning up realtime subscription');
+      supabase.removeChannel(eventChannel);
     };
-  }, [appointment, user, loadActiveParticipants]);
+  }, [appointment?.event_id, appointment?.id, user]);
 
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+  useFocusEffect(
+    useCallback(() => {
+      console.log('InteraccionScreen focused, reloading data');
+      loadAppointment();
+      loadActiveParticipants();
+    }, [loadAppointment, loadActiveParticipants])
+  );
+
+  const updateCountdown = useCallback(() => {
+    if (!appointment?.event) return;
+
+    const eventDate = new Date(appointment.event.date);
+    const now = new Date();
+    const diff = eventDate.getTime() - now.getTime();
+
+    if (diff <= 0) {
+      setCountdown('¡El evento ha comenzado!');
+      return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    setCountdown(`${days}d ${hours}h ${minutes}m`);
+  }, [appointment]);
+
+  useEffect(() => {
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [appointment, updateCountdown]);
+
+  const handleConfirmLocation = async () => {
+    if (!appointment) return;
+
+    console.log('User confirming location for appointment:', appointment.id);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ location_confirmed: true })
+        .eq('id', appointment.id);
+
+      if (error) {
+        console.error('Error confirming location:', error);
+        return;
+      }
+
+      console.log('Location confirmed successfully');
+      setCheckInPhase('arrival_confirmation');
+      loadAppointment();
+    } catch (err) {
+      console.error('Exception confirming location:', err);
+    }
+  };
+
+  const handleConfirmArrival = async () => {
+    if (!appointment) return;
+
+    console.log('User confirming arrival for appointment:', appointment.id);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          arrival_status: 'arrived',
+          checked_in_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.id);
+
+      if (error) {
+        console.error('Error confirming arrival:', error);
+        return;
+      }
+
+      console.log('Arrival confirmed successfully');
+      setCheckInPhase('completed');
+      setShowGameDynamics(true);
+      loadAppointment();
+    } catch (err) {
+      console.error('Exception confirming arrival:', err);
+    }
+  };
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-        </View>
-      </LinearGradient>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={nospiColors.primary} />
+      </View>
     );
   }
 
   if (!appointment) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Interacción</Text>
-          <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
-
-          <View style={styles.placeholderContainer}>
-            <Text style={styles.placeholderIcon}>📅</Text>
-            <Text style={styles.placeholderText}>
-              No tienes ningún evento confirmado
-            </Text>
-          </View>
-        </ScrollView>
-      </LinearGradient>
+      <View style={styles.container}>
+        <Text style={styles.noAppointmentText}>No tienes citas confirmadas</Text>
+        <Text style={styles.noAppointmentSubtext}>
+          Confirma tu asistencia a un evento para ver la información aquí
+        </Text>
+      </View>
     );
   }
 
-  if (!isEventDay) {
-    const eventDate = new Date(appointment.event.start_time!);
-    const eventDateText = eventDate.toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    const now = new Date();
-    const diffMs = eventDate.getTime() - now.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-
-    let countdownText = '';
-    if (diffDays >= 2) {
-      countdownText = `Faltan ${diffDays} días para tu experiencia`;
-    } else if (diffDays === 1) {
-      countdownText = 'Falta 1 día para tu experiencia';
-    } else if (diffHours >= 1) {
-      countdownText = `Faltan ${diffHours} horas para tu experiencia`;
-    } else {
-      countdownText = '¡Tu experiencia es muy pronto!';
-    }
-
+  if (showGameDynamics && checkInPhase === 'completed') {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Tu Evento Nospi</Text>
-          <Text style={styles.subtitle}>¡Se acerca una gran experiencia!</Text>
-
-          {/* Countdown card */}
-          <View style={[styles.eventInfoCard, { marginBottom: 16 }]}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
-            <Text style={[styles.eventInfoTitle, { fontSize: 22, marginBottom: 6 }]}>{countdownText}</Text>
-            <Text style={styles.eventInfoDate}>{eventDateText}</Text>
-            <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
-          </View>
-
-          {/* Puntualidad */}
-          <View style={styles.preEventTipCard}>
-            <Text style={styles.preEventTipIcon}>⏰</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Llega puntual</Text>
-              <Text style={styles.preEventTipText}>El evento arranca con una dinámica para romper el hielo. No querrás perderte el inicio.</Text>
-            </View>
-          </View>
-
-          {/* Instrucción */}
-          <View style={styles.preEventTipCard}>
-            <Text style={styles.preEventTipIcon}>💬</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Cuando llegues</Text>
-              <Text style={styles.preEventTipText}>Abre esta pestaña para confirmar tu asistencia e iniciar la experiencia con los demás.</Text>
-            </View>
-          </View>
-
-        </ScrollView>
-      </LinearGradient>
+      <GameDynamicsScreen
+        appointment={appointment}
+        activeParticipants={activeParticipants}
+      />
     );
   }
-
-  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
-    
-    const transformedParticipants = activeParticipants.map(p => ({
-      id: p.id,
-      user_id: p.user_id,
-      name: p.profiles?.name || 'Participante',
-      profile_photo_url: p.profiles?.profile_photo_url || null,
-      occupation: p.profiles?.city || 'Ciudad',
-      confirmed: p.confirmed,
-      check_in_time: p.check_in_time,
-      presented: p.is_presented
-    }));
-    
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
-  }
-  
-
-
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
-  
-  const locationRevealed = appointment.event.is_location_revealed || false;
-  const shouldShowLocationText = !locationRevealed;
-  const locationText = locationRevealed && appointment.event.location_name
-    ? appointment.event.location_name
-    : '';
-  
-  const participantCountText = activeParticipants.length.toString();
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
-        <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+    <ScrollView style={styles.container}>
+      <LinearGradient
+        colors={[nospiColors.primary, nospiColors.secondary]}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Tu Próxima Cita</Text>
+        <Text style={styles.countdown}>{countdown}</Text>
+      </LinearGradient>
 
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>
-            {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
-          </Text>
-          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
-        </View>
-
+      <View style={styles.content}>
         <View style={styles.eventCard}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
-            <View style={styles.eventHeaderText}>
-              <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{appointment.event.time}</Text>
-            </View>
-          </View>
-          {shouldShowLocationText && (
-            <Text style={styles.eventLocation}>Ubicación se revelará 48 horas antes del evento</Text>
-          )}
-          {locationRevealed && locationText && (
-            <Text style={styles.eventLocation}>{locationText}</Text>
-          )}
+          <Text style={styles.eventType}>{appointment.event.type}</Text>
+          <Text style={styles.eventDate}>{appointment.event.date}</Text>
+          <Text style={styles.eventTime}>{appointment.event.time}</Text>
         </View>
 
-        {checkInPhase === 'code_entry' && (
-          <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-            
-            <TextInput
-              style={styles.codeInput}
-              value={confirmationCode}
-              onChangeText={(text) => {
-                setConfirmationCode(text);
-                setCodeError('');
-              }}
-              placeholder="Código"
-              placeholderTextColor="#999"
-              keyboardType="default"
-              maxLength={10}
-              autoFocus
-            />
-
-            {codeError ? (
-              <Text style={styles.codeErrorText}>{codeError}</Text>
-            ) : null}
-
+        {checkInPhase === 'location_confirmation' && (
+          <View style={styles.checkInCard}>
+            <Text style={styles.checkInTitle}>Confirma la ubicación</Text>
+            <Text style={styles.checkInText}>
+              {appointment.event.location_name}
+            </Text>
+            <Text style={styles.checkInAddress}>
+              {appointment.event.location_address}
+            </Text>
             <TouchableOpacity
-              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
-              onPress={handleCodeConfirmation}
-              disabled={!confirmationCode.trim()}
-              activeOpacity={0.8}
+              style={styles.confirmButton}
+              onPress={handleConfirmLocation}
             >
-              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+              <Text style={styles.confirmButtonText}>Confirmar Ubicación</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {checkInPhase === 'confirmed' && (
-          <>
-            <View style={styles.confirmedCard}>
-              <Text style={styles.confirmedIcon}>✅</Text>
-              <Text style={styles.confirmedText}>
-                ¡Llegada confirmada!
-              </Text>
-            </View>
+        {checkInPhase === 'arrival_confirmation' && (
+          <View style={styles.checkInCard}>
+            <Text style={styles.checkInTitle}>¿Ya llegaste?</Text>
+            <Text style={styles.checkInText}>
+              Confirma tu llegada cuando estés en el lugar
+            </Text>
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={handleConfirmArrival}
+            >
+              <Text style={styles.confirmButtonText}>Confirmar Llegada</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-            <View style={styles.participantsListCard}>
-              <View style={styles.participantsListHeader}>
-                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
-                <View style={styles.participantCountBadge}>
-                  <Text style={styles.participantCountText}>{participantCountText}</Text>
-                </View>
-              </View>
-              
-              {activeParticipants.length > 0 && (
-                <View style={styles.participantsList}>
-                  {activeParticipants.map((participant, index) => {
-                    const displayName = participant.profiles?.name || 'Participante';
-                    
-                    return (
-                      <React.Fragment key={index}>
-                      <View style={styles.participantListItem}>
-                        <View style={styles.participantListPhotoPlaceholder}>
-                          <Text style={styles.participantListPhotoText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.participantListName}>{displayName}</Text>
-                      </View>
-                      </React.Fragment>
-                    );
-                  })}
-                </View>
+        <View style={styles.participantsCard}>
+          <Text style={styles.participantsTitle}>
+            Participantes Confirmados: {activeParticipants.length}
+          </Text>
+          {activeParticipants.map((participant, index) => (
+            <View key={index} style={styles.participantItem}>
+              <Text style={styles.participantName}>
+                {participant.profiles?.name || 'Usuario'}
+              </Text>
+              {participant.is_presented && (
+                <Text style={styles.presentedBadge}>✓ Presente</Text>
               )}
             </View>
-
-            {!canStartExperience && countdown > 0 && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ⏰ Esperando el momento de inicio
-                </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El botón &quot;Continuar&quot; aparecerá cuando termine el conteo y así poder iniciar la dinámica
-                </Text>
-              </View>
-            )}
-
-            {canStartExperience && (
-              <>
-                <View style={styles.infoCard}>
-                  <Text style={styles.infoText}>
-                    ✨ Hay {activeParticipants.length} participantes confirmados
-                  </Text>
-                  <Text style={styles.infoTextSecondary}>
-                    Presiona &quot;Continuar&quot; para iniciar la experiencia
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
-                  onPress={handleStartExperience}
-                  disabled={startingExperience}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.continueButtonText}>
-                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </>
-        )}
-      </ScrollView>
-    </LinearGradient>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
-  contentContainer: {
+  header: {
     padding: 24,
-    paddingBottom: 120,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    paddingTop: 60,
     alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#fff',
     marginBottom: 8,
-    marginTop: 48,
   },
-  subtitle: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    opacity: 0.8,
-    marginBottom: 24,
-  },
-  placeholderContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 40,
-    alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  placeholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-  },
-  eventInfoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-  },
-  preEventTipCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 12,
-  },
-  preEventTipIcon: {
-    fontSize: 26,
-    marginTop: 2,
-  },
-  preEventTipTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: nospiColors.purpleDark,
-    marginBottom: 4,
-  },
-  preEventTipText: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-  },
-  eventInfoIcon: {
-    fontSize: 60,
-    marginBottom: 16,
-  },
-  eventInfoTitle: {
-    fontSize: 20,
+  countdown: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 16,
+    color: '#fff',
   },
-  eventInfoDate: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  eventInfoTime: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: nospiColors.purpleMid,
-  },
-  countdownCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  countdownLabel: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  countdownTime: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: nospiColors.purpleDark,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-    letterSpacing: 2,
+  content: {
+    padding: 16,
   },
   eventCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
   },
-  eventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  eventIconLarge: {
-    fontSize: 40,
-    marginRight: 16,
-  },
-  eventHeaderText: {
-    flex: 1,
-  },
   eventType: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: nospiColors.primary,
+    marginBottom: 8,
+  },
+  eventDate: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 4,
   },
   eventTime: {
     fontSize: 16,
-    color: nospiColors.purpleMid,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  eventLocation: {
-    fontSize: 14,
     color: '#666',
   },
-  codeEntryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-  },
-  codeEntryTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  codeEntrySubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  codeInput: {
-    backgroundColor: '#F5F5F5',
+  checkInCard: {
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: nospiColors.primary,
   },
-  codeErrorText: {
-    fontSize: 14,
-    color: '#EF4444',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  confirmCodeButton: {
-    backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  confirmCodeButtonText: {
+  checkInTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.primary,
+    marginBottom: 8,
   },
-  confirmedCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 16,
-    padding: 20,
+  checkInText: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 8,
+  },
+  checkInAddress: {
+    fontSize: 14,
+    color: '#666',
     marginBottom: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#10B981',
   },
-  confirmedIcon: {
-    fontSize: 48,
+  confirmButton: {
+    backgroundColor: nospiColors.primary,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  participantsCard: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+  },
+  participantsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: nospiColors.primary,
     marginBottom: 12,
   },
-  confirmedText: {
-    fontSize: 16,
-    color: '#065F46',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  participantsListCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-  },
-  participantsListHeader: {
+  participantItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  participantsListTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    flex: 1,
-  },
-  participantCountBadge: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 20,
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    minWidth: 50,
-    alignItems: 'center',
-  },
-  participantCountText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  participantsList: {
-    marginTop: 8,
-  },
-  participantListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#e0e0e0',
   },
-  participantListPhotoPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: nospiColors.purpleLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  participantListPhotoText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-  },
-  participantListName: {
+  participantName: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  infoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-  },
-  infoText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  infoTextSecondary: {
+  presentedBadge: {
     fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  noAppointmentText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  noAppointmentSubtext: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  continueButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 15,
-    marginBottom: 16,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  continueButtonText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    paddingHorizontal: 32,
   },
 });
