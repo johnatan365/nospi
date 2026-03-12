@@ -30,9 +30,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // URL de redirección web que Wompi acepta (debe ser HTTPS)
 // Esta URL debe redirigir de vuelta a la app usando el deep link
-const WEB_REDIRECT_URL = Platform.OS === 'web' 
-  ? `${window.location.origin}/payment-callback`
-  : 'https://nospi.vercel.app/payment-callback';
+// IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
+const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -116,6 +115,38 @@ export default function SubscriptionPlansScreen() {
   }, [user?.id]);
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
+
+  // Check localStorage for payment callback info (web only)
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const checkLocalStoragePayment = async () => {
+        const callbackStatus = window.localStorage.getItem('payment_callback_status');
+        const callbackTransactionId = window.localStorage.getItem('payment_callback_transaction_id');
+        const callbackTimestamp = window.localStorage.getItem('payment_callback_timestamp');
+        
+        if (callbackStatus === 'success' && callbackTransactionId) {
+          // Check if the callback is recent (within last 5 minutes)
+          const timestamp = parseInt(callbackTimestamp || '0', 10);
+          const now = Date.now();
+          const fiveMinutes = 5 * 60 * 1000;
+          
+          if (now - timestamp < fiveMinutes) {
+            console.log('Found recent payment callback in localStorage:', callbackTransactionId);
+            
+            // Clear the localStorage
+            window.localStorage.removeItem('payment_callback_status');
+            window.localStorage.removeItem('payment_callback_transaction_id');
+            window.localStorage.removeItem('payment_callback_timestamp');
+            
+            // Process the payment callback
+            await handlePaymentCallback('success', callbackTransactionId);
+          }
+        }
+      };
+      
+      checkLocalStoragePayment();
+    }
+  }, [handlePaymentCallback]);
 
   const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
 
