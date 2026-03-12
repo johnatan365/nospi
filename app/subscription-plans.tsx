@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -233,22 +232,8 @@ export default function SubscriptionPlansScreen() {
     const handleAppStateChange = async (nextState: string) => {
       if (nextState === 'background' || nextState === 'inactive') {
         appWasBackground = true;
-        // Check if we just opened a payment (within last 3 seconds)
-        const openedTime = await AsyncStorage.getItem('payment_opened_time');
-        if (openedTime) {
-          const elapsed = Date.now() - parseInt(openedTime);
-          paymentJustOpened = elapsed < 3000; // 3 seconds grace period
-        }
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
-        
-        // If payment was just opened, don't check status yet (user is still in payment flow)
-        if (paymentJustOpened) {
-          console.log('App returned to foreground, but payment was just opened - waiting for user to complete');
-          paymentJustOpened = false;
-          await AsyncStorage.removeItem('payment_opened_time');
-          return;
-        }
 
         const pending = await AsyncStorage.getItem('pse_payment_pending');
         if (pending !== 'true') return;
@@ -508,8 +493,18 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
       }
 
-      // Usar WebBrowser.openAuthSessionAsync para manejar el deep linking automáticamente
-      console.log('Opening Bancolombia URL with WebBrowser...');
+      // iOS: usar Linking.openURL para que AppState pueda manejar el retorno
+      // Android/Web: usar WebBrowser.openAuthSessionAsync
+      console.log('Opening Bancolombia URL...');
+      
+      if (Platform.OS === 'ios') {
+        // En iOS, abrir con Linking para que AppState detecte el regreso
+        await Linking.openURL(result.redirectUrl);
+        // El AppState handler se encarga de verificar el pago cuando el usuario regresa
+        setProcessingMethod(null);
+        return;
+      }
+
       const browserResult = await WebBrowser.openAuthSessionAsync(
         result.redirectUrl,
         redirectUrl
@@ -576,8 +571,27 @@ export default function SubscriptionPlansScreen() {
         await AsyncStorage.removeItem('payment_opened_time');
         setProcessingMethod(null);
       } else {
-        console.log('WebBrowser dismissed:', browserResult.type);
+        // 'dismiss' on iOS — check payment status via AppState
+        console.log('WebBrowser dismissed, checking payment via AppState:', browserResult.type);
         await AsyncStorage.removeItem('payment_opened_time');
+        // Try to verify payment immediately
+        const transactionId = await AsyncStorage.getItem('wompi_transaction_id');
+        if (transactionId) {
+          try {
+            const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
+            const data = await res.json();
+            const status = data.data?.status;
+            if (status === 'APPROVED' || status === 'PENDING') {
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              try { await supabase.auth.refreshSession(); } catch {}
+              await confirmAppointment();
+              setProcessingMethod(null);
+              setShowSuccessModal(true);
+              return;
+            }
+          } catch (e) { console.error('Error verifying on dismiss:', e); }
+        }
         setProcessingMethod(null);
       }
     } catch (error: any) {
