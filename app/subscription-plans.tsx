@@ -66,8 +66,6 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  const { payment_status } = useLocalSearchParams<{ payment_status?: string }>();
-
   const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
 
   // Handle return from Bancolombia/PSE web redirect
