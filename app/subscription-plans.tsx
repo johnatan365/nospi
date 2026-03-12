@@ -142,8 +142,14 @@ export default function SubscriptionPlansScreen() {
           console.log('No transaction ID, confirming appointment directly');
           await cleanup();
           try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
-          setShowSuccessModal(true);
+          const confirmed = await confirmAppointment();
+          if (confirmed) {
+            console.log('Payment callback successful, showing success modal');
+            setShowSuccessModal(true);
+          } else {
+            console.log('Appointment already confirmed, navigating to appointments');
+            router.replace('/(tabs)/appointments');
+          }
           return;
         }
 
@@ -159,15 +165,27 @@ export default function SubscriptionPlansScreen() {
           if (status === 'APPROVED') {
             await cleanup();
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
-            setShowSuccessModal(true);
+            const confirmed = await confirmAppointment();
+            if (confirmed) {
+              console.log('Payment approved, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           } else if (status === 'PENDING' || !status) {
             // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
             console.log('Transaction pending, confirming anyway');
             await cleanup();
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
-            setShowSuccessModal(true);
+            const confirmed = await confirmAppointment();
+            if (confirmed) {
+              console.log('Payment pending, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           } else {
             console.log('Transaction not approved:', status);
             await cleanup();
@@ -178,8 +196,14 @@ export default function SubscriptionPlansScreen() {
           console.error('Error verifying transaction, confirming anyway:', e);
           await cleanup();
           try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
-          setShowSuccessModal(true);
+          const confirmed = await confirmAppointment();
+          if (confirmed) {
+            console.log('Error verifying but payment successful, showing success modal');
+            setShowSuccessModal(true);
+          } else {
+            console.log('Appointment already confirmed, navigating to appointments');
+            router.replace('/(tabs)/appointments');
+          }
         }
       };
       handleWebPaymentReturn();
@@ -236,8 +260,14 @@ export default function SubscriptionPlansScreen() {
               await AsyncStorage.removeItem('pse_payment_pending');
               await AsyncStorage.removeItem('wompi_transaction_id');
               try { await supabase.auth.refreshSession(); } catch {}
-              await confirmAppointment();
-              setShowSuccessModal(true);
+              const confirmed = await confirmAppointment();
+              if (confirmed) {
+                console.log('Payment successful, showing success modal');
+                setShowSuccessModal(true);
+              } else {
+                console.log('Appointment already confirmed, navigating to appointments');
+                router.replace('/(tabs)/appointments');
+              }
             }
           } catch (e) {
             console.error('Error verifying transaction on AppState:', e);
@@ -255,12 +285,15 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
         console.log('No pending event ID found');
-        return;
+        return false;
       }
       // Get user from session directly in case context hasn't loaded yet
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || user?.id;
-      if (!userId) { console.error('confirmAppointment: no userId'); return; }
+      if (!userId) { 
+        console.error('confirmAppointment: no userId'); 
+        return false; 
+      }
       const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
       if (!existing) {
         console.log('Creating appointment for event:', pendingEventId);
@@ -270,12 +303,22 @@ export default function SubscriptionPlansScreen() {
         console.log('Appointment already exists');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
-    } catch (e) { console.error('Error confirmando cita:', e); }
+      return true;
+    } catch (e) { 
+      console.error('Error confirmando cita:', e); 
+      return false;
+    }
   };
 
   const handleSuccess = async () => {
-    await confirmAppointment();
-    setShowSuccessModal(true);
+    const confirmed = await confirmAppointment();
+    if (confirmed) {
+      console.log('Appointment confirmed, showing success modal');
+      setShowSuccessModal(true);
+    } else {
+      console.log('Appointment confirmation failed, navigating to appointments anyway');
+      router.replace('/(tabs)/appointments');
+    }
   };
 
   const getSession = async () => {
@@ -489,9 +532,15 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
+            const confirmed = await confirmAppointment();
             setProcessingMethod(null);
-            setShowSuccessModal(true);
+            if (confirmed) {
+              console.log('Bancolombia payment successful, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           } else if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
             // Only show error for explicitly failed payments
             await AsyncStorage.removeItem('pse_payment_pending');
@@ -504,9 +553,15 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
+            const confirmed = await confirmAppointment();
             setProcessingMethod(null);
-            setShowSuccessModal(true);
+            if (confirmed) {
+              console.log('Unknown status but confirming, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           }
         } catch (e) {
           console.error('Error verifying Bancolombia payment:', e);
@@ -514,9 +569,15 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('pse_payment_pending');
           await AsyncStorage.removeItem('wompi_transaction_id');
           try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
+          const confirmed = await confirmAppointment();
           setProcessingMethod(null);
-          setShowSuccessModal(true);
+          if (confirmed) {
+            console.log('Error verifying Bancolombia but confirming, showing success modal');
+            setShowSuccessModal(true);
+          } else {
+            console.log('Appointment already confirmed, navigating to appointments');
+            router.replace('/(tabs)/appointments');
+          }
         }
       } else if (browserResult.type === 'cancel') {
         console.log('User cancelled Bancolombia payment');
@@ -623,9 +684,15 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
+            const confirmed = await confirmAppointment();
             setProcessingMethod(null);
-            setShowSuccessModal(true);
+            if (confirmed) {
+              console.log('PSE payment successful, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           } else if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
             // Only show error for explicitly failed payments
             await AsyncStorage.removeItem('pse_payment_pending');
@@ -638,9 +705,15 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
             try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
+            const confirmed = await confirmAppointment();
             setProcessingMethod(null);
-            setShowSuccessModal(true);
+            if (confirmed) {
+              console.log('Unknown PSE status but confirming, showing success modal');
+              setShowSuccessModal(true);
+            } else {
+              console.log('Appointment already confirmed, navigating to appointments');
+              router.replace('/(tabs)/appointments');
+            }
           }
         } catch (e) {
           console.error('Error verifying PSE payment:', e);
@@ -648,9 +721,15 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('pse_payment_pending');
           await AsyncStorage.removeItem('wompi_transaction_id');
           try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
+          const confirmed = await confirmAppointment();
           setProcessingMethod(null);
-          setShowSuccessModal(true);
+          if (confirmed) {
+            console.log('Error verifying PSE but confirming, showing success modal');
+            setShowSuccessModal(true);
+          } else {
+            console.log('Appointment already confirmed, navigating to appointments');
+            router.replace('/(tabs)/appointments');
+          }
         }
       } else if (browserResult.type === 'cancel') {
         console.log('User cancelled PSE payment');
