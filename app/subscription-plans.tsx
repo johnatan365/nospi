@@ -65,7 +65,7 @@ export default function SubscriptionPlansScreen() {
     { code: '1040', name: 'Banco Agrario' },
     { code: '1052', name: 'Banco AV Villas' },
     { code: '1032', name: 'Banco Caja Social' },
-    { code: '1004', name: 'Bancolombia' },
+    { code: '1007', name: 'Bancolombia' },
     { code: '1059', name: 'Bancamía' },
     { code: '1013', name: 'BBVA Colombia' },
     { code: '1006', name: 'Davivienda' },
