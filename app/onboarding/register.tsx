@@ -654,16 +654,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   googleIconContainer: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   googleIcon: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#4285F4',
     fontWeight: 'bold',
+    lineHeight: 24,
+    marginTop: 4,
   },
   emailIcon: {
     fontSize: 20,

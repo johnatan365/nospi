@@ -270,13 +270,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: Platform.OS === 'android' ? 'center' : 'flex-end',
+    paddingHorizontal: Platform.OS === 'android' ? 20 : 0,
   },
   modalContent: {
     backgroundColor: nospiColors.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderBottomLeftRadius: Platform.OS === 'android' ? 24 : 0,
+    borderBottomRightRadius: Platform.OS === 'android' ? 24 : 0,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    maxHeight: Platform.OS === 'android' ? '70%' : undefined,
   },
   modalHeader: {
     flexDirection: 'row',
