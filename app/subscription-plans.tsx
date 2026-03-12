@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -26,6 +27,9 @@ const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ijl06L';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
+
+// URL de redirección web que Wompi acepta (debe ser HTTPS)
+const WEB_REDIRECT_URL = 'https://johnatan365.github.io/nospi-redirect';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -459,11 +463,8 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      // Generar la URL de deep link para el callback
-      const redirectUrl = Linking.createURL('subscription-plans', {
-        queryParams: { payment_status: 'success' }
-      });
-      console.log('Bancolombia redirect URL:', redirectUrl);
+      // Usar la URL web que Wompi acepta
+      console.log('Bancolombia redirect URL:', WEB_REDIRECT_URL);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
@@ -475,7 +476,7 @@ export default function SubscriptionPlansScreen() {
           userEmail: userProfile?.email || currentUser.email || '', 
           userId: currentUser.id, 
           eventId: pendingEventId,
-          redirectUrl: redirectUrl // Pasar la URL de deep link al backend
+          redirectUrl: WEB_REDIRECT_URL
         }),
       });
       const result = await response.json();
@@ -493,12 +494,15 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
       }
 
-      // iOS: usar Linking.openURL para que AppState pueda manejar el retorno
-      // Android/Web: usar WebBrowser.openAuthSessionAsync
+      // Generar deep link para cuando el usuario regrese
+      const appDeepLink = Linking.createURL('subscription-plans', {
+        queryParams: { payment_status: 'success', transaction_id: bancolombiaTransactionId }
+      });
+
       console.log('Opening Bancolombia URL...');
       
       if (Platform.OS === 'ios') {
-        // En iOS, abrir con Linking para que AppState detecte el regreso
+        // En iOS, abrir con Linking para que AppState pueda manejar el retorno
         await Linking.openURL(result.redirectUrl);
         // El AppState handler se encarga de verificar el pago cuando el usuario regresa
         setProcessingMethod(null);
@@ -507,7 +511,7 @@ export default function SubscriptionPlansScreen() {
 
       const browserResult = await WebBrowser.openAuthSessionAsync(
         result.redirectUrl,
-        redirectUrl
+        appDeepLink
       );
 
       console.log('WebBrowser result:', browserResult);
@@ -621,11 +625,8 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      // Generar la URL de deep link para el callback
-      const redirectUrl = Linking.createURL('subscription-plans', {
-        queryParams: { payment_status: 'success' }
-      });
-      console.log('PSE redirect URL:', redirectUrl);
+      // Usar la URL web que Wompi acepta
+      console.log('PSE redirect URL:', WEB_REDIRECT_URL);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
@@ -642,11 +643,16 @@ export default function SubscriptionPlansScreen() {
           userLegalId: cleanLegalId,
           userLegalIdType: pseLegalIdType,
           financialInstitutionCode: pseBankCode,
-          redirectUrl: redirectUrl // Pasar la URL de deep link al backend
+          redirectUrl: WEB_REDIRECT_URL
         }),
       });
       const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
+      
+      if (!response.ok) {
+        console.error('PSE payment error:', data);
+        throw new Error(data.error || 'Error al crear pago PSE');
+      }
+      
       if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
 
       console.log('PSE payment created, transaction ID:', data.transactionId);
@@ -659,11 +665,16 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
 
+      // Generar deep link para cuando el usuario regrese
+      const appDeepLink = Linking.createURL('subscription-plans', {
+        queryParams: { payment_status: 'success', transaction_id: data.transactionId }
+      });
+
       // Usar WebBrowser.openAuthSessionAsync para manejar el deep linking automáticamente
       console.log('Opening PSE URL with WebBrowser...');
       const browserResult = await WebBrowser.openAuthSessionAsync(
         data.redirectUrl,
-        redirectUrl
+        appDeepLink
       );
 
       console.log('WebBrowser result:', browserResult);
