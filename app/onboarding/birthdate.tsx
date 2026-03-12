@@ -1,11 +1,15 @@
-
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Only import DateTimePicker on native platforms
+let DateTimePicker: any = null;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
 
 export default function BirthdateScreen() {
   const router = useRouter();
@@ -67,16 +71,45 @@ export default function BirthdateScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
           
-          <TouchableOpacity 
-            style={styles.dateDisplayContainer}
-            onPress={() => setShowPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
-            <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <View style={styles.webDateContainer}>
+              <input
+                type="date"
+                value={date.toISOString().split('T')[0]}
+                max={new Date().toISOString().split('T')[0]}
+                min="1940-01-01"
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [y, m, d] = e.target.value.split('-').map(Number);
+                    setDate(new Date(y, m - 1, d));
+                  }
+                }}
+                style={{
+                  fontSize: 18,
+                  padding: '12px 20px',
+                  borderRadius: 12,
+                  border: `2px solid ${nospiColors.purpleLight}`,
+                  color: nospiColors.purpleDark,
+                  backgroundColor: 'rgba(255,255,255,0.9)',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  cursor: 'pointer',
+                } as any}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.dateDisplayContainer}
+              onPress={() => setShowPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
+              <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
+            </TouchableOpacity>
+          )}
 
-          {showPicker && (
+          {Platform.OS !== 'web' && showPicker && DateTimePicker && (
             <View style={styles.pickerContainer}>
               <DateTimePicker
                 value={date}
@@ -141,6 +174,10 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     marginBottom: 32,
     textAlign: 'center',
+  },
+  webDateContainer: {
+    marginBottom: 24,
+    width: '100%',
   },
   dateDisplayContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -270,17 +269,21 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: Platform.OS === 'android' ? 'center' : 'flex-end',
-    paddingHorizontal: Platform.OS === 'android' ? 20 : 0,
+    justifyContent: Platform.OS === 'web' ? 'center' : Platform.OS === 'android' ? 'center' : 'flex-end',
+    alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+    paddingHorizontal: Platform.OS === 'android' ? 20 : Platform.OS === 'web' ? 20 : 0,
   },
   modalContent: {
     backgroundColor: nospiColors.white,
+    borderRadius: 24,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    borderBottomLeftRadius: Platform.OS === 'android' ? 24 : 0,
-    borderBottomRightRadius: Platform.OS === 'android' ? 24 : 0,
+    borderBottomLeftRadius: Platform.OS === 'ios' ? 0 : 24,
+    borderBottomRightRadius: Platform.OS === 'ios' ? 0 : 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    maxHeight: Platform.OS === 'android' ? '70%' : undefined,
+    maxHeight: '70%',
+    width: Platform.OS === 'web' ? '100%' : undefined,
+    maxWidth: Platform.OS === 'web' ? 400 : undefined,
   },
   modalHeader: {
     flexDirection: 'row',

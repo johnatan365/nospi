@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Image as RNImage } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -406,9 +407,7 @@ export default function RegisterScreen() {
     }
   };
 
-  const appleIconText = '';
   const googleIconText = 'G';
-  const emailIconText = '✉';
 
   return (
     <LinearGradient
@@ -455,7 +454,7 @@ export default function RegisterScreen() {
               activeOpacity={0.8}
               disabled={loading}
             >
-              <Text style={styles.emailIcon}>{emailIconText}</Text>
+              <Ionicons name="mail-outline" size={22} color={nospiColors.white} style={styles.emailIcon} />
               <Text style={styles.buttonTextLight}>Inscribirse con el correo electrónico</Text>
             </TouchableOpacity>
           </View>
@@ -668,9 +667,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   emailIcon: {
-    fontSize: 20,
     marginRight: 12,
-    color: nospiColors.white,
   },
   buttonTextDark: {
     color: '#000000',
