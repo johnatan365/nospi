@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -11,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -114,6 +116,7 @@ export default function SubscriptionPlansScreen() {
   // Handle return from Bancolombia/PSE web redirect
   useEffect(() => {
     if (payment_status === 'success') {
+      console.log('Payment callback received with success status');
       const handleWebPaymentReturn = async () => {
         // transactionId viene del parámetro URL (capturado por nospi-redirect desde Wompi)
         // o del localStorage (web) — en nativo ya no dependemos de esto
@@ -122,6 +125,8 @@ export default function SubscriptionPlansScreen() {
               ? window.localStorage.getItem('wompi_transaction_id')
               : null)
           || await AsyncStorage.getItem('wompi_transaction_id');
+
+        console.log('Transaction ID from callback:', transactionId);
 
         const cleanup = async () => {
           await AsyncStorage.removeItem('pse_payment_pending');
@@ -134,6 +139,7 @@ export default function SubscriptionPlansScreen() {
 
         if (!transactionId) {
           // Sin transactionId — confirmar cita directamente (Wompi ya confirmó con payment_status=success)
+          console.log('No transaction ID, confirming appointment directly');
           await cleanup();
           try { await supabase.auth.refreshSession(); } catch {}
           await confirmAppointment();
@@ -143,9 +149,12 @@ export default function SubscriptionPlansScreen() {
 
         // Verificar estado con Wompi
         try {
+          console.log('Verifying transaction status with Wompi:', transactionId);
           const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
           const data = await res.json();
           const status = data.data?.status;
+
+          console.log('Wompi transaction status:', status);
 
           if (status === 'APPROVED') {
             await cleanup();
@@ -154,16 +163,19 @@ export default function SubscriptionPlansScreen() {
             setShowSuccessModal(true);
           } else if (status === 'PENDING' || !status) {
             // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
+            console.log('Transaction pending, confirming anyway');
             await cleanup();
             try { await supabase.auth.refreshSession(); } catch {}
             await confirmAppointment();
             setShowSuccessModal(true);
           } else {
+            console.log('Transaction not approved:', status);
             await cleanup();
             showAlert('Pago no completado', 'El pago no fue aprobado.');
           }
         } catch (e) {
           // Error de red — confirmar igualmente porque Wompi redirigió con success
+          console.error('Error verifying transaction, confirming anyway:', e);
           await cleanup();
           try { await supabase.auth.refreshSession(); } catch {}
           await confirmAppointment();
@@ -184,6 +196,8 @@ export default function SubscriptionPlansScreen() {
         const pending = await AsyncStorage.getItem('pse_payment_pending');
         if (pending !== 'true') return;
 
+        console.log('App returned to foreground, checking payment status');
+
         // Verify transaction before confirming
         const transactionId = await AsyncStorage.getItem('wompi_transaction_id');
         if (transactionId) {
@@ -191,6 +205,7 @@ export default function SubscriptionPlansScreen() {
             const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
             const data = await res.json();
             const status = data.data?.status;
+            console.log('Transaction status on app return:', status);
             if (status !== 'APPROVED') {
               await AsyncStorage.removeItem('pse_payment_pending');
               await AsyncStorage.removeItem('wompi_transaction_id');
@@ -215,16 +230,23 @@ export default function SubscriptionPlansScreen() {
 
   const confirmAppointment = async () => {
     try {
+      console.log('Confirming appointment...');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) return;
+      if (!pendingEventId) {
+        console.log('No pending event ID found');
+        return;
+      }
       // Get user from session directly in case context hasn't loaded yet
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || user?.id;
       if (!userId) { console.error('confirmAppointment: no userId'); return; }
       const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
       if (!existing) {
+        console.log('Creating appointment for event:', pendingEventId);
         await supabase.from('appointments').insert({ user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' });
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+      } else {
+        console.log('Appointment already exists');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
     } catch (e) { console.error('Error confirmando cita:', e); }
@@ -374,6 +396,7 @@ export default function SubscriptionPlansScreen() {
   const handleBancolombiaPayment = async () => {
     setProcessingMethod('bancolombia');
     try {
+      console.log('Starting Bancolombia payment...');
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -382,13 +405,29 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
+      // Generar la URL de deep link para el callback
+      const redirectUrl = Linking.createURL('subscription-plans', {
+        queryParams: { payment_status: 'success' }
+      });
+      console.log('Bancolombia redirect URL:', redirectUrl);
+
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({ 
+          acceptanceToken, 
+          personalDataToken, 
+          amountCOP: priceCOP, 
+          userEmail: userProfile?.email || currentUser.email || '', 
+          userId: currentUser.id, 
+          eventId: pendingEventId,
+          redirectUrl: redirectUrl // Pasar la URL de deep link al backend
+        }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
+
+      console.log('Bancolombia payment created, transaction ID:', result.transactionId);
 
       // Guardar transactionId antes de abrir navegador
       const bancolombiaTransactionId = result.transactionId;
@@ -399,52 +438,73 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
       }
 
-      // Abrir URL de Bancolombia en navegador externo
-      await Linking.openURL(result.redirectUrl);
+      // Usar WebBrowser.openAuthSessionAsync para manejar el deep linking automáticamente
+      console.log('Opening Bancolombia URL with WebBrowser...');
+      const browserResult = await WebBrowser.openAuthSessionAsync(
+        result.redirectUrl,
+        redirectUrl
+      );
 
-      // En nativo: iniciar polling para detectar cuando el pago sea aprobado
-      // (AppState puede no dispararse en Expo Go)
-      if (Platform.OS !== 'web' && bancolombiaTransactionId) {
-        let pollAttempts = 0;
-        const maxAttempts = 24; // 2 minutos
-        const pollInterval = setInterval(async () => {
-          pollAttempts++;
-          try {
-            const pending = await AsyncStorage.getItem('pse_payment_pending');
-            if (pending !== 'true') { clearInterval(pollInterval); return; }
+      console.log('WebBrowser result:', browserResult);
 
-            const res = await fetch(`${WOMPI_API_URL}/transactions/${bancolombiaTransactionId}`);
-            const data = await res.json();
-            const status = data.data?.status;
+      if (browserResult.type === 'success') {
+        // El usuario completó el pago y regresó a la app
+        console.log('User returned from Bancolombia, verifying payment...');
+        
+        // Verificar el estado del pago
+        try {
+          const res = await fetch(`${WOMPI_API_URL}/transactions/${bancolombiaTransactionId}`);
+          const data = await res.json();
+          const status = data.data?.status;
+          
+          console.log('Bancolombia payment status:', status);
 
-            if (status === 'APPROVED') {
-              clearInterval(pollInterval);
-              await AsyncStorage.removeItem('pse_payment_pending');
-              await AsyncStorage.removeItem('wompi_transaction_id');
-              try { await supabase.auth.refreshSession(); } catch {}
-              await confirmAppointment();
-              setProcessingMethod(null);
-              setShowSuccessModal(true);
-            } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || pollAttempts >= maxAttempts) {
-              clearInterval(pollInterval);
-              await AsyncStorage.removeItem('pse_payment_pending');
-              await AsyncStorage.removeItem('wompi_transaction_id');
-              setProcessingMethod(null);
-              if (pollAttempts < maxAttempts) {
-                showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
-              }
-            }
-          } catch (e) {
-            if (pollAttempts >= maxAttempts) {
-              clearInterval(pollInterval);
-              setProcessingMethod(null);
-            }
+          if (status === 'APPROVED') {
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setProcessingMethod(null);
+            setShowSuccessModal(true);
+          } else if (status === 'PENDING') {
+            // Pago pendiente, confirmar de todas formas
+            console.log('Payment pending, confirming anyway');
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setProcessingMethod(null);
+            setShowSuccessModal(true);
+          } else {
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            setProcessingMethod(null);
+            showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
           }
-        }, 5000);
+        } catch (e) {
+          console.error('Error verifying Bancolombia payment:', e);
+          // Si hay error verificando, confirmar de todas formas porque el usuario regresó
+          await AsyncStorage.removeItem('pse_payment_pending');
+          await AsyncStorage.removeItem('wompi_transaction_id');
+          try { await supabase.auth.refreshSession(); } catch {}
+          await confirmAppointment();
+          setProcessingMethod(null);
+          setShowSuccessModal(true);
+        }
+      } else if (browserResult.type === 'cancel') {
+        console.log('User cancelled Bancolombia payment');
+        await AsyncStorage.removeItem('pse_payment_pending');
+        await AsyncStorage.removeItem('wompi_transaction_id');
+        setProcessingMethod(null);
+      } else {
+        console.log('WebBrowser dismissed:', browserResult.type);
+        setProcessingMethod(null);
       }
     } catch (error: any) {
+      console.error('Error in Bancolombia payment:', error);
       showAlert('Error Bancolombia', error.message);
-    } finally { setProcessingMethod(null); }
+      setProcessingMethod(null);
+    }
   };
 
   // ─── PSE ─────────────────────────────────────────────────────
@@ -458,6 +518,7 @@ export default function SubscriptionPlansScreen() {
 
     setProcessingMethod('pse');
     try {
+      console.log('Starting PSE payment...');
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -465,6 +526,12 @@ export default function SubscriptionPlansScreen() {
 
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
+
+      // Generar la URL de deep link para el callback
+      const redirectUrl = Linking.createURL('subscription-plans', {
+        queryParams: { payment_status: 'success' }
+      });
+      console.log('PSE redirect URL:', redirectUrl);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
@@ -481,11 +548,14 @@ export default function SubscriptionPlansScreen() {
           userLegalId: cleanLegalId,
           userLegalIdType: pseLegalIdType,
           financialInstitutionCode: pseBankCode,
+          redirectUrl: redirectUrl // Pasar la URL de deep link al backend
         }),
       });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
       if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
+
+      console.log('PSE payment created, transaction ID:', data.transactionId);
 
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await AsyncStorage.setItem('wompi_transaction_id', data.transactionId);
@@ -493,43 +563,74 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
-      await Linking.openURL(data.redirectUrl);
 
-      // Polling igual que Bancolombia
-      if (Platform.OS !== 'web' && data.transactionId) {
-        let pollAttempts = 0;
-        const maxAttempts = 24;
-        const pollInterval = setInterval(async () => {
-          pollAttempts++;
-          try {
-            const pending = await AsyncStorage.getItem('pse_payment_pending');
-            if (pending !== 'true') { clearInterval(pollInterval); return; }
-            const res = await fetch(`${WOMPI_API_URL}/transactions/${data.transactionId}`);
-            const txData = await res.json();
-            const status = txData.data?.status;
-            if (status === 'APPROVED') {
-              clearInterval(pollInterval);
-              await AsyncStorage.removeItem('pse_payment_pending');
-              await AsyncStorage.removeItem('wompi_transaction_id');
-              try { await supabase.auth.refreshSession(); } catch {}
-              await confirmAppointment();
-              setProcessingMethod(null);
-              setShowSuccessModal(true);
-            } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || pollAttempts >= maxAttempts) {
-              clearInterval(pollInterval);
-              await AsyncStorage.removeItem('pse_payment_pending');
-              await AsyncStorage.removeItem('wompi_transaction_id');
-              setProcessingMethod(null);
-              if (pollAttempts < maxAttempts) showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
-            }
-          } catch (e) {
-            if (pollAttempts >= maxAttempts) { clearInterval(pollInterval); setProcessingMethod(null); }
+      // Usar WebBrowser.openAuthSessionAsync para manejar el deep linking automáticamente
+      console.log('Opening PSE URL with WebBrowser...');
+      const browserResult = await WebBrowser.openAuthSessionAsync(
+        data.redirectUrl,
+        redirectUrl
+      );
+
+      console.log('WebBrowser result:', browserResult);
+
+      if (browserResult.type === 'success') {
+        // El usuario completó el pago y regresó a la app
+        console.log('User returned from PSE, verifying payment...');
+        
+        // Verificar el estado del pago
+        try {
+          const res = await fetch(`${WOMPI_API_URL}/transactions/${data.transactionId}`);
+          const txData = await res.json();
+          const status = txData.data?.status;
+          
+          console.log('PSE payment status:', status);
+
+          if (status === 'APPROVED') {
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setProcessingMethod(null);
+            setShowSuccessModal(true);
+          } else if (status === 'PENDING') {
+            // Pago pendiente, confirmar de todas formas
+            console.log('Payment pending, confirming anyway');
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setProcessingMethod(null);
+            setShowSuccessModal(true);
+          } else {
+            await AsyncStorage.removeItem('pse_payment_pending');
+            await AsyncStorage.removeItem('wompi_transaction_id');
+            setProcessingMethod(null);
+            showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
           }
-        }, 5000);
+        } catch (e) {
+          console.error('Error verifying PSE payment:', e);
+          // Si hay error verificando, confirmar de todas formas porque el usuario regresó
+          await AsyncStorage.removeItem('pse_payment_pending');
+          await AsyncStorage.removeItem('wompi_transaction_id');
+          try { await supabase.auth.refreshSession(); } catch {}
+          await confirmAppointment();
+          setProcessingMethod(null);
+          setShowSuccessModal(true);
+        }
+      } else if (browserResult.type === 'cancel') {
+        console.log('User cancelled PSE payment');
+        await AsyncStorage.removeItem('pse_payment_pending');
+        await AsyncStorage.removeItem('wompi_transaction_id');
+        setProcessingMethod(null);
+      } else {
+        console.log('WebBrowser dismissed:', browserResult.type);
+        setProcessingMethod(null);
       }
     } catch (error: any) {
+      console.error('Error in PSE payment:', error);
       showAlert('Error PSE', error.message);
-    } finally { setProcessingMethod(null); }
+      setProcessingMethod(null);
+    }
   };
 
   // ─── CARD FORM ────────────────────────────────────────────────
@@ -892,7 +993,7 @@ const styles = StyleSheet.create({
   waitingHint: { fontSize: 13, color: '#999', marginTop: 12 },
   title: { fontSize: 30, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
   subtitle: { fontSize: 15, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 24, lineHeight: 22 },
-  priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
+  priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
   priceLabel: { fontSize: 15, color: '#666', marginBottom: 6 },
   priceAmount: { fontSize: 44, fontWeight: 'bold', color: nospiColors.purpleDark },
   priceAmountCOP: { fontSize: 18, fontWeight: '600', color: nospiColors.purpleMid, marginTop: 4 },
