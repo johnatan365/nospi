@@ -60,58 +60,39 @@ export default function SubscriptionPlansScreen() {
   const [pseBankCode, setPseBankCode] = useState('');
   const [pseBankName, setPseBankName] = useState('');
   const [showBankPicker, setShowBankPicker] = useState(false);
+  const [pseBanks, setPseBanks] = useState<{ code: string; name: string }[]>([]);
+  const [loadingBanks, setLoadingBanks] = useState(false);
 
-  const PSE_BANKS = [
-    { code: '1831', name: 'ACCION FIDUCIARIA' },
-    { code: '1815', name: 'ALIANZA FIDUCIARIA' },
-    { code: '1558', name: 'BAN100' },
-    { code: '1059', name: 'BANCAMIA S.A.' },
-    { code: '1040', name: 'BANCO AGRARIO' },
-    { code: '1052', name: 'BANCO AV VILLAS' },
-    { code: '1013', name: 'BANCO BBVA COLOMBIA S.A.' },
-    { code: '1032', name: 'BANCO CAJA SOCIAL' },
-    { code: '1066', name: 'BANCO COOPERATIVO COOPCENTRAL' },
-    { code: '1051', name: 'BANCO DAVIVIENDA' },
-    { code: '1001', name: 'BANCO DE BOGOTA' },
-    { code: '1023', name: 'BANCO DE OCCIDENTE' },
-    { code: '1062', name: 'BANCO FALABELLA' },
-    { code: '1063', name: 'BANCO FINANDINA S.A. BIC' },
-    { code: '1012', name: 'BANCO GNB SUDAMERIS' },
-    { code: '1006', name: 'BANCO ITAU' },
-    { code: '1071', name: 'BANCO J.P. MORGAN COLOMBIA S.A.' },
-    { code: '1047', name: 'BANCO MUNDO MUJER S.A.' },
-    { code: '1060', name: 'BANCO PICHINCHA S.A.' },
-    { code: '1002', name: 'BANCO POPULAR' },
-    { code: '1065', name: 'BANCO SANTANDER COLOMBIA' },
-    { code: '1069', name: 'BANCO SERFINANZA' },
-    { code: '1303', name: 'BANCO UNION' },
-    { code: '1007', name: 'BANCOLOMBIA' },
-    { code: '1061', name: 'BANCOOMEVA S.A.' },
-    { code: '1808', name: 'BOLD CF' },
-    { code: '1283', name: 'CFA COOPERATIVA FINANCIERA' },
-    { code: '1009', name: 'CITIBANK' },
-    { code: '1812', name: 'COINK SA' },
-    { code: '1370', name: 'COLTEFINANCIERA' },
-    { code: '1292', name: 'CONFIAR COOPERATIVA FINANCIERA' },
-    { code: '1289', name: 'COTRAFA' },
-    { code: '1816', name: 'CREZCAMOS MOSI' },
-    { code: '1097', name: 'DALE' },
-    { code: '1019', name: 'DAVIbank S.A.' },
-    { code: '1551', name: 'DAVIPLATA' },
-    { code: '1802', name: 'DING' },
-    { code: '1121', name: 'FINANCIERA JURISCOOP' },
-    { code: '1814', name: 'GLOBAL66' },
-    { code: '1637', name: 'IRIS' },
-    { code: '1286', name: 'JFK COOPERATIVA FINANCIERA' },
-    { code: '1070', name: 'LULO BANK' },
-    { code: '1801', name: 'MOVII S.A.' },
-    { code: '1507', name: 'NEQUI' },
-    { code: '1809', name: 'NU' },
-    { code: '1824', name: 'PAYCASH' },
-    { code: '1803', name: 'POWWI' },
-    { code: '1811', name: 'RAPPIPAY' },
-    { code: '1804', name: 'UALÁ' },
-  ];
+  const loadPSEBanks = useCallback(async () => {
+    if (pseBanks.length > 0) return; // ya cargados
+    setLoadingBanks(true);
+    try {
+      const res = await fetch(`${WOMPI_API_URL}/pse/financial_institutions`, {
+        headers: { 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
+      });
+      const data = await res.json();
+      const banks = (data.data || [])
+        .filter((b: any) => b.financial_institution_code !== '0')
+        .map((b: any) => ({ code: b.financial_institution_code, name: b.financial_institution_name }));
+      setPseBanks(banks);
+    } catch {
+      // fallback con bancos principales si falla la red
+      setPseBanks([
+        { code: '1007', name: 'BANCOLOMBIA' },
+        { code: '1051', name: 'BANCO DAVIVIENDA' },
+        { code: '1001', name: 'BANCO DE BOGOTA' },
+        { code: '1013', name: 'BANCO BBVA COLOMBIA S.A.' },
+        { code: '1507', name: 'NEQUI' },
+        { code: '1551', name: 'DAVIPLATA' },
+        { code: '1023', name: 'BANCO DE OCCIDENTE' },
+        { code: '1032', name: 'BANCO CAJA SOCIAL' },
+        { code: '1052', name: 'BANCO AV VILLAS' },
+        { code: '1002', name: 'BANCO POPULAR' },
+      ]);
+    } finally {
+      setLoadingBanks(false);
+    }
+  }, [pseBanks]);
 
   const priceCOP = PRECIO_EVENTO_COP;
 
@@ -670,19 +651,22 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.inputLabel}>Banco</Text>
               <TouchableOpacity
                 style={[styles.input, { justifyContent: 'center' }]}
-                onPress={() => setShowBankPicker(true)}
+                onPress={() => !loadingBanks && setShowBankPicker(true)}
               >
-                <Text style={{ fontSize: 16, color: pseBankName ? '#111' : '#aaa' }}>
-                  {pseBankName || 'Selecciona tu banco'}
-                </Text>
+                {loadingBanks
+                  ? <ActivityIndicator size="small" color={nospiColors.purpleDark} />
+                  : <Text style={{ fontSize: 16, color: pseBankName ? '#111' : '#aaa' }}>
+                      {pseBankName || 'Selecciona tu banco'}
+                    </Text>
+                }
               </TouchableOpacity>
 
               {showBankPicker && (
                 <View style={styles.bankPickerContainer}>
                   <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
-                    {PSE_BANKS.map((bank) => (
+                    {pseBanks.map((bank) => (
                       <TouchableOpacity
-                        key={bank.code + bank.name}
+                        key={bank.code}
                         style={styles.bankOption}
                         onPress={() => { setPseBankCode(bank.code); setPseBankName(bank.name); setShowBankPicker(false); }}
                       >
@@ -836,7 +820,7 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowPSEForm(true)} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={() => { setShowPSEForm(true); loadPSEBanks(); }} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
