@@ -50,6 +50,13 @@ export default function PhoneScreen() {
   const debounceRef = useRef<any>(null);
   const [search, setSearch] = useState('');
 
+  const filteredCountries = COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.code.includes(search)
+  );
+
+  const cleanNumber = phoneNumber.replace(/\D/g, '');
+
   // Realtime duplicate check when number is complete
   useEffect(() => {
     if (cleanNumber.length !== selectedCountry.digits) {
@@ -65,13 +72,6 @@ export default function PhoneScreen() {
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [cleanNumber, selectedCountry]);
-
-  const filteredCountries = COUNTRIES.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.code.includes(search)
-  );
-
-  const cleanNumber = phoneNumber.replace(/\D/g, '');
 
   // Button enabled only when exact digit count is reached
   const canContinue = cleanNumber.length === selectedCountry.digits && !checking && phoneStatus !== "taken" && phoneStatus !== "checking";
