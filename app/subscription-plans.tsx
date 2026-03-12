@@ -11,7 +11,6 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -69,14 +68,18 @@ export default function SubscriptionPlansScreen() {
 
   const { payment_status } = useLocalSearchParams<{ payment_status?: string }>();
 
+  const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
+
   // Handle return from Bancolombia/PSE web redirect
   useEffect(() => {
     if (payment_status === 'success') {
       const handleWebPaymentReturn = async () => {
-        // Get transactionId from localStorage (persists across page reloads)
-        let transactionId = (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage)
-          ? window.localStorage.getItem('wompi_transaction_id')
-          : await AsyncStorage.getItem('wompi_transaction_id');
+        // transactionId can come from URL param, localStorage, or AsyncStorage
+        let transactionId = urlTransactionId as string
+          || (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
+              ? window.localStorage.getItem('wompi_transaction_id')
+              : null)
+          || await AsyncStorage.getItem('wompi_transaction_id');
 
         if (!transactionId) {
           showAlert('Error', 'No se encontró la transacción. Contacta soporte.');
@@ -116,7 +119,7 @@ export default function SubscriptionPlansScreen() {
         }
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
-        router.replace('/(tabs)/appointments');
+        setShowSuccessModal(true);
       };
       handleWebPaymentReturn();
     }
@@ -154,7 +157,7 @@ export default function SubscriptionPlansScreen() {
         await AsyncStorage.removeItem('wompi_transaction_id');
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
-        router.replace('/(tabs)/appointments');
+        setShowSuccessModal(true);
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
@@ -338,18 +341,16 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
-      // Abrir URL de Bancolombia en navegador externo
+      // Guardar transactionId antes de abrir navegador
       await AsyncStorage.setItem('pse_payment_pending', 'true');
       await AsyncStorage.setItem('wompi_transaction_id', result.transactionId);
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', result.transactionId);
       }
-      if (Platform.OS === 'web') {
-        await Linking.openURL(result.redirectUrl);
-      } else {
-        await WebBrowser.openBrowserAsync(result.redirectUrl);
-      }
+
+      // Abrir URL de Bancolombia en navegador externo
+      await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
     } finally { setProcessingMethod(null); }
@@ -382,11 +383,7 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('pse_payment_pending', 'true');
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
-      if (Platform.OS === 'web') {
-        await Linking.openURL(data.redirectUrl);
-      } else {
-        await WebBrowser.openBrowserAsync(data.redirectUrl);
-      }
+      await Linking.openURL(data.redirectUrl);
     } catch (error: any) {
       showAlert('Error PSE', error.message);
     } finally { setProcessingMethod(null); }
