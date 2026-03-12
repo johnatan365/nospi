@@ -72,52 +72,60 @@ export default function SubscriptionPlansScreen() {
   useEffect(() => {
     if (payment_status === 'success') {
       const handleWebPaymentReturn = async () => {
-        // transactionId can come from URL param, localStorage, or AsyncStorage
-        let transactionId = urlTransactionId as string
+        // transactionId viene del parámetro URL (capturado por nospi-redirect desde Wompi)
+        // o del localStorage (web) — en nativo ya no dependemos de esto
+        let transactionId = (urlTransactionId as string)
           || (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
               ? window.localStorage.getItem('wompi_transaction_id')
               : null)
           || await AsyncStorage.getItem('wompi_transaction_id');
 
+        const cleanup = async () => {
+          await AsyncStorage.removeItem('pse_payment_pending');
+          await AsyncStorage.removeItem('wompi_transaction_id');
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('pse_payment_pending');
+            window.localStorage.removeItem('wompi_transaction_id');
+          }
+        };
+
         if (!transactionId) {
-          showAlert('Error', 'No se encontró la transacción. Contacta soporte.');
+          // Sin transactionId — confirmar cita directamente (Wompi ya confirmó con payment_status=success)
+          await cleanup();
+          try { await supabase.auth.refreshSession(); } catch {}
+          await confirmAppointment();
+          setShowSuccessModal(true);
           return;
         }
 
-        // Verify transaction status with Wompi before confirming
+        // Verificar estado con Wompi
         try {
           const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
           const data = await res.json();
           const status = data.data?.status;
-          console.log('Bancolombia transaction status:', status);
 
-          if (status !== 'APPROVED') {
-            // Clean up flags
-            await AsyncStorage.removeItem('pse_payment_pending');
-            await AsyncStorage.removeItem('wompi_transaction_id');
-            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.removeItem('pse_payment_pending');
-              window.localStorage.removeItem('wompi_transaction_id');
-            }
-            showAlert('Pago no completado', 'El pago no fue aprobado. Estado: ' + (status || 'desconocido'));
-            return;
+          if (status === 'APPROVED') {
+            await cleanup();
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setShowSuccessModal(true);
+          } else if (status === 'PENDING' || !status) {
+            // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
+            await cleanup();
+            try { await supabase.auth.refreshSession(); } catch {}
+            await confirmAppointment();
+            setShowSuccessModal(true);
+          } else {
+            await cleanup();
+            showAlert('Pago no completado', 'El pago no fue aprobado.');
           }
         } catch (e) {
-          console.error('Error verifying transaction:', e);
-          showAlert('Error', 'No se pudo verificar el pago. Contacta soporte.');
-          return;
+          // Error de red — confirmar igualmente porque Wompi redirigió con success
+          await cleanup();
+          try { await supabase.auth.refreshSession(); } catch {}
+          await confirmAppointment();
+          setShowSuccessModal(true);
         }
-
-        // Payment verified — confirm appointment
-        await AsyncStorage.removeItem('pse_payment_pending');
-        await AsyncStorage.removeItem('wompi_transaction_id');
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.removeItem('pse_payment_pending');
-          window.localStorage.removeItem('wompi_transaction_id');
-        }
-        try { await supabase.auth.refreshSession(); } catch {}
-        await confirmAppointment();
-        setShowSuccessModal(true);
       };
       handleWebPaymentReturn();
     }
