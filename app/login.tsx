@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Image as RNImage } from 'react-native';
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   modalOverlay: {
