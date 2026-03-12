@@ -113,82 +113,119 @@ export default function SubscriptionPlansScreen() {
 
   const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
 
-  // Handle return from Bancolombia/PSE web redirect
+  // Handle payment callback from URL params or deep link
+  const handlePaymentCallback = useCallback(async (paymentStatus: string, transactionId?: string) => {
+    console.log('Payment callback received with status:', paymentStatus, 'transaction:', transactionId);
+    
+    const cleanup = async () => {
+      await AsyncStorage.removeItem('pse_payment_pending');
+      await AsyncStorage.removeItem('wompi_transaction_id');
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('pse_payment_pending');
+        window.localStorage.removeItem('wompi_transaction_id');
+      }
+    };
+
+    // Get transaction ID from params or storage
+    let txId = transactionId
+      || (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
+          ? window.localStorage.getItem('wompi_transaction_id')
+          : null)
+      || await AsyncStorage.getItem('wompi_transaction_id');
+
+    console.log('Transaction ID from callback:', txId);
+
+    if (!txId) {
+      // Sin transactionId — confirmar cita directamente (Wompi ya confirmó con payment_status=success)
+      console.log('No transaction ID, confirming appointment directly');
+      await cleanup();
+      try { await supabase.auth.refreshSession(); } catch {}
+      await confirmAppointment();
+      console.log('Payment callback successful, showing success modal');
+      setShowSuccessModal(true);
+      return;
+    }
+
+    // Verificar estado con Wompi
+    try {
+      console.log('Verifying transaction status with Wompi:', txId);
+      const res = await fetch(`${WOMPI_API_URL}/transactions/${txId}`);
+      const data = await res.json();
+      const status = data.data?.status;
+
+      console.log('Wompi transaction status:', status);
+
+      if (status === 'APPROVED') {
+        await cleanup();
+        try { await supabase.auth.refreshSession(); } catch {}
+        await confirmAppointment();
+        console.log('Payment approved, showing success modal');
+        setShowSuccessModal(true);
+      } else if (status === 'PENDING' || !status) {
+        // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
+        console.log('Transaction pending, confirming anyway');
+        await cleanup();
+        try { await supabase.auth.refreshSession(); } catch {}
+        await confirmAppointment();
+        console.log('Payment pending, showing success modal');
+        setShowSuccessModal(true);
+      } else {
+        console.log('Transaction not approved:', status);
+        await cleanup();
+        showAlert('Pago no completado', 'El pago no fue aprobado.');
+      }
+    } catch (e) {
+      // Error de red — confirmar igualmente porque Wompi redirigió con success
+      console.error('Error verifying transaction, confirming anyway:', e);
+      await cleanup();
+      try { await supabase.auth.refreshSession(); } catch {}
+      await confirmAppointment();
+      console.log('Error verifying but payment successful, showing success modal');
+      setShowSuccessModal(true);
+    }
+  }, []);
+
+  // Handle return from Bancolombia/PSE web redirect via URL params
   useEffect(() => {
     if (payment_status === 'success') {
-      console.log('Payment callback received with success status');
-      const handleWebPaymentReturn = async () => {
-        // transactionId viene del parámetro URL (capturado por nospi-redirect desde Wompi)
-        // o del localStorage (web) — en nativo ya no dependemos de esto
-        let transactionId = (urlTransactionId as string)
-          || (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
-              ? window.localStorage.getItem('wompi_transaction_id')
-              : null)
-          || await AsyncStorage.getItem('wompi_transaction_id');
-
-        console.log('Transaction ID from callback:', transactionId);
-
-        const cleanup = async () => {
-          await AsyncStorage.removeItem('pse_payment_pending');
-          await AsyncStorage.removeItem('wompi_transaction_id');
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.removeItem('pse_payment_pending');
-            window.localStorage.removeItem('wompi_transaction_id');
-          }
-        };
-
-        if (!transactionId) {
-          // Sin transactionId — confirmar cita directamente (Wompi ya confirmó con payment_status=success)
-          console.log('No transaction ID, confirming appointment directly');
-          await cleanup();
-          try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
-          console.log('Payment callback successful, showing success modal');
-          setShowSuccessModal(true);
-          return;
-        }
-
-        // Verificar estado con Wompi
-        try {
-          console.log('Verifying transaction status with Wompi:', transactionId);
-          const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
-          const data = await res.json();
-          const status = data.data?.status;
-
-          console.log('Wompi transaction status:', status);
-
-          if (status === 'APPROVED') {
-            await cleanup();
-            try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
-            console.log('Payment approved, showing success modal');
-            setShowSuccessModal(true);
-          } else if (status === 'PENDING' || !status) {
-            // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
-            console.log('Transaction pending, confirming anyway');
-            await cleanup();
-            try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
-            console.log('Payment pending, showing success modal');
-            setShowSuccessModal(true);
-          } else {
-            console.log('Transaction not approved:', status);
-            await cleanup();
-            showAlert('Pago no completado', 'El pago no fue aprobado.');
-          }
-        } catch (e) {
-          // Error de red — confirmar igualmente porque Wompi redirigió con success
-          console.error('Error verifying transaction, confirming anyway:', e);
-          await cleanup();
-          try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment();
-          console.log('Error verifying but payment successful, showing success modal');
-          setShowSuccessModal(true);
-        }
-      };
-      handleWebPaymentReturn();
+      handlePaymentCallback(payment_status, urlTransactionId as string);
     }
-  }, [payment_status]);
+  }, [payment_status, urlTransactionId, handlePaymentCallback]);
+
+  // Handle deep link when app is opened from external browser (iOS fix)
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      console.log('Deep link received:', event.url);
+      const url = Linking.parse(event.url);
+      const status = url.queryParams?.payment_status as string;
+      const txId = url.queryParams?.transaction_id as string;
+      
+      if (status === 'success') {
+        console.log('Deep link payment success detected');
+        handlePaymentCallback(status, txId);
+      }
+    };
+
+    // Listen for deep links when app is already open
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // Check if app was opened with a deep link
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('App opened with URL:', url);
+        const parsed = Linking.parse(url);
+        const status = parsed.queryParams?.payment_status as string;
+        const txId = parsed.queryParams?.transaction_id as string;
+        
+        if (status === 'success') {
+          console.log('Initial URL payment success detected');
+          handlePaymentCallback(status, txId);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [handlePaymentCallback]);
 
   useEffect(() => {
     let appWasBackground = false;
