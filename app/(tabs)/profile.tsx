@@ -252,82 +252,123 @@ export default function ProfileScreen() {
   const handlePhotoPress = async () => {
     console.log('User tapped profile photo to edit');
     
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (permissionResult.granted === false) {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
-      return;
-    }
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
+      console.log('📸 Launching image picker...');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      await uploadPhoto(result.assets[0].uri);
+      console.log('📸 Image picker result:', result);
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        console.log('✅ Image selected:', result.assets[0].uri);
+        await uploadPhoto(result.assets[0].uri);
+      } else {
+        console.log('❌ Image selection cancelled or no assets');
+      }
+    } catch (error) {
+      console.error('❌ Error in handlePhotoPress:', error);
+      Alert.alert('Error', 'No se pudo abrir el selector de fotos');
     }
   };
 
   const uploadPhoto = async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      console.log('🖼️ === UPLOADING PROFILE PHOTO (Android-compatible) ===');
-      console.log('URI:', uri);
+      console.log('🖼️ === UPLOADING PROFILE PHOTO ===');
+      console.log('Platform:', Platform.OS);
+      console.log('Original URI:', uri);
       
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const timestamp = Date.now();
-      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
+      if (!user?.id) {
+        throw new Error('No user ID available');
+      }
 
-      console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
-
-      // Use FileSystem to read file as base64 (works reliably on Android)
-      let uploadData: ArrayBuffer;
-      
+      // Normalize URI for Android
+      let normalizedUri = uri;
       if (Platform.OS === 'android') {
-        console.log('📱 Android detected - using FileSystem base64 method');
-        const base64 = await FileSystem.readAsStringAsync(uri, {
+        if (uri.startsWith('file://')) {
+          normalizedUri = uri;
+        } else if (!uri.startsWith('content://') && !uri.startsWith('file://')) {
+          normalizedUri = 'file://' + uri;
+        }
+      }
+      console.log('Normalized URI:', normalizedUri);
+
+      const fileExt = uri.split('.').pop()?.toLowerCase()?.split('?')[0] || 'jpg';
+      const timestamp = Date.now();
+      const fileName = `${user.id}-${timestamp}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      console.log('File extension:', fileExt);
+      console.log('File path in storage:', filePath);
+
+      // Read file as base64 (works on all platforms)
+      console.log('📖 Reading file as base64...');
+      let base64Data: string;
+      
+      try {
+        base64Data = await FileSystem.readAsStringAsync(normalizedUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        
-        // Convert base64 to ArrayBuffer
-        const binaryStr = atob(base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        uploadData = bytes.buffer;
-      } else {
-        console.log('📱 iOS/Web detected - using fetch method');
-        const response = await fetch(uri);
-        uploadData = await response.arrayBuffer();
+        console.log('✅ File read successfully, size:', base64Data.length, 'characters');
+      } catch (readError) {
+        console.error('❌ Error reading file:', readError);
+        throw new Error('No se pudo leer el archivo de imagen');
       }
+      
+      // Convert base64 to ArrayBuffer
+      console.log('🔄 Converting base64 to ArrayBuffer...');
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const uploadData = bytes.buffer;
+      console.log('✅ Conversion complete, buffer size:', uploadData.byteLength, 'bytes');
 
       // Delete old photos first
       console.log('🗑️ Deleting old photos...');
-      const { data: existingFiles } = await supabase.storage
-        .from('profile-photos')
-        .list(user?.id || '', {
-          search: user?.id || '',
-        });
-
-      if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map(f => `${user?.id}/${f.name}`);
-        const { error: deleteError } = await supabase.storage
+      try {
+        const { data: existingFiles, error: listError } = await supabase.storage
           .from('profile-photos')
-          .remove(filesToDelete);
-        
-        if (deleteError) {
-          console.error('⚠️ Error deleting old photos:', deleteError);
+          .list(user.id, {
+            search: user.id,
+          });
+
+        if (listError) {
+          console.warn('⚠️ Error listing old photos:', listError);
+        } else if (existingFiles && existingFiles.length > 0) {
+          const filesToDelete = existingFiles.map(f => `${user.id}/${f.name}`);
+          console.log('Files to delete:', filesToDelete);
+          
+          const { error: deleteError } = await supabase.storage
+            .from('profile-photos')
+            .remove(filesToDelete);
+          
+          if (deleteError) {
+            console.warn('⚠️ Error deleting old photos:', deleteError);
+          } else {
+            console.log('✅ Deleted old photos');
+          }
         } else {
-          console.log('✅ Deleted old photos:', filesToDelete);
+          console.log('No old photos to delete');
         }
+      } catch (deleteError) {
+        console.warn('⚠️ Error in delete process:', deleteError);
       }
 
       // Upload new photo
+      console.log('📤 Uploading new photo to Supabase Storage...');
       const { data: uploadResult, error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, uploadData, {
@@ -338,8 +379,7 @@ export default function ProfileScreen() {
 
       if (uploadError) {
         console.error('❌ Upload error:', uploadError);
-        Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
-        return;
+        throw new Error(`Error al subir: ${uploadError.message}`);
       }
 
       console.log('✅ Upload successful:', uploadResult);
@@ -350,25 +390,25 @@ export default function ProfileScreen() {
         .getPublicUrl(filePath);
 
       const basePhotoUrl = urlData.publicUrl;
-      console.log('🔗 Base public URL:', basePhotoUrl);
+      console.log('🔗 Public URL:', basePhotoUrl);
 
       // Update database with base URL
+      console.log('💾 Updating database...');
       const { error: updateError } = await supabase
         .from('users')
         .update({ profile_photo_url: basePhotoUrl })
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (updateError) {
         console.error('❌ Database update error:', updateError);
-        Alert.alert('Error', 'No se pudo actualizar el perfil');
-        return;
+        throw new Error('No se pudo actualizar el perfil en la base de datos');
       }
 
       console.log('✅ Database updated successfully');
       
       // Force immediate UI update with cache-busted URL
       const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
-      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
+      console.log('🔄 Updating UI with cache-busted URL');
       
       setProfile(prev => prev ? { 
         ...prev, 
@@ -376,10 +416,11 @@ export default function ProfileScreen() {
       } : null);
       
       console.log('✅ === PHOTO UPLOAD COMPLETE ===');
-      Alert.alert('Éxito', 'Foto de perfil actualizada');
-    } catch (error) {
+      Alert.alert('Éxito', 'Foto de perfil actualizada correctamente');
+    } catch (error: any) {
       console.error('❌ Failed to upload photo:', error);
-      Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
+      const errorMessage = error?.message || 'Error desconocido';
+      Alert.alert('Error', `No se pudo subir la foto: ${errorMessage}`);
     } finally {
       setUploadingPhoto(false);
     }
