@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import Toast from 'react-native-toast-message';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -125,6 +126,7 @@ export default function SubscriptionPlansScreen() {
     const cleanup = async () => {
       await AsyncStorage.removeItem('pse_payment_pending');
       await AsyncStorage.removeItem('wompi_transaction_id');
+      await AsyncStorage.removeItem('payment_opened_time');
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem('pse_payment_pending');
         window.localStorage.removeItem('wompi_transaction_id');
@@ -161,34 +163,39 @@ export default function SubscriptionPlansScreen() {
       console.log('Wompi transaction status:', status);
 
       if (status === 'APPROVED') {
+        // ONLY show success modal and confirm appointment if payment is APPROVED
         await cleanup();
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
         console.log('Payment approved, showing success modal');
         setShowSuccessModal(true);
-      } else if (status === 'PENDING' || !status) {
-        // Pago pendiente — confirmar igualmente porque Wompi redirigió con success
-        console.log('Transaction pending, confirming anyway');
+      } else if (status === 'PENDING') {
+        // If payment is PENDING, do NOT show success modal
+        // Inform the user that the payment is in process
+        console.log('Payment is pending, showing info message');
         await cleanup();
-        try { await supabase.auth.refreshSession(); } catch {}
-        await confirmAppointment();
-        console.log('Payment pending, showing success modal');
-        setShowSuccessModal(true);
+        Toast.show({
+          type: 'info',
+          text1: 'Pago en proceso',
+          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+          visibilityTime: 5000,
+          position: 'top',
+        });
+        router.replace('/(tabs)/appointments');
       } else {
+        // DECLINED, ERROR, VOIDED
         console.log('Transaction not approved:', status);
         await cleanup();
-        showAlert('Pago no completado', 'El pago no fue aprobado.');
+        showAlert('Pago no completado', 'El pago fue rechazado por el banco o no pudo ser procesado. Por favor, inténtalo de nuevo.');
       }
     } catch (e) {
-      // Error de red — confirmar igualmente porque Wompi redirigió con success
-      console.error('Error verifying transaction, confirming anyway:', e);
+      // Error de red — mostrar error y no confirmar
+      console.error('Error verifying transaction:', e);
       await cleanup();
-      try { await supabase.auth.refreshSession(); } catch {}
-      await confirmAppointment();
-      console.log('Error verifying but payment successful, showing success modal');
-      setShowSuccessModal(true);
+      showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
+      router.replace('/(tabs)/appointments');
     }
-  }, []);
+  }, [router]);
 
   // Handle return from Bancolombia/PSE web redirect via URL params
   useEffect(() => {
@@ -245,6 +252,13 @@ export default function SubscriptionPlansScreen() {
 
         console.log('App returned to foreground after payment, checking status');
 
+        // Check if app returned too quickly (grace period)
+        const paymentOpenedTime = await AsyncStorage.getItem('payment_opened_time');
+        if (paymentOpenedTime && Date.now() - parseInt(paymentOpenedTime, 10) < 3000) {
+          console.log('App returned too quickly after opening payment, ignoring immediate status check.');
+          return;
+        }
+
         // Wait a moment for the payment to process
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -257,24 +271,35 @@ export default function SubscriptionPlansScreen() {
             const status = data.data?.status;
             console.log('Transaction status on app return:', status);
             
-            // Only show error if payment was explicitly declined/failed
-            if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
-              await AsyncStorage.removeItem('pse_payment_pending');
-              await AsyncStorage.removeItem('wompi_transaction_id');
-              await AsyncStorage.removeItem('payment_opened_time');
-              showAlert('Pago no completado', 'El pago no fue aprobado.');
-              return;
-            }
-            
-            // For APPROVED or PENDING, confirm the appointment
-            if (status === 'APPROVED' || status === 'PENDING') {
+            if (status === 'APPROVED') {
+              // Only confirm if payment is APPROVED
               await AsyncStorage.removeItem('pse_payment_pending');
               await AsyncStorage.removeItem('wompi_transaction_id');
               await AsyncStorage.removeItem('payment_opened_time');
               try { await supabase.auth.refreshSession(); } catch {}
               await confirmAppointment();
-              console.log('Payment successful, showing success modal');
+              console.log('Payment approved, showing success modal');
               setShowSuccessModal(true);
+            } else if (status === 'PENDING') {
+              // Payment is still pending - show info message
+              console.log('Payment is pending, showing info message');
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              await AsyncStorage.removeItem('payment_opened_time');
+              Toast.show({
+                type: 'info',
+                text1: 'Pago en proceso',
+                text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+                visibilityTime: 5000,
+                position: 'top',
+              });
+              router.replace('/(tabs)/appointments');
+            } else if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
+              // Payment failed
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              await AsyncStorage.removeItem('payment_opened_time');
+              showAlert('Pago no completado', 'El pago fue rechazado por el banco o no pudo ser procesado. Por favor, inténtalo de nuevo.');
             } else {
               // Unknown status - wait a bit longer and check again
               console.log('Unknown status, waiting and checking again...');
@@ -285,38 +310,48 @@ export default function SubscriptionPlansScreen() {
               const status2 = data2.data?.status;
               console.log('Transaction status after second check:', status2);
               
-              if (status2 === 'APPROVED' || status2 === 'PENDING') {
+              if (status2 === 'APPROVED') {
                 await AsyncStorage.removeItem('pse_payment_pending');
                 await AsyncStorage.removeItem('wompi_transaction_id');
                 await AsyncStorage.removeItem('payment_opened_time');
                 try { await supabase.auth.refreshSession(); } catch {}
                 await confirmAppointment();
-                console.log('Payment successful after second check, showing success modal');
+                console.log('Payment approved after second check, showing success modal');
                 setShowSuccessModal(true);
+              } else if (status2 === 'PENDING') {
+                await AsyncStorage.removeItem('pse_payment_pending');
+                await AsyncStorage.removeItem('wompi_transaction_id');
+                await AsyncStorage.removeItem('payment_opened_time');
+                Toast.show({
+                  type: 'info',
+                  text1: 'Pago en proceso',
+                  text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+                  visibilityTime: 5000,
+                  position: 'top',
+                });
+                router.replace('/(tabs)/appointments');
               } else if (status2 === 'DECLINED' || status2 === 'ERROR' || status2 === 'VOIDED') {
                 await AsyncStorage.removeItem('pse_payment_pending');
                 await AsyncStorage.removeItem('wompi_transaction_id');
                 await AsyncStorage.removeItem('payment_opened_time');
-                showAlert('Pago no completado', 'El pago no fue aprobado.');
+                showAlert('Pago no completado', 'El pago fue rechazado por el banco o no pudo ser procesado. Por favor, inténtalo de nuevo.');
               }
             }
           } catch (e) {
             console.error('Error verifying transaction on AppState:', e);
-            // On error, assume payment might be successful and confirm
+            // On error, show error message instead of confirming
             await AsyncStorage.removeItem('pse_payment_pending');
             await AsyncStorage.removeItem('wompi_transaction_id');
             await AsyncStorage.removeItem('payment_opened_time');
-            try { await supabase.auth.refreshSession(); } catch {}
-            await confirmAppointment();
-            console.log('Error verifying but confirming payment, showing success modal');
-            setShowSuccessModal(true);
+            showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
+            router.replace('/(tabs)/appointments');
           }
         }
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, []);
+  }, [router]);
 
   const confirmAppointment = async () => {
     try {
@@ -427,9 +462,19 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
 
-      if (result.status === 'APPROVED' || result.status === 'PENDING') {
+      if (result.status === 'APPROVED') {
         setShowCardForm(false);
         await handleSuccess();
+      } else if (result.status === 'PENDING') {
+        setShowCardForm(false);
+        Toast.show({
+          type: 'info',
+          text1: 'Pago en proceso',
+          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
+          visibilityTime: 5000,
+          position: 'top',
+        });
+        router.replace('/(tabs)/appointments');
       } else {
         throw new Error('Pago rechazado. Intenta con otra tarjeta.');
       }
@@ -982,6 +1027,8 @@ export default function SubscriptionPlansScreen() {
           </View>
         </View>
       </Modal>
+      
+      <Toast />
     </LinearGradient>
   );
 }
