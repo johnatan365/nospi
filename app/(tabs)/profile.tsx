@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 
 interface UserProfile {
   id: string;
@@ -262,7 +263,7 @@ export default function ProfileScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -273,11 +274,8 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      console.log('🖼️ === UPLOADING PROFILE PHOTO ===');
+      console.log('🖼️ === UPLOADING PROFILE PHOTO (Android-compatible) ===');
       console.log('URI:', uri);
-      
-      const response = await fetch(uri);
-      const blob = await response.blob();
       
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
@@ -285,6 +283,28 @@ export default function ProfileScreen() {
       const filePath = `${user?.id}/${fileName}`;
 
       console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
+
+      // Use FileSystem to read file as base64 (works reliably on Android)
+      let uploadData: ArrayBuffer;
+      
+      if (Platform.OS === 'android') {
+        console.log('📱 Android detected - using FileSystem base64 method');
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Convert base64 to ArrayBuffer
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        uploadData = bytes.buffer;
+      } else {
+        console.log('📱 iOS/Web detected - using fetch method');
+        const response = await fetch(uri);
+        uploadData = await response.arrayBuffer();
+      }
 
       // Delete old photos first
       console.log('🗑️ Deleting old photos...');
@@ -308,12 +328,12 @@ export default function ProfileScreen() {
       }
 
       // Upload new photo
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: uploadResult, error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, blob, {
+        .upload(filePath, uploadData, {
           contentType: `image/${fileExt}`,
           cacheControl: '0',
-          upsert:true,
+          upsert: true,
         });
 
       if (uploadError) {
@@ -322,46 +342,38 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('✅ Upload successful:', uploadData);
+      console.log('✅ Upload successful:', uploadResult);
 
-// Get public URL of uploaded photo
-const { data: urlData } = supabase.storage
-.from("profile-photos")
-.getPublicUrl(filePath);
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
 
-const photoUrl = urlData.publicUrl;
+      const basePhotoUrl = urlData.publicUrl;
+      console.log('🔗 Base public URL:', basePhotoUrl);
 
-if (!user) {
-console.error("Usuario no autenticado");
-return;
-}
+      // Update database with base URL
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ profile_photo_url: basePhotoUrl })
+        .eq('id', user?.id);
 
-// Update profile with photo URL
-const { error: updateError } = await supabase
-.from("users")
-.update({ profile_photo_url: photoUrl })
-.eq("id", user.id);
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        Alert.alert('Error', 'No se pudo actualizar el perfil');
+        return;
+      }
 
-if (updateError) {
-console.error("Error actualizando foto:", updateError);
-return;
-}
-
-console.log("✅ Foto guardada correctamente");
+      console.log('✅ Database updated successfully');
       
-
-// Force immediate UI update with cache-busted URL
-const cacheBustedUrl = `${photoUrl}?t=${Date.now()}`;
-console.log("Updating UI with cache-busted URL:", cacheBustedUrl);
-
-setProfile(prev =>
-prev
-? {
-...prev,
-profile_photo_url: cacheBustedUrl
-}
-: null
-);
+      // Force immediate UI update with cache-busted URL
+      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
+      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
+      
+      setProfile(prev => prev ? { 
+        ...prev, 
+        profile_photo_url: cacheBustedUrl 
+      } : null);
       
       console.log('✅ === PHOTO UPLOAD COMPLETE ===');
       Alert.alert('Éxito', 'Foto de perfil actualizada');

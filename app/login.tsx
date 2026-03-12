@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -356,27 +357,33 @@ export default function LoginScreen() {
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="email" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Contraseña"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="lock" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -500,6 +507,28 @@ const styles = StyleSheet.create({
   inputContainer: {
     gap: 16,
     marginBottom: 24,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: nospiColors.white,
+    borderRadius: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginLeft: 16,
+    marginRight: 8,
+  },
+  inputWithIcon: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingRight: 20,
+    fontSize: 16,
+    color: '#333',
   },
   input: {
     backgroundColor: nospiColors.white,
