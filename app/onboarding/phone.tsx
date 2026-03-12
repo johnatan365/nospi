@@ -62,10 +62,12 @@ export default function PhoneScreen() {
 
   const checkPhoneExists = async (full: string): Promise<boolean> => {
     try {
+      const withoutPlus = full.replace('+', '');
+      const digitsOnly = full.replace(/^\+\d{2,3}/, '');
       const { data, error } = await supabase
         .from('users')
         .select('id')
-        .eq('phone', full)
+        .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
         .maybeSingle();
       if (error) { console.error(error); return false; }
       return !!data;
