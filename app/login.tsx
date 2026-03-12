@@ -549,8 +549,8 @@ const styles = StyleSheet.create({
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
-    color: nospiColors.purpleDark,
-    opacity: 0.6,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   socialButtonsContainer: {
     flexDirection: 'row',
