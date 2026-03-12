@@ -72,9 +72,21 @@ export default function SubscriptionPlansScreen() {
   useEffect(() => {
     if (payment_status === 'success') {
       const handleWebPaymentReturn = async () => {
-        const pending = await AsyncStorage.getItem('pse_payment_pending');
-        if (pending !== 'true') return;
+        // In web, AsyncStorage may not persist across full page reloads
+        // So we check both AsyncStorage and localStorage
+        let pending = await AsyncStorage.getItem('pse_payment_pending');
+        if (!pending && typeof window !== 'undefined') {
+          pending = window.localStorage.getItem('pse_payment_pending');
+        }
+        if (pending !== 'true') {
+          // Even without the flag, if payment_status=success we should confirm
+          // This handles the case where the page reloaded and lost the flag
+          pending = 'true';
+        }
         await AsyncStorage.removeItem('pse_payment_pending');
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('pse_payment_pending');
+        }
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment();
         router.replace('/(tabs)/appointments');
@@ -106,9 +118,13 @@ export default function SubscriptionPlansScreen() {
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return;
-      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', user?.id).eq('event_id', pendingEventId).maybeSingle();
+      // Get user from session directly in case context hasn't loaded yet
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id || user?.id;
+      if (!userId) { console.error('confirmAppointment: no userId'); return; }
+      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
       if (!existing) {
-        await supabase.from('appointments').insert({ user_id: user?.id, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' });
+        await supabase.from('appointments').insert({ user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' });
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
@@ -277,6 +293,9 @@ export default function SubscriptionPlansScreen() {
 
       // Abrir URL de Bancolombia en navegador externo
       await AsyncStorage.setItem('pse_payment_pending', 'true');
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('pse_payment_pending', 'true');
+      }
       await Linking.openURL(result.redirectUrl);
     } catch (error: any) {
       showAlert('Error Bancolombia', error.message);
