@@ -1,5 +1,5 @@
-
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Alert, Platform } from 'react-native';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -67,8 +67,39 @@ export default function Index() {
               return;
             }
 
-            console.log('Index: Profile exists, redirecting to events');
-            router.replace('/(tabs)/events');
+            console.log('Index: Profile exists, checking for pending payment...');
+
+            // Verificar si hay pago pendiente de Bancolombia/PSE
+            // En web: revisar URL params
+            // En nativo: revisar AsyncStorage
+            let hasPendingPayment = false;
+            let paymentStatus = '';
+            let transactionId = '';
+
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              const urlParams = new URLSearchParams(window.location.search);
+              paymentStatus = urlParams.get('payment_status') || '';
+              transactionId = urlParams.get('transaction_id') || '';
+              if (paymentStatus) hasPendingPayment = true;
+            }
+
+            if (!hasPendingPayment) {
+              const pending = await AsyncStorage.getItem('pse_payment_pending');
+              if (pending === 'true') hasPendingPayment = true;
+            }
+
+            if (hasPendingPayment) {
+              console.log('Index: Pending payment detected, redirecting to subscription-plans');
+              let target = '/subscription-plans';
+              if (paymentStatus) {
+                target += '?payment_status=' + paymentStatus;
+                if (transactionId) target += '&transaction_id=' + transactionId;
+              }
+              router.replace(target as any);
+            } else {
+              console.log('Index: No pending payment, redirecting to events');
+              router.replace('/(tabs)/events');
+            }
           } catch (error) {
             console.error('Index: Unexpected error during profile check:', error);
             
