@@ -52,6 +52,52 @@ export default function SubscriptionPlansScreen() {
   const [nequiPhone, setNequiPhone] = useState('');
   const [nequiStatus, setNequiStatus] = useState<'idle' | 'waiting'>('idle');
 
+  // PSE form
+  const [showPSEForm, setShowPSEForm] = useState(false);
+  const [psePhone, setPsePhone] = useState('');
+  const [pseLegalId, setPseLegalId] = useState('');
+  const [pseLegalIdType, setPseLegalIdType] = useState('CC');
+  const [pseBankCode, setPseBankCode] = useState('');
+  const [pseBankName, setPseBankName] = useState('');
+  const [showBankPicker, setShowBankPicker] = useState(false);
+
+  const PSE_BANKS = [
+    { code: '1040', name: 'Banco Agrario' },
+    { code: '1507', name: 'NEQUI' },
+    { code: '1052', name: 'Banco AV Villas' },
+    { code: '1032', name: 'Banco Caja Social' },
+    { code: '1019', name: 'SCOTIABANK COLPATRIA' },
+    { code: '1066', name: 'Banco Cooperativo Coopcentral' },
+    { code: '1558', name: 'Banco Credifinanciera' },
+    { code: '1006', name: 'Banco Davivienda' },
+    { code: '1051', name: 'Banco de Bogotá' },
+    { code: '1009', name: 'Banco de Occidente' },
+    { code: '1062', name: 'Banco Falabella' },
+    { code: '1069', name: 'Banco Finandina' },
+    { code: '1524', name: 'Banco Pichincha' },
+    { code: '1060', name: 'Banco Pichincha S.A.' },
+    { code: '1002', name: 'Banco Popular' },
+    { code: '1065', name: 'Banco Santander Colombia' },
+    { code: '1247', name: 'Banco Mundo Mujer' },
+    { code: '1292', name: 'Confiar Cooperativa Financiera' },
+    { code: '1023', name: 'Banco de la República' },
+    { code: '1063', name: 'Banco Fincomercio' },
+    { code: '1303', name: 'Coofinep Cooperativa Financiera' },
+    { code: '1004', name: 'Bancolombia' },
+    { code: '1007', name: 'Bancolombia' },
+    { code: '1283', name: 'CFA Cooperativa Financiera' },
+    { code: '1370', name: 'Coltefinanciera' },
+    { code: '1289', name: 'Cotrafa Cooperativa Financiera' },
+    { code: '1353', name: 'Coopcentralde' },
+    { code: '1637', name: 'IRIS' },
+    { code: '1801', name: 'DAVIPLATA' },
+    { code: '1013', name: 'BBVA Colombia' },
+    { code: '1022', name: 'Itaú' },
+    { code: '1014', name: 'Itaú CorpBanca' },
+    { code: '1059', name: 'Bancamía' },
+    { code: '1558', name: 'JFK Cooperativa Financiera' },
+  ];
+
   const priceCOP = PRECIO_EVENTO_COP;
 
   const fetchVirtualBalance = useCallback(async () => {
@@ -404,8 +450,14 @@ export default function SubscriptionPlansScreen() {
     } finally { setProcessingMethod(null); }
   };
 
-    // ─── PSE ─────────────────────────────────────────────────────
+  // ─── PSE ─────────────────────────────────────────────────────
   const handlePSEPayment = async () => {
+    const cleanPhone = psePhone.replace(/\D/g, '');
+    const cleanLegalId = pseLegalId.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
+    if (cleanLegalId.length < 5) { showAlert('Error', 'Ingresa un número de documento válido.'); return; }
+    if (!pseBankCode) { showAlert('Error', 'Selecciona tu banco.'); return; }
+
     setProcessingMethod('pse');
     try {
       const currentUser = await getSession();
@@ -419,7 +471,19 @@ export default function SubscriptionPlansScreen() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({
+          acceptanceToken,
+          personalDataToken,
+          amountCOP: priceCOP,
+          userEmail: userProfile?.email || currentUser.email || '',
+          userId: currentUser.id,
+          eventId: pendingEventId,
+          userFullName: userProfile?.name || currentUser.email || '',
+          userPhone: cleanPhone,
+          userLegalId: cleanLegalId,
+          userLegalIdType: pseLegalIdType,
+          financialInstitutionCode: pseBankCode,
+        }),
       });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || 'Error al crear pago PSE');
@@ -432,6 +496,39 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('wompi_transaction_id', data.transactionId);
       }
       await Linking.openURL(data.redirectUrl);
+
+      // Polling igual que Bancolombia
+      if (Platform.OS !== 'web' && data.transactionId) {
+        let pollAttempts = 0;
+        const maxAttempts = 24;
+        const pollInterval = setInterval(async () => {
+          pollAttempts++;
+          try {
+            const pending = await AsyncStorage.getItem('pse_payment_pending');
+            if (pending !== 'true') { clearInterval(pollInterval); return; }
+            const res = await fetch(`${WOMPI_API_URL}/transactions/${data.transactionId}`);
+            const txData = await res.json();
+            const status = txData.data?.status;
+            if (status === 'APPROVED') {
+              clearInterval(pollInterval);
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              try { await supabase.auth.refreshSession(); } catch {}
+              await confirmAppointment();
+              setProcessingMethod(null);
+              setShowSuccessModal(true);
+            } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || pollAttempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              await AsyncStorage.removeItem('pse_payment_pending');
+              await AsyncStorage.removeItem('wompi_transaction_id');
+              setProcessingMethod(null);
+              if (pollAttempts < maxAttempts) showAlert('Pago no completado', 'El pago fue rechazado o cancelado.');
+            }
+          } catch (e) {
+            if (pollAttempts >= maxAttempts) { clearInterval(pollInterval); setProcessingMethod(null); }
+          }
+        }, 5000);
+      }
     } catch (error: any) {
       showAlert('Error PSE', error.message);
     } finally { setProcessingMethod(null); }
@@ -540,6 +637,103 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
+  // ─── PSE FORM ─────────────────────────────────────────────────
+  if (showPSEForm) {
+    return (
+      <SafeAreaView style={styles.formContainer}>
+        <Stack.Screen options={{ headerShown: true, title: 'Pagar con PSE', headerLeft: () => (
+          <TouchableOpacity onPress={() => { setShowPSEForm(false); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+          </TouchableOpacity>
+        )}} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+            <View style={styles.formCard}>
+              <Image source={require('@/assets/images/logo_380.png')} style={styles.methodLogoLarge} resizeMode="contain" />
+              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+
+              <Text style={styles.inputLabel}>Banco</Text>
+              <TouchableOpacity
+                style={[styles.input, { justifyContent: 'center' }]}
+                onPress={() => setShowBankPicker(true)}
+              >
+                <Text style={{ fontSize: 16, color: pseBankName ? '#111' : '#aaa' }}>
+                  {pseBankName || 'Selecciona tu banco'}
+                </Text>
+              </TouchableOpacity>
+
+              {showBankPicker && (
+                <View style={styles.bankPickerContainer}>
+                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
+                    {PSE_BANKS.map((bank) => (
+                      <TouchableOpacity
+                        key={bank.code + bank.name}
+                        style={styles.bankOption}
+                        onPress={() => { setPseBankCode(bank.code); setPseBankName(bank.name); setShowBankPicker(false); }}
+                      >
+                        <Text style={[styles.bankOptionText, pseBankCode === bank.code && { color: nospiColors.purpleDark, fontWeight: '700' }]}>
+                          {bank.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              <Text style={styles.inputLabel}>Tipo de documento</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                {['CC', 'CE', 'NIT', 'PP'].map((tipo) => (
+                  <TouchableOpacity
+                    key={tipo}
+                    style={[styles.installmentBtn, pseLegalIdType === tipo && styles.installmentBtnSelected]}
+                    onPress={() => setPseLegalIdType(tipo)}
+                  >
+                    <Text style={[styles.installmentText, pseLegalIdType === tipo && styles.installmentTextSelected]}>{tipo}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Número de documento</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="123456789"
+                value={pseLegalId}
+                onChangeText={(t) => setPseLegalId(t.replace(/\D/g, '').slice(0, 15))}
+                keyboardType="numeric"
+                maxLength={15}
+                returnKeyType="next"
+              />
+
+              <Text style={styles.inputLabel}>Celular</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="3001234567"
+                value={psePhone}
+                onChangeText={(t) => setPsePhone(t.replace(/\D/g, '').slice(0, 10))}
+                keyboardType="phone-pad"
+                maxLength={10}
+                returnKeyType="done"
+              />
+
+              <TouchableOpacity
+                style={[styles.payBtn, isProcessing('pse') && styles.payBtnDisabled]}
+                onPress={() => { Keyboard.dismiss(); handlePSEPayment(); }}
+                disabled={isProcessing('pse')}
+                activeOpacity={0.7}
+              >
+                {isProcessing('pse')
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.payBtnText}>{`Pagar $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+                }
+              </TouchableOpacity>
+              <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
   // ─── PANTALLA PRINCIPAL ───────────────────────────────────────
   return (
     <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
@@ -627,7 +821,7 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={handlePSEPayment} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowPSEForm(true)} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
@@ -712,5 +906,8 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 16, textAlign: 'center' },
   successMessage: { fontSize: 16, color: '#666', textAlign: 'center', lineHeight: 24, marginBottom: 32 },
   successButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 18, paddingHorizontal: 48, borderRadius: 16, width: '100%', alignItems: 'center' },
+  bankPickerContainer: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', marginTop: 4, marginBottom: 8, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
+  bankOption: { paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  bankOptionText: { fontSize: 15, color: '#333' },
   successButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 });
