@@ -59,6 +59,7 @@ export default function SubscriptionPlansScreen() {
   const [pseLegalIdType, setPseLegalIdType] = useState('CC');
   const [pseBankCode, setPseBankCode] = useState('');
   const [pseBankName, setPseBankName] = useState('');
+  const [pseEmail, setPseEmail] = useState('');
   const [showBankPicker, setShowBankPicker] = useState(false);
   const [pseBanks, setPseBanks] = useState<{ code: string; name: string }[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
@@ -450,6 +451,7 @@ export default function SubscriptionPlansScreen() {
   const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
     const cleanLegalId = pseLegalId.replace(/\D/g, '');
+    if (!pseEmail || !pseEmail.includes('@')) { showAlert('Error', 'Ingresa tu correo registrado en PSE.'); return; }
     if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
     if (cleanLegalId.length < 5) { showAlert('Error', 'Ingresa un número de documento válido.'); return; }
     if (!pseBankCode) { showAlert('Error', 'Selecciona tu banco.'); return; }
@@ -471,7 +473,7 @@ export default function SubscriptionPlansScreen() {
           acceptanceToken,
           personalDataToken,
           amountCOP: priceCOP,
-          userEmail: userProfile?.email || currentUser.email || '',
+          userEmail: pseEmail,
           userId: currentUser.id,
           eventId: pendingEventId,
           userFullName: userProfile?.name || currentUser.email || '',
@@ -678,6 +680,17 @@ export default function SubscriptionPlansScreen() {
                   </ScrollView>
                 </View>
               )}
+
+              <Text style={styles.inputLabel}>Correo registrado en PSE</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="tucorreo@gmail.com"
+                value={pseEmail}
+                onChangeText={setPseEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
 
               <Text style={styles.inputLabel}>Tipo de documento</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
