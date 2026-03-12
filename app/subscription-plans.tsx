@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -65,6 +65,23 @@ export default function SubscriptionPlansScreen() {
   }, [user?.id]);
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
+
+  const { payment_status } = useLocalSearchParams<{ payment_status?: string }>();
+
+  // Handle return from Bancolombia/PSE web redirect
+  useEffect(() => {
+    if (payment_status === 'success') {
+      const handleWebPaymentReturn = async () => {
+        const pending = await AsyncStorage.getItem('pse_payment_pending');
+        if (pending !== 'true') return;
+        await AsyncStorage.removeItem('pse_payment_pending');
+        try { await supabase.auth.refreshSession(); } catch {}
+        await confirmAppointment();
+        router.replace('/(tabs)/appointments');
+      };
+      handleWebPaymentReturn();
+    }
+  }, [payment_status]);
 
   useEffect(() => {
     let appWasBackground = false;
