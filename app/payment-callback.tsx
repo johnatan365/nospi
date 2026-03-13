@@ -174,8 +174,8 @@ const styles = StyleSheet.create({
     maxWidth: 500,
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 240,
+    height: 240,
     marginBottom: 40,
   },
   instructionsCard: {
