@@ -272,11 +272,14 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      // Request base64 so we have a reliable data source on iOS
       base64: true,
     });
 
-    if (!result.canceled && result.assets[0]) {
-      await uploadPhoto(result.assets[0].uri, result.assets[0].base64 || null);
+    if (!result.canceled && result.assets && result.assets[0]) {
+      const asset = result.assets[0];
+      console.log('📸 Image selected, URI:', asset.uri, 'has base64:', !!asset.base64);
+      await uploadPhoto(asset.uri, asset.base64 || null);
     }
   };
 
@@ -285,30 +288,40 @@ export default function ProfileScreen() {
     try {
       console.log('🖼️ === UPLOADING PROFILE PHOTO (iOS) ===');
       console.log('URI:', uri);
-      
-      const fileExt = uri.split('.').pop()?.toLowerCase().split('?')[0] || 'jpg';
+
+      // On iOS, always use jpeg — the picker compresses to JPEG regardless of source format
+      const MIME_TYPE = 'image/jpeg';
+      const FILE_EXT = 'jpg';
       const timestamp = Date.now();
-      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
+      const fileName = `${user?.id}-${timestamp}.${FILE_EXT}`;
       const filePath = `${user?.id}/${fileName}`;
 
-      // Convert base64 to ArrayBuffer for Supabase (avoids fetch+blob issues on iOS)
-      let uploadData: ArrayBuffer;
+      console.log('📤 Preparing upload — bucket: profile-photos, path:', filePath);
+
+      // Build upload payload: prefer base64 (most reliable on iOS Expo Go),
+      // fall back to fetch→blob which also works for file:// URIs on iOS.
+      let uploadPayload: ArrayBuffer | Blob;
       if (base64Data) {
+        console.log('📦 Using base64 data for upload');
         const binaryStr = atob(base64Data);
         const bytes = new Uint8Array(binaryStr.length);
         for (let i = 0; i < binaryStr.length; i++) {
           bytes[i] = binaryStr.charCodeAt(i);
         }
-        uploadData = bytes.buffer;
+        uploadPayload = bytes.buffer;
       } else {
-        // Fallback to fetch+blob if base64 not available
-        const response = await fetch(uri);
-        uploadData = await response.arrayBuffer();
+        // fetch() handles file:// URIs correctly on iOS
+        console.log('📦 Falling back to fetch→blob for upload');
+        const fetchResponse = await fetch(uri);
+        if (!fetchResponse.ok) {
+          throw new Error(`Failed to read image file: ${fetchResponse.status}`);
+        }
+        uploadPayload = await fetchResponse.blob();
       }
 
-      console.log('📤 Uploading to bucket: profile-photos, path:', filePath);
+      console.log('📤 Uploading to Supabase Storage...');
 
-      // Delete old photos first
+      // Delete old photos first (best-effort, don't block on failure)
       console.log('🗑️ Deleting old photos...');
       const { data: existingFiles } = await supabase.storage
         .from('profile-photos')
@@ -323,17 +336,17 @@ export default function ProfileScreen() {
           .remove(filesToDelete);
         
         if (deleteError) {
-          console.error('⚠️ Error deleting old photos:', deleteError);
+          console.error('⚠️ Error deleting old photos (non-fatal):', deleteError);
         } else {
           console.log('✅ Deleted old photos:', filesToDelete);
         }
       }
 
-      // Upload new photo
+      // Upload new photo with explicit JPEG content type
       const { data: uploadResult, error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, uploadData, {
-          contentType: `image/${fileExt}`,
+        .upload(filePath, uploadPayload, {
+          contentType: MIME_TYPE,
           cacheControl: '0',
           upsert: true,
         });
