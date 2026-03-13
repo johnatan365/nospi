@@ -1,15 +1,11 @@
+
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Only import DateTimePicker on native platforms
-let DateTimePicker: any = null;
-if (Platform.OS !== 'web') {
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function BirthdateScreen() {
   const router = useRouter();
@@ -109,7 +105,7 @@ export default function BirthdateScreen() {
             </TouchableOpacity>
           )}
 
-          {Platform.OS !== 'web' && showPicker && DateTimePicker && (
+          {Platform.OS !== 'web' && showPicker && (
             <View style={styles.pickerContainer}>
               <DateTimePicker
                 value={date}
