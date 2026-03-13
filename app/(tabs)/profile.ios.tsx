@@ -64,13 +64,18 @@ const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
 };
 
 const AVAILABLE_INTERESTS = [
-  'Música', 'Deportes', 'Viajes', 'Cine', 'Arte', 'Lectura', 'Cocina', 
-  'Tecnología', 'Fotografía', 'Baile', 'Yoga', 'Fitness'
+  '🎵 Música', '🎬 Cine', '📚 Lectura', '✈️ Viajar', '🍳 Cocinar',
+  '🏃 Deportes', '🎨 Arte', '📸 Fotografía', '🎮 Videojuegos', '🧘 Yoga',
+  '🏋️ Gym', '🎭 Teatro', '🍷 Vino', '☕ Café', '🌱 Naturaleza',
+  '🐕 Mascotas', '🎤 Karaoke', '💃 Bailar', '🏖️ Playa', '⛰️ Montaña',
+  '🍕 Comida', '🎪 Festivales', '🚴 Ciclismo', '🏊 Natación', '🎸 Música en vivo',
 ];
 
 const AVAILABLE_PERSONALITY = [
-  'Extrovertido', 'Introvertido', 'Aventurero', 'Tranquilo', 'Creativo',
-  'Analítico', 'Empático', 'Optimista', 'Realista', 'Espontáneo'
+  '😊 Optimista', '🤗 Empático', '🎉 Divertido', '🧠 Intelectual', '💪 Aventurero',
+  '🎯 Ambicioso', '😌 Tranquilo', '🤝 Sociable', '💭 Creativo', '📖 Curioso',
+  '❤️ Romántico', '😂 Gracioso', '🎭 Espontáneo', '🧘 Zen', '🔥 Apasionado',
+  '🤓 Geek', '🌟 Carismático', '💼 Profesional', '🎨 Artístico', '🏆 Competitivo',
 ];
 
 export default function ProfileScreen() {
@@ -459,19 +464,19 @@ export default function ProfileScreen() {
   };
 
   const toggleInterest = (interest: string) => {
-    if (editInterests.includes(interest)) {
-      setEditInterests(editInterests.filter(i => i !== interest));
-    } else {
-      setEditInterests([...editInterests, interest]);
-    }
+    setEditInterests(prev => {
+      const isSelected = prev.includes(interest);
+      console.log(`User toggled interest "${interest}": ${isSelected ? 'removed' : 'added'}`);
+      return isSelected ? prev.filter(i => i !== interest) : [...prev, interest];
+    });
   };
 
   const togglePersonality = (trait: string) => {
-    if (editPersonality.includes(trait)) {
-      setEditPersonality(editPersonality.filter(t => t !== trait));
-    } else {
-      setEditPersonality([...editPersonality, trait]);
-    }
+    setEditPersonality(prev => {
+      const isSelected = prev.includes(trait);
+      console.log(`User toggled personality trait "${trait}": ${isSelected ? 'removed' : 'added'}`);
+      return isSelected ? prev.filter(t => t !== trait) : [...prev, trait];
+    });
   };
 
   const handleMinAgeChange = (value: number) => {

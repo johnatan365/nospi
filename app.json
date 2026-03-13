@@ -34,7 +34,7 @@
         "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.jaxper.jaxper",
+      "package": "com.nospi.jaxper",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
