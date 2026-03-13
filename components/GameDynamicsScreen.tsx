@@ -535,9 +535,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   // Per-level gradient backgrounds
   const LEVEL_GRADIENTS: Record<QuestionLevel, [string, string, ...string[]]> = {
-    divertido: ['#FF6B6B', '#FF8E53', '#FFE66D'],
-    sensual:   ['#4ECDC4', '#44A08D', '#2C7873'],
-    atrevido:  ['#667eea', '#764ba2', '#4a2c6e'],
+    divertido: ['#FF6B6B', '#FFE66D'],
+    sensual:   ['#FF8C00', '#FFA500', '#FFD700'],
+    atrevido:  ['#8B0000', '#C0392B', '#E74C3C'],
   };
   const levelGradient = LEVEL_GRADIENTS[currentLevel];
   
@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
   continueButtonTextWaiting: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.35)',
+    color: '#FFFFFF',
   },
   buttonDisabled: {
     opacity: 0.6,
