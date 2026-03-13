@@ -46,6 +46,7 @@ export default function SubscriptionPlansScreen() {
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
+  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
 
   // Card form
   const [showCardForm, setShowCardForm] = useState(false);
@@ -219,6 +220,9 @@ export default function SubscriptionPlansScreen() {
           if (paymentTime > fiveMinutesAgo) { // Only process recent payments
             console.log('Found recent payment in AsyncStorage:', { storedStatus, storedTransactionId });
             
+            // Show checking status indicator
+            setCheckingPaymentStatus(true);
+            
             // Clear AsyncStorage items immediately to prevent re-processing
             await AsyncStorage.removeItem('nospi_payment_status');
             await AsyncStorage.removeItem('nospi_transaction_id');
@@ -226,6 +230,9 @@ export default function SubscriptionPlansScreen() {
 
             // Call the payment callback handler with the stored data
             await handlePaymentCallback(storedStatus, storedTransactionId);
+            
+            // Hide checking status indicator
+            setCheckingPaymentStatus(false);
           } else {
             // Clear old AsyncStorage items
             await AsyncStorage.removeItem('nospi_payment_status');
@@ -636,14 +643,18 @@ export default function SubscriptionPlansScreen() {
       // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
       await Linking.openURL(result.redirectUrl);
       
-      // Mostrar mensaje al usuario
-      showAlert(
-        'Completa tu pago',
-        'Serás redirigido a Bancolombia para completar el pago. Una vez finalizado, regresa a la app de Nospi para confirmar tu cita.'
-      );
-      
-      // Limpiar el estado de procesamiento
+      // Limpiar el estado de procesamiento inmediatamente
       setProcessingMethod(null);
+      
+      // Mostrar toast informativo en lugar de Alert
+      Toast.show({
+        type: 'info',
+        text1: 'Completa tu pago en Bancolombia',
+        text2: 'Cuando termines, regresa a esta pantalla. Tu pago se verificará automáticamente.',
+        visibilityTime: 8000,
+        position: 'top',
+        topOffset: 60,
+      });
       
       // El AppState handler se encargará de verificar el pago cuando el usuario regrese
       return;
@@ -777,15 +788,19 @@ export default function SubscriptionPlansScreen() {
       // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
       await Linking.openURL(data.redirectUrl);
       
-      // Mostrar mensaje al usuario
-      showAlert(
-        'Completa tu pago',
-        'Serás redirigido a tu banco para completar el pago. Una vez finalizado, regresa a la app de Nospi para confirmar tu cita.'
-      );
-      
-      // Limpiar el estado de procesamiento
+      // Limpiar el estado de procesamiento inmediatamente
       setProcessingMethod(null);
       setShowPSEForm(false);
+      
+      // Mostrar toast informativo en lugar de Alert
+      Toast.show({
+        type: 'info',
+        text1: 'Completa tu pago en tu banco',
+        text2: 'Cuando termines, regresa a esta pantalla. Tu pago se verificará automáticamente.',
+        visibilityTime: 8000,
+        position: 'top',
+        topOffset: 60,
+      });
       
       // El AppState handler se encargará de verificar el pago cuando el usuario regrese
       return;
@@ -1016,6 +1031,14 @@ export default function SubscriptionPlansScreen() {
   return (
     <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
+      
+      {checkingPaymentStatus && (
+        <View style={styles.checkingStatusBanner}>
+          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 12 }} />
+          <Text style={styles.checkingStatusText}>Verificando estado del pago...</Text>
+        </View>
+      )}
+      
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
         <Text style={styles.title}>Pago del Evento</Text>
@@ -1135,6 +1158,19 @@ const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 60 },
+  checkingStatusBanner: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkingStatusText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   formContainer: { flex: 1, backgroundColor: '#f5f5f5' },
   formContent: { padding: 20, paddingBottom: 120 },
   formCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
