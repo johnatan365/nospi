@@ -560,7 +560,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           <View style={styles.questionCard}>
-            <Text style={styles.questionIcon}>❓</Text>
             <Text style={styles.questionText}>{currentQuestion}</Text>
 
             {/* Countdown timer badge */}
@@ -583,9 +582,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           {timerExpired ? (
             <>
-              <View style={styles.tiempoCard}>
-                <Text style={styles.tiempoText}>¡Tiempo!</Text>
-              </View>
               <TouchableOpacity
                 style={[styles.continueButton, loading && styles.buttonDisabled]}
                 onPress={() => {
@@ -803,10 +799,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   questionText: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
     color: nospiColors.purpleDark,
     textAlign: 'center',
+    lineHeight: 38,
   },
   starterCard: {
     backgroundColor: nospiColors.purpleMid,
