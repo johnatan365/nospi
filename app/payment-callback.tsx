@@ -5,92 +5,99 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import Constants from 'expo-constants';
 
 export default function PaymentCallbackScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const localSearchParams = useLocalSearchParams();
   const [status, setStatus] = useState('Procesando pago...');
   const [showManualButton, setShowManualButton] = useState(false);
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
     console.log('PaymentCallbackScreen: Payment callback received');
-    console.log('PaymentCallbackScreen: URL params:', params);
+    console.log('PaymentCallbackScreen: URL params:', localSearchParams);
     console.log('PaymentCallbackScreen: Platform:', Platform.OS);
     
-    const handleCallback = async () => {
-      try {
-        // Extract transaction ID from URL params
-        const transactionId = params.id as string || params.transaction_id as string;
-        
-        console.log('PaymentCallbackScreen: Transaction ID:', transactionId);
+    if (isWeb) {
+      // Extract payment details from URL parameters
+      const paymentStatus = localSearchParams.payment_status as string || 'unknown';
+      const transactionId = localSearchParams.transaction_id as string || '';
 
-        if (Platform.OS === 'web') {
-          // On web, store the payment info in localStorage so the app can pick it up
-          console.log('PaymentCallbackScreen: Web platform, storing payment info and triggering deep link');
-          setStatus('Redirigiendo a la aplicación...');
-          
-          // Store payment info in localStorage
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('payment_callback_status', 'success');
-            window.localStorage.setItem('payment_callback_transaction_id', transactionId || '');
-            window.localStorage.setItem('payment_callback_timestamp', Date.now().toString());
-            console.log('PaymentCallbackScreen: Payment info stored in localStorage');
-          }
-          
-          // Try to open the app with a simple instruction to the user
-          // The app will check localStorage when it opens
+      console.log('PaymentCallbackScreen: Web platform, storing payment info');
+      console.log('PaymentCallbackScreen: Payment status:', paymentStatus);
+      console.log('PaymentCallbackScreen: Transaction ID:', transactionId);
+
+      // Store payment info in localStorage for the app to pick up
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('nospi_payment_status', paymentStatus);
+        window.localStorage.setItem('nospi_transaction_id', transactionId);
+        window.localStorage.setItem('nospi_payment_time', Date.now().toString());
+        console.log('PaymentCallbackScreen: Payment info stored in localStorage');
+      }
+
+      // Attempt to create a deep link URL for the app
+      const appDeepLink = Linking.createURL('subscription-plans', {
+        queryParams: {
+          payment_status: paymentStatus,
+          transaction_id: transactionId,
+        },
+      });
+
+      console.log('PaymentCallbackScreen: Generated deep link:', appDeepLink);
+
+      // CRITICAL FIX: Only attempt to redirect if the generated URL is a deep link.
+      // If it's a standard web URL (e.g., https://nospi.vercel.app/subscription-plans),
+      // do NOT redirect. Stay on this page and show instructions.
+      if (appDeepLink.startsWith('exp://') || appDeepLink.startsWith('nospi://')) {
+        console.log('PaymentCallbackScreen: Valid deep link detected, attempting automatic redirect');
+        setStatus('Redirigiendo a la aplicación...');
+        
+        // Try to open the app automatically
+        try {
+          window.location.href = appDeepLink;
+        } catch (e) {
+          console.error('PaymentCallbackScreen: Error opening deep link:', e);
           setStatus('Pago completado');
           setShowManualButton(true);
-          
-          // Also try to trigger the deep link automatically
-          try {
-            // For Expo Go, we need to use the nospi:// scheme
-            const deepLinkUrl = `nospi://subscription-plans?payment_status=success&transaction_id=${transactionId || ''}`;
-            console.log('PaymentCallbackScreen: Attempting to open deep link:', deepLinkUrl);
-            window.location.href = deepLinkUrl;
-          } catch (e) {
-            console.error('PaymentCallbackScreen: Error opening deep link:', e);
-          }
-        } else {
-          // On mobile (should not happen in Expo Go, but just in case)
-          console.log('PaymentCallbackScreen: Mobile platform, using router');
-          setStatus('Redirigiendo...');
-          
-          router.replace({
-            pathname: '/subscription-plans',
-            params: {
-              payment_status: 'success',
-              transaction_id: transactionId || ''
-            }
-          });
         }
-      } catch (error) {
-        console.error('PaymentCallbackScreen: Error processing callback:', error);
-        setStatus('Error al procesar el pago');
-        
-        if (Platform.OS === 'web') {
-          setStatus('Por favor abre la app de Nospi manualmente');
-          setShowManualButton(true);
-        } else {
-          // Fallback to subscription-plans screen
-          setTimeout(() => {
-            router.replace('/subscription-plans');
-          }, 2000);
-        }
+      } else {
+        // If the deep link generated is a web URL, it means the browser
+        // is not configured to handle deep links automatically (e.g., desktop browser).
+        // In this case, we stay on the payment-callback page and let the user
+        // manually open the app using the provided instructions/button.
+        console.log('PaymentCallbackScreen: Deep link generated was a web URL, not attempting automatic redirect');
+        console.log('PaymentCallbackScreen: User will use manual button to return to app');
+        setStatus('Pago completado');
+        setShowManualButton(true);
       }
-    };
-
-    handleCallback();
-  }, [router, params]);
+    } else {
+      // On mobile (should not happen in normal flow, but just in case)
+      console.log('PaymentCallbackScreen: Mobile platform, using router');
+      setStatus('Redirigiendo...');
+      
+      const paymentStatus = localSearchParams.payment_status as string || 'success';
+      const transactionId = localSearchParams.transaction_id as string || '';
+      
+      router.replace({
+        pathname: '/subscription-plans',
+        params: {
+          payment_status: paymentStatus,
+          transaction_id: transactionId
+        }
+      });
+    }
+  }, [localSearchParams, isWeb, router]);
 
   const handleManualOpen = () => {
-    const transactionId = params.id as string || params.transaction_id as string;
+    const paymentStatus = localSearchParams.payment_status as string || 'success';
+    const transactionId = localSearchParams.transaction_id as string || '';
     
     // Try to open the app with the custom scheme
-    const deepLinkUrl = `nospi://subscription-plans?payment_status=success&transaction_id=${transactionId || ''}`;
+    const deepLinkUrl = `nospi://subscription-plans?payment_status=${paymentStatus}&transaction_id=${transactionId}`;
     
-    if (Platform.OS === 'web') {
+    console.log('PaymentCallbackScreen: Manual open button clicked, deep link:', deepLinkUrl);
+    
+    if (isWeb && typeof window !== 'undefined') {
       window.location.href = deepLinkUrl;
     }
   };
@@ -109,13 +116,13 @@ export default function PaymentCallbackScreen() {
         <Text style={styles.successIcon}>✅</Text>
         <Text style={styles.text}>{status}</Text>
         <Text style={styles.subtext}>
-          {Platform.OS === 'web' 
+          {isWeb 
             ? showManualButton 
               ? 'Regresa a la app de Nospi para confirmar tu cita' 
               : 'Abriendo la aplicación...'
             : 'Por favor espera un momento...'}
         </Text>
-        {Platform.OS === 'web' && showManualButton && (
+        {isWeb && showManualButton && (
           <>
             <TouchableOpacity 
               style={styles.manualButton}
@@ -129,7 +136,7 @@ export default function PaymentCallbackScreen() {
             </Text>
           </>
         )}
-        {Platform.OS === 'web' && !showManualButton && (
+        {isWeb && !showManualButton && (
           <Text style={styles.instructionText}>
             Si la app no se abre automáticamente, espera unos segundos...
           </Text>

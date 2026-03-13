@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -12,6 +13,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -30,7 +32,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // URL de redirección web que Wompi acepta (debe ser HTTPS)
 // Esta URL debe redirigir de vuelta a la app usando el deep link
 // IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
-const WEB_REDIRECT_URL = 'https://johnatan365.github.io/nospi-redirect/';
+const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -115,38 +117,6 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  // Check localStorage for payment callback info (web only)
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      const checkLocalStoragePayment = async () => {
-        const callbackStatus = window.localStorage.getItem('payment_callback_status');
-        const callbackTransactionId = window.localStorage.getItem('payment_callback_transaction_id');
-        const callbackTimestamp = window.localStorage.getItem('payment_callback_timestamp');
-        
-        if (callbackStatus === 'success' && callbackTransactionId) {
-          // Check if the callback is recent (within last 5 minutes)
-          const timestamp = parseInt(callbackTimestamp || '0', 10);
-          const now = Date.now();
-          const fiveMinutes = 5 * 60 * 1000;
-          
-          if (now - timestamp < fiveMinutes) {
-            console.log('Found recent payment callback in localStorage:', callbackTransactionId);
-            
-            // Clear the localStorage
-            window.localStorage.removeItem('payment_callback_status');
-            window.localStorage.removeItem('payment_callback_transaction_id');
-            window.localStorage.removeItem('payment_callback_timestamp');
-            
-            // Process the payment callback
-            await handlePaymentCallback('success', callbackTransactionId);
-          }
-        }
-      };
-      
-      checkLocalStoragePayment();
-    }
-  }, [handlePaymentCallback]);
-
   const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
 
   // Handle payment callback from URL params or deep link
@@ -160,13 +130,16 @@ export default function SubscriptionPlansScreen() {
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem('pse_payment_pending');
         window.localStorage.removeItem('wompi_transaction_id');
+        window.localStorage.removeItem('nospi_payment_status');
+        window.localStorage.removeItem('nospi_transaction_id');
+        window.localStorage.removeItem('nospi_payment_time');
       }
     };
 
     // Get transaction ID from params or storage
     let txId = transactionId
       || (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
-          ? window.localStorage.getItem('wompi_transaction_id')
+          ? window.localStorage.getItem('wompi_transaction_id') || window.localStorage.getItem('nospi_transaction_id')
           : null)
       || await AsyncStorage.getItem('wompi_transaction_id');
 
@@ -226,6 +199,45 @@ export default function SubscriptionPlansScreen() {
       router.replace('/(tabs)/appointments');
     }
   }, [router]);
+
+  // Check localStorage for payment callback info when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const checkLocalStoragePayment = async () => {
+        // Only check on native platforms (not web)
+        if (Platform.OS === 'web') return;
+
+        // Check AsyncStorage for payment info stored by payment-callback page
+        const storedStatus = await AsyncStorage.getItem('nospi_payment_status');
+        const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
+        const storedTime = await AsyncStorage.getItem('nospi_payment_time');
+
+        if (storedStatus && storedTransactionId && storedTime) {
+          const paymentTime = parseInt(storedTime, 10);
+          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in ms
+
+          if (paymentTime > fiveMinutesAgo) { // Only process recent payments
+            console.log('Found recent payment in AsyncStorage:', { storedStatus, storedTransactionId });
+            
+            // Clear AsyncStorage items immediately to prevent re-processing
+            await AsyncStorage.removeItem('nospi_payment_status');
+            await AsyncStorage.removeItem('nospi_transaction_id');
+            await AsyncStorage.removeItem('nospi_payment_time');
+
+            // Call the payment callback handler with the stored data
+            await handlePaymentCallback(storedStatus, storedTransactionId);
+          } else {
+            // Clear old AsyncStorage items
+            await AsyncStorage.removeItem('nospi_payment_status');
+            await AsyncStorage.removeItem('nospi_transaction_id');
+            await AsyncStorage.removeItem('nospi_payment_time');
+          }
+        }
+      };
+
+      checkLocalStoragePayment();
+    }, [handlePaymentCallback])
+  );
 
   // Handle return from Bancolombia/PSE web redirect via URL params
   useEffect(() => {
