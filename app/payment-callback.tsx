@@ -89,7 +89,7 @@ export default function PaymentCallbackScreen() {
           <View style={styles.content}>
             {/* Nospi Logo */}
             <Image 
-              source={require('@/assets/images/logo_380.png')}
+              source={require('@/assets/images/icono Nospi.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -146,7 +146,7 @@ export default function PaymentCallbackScreen() {
     >
       <View style={styles.content}>
         <Image 
-          source={require('@/assets/images/logo_380.png')}
+          source={require('@/assets/images/icono Nospi.png')}
           style={styles.logo}
           resizeMode="contain"
         />
