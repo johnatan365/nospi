@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -6,6 +5,7 @@ import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -16,25 +16,47 @@ export default function AuthCallbackScreen() {
     console.log('AuthCallbackScreen: OAuth callback received');
     console.log('AuthCallbackScreen: URL params:', params);
     console.log('AuthCallbackScreen: Platform:', Platform.OS);
-    
+
     const handleCallback = async () => {
       try {
-        // Wait a bit for Supabase to process the URL session
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Extract tokens from URL params (for native apps)
-        const accessToken = params.access_token as string;
-        const refreshToken = params.refresh_token as string;
-        const type = params.type as string;
+        // 1. Intentar obtener tokens de los params de la ruta
+        let accessToken = params.access_token as string;
+        let refreshToken = params.refresh_token as string;
 
-        console.log('AuthCallbackScreen: Token type:', type);
-        console.log('AuthCallbackScreen: Has access token:', !!accessToken);
-        console.log('AuthCallbackScreen: Has refresh token:', !!refreshToken);
+        // 2. Si no hay tokens en params, buscar en la URL inicial (Android deep link con hash)
+        if (!accessToken || !refreshToken) {
+          const initialUrl = await Linking.getInitialURL();
+          console.log('AuthCallbackScreen: Initial URL:', initialUrl);
 
-        // Try to set session from URL tokens first (native flow)
+          if (initialUrl) {
+            // Tokens pueden venir en hash fragment: nospi://auth/callback#access_token=...
+            const hashPart = initialUrl.split('#')[1] || '';
+            const queryPart = initialUrl.split('?')[1]?.split('#')[0] || '';
+
+            const parseParams = (str: string) => {
+              const result: Record<string, string> = {};
+              str.split('&').forEach(pair => {
+                const [k, v] = pair.split('=');
+                if (k && v) result[decodeURIComponent(k)] = decodeURIComponent(v);
+              });
+              return result;
+            };
+
+            const hashParams = parseParams(hashPart);
+            const queryParams = parseParams(queryPart);
+
+            accessToken = accessToken || hashParams.access_token || queryParams.access_token;
+            refreshToken = refreshToken || hashParams.refresh_token || queryParams.refresh_token;
+
+            console.log('AuthCallbackScreen: Parsed from URL - access_token:', !!accessToken, 'refresh_token:', !!refreshToken);
+          }
+        }
+
+        // 3. Si tenemos tokens, establecer sesión directamente
         if (accessToken && refreshToken) {
-          console.log('AuthCallbackScreen: Setting session from URL tokens (native flow)');
-          
+          console.log('AuthCallbackScreen: Setting session from tokens');
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -42,65 +64,64 @@ export default function AuthCallbackScreen() {
 
           if (error) {
             console.error('AuthCallbackScreen: Error setting session:', error);
-            setStatus('Error al establecer la sesión');
-            setTimeout(() => {
-              router.replace('/welcome');
-            }, 2000);
-            return;
-          }
-
-          if (data.session) {
-            console.log('AuthCallbackScreen: Session set successfully from tokens, user:', data.session.user.id);
+            // Intentar getSession como fallback
+          } else if (data.session) {
+            console.log('AuthCallbackScreen: Session set successfully, user:', data.session.user.id);
             await processUserProfile(data.session.user);
             return;
           }
         }
 
-        // Fallback: Try to get session from Supabase (web flow with detectSessionInUrl)
-        console.log('AuthCallbackScreen: Checking for session from Supabase (web flow)');
-        
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('AuthCallbackScreen: Error getting session:', error);
+        // 4. Fallback: esperar y obtener sesión de Supabase (maneja el hash automáticamente en web)
+        console.log('AuthCallbackScreen: Fallback - waiting for Supabase session...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('AuthCallbackScreen: Error getting session:', sessionError);
           setStatus('Error al obtener la sesión');
-          setTimeout(() => {
-            router.replace('/welcome');
-          }, 2000);
+          setTimeout(() => router.replace('/welcome'), 2000);
           return;
         }
 
         if (session) {
-          console.log('AuthCallbackScreen: Session found from Supabase, user:', session.user.id);
+          console.log('AuthCallbackScreen: Session found, user:', session.user.id);
           await processUserProfile(session.user);
         } else {
-          console.log('AuthCallbackScreen: No session found after OAuth');
-          setStatus('No se encontró sesión. Por favor intenta de nuevo.');
+          // 5. Último recurso: escuchar cambios de auth state
+          console.log('AuthCallbackScreen: No session yet, listening for auth state change...');
+          setStatus('Esperando confirmación...');
+
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+            console.log('AuthCallbackScreen: Auth state change:', event);
+            if (newSession) {
+              subscription.unsubscribe();
+              await processUserProfile(newSession.user);
+            }
+          });
+
+          // Timeout de 8 segundos
           setTimeout(() => {
-            router.replace('/welcome');
-          }, 2000);
+            subscription.unsubscribe();
+            setStatus('No se encontró sesión. Por favor intenta de nuevo.');
+            setTimeout(() => router.replace('/welcome'), 2000);
+          }, 8000);
         }
       } catch (error) {
         console.error('AuthCallbackScreen: Error processing callback:', error);
         setStatus('Error al procesar la autenticación');
-        setTimeout(() => {
-          router.replace('/welcome');
-        }, 2000);
+        setTimeout(() => router.replace('/welcome'), 2000);
       }
     };
 
     const processUserProfile = async (googleUser: any) => {
       try {
         setStatus('Verificando perfil...');
-
-        // Check what flow type this is (register or login)
         const flowType = await AsyncStorage.getItem('oauth_flow_type');
         console.log('AuthCallbackScreen: OAuth flow type:', flowType);
-        
-        // Clear the flow type
         await AsyncStorage.removeItem('oauth_flow_type');
 
-        // Check if user profile exists in users table
         const { data: existingProfile, error: profileError } = await supabase
           .from('users')
           .select('*')
@@ -111,18 +132,15 @@ export default function AuthCallbackScreen() {
           console.error('AuthCallbackScreen: Error checking profile:', profileError);
           setStatus('Error al verificar el perfil');
           await supabase.auth.signOut();
-          setTimeout(() => {
-            router.replace('/welcome');
-          }, 2000);
+          setTimeout(() => router.replace('/welcome'), 2000);
           return;
         }
 
-        // REGISTRATION FLOW: Create new profile if it doesn't exist
+        // REGISTRO: crear perfil si no existe
         if (!existingProfile && flowType === 'register') {
-          console.log('AuthCallbackScreen: Registration flow - creating new profile for Google user');
+          console.log('AuthCallbackScreen: Registration flow - creating new profile');
           setStatus('Creando perfil...');
-          
-          // Get onboarding data from AsyncStorage
+
           const nameData = await AsyncStorage.getItem('onboarding_name');
           const birthdateData = await AsyncStorage.getItem('onboarding_birthdate');
           const ageData = await AsyncStorage.getItem('onboarding_age');
@@ -138,199 +156,75 @@ export default function AuthCallbackScreen() {
           const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
 
           const metadata = googleUser.user_metadata || {};
-          const googleFullName = metadata.full_name || metadata.name || '';
-          const googleEmail = googleUser.email || '';
+          const name = nameData || metadata.full_name || metadata.name || '';
           const googlePhotoUrl = metadata.avatar_url || metadata.picture || null;
-
-          // Parse onboarding data
-          const name = nameData || googleFullName;
-          const birthdate = birthdateData || '';
-          const age = ageData ? parseInt(ageData) : 18;
-          const gender = genderData || 'hombre';
-          const interestedIn = interestedInData || 'ambos';
-          const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
-          const country = countryData || 'Colombia';
-          const city = cityData || 'Medellín';
-          const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-          
-          // 🔥 PRIORITY FIX: User uploaded photo takes priority over Google photo
-          // If user uploaded a photo during onboarding, use it. Otherwise, use Google photo.
           const uploadedPhoto = photoData || '';
-          let finalPhoto = null;
-          
-          if (uploadedPhoto && uploadedPhoto.trim() !== '') {
-            console.log('✅ User uploaded photo during onboarding - using uploaded photo');
-            finalPhoto = uploadedPhoto;
-          } else {
-            console.log('ℹ️ No uploaded photo - using Google photo as fallback');
-            finalPhoto = googlePhotoUrl;
-          }
-          
-          console.log('📸 Final photo URL:', finalPhoto);
-          
-          const interests = interestsData ? JSON.parse(interestsData) : [];
-          const personality = personalityData ? JSON.parse(personalityData) : [];
-          const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
+          const finalPhoto = uploadedPhoto.trim() !== '' ? uploadedPhoto : googlePhotoUrl;
 
-          // Create user profile
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert({
-              id: googleUser.id,
-              email: googleEmail,
-              name: name,
-              birthdate: birthdate,
-              age: age,
-              gender: gender,
-              interested_in: interestedIn,
-              age_range_min: ageRange.min,
-              age_range_max: ageRange.max,
-              country: country,
-              city: city,
-              phone: phoneInfo.phoneNumber,
-              profile_photo_url: finalPhoto,
-              interests: interests,
-              personality_traits: personality,
-              compatibility_percentage: compatibility,
-              notification_preferences: {
-                whatsapp: false,
-                email: true,
-                sms: false,
-                push: true,
-              },
-            });
+          const { error: insertError } = await supabase.from('users').insert({
+            id: googleUser.id,
+            email: googleUser.email || '',
+            name,
+            birthdate: birthdateData || '',
+            age: ageData ? parseInt(ageData) : 18,
+            gender: genderData || 'hombre',
+            interested_in: interestedInData || 'ambos',
+            age_range_min: ageRangeData ? JSON.parse(ageRangeData).min : 18,
+            age_range_max: ageRangeData ? JSON.parse(ageRangeData).max : 60,
+            country: countryData || 'Colombia',
+            city: cityData || 'Medellín',
+            phone: phoneData ? JSON.parse(phoneData).phoneNumber : '',
+            profile_photo_url: finalPhoto,
+            interests: interestsData ? JSON.parse(interestsData) : [],
+            personality_traits: personalityData ? JSON.parse(personalityData) : [],
+            compatibility_percentage: compatibilityData ? parseInt(compatibilityData) : 95,
+            notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+          });
 
           if (insertError) {
             console.error('AuthCallbackScreen: Error creating profile:', insertError);
             setStatus('Error al crear el perfil');
             await supabase.auth.signOut();
-            
-            if (Platform.OS === 'web') {
-              window.alert(`Error al crear tu perfil: ${insertError.message}\n\nPor favor, intenta registrarte nuevamente.`);
-            } else {
-              Alert.alert('Error', `Error al crear tu perfil: ${insertError.message}\n\nPor favor, intenta registrarte nuevamente.`);
-            }
-            
-            setTimeout(() => {
-              router.replace('/onboarding/register');
-            }, 2000);
+            Alert.alert('Error', `Error al crear tu perfil: ${insertError.message}`);
+            setTimeout(() => router.replace('/onboarding/register'), 2000);
             return;
           }
 
-          console.log('AuthCallbackScreen: Profile created successfully for Google user');
-          
-          // Clear onboarding data
           await AsyncStorage.multiRemove([
-            'onboarding_interests',
-            'onboarding_personality',
-            'onboarding_name',
-            'onboarding_birthdate',
-            'onboarding_age',
-            'onboarding_gender',
-            'onboarding_interested_in',
-            'onboarding_age_range',
-            'onboarding_country',
-            'onboarding_city',
-            'onboarding_phone',
-            'onboarding_photo',
-            'onboarding_compatibility',
+            'onboarding_interests', 'onboarding_personality', 'onboarding_name',
+            'onboarding_birthdate', 'onboarding_age', 'onboarding_gender',
+            'onboarding_interested_in', 'onboarding_age_range', 'onboarding_country',
+            'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
           ]);
 
-          // Navigate to events screen
-          console.log('AuthCallbackScreen: Navigating to events screen');
           setStatus('¡Registro exitoso!');
-          setTimeout(() => {
-            router.replace('/(tabs)/events');
-          }, 500);
+          setTimeout(() => router.replace('/(tabs)/events'), 500);
           return;
         }
 
-        // LOGIN FLOW: Profile must exist
-        if (!existingProfile && flowType === 'login') {
-          console.log('AuthCallbackScreen: Login flow - No profile found for Google user. User must register first.');
+        // LOGIN: perfil debe existir
+        if (!existingProfile) {
+          console.log('AuthCallbackScreen: No profile found - must register first');
           setStatus('Registro requerido');
-          
-          // Sign out the user
           await supabase.auth.signOut();
-          
-          // Show alert and redirect to register
-          if (Platform.OS === 'web') {
-            const shouldRegister = window.confirm(
-              'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.\n\n¿Ir a registro?'
-            );
-            if (shouldRegister) {
-              router.replace('/onboarding/register');
-            } else {
-              router.replace('/welcome');
-            }
-          } else {
-            Alert.alert(
-              'Registro Requerido',
-              'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    router.replace('/onboarding/register');
-                  }
-                }
-              ]
-            );
-          }
+          Alert.alert(
+            'Registro Requerido',
+            'Debes registrarte primero antes de iniciar sesión con Google.',
+            [{ text: 'OK', onPress: () => router.replace('/onboarding/register') }]
+          );
           return;
         }
 
-        // If no flow type specified, default to login behavior
-        if (!existingProfile && !flowType) {
-          console.log('AuthCallbackScreen: No flow type - No profile found for Google user. User must register first.');
-          setStatus('Registro requerido');
-          
-          await supabase.auth.signOut();
-          
-          if (Platform.OS === 'web') {
-            const shouldRegister = window.confirm(
-              'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.\n\n¿Ir a registro?'
-            );
-            if (shouldRegister) {
-              router.replace('/onboarding/register');
-            } else {
-              router.replace('/welcome');
-            }
-          } else {
-            Alert.alert(
-              'Registro Requerido',
-              'Debes registrarte primero en la aplicación antes de iniciar sesión con Google. Por favor, completa el proceso de registro.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    router.replace('/onboarding/register');
-                  }
-                }
-              ]
-            );
-          }
-          return;
-        }
-
-        // Profile exists (LOGIN FLOW) - DO NOT update photo automatically
-        // Only update if user explicitly changes it in profile settings
-        console.log('AuthCallbackScreen: Profile exists - user logged in successfully');
-        console.log('ℹ️ Not updating profile photo - keeping existing photo');
-
-        // Navigate to events screen
-        console.log('AuthCallbackScreen: Navigating to events screen');
+        // Perfil existe — login exitoso
+        console.log('AuthCallbackScreen: Login successful');
         setStatus('¡Bienvenido!');
-        setTimeout(() => {
-          router.replace('/(tabs)/events');
-        }, 500);
+        setTimeout(() => router.replace('/(tabs)/events'), 500);
+
       } catch (error) {
-        console.error('AuthCallbackScreen: Error processing user profile:', error);
+        console.error('AuthCallbackScreen: Error processing profile:', error);
         setStatus('Error al procesar el perfil');
         await supabase.auth.signOut();
-        setTimeout(() => {
-          router.replace('/welcome');
-        }, 2000);
+        setTimeout(() => router.replace('/welcome'), 2000);
       }
     };
 
@@ -353,19 +247,7 @@ export default function AuthCallbackScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  text: {
-    marginTop: 16,
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-  },
+  container: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  text: { marginTop: 16, fontSize: 16, color: nospiColors.purpleDark, textAlign: 'center' },
 });
