@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -31,7 +30,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // URL de redirección web que Wompi acepta (debe ser HTTPS)
 // Esta URL debe redirigir de vuelta a la app usando el deep link
 // IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
-const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
+const WEB_REDIRECT_URL = 'https://johnatan365.github.io/nospi-redirect/';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -611,8 +610,14 @@ export default function SubscriptionPlansScreen() {
       console.log('Opening Bancolombia URL...');
       
       if (Platform.OS === 'web') {
-        // En web, abrir en la misma ventana
-        window.location.href = result.redirectUrl;
+        // En web: abrir en nueva pestaña y polling en la pestaña actual
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('pse_payment_pending', 'true');
+          window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
+        }
+        window.open(result.redirectUrl, '_blank');
+        setProcessingMethod(null);
+        startWebPolling(bancolombiaTransactionId);
         return;
       }
       
@@ -636,6 +641,48 @@ export default function SubscriptionPlansScreen() {
       setProcessingMethod(null);
     }
   };
+
+  // ─── Web polling for PSE ──────────────────────────────────────
+  const startWebPolling = useCallback((transactionId: string) => {
+    let attempts = 0;
+    const maxAttempts = 24; // 2 minutos
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
+        const data = await res.json();
+        const status = data.data?.status;
+        console.log(`Web PSE polling attempt ${attempts}: ${status}`);
+        if (status === 'APPROVED' || status === 'PENDING') {
+          clearInterval(interval);
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('pse_payment_pending');
+            window.localStorage.removeItem('wompi_transaction_id');
+          }
+          await AsyncStorage.removeItem('pse_payment_pending');
+          await AsyncStorage.removeItem('wompi_transaction_id');
+          try { await supabase.auth.refreshSession(); } catch {}
+          await confirmAppointment();
+          setShowSuccessModal(true);
+        } else if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
+          clearInterval(interval);
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('pse_payment_pending');
+            window.localStorage.removeItem('wompi_transaction_id');
+          }
+          await AsyncStorage.removeItem('pse_payment_pending');
+          await AsyncStorage.removeItem('wompi_transaction_id');
+          showAlert('Pago no completado', 'El pago fue rechazado por el banco.');
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          showAlert('Tiempo agotado', 'No se pudo confirmar el pago. Si realizaste el pago, contacta soporte.');
+        }
+      } catch (e) {
+        console.error('Web polling error:', e);
+        if (attempts >= maxAttempts) clearInterval(interval);
+      }
+    }, 5000);
+  }, [confirmAppointment, showAlert]);
 
   // ─── PSE ─────────────────────────────────────────────────────
   const handlePSEPayment = async () => {
@@ -702,8 +749,16 @@ export default function SubscriptionPlansScreen() {
       console.log('Opening PSE URL...');
       
       if (Platform.OS === 'web') {
-        // En web, abrir en la misma ventana
-        window.location.href = data.redirectUrl;
+        // En web: abrir PSE en nueva pestaña y hacer polling en la pestaña actual
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('pse_payment_pending', 'true');
+          window.localStorage.setItem('wompi_transaction_id', data.transactionId);
+        }
+        window.open(data.redirectUrl, '_blank');
+        setProcessingMethod(null);
+        setShowPSEForm(false);
+        // Iniciar polling manual en web
+        startWebPolling(data.transactionId);
         return;
       }
       
