@@ -30,8 +30,6 @@ const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
 // URL de redirección web que Wompi acepta (debe ser HTTPS)
-// Esta URL debe redirigir de vuelta a la app usando el deep link
-// IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
 const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
 
 export default function SubscriptionPlansScreen() {
@@ -74,7 +72,7 @@ export default function SubscriptionPlansScreen() {
   const [loadingBanks, setLoadingBanks] = useState(false);
 
   const loadPSEBanks = useCallback(async () => {
-    if (pseBanks.length > 0) return; // ya cargados
+    if (pseBanks.length > 0) return;
     setLoadingBanks(true);
     try {
       const res = await fetch(`${WOMPI_API_URL}/pse/financial_institutions`, {
@@ -86,7 +84,6 @@ export default function SubscriptionPlansScreen() {
         .map((b: any) => ({ code: b.financial_institution_code, name: b.financial_institution_name }));
       setPseBanks(banks);
     } catch {
-      // fallback con bancos principales si falla la red
       setPseBanks([
         { code: '1007', name: 'BANCOLOMBIA' },
         { code: '1051', name: 'BANCO DAVIVIENDA' },
@@ -120,7 +117,6 @@ export default function SubscriptionPlansScreen() {
 
   const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
 
-  // Handle payment callback from URL params or deep link
   const handlePaymentCallback = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
     console.log('Payment callback received for transaction:', transactionId, 'method:', paymentMethod);
     
@@ -143,7 +139,6 @@ export default function SubscriptionPlansScreen() {
       return;
     }
 
-    // Verificar estado con Wompi
     try {
       console.log('Verifying transaction status with Wompi:', transactionId);
       const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
@@ -153,15 +148,12 @@ export default function SubscriptionPlansScreen() {
       console.log('Wompi transaction status:', status);
 
       if (status === 'APPROVED') {
-        // ONLY show success modal and confirm appointment if payment is APPROVED
         await cleanup();
         try { await supabase.auth.refreshSession(); } catch {}
         await confirmAppointment(transactionId, paymentMethod);
         console.log('Payment approved, showing success modal');
         setShowSuccessModal(true);
       } else if (status === 'PENDING') {
-        // If payment is PENDING, do NOT show success modal
-        // Inform the user that the payment is in process
         console.log('Payment is pending, showing info message');
         await cleanup();
         Toast.show({
@@ -173,29 +165,24 @@ export default function SubscriptionPlansScreen() {
         });
         router.replace('/(tabs)/appointments');
       } else if (status === 'DECLINED') {
-        // Payment was declined by the bank
         console.log('Payment declined by bank');
         await cleanup();
         showAlert('Pago rechazado', 'El banco rechazó tu pago. Esto puede deberse a fondos insuficientes o límites de transacción. Por favor, inténtalo de nuevo.');
       } else if (status === 'VOIDED') {
-        // Payment was canceled by the user
         console.log('Payment was canceled by user');
         await cleanup();
         showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
       } else if (status === 'ERROR') {
-        // Payment had an error
         console.log('Payment had an error');
         await cleanup();
         showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago. Por favor, inténtalo de nuevo o contacta a soporte si el problema persiste.');
       } else {
-        // Unknown status
         console.log('Unknown transaction status:', status);
         await cleanup();
         showAlert('Estado desconocido', 'No se pudo determinar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
         router.replace('/(tabs)/appointments');
       }
     } catch (e) {
-      // Error de red — mostrar error y no confirmar
       console.error('Error verifying transaction:', e);
       await cleanup();
       showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
@@ -203,40 +190,32 @@ export default function SubscriptionPlansScreen() {
     }
   }, [router]);
 
-  // Check localStorage for payment callback info when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       const checkLocalStoragePayment = async () => {
-        // Only check on native platforms (not web)
         if (Platform.OS === 'web') return;
 
-        // Check AsyncStorage for payment info stored by payment-callback page or before opening browser
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
         if (storedTransactionId && storedPaymentMethod && storedTime) {
           const paymentTime = parseInt(storedTime, 10);
-          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in ms
+          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
 
-          if (paymentTime > fiveMinutesAgo) { // Only process recent payments
+          if (paymentTime > fiveMinutesAgo) {
             console.log('Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
             
-            // Show checking status indicator
             setCheckingPaymentStatus(true);
             
-            // Clear AsyncStorage items immediately to prevent re-processing
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
 
-            // Call the payment callback handler with the stored data
             await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
             
-            // Hide checking status indicator
             setCheckingPaymentStatus(false);
           } else {
-            // Clear old AsyncStorage items
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
@@ -248,10 +227,8 @@ export default function SubscriptionPlansScreen() {
     }, [handlePaymentCallback])
   );
 
-  // Handle return from Bancolombia/PSE web redirect via URL params
   useEffect(() => {
     if (payment_status && urlTransactionId) {
-      // Get payment method from AsyncStorage
       const getPaymentMethodAndHandle = async () => {
         const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
         if (method) {
@@ -262,7 +239,6 @@ export default function SubscriptionPlansScreen() {
     }
   }, [payment_status, urlTransactionId, handlePaymentCallback]);
 
-  // Handle deep link when app is opened from external browser (iOS fix)
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       console.log('Deep link received:', event.url);
@@ -271,7 +247,6 @@ export default function SubscriptionPlansScreen() {
       
       if (txId) {
         console.log('Deep link transaction detected');
-        // Get payment method from AsyncStorage
         const getPaymentMethodAndHandle = async () => {
           const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
           if (method) {
@@ -282,10 +257,8 @@ export default function SubscriptionPlansScreen() {
       }
     };
 
-    // Listen for deep links when app is already open
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
-    // Check if app was opened with a deep link
     Linking.getInitialURL().then((url) => {
       if (url) {
         console.log('App opened with URL:', url);
@@ -294,7 +267,6 @@ export default function SubscriptionPlansScreen() {
         
         if (txId) {
           console.log('Initial URL transaction detected');
-          // Get payment method from AsyncStorage
           const getPaymentMethodAndHandle = async () => {
             const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
             if (method) {
@@ -317,7 +289,6 @@ export default function SubscriptionPlansScreen() {
       } else if (nextState === 'active' && appWasBackground) {
         appWasBackground = false;
 
-        // Check if there's a pending payment
         const transactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const paymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
         const paymentOpenedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
@@ -326,16 +297,13 @@ export default function SubscriptionPlansScreen() {
 
         console.log('App returned to foreground after payment, checking status');
 
-        // Check if app returned too quickly (grace period)
         if (paymentOpenedTime && Date.now() - parseInt(paymentOpenedTime, 10) < 3000) {
           console.log('App returned too quickly after opening payment, ignoring immediate status check.');
           return;
         }
 
-        // Wait a moment for the payment to process
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Verify transaction and handle callback
         await handlePaymentCallback(transactionId, paymentMethod);
       }
     };
@@ -351,7 +319,6 @@ export default function SubscriptionPlansScreen() {
         console.log('No pending event ID found');
         return;
       }
-      // Get user from session directly in case context hasn't loaded yet
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || user?.id;
       if (!userId) { 
@@ -378,7 +345,6 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handleSuccess = async () => {
-    // This is only used for virtual balance and card payments that are immediately confirmed
     await confirmAppointment('', 'virtual_balance');
     console.log('Appointment confirmed, showing success modal');
     setShowSuccessModal(true);
@@ -398,7 +364,6 @@ export default function SubscriptionPlansScreen() {
     };
   };
 
-  // ─── VIRTUAL BALANCE ─────────────────────────────────────────
   const handlePayWithVirtualBalance = async () => {
     setProcessingMethod('virtual');
     try {
@@ -408,439 +373,6 @@ export default function SubscriptionPlansScreen() {
     finally { setProcessingMethod(null); }
   };
 
-  // ─── TARJETA ─────────────────────────────────────────────────
-  const handleCardPayment = async () => {
-    if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
-      return;
-    }
-    if (cardHolder.trim().length < 5) {
-      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
-      return;
-    }
-    setProcessingMethod('card');
-    try {
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
-
-      const [expMonth, expYear] = cardExpiry.split('/');
-      const expYearFull = expYear?.trim().length === 4 ? expYear.trim().slice(2) : expYear?.trim();
-
-      const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
-        method: 'The Edge Functions are managed by the backend system. The issue is that Wompi redirects to our callback URL with the transaction ID, but we need to verify the actual status. Let me update the `subscription-plans.tsx` to better handle the payment status verification when the user returns from Bancolombia/PSE:
-
-<write file="app/subscription-plans.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
-  Image, TextInput, KeyboardAvoidingView, Platform, Keyboard
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Linking from 'expo-linking';
-import Toast from 'react-native-toast-message';
-import { useFocusEffect } from '@react-navigation/native';
-
-// Funciona en web Y en nativo
-const showAlert = (title: string, message?: string) => {
-  if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
-    window.alert(title + (message ? '\n\n' + message : ''));
-  } else {
-    Alert.alert(title, message);
-  }
-};
-
-const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ijl06L';
-const WOMPI_API_URL = 'https://production.wompi.co/v1';
-const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
-
-// URL de redirección web que Wompi acepta (debe ser HTTPS)
-// Esta URL debe redirigir de vuelta a la app usando el deep link
-// IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
-const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
-
-export default function SubscriptionPlansScreen() {
-  const router = useRouter();
-  const { user } = useSupabase();
-
-  const [processingMethod, setProcessingMethod] = useState<string | null>(null);
-  const processing = processingMethod !== null;
-  const isProcessing = (m: string) => processingMethod === m;
-
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [virtualBalance, setVirtualBalance] = useState(0);
-  const [loadingBalance, setLoadingBalance] = useState(true);
-  const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
-  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
-
-  // Card form
-  const [showCardForm, setShowCardForm] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [cardInstallments, setCardInstallments] = useState('1');
-
-  // Nequi form
-  const [showNequiForm, setShowNequiForm] = useState(false);
-  const [nequiPhone, setNequiPhone] = useState('');
-  const [nequiStatus, setNequiStatus] = useState<'idle' | 'waiting'>('idle');
-
-  // PSE form
-  const [showPSEForm, setShowPSEForm] = useState(false);
-  const [psePhone, setPsePhone] = useState('');
-  const [pseLegalId, setPseLegalId] = useState('');
-  const [pseLegalIdType, setPseLegalIdType] = useState('CC');
-  const [pseBankCode, setPseBankCode] = useState('');
-  const [pseBankName, setPseBankName] = useState('');
-  const [pseEmail, setPseEmail] = useState('');
-  const [showBankPicker, setShowBankPicker] = useState(false);
-  const [pseBanks, setPseBanks] = useState<{ code: string; name: string }[]>([]);
-  const [loadingBanks, setLoadingBanks] = useState(false);
-
-  const loadPSEBanks = useCallback(async () => {
-    if (pseBanks.length > 0) return; // ya cargados
-    setLoadingBanks(true);
-    try {
-      const res = await fetch(`${WOMPI_API_URL}/pse/financial_institutions`, {
-        headers: { 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-      });
-      const data = await res.json();
-      const banks = (data.data || [])
-        .filter((b: any) => b.financial_institution_code !== '0')
-        .map((b: any) => ({ code: b.financial_institution_code, name: b.financial_institution_name }));
-      setPseBanks(banks);
-    } catch {
-      // fallback con bancos principales si falla la red
-      setPseBanks([
-        { code: '1007', name: 'BANCOLOMBIA' },
-        { code: '1051', name: 'BANCO DAVIVIENDA' },
-        { code: '1001', name: 'BANCO DE BOGOTA' },
-        { code: '1013', name: 'BANCO BBVA COLOMBIA S.A.' },
-        { code: '1507', name: 'NEQUI' },
-        { code: '1551', name: 'DAVIPLATA' },
-        { code: '1023', name: 'BANCO DE OCCIDENTE' },
-        { code: '1032', name: 'BANCO CAJA SOCIAL' },
-        { code: '1052', name: 'BANCO AV VILLAS' },
-        { code: '1002', name: 'BANCO POPULAR' },
-      ]);
-    } finally {
-      setLoadingBanks(false);
-    }
-  }, [pseBanks]);
-
-  const priceCOP = PRECIO_EVENTO_COP;
-
-  const fetchVirtualBalance = useCallback(async () => {
-    try {
-      setLoadingBalance(true);
-      const { data } = await supabase.from('users').select('virtual_balance, email, name').eq('id', user?.id).single();
-      setVirtualBalance(data?.virtual_balance || 0);
-      if (data) setUserProfile({ email: data.email || '', name: data.name || '' });
-    } catch { setVirtualBalance(0); }
-    finally { setLoadingBalance(false); }
-  }, [user?.id]);
-
-  useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
-
-  const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
-
-  // Handle payment callback from URL params or deep link
-  const handlePaymentCallback = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
-    console.log('Payment callback received for transaction:', transactionId, 'method:', paymentMethod);
-    
-    const cleanup = async () => {
-      await AsyncStorage.removeItem('nospi_payment_opened_time');
-      await AsyncStorage.removeItem('nospi_payment_method');
-      await AsyncStorage.removeItem('nospi_transaction_id');
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem('nospi_payment_opened_time');
-        window.localStorage.removeItem('nospi_payment_method');
-        window.localStorage.removeItem('nospi_transaction_id');
-        window.localStorage.removeItem('nospi_payment_status');
-        window.localStorage.removeItem('nospi_payment_time');
-      }
-    };
-
-    if (!transactionId) {
-      console.log('No transaction ID provided');
-      await cleanup();
-      return;
-    }
-
-    // Verificar estado con Wompi
-    try {
-      console.log('Verifying transaction status with Wompi:', transactionId);
-      const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
-      const data = await res.json();
-      const status = data.data?.status;
-
-      console.log('Wompi transaction status:', status);
-
-      if (status === 'APPROVED') {
-        // ONLY show success modal and confirm appointment if payment is APPROVED
-        await cleanup();
-        try { await supabase.auth.refreshSession(); } catch {}
-        await confirmAppointment(transactionId, paymentMethod);
-        console.log('Payment approved, showing success modal');
-        setShowSuccessModal(true);
-      } else if (status === 'PENDING') {
-        // If payment is PENDING, do NOT show success modal
-        // Inform the user that the payment is in process
-        console.log('Payment is pending, showing info message');
-        await cleanup();
-        Toast.show({
-          type: 'info',
-          text1: 'Pago en proceso',
-          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          visibilityTime: 5000,
-          position: 'top',
-        });
-        router.replace('/(tabs)/appointments');
-      } else if (status === 'DECLINED') {
-        // Payment was declined by the bank
-        console.log('Payment declined by bank');
-        await cleanup();
-        showAlert('Pago rechazado', 'El banco rechazó tu pago. Esto puede deberse a fondos insuficientes o límites de transacción. Por favor, inténtalo de nuevo.');
-      } else if (status === 'VOIDED') {
-        // Payment was canceled by the user
-        console.log('Payment was canceled by user');
-        await cleanup();
-        showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
-      } else if (status === 'ERROR') {
-        // Payment had an error
-        console.log('Payment had an error');
-        await cleanup();
-        showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago. Por favor, inténtalo de nuevo o contacta a soporte si el problema persiste.');
-      } else {
-        // Unknown status
-        console.log('Unknown transaction status:', status);
-        await cleanup();
-        showAlert('Estado desconocido', 'No se pudo determinar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-        router.replace('/(tabs)/appointments');
-      }
-    } catch (e) {
-      // Error de red — mostrar error y no confirmar
-      console.error('Error verifying transaction:', e);
-      await cleanup();
-      showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-      router.replace('/(tabs)/appointments');
-    }
-  }, [router]);
-
-  // Check localStorage for payment callback info when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const checkLocalStoragePayment = async () => {
-        // Only check on native platforms (not web)
-        if (Platform.OS === 'web') return;
-
-        // Check AsyncStorage for payment info stored by payment-callback page or before opening browser
-        const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-        if (storedTransactionId && storedPaymentMethod && storedTime) {
-          const paymentTime = parseInt(storedTime, 10);
-          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in ms
-
-          if (paymentTime > fiveMinutesAgo) { // Only process recent payments
-            console.log('Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
-            
-            // Show checking status indicator
-            setCheckingPaymentStatus(true);
-            
-            // Clear AsyncStorage items immediately to prevent re-processing
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-
-            // Call the payment callback handler with the stored data
-            await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
-            
-            // Hide checking status indicator
-            setCheckingPaymentStatus(false);
-          } else {
-            // Clear old AsyncStorage items
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-          }
-        }
-      };
-
-      checkLocalStoragePayment();
-    }, [handlePaymentCallback])
-  );
-
-  // Handle return from Bancolombia/PSE web redirect via URL params
-  useEffect(() => {
-    if (payment_status && urlTransactionId) {
-      // Get payment method from AsyncStorage
-      const getPaymentMethodAndHandle = async () => {
-        const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        if (method) {
-          handlePaymentCallback(urlTransactionId as string, method);
-        }
-      };
-      getPaymentMethodAndHandle();
-    }
-  }, [payment_status, urlTransactionId, handlePaymentCallback]);
-
-  // Handle deep link when app is opened from external browser (iOS fix)
-  useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      console.log('Deep link received:', event.url);
-      const url = Linking.parse(event.url);
-      const txId = url.queryParams?.transaction_id as string;
-      
-      if (txId) {
-        console.log('Deep link transaction detected');
-        // Get payment method from AsyncStorage
-        const getPaymentMethodAndHandle = async () => {
-          const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-          if (method) {
-            handlePaymentCallback(txId, method);
-          }
-        };
-        getPaymentMethodAndHandle();
-      }
-    };
-
-    // Listen for deep links when app is already open
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    // Check if app was opened with a deep link
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('App opened with URL:', url);
-        const parsed = Linking.parse(url);
-        const txId = parsed.queryParams?.transaction_id as string;
-        
-        if (txId) {
-          console.log('Initial URL transaction detected');
-          // Get payment method from AsyncStorage
-          const getPaymentMethodAndHandle = async () => {
-            const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-            if (method) {
-              handlePaymentCallback(txId, method);
-            }
-          };
-          getPaymentMethodAndHandle();
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, [handlePaymentCallback]);
-
-  useEffect(() => {
-    let appWasBackground = false;
-    const handleAppStateChange = async (nextState: string) => {
-      if (nextState === 'background' || nextState === 'inactive') {
-        appWasBackground = true;
-      } else if (nextState === 'active' && appWasBackground) {
-        appWasBackground = false;
-
-        const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const paymentOpenedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-        if (!storedTransactionId || !storedPaymentMethod) return;
-
-        console.log('App returned to foreground after payment, checking status');
-
-        // Check if app returned too quickly (grace period)
-        if (paymentOpenedTime && Date.now() - parseInt(paymentOpenedTime, 10) < 3000) {
-          console.log('App returned too quickly after opening payment, ignoring immediate status check.');
-          return;
-        }
-
-        // Wait a moment for the payment to process
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Verify transaction before confirming
-        await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
-      }
-    };
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [handlePaymentCallback]);
-
-  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
-    try {
-      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod);
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        console.log('No pending event ID found');
-        return;
-      }
-      // Get user from session directly in case context hasn't loaded yet
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || user?.id;
-      if (!userId) { 
-        console.error('confirmAppointment: no userId'); 
-        return; 
-      }
-      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
-      if (!existing) {
-        console.log('Creating appointment for event:', pendingEventId);
-        await supabase.from('appointments').insert({ 
-          user_id: userId, 
-          event_id: pendingEventId, 
-          status: 'confirmada', 
-          payment_status: 'completed' 
-        });
-        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-      } else {
-        console.log('Appointment already exists');
-      }
-      await AsyncStorage.removeItem('pending_event_confirmation');
-    } catch (e) { 
-      console.error('Error confirmando cita:', e); 
-    }
-  };
-
-  const handleSuccess = async () => {
-    // This is only used for virtual balance and card payments that are immediately confirmed
-    await confirmAppointment('', 'virtual_balance');
-    console.log('Appointment confirmed, showing success modal');
-    setShowSuccessModal(true);
-  };
-
-  const getSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? user;
-  };
-
-  const getWompiTokens = async () => {
-    const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
-    const data = await res.json();
-    return {
-      acceptanceToken: data.data?.presigned_acceptance?.acceptance_token,
-      personalDataToken: data.data?.presigned_personal_data_auth?.acceptance_token,
-    };
-  };
-
-  // ─── VIRTUAL BALANCE ─────────────────────────────────────────
-  const handlePayWithVirtualBalance = async () => {
-    setProcessingMethod('virtual');
-    try {
-      await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
-      await handleSuccess();
-    } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
-    finally { setProcessingMethod(null); }
-  };
-
-  // ─── TARJETA ─────────────────────────────────────────────────
   const handleCardPayment = async () => {
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
       showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
@@ -911,7 +443,6 @@ export default function SubscriptionPlansScreen() {
     } finally { setProcessingMethod(null); }
   };
 
-  // ─── NEQUI ───────────────────────────────────────────────────
   const handleNequiPayment = async () => {
     const cleanPhone = nequiPhone.replace(/\D/g, '');
     if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
@@ -961,7 +492,6 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  // ─── BANCOLOMBIA ─────────────────────────────────────────────
   const handleBancolombiaPayment = async () => {
     setProcessingMethod('bancolombia');
     try {
@@ -974,7 +504,6 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      // Usar la URL web que Wompi acepta
       console.log('Bancolombia redirect URL:', WEB_REDIRECT_URL);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
@@ -995,7 +524,6 @@ export default function SubscriptionPlansScreen() {
 
       console.log('Bancolombia payment created, transaction ID:', result.transactionId);
 
-      // Guardar transactionId y método de pago antes de abrir navegador
       const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'bancolombia');
@@ -1009,7 +537,6 @@ export default function SubscriptionPlansScreen() {
       console.log('Opening Bancolombia URL...');
       
       if (Platform.OS === 'web') {
-        // En web: abrir en nueva pestaña y polling en la pestaña actual
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
           window.localStorage.setItem('nospi_payment_method', 'bancolombia');
@@ -1021,13 +548,10 @@ export default function SubscriptionPlansScreen() {
         return;
       }
       
-      // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
       await Linking.openURL(result.redirectUrl);
       
-      // Limpiar el estado de procesamiento inmediatamente
       setProcessingMethod(null);
       
-      // Mostrar toast informativo en lugar de Alert
       Toast.show({
         type: 'info',
         text1: 'Completa tu pago en Bancolombia',
@@ -1037,7 +561,6 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
       
-      // El AppState handler se encargará de verificar el pago cuando el usuario regrese
       return;
     } catch (error: any) {
       console.error('Error in Bancolombia payment:', error);
@@ -1046,10 +569,9 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  // ─── Web polling for PSE ──────────────────────────────────────
   const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
-    const maxAttempts = 24; // 2 minutos
+    const maxAttempts = 24;
     const interval = setInterval(async () => {
       attempts++;
       try {
@@ -1071,7 +593,6 @@ export default function SubscriptionPlansScreen() {
           await confirmAppointment(transactionId, paymentMethod);
           setShowSuccessModal(true);
         } else if (status === 'PENDING') {
-          // Keep polling for PENDING status
           if (attempts >= maxAttempts) {
             clearInterval(interval);
             if (typeof window !== 'undefined') {
@@ -1120,7 +641,6 @@ export default function SubscriptionPlansScreen() {
     }, 5000);
   }, [confirmAppointment, showAlert, router]);
 
-  // ─── PSE ─────────────────────────────────────────────────────
   const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
     const cleanLegalId = pseLegalId.replace(/\D/g, '');
@@ -1140,7 +660,6 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      // Usar la URL web que Wompi acepta
       console.log('PSE redirect URL:', WEB_REDIRECT_URL);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
@@ -1172,7 +691,6 @@ export default function SubscriptionPlansScreen() {
 
       console.log('PSE payment created, transaction ID:', data.transactionId);
 
-      // Guardar transactionId y método de pago antes de abrir navegador
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
@@ -1182,12 +700,9 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       }
 
-      // Para PSE, simplemente abrir la URL en el navegador
-      // El usuario completará el pago y luego regresará manualmente a la app
       console.log('Opening PSE URL...');
       
       if (Platform.OS === 'web') {
-        // En web: abrir PSE en nueva pestaña y hacer polling en la pestaña actual
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('nospi_transaction_id', data.transactionId);
           window.localStorage.setItem('nospi_payment_method', 'pse');
@@ -1196,19 +711,15 @@ export default function SubscriptionPlansScreen() {
         window.open(data.redirectUrl, '_blank');
         setProcessingMethod(null);
         setShowPSEForm(false);
-        // Iniciar polling manual en web
         startWebPolling(data.transactionId, 'pse');
         return;
       }
       
-      // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
       await Linking.openURL(data.redirectUrl);
       
-      // Limpiar el estado de procesamiento inmediatamente
       setProcessingMethod(null);
       setShowPSEForm(false);
       
-      // Mostrar toast informativo en lugar de Alert
       Toast.show({
         type: 'info',
         text1: 'Completa tu pago en tu banco',
@@ -1218,7 +729,6 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
       
-      // El AppState handler se encargará de verificar el pago cuando el usuario regrese
       return;
 
 
@@ -1229,7 +739,6 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  // ─── CARD FORM ────────────────────────────────────────────────
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -1287,7 +796,6 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  // ─── NEQUI FORM ───────────────────────────────────────────────
   if (showNequiForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -1332,969 +840,6 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  // ─── PSE FORM ─────────────────────────────────────────────────
-  if (showPSEForm) {
-    return (
-      <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con PSE', headerLeft: () => (
-          <TouchableOpacity onPress={() => { setShowPSEForm(false); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
-          </TouchableOpacity>
-        )}} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.formCard}>
-              <Image source={require('@/assets/images/logo_380.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
-
-              <Text style={styles.inputLabel}>Banco</Text>
-              <TouchableOpacity
-                style={[styles.input, { justifyContent: 'center' }]}
-                onPress={() => !loadingBanks && setShowBankPicker(true)}
-              >
-                {loadingBanks
-                  ? <ActivityIndicator size="small" color={nospiColors.purpleDark} />
-                  : <Text style={{ fontSize: 16, color: pseBankName ? '#111' : '#aaa' }}>
-                      {pseBankName || 'Selecciona tu banco'}
-                    </Text>
-                }
-              </TouchableOpacity>
-
-              {showBankPicker && (
-                <View style={styles.bankPickerContainer}>
-                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
-                    {pseBanks.map((bank) => (
-                      <TouchableOpacity
-                        key={bank.code}
-                        style={styles.bankOption}
-                        onPress={() => { setPseBankCode(bank.code); setPseBankName(bank.name); setShowBankPicker(false); }}
-                      >
-                        <Text style={[styles.bankOptionText, pseBankCode === bank.code && { color: nospiColors.purpleDark, fontWeight: '700' }]}>
-                          {bank.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              <Text style={styles.inputLabel}>Correo registrado en PSE</Text>
-              <TextInputThe Edge Functions are managed by the backend system. The issue is that Wompi redirects to our callback URL with the transaction ID, but we need to verify the actual status. Let me update the `subscription-plans.tsx` to better handle the payment verification when the user returns from Bancolombia/PSE:
-
-<write file="app/subscription-plans.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
-  Image, TextInput, KeyboardAvoidingView, Platform, Keyboard
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Linking from 'expo-linking';
-import Toast from 'react-native-toast-message';
-import { useFocusEffect } from '@react-navigation/native';
-
-// Funciona en web Y en nativo
-const showAlert = (title: string, message?: string) => {
-  if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
-    window.alert(title + (message ? '\n\n' + message : ''));
-  } else {
-    Alert.alert(title, message);
-  }
-};
-
-const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ijl06L';
-const WOMPI_API_URL = 'https://production.wompi.co/v1';
-const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
-
-// URL de redirección web que Wompi acepta (debe ser HTTPS)
-// Esta URL debe redirigir de vuelta a la app usando el deep link
-// IMPORTANTE: Siempre usar la URL web, incluso en móvil, para que Wompi la acepte
-const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
-
-export default function SubscriptionPlansScreen() {
-  const router = useRouter();
-  const { user } = useSupabase();
-
-  const [processingMethod, setProcessingMethod] = useState<string | null>(null);
-  const processing = processingMethod !== null;
-  const isProcessing = (m: string) => processingMethod === m;
-
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [virtualBalance, setVirtualBalance] = useState(0);
-  const [loadingBalance, setLoadingBalance] = useState(true);
-  const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
-  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
-
-  // Card form
-  const [showCardForm, setShowCardForm] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [cardInstallments, setCardInstallments] = useState('1');
-
-  // Nequi form
-  const [showNequiForm, setShowNequiForm] = useState(false);
-  const [nequiPhone, setNequiPhone] = useState('');
-  const [nequiStatus, setNequiStatus] = useState<'idle' | 'waiting'>('idle');
-
-  // PSE form
-  const [showPSEForm, setShowPSEForm] = useState(false);
-  const [psePhone, setPsePhone] = useState('');
-  const [pseLegalId, setPseLegalId] = useState('');
-  const [pseLegalIdType, setPseLegalIdType] = useState('CC');
-  const [pseBankCode, setPseBankCode] = useState('');
-  const [pseBankName, setPseBankName] = useState('');
-  const [pseEmail, setPseEmail] = useState('');
-  const [showBankPicker, setShowBankPicker] = useState(false);
-  const [pseBanks, setPseBanks] = useState<{ code: string; name: string }[]>([]);
-  const [loadingBanks, setLoadingBanks] = useState(false);
-
-  const loadPSEBanks = useCallback(async () => {
-    if (pseBanks.length > 0) return; // ya cargados
-    setLoadingBanks(true);
-    try {
-      const res = await fetch(`${WOMPI_API_URL}/pse/financial_institutions`, {
-        headers: { 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-      });
-      const data = await res.json();
-      const banks = (data.data || [])
-        .filter((b: any) => b.financial_institution_code !== '0')
-        .map((b: any) => ({ code: b.financial_institution_code, name: b.financial_institution_name }));
-      setPseBanks(banks);
-    } catch {
-      // fallback con bancos principales si falla la red
-      setPseBanks([
-        { code: '1007', name: 'BANCOLOMBIA' },
-        { code: '1051', name: 'BANCO DAVIVIENDA' },
-        { code: '1001', name: 'BANCO DE BOGOTA' },
-        { code: '1013', name: 'BANCO BBVA COLOMBIA S.A.' },
-        { code: '1507', name: 'NEQUI' },
-        { code: '1551', name: 'DAVIPLATA' },
-        { code: '1023', name: 'BANCO DE OCCIDENTE' },
-        { code: '1032', name: 'BANCO CAJA SOCIAL' },
-        { code: '1052', name: 'BANCO AV VILLAS' },
-        { code: '1002', name: 'BANCO POPULAR' },
-      ]);
-    } finally {
-      setLoadingBanks(false);
-    }
-  }, [pseBanks]);
-
-  const priceCOP = PRECIO_EVENTO_COP;
-
-  const fetchVirtualBalance = useCallback(async () => {
-    try {
-      setLoadingBalance(true);
-      const { data } = await supabase.from('users').select('virtual_balance, email, name').eq('id', user?.id).single();
-      setVirtualBalance(data?.virtual_balance || 0);
-      if (data) setUserProfile({ email: data.email || '', name: data.name || '' });
-    } catch { setVirtualBalance(0); }
-    finally { setLoadingBalance(false); }
-  }, [user?.id]);
-
-  useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
-
-  const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
-
-  // Handle payment callback from URL params or deep link
-  const handlePaymentCallback = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
-    console.log('Payment callback received for transaction:', transactionId, 'method:', paymentMethod);
-    
-    const cleanup = async () => {
-      await AsyncStorage.removeItem('nospi_payment_opened_time');
-      await AsyncStorage.removeItem('nospi_payment_method');
-      await AsyncStorage.removeItem('nospi_transaction_id');
-      await AsyncStorage.removeItem('pse_payment_pending');
-      await AsyncStorage.removeItem('wompi_transaction_id');
-      await AsyncStorage.removeItem('payment_opened_time');
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem('pse_payment_pending');
-        window.localStorage.removeItem('wompi_transaction_id');
-        window.localStorage.removeItem('nospi_payment_status');
-        window.localStorage.removeItem('nospi_transaction_id');
-        window.localStorage.removeItem('nospi_payment_time');
-        window.localStorage.removeItem('nospi_payment_opened_time');
-        window.localStorage.removeItem('nospi_payment_method');
-      }
-    };
-
-    if (!transactionId) {
-      console.log('No transaction ID provided');
-      await cleanup();
-      return;
-    }
-
-    // Verificar estado con Wompi
-    try {
-      console.log('Verifying transaction status with Wompi:', transactionId);
-      const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
-      const data = await res.json();
-      const status = data.data?.status;
-
-      console.log('Wompi transaction status:', status);
-
-      if (status === 'APPROVED') {
-        // ONLY show success modal and confirm appointment if payment is APPROVED
-        await cleanup();
-        try { await supabase.auth.refreshSession(); } catch {}
-        await confirmAppointment(transactionId, paymentMethod);
-        console.log('Payment approved, showing success modal');
-        setShowSuccessModal(true);
-      } else if (status === 'PENDING') {
-        // If payment is PENDING, do NOT show success modal
-        // Inform the user that the payment is in process
-        console.log('Payment is pending, showing info message');
-        await cleanup();
-        Toast.show({
-          type: 'info',
-          text1: 'Pago en proceso',
-          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          visibilityTime: 5000,
-          position: 'top',
-        });
-        router.replace('/(tabs)/appointments');
-      } else if (status === 'DECLINED') {
-        // Payment was declined by the bank
-        console.log('Payment declined by bank');
-        await cleanup();
-        showAlert('Pago rechazado', 'El pago fue rechazado por el banco. Por favor, verifica tu saldo o límites de transacción e intenta nuevamente.');
-      } else if (status === 'VOIDED') {
-        // Payment was canceled by the user
-        console.log('Payment was canceled by user');
-        await cleanup();
-        showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Puedes intentar nuevamente cuando estés listo.');
-      } else if (status === 'ERROR') {
-        // Payment had an error
-        console.log('Payment had an error');
-        await cleanup();
-        showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago. Por favor, intenta nuevamente.');
-      } else {
-        // Unknown status
-        console.log('Unknown transaction status:', status);
-        await cleanup();
-        showAlert('Estado desconocido', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-        router.replace('/(tabs)/appointments');
-      }
-    } catch (e) {
-      // Error de red — mostrar error y no confirmar
-      console.error('Error verifying transaction:', e);
-      await cleanup();
-      showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-      router.replace('/(tabs)/appointments');
-    }
-  }, [router]);
-
-  // Check localStorage for payment callback info when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const checkLocalStoragePayment = async () => {
-        // Only check on native platforms (not web)
-        if (Platform.OS === 'web') return;
-
-        // Check AsyncStorage for payment info stored by payment-callback page or before opening browser
-        const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-        if (storedTransactionId && storedPaymentMethod && storedTime) {
-          const paymentTime = parseInt(storedTime, 10);
-          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in ms
-
-          if (paymentTime > fiveMinutesAgo) { // Only process recent payments
-            console.log('Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
-            
-            // Show checking status indicator
-            setCheckingPaymentStatus(true);
-            
-            // Clear AsyncStorage items immediately to prevent re-processing
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-
-            // Call the payment callback handler with the stored data
-            await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
-            
-            // Hide checking status indicator
-            setCheckingPaymentStatus(false);
-          } else {
-            // Clear old AsyncStorage items
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-          }
-        }
-      };
-
-      checkLocalStoragePayment();
-    }, [handlePaymentCallback])
-  );
-
-  // Handle return from Bancolombia/PSE web redirect via URL params
-  useEffect(() => {
-    if (payment_status === 'success' && urlTransactionId) {
-      // Get payment method from AsyncStorage
-      const getPaymentMethod = async () => {
-        const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        if (method) {
-          handlePaymentCallback(urlTransactionId as string, method);
-        }
-      };
-      getPaymentMethod();
-    }
-  }, [payment_status, urlTransactionId, handlePaymentCallback]);
-
-  // Handle deep link when app is opened from external browser (iOS fix)
-  useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      console.log('Deep link received:', event.url);
-      const url = Linking.parse(event.url);
-      const status = url.queryParams?.payment_status as string;
-      const txId = url.queryParams?.transaction_id as string;
-      
-      if (status === 'success' && txId) {
-        console.log('Deep link payment success detected');
-        // Get payment method from AsyncStorage
-        const getPaymentMethod = async () => {
-          const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-          if (method) {
-            handlePaymentCallback(txId, method);
-          }
-        };
-        getPaymentMethod();
-      }
-    };
-
-    // Listen for deep links when app is already open
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    // Check if app was opened with a deep link
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('App opened with URL:', url);
-        const parsed = Linking.parse(url);
-        const status = parsed.queryParams?.payment_status as string;
-        const txId = parsed.queryParams?.transaction_id as string;
-        
-        if (status === 'success' && txId) {
-          console.log('Initial URL payment success detected');
-          // Get payment method from AsyncStorage
-          const getPaymentMethod = async () => {
-            const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-            if (method) {
-              handlePaymentCallback(txId, method);
-            }
-          };
-          getPaymentMethod();
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, [handlePaymentCallback]);
-
-  useEffect(() => {
-    let appWasBackground = false;
-    const handleAppStateChange = async (nextState: string) => {
-      if (nextState === 'background' || nextState === 'inactive') {
-        appWasBackground = true;
-      } else if (nextState === 'active' && appWasBackground) {
-        appWasBackground = false;
-
-        const transactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const paymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const paymentOpenedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-        
-        if (!transactionId || !paymentMethod) return;
-
-        console.log('App returned to foreground after payment, checking status');
-
-        // Check if app returned too quickly (grace period)
-        if (paymentOpenedTime && Date.now() - parseInt(paymentOpenedTime, 10) < 3000) {
-          console.log('App returned too quickly after opening payment, ignoring immediate status check.');
-          return;
-        }
-
-        // Wait a moment for the payment to process
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Verify transaction before confirming
-        await handlePaymentCallback(transactionId, paymentMethod);
-      }
-    };
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [handlePaymentCallback]);
-
-  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
-    try {
-      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod);
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        console.log('No pending event ID found');
-        return;
-      }
-      // Get user from session directly in case context hasn't loaded yet
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || user?.id;
-      if (!userId) { 
-        console.error('confirmAppointment: no userId'); 
-        return; 
-      }
-      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
-      if (!existing) {
-        console.log('Creating appointment for event:', pendingEventId);
-        await supabase.from('appointments').insert({ 
-          user_id: userId, 
-          event_id: pendingEventId, 
-          status: 'confirmada', 
-          payment_status: 'completed'
-        });
-        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-      } else {
-        console.log('Appointment already exists');
-      }
-      await AsyncStorage.removeItem('pending_event_confirmation');
-    } catch (e) { 
-      console.error('Error confirmando cita:', e); 
-    }
-  };
-
-  const handleSuccess = async () => {
-    await confirmAppointment('', 'virtual_balance');
-    console.log('Appointment confirmed, showing success modal');
-    setShowSuccessModal(true);
-  };
-
-  const getSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? user;
-  };
-
-  const getWompiTokens = async () => {
-    const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
-    const data = await res.json();
-    return {
-      acceptanceToken: data.data?.presigned_acceptance?.acceptance_token,
-      personalDataToken: data.data?.presigned_personal_data_auth?.acceptance_token,
-    };
-  };
-
-  // ─── VIRTUAL BALANCE ─────────────────────────────────────────
-  const handlePayWithVirtualBalance = async () => {
-    setProcessingMethod('virtual');
-    try {
-      await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
-      await handleSuccess();
-    } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
-    finally { setProcessingMethod(null); }
-  };
-
-  // ─── TARJETA ─────────────────────────────────────────────────
-  const handleCardPayment = async () => {
-    if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
-      return;
-    }
-    if (cardHolder.trim().length < 5) {
-      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
-      return;
-    }
-    setProcessingMethod('card');
-    try {
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
-
-      const [expMonth, expYear] = cardExpiry.split('/');
-      const expYearFull = expYear?.trim().length === 4 ? expYear.trim().slice(2) : expYear?.trim();
-
-      const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
-        body: JSON.stringify({
-          number: cardNumber.replace(/\s/g, ''),
-          exp_month: expMonth?.trim(),
-          exp_year: expYearFull,
-          cvc: cardCvc,
-          card_holder: cardHolder,
-        }),
-      });
-      const tokenData = await tokenRes.json();
-      if (!tokenRes.ok || !tokenData.data?.id) {
-        const msgs = tokenData.error?.messages;
-        const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
-        throw new Error(readable || 'Datos de tarjeta inválidos');
-      }
-      const cardToken = tokenData.data.id;
-
-      const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación de Wompi');
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
-      });
-      const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
-
-      if (result.status === 'APPROVED') {
-        setShowCardForm(false);
-        await handleSuccess();
-      } else if (result.status === 'PENDING') {
-        setShowCardForm(false);
-        Toast.show({
-          type: 'info',
-          text1: 'Pago en proceso',
-          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          visibilityTime: 5000,
-          position: 'top',
-        });
-        router.replace('/(tabs)/appointments');
-      } else {
-        throw new Error('Pago rechazado. Intenta con otra tarjeta.');
-      }
-    } catch (error: any) {
-      showAlert('Error en tarjeta', error.message);
-    } finally { setProcessingMethod(null); }
-  };
-
-  // ─── NEQUI ───────────────────────────────────────────────────
-  const handleNequiPayment = async () => {
-    const cleanPhone = nequiPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
-    setProcessingMethod('nequi');
-    try {
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
-
-      const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-nequi-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
-      });
-      const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Nequi');
-
-      setNequiStatus('waiting');
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
-          const data = await res.json();
-          const status = data.data?.status;
-          if (status === 'APPROVED') {
-            clearInterval(poll);
-            setProcessingMethod(null);
-            setShowNequiForm(false);
-            setNequiStatus('idle');
-            await handleSuccess();
-          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
-            clearInterval(poll);
-            setProcessingMethod(null);
-            setNequiStatus('idle');
-            showAlert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado.');
-          }
-        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
-      }, 5000);
-    } catch (error: any) {
-      showAlert('Error Nequi', error.message);
-      setProcessingMethod(null);
-    }
-  };
-
-  // ─── BANCOLOMBIA ─────────────────────────────────────────────
-  const handleBancolombiaPayment = async () => {
-    setProcessingMethod('bancolombia');
-    try {
-      console.log('Starting Bancolombia payment...');
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
-
-      const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
-
-      // Usar la URL web que Wompi acepta
-      console.log('Bancolombia redirect URL:', WEB_REDIRECT_URL);
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ 
-          acceptanceToken, 
-          personalDataToken, 
-          amountCOP: priceCOP, 
-          userEmail: userProfile?.email || currentUser.email || '', 
-          userId: currentUser.id, 
-          eventId: pendingEventId,
-          redirectUrl: WEB_REDIRECT_URL
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
-
-      console.log('Bancolombia payment created, transaction ID:', result.transactionId);
-
-      // Guardar transactionId y método de pago antes de abrir navegador
-      const bancolombiaTransactionId = result.transactionId;
-      await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
-      await AsyncStorage.setItem('nospi_payment_method', 'bancolombia');
-      await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-      
-      // Legacy keys for backward compatibility
-      await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await AsyncStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
-      await AsyncStorage.setItem('payment_opened_time', Date.now().toString());
-      
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
-        window.localStorage.setItem('nospi_payment_method', 'bancolombia');
-        window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-        window.localStorage.setItem('pse_payment_pending', 'true');
-        window.localStorage.setItem('wompi_transaction_id', bancolombiaTransactionId);
-      }
-
-      console.log('Opening Bancolombia URL...');
-      
-      if (Platform.OS === 'web') {
-        // En web: abrir en nueva pestaña y polling en la pestaña actual
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
-          window.localStorage.setItem('nospi_payment_method', 'bancolombia');
-          window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-        }
-        window.open(result.redirectUrl, '_blank');
-        setProcessingMethod(null);
-        startWebPolling(bancolombiaTransactionId, 'bancolombia');
-        return;
-      }
-      
-      // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
-      await Linking.openURL(result.redirectUrl);
-      
-      // Limpiar el estado de procesamiento inmediatamente
-      setProcessingMethod(null);
-      
-      // Mostrar toast informativo en lugar de Alert
-      Toast.show({
-        type: 'info',
-        text1: 'Completa tu pago en Bancolombia',
-        text2: 'Cuando termines, regresa a esta pantalla. Tu pago se verificará automáticamente.',
-        visibilityTime: 8000,
-        position: 'top',
-        topOffset: 60,
-      });
-      
-      // El AppState handler se encargará de verificar el pago cuando el usuario regrese
-      return;
-    } catch (error: any) {
-      console.error('Error in Bancolombia payment:', error);
-      showAlert('Error Bancolombia', error.message);
-      setProcessingMethod(null);
-    }
-  };
-
-  // ─── Web polling for PSE ──────────────────────────────────────
-  const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
-    let attempts = 0;
-    const maxAttempts = 24; // 2 minutos
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
-        const data = await res.json();
-        const status = data.data?.status;
-        console.log(`Web ${paymentMethod} polling attempt ${attempts}: ${status}`);
-        if (status === 'APPROVED') {
-          clearInterval(interval);
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem('nospi_transaction_id');
-            window.localStorage.removeItem('nospi_payment_method');
-            window.localStorage.removeItem('nospi_payment_opened_time');
-            window.localStorage.removeItem('pse_payment_pending');
-            window.localStorage.removeItem('wompi_transaction_id');
-          }
-          await AsyncStorage.removeItem('nospi_transaction_id');
-          await AsyncStorage.removeItem('nospi_payment_method');
-          await AsyncStorage.removeItem('nospi_payment_opened_time');
-          await AsyncStorage.removeItem('pse_payment_pending');
-          await AsyncStorage.removeItem('wompi_transaction_id');
-          try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment(transactionId, paymentMethod);
-          setShowSuccessModal(true);
-        } else if (status === 'PENDING') {
-          // Keep polling for PENDING status
-          console.log(`Payment still pending, attempt ${attempts}/${maxAttempts}`);
-        } else if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
-          clearInterval(interval);
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem('nospi_transaction_id');
-            window.localStorage.removeItem('nospi_payment_method');
-            window.localStorage.removeItem('nospi_payment_opened_time');
-            window.localStorage.removeItem('pse_payment_pending');
-            window.localStorage.removeItem('wompi_transaction_id');
-          }
-          await AsyncStorage.removeItem('nospi_transaction_id');
-          await AsyncStorage.removeItem('nospi_payment_method');
-          await AsyncStorage.removeItem('nospi_payment_opened_time');
-          await AsyncStorage.removeItem('pse_payment_pending');
-          await AsyncStorage.removeItem('wompi_transaction_id');
-          
-          if (status === 'VOIDED') {
-            showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Puedes intentar nuevamente cuando estés listo.');
-          } else if (status === 'DECLINED') {
-            showAlert('Pago rechazado', 'El pago fue rechazado por el banco.');
-          } else {
-            showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago.');
-          }
-        } else if (attempts >= maxAttempts) {
-          clearInterval(interval);
-          showAlert('Tiempo agotado', 'No se pudo confirmar el pago. Si realizaste el pago, contacta soporte.');
-        }
-      } catch (e) {
-        console.error('Web polling error:', e);
-        if (attempts >= maxAttempts) clearInterval(interval);
-      }
-    }, 5000);
-  }, [confirmAppointment, showAlert]);
-
-  // ─── PSE ─────────────────────────────────────────────────────
-  const handlePSEPayment = async () => {
-    const cleanPhone = psePhone.replace(/\D/g, '');
-    const cleanLegalId = pseLegalId.replace(/\D/g, '');
-    if (!pseEmail || !pseEmail.includes('@')) { showAlert('Error', 'Ingresa tu correo registrado en PSE.'); return; }
-    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
-    if (cleanLegalId.length < 5) { showAlert('Error', 'Ingresa un número de documento válido.'); return; }
-    if (!pseBankCode) { showAlert('Error', 'Selecciona tu banco.'); return; }
-
-    setProcessingMethod('pse');
-    try {
-      console.log('Starting PSE payment...');
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
-
-      const { acceptanceToken, personalDataToken } = await getWompiTokens();
-      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
-
-      // Usar la URL web que Wompi acepta
-      console.log('PSE redirect URL:', WEB_REDIRECT_URL);
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          acceptanceToken,
-          personalDataToken,
-          amountCOP: priceCOP,
-          userEmail: pseEmail,
-          userId: currentUser.id,
-          eventId: pendingEventId,
-          userFullName: userProfile?.name || currentUser.email || '',
-          userPhone: cleanPhone,
-          userLegalId: cleanLegalId,
-          userLegalIdType: pseLegalIdType,
-          financialInstitutionCode: pseBankCode,
-          redirectUrl: WEB_REDIRECT_URL
-        }),
-      });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('PSE payment error:', data);
-        throw new Error(data.error || 'Error al crear pago PSE');
-      }
-      
-      if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
-
-      console.log('PSE payment created, transaction ID:', data.transactionId);
-
-      // Guardar transactionId y método de pago antes de abrir navegador
-      await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
-      await AsyncStorage.setItem('nospi_payment_method', 'pse');
-      await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-      
-      // Legacy keys for backward compatibility
-      await AsyncStorage.setItem('pse_payment_pending', 'true');
-      await AsyncStorage.setItem('wompi_transaction_id', data.transactionId);
-      await AsyncStorage.setItem('payment_opened_time', Date.now().toString());
-      
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('nospi_transaction_id', data.transactionId);
-        window.localStorage.setItem('nospi_payment_method', 'pse');
-        window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-        window.localStorage.setItem('pse_payment_pending', 'true');
-        window.localStorage.setItem('wompi_transaction_id', data.transactionId);
-      }
-
-      // Para PSE, simplemente abrir la URL en el navegador
-      // El usuario completará el pago y luego regresará manualmente a la app
-      console.log('Opening PSE URL...');
-      
-      if (Platform.OS === 'web') {
-        // En web: abrir PSE en nueva pestaña y hacer polling en la pestaña actual
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('nospi_transaction_id', data.transactionId);
-          window.localStorage.setItem('nospi_payment_method', 'pse');
-          window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-        }
-        window.open(data.redirectUrl, '_blank');
-        setProcessingMethod(null);
-        setShowPSEForm(false);
-        // Iniciar polling manual en web
-        startWebPolling(data.transactionId, 'pse');
-        return;
-      }
-      
-      // En móvil, abrir con Linking para que el usuario pueda regresar manualmente
-      await Linking.openURL(data.redirectUrl);
-      
-      // Limpiar el estado de procesamiento inmediatamente
-      setProcessingMethod(null);
-      setShowPSEForm(false);
-      
-      // Mostrar toast informativo en lugar de Alert
-      Toast.show({
-        type: 'info',
-        text1: 'Completa tu pago en tu banco',
-        text2: 'Cuando termines, regresa a esta pantalla. Tu pago se verificará automáticamente.',
-        visibilityTime: 8000,
-        position: 'top',
-        topOffset: 60,
-      });
-      
-      // El AppState handler se encargará de verificar el pago cuando el usuario regrese
-      return;
-
-
-    } catch (error: any) {
-      console.error('Error in PSE payment:', error);
-      showAlert('Error PSE', error.message);
-      setProcessingMethod(null);
-    }
-  };
-
-  // ─── CARD FORM ────────────────────────────────────────────────
-  if (showCardForm) {
-    return (
-      <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Tarjeta', headerLeft: () => (
-          <TouchableOpacity onPress={() => setShowCardForm(false)} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
-          </TouchableOpacity>
-        )}} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.formCard}>
-              <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
-              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
-              <Text style={styles.inputLabel}>Nombre del titular</Text>
-              <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
-              <Text style={styles.inputLabel}>Número de tarjeta</Text>
-              <TextInput style={styles.input} placeholder="0000 0000 0000 0000" value={cardNumber}
-                onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
-                keyboardType="numeric" maxLength={19} returnKeyType="next" />
-              <View style={styles.row}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.inputLabel}>Vencimiento</Text>
-                  <TextInput style={styles.input} placeholder="MM/AA" value={cardExpiry}
-                    onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(c.length >= 2 ? c.slice(0, 2) + '/' + c.slice(2) : c); }}
-                    keyboardType="numeric" maxLength={5} returnKeyType="next" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>CVV</Text>
-                  <TextInput style={styles.input} placeholder="123" value={cardCvc}
-                    onChangeText={(t) => setCardCvc(t.replace(/\D/g, '').slice(0, 4))}
-                    keyboardType="numeric" maxLength={4} secureTextEntry returnKeyType="done" />
-                </View>
-              </View>
-              <Text style={styles.inputLabel}>Cuotas</Text>
-              <View style={styles.installmentsContainer}>
-                {['1', '3', '6', '12'].map((q) => (
-                  <TouchableOpacity key={q} style={[styles.installmentBtn, cardInstallments === q && styles.installmentBtnSelected]} onPress={() => setCardInstallments(q)}>
-                    <Text style={[styles.installmentText, cardInstallments === q && styles.installmentTextSelected]}>{q === '1' ? 'Sin cuotas' : `${q} cuotas`}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={[styles.payBtn, isProcessing('card') && styles.payBtnDisabled]}
-                onPress={() => { Keyboard.dismiss(); handleCardPayment(); }}
-                disabled={isProcessing('card')}
-                activeOpacity={0.7}
-              >
-                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{`Pagar $${priceCOP.toLocaleString('es-CO')} COP`}</Text>}
-              </TouchableOpacity>
-              <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    );
-  }
-
-  // ─── NEQUI FORM ───────────────────────────────────────────────
-  if (showNequiForm) {
-    return (
-      <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Nequi', headerLeft: () => (
-          <TouchableOpacity onPress={() => { setShowNequiForm(false); setNequiStatus('idle'); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
-          </TouchableOpacity>
-        )}} />
-        <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.formCard}>
-            {nequiStatus === 'idle' ? (
-              <>
-                <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
-                <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago.</Text>
-                <Text style={styles.inputLabel}>Número de celular Nequi</Text>
-                <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
-                  onChangeText={(t) => setNequiPhone(t.replace(/\D/g, '').slice(0, 10))}
-                  keyboardType="phone-pad" maxLength={10} />
-                <TouchableOpacity
-                  style={[styles.payBtn, { backgroundColor: '#7C3AED' }, isProcessing('nequi') && styles.payBtnDisabled]}
-                  onPress={handleNequiPayment}
-                  disabled={isProcessing('nequi')}
-                  activeOpacity={0.7}
-                >
-                  {isProcessing('nequi') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Enviar solicitud de pago</Text>}
-                </TouchableOpacity>
-                <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
-              </>
-            ) : (
-              <View style={styles.waitingContainer}>
-                <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
-                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text> desde tu app Nequi.</Text>
-                <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
-                <Text style={styles.waitingHint}>Esperando confirmación...</Text>
-              </View>
-            )}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // ─── PSE FORM ─────────────────────────────────────────────────
   if (showPSEForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -2405,7 +950,6 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  // ─── PANTALLA PRINCIPAL ───────────────────────────────────────
   return (
     <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
