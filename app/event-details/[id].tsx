@@ -1,12 +1,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface Event {
   id: string;
@@ -32,6 +33,7 @@ export default function EventDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const loadEvent = useCallback(async () => {
     try {
@@ -83,6 +85,26 @@ export default function EventDetailsScreen() {
       checkEnrollment();
     }
   }, [id, loadEvent, checkEnrollment]);
+
+  // Re-check enrollment whenever the screen comes back into focus (e.g. after payment)
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        console.log('EventDetails: screen focused, re-checking enrollment for event:', id);
+        checkEnrollment();
+      }
+    }, [id, checkEnrollment])
+  );
+
+  // Show success modal if navigated back with paymentSuccess param
+  const { paymentSuccess } = useLocalSearchParams<{ paymentSuccess?: string }>();
+  useEffect(() => {
+    if (paymentSuccess === 'true') {
+      console.log('EventDetails: paymentSuccess param detected, showing success modal');
+      setShowSuccessModal(true);
+      checkEnrollment();
+    }
+  }, [paymentSuccess, checkEnrollment]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -265,6 +287,27 @@ export default function EventDetailsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={showSuccessModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.successIcon}>✅</Text>
+            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
+            <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => {
+                console.log('EventDetails: success modal dismissed, navigating to appointments');
+                setShowSuccessModal(false);
+                router.replace('/(tabs)/appointments');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successButtonText}>Ver mis citas</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -438,5 +481,55 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  successIcon: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  successButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

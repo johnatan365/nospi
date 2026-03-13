@@ -44,35 +44,36 @@ export default function PaymentCallbackScreen() {
       // Store payment info in localStorage for the app to pick up
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_payment_status', actualStatus);
-        window.localStorage.setItem('nospi_transaction_id', transactionId);
         window.localStorage.setItem('nospi_payment_time', Date.now().toString());
-        console.log('PaymentCallbackScreen: Payment info stored in localStorage');
+        // NOTE: do NOT overwrite nospi_transaction_id — the payment handler already stored the real one
+        console.log('PaymentCallbackScreen: Payment status stored in localStorage');
       }
     } else {
-      // On mobile (native app), store in AsyncStorage and redirect
-      console.log('PaymentCallbackScreen: Mobile platform, storing in AsyncStorage');
+      // On mobile, navigate back to subscription-plans so its useFocusEffect/AppState
+      // handler can pick up the transaction ID already stored in AsyncStorage.
+      // Do NOT overwrite nospi_transaction_id here — the real ID was stored when the
+      // payment was initiated and must remain intact for verification.
+      console.log('PaymentCallbackScreen: Mobile platform, navigating back to subscription-plans');
       
-      const storeAndRedirect = async () => {
+      const redirect = async () => {
         try {
+          // Only store the gateway-reported status as a hint; verification always
+          // re-checks with Wompi using the stored transaction ID.
           await AsyncStorage.setItem('nospi_payment_status', actualStatus);
-          await AsyncStorage.setItem('nospi_transaction_id', transactionId);
-          await AsyncStorage.setItem('nospi_payment_time', Date.now().toString());
-          console.log('PaymentCallbackScreen: Payment info stored in AsyncStorage');
+          console.log('PaymentCallbackScreen: Navigating to subscription-plans with status:', actualStatus);
           
-          // Redirect to subscription-plans screen
           router.replace({
             pathname: '/subscription-plans',
             params: {
               payment_status: actualStatus,
-              transaction_id: transactionId
             }
           });
         } catch (error) {
-          console.error('PaymentCallbackScreen: Error storing payment info:', error);
+          console.error('PaymentCallbackScreen: Error during redirect:', error);
         }
       };
       
-      storeAndRedirect();
+      redirect();
     }
   }, [localSearchParams, isWeb, router]);
 

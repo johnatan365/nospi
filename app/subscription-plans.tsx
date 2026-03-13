@@ -150,9 +150,14 @@ export default function SubscriptionPlansScreen() {
       if (status === 'APPROVED') {
         await cleanup();
         try { await supabase.auth.refreshSession(); } catch {}
+        const eventId = await AsyncStorage.getItem('pending_event_confirmation');
         await confirmAppointment(transactionId, paymentMethod);
-        console.log('Payment approved, showing success modal');
-        setShowSuccessModal(true);
+        console.log('Payment approved, navigating to event detail with paymentSuccess');
+        if (eventId) {
+          router.replace({ pathname: '/event-details/[id]', params: { id: eventId, paymentSuccess: 'true' } });
+        } else {
+          setShowSuccessModal(true);
+        }
       } else if (status === 'PENDING') {
         console.log('Payment is pending, showing info message');
         await cleanup();
@@ -192,52 +197,70 @@ export default function SubscriptionPlansScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const checkLocalStoragePayment = async () => {
+      const checkStoredPayment = async () => {
         if (Platform.OS === 'web') return;
 
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
-        if (storedTransactionId && storedPaymentMethod && storedTime) {
-          const paymentTime = parseInt(storedTime, 10);
-          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+        if (!storedTransactionId || !storedPaymentMethod || !storedTime) return;
 
-          if (paymentTime > fiveMinutesAgo) {
-            console.log('Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
-            
-            setCheckingPaymentStatus(true);
-            
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
+        const paymentTime = parseInt(storedTime, 10);
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
 
-            await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
-            
-            setCheckingPaymentStatus(false);
-          } else {
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-          }
+        if (paymentTime <= fiveMinutesAgo) {
+          console.log('Stored payment is too old, clearing');
+          await AsyncStorage.multiRemove(['nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time', 'nospi_payment_status']);
+          return;
         }
+
+        console.log('useFocusEffect: Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
+        setCheckingPaymentStatus(true);
+        // Pass copies of the values before clearing so handlePaymentCallback has them
+        const txId = storedTransactionId;
+        const method = storedPaymentMethod;
+        // Clear keys AFTER capturing values — handlePaymentCallback will also call cleanup()
+        await handlePaymentCallback(txId, method);
+        setCheckingPaymentStatus(false);
       };
 
-      checkLocalStoragePayment();
+      checkStoredPayment();
     }, [handlePaymentCallback])
   );
 
+  // Handle the case where payment-callback.tsx navigated here with payment_status param.
+  // The real transaction ID is still in AsyncStorage (payment-callback no longer overwrites it).
   useEffect(() => {
-    if (payment_status && urlTransactionId) {
-      const getPaymentMethodAndHandle = async () => {
-        const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        if (method) {
-          handlePaymentCallback(urlTransactionId as string, method);
-        }
-      };
-      getPaymentMethodAndHandle();
-    }
-  }, [payment_status, urlTransactionId, handlePaymentCallback]);
+    if (!payment_status) return;
+    console.log('URL param payment_status received:', payment_status);
+
+    const handleFromUrlParam = async () => {
+      const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
+      const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
+      const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
+
+      if (!storedTransactionId || !storedPaymentMethod) {
+        console.log('URL param handler: no stored transaction ID or method, skipping');
+        return;
+      }
+
+      const paymentTime = storedTime ? parseInt(storedTime, 10) : 0;
+      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+      if (paymentTime <= fiveMinutesAgo) {
+        console.log('URL param handler: stored payment is too old, clearing');
+        await AsyncStorage.multiRemove(['nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time', 'nospi_payment_status']);
+        return;
+      }
+
+      console.log('URL param handler: processing stored transaction:', storedTransactionId, 'method:', storedPaymentMethod);
+      setCheckingPaymentStatus(true);
+      await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
+      setCheckingPaymentStatus(false);
+    };
+
+    handleFromUrlParam();
+  }, [payment_status, handlePaymentCallback]);
 
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
