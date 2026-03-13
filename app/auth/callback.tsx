@@ -152,7 +152,22 @@ export default function AuthCallbackScreen() {
           const country = countryData || 'Colombia';
           const city = cityData || 'Medellín';
           const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
-          const photo = photoData || googlePhotoUrl;
+          
+          // 🔥 PRIORITY FIX: User uploaded photo takes priority over Google photo
+          // If user uploaded a photo during onboarding, use it. Otherwise, use Google photo.
+          const uploadedPhoto = photoData || '';
+          let finalPhoto = null;
+          
+          if (uploadedPhoto && uploadedPhoto.trim() !== '') {
+            console.log('✅ User uploaded photo during onboarding - using uploaded photo');
+            finalPhoto = uploadedPhoto;
+          } else {
+            console.log('ℹ️ No uploaded photo - using Google photo as fallback');
+            finalPhoto = googlePhotoUrl;
+          }
+          
+          console.log('📸 Final photo URL:', finalPhoto);
+          
           const interests = interestsData ? JSON.parse(interestsData) : [];
           const personality = personalityData ? JSON.parse(personalityData) : [];
           const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
@@ -173,7 +188,7 @@ export default function AuthCallbackScreen() {
               country: country,
               city: city,
               phone: phoneInfo.phoneNumber,
-              profile_photo_url: photo,
+              profile_photo_url: finalPhoto,
               interests: interests,
               personality_traits: personality,
               compatibility_percentage: compatibility,
@@ -298,33 +313,10 @@ export default function AuthCallbackScreen() {
           return;
         }
 
-        // Profile exists, update with Google data if needed
-        console.log('AuthCallbackScreen: Profile exists, updating Google data if needed');
-        const metadata = googleUser.user_metadata || {};
-        const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
-        
-        const updateData: any = {};
-        
-        // Always update photo from Google if available and different
-        if (profilePhotoUrl && profilePhotoUrl !== existingProfile.profile_photo_url) {
-          updateData.profile_photo_url = profilePhotoUrl;
-        }
-
-        // Only update if there's something to update
-        if (Object.keys(updateData).length > 0) {
-          console.log('AuthCallbackScreen: Updating profile with:', updateData);
-          
-          const { error: updateError } = await supabase
-            .from('users')
-            .update(updateData)
-            .eq('id', googleUser.id);
-
-          if (updateError) {
-            console.error('AuthCallbackScreen: Error updating profile:', updateError);
-          } else {
-            console.log('AuthCallbackScreen: Profile updated successfully');
-          }
-        }
+        // Profile exists (LOGIN FLOW) - DO NOT update photo automatically
+        // Only update if user explicitly changes it in profile settings
+        console.log('AuthCallbackScreen: Profile exists - user logged in successfully');
+        console.log('ℹ️ Not updating profile photo - keeping existing photo');
 
         // Navigate to events screen
         console.log('AuthCallbackScreen: Navigating to events screen');
