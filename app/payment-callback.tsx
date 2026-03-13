@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text, Platform, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Platform, ScrollView, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +9,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function PaymentCallbackScreen() {
   const router = useRouter();
   const localSearchParams = useLocalSearchParams();
-  const [status, setStatus] = useState('Procesando...');
   const [paymentStatus, setPaymentStatus] = useState<'APPROVED' | 'PENDING' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'unknown'>('unknown');
   const isWeb = Platform.OS === 'web';
 
@@ -49,21 +48,6 @@ export default function PaymentCallbackScreen() {
         window.localStorage.setItem('nospi_payment_time', Date.now().toString());
         console.log('PaymentCallbackScreen: Payment info stored in localStorage');
       }
-
-      // Set appropriate status message
-      if (actualStatus === 'APPROVED') {
-        setStatus('¡Pago completado!');
-      } else if (actualStatus === 'PENDING') {
-        setStatus('Pago en proceso');
-      } else if (actualStatus === 'DECLINED') {
-        setStatus('Pago rechazado');
-      } else if (actualStatus === 'ERROR') {
-        setStatus('Error en el pago');
-      } else if (actualStatus === 'VOIDED') {
-        setStatus('Pago cancelado');
-      } else {
-        setStatus('Estado desconocido');
-      }
     } else {
       // On mobile (native app), store in AsyncStorage and redirect
       console.log('PaymentCallbackScreen: Mobile platform, storing in AsyncStorage');
@@ -92,178 +76,65 @@ export default function PaymentCallbackScreen() {
     }
   }, [localSearchParams, isWeb, router]);
 
-  // Web-only view with clear instructions based on payment status
+  // Web-only view with beautiful Nospi branding
   if (isWeb) {
-    // APPROVED - Payment successful
-    if (paymentStatus === 'APPROVED') {
-      return (
-        <LinearGradient
-          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-          style={styles.container}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.content}>
-              <Text style={styles.successIcon}>✅</Text>
-              <Text style={styles.text}>{status}</Text>
-              
-              <View style={styles.instructionsCard}>
-                <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
-                <Text style={styles.instructionsText}>
-                  1. Cierra esta ventana del navegador
-                </Text>
-                <Text style={styles.instructionsText}>
-                  2. Regresa a la app de Nospi en tu dispositivo
-                </Text>
-                <Text style={styles.instructionsText}>
-                  3. Tu cita se confirmará automáticamente
-                </Text>
-              </View>
-
-              <View style={styles.infoCard}>
-                <Text style={styles.infoIcon}>💡</Text>
-                <Text style={styles.infoText}>
-                  La app detectará tu pago automáticamente cuando regreses. No necesitas hacer nada más.
-                </Text>
-              </View>
-
-              <View style={styles.warningCard}>
-                <Text style={styles.warningIcon}>⚠️</Text>
-                <Text style={styles.warningText}>
-                  <Text style={styles.warningBold}>Importante:</Text> No cierres la app de Nospi. Solo cierra esta ventana del navegador y regresa a la app.
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-        </LinearGradient>
-      );
-    }
-
-    // PENDING - Payment is being processed
-    if (paymentStatus === 'PENDING') {
-      return (
-        <LinearGradient
-          colors={['#FFFFFF', '#FEF3C7', '#FDE68A', '#FCD34D', '#FBBF24']}
-          style={styles.container}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.content}>
-              <Text style={styles.pendingIcon}>⏳</Text>
-              <Text style={styles.text}>{status}</Text>
-              
-              <View style={styles.instructionsCard}>
-                <Text style={styles.instructionsTitle}>Tu pago está siendo procesado</Text>
-                <Text style={styles.instructionsText}>
-                  1. Cierra esta ventana del navegador
-                </Text>
-                <Text style={styles.instructionsText}>
-                  2. Regresa a la app de Nospi en tu dispositivo
-                </Text>
-                <Text style={styles.instructionsText}>
-                  3. Te notificaremos cuando se confirme el pago
-                </Text>
-              </View>
-
-              <View style={[styles.infoCard, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
-                <Text style={styles.infoIcon}>ℹ️</Text>
-                <Text style={[styles.infoText, { color: '#92400e' }]}>
-                  El banco está procesando tu pago. Esto puede tomar unos minutos. Revisa tu sección de Citas para ver el estado actualizado.
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-        </LinearGradient>
-      );
-    }
-
-    // DECLINED, ERROR, VOIDED - Payment failed or canceled
-    if (paymentStatus === 'DECLINED' || paymentStatus === 'ERROR' || paymentStatus === 'VOIDED') {
-      const errorTitle = paymentStatus === 'VOIDED' ? 'Pago cancelado' : paymentStatus === 'DECLINED' ? 'Pago rechazado' : 'Error en el pago';
-      const errorMessage = paymentStatus === 'VOIDED' 
-        ? 'Cancelaste el proceso de pago en el banco.'
-        : paymentStatus === 'DECLINED'
-        ? 'El banco rechazó tu pago. Esto puede deberse a fondos insuficientes o límites de transacción.'
-        : 'Ocurrió un error al procesar tu pago.';
-
-      return (
-        <LinearGradient
-          colors={['#FFFFFF', '#FEE2E2', '#FECACA', '#FCA5A5', '#F87171']}
-          style={styles.container}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.content}>
-              <Text style={styles.errorIcon}>❌</Text>
-              <Text style={styles.text}>{errorTitle}</Text>
-              
-              <View style={styles.instructionsCard}>
-                <Text style={styles.instructionsTitle}>¿Qué pasó?</Text>
-                <Text style={[styles.instructionsText, { textAlign: 'center', paddingLeft: 0 }]}>
-                  {errorMessage}
-                </Text>
-              </View>
-
-              <View style={styles.instructionsCard}>
-                <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
-                <Text style={styles.instructionsText}>
-                  1. Cierra esta ventana del navegador
-                </Text>
-                <Text style={styles.instructionsText}>
-                  2. Regresa a la app de Nospi en tu dispositivo
-                </Text>
-                <Text style={styles.instructionsText}>
-                  3. Intenta realizar el pago nuevamente
-                </Text>
-              </View>
-
-              <View style={[styles.infoCard, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                <Text style={styles.infoIcon}>💡</Text>
-                <Text style={[styles.infoText, { color: '#991b1b' }]}>
-                  Puedes intentar con otro método de pago o verificar con tu banco si hay algún problema con tu cuenta.
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-        </LinearGradient>
-      );
-    }
-
-    // UNKNOWN - Status not recognized
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3F4F6', '#E5E7EB', '#D1D5DB', '#9CA3AF']}
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
         style={styles.container}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
-            <Text style={styles.unknownIcon}>❓</Text>
-            <Text style={styles.text}>Estado desconocido</Text>
-            
-            <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>No pudimos determinar el estado del pago</Text>
-              <Text style={[styles.instructionsText, { textAlign: 'center', paddingLeft: 0 }]}>
-                Por favor, verifica el estado de tu pago en la sección de Citas de la app.
-              </Text>
+            {/* Nospi Logo */}
+            <Image 
+              source={require('@/assets/images/logo_380.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+
+            {/* Success Icon */}
+            <View style={styles.iconContainer}>
+              <Text style={styles.successIcon}>✓</Text>
             </View>
 
+            {/* Instructions Card */}
             <View style={styles.instructionsCard}>
               <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
-              <Text style={styles.instructionsText}>
-                1. Cierra esta ventana del navegador
-              </Text>
-              <Text style={styles.instructionsText}>
-                2. Regresa a la app de Nospi en tu dispositivo
-              </Text>
-              <Text style={styles.instructionsText}>
-                3. Revisa tu sección de Citas
-              </Text>
+              
+              <View style={styles.stepContainer}>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>1</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Cierra esta ventana del navegador
+                </Text>
+              </View>
+
+              <View style={styles.stepContainer}>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>2</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Regresa a la app de Nospi
+                </Text>
+              </View>
+
+              <View style={styles.stepContainer}>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>3</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Tu pago se procesará automáticamente
+                </Text>
+              </View>
             </View>
+
+            {/* Footer text */}
+            <Text style={styles.footerText}>
+              Gracias por confiar en Nospi 💜
+            </Text>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -273,16 +144,18 @@ export default function PaymentCallbackScreen() {
   // Mobile view (should redirect automatically)
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
       style={styles.container}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.content}>
-        <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-        <Text style={styles.successIcon}>✅</Text>
-        <Text style={styles.text}>Redirigiendo...</Text>
-        <Text style={styles.subtext}>Por favor espera un momento...</Text>
+        <Image 
+          source={require('@/assets/images/logo_380.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.redirectText}>Redirigiendo...</Text>
       </View>
     </LinearGradient>
   );
@@ -295,112 +168,99 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 24,
+    minHeight: '100%',
   },
   content: {
     alignItems: 'center',
-    paddingVertical: 40,
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 500,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 40,
+  },
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
   successIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  pendingIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  errorIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  unknownIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  text: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 60,
+    fontWeight: '700',
     color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  subtext: {
-    marginTop: 12,
-    fontSize: 16,
-    color: nospiColors.purpleMid,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    lineHeight: 24,
   },
   instructionsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 32,
     width: '100%',
-    maxWidth: 400,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+    marginBottom: 32,
   },
   instructionsTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: nospiColors.purpleDark,
-    marginBottom: 16,
+    marginBottom: 28,
     textAlign: 'center',
   },
-  instructionsText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 28,
-    marginBottom: 8,
-    paddingLeft: 8,
-  },
-  infoCard: {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    width: '100%',
-    maxWidth: 400,
+  stepContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  infoIcon: {
-    fontSize: 24,
-    marginRight: 12,
+  stepNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: nospiColors.purpleMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  infoText: {
-    flex: 1,
-    fontSize: 14,
-    color: nospiColors.purpleDark,
-    lineHeight: 22,
-  },
-  warningCard: {
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 400,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.3)',
-  },
-  warningIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#92400e',
-    lineHeight: 22,
-  },
-  warningBold: {
+  stepNumberText: {
+    fontSize: 18,
     fontWeight: '700',
+    color: nospiColors.white,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 17,
+    color: nospiColors.gray800,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  footerText: {
+    fontSize: 18,
+    color: nospiColors.white,
+    textAlign: 'center',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  redirectText: {
+    fontSize: 20,
+    color: nospiColors.white,
+    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 24,
   },
 });
