@@ -94,11 +94,6 @@ export default function PaymentCallbackScreen() {
               resizeMode="contain"
             />
 
-            {/* Success Icon */}
-            <View style={styles.iconContainer}>
-              <Text style={styles.successIcon}>✓</Text>
-            </View>
-
             {/* Instructions Card */}
             <View style={styles.instructionsCard}>
               <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
@@ -182,25 +177,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     marginBottom: 40,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  successIcon: {
-    fontSize: 60,
-    fontWeight: '700',
-    color: nospiColors.purpleDark,
   },
   instructionsCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
