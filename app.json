@@ -48,7 +48,8 @@
           "data": [
             {
               "scheme": "nospi",
-              "host": "auth"
+              "host": "auth",
+              "pathPrefix": "/callback"
             },
             {
               "scheme": "https",

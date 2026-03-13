@@ -148,51 +148,37 @@ export default function LoginScreen() {
       if (data.url) {
         console.log('LoginScreen: Opening Google OAuth URL');
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: WebBrowser result:', result);
-        
+        console.log('LoginScreen: WebBrowser result type:', result.type);
+
         if (result.type === 'success' && result.url) {
           console.log('LoginScreen: OAuth success, callback URL:', result.url);
           const callbackUrl = result.url;
-          
-          const url = new URL(callbackUrl);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
-          
-          // Tokens can be in query params OR hash fragment (Android sends them in hash)
-          let finalAccessToken = accessToken;
-          let finalRefreshToken = refreshToken;
 
-          if (!finalAccessToken || !finalRefreshToken) {
-            // Try hash fragment (#access_token=...&refresh_token=...)
+          // PKCE flow: extract the `code` param and let the callback screen exchange it
+          const parsedUrl = new URL(callbackUrl);
+          const code = parsedUrl.searchParams.get('code');
+
+          // Also check for legacy implicit-flow tokens in query or hash
+          let accessToken = parsedUrl.searchParams.get('access_token');
+          let refreshToken = parsedUrl.searchParams.get('refresh_token');
+          if (!accessToken || !refreshToken) {
             const hash = callbackUrl.split('#')[1] || '';
             const hashParams = new URLSearchParams(hash);
-            finalAccessToken = finalAccessToken || hashParams.get('access_token');
-            finalRefreshToken = finalRefreshToken || hashParams.get('refresh_token');
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
           }
 
-          if (finalAccessToken && finalRefreshToken) {
-            console.log('LoginScreen: Tokens found, setting session directly');
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-              access_token: finalAccessToken,
-              refresh_token: finalRefreshToken,
+          if (code) {
+            console.log('LoginScreen: PKCE code found, navigating to callback screen');
+            router.push({ pathname: '/auth/callback', params: { code } });
+          } else if (accessToken && refreshToken) {
+            console.log('LoginScreen: Implicit tokens found, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
             });
-            if (sessionError) {
-              console.error('LoginScreen: Error setting session:', sessionError);
-              setError('Error al establecer la sesión. Intenta de nuevo.');
-              setLoading(false);
-            } else if (sessionData.session) {
-              console.log('LoginScreen: Session set, navigating to callback');
-              router.push({
-                pathname: '/auth/callback',
-                params: {
-                  access_token: finalAccessToken,
-                  refresh_token: finalRefreshToken,
-                  type: 'recovery',
-                },
-              });
-            }
           } else {
-            console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
+            console.log('LoginScreen: No code or tokens in URL, navigating to callback screen anyway');
             router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
@@ -264,59 +250,45 @@ export default function LoginScreen() {
       if (data.url) {
         console.log('LoginScreen: Opening Apple OAuth URL');
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: WebBrowser result:', result);
-        
-        if (result.type === 'success' && result.url) {
-          console.log('LoginScreen: OAuth success, callback URL:', result.url);
-          const callbackUrl = result.url;
-          
-          const url = new URL(callbackUrl);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
-          
-          // Tokens can be in query params OR hash fragment (Android sends them in hash)
-          let finalAccessToken = accessToken;
-          let finalRefreshToken = refreshToken;
+        console.log('LoginScreen: Apple WebBrowser result type:', result.type);
 
-          if (!finalAccessToken || !finalRefreshToken) {
-            // Try hash fragment (#access_token=...&refresh_token=...)
+        if (result.type === 'success' && result.url) {
+          console.log('LoginScreen: Apple OAuth success, callback URL:', result.url);
+          const callbackUrl = result.url;
+
+          // PKCE flow: extract the `code` param and let the callback screen exchange it
+          const parsedUrl = new URL(callbackUrl);
+          const code = parsedUrl.searchParams.get('code');
+
+          // Also check for legacy implicit-flow tokens in query or hash
+          let accessToken = parsedUrl.searchParams.get('access_token');
+          let refreshToken = parsedUrl.searchParams.get('refresh_token');
+          if (!accessToken || !refreshToken) {
             const hash = callbackUrl.split('#')[1] || '';
             const hashParams = new URLSearchParams(hash);
-            finalAccessToken = finalAccessToken || hashParams.get('access_token');
-            finalRefreshToken = finalRefreshToken || hashParams.get('refresh_token');
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
           }
 
-          if (finalAccessToken && finalRefreshToken) {
-            console.log('LoginScreen: Tokens found, setting session directly');
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-              access_token: finalAccessToken,
-              refresh_token: finalRefreshToken,
+          if (code) {
+            console.log('LoginScreen: Apple PKCE code found, navigating to callback screen');
+            router.push({ pathname: '/auth/callback', params: { code } });
+          } else if (accessToken && refreshToken) {
+            console.log('LoginScreen: Apple implicit tokens found, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
             });
-            if (sessionError) {
-              console.error('LoginScreen: Error setting session:', sessionError);
-              setError('Error al establecer la sesión. Intenta de nuevo.');
-              setLoading(false);
-            } else if (sessionData.session) {
-              console.log('LoginScreen: Session set, navigating to callback');
-              router.push({
-                pathname: '/auth/callback',
-                params: {
-                  access_token: finalAccessToken,
-                  refresh_token: finalRefreshToken,
-                  type: 'recovery',
-                },
-              });
-            }
           } else {
-            console.log('LoginScreen: No tokens in URL, navigating to callback screen anyway');
+            console.log('LoginScreen: No code or tokens in Apple URL, navigating to callback screen anyway');
             router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
-          console.log('LoginScreen: User cancelled OAuth');
+          console.log('LoginScreen: User cancelled Apple OAuth');
           setError('Inicio de sesión cancelado');
           setLoading(false);
         } else {
-          console.log('LoginScreen: OAuth result type:', result.type);
+          console.log('LoginScreen: Apple OAuth result type:', result.type);
           setLoading(false);
         }
       }
