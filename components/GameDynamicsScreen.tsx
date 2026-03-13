@@ -57,6 +57,8 @@ const DEFAULT_QUESTIONS = {
 
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
+const TIMER_DURATION = 60;
+
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
@@ -67,6 +69,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
+
+  // Countdown timer state
+  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Level transition animation state
   const [showLevelTransition, setShowLevelTransition] = useState(false);
@@ -249,6 +255,33 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id, activeParticipants]);
+
+  // Countdown timer logic
+  const startTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimeLeft(TIMER_DURATION);
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          console.log('[Timer] Countdown reached 0 — revealing continue button');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  // Reset timer whenever the question changes
+  useEffect(() => {
+    if (gamePhase === 'questions' && currentQuestion) {
+      console.log(`[Timer] Starting 60s countdown for question index ${currentQuestionIndex}`);
+      startTimer();
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [currentQuestionIndex, currentQuestion, gamePhase, startTimer]);
 
   // Level transition animation function
   const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
@@ -503,6 +536,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
+  const timerColor = timeLeft > 30 ? '#10B981' : timeLeft > 10 ? '#F59E0B' : '#EF4444';
+  const timerLabel = `${timeLeft}s`;
+  const timerExpired = timeLeft === 0;
+
 
 
 
@@ -525,6 +562,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <View style={styles.questionCard}>
             <Text style={styles.questionIcon}>❓</Text>
             <Text style={styles.questionText}>{currentQuestion}</Text>
+
+            {/* Countdown timer badge */}
+            <View style={[styles.timerBadge, { borderColor: timerColor }]}>
+              <Text style={[styles.timerNumber, { color: timerColor }]}>{timerLabel}</Text>
+            </View>
           </View>
 
           <View style={styles.starterCard}>
@@ -539,16 +581,32 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.continueButton, loading && styles.buttonDisabled]}
-            onPress={handleContinue}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.continueButtonText}>
-              {loading ? '⏳ Cargando...' : '➡️ Continuar'}
-            </Text>
-          </TouchableOpacity>
+          {timerExpired ? (
+            <>
+              <View style={styles.tiempoCard}>
+                <Text style={styles.tiempoText}>¡Tiempo!</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.continueButton, loading && styles.buttonDisabled]}
+                onPress={() => {
+                  console.log('[Button] Continuar pressed');
+                  handleContinue();
+                }}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.continueButtonText}>
+                  {loading ? '⏳ Cargando...' : '➡️ Continuar'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={[styles.continueButton, styles.continueButtonWaiting]}>
+              <Text style={styles.continueButtonTextWaiting}>
+                Espera el tiempo...
+              </Text>
+            </View>
+          )}
         </ScrollView>
         
         {/* Level Transition Animation Overlay */}
@@ -787,6 +845,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 24,
   },
+  timerBadge: {
+    marginTop: 20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  timerNumber: {
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  tiempoCard: {
+    backgroundColor: '#EF4444',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  tiempoText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
   continueButton: {
     backgroundColor: '#10B981',
     borderRadius: 20,
@@ -800,10 +886,20 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  continueButtonWaiting: {
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   continueButtonText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  continueButtonTextWaiting: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.35)',
   },
   buttonDisabled: {
     opacity: 0.6,
