@@ -532,6 +532,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+
+  // Per-level gradient backgrounds
+  const LEVEL_GRADIENTS: Record<QuestionLevel, [string, string, ...string[]]> = {
+    divertido: ['#FF6B6B', '#FF8E53', '#FFE66D'],
+    sensual:   ['#4ECDC4', '#44A08D', '#2C7873'],
+    atrevido:  ['#667eea', '#764ba2', '#4a2c6e'],
+  };
+  const levelGradient = LEVEL_GRADIENTS[currentLevel];
   
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
@@ -548,7 +556,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF']}
+        colors={levelGradient}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -576,7 +584,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           <View style={styles.instructionCard}>
             <Text style={styles.instructionText}>
-              Presionen continuar cuando todos contesten esta pregunta
+              Cuando termine el conteo aparecerá el botón Continuar. Presiónenlo cuando todos hayan respondido
             </Text>
           </View>
 
