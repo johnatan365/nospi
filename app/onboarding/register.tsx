@@ -22,6 +22,8 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     // Listen for deep link events (OAuth callback)
@@ -503,27 +505,43 @@ export default function RegisterScreen() {
               autoCorrect={false}
             />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Contraseña"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Contraseña"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() => { console.log('Toggle register password visibility'); setShowPassword(!showPassword); }}
+                style={styles.eyeButton}
+              >
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirmar Contraseña"
-              placeholderTextColor="#999"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirmar Contraseña"
+                placeholderTextColor="#999"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() => { console.log('Toggle register confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }}
+                style={styles.eyeButton}
+              >
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={[styles.registerButton, loading && styles.registerButtonDisabled]}
@@ -740,6 +758,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginBottom: 16,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingLeft: 20,
+    paddingRight: 8,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   registerButton: {
     backgroundColor: nospiColors.purpleDark,

@@ -144,12 +144,15 @@ export default function LocationScreen() {
                 }
               }}
               style={styles.modalPicker}
+              color="#000000"
+              dropdownIconColor="#000000"
             >
               {COUNTRIES.map((countryOption) => (
                 <Picker.Item 
                   key={countryOption} 
                   label={countryOption} 
                   value={countryOption}
+                  color="#000000"
                 />
               ))}
             </Picker>
@@ -184,12 +187,15 @@ export default function LocationScreen() {
                 }
               }}
               style={styles.modalPicker}
+              color="#000000"
+              dropdownIconColor="#000000"
             >
               {availableCities.map((cityOption) => (
                 <Picker.Item 
                   key={cityOption} 
                   label={cityOption} 
                   value={cityOption}
+                  color="#000000"
                 />
               ))}
             </Picker>

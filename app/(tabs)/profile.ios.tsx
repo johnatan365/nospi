@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -101,6 +102,9 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -907,9 +911,11 @@ export default function ProfileScreen() {
                 if (cities.length > 0) setEditCity(cities[0]);
               }}
               style={styles.picker}
+              color="#000000"
+              dropdownIconColor="#000000"
             >
               {COUNTRIES.map((country) => (
-                <Picker.Item key={country} label={country} value={country} />
+                <Picker.Item key={country} label={country} value={country} color="#000000" />
               ))}
             </Picker>
           </View>
@@ -935,9 +941,11 @@ export default function ProfileScreen() {
               selectedValue={editCity}
               onValueChange={(value) => setEditCity(value)}
               style={styles.picker}
+              color="#000000"
+              dropdownIconColor="#000000"
             >
               {(CITIES_BY_COUNTRY[editCountry] || []).map((city) => (
-                <Picker.Item key={city} label={city} value={city} />
+                <Picker.Item key={city} label={city} value={city} color="#000000" />
               ))}
             </Picker>
           </View>
@@ -957,46 +965,70 @@ export default function ProfileScreen() {
             <Text style={styles.modalSubtitle}>Ingresa tu contraseña actual y la nueva</Text>
 
             <Text style={styles.inputLabel}>Contraseña Actual *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Contraseña actual"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={currentPassword}
-              onChangeText={(text) => {
-                setCurrentPassword(text);
-                setPasswordError('');
-              }}
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordInputWrapper}>
+              <TextInput
+                style={styles.passwordModalInput}
+                placeholder="Contraseña actual"
+                placeholderTextColor="#999"
+                secureTextEntry={!showCurrentPassword}
+                value={currentPassword}
+                onChangeText={(text) => {
+                  setCurrentPassword(text);
+                  setPasswordError('');
+                }}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => { console.log('Toggle current password visibility'); setShowCurrentPassword(!showCurrentPassword); }}
+                style={styles.passwordEyeButton}
+              >
+                <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.inputLabel}>Nueva Contraseña *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Nueva contraseña (mínimo 6 caracteres)"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={(text) => {
-                setNewPassword(text);
-                setPasswordError('');
-              }}
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordInputWrapper}>
+              <TextInput
+                style={styles.passwordModalInput}
+                placeholder="Nueva contraseña (mínimo 6 caracteres)"
+                placeholderTextColor="#999"
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={(text) => {
+                  setNewPassword(text);
+                  setPasswordError('');
+                }}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => { console.log('Toggle new password visibility'); setShowNewPassword(!showNewPassword); }}
+                style={styles.passwordEyeButton}
+              >
+                <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.inputLabel}>Confirmar Nueva Contraseña *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Confirma la nueva contraseña"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={(text) => {
-                setConfirmPassword(text);
-                setPasswordError('');
-              }}
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordInputWrapper}>
+              <TextInput
+                style={styles.passwordModalInput}
+                placeholder="Confirma la nueva contraseña"
+                placeholderTextColor="#999"
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setPasswordError('');
+                }}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => { console.log('Toggle confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }}
+                style={styles.passwordEyeButton}
+              >
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             {passwordError ? (
               <Text style={styles.passwordError}>{passwordError}</Text>
@@ -1170,4 +1202,7 @@ const styles = StyleSheet.create({
   pickerModalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
   pickerModalClose: { fontSize: 16, fontWeight: '600', color: nospiColors.purpleMid },
   picker: { width: '100%', height: 200 },
+  passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
+  passwordModalInput: { flex: 1, paddingVertical: 14, paddingLeft: 16, paddingRight: 8, fontSize: 16, color: '#333' },
+  passwordEyeButton: { paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'stretch' },
 });

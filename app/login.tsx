@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     // Listen for deep link events (OAuth callback)
@@ -351,10 +353,16 @@ export default function LoginScreen() {
                   placeholderTextColor="#999"
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                <TouchableOpacity
+                  onPress={() => { console.log('Toggle password visibility'); setShowPassword(!showPassword); }}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -498,9 +506,14 @@ const styles = StyleSheet.create({
   inputWithIcon: {
     flex: 1,
     paddingVertical: 16,
-    paddingRight: 20,
+    paddingRight: 8,
     fontSize: 16,
     color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   input: {
     backgroundColor: nospiColors.white,
