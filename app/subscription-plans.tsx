@@ -175,10 +175,23 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handlePayWithVirtualBalance = async () => {
+    console.log('[VirtualBalance] Starting payment, amount:', priceCOP);
     setProcessingMethod('virtual');
     try {
       await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
-      await handleSuccess();
+      console.log('[VirtualBalance] Balance deducted — reading pendingEventId before confirmAppointment');
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      await confirmAppointment('', 'virtual_balance');
+      if (pendingEventId) {
+        console.log('[VirtualBalance] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
+        router.replace({
+          pathname: '/event-details/[id]',
+          params: { id: pendingEventId, paymentSuccess: 'true' },
+        });
+      } else {
+        console.log('[VirtualBalance] No pendingEventId found, showing success modal');
+        setShowSuccessModal(true);
+      }
     } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
     finally { setProcessingMethod(null); }
   };
@@ -234,7 +247,20 @@ export default function SubscriptionPlansScreen() {
 
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
-        await handleSuccess();
+        console.log('[CardPayment] APPROVED — reading pendingEventId before confirmAppointment');
+        // Get the event ID BEFORE confirming (confirmAppointment removes it from AsyncStorage)
+        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+        await confirmAppointment(result.transactionId || '', 'card');
+        if (pendingEventId) {
+          console.log('[CardPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
+          router.replace({
+            pathname: '/event-details/[id]',
+            params: { id: pendingEventId, paymentSuccess: 'true' },
+          });
+        } else {
+          console.log('[CardPayment] No pendingEventId found, showing success modal');
+          setShowSuccessModal(true);
+        }
       } else if (result.status === 'PENDING') {
         setShowCardForm(false);
         Toast.show({
@@ -287,7 +313,19 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
-            await handleSuccess();
+            console.log('[NequiPayment] APPROVED — reading pendingEventId before confirmAppointment');
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            await confirmAppointment(result.transactionId || '', 'nequi');
+            if (pendingEventId) {
+              console.log('[NequiPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
+              router.replace({
+                pathname: '/event-details/[id]',
+                params: { id: pendingEventId, paymentSuccess: 'true' },
+              });
+            } else {
+              console.log('[NequiPayment] No pendingEventId found, showing success modal');
+              setShowSuccessModal(true);
+            }
           } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
             clearInterval(poll);
             setProcessingMethod(null);
