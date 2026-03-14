@@ -84,7 +84,7 @@ interface LevelTheme {
 
 const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
   divertido: {
-    gradient: ['#E0F7FA', '#81D4FA', '#29B6F6'],
+    gradient: ['#1a3a5c', '#1565C0', '#0D47A1'],
     questionCardBg: 'rgba(255,255,255,0.08)',
     questionCardBorder: 'rgba(100,181,246,0.30)',
     questionTextColor: '#FFFFFF',
@@ -101,7 +101,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
     continueButtonText: '#FFFFFF',
     accentColor: '#64B5F6',
     starterCardBg: 'rgba(0,0,0,0.35)',
-    transitionGradient: ['#E0F7FA', '#81D4FA', '#29B6F6'],
+    transitionGradient: ['#1a3a5c', '#1565C0', '#0D47A1'],
     transitionAccent: '#64B5F6',
     participantCardBg: 'rgba(100,181,246,0.08)',
     participantAvatarBg: 'rgba(100,181,246,0.18)',
