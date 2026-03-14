@@ -29,8 +29,13 @@ const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
-// URL de redirección web que Wompi acepta (debe ser HTTPS)
+// Wompi redirect URLs:
+// - Web: must be HTTPS (Wompi requirement)
+// - Native (iOS/Android): must use the app scheme so the OS routes it back into the app.
+//   https:// redirects on mobile open the browser, NOT the app, unless App Links are
+//   fully configured with a verified domain. nospi:// is always safe on native.
 const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
+const NATIVE_REDIRECT_URL = 'nospi://payment-callback';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -527,7 +532,8 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      console.log('Bancolombia redirect URL:', WEB_REDIRECT_URL);
+      const bancolombiaRedirectUrl = Platform.OS === 'web' ? WEB_REDIRECT_URL : NATIVE_REDIRECT_URL;
+      console.log('Bancolombia redirect URL:', bancolombiaRedirectUrl);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
@@ -539,7 +545,7 @@ export default function SubscriptionPlansScreen() {
           userEmail: userProfile?.email || currentUser.email || '', 
           userId: currentUser.id, 
           eventId: pendingEventId,
-          redirectUrl: WEB_REDIRECT_URL
+          redirectUrl: bancolombiaRedirectUrl
         }),
       });
       const result = await response.json();
@@ -683,7 +689,8 @@ export default function SubscriptionPlansScreen() {
       const { acceptanceToken, personalDataToken } = await getWompiTokens();
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
-      console.log('PSE redirect URL:', WEB_REDIRECT_URL);
+      const pseRedirectUrl = Platform.OS === 'web' ? WEB_REDIRECT_URL : NATIVE_REDIRECT_URL;
+      console.log('PSE redirect URL:', pseRedirectUrl);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
@@ -700,7 +707,7 @@ export default function SubscriptionPlansScreen() {
           userLegalId: cleanLegalId,
           userLegalIdType: pseLegalIdType,
           financialInstitutionCode: pseBankCode,
-          redirectUrl: WEB_REDIRECT_URL
+          redirectUrl: pseRedirectUrl
         }),
       });
       const data = await response.json();
