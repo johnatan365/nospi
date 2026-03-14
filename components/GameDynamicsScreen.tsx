@@ -84,7 +84,7 @@ interface LevelTheme {
 
 const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
   divertido: {
-    gradient: ['#E0F7FA', '#81D4FA', '#29B6F6'],
+    gradient: ['#4FC3F7', '#0288D1', '#01579B'],
     questionCardBg: 'rgba(255,255,255,0.08)',
     questionCardBorder: 'rgba(100,181,246,0.30)',
     questionTextColor: '#FFFFFF',
@@ -101,7 +101,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
     continueButtonText: '#FFFFFF',
     accentColor: '#64B5F6',
     starterCardBg: 'rgba(0,0,0,0.35)',
-    transitionGradient: ['#E0F7FA', '#81D4FA', '#29B6F6'],
+    transitionGradient: ['#4FC3F7', '#0288D1', '#01579B'],
     transitionAccent: '#64B5F6',
     participantCardBg: 'rgba(100,181,246,0.08)',
     participantAvatarBg: 'rgba(100,181,246,0.18)',
@@ -914,11 +914,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   levelEmoji: {
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 7,
   },
   levelText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1.2,
     textAlign: 'center',
@@ -934,7 +934,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   questionText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 32,
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timerNumber: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -976,7 +976,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   starterAvatarText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
   },
   starterInfo: {
@@ -984,18 +984,18 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   starterLabelWhite: {
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 1.2,
     fontWeight: '600',
     marginBottom: 2,
   },
   starterNameWhite: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '500',
     color: '#FFFFFF',
   },
   starterInstructionWhite: {
-    fontSize: 11,
+    fontSize: 13,
     color: 'rgba(255,255,255,0.45)',
     marginTop: 2,
   },
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   instructionText: {
-    fontSize: 12,
+    fontSize: 14,
     textAlign: 'center',
     fontWeight: '400',
     lineHeight: 19,
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
   continueButtonCText: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.4,
@@ -1053,7 +1053,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   continueButtonCArrow: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '400',
     lineHeight: 26,
     marginTop: -2,
@@ -1074,11 +1074,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.25)',
   },
   continueButtonText: {
-    fontSize: 19,
+    fontSize: 21,
     fontWeight: '700',
   },
   continueButtonTextWaiting: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.45)',
     letterSpacing: 0.3,
@@ -1099,14 +1099,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   transitionFullTitle: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 16,
   },
   transitionFullSubtitle: {
-    fontSize: 18,
+    fontSize: 20,
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     lineHeight: 26,
@@ -1140,14 +1140,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   transitionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.85)',
     marginBottom: 10,
     textAlign: 'center',
   },
   transitionLevel: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
@@ -1173,14 +1173,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iceBreakTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 10,
     textAlign: 'center',
   },
   iceBreakSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     lineHeight: 24,
@@ -1198,14 +1198,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   evaluationTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 10,
     textAlign: 'center',
   },
   evaluationText: {
-    fontSize: 15,
+    fontSize: 17,
     color: 'rgba(255,255,255,0.75)',
     textAlign: 'center',
     lineHeight: 22,
@@ -1243,12 +1243,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   participantRatingPhotoPlaceholderText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   participantRatingName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -1268,7 +1268,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   ratingConfirmation: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#A5F3C4',
     fontWeight: '600',
     textAlign: 'center',
@@ -1286,7 +1286,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   finishButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -1305,7 +1305,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tiempoText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
