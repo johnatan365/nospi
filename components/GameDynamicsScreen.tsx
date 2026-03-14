@@ -911,7 +911,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
   },
   levelEmoji: {
     fontSize: 16,
@@ -921,6 +921,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 1.2,
+    textAlign: 'center',
   },
 
   // ── Question card ────────────────────────────────────────────────────────────
