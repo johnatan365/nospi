@@ -790,7 +790,7 @@ export default function InteraccionScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.eventStripName}>{eventTypeText} · Noche Nospi</Text>
             <Text style={styles.eventStripSub}>
-              {appointment.event.time}{locationRevealed && locationText ? \` · \${locationText}\` : shouldShowLocationText ? ' · Ubicación próximamente' : ''}
+              {appointment.event.time}{locationRevealed && locationText ? ` · ${locationText}` : shouldShowLocationText ? ' · Ubicación próximamente' : ''}
             </Text>
           </View>
         </View>
