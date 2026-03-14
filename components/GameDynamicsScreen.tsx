@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,6 +74,7 @@ interface LevelTheme {
   instructionText: string;
   continueButtonBg: string;
   continueButtonText: string;
+  accentColor: string;
   starterCardBg: string;
   transitionGradient: [string, string, ...string[]];
   transitionAccent: string;
@@ -99,6 +99,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
     instructionText: 'rgba(255,255,255,0.9)',
     continueButtonBg: '#0288D1',
     continueButtonText: '#FFFFFF',
+    accentColor: '#64B5F6',
     starterCardBg: 'rgba(2,136,209,0.45)',
     transitionGradient: ['#87CEEB', '#4FC3F7', '#0288D1'],
     transitionAccent: '#0288D1',
@@ -121,6 +122,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
     instructionText: 'rgba(255,255,255,0.9)',
     continueButtonBg: '#E65100',
     continueButtonText: '#FFFFFF',
+    accentColor: '#FFB74D',
     starterCardBg: 'rgba(230,81,0,0.45)',
     transitionGradient: ['#FF8C00', '#FFA500', '#FFD700'],
     transitionAccent: '#E65100',
@@ -143,6 +145,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
     instructionText: 'rgba(255,255,255,0.9)',
     continueButtonBg: '#B71C1C',
     continueButtonText: '#FFFFFF',
+    accentColor: '#F06292',
     starterCardBg: 'rgba(183,28,28,0.45)',
     transitionGradient: ['#8B0000', '#C0392B', '#E74C3C'],
     transitionAccent: '#B71C1C',
@@ -704,24 +707,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
           {timerExpired ? (
             <TouchableOpacity
-              style={[
-                styles.continueButton,
-                { backgroundColor: theme.continueButtonBg },
-                loading && styles.buttonDisabled,
-              ]}
+              style={[styles.continueButtonC, loading && styles.buttonDisabled]}
               onPress={() => {
                 console.log('[Button] Continuar pressed');
                 handleContinue();
               }}
               disabled={loading}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={[styles.continueButtonText, { color: theme.continueButtonText }]}>
-                {loading ? '⏳ Cargando...' : '➡️ Continuar'}
+              <Text style={styles.continueButtonCText}>
+                {loading ? 'Cargando...' : 'Continuar'}
               </Text>
+              <View style={[styles.continueButtonCCircle, { borderColor: theme.accentColor, backgroundColor: theme.accentColor + '25' }]}>
+                <Text style={[styles.continueButtonCArrow, { color: theme.accentColor }]}>›</Text>
+              </View>
             </TouchableOpacity>
           ) : (
-            <View style={[styles.continueButton, styles.continueButtonWaiting]}>
+            <View style={styles.continueButtonWaitingC}>
               <Text style={styles.continueButtonTextWaiting}>
                 Espera el tiempo...
               </Text>
@@ -1000,11 +1002,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     alignItems: 'center',
     marginBottom: 16,
-    boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+  },
+  continueButtonC: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 50,
+    paddingVertical: 4,
+    paddingLeft: 20,
+    paddingRight: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  continueButtonCText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
+  },
+  continueButtonCCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueButtonCArrow: {
+    fontSize: 22,
+    fontWeight: '400',
+    lineHeight: 26,
+    marginTop: -2,
+  },
+  continueButtonWaitingC: {
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   continueButtonWaiting: {
     backgroundColor: 'rgba(255,255,255,0.15)',
-    boxShadow: 'none',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
@@ -1013,9 +1058,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   continueButtonTextWaiting: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.3,
   },
   buttonDisabled: {
     opacity: 0.6,
