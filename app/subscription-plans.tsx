@@ -2,18 +2,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal, Alert, SafeAreaView, AppState,
+  ActivityIndicator, Modal, Alert, SafeAreaView,
   Image, TextInput, KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
-import { useFocusEffect } from '@react-navigation/native';
 
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
@@ -49,7 +48,6 @@ export default function SubscriptionPlansScreen() {
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
-  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
 
   // Card form
   const [showCardForm, setShowCardForm] = useState(false);
@@ -120,224 +118,8 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  const { payment_status, transaction_id: urlTransactionId } = useLocalSearchParams<{ payment_status?: string, transaction_id?: string }>();
-
-  const handlePaymentCallback = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
-    console.log('Payment callback received for transaction:', transactionId, 'method:', paymentMethod);
-    
-    const cleanup = async () => {
-      await AsyncStorage.removeItem('nospi_payment_opened_time');
-      await AsyncStorage.removeItem('nospi_payment_method');
-      await AsyncStorage.removeItem('nospi_transaction_id');
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem('nospi_payment_opened_time');
-        window.localStorage.removeItem('nospi_payment_method');
-        window.localStorage.removeItem('nospi_transaction_id');
-        window.localStorage.removeItem('nospi_payment_status');
-        window.localStorage.removeItem('nospi_payment_time');
-      }
-    };
-
-    if (!transactionId) {
-      console.log('No transaction ID provided');
-      await cleanup();
-      return;
-    }
-
-    try {
-      console.log('Verifying transaction status with Wompi:', transactionId);
-      const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
-      const data = await res.json();
-      const status = data.data?.status;
-
-      console.log('Wompi transaction status:', status);
-
-      if (status === 'APPROVED') {
-        await cleanup();
-        try { await supabase.auth.refreshSession(); } catch {}
-        const eventId = await AsyncStorage.getItem('pending_event_confirmation');
-        await confirmAppointment(transactionId, paymentMethod);
-        console.log('Payment approved, navigating to event detail with paymentSuccess');
-        if (eventId) {
-          router.replace({ pathname: '/event-details/[id]', params: { id: eventId, paymentSuccess: 'true' } });
-        } else {
-          setShowSuccessModal(true);
-        }
-      } else if (status === 'PENDING') {
-        console.log('Payment is pending, showing info message');
-        await cleanup();
-        Toast.show({
-          type: 'info',
-          text1: 'Pago en proceso',
-          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          visibilityTime: 5000,
-          position: 'top',
-        });
-        router.replace('/(tabs)/appointments');
-      } else if (status === 'DECLINED') {
-        console.log('Payment declined by bank');
-        await cleanup();
-        showAlert('Pago rechazado', 'El banco rechazó tu pago. Esto puede deberse a fondos insuficientes o límites de transacción. Por favor, inténtalo de nuevo.');
-      } else if (status === 'VOIDED') {
-        console.log('Payment was canceled by user');
-        await cleanup();
-        showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
-      } else if (status === 'ERROR') {
-        console.log('Payment had an error');
-        await cleanup();
-        showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago. Por favor, inténtalo de nuevo o contacta a soporte si el problema persiste.');
-      } else {
-        console.log('Unknown transaction status:', status);
-        await cleanup();
-        showAlert('Estado desconocido', 'No se pudo determinar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-        router.replace('/(tabs)/appointments');
-      }
-    } catch (e) {
-      console.error('Error verifying transaction:', e);
-      await cleanup();
-      showAlert('Error de verificación', 'No se pudo verificar el estado del pago. Por favor, verifica tu cita en la sección de Citas.');
-      router.replace('/(tabs)/appointments');
-    }
-  }, [router]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const checkStoredPayment = async () => {
-        if (Platform.OS === 'web') return;
-
-        const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-        if (!storedTransactionId || !storedPaymentMethod || !storedTime) return;
-
-        const paymentTime = parseInt(storedTime, 10);
-        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-
-        if (paymentTime <= fiveMinutesAgo) {
-          console.log('Stored payment is too old, clearing');
-          await AsyncStorage.multiRemove(['nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time', 'nospi_payment_status']);
-          return;
-        }
-
-        console.log('useFocusEffect: Found recent payment in AsyncStorage:', { storedTransactionId, storedPaymentMethod });
-        setCheckingPaymentStatus(true);
-        // Pass copies of the values before clearing so handlePaymentCallback has them
-        const txId = storedTransactionId;
-        const method = storedPaymentMethod;
-        // Clear keys AFTER capturing values — handlePaymentCallback will also call cleanup()
-        await handlePaymentCallback(txId, method);
-        setCheckingPaymentStatus(false);
-      };
-
-      checkStoredPayment();
-    }, [handlePaymentCallback])
-  );
-
-  // Handle the case where payment-callback.tsx navigated here with payment_status param.
-  // The real transaction ID is still in AsyncStorage (payment-callback no longer overwrites it).
-  useEffect(() => {
-    if (!payment_status) return;
-    console.log('URL param payment_status received:', payment_status);
-
-    const handleFromUrlParam = async () => {
-      const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
-      const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-      const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-      if (!storedTransactionId || !storedPaymentMethod) {
-        console.log('URL param handler: no stored transaction ID or method, skipping');
-        return;
-      }
-
-      const paymentTime = storedTime ? parseInt(storedTime, 10) : 0;
-      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-      if (paymentTime <= fiveMinutesAgo) {
-        console.log('URL param handler: stored payment is too old, clearing');
-        await AsyncStorage.multiRemove(['nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time', 'nospi_payment_status']);
-        return;
-      }
-
-      console.log('URL param handler: processing stored transaction:', storedTransactionId, 'method:', storedPaymentMethod);
-      setCheckingPaymentStatus(true);
-      await handlePaymentCallback(storedTransactionId, storedPaymentMethod);
-      setCheckingPaymentStatus(false);
-    };
-
-    handleFromUrlParam();
-  }, [payment_status, handlePaymentCallback]);
-
-  useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      console.log('Deep link received:', event.url);
-      const url = Linking.parse(event.url);
-      const txId = url.queryParams?.transaction_id as string;
-      
-      if (txId) {
-        console.log('Deep link transaction detected');
-        const getPaymentMethodAndHandle = async () => {
-          const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-          if (method) {
-            handlePaymentCallback(txId, method);
-          }
-        };
-        getPaymentMethodAndHandle();
-      }
-    };
-
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('App opened with URL:', url);
-        const parsed = Linking.parse(url);
-        const txId = parsed.queryParams?.transaction_id as string;
-        
-        if (txId) {
-          console.log('Initial URL transaction detected');
-          const getPaymentMethodAndHandle = async () => {
-            const method = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-            if (method) {
-              handlePaymentCallback(txId, method);
-            }
-          };
-          getPaymentMethodAndHandle();
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, [handlePaymentCallback]);
-
-  useEffect(() => {
-    let appWasBackground = false;
-    const handleAppStateChange = async (nextState: string) => {
-      if (nextState === 'background' || nextState === 'inactive') {
-        appWasBackground = true;
-      } else if (nextState === 'active' && appWasBackground) {
-        appWasBackground = false;
-
-        const transactionId = await AsyncStorage.getItem('nospi_transaction_id');
-        const paymentMethod = await AsyncStorage.getItem('nospi_payment_method') as 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | null;
-        const paymentOpenedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
-
-        if (!transactionId || !paymentMethod) return;
-
-        console.log('App returned to foreground after payment, checking status');
-
-        if (paymentOpenedTime && Date.now() - parseInt(paymentOpenedTime, 10) < 3000) {
-          console.log('App returned too quickly after opening payment, ignoring immediate status check.');
-          return;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        await handlePaymentCallback(transactionId, paymentMethod);
-      }
-    };
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [handlePaymentCallback]);
+  // subscription-plans.tsx only initiates payments.
+  // All callback processing is handled exclusively in payment-callback.tsx.
 
   const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
     try {
@@ -984,12 +766,6 @@ export default function SubscriptionPlansScreen() {
     <LinearGradient colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
       
-      {checkingPaymentStatus && (
-        <View style={styles.checkingStatusBanner}>
-          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 12 }} />
-          <Text style={styles.checkingStatusText}>Verificando estado del pago...</Text>
-        </View>
-      )}
       
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 

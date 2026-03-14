@@ -96,13 +96,17 @@ export default function EventDetailsScreen() {
     }, [id, checkEnrollment])
   );
 
-  // Show success modal if navigated back with paymentSuccess param
+  // Show success modal if navigated back with paymentSuccess param.
+  // Wait 1 second before checking enrollment to allow DB propagation on Android.
   const { paymentSuccess } = useLocalSearchParams<{ paymentSuccess?: string }>();
   useEffect(() => {
     if (paymentSuccess === 'true') {
-      console.log('EventDetails: paymentSuccess param detected, showing success modal');
-      setShowSuccessModal(true);
-      checkEnrollment();
+      console.log('EventDetails: paymentSuccess param detected, waiting 1s then checking enrollment');
+      const timer = setTimeout(() => {
+        checkEnrollment();
+        setShowSuccessModal(true);
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [paymentSuccess, checkEnrollment]);
 

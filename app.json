@@ -63,7 +63,8 @@
           ]
         },
         {
-          "action": "VIEW",
+          "action": "android.intent.action.VIEW",
+          "autoVerify": false,
           "data": [
             {
               "scheme": "nospi",
@@ -71,8 +72,8 @@
             }
           ],
           "category": [
-            "BROWSABLE",
-            "DEFAULT"
+            "android.intent.category.DEFAULT",
+            "android.intent.category.BROWSABLE"
           ]
         }
       ]

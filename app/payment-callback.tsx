@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Platform, ScrollView, Image, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, Text, Platform, ScrollView, Image, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,7 @@ const WOMPI_API_URL = 'https://production.wompi.co/v1';
 type WompiStatus = 'APPROVED' | 'PENDING' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'unknown';
 
 // Confirm the appointment in Supabase once payment is verified as APPROVED.
+// Uses upsert to handle both insert and update cases atomically.
 async function confirmAppointmentInSupabase(
   transactionId: string,
   paymentMethod: string,
@@ -19,31 +20,58 @@ async function confirmAppointmentInSupabase(
   userId: string,
 ): Promise<void> {
   console.log('payment-callback: confirmAppointment', { transactionId, paymentMethod, eventId, userId });
-  const { data: existing } = await supabase
-    .from('appointments')
-    .select('id, payment_status')
-    .eq('user_id', userId)
-    .eq('event_id', eventId)
-    .maybeSingle();
 
-  if (!existing) {
-    console.log('payment-callback: inserting new appointment');
-    await supabase.from('appointments').insert({
-      user_id: userId,
-      event_id: eventId,
-      status: 'confirmada',
-      payment_status: 'completed',
-    });
-    await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-  } else if (existing.payment_status !== 'completed') {
-    console.log('payment-callback: updating existing appointment to completed');
-    await supabase
+  // Try upsert first (handles both insert and update in one call)
+  const { error: upsertError } = await supabase
+    .from('appointments')
+    .upsert(
+      {
+        user_id: userId,
+        event_id: eventId,
+        status: 'confirmada',
+        payment_status: 'completed',
+        transaction_id: transactionId,
+        payment_method: paymentMethod,
+        confirmed_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,event_id', ignoreDuplicates: false },
+    );
+
+  if (upsertError) {
+    // Upsert failed (e.g. schema doesn't have transaction_id/payment_method columns yet).
+    // Fall back to UPDATE then INSERT.
+    console.warn('payment-callback: upsert failed, falling back to update+insert:', upsertError.message);
+
+    const { data: updated, error: updateError } = await supabase
       .from('appointments')
       .update({ status: 'confirmada', payment_status: 'completed' })
       .eq('user_id', userId)
-      .eq('event_id', eventId);
+      .eq('event_id', eventId)
+      .select('id');
+
+    if (updateError) {
+      console.error('payment-callback: update failed:', updateError.message);
+    }
+
+    if (!updated || updated.length === 0) {
+      console.log('payment-callback: no existing row, inserting new appointment');
+      const { error: insertError } = await supabase.from('appointments').insert({
+        user_id: userId,
+        event_id: eventId,
+        status: 'confirmada',
+        payment_status: 'completed',
+      });
+      if (insertError) {
+        console.error('payment-callback: insert failed:', insertError.message);
+      } else {
+        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+      }
+    } else {
+      console.log('payment-callback: updated existing appointment to completed');
+    }
   } else {
-    console.log('payment-callback: appointment already confirmed, nothing to do');
+    console.log('payment-callback: upsert succeeded');
+    await AsyncStorage.setItem('should_check_notification_prompt', 'true');
   }
 }
 
@@ -87,15 +115,15 @@ export default function PaymentCallbackScreen() {
     // Wompi redirected to nospi://payment-callback?payment_status=...&transaction_id=...
     // We have the transaction ID both in the URL params AND in AsyncStorage.
     // Prefer the URL param (most authoritative), fall back to AsyncStorage.
-    const processPayment = async () => {
+    const processPayment = async (overrideTransactionId?: string, overrideStatus?: string) => {
       try {
-        const urlPaymentStatus = (localSearchParams.payment_status as string) || '';
-        const urlTransactionId = (localSearchParams.transaction_id as string) || '';
+        const urlPaymentStatus = overrideStatus || (localSearchParams.payment_status as string) || '';
+        const urlTransactionId = overrideTransactionId || (localSearchParams.transaction_id as string) || '';
 
         console.log('payment-callback (mobile): urlPaymentStatus:', urlPaymentStatus);
         console.log('payment-callback (mobile): urlTransactionId:', urlTransactionId);
 
-        // Read stored values — do NOT overwrite them here.
+        // Step 1: Read ALL AsyncStorage values BEFORE any cleanup.
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
         const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -108,6 +136,7 @@ export default function PaymentCallbackScreen() {
         // Use URL transaction ID first, then fall back to stored one.
         const transactionId = urlTransactionId || storedTransactionId || '';
         const paymentMethod = storedPaymentMethod || 'card';
+        // IMPORTANT: capture eventId from AsyncStorage BEFORE cleanup is called.
         const eventId = storedEventId || '';
 
         if (!transactionId) {
@@ -130,8 +159,7 @@ export default function PaymentCallbackScreen() {
           }
         }
 
-        // Verify with Wompi — the URL status param is a hint but we always confirm
-        // server-side to prevent spoofing.
+        // Step 2: Verify with Wompi — always confirm server-side to prevent spoofing.
         console.log('payment-callback (mobile): verifying transaction with Wompi:', transactionId);
         setStatusMessage('Verificando pago con Wompi...');
 
@@ -149,18 +177,20 @@ export default function PaymentCallbackScreen() {
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
 
-          // Refresh session so Supabase RLS sees the current user.
+          // Step 3: Refresh session so Supabase RLS sees the current user.
           try { await supabase.auth.refreshSession(); } catch {}
 
           const { data: { session } } = await supabase.auth.getSession();
           const userId = session?.user?.id;
 
+          // Step 4: Confirm appointment BEFORE cleanup (eventId already captured above).
           if (userId && eventId) {
             await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
           } else {
             console.warn('payment-callback (mobile): missing userId or eventId for appointment confirmation', { userId, eventId });
           }
 
+          // Step 5: Cleanup AFTER appointment is confirmed.
           await cleanupAsyncStorage();
 
           console.log('payment-callback (mobile): navigating to event-details with paymentSuccess=true, eventId:', eventId);
@@ -185,7 +215,7 @@ export default function PaymentCallbackScreen() {
           console.log('payment-callback (mobile): payment DECLINED');
           setStatusMessage('Pago rechazado.');
           await cleanupAsyncStorage();
-          // Navigate back to subscription-plans so the user can retry.
+          // Restore eventId so user can retry from subscription-plans.
           if (eventId) {
             await AsyncStorage.setItem('pending_event_confirmation', eventId);
           }
@@ -218,6 +248,89 @@ export default function PaymentCallbackScreen() {
     processPayment();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Issue 5: Fallback Linking listener for Android — sometimes URL params arrive
+  // via a Linking event rather than the initial route params.
+  useEffect(() => {
+    if (isWeb) return;
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('payment-callback: Linking url event received:', url);
+      if (url.includes('payment-callback')) {
+        try {
+          const urlObj = new URL(url);
+          const status = urlObj.searchParams.get('payment_status') || urlObj.searchParams.get('status') || '';
+          const txId = urlObj.searchParams.get('transaction_id') || urlObj.searchParams.get('id') || '';
+          console.log('payment-callback: Linking fallback — status:', status, 'txId:', txId);
+          if (txId) {
+            // Re-run processPayment with the params from the Linking event.
+            // We define a local async wrapper to avoid stale closure issues.
+            const runProcess = async () => {
+              const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
+              const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
+              const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
+              const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
+
+              const transactionId = txId || storedTransactionId || '';
+              const paymentMethod = storedPaymentMethod || 'card';
+              const eventId = storedEventId || '';
+
+              if (!transactionId) return;
+
+              if (storedTime) {
+                const age = Date.now() - parseInt(storedTime, 10);
+                if (age > 10 * 60 * 1000) return;
+              }
+
+              console.log('payment-callback: Linking fallback verifying with Wompi:', transactionId);
+              setStatusMessage('Verificando pago con Wompi...');
+
+              try {
+                const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
+                if (!res.ok) throw new Error(`Wompi API returned ${res.status}`);
+                const data = await res.json();
+                const wompiStatus: WompiStatus = data.data?.status ?? 'unknown';
+                console.log('payment-callback: Linking fallback Wompi status:', wompiStatus);
+
+                if (wompiStatus === 'APPROVED') {
+                  setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
+                  try { await supabase.auth.refreshSession(); } catch {}
+                  const { data: { session } } = await supabase.auth.getSession();
+                  const userId = session?.user?.id;
+                  if (userId && eventId) {
+                    await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
+                  }
+                  await cleanupAsyncStorage();
+                  if (eventId) {
+                    router.replace({ pathname: '/event-details/[id]', params: { id: eventId, paymentSuccess: 'true' } });
+                  } else {
+                    router.replace('/(tabs)/appointments');
+                  }
+                } else if (wompiStatus === 'DECLINED' || wompiStatus === 'VOIDED') {
+                  await cleanupAsyncStorage();
+                  if (eventId) await AsyncStorage.setItem('pending_event_confirmation', eventId);
+                  router.replace('/subscription-plans');
+                } else {
+                  await cleanupAsyncStorage();
+                  router.replace('/(tabs)/appointments');
+                }
+              } catch (err) {
+                console.error('payment-callback: Linking fallback error:', err);
+                await cleanupAsyncStorage();
+                router.replace('/(tabs)/appointments');
+              }
+            };
+            runProcess();
+          }
+        } catch (parseErr) {
+          console.error('payment-callback: failed to parse Linking url:', parseErr);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWeb]);
 
   // ── WEB VIEW ─────────────────────────────────────────────────────────────
   if (isWeb) {
