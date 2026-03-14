@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
@@ -58,6 +57,102 @@ const DEFAULT_QUESTIONS = {
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
 const TIMER_DURATION = 60;
+
+// ─── Per-level theme system ───────────────────────────────────────────────────
+interface LevelTheme {
+  gradient: [string, string, ...string[]];
+  questionCardBg: string;
+  questionCardBorder: string;
+  questionTextColor: string;
+  questionTextShadow: string;
+  answerBg: string;
+  answerBorder: string;
+  answerText: string;
+  selectedAnswerBg: string;
+  selectedAnswerBorder: string;
+  timerBadgeBg: string;
+  timerText: string;
+  instructionText: string;
+  continueButtonBg: string;
+  continueButtonText: string;
+  starterCardBg: string;
+  transitionGradient: [string, string, ...string[]];
+  transitionAccent: string;
+  participantCardBg: string;
+  participantAvatarBg: string;
+}
+
+const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
+  divertido: {
+    gradient: ['#87CEEB', '#4FC3F7', '#0288D1'],
+    questionCardBg: 'rgba(255,255,255,0.20)',
+    questionCardBorder: 'rgba(255,255,255,0.5)',
+    questionTextColor: '#FFFFFF',
+    questionTextShadow: 'rgba(0,0,0,0.25)',
+    answerBg: 'rgba(255,255,255,0.25)',
+    answerBorder: 'rgba(255,255,255,0.6)',
+    answerText: '#FFFFFF',
+    selectedAnswerBg: 'rgba(2,136,209,0.7)',
+    selectedAnswerBorder: '#FFFFFF',
+    timerBadgeBg: 'rgba(255,255,255,0.3)',
+    timerText: '#FFFFFF',
+    instructionText: 'rgba(255,255,255,0.9)',
+    continueButtonBg: '#0288D1',
+    continueButtonText: '#FFFFFF',
+    starterCardBg: 'rgba(2,136,209,0.45)',
+    transitionGradient: ['#87CEEB', '#4FC3F7', '#0288D1'],
+    transitionAccent: '#0288D1',
+    participantCardBg: 'rgba(2,136,209,0.18)',
+    participantAvatarBg: 'rgba(2,136,209,0.4)',
+  },
+  sensual: {
+    gradient: ['#FF8C00', '#FFA500', '#FFD700'],
+    questionCardBg: 'rgba(255,255,255,0.18)',
+    questionCardBorder: 'rgba(255,255,255,0.45)',
+    questionTextColor: '#FFFFFF',
+    questionTextShadow: 'rgba(0,0,0,0.3)',
+    answerBg: 'rgba(255,255,255,0.22)',
+    answerBorder: 'rgba(255,200,0,0.6)',
+    answerText: '#FFFFFF',
+    selectedAnswerBg: 'rgba(255,140,0,0.75)',
+    selectedAnswerBorder: '#FFD700',
+    timerBadgeBg: 'rgba(255,255,255,0.25)',
+    timerText: '#FFFFFF',
+    instructionText: 'rgba(255,255,255,0.9)',
+    continueButtonBg: '#E65100',
+    continueButtonText: '#FFFFFF',
+    starterCardBg: 'rgba(230,81,0,0.45)',
+    transitionGradient: ['#FF8C00', '#FFA500', '#FFD700'],
+    transitionAccent: '#E65100',
+    participantCardBg: 'rgba(230,81,0,0.18)',
+    participantAvatarBg: 'rgba(230,81,0,0.4)',
+  },
+  atrevido: {
+    gradient: ['#8B0000', '#C0392B', '#E74C3C'],
+    questionCardBg: 'rgba(255,255,255,0.15)',
+    questionCardBorder: 'rgba(255,100,100,0.5)',
+    questionTextColor: '#FFFFFF',
+    questionTextShadow: 'rgba(0,0,0,0.35)',
+    answerBg: 'rgba(255,255,255,0.18)',
+    answerBorder: 'rgba(255,100,100,0.5)',
+    answerText: '#FFFFFF',
+    selectedAnswerBg: 'rgba(183,28,28,0.75)',
+    selectedAnswerBorder: '#FF5252',
+    timerBadgeBg: 'rgba(255,255,255,0.2)',
+    timerText: '#FFFFFF',
+    instructionText: 'rgba(255,255,255,0.9)',
+    continueButtonBg: '#B71C1C',
+    continueButtonText: '#FFFFFF',
+    starterCardBg: 'rgba(183,28,28,0.45)',
+    transitionGradient: ['#8B0000', '#C0392B', '#E74C3C'],
+    transitionAccent: '#B71C1C',
+    participantCardBg: 'rgba(183,28,28,0.18)',
+    participantAvatarBg: 'rgba(183,28,28,0.4)',
+  },
+};
+
+// Free phase uses a deep neutral gradient (no purple)
+const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1C1C2E', '#2C2C3E', '#3C3C4E'];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   
@@ -533,22 +628,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
 
-  // Per-level gradient backgrounds
-  const LEVEL_GRADIENTS: Record<QuestionLevel, [string, string, ...string[]]> = {
-    divertido: ['#FF6B6B', '#FFE66D'],
-    sensual:   ['#FF8C00', '#FFA500', '#FFD700'],
-    atrevido:  ['#8B0000', '#C0392B', '#E74C3C'],
-  };
-  const levelGradient = LEVEL_GRADIENTS[currentLevel];
+  const theme = LEVEL_THEMES[currentLevel];
   
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
   const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+  const transitionTheme = transitionLevel ? LEVEL_THEMES[transitionLevel] : theme;
 
-  const timerColor = timeLeft > 30 ? '#10B981' : timeLeft > 10 ? '#F59E0B' : '#EF4444';
+  // Timer color thresholds
+  const timerColor = timeLeft > 30 ? '#FFFFFF' : timeLeft > 10 ? '#FFE082' : '#FF5252';
   const timerLabel = `${timeLeft}s`;
   const timerExpired = timeLeft === 0;
-
-
 
 
   if (gamePhase === 'questions' && currentQuestion) {
@@ -556,54 +645,76 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
 
     return (
       <LinearGradient
-        colors={levelGradient}
+        colors={theme.gradient}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.levelBadge}>
+          {/* Level badge */}
+          <View style={[styles.levelBadge, { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.5)' }]}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={styles.levelText}>{levelName}</Text>
+            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName}</Text>
           </View>
 
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{currentQuestion}</Text>
+          {/* Question card */}
+          <View style={[
+            styles.questionCard,
+            {
+              backgroundColor: theme.questionCardBg,
+              borderColor: theme.questionCardBorder,
+            },
+          ]}>
+            <Text style={[
+              styles.questionText,
+              {
+                color: theme.questionTextColor,
+                textShadowColor: theme.questionTextShadow,
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 4,
+              },
+            ]}>
+              {currentQuestion}
+            </Text>
 
             {/* Countdown timer badge */}
-            <View style={[styles.timerBadge, { borderColor: timerColor }]}>
+            <View style={[styles.timerBadge, { backgroundColor: theme.timerBadgeBg, borderColor: timerColor }]}>
               <Text style={[styles.timerNumber, { color: timerColor }]}>{timerLabel}</Text>
             </View>
           </View>
 
-          <View style={styles.starterCard}>
+          {/* Starter card */}
+          <View style={[styles.starterCard, { backgroundColor: theme.starterCardBg }]}>
             <Text style={styles.starterLabelWhite}>Empieza:</Text>
             <Text style={styles.starterNameWhite}>{starterName}</Text>
             <Text style={styles.starterInstructionWhite}>y luego continúa hacia la derecha</Text>
           </View>
 
-          <View style={styles.instructionCard}>
-            <Text style={styles.instructionText}>
+          {/* Instruction card */}
+          <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
+            <Text style={[styles.instructionText, { color: theme.instructionText }]}>
               Cuando termine el conteo aparecerá el botón Continuar. Presiónenlo cuando todos hayan respondido
             </Text>
           </View>
 
           {timerExpired ? (
-            <>
-              <TouchableOpacity
-                style={[styles.continueButton, loading && styles.buttonDisabled]}
-                onPress={() => {
-                  console.log('[Button] Continuar pressed');
-                  handleContinue();
-                }}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.continueButtonText}>
-                  {loading ? '⏳ Cargando...' : '➡️ Continuar'}
-                </Text>
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity
+              style={[
+                styles.continueButton,
+                { backgroundColor: theme.continueButtonBg },
+                loading && styles.buttonDisabled,
+              ]}
+              onPress={() => {
+                console.log('[Button] Continuar pressed');
+                handleContinue();
+              }}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.continueButtonText, { color: theme.continueButtonText }]}>
+                {loading ? '⏳ Cargando...' : '➡️ Continuar'}
+              </Text>
+            </TouchableOpacity>
           ) : (
             <View style={[styles.continueButton, styles.continueButtonWaiting]}>
               <Text style={styles.continueButtonTextWaiting}>
@@ -625,9 +736,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
                 },
               ]}
             >
-              <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
-              <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
-              <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
+              <LinearGradient
+                colors={transitionTheme.gradient}
+                style={styles.transitionCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
+                <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
+                <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
+              </LinearGradient>
             </Animated.View>
           </View>
         )}
@@ -639,10 +757,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
     const isFinished = gamePhase === 'finished';
     const nextLevelEmoji = currentLevel === 'divertido' ? '💕' : currentLevel === 'sensual' ? '🔥' : '✨';
     const nextLevelName = currentLevel === 'divertido' ? 'Sensual' : currentLevel === 'sensual' ? 'Atrevido' : 'Fase libre';
+    const transitionColors: [string, string, ...string[]] = isFinished
+      ? ['#1C1C2E', '#2C2C3E', '#3C3C4E']
+      : LEVEL_THEMES[currentLevel === 'divertido' ? 'sensual' : 'atrevido'].gradient;
 
     return (
       <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        colors={transitionColors}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -656,7 +777,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </Text>
           <Text style={styles.transitionFullSubtitle}>
             {isFinished
-              ? 'Completaron todos los niveles. Ahora disfruten la noche 💜'
+              ? 'Completaron todos los niveles. Ahora disfruten la noche ✨'
               : `Se viene el nivel ${nextLevelName}. ¡Prepárense!`}
           </Text>
           <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" style={{ marginTop: 32 }} />
@@ -668,7 +789,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   if (gamePhase === 'free_phase') {
     return (
       <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        colors={FREE_PHASE_GRADIENT}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -678,7 +799,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             <Text style={styles.iceBreakIcon}>✨</Text>
             <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
             <Text style={styles.iceBreakSubtitle}>
-              Ahora disfruten el resto de la noche y déjense sorprender 💜
+              Ahora disfruten el resto de la noche y déjense sorprender ✨
             </Text>
           </View>
 
@@ -771,10 +892,13 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 120,
   },
+
+  // ── Level badge ──────────────────────────────────────────────────────────────
   levelBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
-    padding: 16,
+    borderWidth: 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     marginTop: 80,
     marginBottom: 16,
     flexDirection: 'row',
@@ -782,74 +906,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   levelEmoji: {
-    fontSize: 32,
-    marginRight: 12,
+    fontSize: 28,
+    marginRight: 10,
   },
   levelText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
+
+  // ── Question card ────────────────────────────────────────────────────────────
   questionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
+    borderRadius: 20,
+    borderWidth: 1.5,
     padding: 32,
     marginBottom: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  questionIcon: {
-    fontSize: 64,
-    marginBottom: 20,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
   },
   questionText: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: nospiColors.purpleDark,
     textAlign: 'center',
-    lineHeight: 38,
+    lineHeight: 36,
   },
-  starterCard: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  starterLabelWhite: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  starterNameWhite: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  starterInstructionWhite: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontStyle: 'italic',
-  },
-  instructionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  instructionText: {
-    fontSize: 16,
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    fontWeight: '600',
-    lineHeight: 24,
-  },
+
+  // ── Timer badge ──────────────────────────────────────────────────────────────
   timerBadge: {
     marginTop: 20,
     width: 80,
@@ -858,57 +940,83 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   timerNumber: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
   },
-  tiempoCard: {
-    backgroundColor: '#EF4444',
+
+  // ── Starter card ─────────────────────────────────────────────────────────────
+  starterCard: {
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    padding: 20,
+    marginBottom: 16,
     alignItems: 'center',
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  tiempoText: {
-    fontSize: 22,
-    fontWeight: '800',
+  starterLabelWhite: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  starterNameWhite: {
+    fontSize: 28,
+    fontWeight: 'bold',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    marginBottom: 6,
   },
+  starterInstructionWhite: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontStyle: 'italic',
+  },
+
+  // ── Instruction card ─────────────────────────────────────────────────────────
+  instructionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  instructionText: {
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+
+  // ── Continue button ──────────────────────────────────────────────────────────
   continueButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 20,
-    paddingVertical: 20,
+    borderRadius: 16,
+    paddingVertical: 18,
     paddingHorizontal: 32,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
   },
   continueButtonWaiting: {
-    backgroundColor: 'rgba(0,0,0,0.12)',
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    boxShadow: 'none',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   continueButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '700',
   },
   continueButtonTextWaiting: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.7)',
   },
   buttonDisabled: {
     opacity: 0.6,
   },
+
+  // ── Level transition full screen ─────────────────────────────────────────────
   transitionFullScreen: {
     flex: 1,
     justifyContent: 'center',
@@ -932,79 +1040,85 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 26,
   },
+
+  // ── Level transition overlay (animated popup) ────────────────────────────────
   transitionOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   transitionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 32,
+    overflow: 'hidden',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+    minWidth: 280,
+  },
+  transitionCardGradient: {
     padding: 48,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 20,
-    minWidth: 280,
+    borderRadius: 32,
   },
   transitionEmoji: {
     fontSize: 100,
     marginBottom: 24,
   },
   transitionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#666',
-    marginBottom: 12,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 10,
     textAlign: 'center',
   },
   transitionLevel: {
     fontSize: 36,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontWeight: '800',
+    color: '#FFFFFF',
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
+
+  // ── Free phase ───────────────────────────────────────────────────────────────
   iceBreakCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
     padding: 28,
     marginTop: 60,
     marginBottom: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
   },
   iceBreakIcon: {
     fontSize: 72,
     marginBottom: 12,
   },
   iceBreakTitle: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: 10,
     textAlign: 'center',
   },
   iceBreakSubtitle: {
-    fontSize: 17,
-    color: '#666',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     lineHeight: 24,
   },
   evaluationCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
     padding: 24,
     alignItems: 'center',
   },
@@ -1014,14 +1128,14 @@ const styles = StyleSheet.create({
   },
   evaluationTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 10,
     textAlign: 'center',
   },
   evaluationText: {
     fontSize: 15,
-    color: '#666',
+    color: 'rgba(255,255,255,0.75)',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 20,
@@ -1030,8 +1144,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   participantRatingCard: {
-    backgroundColor: 'rgba(233, 213, 255, 0.5)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
     padding: 16,
     marginBottom: 12,
   },
@@ -1050,7 +1166,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -1058,12 +1174,12 @@ const styles = StyleSheet.create({
   participantRatingPhotoPlaceholderText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
   },
   participantRatingName: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   starsContainer: {
     flexDirection: 'row',
@@ -1082,15 +1198,17 @@ const styles = StyleSheet.create({
   },
   ratingConfirmation: {
     fontSize: 12,
-    color: '#10B981',
+    color: '#A5F3C4',
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 8,
   },
   finishButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 16,
-    paddingVertical: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    paddingVertical: 18,
     paddingHorizontal: 32,
     alignItems: 'center',
     marginTop: 24,
@@ -1098,7 +1216,27 @@ const styles = StyleSheet.create({
   },
   finishButtonText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#FFFFFF',
+  },
+
+  // ── Unused legacy (kept for safety) ─────────────────────────────────────────
+  questionIcon: {
+    fontSize: 64,
+    marginBottom: 20,
+  },
+  tiempoCard: {
+    backgroundColor: '#EF4444',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  tiempoText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
