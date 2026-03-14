@@ -955,15 +955,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* ========== TEST BUTTON - DELETE BEFORE PRODUCTION ========== */}
-        <TouchableOpacity
-          style={testPaymentStyles.btn}
-          onPress={handleTestPayment}
-          activeOpacity={0.7}
-        >
-          <Text style={testPaymentStyles.btnText}>🧪 Pago de Prueba (TEST)</Text>
-        </TouchableOpacity>
-        {/* ========== END TEST BUTTON ========== */}
 
         <Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
       </ScrollView>
