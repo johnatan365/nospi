@@ -684,11 +684,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           {/* Starter card */}
-          <View style={[styles.starterCard, { backgroundColor: theme.starterCardBg }]}>
+          <LinearGradient
+            colors={['#1a1a1a', '#000000']}
+            style={styles.starterCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          >
             <Text style={styles.starterLabelWhite}>Empieza:</Text>
             <Text style={styles.starterNameWhite}>{starterName}</Text>
             <Text style={styles.starterInstructionWhite}>y luego continúan hacia la derecha</Text>
-          </View>
+          </LinearGradient>
 
           {/* Instruction card */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
@@ -953,11 +958,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   starterLabelWhite: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.75)',
     marginBottom: 6,
     fontWeight: '500',
   },
@@ -969,7 +974,7 @@ const styles = StyleSheet.create({
   },
   starterInstructionWhite: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.75)',
     fontStyle: 'italic',
   },
 
