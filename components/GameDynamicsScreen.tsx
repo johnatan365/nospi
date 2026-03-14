@@ -687,13 +687,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           <View style={[styles.starterCard, { backgroundColor: theme.starterCardBg }]}>
             <Text style={styles.starterLabelWhite}>Empieza:</Text>
             <Text style={styles.starterNameWhite}>{starterName}</Text>
-            <Text style={styles.starterInstructionWhite}>y luego continúa hacia la derecha</Text>
+            <Text style={styles.starterInstructionWhite}>y luego continúan hacia la derecha</Text>
           </View>
 
           {/* Instruction card */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
-              Cuando termine el conteo aparecerá el botón Continuar. Presiónenlo cuando todos hayan respondido
+              Cuando termine el conteo aparecerá el botón Continuar. Presiónenlo cuando todos hayan contestado.
             </Text>
           </View>
 
