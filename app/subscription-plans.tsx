@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -142,7 +141,9 @@ export default function SubscriptionPlansScreen() {
           user_id: userId, 
           event_id: pendingEventId, 
           status: 'confirmada', 
-          payment_status: 'completed' 
+          payment_status: 'completed',
+          payment_method: paymentMethod,
+          transaction_id: transactionId || null,
         });
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       } else {
@@ -247,20 +248,10 @@ export default function SubscriptionPlansScreen() {
 
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
-        console.log('[CardPayment] APPROVED — reading pendingEventId before confirmAppointment');
-        // Get the event ID BEFORE confirming (confirmAppointment removes it from AsyncStorage)
-        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+        console.log('[CardPayment] APPROVED — confirming appointment');
         await confirmAppointment(result.transactionId || '', 'card');
-        if (pendingEventId) {
-          console.log('[CardPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
-          router.replace({
-            pathname: '/event-details/[id]',
-            params: { id: pendingEventId, paymentSuccess: 'true' },
-          });
-        } else {
-          console.log('[CardPayment] No pendingEventId found, showing success modal');
-          setShowSuccessModal(true);
-        }
+        console.log('[CardPayment] Showing success modal');
+        setShowSuccessModal(true);
       } else if (result.status === 'PENDING') {
         setShowCardForm(false);
         Toast.show({
