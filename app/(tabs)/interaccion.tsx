@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -769,62 +768,93 @@ export default function InteraccionScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
-        <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+        {/* Header */}
+        <Text style={styles.microLabel}>HOY ES TU NOCHE</Text>
+        <Text style={styles.mainTitle}>Confirma tu llegada</Text>
 
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>
-            {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
-          </Text>
-          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
+        {/* Countdown strip */}
+        <View style={styles.countdownStrip}>
+          <Text style={styles.countdownStripLabel}>Tiempo restante</Text>
+          {countdownDisplay === '¡Es hora!' ? (
+            <Text style={styles.countdownNow}>AHORA</Text>
+          ) : (
+            <Text style={styles.countdownStripTime}>{countdownDisplay}</Text>
+          )}
         </View>
 
-        <View style={styles.eventCard}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
-            <View style={styles.eventHeaderText}>
-              <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{appointment.event.time}</Text>
-            </View>
+        {/* Event strip */}
+        <View style={styles.eventStrip}>
+          <View style={styles.eventStripIcon}>
+            <Text style={{ fontSize: 14 }}>{eventIcon}</Text>
           </View>
-          {shouldShowLocationText && (
-            <Text style={styles.eventLocation}>Ubicación se revelará 48 horas antes del evento</Text>
-          )}
-          {locationRevealed && locationText && (
-            <Text style={styles.eventLocation}>{locationText}</Text>
-          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eventStripName}>{eventTypeText} · Noche Nospi</Text>
+            <Text style={styles.eventStripSub}>
+              {appointment.event.time}{locationRevealed && locationText ? \` · \${locationText}\` : shouldShowLocationText ? ' · Ubicación próximamente' : ''}
+            </Text>
+          </View>
         </View>
 
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-            
+            <Text style={styles.codeEntryLabel}>CÓDIGO DEL ENCUENTRO</Text>
+
+            <View style={styles.otpRow}>
+              {[0, 1, 2, 3].map((i) => {
+                const char = confirmationCode[i] || '';
+                const filled = char !== '';
+                const active = !filled && i === confirmationCode.length;
+                const hasError = !!codeError;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.otpBox,
+                      filled && !hasError && styles.otpBoxFilled,
+                      active && !hasError && styles.otpBoxActive,
+                      hasError && styles.otpBoxError,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.otpChar,
+                      filled && !hasError && styles.otpCharFilled,
+                      hasError && styles.otpCharError,
+                    ]}>
+                      {char || (active ? '|' : '')}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
             <TextInput
-              style={styles.codeInput}
+              style={styles.hiddenInput}
               value={confirmationCode}
               onChangeText={(text) => {
-                setConfirmationCode(text);
+                setConfirmationCode(text.slice(0, 4));
                 setCodeError('');
               }}
-              placeholder="Código"
-              placeholderTextColor="#999"
               keyboardType="default"
-              maxLength={10}
+              maxLength={4}
               autoFocus
             />
 
             {codeError ? (
-              <Text style={styles.codeErrorText}>{codeError}</Text>
-            ) : null}
+              <Text style={styles.codeErrorText}>⚠ {codeError}</Text>
+            ) : (
+              <Text style={styles.codeHint}>Tu anfitrión te lo compartió al llegar</Text>
+            )}
 
             <TouchableOpacity
               style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
               onPress={handleCodeConfirmation}
               disabled={!confirmationCode.trim()}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+              <Text style={styles.confirmCodeButtonText}>Confirmar llegada</Text>
+              <View style={styles.confirmCodeArrow}>
+                <Text style={{ fontSize: 16, color: '#fff' }}>›</Text>
+              </View>
             </TouchableOpacity>
           </View>
         )}
@@ -832,15 +862,18 @@ export default function InteraccionScreen() {
         {checkInPhase === 'confirmed' && (
           <>
             <View style={styles.confirmedCard}>
-              <Text style={styles.confirmedIcon}>✅</Text>
-              <Text style={styles.confirmedText}>
-                ¡Llegada confirmada!
-              </Text>
+              <View style={styles.confirmedIconWrap}>
+                <Text style={{ fontSize: 15 }}>✓</Text>
+              </View>
+              <View>
+                <Text style={styles.confirmedTitle}>¡Llegada confirmada!</Text>
+                <Text style={styles.confirmedSub}>Ya eres parte de esta noche</Text>
+              </View>
             </View>
 
             <View style={styles.participantsListCard}>
               <View style={styles.participantsListHeader}>
-                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+                <Text style={styles.participantsListTitle}>Participantes</Text>
                 <View style={styles.participantCountBadge}>
                   <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
@@ -860,6 +893,7 @@ export default function InteraccionScreen() {
                           </Text>
                         </View>
                         <Text style={styles.participantListName}>{displayName}</Text>
+                        <Text style={styles.participantCheck}>✓</Text>
                       </View>
                       </React.Fragment>
                     );
@@ -1058,61 +1092,214 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  codeEntryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
+  participantCheck: {
+    fontSize: 11,
+    color: '#16a34a',
   },
-  codeEntryTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  // ── New check-in screen styles ──────────────────────────────────────────────
+  microLabel: {
+    fontSize: 9,
+    letterSpacing: 1.5,
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.55)',
+    marginBottom: 2,
+  },
+  mainTitle: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: '#3b0764',
+    marginBottom: 4,
+  },
+  countdownStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    backgroundColor: 'rgba(124,58,237,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.13)',
+    marginBottom: 4,
+  },
+  countdownStripLabel: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.7)',
+  },
+  countdownStripTime: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#3b0764',
+    letterSpacing: 1,
+  },
+  countdownNow: {
+    fontSize: 10,
+    fontWeight: '600',
     color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 8,
+    letterSpacing: 2,
   },
-  codeEntrySubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
+  eventStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    backgroundColor: 'rgba(124,58,237,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.1)',
+    marginBottom: 4,
   },
-  codeInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+  eventStripIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  eventStripName: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#3b0764',
+  },
+  eventStripSub: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.7)',
+    marginTop: 1,
+  },
+  codeEntryCard: {
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 18,
     padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.14)',
+  },
+  codeEntryLabel: {
+    fontSize: 9,
+    letterSpacing: 1.2,
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.6)',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  otpBox: {
+    width: 52,
+    height: 62,
+    borderRadius: 13,
+    backgroundColor: 'rgba(124,58,237,0.02)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(124,58,237,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxFilled: {
+    backgroundColor: 'rgba(124,58,237,0.08)',
+    borderColor: nospiColors.purpleDark,
+  },
+  otpBoxActive: {
+    backgroundColor: 'rgba(124,58,237,0.04)',
+    borderColor: 'rgba(124,58,237,0.45)',
+  },
+  otpBoxError: {
+    backgroundColor: 'rgba(239,68,68,0.07)',
+    borderColor: '#ef4444',
+  },
+  otpChar: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.18)',
+  },
+  otpCharFilled: {
+    color: '#3b0764',
+  },
+  otpCharError: {
+    color: '#dc2626',
+  },
+  hiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0,
+  },
+  codeHint: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.45)',
     textAlign: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
   },
   codeErrorText: {
-    fontSize: 14,
+    fontSize: 10,
     color: '#EF4444',
     textAlign: 'center',
-    marginBottom: 12,
   },
   confirmCodeButton: {
     backgroundColor: nospiColors.purpleDark,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 40,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 4,
+    flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
   },
   confirmCodeButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
     color: '#FFFFFF',
+    paddingLeft: 8,
+  },
+  confirmCodeArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmedCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#86efac',
+  },
+  confirmedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  confirmedTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#166534',
+  },
+  confirmedSub: {
+    fontSize: 9,
+    color: '#16a34a',
+    marginTop: 1,
   },
   confirmedIcon: {
     fontSize: 48,
@@ -1125,64 +1312,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   participantsListCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 16,
+    paddingTop: 13,
+    paddingHorizontal: 13,
+    paddingBottom: 6,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.14)',
   },
   participantsListHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   participantsListTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3b0764',
     flex: 1,
   },
   participantCountBadge: {
-    backgroundColor: nospiColors.purpleMid,
+    backgroundColor: 'rgba(124,58,237,0.1)',
     borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    minWidth: 50,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
     alignItems: 'center',
   },
   participantCountText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
   },
   participantsList: {
-    marginTop: 8,
+    marginTop: 0,
   },
   participantListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(124,58,237,0.07)',
   },
   participantListPhotoPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: nospiColors.purpleLight,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 9,
   },
   participantListPhotoText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
     color: nospiColors.purpleDark,
   },
   participantListName: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#3b0764',
+    fontWeight: '400',
+    flex: 1,
   },
   buttonDisabled: {
     opacity: 0.5,
