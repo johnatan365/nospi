@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -89,6 +88,8 @@ export default function InteraccionScreen() {
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [startingExperience, setStartingExperience] = useState(false);
+  const [showIntroScreen, setShowIntroScreen] = useState(false);
+  const [introCountdown, setIntroCountdown] = useState(20);
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   
@@ -131,7 +132,7 @@ export default function InteraccionScreen() {
 
     // Display countdown to 10 minutes after appointment
     if (diffToPlus10 <= 0) {
-      setCountdownDisplay('Ahora');
+      setCountdownDisplay('¡Es hora!');
       return;
     }
 
@@ -625,6 +626,14 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
+  // Intro screen countdown
+  useEffect(() => {
+    if (!showIntroScreen) return;
+    if (introCountdown <= 0) return;
+    const t = setTimeout(() => setIntroCountdown(prev => prev - 1), 1000);
+    return () => clearTimeout(t);
+  }, [showIntroScreen, introCountdown]);
+
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
@@ -732,6 +741,111 @@ export default function InteraccionScreen() {
     );
   }
 
+  // ── Intro screen before game starts ──────────────────────────────────────
+  if (showIntroScreen) {
+    const introExpired = introCountdown <= 0;
+    const timerColor = introCountdown > 10 ? '#F06292' : introCountdown > 5 ? '#FFB74D' : '#FF5252';
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={{ padding: 24, paddingBottom: 48 }}>
+          {/* Badge */}
+          <View style={styles.introBadge}>
+            <Text style={styles.introBadgeText}>LA DINÁMICA</Text>
+          </View>
+
+          {/* Title */}
+          <Text style={styles.introTitle}>Antes de empezar</Text>
+          <Text style={styles.introSubtitle}>Lee con atención — el juego inicia pronto</Text>
+
+          {/* Timer */}
+          <View style={[styles.introTimerRing, { borderColor: timerColor }]}>
+            <Text style={[styles.introTimerNum, { color: timerColor }]}>{introCountdown}</Text>
+            <Text style={[styles.introTimerLbl, { color: timerColor }]}>SEG</Text>
+          </View>
+
+          {/* Rules card */}
+          <View style={styles.introCard}>
+
+            {/* Rule 1 */}
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>1</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>3 niveles de preguntas</Text>
+                <Text style={styles.introRuleBody}>
+                  <Text style={{ color: '#87CEEB', fontWeight: '500' }}>Divertido</Text>
+                  {'  ›  '}
+                  <Text style={{ color: '#FFB74D', fontWeight: '500' }}>Sensual</Text>
+                  {'  ›  '}
+                  <Text style={{ color: '#F06292', fontWeight: '500' }}>Atrevido</Text>
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.introRuleDivider} />
+
+            {/* Rule 2 */}
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>2</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>Todos deben responder</Text>
+                <Text style={styles.introRuleBody}>
+                  Cada persona contesta la pregunta en orden. Solo cuando todos hayan respondido se pasa a la siguiente.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.introRuleDivider} />
+
+            {/* Rule 3 */}
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>3</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>¿No quieres responder?</Text>
+                <Text style={styles.introRuleBody}>
+                  El grupo decide: <Text style={{ color: '#FFB74D', fontWeight: '500' }}>shot</Text> o <Text style={{ color: '#F06292', fontWeight: '500' }}>reto</Text>. Sin escapatoria.
+                </Text>
+              </View>
+            </View>
+
+          </View>
+
+          {/* Continue button */}
+          {introExpired ? (
+            <TouchableOpacity
+              style={[styles.introBtn, startingExperience && styles.buttonDisabled]}
+              onPress={() => {
+                setShowIntroScreen(false);
+                handleStartExperience();
+              }}
+              disabled={startingExperience}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.introBtnText}>{startingExperience ? 'Iniciando...' : 'Comenzar'}</Text>
+              <View style={styles.introBtnArrow}>
+                <Text style={{ fontSize: 16, color: '#880E4F' }}>›</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.introBtnWait}>
+              <Text style={styles.introBtnWaitText}>Espera {introCountdown}s para continuar...</Text>
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
   if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
     
     const transformedParticipants = activeParticipants.map(p => ({
@@ -769,62 +883,99 @@ export default function InteraccionScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
-        <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+        {/* Header */}
+        <Text style={styles.microLabel}>HOY ES TU NOCHE</Text>
+        <Text style={styles.mainTitle}>Confirma tu llegada</Text>
 
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>
-            {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
-          </Text>
-          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
+        {/* Countdown strip */}
+        <View style={styles.countdownStrip}>
+          <Text style={styles.countdownStripLabel}>Tiempo restante</Text>
+          {countdownDisplay === '¡Es hora!' ? (
+            <Text style={styles.countdownNow}>AHORA</Text>
+          ) : (
+            <Text style={styles.countdownStripTime}>{countdownDisplay}</Text>
+          )}
         </View>
 
-        <View style={styles.eventCard}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
-            <View style={styles.eventHeaderText}>
-              <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{appointment.event.time}</Text>
-            </View>
+        {/* Event strip */}
+        <View style={styles.eventStrip}>
+          <View style={styles.eventStripIcon}>
+            <Text style={{ fontSize: 14 }}>{eventIcon}</Text>
           </View>
-          {shouldShowLocationText && (
-            <Text style={styles.eventLocation}>Ubicación se revelará 48 horas antes del evento</Text>
-          )}
-          {locationRevealed && locationText && (
-            <Text style={styles.eventLocation}>{locationText}</Text>
-          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eventStripName}>{eventTypeText} · Noche Nospi</Text>
+            <Text style={styles.eventStripSub}>
+              {appointment.event.time}{locationRevealed && locationText ? ` · ${locationText}` : shouldShowLocationText ? ' · Ubicación próximamente' : ''}
+            </Text>
+          </View>
         </View>
 
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-            
+            <Text style={styles.codeEntryLabel}>CÓDIGO DEL ENCUENTRO</Text>
+
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={styles.otpRow}
+            >
+              {[0, 1, 2, 3].map((i) => {
+                const char = confirmationCode[i] || '';
+                const filled = char !== '';
+                const active = !filled && i === confirmationCode.length;
+                const hasError = !!codeError;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.otpBox,
+                      filled && !hasError && styles.otpBoxFilled,
+                      active && !hasError && styles.otpBoxActive,
+                      hasError && styles.otpBoxError,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.otpChar,
+                      filled && !hasError && styles.otpCharFilled,
+                      hasError && styles.otpCharError,
+                    ]}>
+                      {char || (active ? '|' : '')}
+                    </Text>
+                  </View>
+                );
+              })}
+            </TouchableOpacity>
+
             <TextInput
-              style={styles.codeInput}
+              style={styles.realInput}
               value={confirmationCode}
               onChangeText={(text) => {
-                setConfirmationCode(text);
+                setConfirmationCode(text.slice(0, 4));
                 setCodeError('');
               }}
-              placeholder="Código"
-              placeholderTextColor="#999"
               keyboardType="default"
-              maxLength={10}
+              maxLength={4}
               autoFocus
+              caretHidden
+              selectTextOnFocus={false}
             />
 
             {codeError ? (
-              <Text style={styles.codeErrorText}>{codeError}</Text>
-            ) : null}
+              <Text style={styles.codeErrorText}>⚠ {codeError}</Text>
+            ) : (
+              <Text style={styles.codeHint}>Tu anfitrión te lo compartió al llegar</Text>
+            )}
 
             <TouchableOpacity
               style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
               onPress={handleCodeConfirmation}
               disabled={!confirmationCode.trim()}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+              <Text style={styles.confirmCodeButtonText}>Confirmar llegada</Text>
+              <View style={styles.confirmCodeArrow}>
+                <Text style={{ fontSize: 16, color: '#fff' }}>›</Text>
+              </View>
             </TouchableOpacity>
           </View>
         )}
@@ -832,15 +983,18 @@ export default function InteraccionScreen() {
         {checkInPhase === 'confirmed' && (
           <>
             <View style={styles.confirmedCard}>
-              <Text style={styles.confirmedIcon}>✅</Text>
-              <Text style={styles.confirmedText}>
-                ¡Llegada confirmada!
-              </Text>
+              <View style={styles.confirmedIconWrap}>
+                <Text style={{ fontSize: 15 }}>✓</Text>
+              </View>
+              <View>
+                <Text style={styles.confirmedTitle}>¡Llegada confirmada!</Text>
+                <Text style={styles.confirmedSub}>Ya eres parte de esta noche</Text>
+              </View>
             </View>
 
             <View style={styles.participantsListCard}>
               <View style={styles.participantsListHeader}>
-                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+                <Text style={styles.participantsListTitle}>Participantes</Text>
                 <View style={styles.participantCountBadge}>
                   <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
@@ -860,6 +1014,7 @@ export default function InteraccionScreen() {
                           </Text>
                         </View>
                         <Text style={styles.participantListName}>{displayName}</Text>
+                        <Text style={styles.participantCheck}>✓</Text>
                       </View>
                       </React.Fragment>
                     );
@@ -892,13 +1047,14 @@ export default function InteraccionScreen() {
 
                 <TouchableOpacity
                   style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
-                  onPress={handleStartExperience}
+                  onPress={() => { setShowIntroScreen(true); setIntroCountdown(20); }}
                   disabled={startingExperience}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.continueButtonText}>
-                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
-                  </Text>
+                  <Text style={styles.continueButtonText}>Continuar</Text>
+                  <View style={styles.continueButtonArrow}>
+                    <Text style={{ fontSize: 16, color: '#fff' }}>›</Text>
+                  </View>
                 </TouchableOpacity>
               </>
             )}
@@ -1007,229 +1163,530 @@ const styles = StyleSheet.create({
   },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   countdownLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: nospiColors.purpleDark,
-    marginBottom: 8,
+    marginBottom: 12,
     fontWeight: '600',
   },
   countdownTime: {
     fontSize: 48,
-    fontWeight: '800',
-    fontStyle: 'italic',
+    fontWeight: '700',
     color: nospiColors.purpleDark,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 2,
-    textShadowColor: 'rgba(0,0,0,0.15)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
   },
   eventCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
   },
   eventHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   eventIconLarge: {
-    fontSize: 32,
-    marginRight: 12,
+    fontSize: 40,
+    marginRight: 16,
   },
   eventHeaderText: {
     flex: 1,
   },
   eventType: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
   },
   eventTime: {
-    fontSize: 15,
+    fontSize: 16,
     color: nospiColors.purpleMid,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 4,
   },
   eventLocation: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
+  },
+  participantCheck: {
+    fontSize: 11,
+    color: '#16a34a',
+  },
+  // ── New check-in screen styles ──────────────────────────────────────────────
+  microLabel: {
+    fontSize: 9,
+    letterSpacing: 1.5,
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.55)',
+    marginBottom: 2,
+  },
+  mainTitle: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: '#3b0764',
+    marginBottom: 4,
+  },
+  countdownStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    backgroundColor: 'rgba(124,58,237,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.13)',
+    marginBottom: 4,
+  },
+  countdownStripLabel: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.7)',
+  },
+  countdownStripTime: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#3b0764',
+    letterSpacing: 1,
+  },
+  countdownNow: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
+    letterSpacing: 2,
+  },
+  eventStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    backgroundColor: 'rgba(124,58,237,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.1)',
+    marginBottom: 4,
+  },
+  eventStripIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  eventStripName: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#3b0764',
+  },
+  eventStripSub: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.7)',
+    marginTop: 1,
   },
   codeEntryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.14)',
   },
-  codeEntryTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
-    textAlign: 'center',
-    marginBottom: 6,
+  codeEntryLabel: {
+    fontSize: 9,
+    letterSpacing: 1.2,
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.6)',
   },
-  codeEntrySubtitle: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 18,
+  otpRow: {
+    flexDirection: 'row',
+    gap: 7,
   },
-  codeInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 22,
-    fontWeight: 'bold',
+  otpBox: {
+    width: 52,
+    height: 62,
+    borderRadius: 13,
+    backgroundColor: 'rgba(124,58,237,0.02)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(124,58,237,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxFilled: {
+    backgroundColor: 'rgba(124,58,237,0.08)',
+    borderColor: nospiColors.purpleDark,
+  },
+  otpBoxActive: {
+    backgroundColor: 'rgba(124,58,237,0.04)',
+    borderColor: 'rgba(124,58,237,0.45)',
+  },
+  otpBoxError: {
+    backgroundColor: 'rgba(239,68,68,0.07)',
+    borderColor: '#ef4444',
+  },
+  otpChar: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: 'rgba(124,58,237,0.18)',
+  },
+  otpCharFilled: {
+    color: '#3b0764',
+  },
+  otpCharError: {
+    color: '#dc2626',
+  },
+  hiddenInput: {
+    width: 0,
+    height: 0,
+    opacity: 0,
+  },
+  realInput: {
+    width: '100%',
+    height: 1,
+    opacity: 0,
+    marginTop: -1,
+  },
+  codeHint: {
+    fontSize: 9,
+    color: 'rgba(124,58,237,0.45)',
     textAlign: 'center',
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
   },
   codeErrorText: {
-    fontSize: 13,
+    fontSize: 10,
     color: '#EF4444',
     textAlign: 'center',
-    marginBottom: 10,
   },
   confirmCodeButton: {
     backgroundColor: nospiColors.purpleDark,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 40,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 4,
+    flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
   },
   confirmCodeButtonText: {
-    fontSize: 17,
-    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
     color: '#FFFFFF',
+    paddingLeft: 8,
+  },
+  confirmCodeArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmedCard: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#f0fdf4',
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#86efac',
+  },
+  confirmedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  confirmedTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#166534',
+  },
+  confirmedSub: {
+    fontSize: 9,
+    color: '#16a34a',
+    marginTop: 1,
   },
   confirmedIcon: {
-    fontSize: 36,
-    marginBottom: 8,
+    fontSize: 48,
+    marginBottom: 12,
   },
   confirmedText: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#065F46',
     textAlign: 'center',
     fontWeight: '600',
   },
   participantsListCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255,255,255,0.75)',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    paddingTop: 13,
+    paddingHorizontal: 13,
+    paddingBottom: 6,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.14)',
   },
   participantsListHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   participantsListTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3b0764',
     flex: 1,
   },
   participantCountBadge: {
-    backgroundColor: nospiColors.purpleMid,
-    borderRadius: 16,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    minWidth: 40,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderRadius: 20,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
     alignItems: 'center',
   },
   participantCountText: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    color: nospiColors.purpleDark,
   },
   participantsList: {
-    marginTop: 6,
+    marginTop: 0,
   },
   participantListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
+    paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(124,58,237,0.07)',
   },
   participantListPhotoPlaceholder: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: nospiColors.purpleLight,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 9,
   },
   participantListPhotoText: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
     color: nospiColors.purpleDark,
   },
   participantListName: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#3b0764',
+    fontWeight: '400',
+    flex: 1,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
   infoCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
   },
   infoText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: nospiColors.purpleDark,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   infoTextSecondary: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },
   continueButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
+    backgroundColor: '#7c3aed',
+    borderRadius: 40,
+    padding: 4,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
-    elevation: 10,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    marginBottom: 16,
   },
   continueButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    paddingLeft: 8,
+    letterSpacing: 0.3,
   },
+
+  // ── Intro screen styles ──────────────────────────────────────────────────────
+  introBadge: {
+    borderRadius: 30,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(240,98,146,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.35)',
+    alignSelf: 'flex-start',
+    marginTop: 56,
+    marginBottom: 14,
+  },
+  introBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    color: '#F06292',
+  },
+  introTitle: {
+    fontSize: 26,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    lineHeight: 32,
+  },
+  introSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 24,
+  },
+  introTimerRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240,98,146,0.1)',
+    marginBottom: 24,
+  },
+  introTimerNum: {
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  introTimerLbl: {
+    fontSize: 8,
+    letterSpacing: 1,
+    opacity: 0.7,
+  },
+  introCard: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.18)',
+    padding: 20,
+    marginBottom: 20,
+    gap: 0,
+  },
+  introRule: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  introRuleDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  introRuleNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240,98,146,0.1)',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  introRuleNumText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F06292',
+  },
+  introRuleTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  introRuleBody: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 18,
+  },
+  introBtn: {
+    borderRadius: 40,
+    padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  introBtnText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#880E4F',
+    paddingLeft: 8,
+  },
+  introBtnArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(136,14,79,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introBtnWait: {
+    borderRadius: 40,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.15)',
+  },
+  introBtnWaitText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.3,
+  },
+  continueButtonArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
 });
