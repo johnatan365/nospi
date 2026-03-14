@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -89,6 +88,8 @@ export default function InteraccionScreen() {
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [startingExperience, setStartingExperience] = useState(false);
+  const [showIntroScreen, setShowIntroScreen] = useState(false);
+  const [introCountdown, setIntroCountdown] = useState(20);
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   
@@ -625,6 +626,14 @@ export default function InteraccionScreen() {
     };
   }, [appointment, user, loadActiveParticipants]);
 
+  // Intro screen countdown
+  useEffect(() => {
+    if (!showIntroScreen) return;
+    if (introCountdown <= 0) return;
+    const t = setTimeout(() => setIntroCountdown(prev => prev - 1), 1000);
+    return () => clearTimeout(t);
+  }, [showIntroScreen, introCountdown]);
+
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
   if (loading) {
@@ -727,6 +736,98 @@ export default function InteraccionScreen() {
             </View>
           </View>
 
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // ── Intro screen ──────────────────────────────────────────────────────────
+  if (showIntroScreen) {
+    const introExpired = introCountdown <= 0;
+    const timerColor = introCountdown > 10 ? '#F06292' : introCountdown > 5 ? '#FFB74D' : '#FF5252';
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={{ padding: 24, paddingBottom: 48 }}>
+          <View style={styles.introBadge}>
+            <Text style={styles.introBadgeText}>LA DINÁMICA</Text>
+          </View>
+
+          <Text style={styles.introTitle}>Antes de empezar</Text>
+          <Text style={styles.introSubtitle}>Lee con atención — el juego inicia pronto</Text>
+
+          <View style={[styles.introTimerRing, { borderColor: timerColor }]}>
+            <Text style={[styles.introTimerNum, { color: timerColor }]}>{introCountdown}</Text>
+            <Text style={[styles.introTimerLbl, { color: timerColor }]}>SEG</Text>
+          </View>
+
+          <View style={styles.introCard}>
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>1</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>3 niveles de preguntas</Text>
+                <Text style={styles.introRuleBody}>
+                  <Text style={{ color: '#87CEEB', fontWeight: '500' }}>Divertido</Text>
+                  {'  ›  '}
+                  <Text style={{ color: '#FFB74D', fontWeight: '500' }}>Sensual</Text>
+                  {'  ›  '}
+                  <Text style={{ color: '#F06292', fontWeight: '500' }}>Atrevido</Text>
+                </Text>
+              </View>
+            </View>
+            <View style={styles.introRuleDivider} />
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>2</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>Todos deben responder</Text>
+                <Text style={styles.introRuleBody}>
+                  Cada persona contesta en orden. Cuando todos respondan se pasa a la siguiente pregunta.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.introRuleDivider} />
+            <View style={styles.introRule}>
+              <View style={[styles.introRuleNum, { borderColor: 'rgba(240,98,146,0.4)' }]}>
+                <Text style={styles.introRuleNumText}>3</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.introRuleTitle}>¿No quieres responder?</Text>
+                <Text style={styles.introRuleBody}>
+                  El grupo decide:{' '}
+                  <Text style={{ color: '#FFB74D', fontWeight: '500' }}>shot</Text>
+                  {' o '}
+                  <Text style={{ color: '#F06292', fontWeight: '500' }}>reto</Text>
+                  . Sin escapatoria.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {introExpired ? (
+            <TouchableOpacity
+              style={[styles.introBtn, startingExperience && styles.buttonDisabled]}
+              onPress={() => { setShowIntroScreen(false); handleStartExperience(); }}
+              disabled={startingExperience}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.introBtnText}>{startingExperience ? 'Iniciando...' : 'Comenzar'}</Text>
+              <View style={styles.introBtnArrow}>
+                <Text style={{ fontSize: 16, color: '#880E4F' }}>›</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.introBtnWait}>
+              <Text style={styles.introBtnWaitText}>Espera {introCountdown}s para continuar...</Text>
+            </View>
+          )}
         </ScrollView>
       </LinearGradient>
     );
@@ -892,13 +993,14 @@ export default function InteraccionScreen() {
 
                 <TouchableOpacity
                   style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
-                  onPress={handleStartExperience}
+                  onPress={() => { setShowIntroScreen(true); setIntroCountdown(20); }}
                   disabled={startingExperience}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.continueButtonText}>
-                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
-                  </Text>
+                  <Text style={styles.continueButtonText}>Continuar</Text>
+                  <View style={styles.continueButtonArrow}>
+                    <Text style={{ fontSize: 16, color: '#fff' }}>›</Text>
+                  </View>
                 </TouchableOpacity>
               </>
             )}
@@ -1232,4 +1334,149 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+
+  // ── Intro screen styles ──────────────────────────────────────────────────
+  introBadge: {
+    borderRadius: 30,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(240,98,146,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.35)',
+    alignSelf: 'flex-start',
+    marginTop: 56,
+    marginBottom: 14,
+  },
+  introBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    color: '#F06292',
+  },
+  introTitle: {
+    fontSize: 26,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    lineHeight: 32,
+  },
+  introSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 24,
+  },
+  introTimerRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240,98,146,0.1)',
+    marginBottom: 24,
+  },
+  introTimerNum: {
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  introTimerLbl: {
+    fontSize: 8,
+    letterSpacing: 1,
+    opacity: 0.7,
+  },
+  introCard: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.18)',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 20,
+  },
+  introRule: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  introRuleDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  introRuleNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240,98,146,0.1)',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  introRuleNumText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F06292',
+  },
+  introRuleTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  introRuleBody: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 18,
+  },
+  introBtn: {
+    borderRadius: 40,
+    padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  introBtnText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#880E4F',
+    paddingLeft: 8,
+  },
+  introBtnArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(136,14,79,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introBtnWait: {
+    borderRadius: 40,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.15)',
+  },
+  introBtnWaitText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.3,
+  },
+  continueButtonArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
 });
