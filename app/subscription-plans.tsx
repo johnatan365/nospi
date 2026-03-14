@@ -505,35 +505,49 @@ export default function SubscriptionPlansScreen() {
         showAlert('Test', 'No hay sesión activa.');
         return;
       }
-      console.log('[TEST] Upserting appointment for event:', pendingEventId, 'user:', userId);
-      // Simulate confirmed appointment directly in Supabase
-      const { error } = await supabase
+      console.log('[TEST] Checking for existing appointment — event:', pendingEventId, 'user:', userId);
+      // Check if appointment already exists
+      const { data: existing } = await supabase
         .from('appointments')
-        .upsert(
-          {
+        .select('id')
+        .eq('user_id', userId)
+        .eq('event_id', pendingEventId)
+        .maybeSingle();
+
+      if (existing) {
+        console.log('[TEST] Appointment exists, updating status to confirmada');
+        const { error: updateError } = await supabase
+          .from('appointments')
+          .update({
+            status: 'confirmada',
+            payment_status: 'completed',
+          })
+          .eq('id', existing.id);
+        if (updateError) {
+          console.error('[TEST] Update error:', updateError.message);
+          showAlert('Test Error', updateError.message);
+          return;
+        }
+      } else {
+        console.log('[TEST] No existing appointment, inserting new one');
+        const { error: insertError } = await supabase
+          .from('appointments')
+          .insert({
             user_id: userId,
             event_id: pendingEventId,
             status: 'confirmada',
             payment_status: 'completed',
-            transaction_id: 'TEST-' + Date.now(),
-            payment_method: 'test',
-            confirmed_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-        );
-      if (error) {
-        console.log('[TEST] Upsert failed, trying insert:', error.message);
-        // Fallback: try insert
-        await supabase.from('appointments').insert({
-          user_id: userId,
-          event_id: pendingEventId,
-          status: 'confirmada',
-          payment_status: 'completed',
-          transaction_id: 'TEST-' + Date.now(),
-          payment_method: 'test',
-        });
+          });
+        if (insertError) {
+          console.error('[TEST] Insert error:', insertError.message);
+          showAlert('Test Error', insertError.message);
+          return;
+        }
       }
+
       await AsyncStorage.removeItem('pending_event_confirmation');
+      console.log('[TEST] Appointment saved, waiting 500ms before navigating...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('[TEST] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
       router.replace({
         pathname: '/event-details/[id]',
