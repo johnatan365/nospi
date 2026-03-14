@@ -84,78 +84,78 @@ interface LevelTheme {
 
 const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
   divertido: {
-    gradient: ['#87CEEB', '#4FC3F7', '#0288D1'],
-    questionCardBg: 'rgba(255,255,255,0.20)',
-    questionCardBorder: 'rgba(255,255,255,0.5)',
+    gradient: ['#1a3a5c', '#1565C0', '#0D47A1'],
+    questionCardBg: 'rgba(255,255,255,0.08)',
+    questionCardBorder: 'rgba(100,181,246,0.30)',
     questionTextColor: '#FFFFFF',
-    questionTextShadow: 'rgba(0,0,0,0.25)',
-    answerBg: 'rgba(255,255,255,0.25)',
-    answerBorder: 'rgba(255,255,255,0.6)',
+    questionTextShadow: 'rgba(0,0,0,0.4)',
+    answerBg: 'rgba(100,181,246,0.12)',
+    answerBorder: 'rgba(100,181,246,0.3)',
     answerText: '#FFFFFF',
-    selectedAnswerBg: 'rgba(2,136,209,0.7)',
-    selectedAnswerBorder: '#FFFFFF',
-    timerBadgeBg: 'rgba(255,255,255,0.3)',
-    timerText: '#FFFFFF',
-    instructionText: 'rgba(255,255,255,0.9)',
-    continueButtonBg: '#0288D1',
+    selectedAnswerBg: 'rgba(14,165,233,0.45)',
+    selectedAnswerBorder: '#64B5F6',
+    timerBadgeBg: 'rgba(100,181,246,0.12)',
+    timerText: '#64B5F6',
+    instructionText: 'rgba(255,255,255,0.6)',
+    continueButtonBg: '#1565C0',
     continueButtonText: '#FFFFFF',
     accentColor: '#64B5F6',
-    starterCardBg: 'rgba(2,136,209,0.45)',
-    transitionGradient: ['#87CEEB', '#4FC3F7', '#0288D1'],
-    transitionAccent: '#0288D1',
-    participantCardBg: 'rgba(2,136,209,0.18)',
-    participantAvatarBg: 'rgba(2,136,209,0.4)',
+    starterCardBg: 'rgba(0,0,0,0.35)',
+    transitionGradient: ['#1a3a5c', '#1565C0', '#0D47A1'],
+    transitionAccent: '#64B5F6',
+    participantCardBg: 'rgba(100,181,246,0.08)',
+    participantAvatarBg: 'rgba(100,181,246,0.18)',
   },
   sensual: {
-    gradient: ['#FF8C00', '#FFA500', '#FFD700'],
-    questionCardBg: 'rgba(255,255,255,0.18)',
-    questionCardBorder: 'rgba(255,255,255,0.45)',
+    gradient: ['#3d1a00', '#BF360C', '#E64A19'],
+    questionCardBg: 'rgba(255,255,255,0.07)',
+    questionCardBorder: 'rgba(255,183,77,0.28)',
     questionTextColor: '#FFFFFF',
-    questionTextShadow: 'rgba(0,0,0,0.3)',
-    answerBg: 'rgba(255,255,255,0.22)',
-    answerBorder: 'rgba(255,200,0,0.6)',
+    questionTextShadow: 'rgba(0,0,0,0.45)',
+    answerBg: 'rgba(255,183,77,0.10)',
+    answerBorder: 'rgba(255,183,77,0.28)',
     answerText: '#FFFFFF',
-    selectedAnswerBg: 'rgba(255,140,0,0.75)',
-    selectedAnswerBorder: '#FFD700',
-    timerBadgeBg: 'rgba(255,255,255,0.25)',
-    timerText: '#FFFFFF',
-    instructionText: 'rgba(255,255,255,0.9)',
-    continueButtonBg: '#E65100',
+    selectedAnswerBg: 'rgba(234,88,12,0.45)',
+    selectedAnswerBorder: '#FFB74D',
+    timerBadgeBg: 'rgba(255,183,77,0.12)',
+    timerText: '#FFB74D',
+    instructionText: 'rgba(255,255,255,0.6)',
+    continueButtonBg: '#BF360C',
     continueButtonText: '#FFFFFF',
     accentColor: '#FFB74D',
-    starterCardBg: 'rgba(230,81,0,0.45)',
-    transitionGradient: ['#FF8C00', '#FFA500', '#FFD700'],
-    transitionAccent: '#E65100',
-    participantCardBg: 'rgba(230,81,0,0.18)',
-    participantAvatarBg: 'rgba(230,81,0,0.4)',
+    starterCardBg: 'rgba(0,0,0,0.35)',
+    transitionGradient: ['#3d1a00', '#BF360C', '#E64A19'],
+    transitionAccent: '#FFB74D',
+    participantCardBg: 'rgba(255,183,77,0.08)',
+    participantAvatarBg: 'rgba(255,183,77,0.18)',
   },
   atrevido: {
-    gradient: ['#8B0000', '#C0392B', '#E74C3C'],
-    questionCardBg: 'rgba(255,255,255,0.15)',
-    questionCardBorder: 'rgba(255,100,100,0.5)',
+    gradient: ['#1a0010', '#880E4F', '#AD1457'],
+    questionCardBg: 'rgba(255,255,255,0.07)',
+    questionCardBorder: 'rgba(240,98,146,0.28)',
     questionTextColor: '#FFFFFF',
-    questionTextShadow: 'rgba(0,0,0,0.35)',
-    answerBg: 'rgba(255,255,255,0.18)',
-    answerBorder: 'rgba(255,100,100,0.5)',
+    questionTextShadow: 'rgba(0,0,0,0.45)',
+    answerBg: 'rgba(240,98,146,0.10)',
+    answerBorder: 'rgba(240,98,146,0.28)',
     answerText: '#FFFFFF',
-    selectedAnswerBg: 'rgba(183,28,28,0.75)',
-    selectedAnswerBorder: '#FF5252',
-    timerBadgeBg: 'rgba(255,255,255,0.2)',
-    timerText: '#FFFFFF',
-    instructionText: 'rgba(255,255,255,0.9)',
-    continueButtonBg: '#B71C1C',
+    selectedAnswerBg: 'rgba(136,14,79,0.45)',
+    selectedAnswerBorder: '#F06292',
+    timerBadgeBg: 'rgba(240,98,146,0.12)',
+    timerText: '#F06292',
+    instructionText: 'rgba(255,255,255,0.6)',
+    continueButtonBg: '#880E4F',
     continueButtonText: '#FFFFFF',
     accentColor: '#F06292',
-    starterCardBg: 'rgba(183,28,28,0.45)',
-    transitionGradient: ['#8B0000', '#C0392B', '#E74C3C'],
-    transitionAccent: '#B71C1C',
-    participantCardBg: 'rgba(183,28,28,0.18)',
-    participantAvatarBg: 'rgba(183,28,28,0.4)',
+    starterCardBg: 'rgba(0,0,0,0.35)',
+    transitionGradient: ['#1a0010', '#880E4F', '#AD1457'],
+    transitionAccent: '#F06292',
+    participantCardBg: 'rgba(240,98,146,0.08)',
+    participantAvatarBg: 'rgba(240,98,146,0.18)',
   },
 };
 
 // Free phase uses a deep neutral gradient (no purple)
-const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1C1C2E', '#2C2C3E', '#3C3C4E'];
+const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#0a0a0f', '#141428', '#1e1e3c'];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   
@@ -655,9 +655,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           {/* Level badge */}
-          <View style={[styles.levelBadge, { backgroundColor: 'rgba(255,255,255,0.22)', borderColor: 'rgba(255,255,255,0.5)' }]}>
+          <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName}</Text>
+            <Text style={[styles.levelText, { color: theme.accentColor }]}>{levelName.toUpperCase()}</Text>
           </View>
 
           {/* Question card */}
@@ -687,16 +687,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           </View>
 
           {/* Starter card */}
-          <LinearGradient
-            colors={['#1a1a1a', '#000000']}
-            style={styles.starterCard}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          >
-            <Text style={styles.starterLabelWhite}>Empieza:</Text>
-            <Text style={styles.starterNameWhite}>{starterName}</Text>
-            <Text style={styles.starterInstructionWhite}>y luego continúan hacia la derecha</Text>
-          </LinearGradient>
+          <View style={[styles.starterCard, { backgroundColor: theme.starterCardBg, borderColor: 'rgba(255,255,255,0.10)' }]}>
+            <View style={[styles.starterAvatar, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '60' }]}>
+              <Text style={[styles.starterAvatarText, { color: theme.accentColor }]}>{starterName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.starterInfo}>
+              <Text style={[styles.starterLabelWhite, { color: theme.accentColor }]}>EMPIEZA</Text>
+              <Text style={styles.starterNameWhite}>{starterName}</Text>
+              <Text style={styles.starterInstructionWhite}>luego continúan hacia la derecha →</Text>
+            </View>
+          </View>
 
           {/* Instruction card */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
@@ -902,97 +902,116 @@ const styles = StyleSheet.create({
 
   // ── Level badge ──────────────────────────────────────────────────────────────
   levelBadge: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 80,
-    marginBottom: 16,
+    borderRadius: 30,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginTop: 60,
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   levelEmoji: {
-    fontSize: 28,
-    marginRight: 10,
+    fontSize: 16,
+    marginRight: 7,
   },
   levelText: {
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1.2,
   },
 
   // ── Question card ────────────────────────────────────────────────────────────
   questionCard: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 32,
-    marginBottom: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    marginBottom: 14,
     alignItems: 'center',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
   },
   questionText: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: 32,
   },
 
   // ── Timer badge ──────────────────────────────────────────────────────────────
   timerBadge: {
-    marginTop: 20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
+    marginTop: 18,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   timerNumber: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 
   // ── Starter card ─────────────────────────────────────────────────────────────
   starterCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  starterAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  starterAvatarText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  starterInfo: {
+    flex: 1,
+    gap: 2,
   },
   starterLabelWhite: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: 6,
-    fontWeight: '500',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   starterNameWhite: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#FFFFFF',
-    marginBottom: 6,
   },
   starterInstructionWhite: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    fontStyle: 'italic',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 2,
   },
 
   // ── Instruction card ─────────────────────────────────────────────────────────
   instructionCard: {
     borderRadius: 14,
     borderWidth: 1,
-    padding: 18,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 14,
     alignItems: 'center',
   },
   instructionText: {
-    fontSize: 15,
+    fontSize: 12,
     textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 22,
+    fontWeight: '400',
+    lineHeight: 19,
   },
 
   // ── Continue button ──────────────────────────────────────────────────────────
