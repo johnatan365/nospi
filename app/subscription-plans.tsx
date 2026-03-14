@@ -490,76 +490,6 @@ export default function SubscriptionPlansScreen() {
     }, 5000);
   }, [confirmAppointment, showAlert, router]);
 
-  // ========== TEST PAYMENT HANDLER - DELETE BEFORE PRODUCTION ==========
-  const handleTestPayment = async () => {
-    console.log('[TEST] handleTestPayment pressed');
-    try {
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        showAlert('Test', 'No hay evento pendiente. Ve a un evento y presiona Confirmar primero.');
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) {
-        showAlert('Test', 'No hay sesión activa.');
-        return;
-      }
-      console.log('[TEST] Checking for existing appointment — event:', pendingEventId, 'user:', userId);
-      // Check if appointment already exists
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .maybeSingle();
-
-      if (existing) {
-        console.log('[TEST] Appointment exists, updating status to confirmada');
-        const { error: updateError } = await supabase
-          .from('appointments')
-          .update({
-            status: 'confirmada',
-            payment_status: 'completed',
-          })
-          .eq('id', existing.id);
-        if (updateError) {
-          console.error('[TEST] Update error:', updateError.message);
-          showAlert('Test Error', updateError.message);
-          return;
-        }
-      } else {
-        console.log('[TEST] No existing appointment, inserting new one');
-        const { error: insertError } = await supabase
-          .from('appointments')
-          .insert({
-            user_id: userId,
-            event_id: pendingEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-          });
-        if (insertError) {
-          console.error('[TEST] Insert error:', insertError.message);
-          showAlert('Test Error', insertError.message);
-          return;
-        }
-      }
-
-      await AsyncStorage.removeItem('pending_event_confirmation');
-      console.log('[TEST] Appointment saved, waiting 500ms before navigating...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('[TEST] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
-      router.replace({
-        pathname: '/event-details/[id]',
-        params: { id: pendingEventId, paymentSuccess: 'true' },
-      });
-    } catch (e: any) {
-      console.error('[TEST] handleTestPayment error:', e.message);
-      showAlert('Test Error', e.message);
-    }
-  };
-  // ========== END TEST PAYMENT HANDLER ==========
-
   const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
     const cleanLegalId = pseLegalId.replace(/\D/g, '');
@@ -969,16 +899,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* ========== TEST BUTTON - DELETE BEFORE PRODUCTION ========== */}
-        <TouchableOpacity
-          style={testPaymentStyles.btn}
-          onPress={handleTestPayment}
-          activeOpacity={0.7}
-        >
-          <Text style={testPaymentStyles.btnText}>🧪 Pago de Prueba (TEST)</Text>
-        </TouchableOpacity>
-        {/* ========== END TEST BUTTON ========== */}
-
         <Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
       </ScrollView>
 
@@ -1073,24 +993,3 @@ const styles = StyleSheet.create({
   bankOptionText: { fontSize: 15, color: '#333' },
   successButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 });
-
-// ========== TEST BUTTON STYLES - DELETE BEFORE PRODUCTION ==========
-const testPaymentStyles = StyleSheet.create({
-  btn: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#ff0',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: 16,
-  },
-  btnText: {
-    color: '#ff0',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-});
-// ========== END TEST BUTTON STYLES ==========
