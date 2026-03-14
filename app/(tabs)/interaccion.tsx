@@ -799,7 +799,11 @@ export default function InteraccionScreen() {
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryLabel}>CÓDIGO DEL ENCUENTRO</Text>
 
-            <View style={styles.otpRow}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={styles.otpRow}
+            >
               {[0, 1, 2, 3].map((i) => {
                 const char = confirmationCode[i] || '';
                 const filled = char !== '';
@@ -825,10 +829,10 @@ export default function InteraccionScreen() {
                   </View>
                 );
               })}
-            </View>
+            </TouchableOpacity>
 
             <TextInput
-              style={styles.hiddenInput}
+              style={styles.realInput}
               value={confirmationCode}
               onChangeText={(text) => {
                 setConfirmationCode(text.slice(0, 4));
@@ -837,6 +841,8 @@ export default function InteraccionScreen() {
               keyboardType="default"
               maxLength={4}
               autoFocus
+              caretHidden
+              selectTextOnFocus={false}
             />
 
             {codeError ? (
@@ -1225,10 +1231,15 @@ const styles = StyleSheet.create({
     color: '#dc2626',
   },
   hiddenInput: {
-    position: 'absolute',
-    width: 1,
+    width: 0,
+    height: 0,
+    opacity: 0,
+  },
+  realInput: {
+    width: '100%',
     height: 1,
     opacity: 0,
+    marginTop: -1,
   },
   codeHint: {
     fontSize: 9,
