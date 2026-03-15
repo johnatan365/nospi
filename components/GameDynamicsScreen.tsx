@@ -157,6 +157,9 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 // Free phase uses a deep neutral gradient (no purple)
 const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#0a0a0f', '#141428', '#1e1e3c'];
 
+// Intro screen gradient (Atrevido/red theme)
+const INTRO_GRADIENT: [string, string, ...string[]] = ['#8B0000', '#C0392B', '#E74C3C'];
+
 export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
@@ -167,6 +170,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
+
+  // Intro screen local state
+  const [showIntro, setShowIntro] = useState(true);
+  const [introCountdown, setIntroCountdown] = useState(20);
+  const introTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
@@ -298,12 +306,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           const starter = activeParticipants.find((p) => p.user_id === data.current_question_starter_id);
           setStarterParticipant(starter || null);
         }
+
+        // If we're restoring mid-game (not at the very start), skip intro
+        if (data.current_question_index > 0 || data.current_level !== 'divertido') {
+          setShowIntro(false);
+        }
       } else if (data.game_phase === 'level_transition') {
         setGamePhase('level_transition');
+        setShowIntro(false);
       } else if (data.game_phase === 'finished') {
         setGamePhase('finished');
+        setShowIntro(false);
       } else if (data.game_phase === 'free_phase') {
         setGamePhase('free_phase');
+        setShowIntro(false);
       }
     };
 
@@ -340,10 +356,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
             }
           } else if (newEvent.game_phase === 'level_transition') {
             setGamePhase('level_transition');
+            setShowIntro(false);
           } else if (newEvent.game_phase === 'finished') {
             setGamePhase('finished');
+            setShowIntro(false);
           } else if (newEvent.game_phase === 'free_phase') {
             setGamePhase('free_phase');
+            setShowIntro(false);
           }
         }
       )
@@ -353,6 +372,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id, activeParticipants]);
+
+  // Intro countdown timer
+  useEffect(() => {
+    if (!showIntro) return;
+    introTimerRef.current = setInterval(() => {
+      setIntroCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(introTimerRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (introTimerRef.current) clearInterval(introTimerRef.current);
+    };
+  }, [showIntro]);
 
   // Countdown timer logic
   const startTimer = useCallback(() => {
@@ -429,6 +465,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
       }, 2000);
     });
   }, [scaleAnim, fadeAnim]);
+
+  const handleIntroStart = useCallback(() => {
+    console.log('[Button] ¡Comenzar! pressed — dismissing intro and showing Divertido transition');
+    setShowIntro(false);
+    // Show the level transition animation for 'divertido' just like handleContinue does for level advances
+    showLevelTransitionAnimation('divertido');
+  }, [showLevelTransitionAnimation]);
 
   const handleContinue = useCallback(async () => {
     
@@ -642,6 +685,113 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
   const timerLabel = `${timeLeft}s`;
   const timerExpired = timeLeft === 0;
 
+  // ── INTRO SCREEN ─────────────────────────────────────────────────────────────
+  if (gamePhase === 'questions' && showIntro && currentLevel === 'divertido') {
+    const introCountdownReady = introCountdown === 0;
+    const introButtonLabel = introCountdownReady ? '¡Comenzar!' : `Comenzar (${introCountdown}s)`;
+
+    return (
+      <LinearGradient
+        colors={INTRO_GRADIENT}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.introContentContainer}>
+          {/* Emoji */}
+          <Text style={styles.introEmoji}>🎮</Text>
+
+          {/* Title */}
+          <Text style={styles.introTitle}>¿Cómo se juega?</Text>
+
+          {/* Rules card */}
+          <View style={styles.introRulesCard}>
+            <View style={styles.introRuleRow}>
+              <Text style={styles.introRuleEmoji}>🎯</Text>
+              <Text style={styles.introRuleText}>
+                <Text style={styles.introRuleTextBold}>Hay 3 niveles: </Text>
+                Divertido, Sensual y Atrevido
+              </Text>
+            </View>
+            <View style={styles.introRuleRow}>
+              <Text style={styles.introRuleEmoji}>🔄</Text>
+              <Text style={styles.introRuleText}>
+                <Text style={styles.introRuleTextBold}>Cada pregunta tiene un contador — </Text>
+                el botón Continuar aparece al terminar
+              </Text>
+            </View>
+            <View style={styles.introRuleRow}>
+              <Text style={styles.introRuleEmoji}>👥</Text>
+              <Text style={styles.introRuleText}>
+                <Text style={styles.introRuleTextBold}>Todos deben responder </Text>
+                antes de continuar
+              </Text>
+            </View>
+            <View style={[styles.introRuleRow, { marginBottom: 0 }]}>
+              <Text style={styles.introRuleEmoji}>🥃</Text>
+              <Text style={styles.introRuleText}>
+                <Text style={styles.introRuleTextBold}>El que no responda: </Text>
+                ¡shot o reto del grupo!
+              </Text>
+            </View>
+          </View>
+
+          {/* Countdown display */}
+          <View style={styles.introCountdownContainer}>
+            <Text style={styles.introCountdownNumber}>{introCountdown}</Text>
+            <Text style={styles.introCountdownLabel}>segundos</Text>
+          </View>
+
+          {/* Start button */}
+          <TouchableOpacity
+            style={[
+              styles.introStartButton,
+              introCountdownReady ? styles.introStartButtonActive : styles.introStartButtonDisabled,
+            ]}
+            onPress={() => {
+              console.log('[Button] ¡Comenzar! intro button pressed');
+              handleIntroStart();
+            }}
+            disabled={!introCountdownReady}
+            activeOpacity={0.85}
+          >
+            <Text style={[
+              styles.introStartButtonText,
+              !introCountdownReady && styles.introStartButtonTextDisabled,
+            ]}>
+              {introButtonLabel}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Level Transition Animation Overlay */}
+        {showLevelTransition && transitionLevel && (
+          <View style={styles.transitionOverlay}>
+            <Animated.View
+              style={[
+                styles.transitionCard,
+                {
+                  transform: [{ scale: scaleAnim }],
+                  opacity: fadeAnim,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={transitionTheme.gradient}
+                style={styles.transitionCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
+                <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
+                <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
+              </LinearGradient>
+            </Animated.View>
+          </View>
+        )}
+      </LinearGradient>
+    );
+  }
 
   if (gamePhase === 'questions' && currentQuestion) {
     const starterName = starterParticipant?.name || 'Alguien';
@@ -900,6 +1050,93 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
+  // ── Intro screen ─────────────────────────────────────────────────────────────
+  introContentContainer: {
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 120,
+    alignItems: 'center',
+  },
+  introEmoji: {
+    fontSize: 68,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  introTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  introRulesCard: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    marginBottom: 28,
+  },
+  introRuleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    gap: 10,
+  },
+  introRuleEmoji: {
+    fontSize: 20,
+    lineHeight: 24,
+    flexShrink: 0,
+  },
+  introRuleText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#FFFFFF',
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  introRuleTextBold: {
+    fontWeight: '700',
+  },
+  introCountdownContainer: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  introCountdownNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    lineHeight: 56,
+  },
+  introCountdownLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  introStartButton: {
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    alignItems: 'center',
+    width: '100%',
+  },
+  introStartButtonActive: {
+    backgroundColor: '#27AE60',
+  },
+  introStartButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  introStartButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  introStartButtonTextDisabled: {
+    color: 'rgba(255,255,255,0.55)',
+  },
+
   // ── Level badge ──────────────────────────────────────────────────────────────
   levelBadge: {
     borderRadius: 30,
@@ -934,10 +1171,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   questionText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 32,
+    lineHeight: 38,
   },
 
   // ── Timer badge ──────────────────────────────────────────────────────────────
