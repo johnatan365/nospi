@@ -701,18 +701,26 @@ export default function InteraccionScreen() {
           }),
         ]).start(() => {
           setShowDivertidoModal(false);
+          // ONLY set local state - do NOT touch DB here
           setUserReadyForGame(true);
-          // Start the game in DB if not already started
-          handleStartExperience();
         });
       }, 2000);
     });
-  }, [divertidoScaleAnim, divertidoFadeAnim, handleStartExperience]);
+  }, [divertidoScaleAnim, divertidoFadeAnim]);
 
   // Handle "Continuar" per-user (local only - does NOT trigger DB changes)
   const handleUserContinue = useCallback(() => {
     setUserReadyForRules(true);
   }, []);
+
+  // When user finishes the intro flow (Comenzar), start game in DB if not already started
+  useEffect(() => {
+    if (!userReadyForGame) return;
+    // Only start the game if it hasn't been started by another user yet
+    if (gamePhase !== 'questions' && gamePhase !== 'question_active' && gamePhase !== 'level_transition' && gamePhase !== 'finished' && gamePhase !== 'free_phase') {
+      handleStartExperience();
+    }
+  }, [userReadyForGame, gamePhase, handleStartExperience]);
 
   // Handle game finish - navigate to appointments tab (anteriores)
   const handleFinishGame = useCallback(() => {
