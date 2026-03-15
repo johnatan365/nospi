@@ -94,9 +94,6 @@ export default function InteraccionScreen() {
   
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
-  // Local-only state: current user has tapped "Continuar" but is waiting for host to start
-  const [localReadyToContinue, setLocalReadyToContinue] = useState(false);
-
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
@@ -630,10 +627,6 @@ export default function InteraccionScreen() {
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
-  // Host is the first participant in the active list (earliest to join)
-  const currentUserId = user?.id;
-  const isHost = activeParticipants.length > 0 && activeParticipants[0]?.user_id === currentUserId;
-
   if (loading) {
     return (
       <LinearGradient
@@ -886,56 +879,28 @@ export default function InteraccionScreen() {
               </View>
             )}
 
-            {canStartExperience && !localReadyToContinue && (
+            {canStartExperience && (
               <>
                 <View style={styles.infoCard}>
                   <Text style={styles.infoText}>
                     ✨ Hay {activeParticipants.length} participantes confirmados
                   </Text>
                   <Text style={styles.infoTextSecondary}>
-                    {isHost
-                      ? 'Presiona "Continuar" para iniciar la experiencia'
-                      : 'El anfitrión iniciará la experiencia en breve'}
+                    Presiona &quot;Continuar&quot; para iniciar la experiencia
                   </Text>
                 </View>
 
-                {isHost ? (
-                  <TouchableOpacity
-                    style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
-                    onPress={() => {
-                      console.log('[Button] Continuar (host) pressed — starting experience for all');
-                      handleStartExperience();
-                    }}
-                    disabled={startingExperience}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.continueButtonText}>
-                      {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={() => {
-                      console.log('[Button] Continuar (non-host) pressed — marking local ready');
-                      setLocalReadyToContinue(true);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.continueButtonText}>🚀 Continuar</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
+                  onPress={handleStartExperience}
+                  disabled={startingExperience}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.continueButtonText}>
+                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
+                  </Text>
+                </TouchableOpacity>
               </>
-            )}
-
-            {canStartExperience && localReadyToContinue && !isHost && (
-              <View style={styles.waitingHostCard}>
-                <ActivityIndicator size="small" color="#7C3AED" style={{ marginBottom: 10 }} />
-                <Text style={styles.waitingHostText}>Esperando al anfitrión...</Text>
-                <Text style={styles.waitingHostSubtext}>
-                  El juego comenzará cuando el anfitrión lo inicie
-                </Text>
-              </View>
             )}
           </>
         )}
@@ -1266,27 +1231,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
     letterSpacing: 0.5,
-  },
-  waitingHostCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.25)',
-  },
-  waitingHostText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#7C3AED',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  waitingHostSubtext: {
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });
