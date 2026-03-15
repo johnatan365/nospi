@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -93,6 +92,14 @@ export default function InteraccionScreen() {
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   
   const [gamePhase, setGamePhase] = useState<string>('intro');
+
+  // Per-user flow states
+  const [userReadyForRules, setUserReadyForRules] = useState(false);
+  const [userReadyForGame, setUserReadyForGame] = useState(false);
+  const [rulesCountdown, setRulesCountdown] = useState(20);
+  const [showDivertidoModal, setShowDivertidoModal] = useState(false);
+  const divertidoScaleAnim = useRef(new Animated.Value(0)).current;
+  const divertidoFadeAnim = useRef(new Animated.Value(0)).current;
 
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
@@ -336,6 +343,12 @@ export default function InteraccionScreen() {
         
         if (appointmentData.event?.game_phase) {
           setGamePhase(appointmentData.event.game_phase);
+          // Already confirmed and game is active: skip intro screens on reload
+          const gp = appointmentData.event.game_phase;
+          if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
+            setUserReadyForRules(true);
+            setUserReadyForGame(true);
+          }
         }
       }
       
@@ -388,6 +401,12 @@ export default function InteraccionScreen() {
       // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
       if (appointment.event?.game_phase) {
         setGamePhase(appointment.event.game_phase);
+        // Late joiner: game already started, skip intro screens
+        const gp = appointment.event.game_phase;
+        if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
+          setUserReadyForRules(true);
+          setUserReadyForGame(true);
+        }
       }
       
       // Now perform database updates in the background
@@ -432,6 +451,11 @@ export default function InteraccionScreen() {
   const handleStartExperience = useCallback(async () => {
     
     if (!appointment?.event_id || startingExperience) {
+      return;
+    }
+
+    // If game is already in progress (another user started it), just update local state
+    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
       return;
     }
 
@@ -485,7 +509,7 @@ export default function InteraccionScreen() {
         setStartingExperience(false);
       }, 1000);
     }
-  }, [appointment, activeParticipants, startingExperience]);
+  }, [appointment, activeParticipants, startingExperience, gamePhase]);
 
   useEffect(() => {
     if (!appointment?.event_id || !appointment?.id || !user) return;
@@ -627,6 +651,73 @@ export default function InteraccionScreen() {
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
+  // Rules screen 20-second countdown
+  useEffect(() => {
+    if (!userReadyForRules || userReadyForGame) return;
+    
+    setRulesCountdown(20);
+    const interval = setInterval(() => {
+      setRulesCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [userReadyForRules, userReadyForGame]);
+
+  // Show divertido level modal animation
+  const showDivertidoModalAnimation = useCallback(() => {
+    setShowDivertidoModal(true);
+    divertidoScaleAnim.setValue(0);
+    divertidoFadeAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(divertidoScaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(divertidoFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(divertidoScaleAnim, {
+            toValue: 1.2,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(divertidoFadeAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowDivertidoModal(false);
+          setUserReadyForGame(true);
+          // Start the game in DB if not already started
+          handleStartExperience();
+        });
+      }, 2000);
+    });
+  }, [divertidoScaleAnim, divertidoFadeAnim, handleStartExperience]);
+
+  // Handle "Continuar" per-user (local only - does NOT trigger DB changes)
+  const handleUserContinue = useCallback(() => {
+    setUserReadyForRules(true);
+  }, []);
+
   if (loading) {
     return (
       <LinearGradient
@@ -732,7 +823,7 @@ export default function InteraccionScreen() {
     );
   }
 
-  if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+  if ((gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') && userReadyForRules && userReadyForGame) {
     
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
@@ -748,6 +839,90 @@ export default function InteraccionScreen() {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
   }
   
+  // ── Rules/Intro Screen (per-user, atrevido theme) ──────────────────────────
+  if (userReadyForRules && !userReadyForGame && checkInPhase === 'confirmed') {
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
+          {/* Header icon */}
+          <Text style={styles.rulesIcon}>🎲</Text>
+          
+          <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
+
+          {/* Rules card */}
+          <View style={styles.rulesCard}>
+            <View style={styles.rulesRow}>
+              <Text style={styles.rulesEmoji}>🎯</Text>
+              <Text style={styles.rulesText}>Pasarás por 3 niveles: Divertido, Sensual y Atrevido.</Text>
+            </View>
+            
+            <View style={styles.rulesDivider} />
+            
+            <View style={styles.rulesRow}>
+              <Text style={styles.rulesEmoji}>👥</Text>
+              <Text style={styles.rulesText}>Todos deben responder cada pregunta para avanzar a la siguiente.</Text>
+            </View>
+            
+            <View style={styles.rulesDivider} />
+            
+            <View style={styles.rulesRow}>
+              <Text style={styles.rulesEmoji}>🥃</Text>
+              <Text style={styles.rulesText}>Si alguien no responde, deberá tomar un shot o cumplir un reto del grupo.</Text>
+            </View>
+          </View>
+
+          {/* Countdown or Comenzar button */}
+          {rulesCountdown > 0 ? (
+            <View style={styles.rulesCountdownContainer}>
+              <Text style={styles.rulesCountdownLabel}>Léelo con calma</Text>
+              <View style={styles.rulesCountdownCircle}>
+                <Text style={styles.rulesCountdownNumber}>{rulesCountdown}</Text>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.comenzarButton}
+              onPress={showDivertidoModalAnimation}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.comenzarButtonText}>Comenzar</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+
+        {/* Divertido Level Modal Overlay */}
+        {showDivertidoModal && (
+          <View style={styles.divertidoOverlay}>
+            <Animated.View
+              style={[
+                styles.divertidoCard,
+                {
+                  transform: [{ scale: divertidoScaleAnim }],
+                  opacity: divertidoFadeAnim,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={['#4FC3F7', '#0288D1', '#01579B']}
+                style={styles.divertidoCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.divertidoEmoji}>😄</Text>
+                <Text style={styles.divertidoModalTitle}>Nivel</Text>
+                <Text style={styles.divertidoModalLevel}>Divertido</Text>
+              </LinearGradient>
+            </Animated.View>
+          </View>
+        )}
+      </LinearGradient>
+    );
+  }
 
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
@@ -886,18 +1061,17 @@ export default function InteraccionScreen() {
                     ✨ Hay {activeParticipants.length} participantes confirmados
                   </Text>
                   <Text style={styles.infoTextSecondary}>
-                    Presiona &quot;Continuar&quot; para iniciar la experiencia
+                    Presiona &quot;Continuar&quot; para ver las reglas del juego
                   </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.continueButton, startingExperience && styles.buttonDisabled]}
-                  onPress={handleStartExperience}
-                  disabled={startingExperience}
+                  style={styles.continueButton}
+                  onPress={handleUserContinue}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.continueButtonText}>
-                    {startingExperience ? '⏳ Iniciando...' : '🚀 Continuar'}
+                    🚀 Continuar
                   </Text>
                 </TouchableOpacity>
               </>
@@ -1231,5 +1405,141 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+
+  // ── Rules/Intro Screen (atrevido theme) ──────────────────────────────────────
+  rulesIcon: {
+    fontSize: 72,
+    marginBottom: 16,
+  },
+  rulesTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 24,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  rulesCard: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(240,98,146,0.30)',
+    padding: 24,
+    width: '100%',
+    marginBottom: 32,
+  },
+  rulesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  rulesEmoji: {
+    fontSize: 26,
+    marginTop: 2,
+  },
+  rulesText: {
+    flex: 1,
+    fontSize: 17,
+    color: '#FFFFFF',
+    lineHeight: 24,
+    fontWeight: '400',
+  },
+  rulesDivider: {
+    height: 1,
+    backgroundColor: 'rgba(240,98,146,0.20)',
+    marginVertical: 16,
+  },
+  rulesCountdownContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  rulesCountdownLabel: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 14,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  rulesCountdownCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2.5,
+    borderColor: '#F06292',
+    backgroundColor: 'rgba(240,98,146,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rulesCountdownNumber: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#F06292',
+  },
+  comenzarButton: {
+    backgroundColor: '#880E4F',
+    borderRadius: 50,
+    paddingVertical: 18,
+    paddingHorizontal: 56,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(240,98,146,0.50)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 10,
+    marginTop: 8,
+  },
+  comenzarButtonText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+
+  // ── Divertido Level Modal ────────────────────────────────────────────────────
+  divertidoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  divertidoCard: {
+    borderRadius: 32,
+    overflow: 'hidden',
+    minWidth: 280,
+  },
+  divertidoCardGradient: {
+    padding: 48,
+    alignItems: 'center',
+    borderRadius: 32,
+  },
+  divertidoEmoji: {
+    fontSize: 100,
+    marginBottom: 24,
+  },
+  divertidoModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  divertidoModalLevel: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
 });

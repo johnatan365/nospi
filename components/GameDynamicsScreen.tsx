@@ -657,7 +657,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
           {/* Level badge */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={[styles.levelText, { color: theme.accentColor }]}>{levelName.toUpperCase()}</Text>
+            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()}</Text>
           </View>
 
           {/* Question card */}
@@ -934,10 +934,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   questionText: {
-    fontSize: 24,
-    fontWeight: '500',
+    fontSize: 28,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 32,
+    lineHeight: 38,
   },
 
   // ── Timer badge ──────────────────────────────────────────────────────────────
