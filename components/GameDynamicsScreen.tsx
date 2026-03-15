@@ -35,6 +35,7 @@ interface Appointment {
 interface GameDynamicsScreenProps {
   appointment: Appointment;
   activeParticipants: Participant[];
+  onFinish?: () => void;
 }
 
 const DEFAULT_QUESTIONS = {
@@ -157,7 +158,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 // Free phase uses a deep neutral gradient (no purple)
 const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#0a0a0f', '#141428', '#1e1e3c'];
 
-export default function GameDynamicsScreen({ appointment, activeParticipants }: GameDynamicsScreenProps) {
+export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
   
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
@@ -618,15 +619,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants }: 
         return;
       }
       
-      
-      // Keep loading state true - the realtime subscription will handle the UI update
-      // and the component will unmount when appointment is cleared
+      // Immediately notify parent to navigate away
+      if (onFinish) {
+        onFinish();
+      }
       
     } catch (error) {
       console.error('❌ Unexpected error finishing event:', error);
       setLoading(false);
     }
-  }, [appointment, currentUserId, loading]);
+  }, [appointment, currentUserId, loading, onFinish]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';

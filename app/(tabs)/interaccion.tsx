@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 
 interface Event {
@@ -79,6 +80,7 @@ if (Platform.OS !== 'web') {
 
 export default function InteraccionScreen() {
   const { user } = useSupabase();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
@@ -401,12 +403,6 @@ export default function InteraccionScreen() {
       // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
       if (appointment.event?.game_phase) {
         setGamePhase(appointment.event.game_phase);
-        // Late joiner: game already started, skip intro screens
-        const gp = appointment.event.game_phase;
-        if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
-          setUserReadyForRules(true);
-          setUserReadyForGame(true);
-        }
       }
       
       // Now perform database updates in the background
@@ -718,6 +714,12 @@ export default function InteraccionScreen() {
     setUserReadyForRules(true);
   }, []);
 
+  // Handle game finish - navigate to appointments tab (anteriores)
+  const handleFinishGame = useCallback(() => {
+    setAppointment(null);
+    router.replace('/(tabs)/appointments');
+  }, [router]);
+
   if (loading) {
     return (
       <LinearGradient
@@ -836,7 +838,7 @@ export default function InteraccionScreen() {
       presented: p.is_presented
     }));
     
-    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} />;
+    return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} onFinish={handleFinishGame} />;
   }
   
   // ── Rules/Intro Screen (per-user, atrevido theme) ──────────────────────────
