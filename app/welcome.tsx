@@ -14,7 +14,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-const logoSource = require('@/assets/images/nospi_icon_atrevido.png');
+const logoSource = require('@/assets/images/icono Nospi.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -56,7 +56,7 @@ export default function WelcomeScreen() {
 
   return (
     <LinearGradient
-      colors={['#1a0010', '#880E4F', '#AD1457']}
+      colors={['#4FC3F7', '#0288D1', '#01579B']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 60,
-    opacity: 0.7,
+    opacity: 0.75,
     fontWeight: '400',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: '#01579B',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -166,11 +166,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 5,
     borderWidth: 1.5,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
+    borderColor: 'rgba(100, 181, 246, 0.40)',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderColor: 'rgba(100, 181, 246, 0.50)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: '#F06292',
+    color: '#64B5F6',
     fontSize: 18,
     fontWeight: '600',
   },
