@@ -7,63 +7,49 @@ import { Asset } from 'expo-asset';
 
 const { width, height } = Dimensions.get('window');
 
-// Helper to resolve image sources (handles both local require() and remote URLs)
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
 }
 
-const logoSource = require('@/assets/images/icono Nospi.png');
+// IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
+const logoSource = require('@/assets/images/nospi_icon_atrevido.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [logoLoaded, setLogoLoaded] = useState(false);
 
-  // Preload logo image to prevent delay
   useEffect(() => {
-    console.log('Preloading logo image...');
     const preloadLogo = async () => {
       try {
         await Asset.fromModule(logoSource).downloadAsync();
-        console.log('Logo preloaded successfully');
         setLogoLoaded(true);
       } catch (error) {
         console.error('Error preloading logo:', error);
-        // Still set loaded to true to show the screen
         setLogoLoaded(true);
       }
     };
-
     preloadLogo();
   }, []);
 
   const handleStart = () => {
-    console.log('User tapped Empezar button');
     router.push('/onboarding/interests');
   };
 
   const handleLogin = () => {
-    console.log('User tapped Ya tengo una cuenta button');
     router.push('/login');
   };
 
-  const tagline1 = 'Tu dosis semanal';
-  const tagline2 = 'de conexión';
-  const subtitle = 'Conoce personas reales en encuentros grupales cada semana';
-  const startButtonText = 'Empezar';
-  const loginButtonText = 'Ya tengo una cuenta';
-
   return (
     <LinearGradient
-      colors={['#4FC3F7', '#0288D1', '#01579B']}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          {/* Logo - Más grande con preload */}
           <View style={styles.logoContainer}>
             <Image 
               source={resolveImageSource(logoSource)} 
@@ -73,23 +59,20 @@ export default function WelcomeScreen() {
             />
           </View>
           
-          {/* Tagline */}
           <View style={styles.taglineContainer}>
-            <Text style={styles.tagline}>{tagline1}</Text>
-            <Text style={styles.tagline}>{tagline2}</Text>
+            <Text style={styles.tagline}>Tu dosis semanal</Text>
+            <Text style={styles.tagline}>de conexión</Text>
           </View>
           
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <Text style={styles.subtitle}>Conoce personas reales en encuentros grupales cada semana</Text>
           
-          {/* Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.primaryButton}
               onPress={handleStart}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>{startButtonText}</Text>
+              <Text style={styles.primaryButtonText}>Empezar</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -97,7 +80,7 @@ export default function WelcomeScreen() {
               onPress={handleLogin}
               activeOpacity={0.8}
             >
-              <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
+              <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -148,7 +131,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 60,
-    opacity: 0.75,
+    opacity: 0.7,
     fontWeight: '400',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -158,7 +141,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: '#01579B',
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -166,11 +149,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 5,
     borderWidth: 1.5,
-    borderColor: 'rgba(100, 181, 246, 0.40)',
+    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -180,7 +163,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: 'rgba(100, 181, 246, 0.50)',
+    borderColor: 'rgba(240, 98, 146, 0.50)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -188,7 +171,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: '#64B5F6',
+    color: '#F06292',
     fontSize: 18,
     fontWeight: '600',
   },
