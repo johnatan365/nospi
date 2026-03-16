@@ -14,7 +14,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-const logoSource = require('@/assets/images/icono Nospi.png');
+const logoSource = require('@/assets/images/nospi_icon_atrevido.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
