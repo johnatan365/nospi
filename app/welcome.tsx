@@ -14,7 +14,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 // IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
-const logoSource = require('@/assets/images/nospi_icon_atrevido.png');
+const logoSource = require('../assets/images/fe41049c-b07a-40e6-8e9e-aac40e0a164b.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
