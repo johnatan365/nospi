@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -57,7 +56,7 @@ export default function WelcomeScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -140,16 +139,16 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     textAlign: 'center',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 60,
-    opacity: 0.8,
+    opacity: 0.7,
     fontWeight: '400',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -159,27 +158,29 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: nospiColors.black,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
   primaryButtonText: {
-    color: nospiColors.white,
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: nospiColors.white,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: nospiColors.white,
+    color: '#F06292',
     fontSize: 18,
     fontWeight: '600',
   },
