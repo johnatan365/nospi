@@ -7,52 +7,39 @@ import { Asset } from 'expo-asset';
 
 const { width, height } = Dimensions.get('window');
 
-// Helper to resolve image sources (handles both local require() and remote URLs)
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
 }
 
+// IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
 const logoSource = require('@/assets/images/nospi_icon_atrevido.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [logoLoaded, setLogoLoaded] = useState(false);
 
-  // Preload logo image to prevent delay
   useEffect(() => {
-    console.log('Preloading logo image...');
     const preloadLogo = async () => {
       try {
         await Asset.fromModule(logoSource).downloadAsync();
-        console.log('Logo preloaded successfully');
         setLogoLoaded(true);
       } catch (error) {
         console.error('Error preloading logo:', error);
-        // Still set loaded to true to show the screen
         setLogoLoaded(true);
       }
     };
-
     preloadLogo();
   }, []);
 
   const handleStart = () => {
-    console.log('User tapped Empezar button');
     router.push('/onboarding/interests');
   };
 
   const handleLogin = () => {
-    console.log('User tapped Ya tengo una cuenta button');
     router.push('/login');
   };
-
-  const tagline1 = 'Tu dosis semanal';
-  const tagline2 = 'de conexión';
-  const subtitle = 'Conoce personas reales en encuentros grupales cada semana';
-  const startButtonText = 'Empezar';
-  const loginButtonText = 'Ya tengo una cuenta';
 
   return (
     <LinearGradient
@@ -63,7 +50,6 @@ export default function WelcomeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          {/* Logo - Más grande con preload */}
           <View style={styles.logoContainer}>
             <Image 
               source={resolveImageSource(logoSource)} 
@@ -73,23 +59,20 @@ export default function WelcomeScreen() {
             />
           </View>
           
-          {/* Tagline */}
           <View style={styles.taglineContainer}>
-            <Text style={styles.tagline}>{tagline1}</Text>
-            <Text style={styles.tagline}>{tagline2}</Text>
+            <Text style={styles.tagline}>Tu dosis semanal</Text>
+            <Text style={styles.tagline}>de conexión</Text>
           </View>
           
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <Text style={styles.subtitle}>Conoce personas reales en encuentros grupales cada semana</Text>
           
-          {/* Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.primaryButton}
               onPress={handleStart}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>{startButtonText}</Text>
+              <Text style={styles.primaryButtonText}>Empezar</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -97,7 +80,7 @@ export default function WelcomeScreen() {
               onPress={handleLogin}
               activeOpacity={0.8}
             >
-              <Text style={styles.secondaryButtonText}>{loginButtonText}</Text>
+              <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
             </TouchableOpacity>
           </View>
         </View>
