@@ -1067,7 +1067,7 @@ export default function AdminPanelScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <LinearGradient
-          colors={['#1a0010', '#880E4F', '#AD1457']}
+          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
           style={styles.gradient}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -1103,7 +1103,7 @@ export default function AdminPanelScreen() {
       <>
         <Stack.Screen options={{ title: 'Panel de Administración' }} />
         <LinearGradient
-          colors={['#1a0010', '#880E4F', '#AD1457']}
+          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
           style={styles.gradient}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -1120,7 +1120,7 @@ export default function AdminPanelScreen() {
     <>
       <Stack.Screen options={{ title: 'Panel de Administración' }} />
       <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}

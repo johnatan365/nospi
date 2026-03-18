@@ -152,7 +152,7 @@ export default function HomeScreen() {
           headerLeft: () => <HeaderLeftButton />,
         }}
       />
-      <ScrollView style={[styles.container, { backgroundColor: 'transparent' }]}>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
             Supabase Status

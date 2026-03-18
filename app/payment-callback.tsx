@@ -336,7 +336,7 @@ export default function PaymentCallbackScreen() {
   if (isWeb) {
     return (
       <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
         style={styles.container}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -384,7 +384,7 @@ export default function PaymentCallbackScreen() {
   // ── MOBILE VIEW (auto-redirects, shows status while processing) ───────────
   return (
     <LinearGradient
-      colors={['#1a0010', '#880E4F', '#AD1457']}
+      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
       style={styles.container}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
