@@ -1,19 +1,15 @@
 
+import { useTheme } from "@react-navigation/native";
 import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons";
 import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Stack } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSupabase } from "@/contexts/SupabaseContext";
 import { testSupabaseConnection } from "@/lib/supabase";
 import { testDatabaseConnection } from "@/utils/supabaseApi";
 import { IconSymbol } from "@/components/IconSymbol";
-import { nospiColors } from "@/constants/Colors";
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
   container: {
     flex: 1,
     padding: 20,
@@ -26,11 +22,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     marginBottom: 8,
-    color: nospiColors.white,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.white,
     opacity: 0.7,
   },
   statusCard: {
@@ -39,7 +33,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
   },
   statusIcon: {
     marginRight: 16,
@@ -51,24 +44,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 4,
-    color: nospiColors.white,
   },
   statusMessage: {
     fontSize: 14,
-    color: nospiColors.white,
     opacity: 0.7,
   },
   infoCard: {
     padding: 20,
     borderRadius: 16,
     marginBottom: 16,
-    backgroundColor: "rgba(255,255,255,0.95)",
   },
   infoTitle: {
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 12,
-    color: nospiColors.purpleDark,
   },
   infoRow: {
     flexDirection: "row",
@@ -77,32 +66,27 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: nospiColors.gray500,
+    opacity: 0.7,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: "500",
-    color: nospiColors.gray800,
   },
   button: {
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 12,
-    backgroundColor: nospiColors.purpleDark,
   },
   buttonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: nospiColors.white,
   },
   successCard: {
     padding: 20,
     borderRadius: 16,
     marginTop: 20,
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   successTitle: {
     fontSize: 18,
@@ -168,146 +152,139 @@ export default function HomeScreen() {
           headerLeft: () => <HeaderLeftButton />,
         }}
       />
-      <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              Supabase Status
-            </Text>
-            <Text style={styles.subtitle}>
-              Connection and configuration
-            </Text>
-          </View>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>
+            Supabase Status
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.text }]}>
+            Connection and configuration
+          </Text>
+        </View>
 
-          {testing || authLoading ? (
-            <View style={styles.statusCard}>
-              <ActivityIndicator size="large" color={nospiColors.purpleLight} style={styles.statusIcon} />
-              <View style={styles.statusContent}>
-                <Text style={styles.statusTitle}>
-                  Testing Connection...
-                </Text>
-                <Text style={styles.statusMessage}>
-                  Please wait
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={[styles.statusCard, { backgroundColor: isFullyConnected ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)" }]}>
-              <IconSymbol
-                android_material_icon_name={statusIcon}
-                size={40}
-                color={statusColor}
-                style={styles.statusIcon}
-              />
-              <View style={styles.statusContent}>
-                <Text style={[styles.statusTitle, { color: statusColor }]}>
-                  {statusText}
-                </Text>
-                <Text style={[styles.statusMessage, { color: statusColor, opacity: 1 }]}>
-                  {isFullyConnected
-                    ? "Supabase is ready to use"
-                    : connectionStatus?.error || dbStatus?.error || "Unable to connect"}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>
-              Connection Details
-            </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Auth Connection
+        {testing || authLoading ? (
+          <View style={[styles.statusCard, { backgroundColor: colors.card }]}>
+            <ActivityIndicator size="large" color={colors.primary} style={styles.statusIcon} />
+            <View style={styles.statusContent}>
+              <Text style={[styles.statusTitle, { color: colors.text }]}>
+                Testing Connection...
               </Text>
-              <Text style={[styles.infoValue, { color: isAuthConnected ? "#10b981" : "#ef4444" }]}>
-                {isAuthConnected ? "✓ Connected" : "✗ Failed"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Database Connection
-              </Text>
-              <Text style={[styles.infoValue, { color: isDbConnected ? "#10b981" : "#ef4444" }]}>
-                {isDbConnected ? "✓ Connected" : "✗ Failed"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Notes Table
-              </Text>
-              <Text style={[styles.infoValue, { color: dbStatus?.tableExists ? "#10b981" : "#ef4444" }]}>
-                {dbStatus?.tableExists ? "✓ Created" : "✗ Missing"}
+              <Text style={[styles.statusMessage, { color: colors.text }]}>
+                Please wait
               </Text>
             </View>
           </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>
-              User Information
-            </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Auth Status
+        ) : (
+          <View style={[styles.statusCard, { backgroundColor: statusBgColor }]}>
+            <IconSymbol
+              android_material_icon_name={statusIcon}
+              size={40}
+              color={statusColor}
+              style={styles.statusIcon}
+            />
+            <View style={styles.statusContent}>
+              <Text style={[styles.statusTitle, { color: statusColor }]}>
+                {statusText}
               </Text>
-              <Text style={styles.infoValue}>
-                {user ? "Authenticated" : "Not authenticated"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                User ID
-              </Text>
-              <Text style={styles.infoValue}>
-                {user?.id ? `${user.id.substring(0, 8)}...` : "None"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Email
-              </Text>
-              <Text style={styles.infoValue}>
-                {user?.email || "None"}
+              <Text style={[styles.statusMessage, { color: statusColor }]}>
+                {isFullyConnected
+                  ? "Supabase is ready to use"
+                  : connectionStatus?.error || dbStatus?.error || "Unable to connect"}
               </Text>
             </View>
           </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.button}
-            onPress={checkConnection}
-            disabled={testing}
-          >
-            <Text style={styles.buttonText}>
-              Test Connection Again
+        <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.infoTitle, { color: colors.text }]}>
+            Connection Details
+          </Text>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Auth Connection
             </Text>
-          </TouchableOpacity>
+            <Text style={[styles.infoValue, { color: isAuthConnected ? "#10b981" : "#ef4444" }]}>
+              {isAuthConnected ? "✓ Connected" : "✗ Failed"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Database Connection
+            </Text>
+            <Text style={[styles.infoValue, { color: isDbConnected ? "#10b981" : "#ef4444" }]}>
+              {isDbConnected ? "✓ Connected" : "✗ Failed"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Notes Table
+            </Text>
+            <Text style={[styles.infoValue, { color: dbStatus?.tableExists ? "#10b981" : "#ef4444" }]}>
+              {dbStatus?.tableExists ? "✓ Created" : "✗ Missing"}
+            </Text>
+          </View>
+        </View>
 
-          {isFullyConnected && (
-            <View style={styles.successCard}>
-              <Text style={styles.successTitle}>
-                ✓ Successfully Connected!
-              </Text>
-              <Text style={styles.successText}>
-                • Supabase client initialized
-              </Text>
-              <Text style={styles.successText}>
-                • Database connection verified
-              </Text>
-              <Text style={styles.successText}>
-                • Notes table created with RLS policies
-              </Text>
-              <Text style={styles.successText}>
-                • Ready to build your app!
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </LinearGradient>
+        <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.infoTitle, { color: colors.text }]}>
+            User Information
+          </Text>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Auth Status
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {user ? "Authenticated" : "Not authenticated"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              User ID
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {user?.id ? `${user.id.substring(0, 8)}...` : "None"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>
+              Email
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {user?.email || "None"}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          onPress={checkConnection}
+          disabled={testing}
+        >
+          <Text style={[styles.buttonText, { color: "#ffffff" }]}>
+            Test Connection Again
+          </Text>
+        </TouchableOpacity>
+
+        {isFullyConnected && (
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>
+              ✓ Successfully Connected!
+            </Text>
+            <Text style={styles.successText}>
+              • Supabase client initialized
+            </Text>
+            <Text style={styles.successText}>
+              • Database connection verified
+            </Text>
+            <Text style={styles.successText}>
+              • Notes table created with RLS policies
+            </Text>
+            <Text style={styles.successText}>
+              • Ready to build your app!
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </React.Fragment>
   );
 }

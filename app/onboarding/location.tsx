@@ -72,7 +72,7 @@ export default function LocationScreen() {
 
   return (
     <LinearGradient
-      colors={['#1a0010', '#880E4F', '#AD1457']}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -235,26 +235,26 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     fontWeight: '600',
   },
   selectedValueDisplay: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderColor: nospiColors.purpleLight,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
   },
   selectedValueText: {
     fontSize: 20,
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     fontWeight: '700',
     textAlign: 'center',
   },
   continueButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,

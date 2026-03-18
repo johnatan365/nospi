@@ -39,7 +39,7 @@ export default function AgeRangeScreen() {
 
   return (
     <LinearGradient
-      colors={['#1a0010', '#880E4F', '#AD1457']}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -132,12 +132,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
     borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderColor: nospiColors.purpleLight,
   },
   rangeText: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
   },
   sliderSection: {
     marginBottom: 32,
@@ -153,12 +153,12 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     fontWeight: '600',
   },
   sliderValue: {
     fontSize: 20,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     fontWeight: 'bold',
   },
   slider: {
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   continueButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,

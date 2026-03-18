@@ -58,7 +58,7 @@ export default function BirthdateScreen() {
 
   return (
     <LinearGradient
-      colors={['#1a0010', '#880E4F', '#AD1457']}
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 32,
     textAlign: 'center',
   },
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   dateDisplayContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderColor: nospiColors.purpleLight,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -186,13 +186,13 @@ const styles = StyleSheet.create({
   },
   dateDisplayLabel: {
     fontSize: 14,
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     opacity: 0.8,
     marginBottom: 8,
   },
   dateDisplayValue: {
     fontSize: 22,
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     fontWeight: '700',
   },
   pickerContainer: {
@@ -227,29 +227,29 @@ const styles = StyleSheet.create({
   },
   ageLabel: {
     fontSize: 20,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginRight: 8,
   },
   ageValue: {
     fontSize: 40,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
   },
   ageYears: {
     fontSize: 20,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginLeft: 4,
   },
   note: {
     fontSize: 14,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     opacity: 0.7,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 20,
   },
   continueButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: nospiColors.purpleDark,
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(136, 14, 79, 0.4)',
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
