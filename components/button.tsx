@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Text,
   TextStyle,
-  useColorScheme,
   ViewStyle,
+  View,
 } from "react-native";
-import { appleBlue, zincColors } from "@/constants/Colors";
+import { LinearGradient } from "expo-linear-gradient";
 
 type ButtonVariant = "filled" | "outline" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
@@ -34,9 +34,6 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-
   const sizeStyles: Record<
     ButtonSize,
     { height: number; fontSize: number; padding: number }
@@ -46,55 +43,89 @@ export const Button: React.FC<ButtonProps> = ({
     lg: { height: 55, fontSize: 18, padding: 20 },
   };
 
-  const getVariantStyle = () => {
-    const baseStyle: ViewStyle = {
+  const getOutlineGhostStyle = (): ViewStyle => {
+    if (variant === "outline") {
+      return {
+        borderRadius: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+      };
+    }
+    return {
       borderRadius: 12,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: "transparent",
     };
-
-    switch (variant) {
-      case "filled":
-        return {
-          ...baseStyle,
-          backgroundColor: isDark ? zincColors[50] : zincColors[900],
-        };
-      case "outline":
-        return {
-          ...baseStyle,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: isDark ? zincColors[700] : zincColors[300],
-        };
-      case "ghost":
-        return {
-          ...baseStyle,
-          backgroundColor: "transparent",
-        };
-    }
   };
 
   const getTextColor = () => {
-    if (disabled) {
-      return isDark ? zincColors[500] : zincColors[400];
-    }
-
-    switch (variant) {
-      case "filled":
-        return isDark ? zincColors[900] : zincColors[50];
-      case "outline":
-      case "ghost":
-        return appleBlue;
-    }
+    if (disabled) return "#9CA3AF";
+    if (variant === "filled") return "#FFFFFF";
+    return "#880E4F";
   };
+
+  const textColorValue = getTextColor();
+
+  if (variant === "filled") {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || loading}
+        style={[
+          {
+            borderRadius: 12,
+            overflow: "hidden",
+            opacity: disabled ? 0.5 : 1,
+          },
+          style,
+        ]}
+      >
+        <LinearGradient
+          colors={["#1a0010", "#880E4F", "#AD1457"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{
+            height: sizeStyles[size].height,
+            paddingHorizontal: sizeStyles[size].padding,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text
+              style={StyleSheet.flatten([
+                {
+                  fontSize: sizeStyles[size].fontSize,
+                  color: "#FFFFFF",
+                  textAlign: "center",
+                  fontWeight: "700",
+                },
+                textStyle,
+              ])}
+            >
+              {children}
+            </Text>
+          )}
+        </LinearGradient>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
       style={[
-        getVariantStyle(),
+        getOutlineGhostStyle(),
         {
           height: sizeStyles[size].height,
           paddingHorizontal: sizeStyles[size].padding,
@@ -104,15 +135,14 @@ export const Button: React.FC<ButtonProps> = ({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={getTextColor()} />
+        <ActivityIndicator color={textColorValue} />
       ) : (
         <Text
           style={StyleSheet.flatten([
             {
               fontSize: sizeStyles[size].fontSize,
-              color: getTextColor(),
+              color: textColorValue,
               textAlign: "center",
-              marginBottom: 0,
               fontWeight: "700",
             },
             textStyle,

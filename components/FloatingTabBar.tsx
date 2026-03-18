@@ -1,10 +1,9 @@
 
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from './IconSymbol';
-import { nospiColors } from '@/constants/Colors';
 
 export interface TabBarItem {
   name: string;
@@ -23,6 +22,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
 
   const handleTabPress = (route: string) => {
+    console.log('FloatingTabBar: tab pressed:', route);
     router.push(route as any);
   };
 
@@ -31,9 +31,9 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const isActive = pathname === tab.route || pathname.startsWith(tab.route);
-          const iconColor = isActive ? '#FFFFFF' : '#9CA3AF';
-          const labelColor = isActive ? '#FFFFFF' : '#6B7280';
-          const backgroundColor = isActive ? nospiColors.purpleDark : 'transparent';
+          const iconColor = isActive ? '#FFFFFF' : '#999999';
+          const labelColor = isActive ? '#FFFFFF' : '#999999';
+          const backgroundColor = isActive ? '#880E4F' : 'transparent';
 
           return (
             <TouchableOpacity
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 10,
   },

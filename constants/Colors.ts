@@ -1,16 +1,29 @@
 
-// Nospi Purple Gradient Theme
+// Nospi Light Theme
 export const nospiColors = {
-  // Primary purple gradient colors
-  purpleDark: '#6B21A8',    // Deep purple
-  purpleMid: '#9333EA',     // Medium purple
-  purpleLight: '#C084FC',   // Light purple
-  purplePale: '#E9D5FF',    // Very light purple
-  
+  // Brand dark-to-pink gradient palette
+  purpleDark: '#1a0010',
+  purpleMid: '#880E4F',
+  purpleLight: '#AD1457',
+  purplePale: '#F8BBD0',
+
   // Accent colors
-  accent: '#EC4899',        // Pink accent
-  accentLight: '#F9A8D4',   // Light pink
-  
+  accent: '#880E4F',
+  accentAlt: '#AD1457',
+  accentLight: '#F8BBD0',
+
+  // Background & surface
+  background: '#FFFFFF',
+  surface: '#F9FAFB',
+  border: '#E5E7EB',
+
+  // Text
+  heading: '#1a0010',
+  body: '#333333',
+  muted: '#555555',
+  placeholder: '#999999',
+  inactive: '#999999',
+
   // Neutral colors
   white: '#FFFFFF',
   black: '#000000',
@@ -24,7 +37,7 @@ export const nospiColors = {
   gray700: '#374151',
   gray800: '#1F2937',
   gray900: '#111827',
-  
+
   // Status colors
   success: '#10B981',
   error: '#EF4444',

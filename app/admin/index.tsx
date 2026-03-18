@@ -1066,12 +1066,7 @@ export default function AdminPanelScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LinearGradient
-          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-          style={styles.gradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
+        <View style={styles.screen}>
           <View style={styles.passwordContainer}>
             <Text style={styles.passwordTitle}>Panel de Administración</Text>
             <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
@@ -1083,9 +1078,13 @@ export default function AdminPanelScreen() {
               onChangeText={setAdminPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
-              <Text style={styles.passwordButtonText}>Acceder</Text>
-            </TouchableOpacity>
+            <View style={styles.passwordButtonWrapper}>
+              <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.passwordButtonGradient}>
+                <TouchableOpacity style={styles.passwordButtonInner} onPress={handlePasswordSubmit}>
+                  <Text style={styles.passwordButtonText}>Acceder</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
@@ -1093,7 +1092,7 @@ export default function AdminPanelScreen() {
               <Text style={styles.backButtonText}>Volver</Text>
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </View>
       </>
     );
   }
@@ -1102,16 +1101,11 @@ export default function AdminPanelScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Panel de Administración' }} />
-        <LinearGradient
-          colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-          style={styles.gradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        >
+        <View style={styles.screen}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+            <ActivityIndicator size="large" color="#880E4F" />
           </View>
-        </LinearGradient>
+        </View>
       </>
     );
   }
@@ -1119,12 +1113,7 @@ export default function AdminPanelScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Panel de Administración' }} />
-      <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
+      <View style={styles.screen}>
         <View style={styles.container}>
           {/* Navigation Tabs */}
           <View style={styles.tabBar}>
@@ -1553,8 +1542,9 @@ export default function AdminPanelScreen() {
 }
 
 const styles = StyleSheet.create({
-  gradient: {
+  screen: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flex: 1,
@@ -1568,8 +1558,11 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#1a0010',
   },
+  passwordButtonWrapper: { borderRadius: 12, overflow: 'hidden', marginBottom: 12 },
+  passwordButtonGradient: { borderRadius: 12 },
+  passwordButtonInner: { paddingVertical: 16, alignItems: 'center' },
   passwordContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1602,7 +1595,7 @@ const styles = StyleSheet.create({
   passwordButton: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
