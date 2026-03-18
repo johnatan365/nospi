@@ -1295,14 +1295,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   confirmedCard: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(240, 98, 146, 0.12)',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
   confirmedIcon: {
     fontSize: 36,
@@ -1310,7 +1310,7 @@ const styles = StyleSheet.create({
   },
   confirmedText: {
     fontSize: 15,
-    color: '#065F46',
+    color: '#880E4F',
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -1396,7 +1396,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   continueButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#880E4F',
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 32,
@@ -1407,8 +1407,8 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 10,
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
   },
   continueButtonText: {
     fontSize: 20,

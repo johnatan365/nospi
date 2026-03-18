@@ -189,6 +189,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 24,
     width: '100%',
+    alignContent: 'center',
   },
   dateDisplayLabel: {
     fontSize: 14,
@@ -268,6 +269,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 5,
+    width: '100%',
+    alignSelf: 'center',
   },
   continueButtonDisabled: {
     backgroundColor: 'rgba(136, 14, 79, 0.4)',

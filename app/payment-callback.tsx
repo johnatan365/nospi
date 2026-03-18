@@ -344,7 +344,7 @@ export default function PaymentCallbackScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             <Image
-              source={require('@/assets/images/icono Nospi.png')}
+              source={require('@/assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -374,7 +374,10 @@ export default function PaymentCallbackScreen() {
               </View>
             </View>
 
-            <Text style={styles.footerText}>Gracias por confiar en Nospi 💜</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={styles.footerText}>Gracias por confiar en Nospi </Text>
+              <Text style={{ fontSize: 18, color: '#F06292' }}>❤️</Text>
+            </View>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -391,7 +394,7 @@ export default function PaymentCallbackScreen() {
     >
       <View style={styles.content}>
         <Image
-          source={require('@/assets/images/icono Nospi.png')}
+          source={require('@/assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png')}
           style={styles.logo}
           resizeMode="contain"
         />

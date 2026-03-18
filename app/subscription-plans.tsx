@@ -736,7 +736,7 @@ export default function SubscriptionPlansScreen() {
                   onChangeText={(t) => setNequiPhone(t.replace(/\D/g, '').slice(0, 10))}
                   keyboardType="phone-pad" maxLength={10} />
                 <TouchableOpacity
-                  style={[styles.payBtn, { backgroundColor: '#7C3AED' }, isProcessing('nequi') && styles.payBtnDisabled]}
+                  style={[styles.payBtn, isProcessing('nequi') && styles.payBtnDisabled]}
                   onPress={handleNequiPayment}
                   disabled={isProcessing('nequi')}
                   activeOpacity={0.7}
@@ -1040,8 +1040,8 @@ const styles = StyleSheet.create({
   waitingTitle: { fontSize: 22, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 12 },
   waitingDesc: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 24 },
   waitingHint: { fontSize: 13, color: '#999', marginTop: 12 },
-  title: { fontSize: 30, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
-  subtitle: { fontSize: 15, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 24, lineHeight: 22 },
+  title: { fontSize: 30, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 8 },
+  subtitle: { fontSize: 15, color: '#FFFFFF', opacity: 0.9, marginBottom: 24, lineHeight: 22 },
   priceCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20, padding: 24, marginBottom: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
   priceLabel: { fontSize: 15, color: '#666', marginBottom: 6 },
   priceAmount: { fontSize: 44, fontWeight: 'bold', color: nospiColors.purpleDark },

@@ -1806,7 +1806,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: '#10B981' }]}
+                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
                     onPress={() => {
                       setShowConfigModal(false);
                       handleSendEventReminder(selectedEventForConfig.id);
@@ -1816,7 +1816,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
+                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleMid }]}
                     onPress={() => {
                       setShowConfigModal(false);
                       setShowQuestionsModal(true);
@@ -1840,7 +1840,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
 
                   {selectedEventForConfig.event_status === 'draft' && (
                     <TouchableOpacity
-                      style={[styles.configActionButton, { backgroundColor: '#10B981' }]}
+                      style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
                       onPress={() => {
                         setShowConfigModal(false);
                         handlePublishEvent(selectedEventForConfig.id);
@@ -3384,7 +3384,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   moveAttendeeButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',

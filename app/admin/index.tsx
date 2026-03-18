@@ -774,7 +774,7 @@ export default function AdminPanelScreen() {
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
       { label: 'Eventos Publicados', value: activeEvents, color: nospiColors.purpleMid },
       { label: 'Total Usuarios', value: totalUsers, color: nospiColors.purpleLight },
-      { label: 'Total Citas', value: totalAppointments, color: '#8B5CF6' },
+      { label: 'Total Citas', value: totalAppointments, color: nospiColors.purpleLight },
     ];
 
     return (
@@ -810,7 +810,7 @@ export default function AdminPanelScreen() {
             <Text style={styles.actionButtonTextSecondary}>Ver Usuarios</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#10B981' }]}
+            style={[styles.actionButton, { backgroundColor: nospiColors.purpleDark }]}
             onPress={handleExportAllAttendees}
             disabled={exporting}
           >
@@ -1863,7 +1863,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   sendNotificationButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
@@ -1935,7 +1935,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   showAgainButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',

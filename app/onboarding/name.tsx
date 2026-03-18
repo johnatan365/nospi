@@ -39,19 +39,21 @@ export default function NameScreen() {
           <Text style={styles.title}>¿Cómo te llamas?</Text>
           <Text style={styles.subtitle}>Así es como aparecerá en tu perfil</Text>
           
-          <TextInput
-            style={[styles.input, isFocused && styles.inputFocused]}
-            value={name}
-            onChangeText={setName}
-            placeholder="Tu nombre"
-            placeholderTextColor="rgba(136, 14, 79, 0.4)"
-            autoFocus
-            maxLength={50}
-            selectionColor="#880E4F"
-            underlineColorAndroid="transparent"
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-          />
+          <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Tu nombre"
+              placeholderTextColor="rgba(136, 14, 79, 0.4)"
+              autoFocus
+              maxLength={50}
+              selectionColor="#F06292"
+              underlineColorAndroid="transparent"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+            />
+          </View>
 
           <TouchableOpacity
             style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
@@ -93,19 +95,23 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginBottom: 32,
   },
-  input: {
+  inputWrapper: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.70)',
     borderRadius: 16,
+    marginBottom: 24,
+  },
+  inputWrapperFocused: {
+    borderColor: 'rgba(240, 98, 146, 0.50)',
+  },
+  input: {
     paddingVertical: 18,
     paddingHorizontal: 20,
     fontSize: 18,
     color: '#333',
-    marginBottom: 24,
-  },
-  inputFocused: {
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    // Remove native iOS focus ring
+    ...(({ outline: 'none' } as any)),
   },
   continueButton: {
     backgroundColor: '#880E4F',
