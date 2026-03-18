@@ -13,7 +13,6 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-// IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
 const logoSource = require('../assets/images/b91bc029-a507-43b6-8dc9-61e6e588c5c9.png');
 
 export default function WelcomeScreen() {
@@ -67,18 +66,20 @@ export default function WelcomeScreen() {
           <Text style={styles.subtitle}>Conoce personas reales en encuentros grupales cada semana</Text>
           
           <View style={styles.buttonContainer}>
+            {/* Botón principal: blanco sólido, premium */}
             <TouchableOpacity 
               style={styles.primaryButton}
               onPress={handleStart}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Text style={styles.primaryButtonText}>Empezar</Text>
             </TouchableOpacity>
             
+            {/* Botón secundario: glass frosted, igualmente prominente */}
             <TouchableOpacity 
               style={styles.secondaryButton}
               onPress={handleLogin}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
             </TouchableOpacity>
@@ -138,10 +139,31 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     width: '100%',
-    gap: 16,
+    gap: 14,
   },
   primaryButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  primaryButtonText: {
+    color: '#880E4F',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  secondaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.40)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -149,30 +171,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  primaryButtonText: {
+  secondaryButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: '#F06292',
-    fontSize: 18,
-    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });
