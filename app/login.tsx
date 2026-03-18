@@ -529,19 +529,21 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   loginButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     borderRadius: 30,
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: nospiColors.black,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
   loginButtonDisabled: {
-    backgroundColor: nospiColors.purpleMid,
+    backgroundColor: '#AD1457',
     opacity: 0.6,
   },
   loginButtonText: {
@@ -557,13 +559,13 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: nospiColors.purpleDark,
-    opacity: 0.2,
+    backgroundColor: 'rgba(240, 98, 146, 0.40)',
+    opacity: 1,
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.7)',
     fontWeight: '600',
   },
   socialButtonsContainer: {

@@ -91,16 +91,16 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 20,
     fontSize: 18,
-    color: nospiColors.purpleDark,
+    color: '#333',
     marginBottom: 24,
   },
   continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(107, 33, 168, 0.4)',
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },

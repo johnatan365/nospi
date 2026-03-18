@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   dateDisplayContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -186,13 +186,13 @@ const styles = StyleSheet.create({
   },
   dateDisplayLabel: {
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     opacity: 0.8,
     marginBottom: 8,
   },
   dateDisplayValue: {
     fontSize: 22,
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     fontWeight: '700',
   },
   pickerContainer: {
@@ -227,29 +227,29 @@ const styles = StyleSheet.create({
   },
   ageLabel: {
     fontSize: 20,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginRight: 8,
   },
   ageValue: {
     fontSize: 40,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
   },
   ageYears: {
     fontSize: 20,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginLeft: 4,
   },
   note: {
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.7,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 20,
   },
   continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(107, 33, 168, 0.4)',
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },

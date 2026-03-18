@@ -276,5 +276,5 @@ export default function AuthCallbackScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  text: { marginTop: 16, fontSize: 16, color: nospiColors.purpleDark, textAlign: 'center' },
+  text: { marginTop: 16, fontSize: 16, color: '#FFFFFF', textAlign: 'center' },
 });

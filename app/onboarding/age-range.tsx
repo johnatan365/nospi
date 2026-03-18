@@ -132,12 +132,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
   },
   rangeText: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   sliderSection: {
     marginBottom: 32,
@@ -153,12 +153,12 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   sliderValue: {
     fontSize: 20,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   slider: {
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
