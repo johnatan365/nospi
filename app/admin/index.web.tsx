@@ -2562,7 +2562,7 @@ const styles = StyleSheet.create({
   },
   passwordButton: {
     width: '100%',
-    backgroundColor: '#880E4F',
+    backgroundColor: nospiColors.purpleDark,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

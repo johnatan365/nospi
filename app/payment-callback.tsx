@@ -1,27 +1,71 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Platform, ScrollView, Image, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { nospiColors } from '@/constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
+
 type WompiStatus = 'APPROVED' | 'PENDING' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'unknown';
 
-async function confirmAppointmentInSupabase(transactionId: string, paymentMethod: string, eventId: string, userId: string): Promise<void> {
+// Confirm the appointment in Supabase once payment is verified as APPROVED.
+// Uses upsert to handle both insert and update cases atomically.
+async function confirmAppointmentInSupabase(
+  transactionId: string,
+  paymentMethod: string,
+  eventId: string,
+  userId: string,
+): Promise<void> {
   console.log('payment-callback: confirmAppointment', { transactionId, paymentMethod, eventId, userId });
-  const { error: upsertError } = await supabase.from('appointments').upsert(
-    { user_id: userId, event_id: eventId, status: 'confirmada', payment_status: 'completed', transaction_id: transactionId, payment_method: paymentMethod, confirmed_at: new Date().toISOString() },
-    { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-  );
+
+  // Try upsert first (handles both insert and update in one call)
+  const { error: upsertError } = await supabase
+    .from('appointments')
+    .upsert(
+      {
+        user_id: userId,
+        event_id: eventId,
+        status: 'confirmada',
+        payment_status: 'completed',
+        transaction_id: transactionId,
+        payment_method: paymentMethod,
+        confirmed_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,event_id', ignoreDuplicates: false },
+    );
+
   if (upsertError) {
+    // Upsert failed (e.g. schema doesn't have transaction_id/payment_method columns yet).
+    // Fall back to UPDATE then INSERT.
     console.warn('payment-callback: upsert failed, falling back to update+insert:', upsertError.message);
-    const { data: updated, error: updateError } = await supabase.from('appointments').update({ status: 'confirmada', payment_status: 'completed' }).eq('user_id', userId).eq('event_id', eventId).select('id');
-    if (updateError) console.error('payment-callback: update failed:', updateError.message);
+
+    const { data: updated, error: updateError } = await supabase
+      .from('appointments')
+      .update({ status: 'confirmada', payment_status: 'completed' })
+      .eq('user_id', userId)
+      .eq('event_id', eventId)
+      .select('id');
+
+    if (updateError) {
+      console.error('payment-callback: update failed:', updateError.message);
+    }
+
     if (!updated || updated.length === 0) {
-      const { error: insertError } = await supabase.from('appointments').insert({ user_id: userId, event_id: eventId, status: 'confirmada', payment_status: 'completed' });
-      if (insertError) console.error('payment-callback: insert failed:', insertError.message);
-      else await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+      console.log('payment-callback: no existing row, inserting new appointment');
+      const { error: insertError } = await supabase.from('appointments').insert({
+        user_id: userId,
+        event_id: eventId,
+        status: 'confirmada',
+        payment_status: 'completed',
+      });
+      if (insertError) {
+        console.error('payment-callback: insert failed:', insertError.message);
+      } else {
+        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+      }
     } else {
       console.log('payment-callback: updated existing appointment to completed');
     }
@@ -32,13 +76,22 @@ async function confirmAppointmentInSupabase(transactionId: string, paymentMethod
 }
 
 async function cleanupAsyncStorage(): Promise<void> {
-  await AsyncStorage.multiRemove(['nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time', 'nospi_payment_status', 'pending_event_confirmation']);
+  await AsyncStorage.multiRemove([
+    'nospi_transaction_id',
+    'nospi_payment_method',
+    'nospi_payment_opened_time',
+    'nospi_payment_status',
+    'pending_event_confirmation',
+  ]);
 }
 
 export default function PaymentCallbackScreen() {
   const router = useRouter();
   const localSearchParams = useLocalSearchParams();
   const isWeb = Platform.OS === 'web';
+
+  // Web-only: show instructions card (user must return to app manually).
+  // Mobile: process the payment immediately and navigate to the event detail.
   const [statusMessage, setStatusMessage] = useState('Verificando pago...');
 
   useEffect(() => {
@@ -46,6 +99,9 @@ export default function PaymentCallbackScreen() {
     console.log('payment-callback: URL params:', localSearchParams);
 
     if (isWeb) {
+      // On web, Wompi redirects to https://nospi.vercel.app/payment-callback.
+      // Store the status so the web polling in subscription-plans can pick it up,
+      // then show the "return to app" instructions card.
       const urlStatus = (localSearchParams.payment_status as string) || 'unknown';
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_payment_status', urlStatus);
@@ -55,20 +111,32 @@ export default function PaymentCallbackScreen() {
       return;
     }
 
+    // ── MOBILE PATH ──────────────────────────────────────────────────────────
+    // Wompi redirected to nospi://payment-callback?payment_status=...&transaction_id=...
+    // We have the transaction ID both in the URL params AND in AsyncStorage.
+    // Prefer the URL param (most authoritative), fall back to AsyncStorage.
     const processPayment = async (overrideTransactionId?: string, overrideStatus?: string) => {
       try {
         const urlPaymentStatus = overrideStatus || (localSearchParams.payment_status as string) || '';
         const urlTransactionId = overrideTransactionId || (localSearchParams.transaction_id as string) || '';
+
         console.log('payment-callback (mobile): urlPaymentStatus:', urlPaymentStatus);
         console.log('payment-callback (mobile): urlTransactionId:', urlTransactionId);
 
+        // Step 1: Read ALL AsyncStorage values BEFORE any cleanup.
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
         const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
+        console.log('payment-callback (mobile): storedTransactionId:', storedTransactionId);
+        console.log('payment-callback (mobile): storedPaymentMethod:', storedPaymentMethod);
+        console.log('payment-callback (mobile): storedEventId:', storedEventId);
+
+        // Use URL transaction ID first, then fall back to stored one.
         const transactionId = urlTransactionId || storedTransactionId || '';
         const paymentMethod = storedPaymentMethod || 'card';
+        // IMPORTANT: capture eventId from AsyncStorage BEFORE cleanup is called.
         const eventId = storedEventId || '';
 
         if (!transactionId) {
@@ -79,6 +147,7 @@ export default function PaymentCallbackScreen() {
           return;
         }
 
+        // Guard: ignore if the payment was initiated more than 10 minutes ago.
         if (storedTime) {
           const age = Date.now() - parseInt(storedTime, 10);
           if (age > 10 * 60 * 1000) {
@@ -90,6 +159,7 @@ export default function PaymentCallbackScreen() {
           }
         }
 
+        // Step 2: Verify with Wompi — always confirm server-side to prevent spoofing.
         console.log('payment-callback (mobile): verifying transaction with Wompi:', transactionId);
         setStatusMessage('Verificando pago con Wompi...');
 
@@ -101,48 +171,72 @@ export default function PaymentCallbackScreen() {
         }
         const data = await res.json();
         const status: WompiStatus = data.data?.status ?? 'unknown';
+
         console.log('payment-callback (mobile): Wompi status:', status);
 
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
+
+          // Step 3: Refresh session so Supabase RLS sees the current user.
           try { await supabase.auth.refreshSession(); } catch {}
+
           const { data: { session } } = await supabase.auth.getSession();
           const userId = session?.user?.id;
+
+          // Step 4: Confirm appointment BEFORE cleanup (eventId already captured above).
           if (userId && eventId) {
             await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
           } else {
-            console.warn('payment-callback (mobile): missing userId or eventId', { userId, eventId });
+            console.warn('payment-callback (mobile): missing userId or eventId for appointment confirmation', { userId, eventId });
           }
+
+          // Step 5: Cleanup AFTER appointment is confirmed.
           await cleanupAsyncStorage();
+
           console.log('payment-callback (mobile): navigating to event-details with paymentSuccess=true, eventId:', eventId);
+
           if (eventId) {
-            router.replace({ pathname: '/event-details/[id]', params: { id: eventId, paymentSuccess: 'true' } });
+            router.replace({
+              pathname: '/event-details/[id]',
+              params: { id: eventId, paymentSuccess: 'true' },
+            });
           } else {
+            // No event ID — fall back to appointments tab.
             router.replace('/(tabs)/appointments');
           }
+
         } else if (status === 'PENDING') {
           console.log('payment-callback (mobile): payment PENDING');
           setStatusMessage('Pago en proceso...');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
+
         } else if (status === 'DECLINED') {
           console.log('payment-callback (mobile): payment DECLINED');
           setStatusMessage('Pago rechazado.');
           await cleanupAsyncStorage();
-          if (eventId) await AsyncStorage.setItem('pending_event_confirmation', eventId);
+          // Restore eventId so user can retry from subscription-plans.
+          if (eventId) {
+            await AsyncStorage.setItem('pending_event_confirmation', eventId);
+          }
           router.replace('/subscription-plans');
+
         } else if (status === 'VOIDED') {
           console.log('payment-callback (mobile): payment VOIDED (cancelled)');
           setStatusMessage('Pago cancelado.');
           await cleanupAsyncStorage();
-          if (eventId) await AsyncStorage.setItem('pending_event_confirmation', eventId);
+          if (eventId) {
+            await AsyncStorage.setItem('pending_event_confirmation', eventId);
+          }
           router.replace('/subscription-plans');
+
         } else {
           console.log('payment-callback (mobile): unknown/error status:', status);
           setStatusMessage('Error en el pago.');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
         }
+
       } catch (err) {
         console.error('payment-callback (mobile): unexpected error:', err);
         setStatusMessage('Error verificando el pago.');
@@ -155,8 +249,11 @@ export default function PaymentCallbackScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Issue 5: Fallback Linking listener for Android — sometimes URL params arrive
+  // via a Linking event rather than the initial route params.
   useEffect(() => {
     if (isWeb) return;
+
     const subscription = Linking.addEventListener('url', ({ url }) => {
       console.log('payment-callback: Linking url event received:', url);
       if (url.includes('payment-callback')) {
@@ -166,33 +263,43 @@ export default function PaymentCallbackScreen() {
           const txId = urlObj.searchParams.get('transaction_id') || urlObj.searchParams.get('id') || '';
           console.log('payment-callback: Linking fallback — status:', status, 'txId:', txId);
           if (txId) {
+            // Re-run processPayment with the params from the Linking event.
+            // We define a local async wrapper to avoid stale closure issues.
             const runProcess = async () => {
               const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
               const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
               const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
               const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
+
               const transactionId = txId || storedTransactionId || '';
               const paymentMethod = storedPaymentMethod || 'card';
               const eventId = storedEventId || '';
+
               if (!transactionId) return;
+
               if (storedTime) {
                 const age = Date.now() - parseInt(storedTime, 10);
                 if (age > 10 * 60 * 1000) return;
               }
+
               console.log('payment-callback: Linking fallback verifying with Wompi:', transactionId);
               setStatusMessage('Verificando pago con Wompi...');
+
               try {
                 const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
                 if (!res.ok) throw new Error(`Wompi API returned ${res.status}`);
                 const data = await res.json();
                 const wompiStatus: WompiStatus = data.data?.status ?? 'unknown';
                 console.log('payment-callback: Linking fallback Wompi status:', wompiStatus);
+
                 if (wompiStatus === 'APPROVED') {
                   setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
                   try { await supabase.auth.refreshSession(); } catch {}
                   const { data: { session } } = await supabase.auth.getSession();
                   const userId = session?.user?.id;
-                  if (userId && eventId) await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
+                  if (userId && eventId) {
+                    await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
+                  }
                   await cleanupAsyncStorage();
                   if (eventId) {
                     router.replace({ pathname: '/event-details/[id]', params: { id: eventId, paymentSuccess: 'true' } });
@@ -220,60 +327,164 @@ export default function PaymentCallbackScreen() {
         }
       }
     });
+
     return () => subscription.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWeb]);
 
+  // ── WEB VIEW ─────────────────────────────────────────────────────────────
   if (isWeb) {
     return (
-      <View style={styles.screen}>
+      <LinearGradient
+        colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
+        style={styles.container}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
-            <Image source={require('@/assets/images/icono Nospi.png')} style={styles.logo} resizeMode="contain" />
+            <Image
+              source={require('@/assets/images/icono Nospi.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+
             <View style={styles.instructionsCard}>
               <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
+
               <View style={styles.stepContainer}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>1</Text>
+                </View>
                 <Text style={styles.stepText}>Cierra esta ventana del navegador</Text>
               </View>
+
               <View style={styles.stepContainer}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>2</Text>
+                </View>
                 <Text style={styles.stepText}>Regresa a la app de Nospi</Text>
               </View>
+
               <View style={styles.stepContainer}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>3</Text>
+                </View>
                 <Text style={styles.stepText}>Tu pago se procesará automáticamente</Text>
               </View>
             </View>
+
             <Text style={styles.footerText}>Gracias por confiar en Nospi 💜</Text>
           </View>
         </ScrollView>
-      </View>
+      </LinearGradient>
     );
   }
 
+  // ── MOBILE VIEW (auto-redirects, shows status while processing) ───────────
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight, nospiColors.purplePale]}
+      style={styles.container}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
       <View style={styles.content}>
-        <Image source={require('@/assets/images/icono Nospi.png')} style={styles.logo} resizeMode="contain" />
-        <ActivityIndicator size="large" color="#880E4F" style={{ marginBottom: 16 }} />
+        <Image
+          source={require('@/assets/images/icono Nospi.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="large" color={nospiColors.white} style={{ marginBottom: 16 }} />
         <Text style={styles.redirectText}>{statusMessage}</Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, minHeight: '100%' },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 500, padding: 24 },
-  logo: { width: 200, height: 200, marginBottom: 32 },
-  instructionsCard: { backgroundColor: '#F9FAFB', borderRadius: 24, padding: 32, width: '100%', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 32 },
-  instructionsTitle: { fontSize: 26, fontWeight: '800', color: '#1a0010', marginBottom: 28, textAlign: 'center' },
-  stepContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  stepNumber: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#880E4F', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  stepNumberText: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  stepText: { flex: 1, fontSize: 17, color: '#333333', lineHeight: 24, fontWeight: '500' },
-  footerText: { fontSize: 18, color: '#555555', textAlign: 'center', fontWeight: '600' },
-  redirectText: { fontSize: 18, color: '#1a0010', textAlign: 'center', fontWeight: '600', marginTop: 8 },
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    minHeight: '100%',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 500,
+    padding: 24,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    marginBottom: 32,
+  },
+  instructionsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+    marginBottom: 32,
+  },
+  instructionsTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: nospiColors.purpleDark,
+    marginBottom: 28,
+    textAlign: 'center',
+  },
+  stepContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  stepNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: nospiColors.purpleMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  stepNumberText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: nospiColors.white,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 17,
+    color: nospiColors.gray800,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  footerText: {
+    fontSize: 18,
+    color: nospiColors.white,
+    textAlign: 'center',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  redirectText: {
+    fontSize: 18,
+    color: nospiColors.white,
+    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 8,
+  },
 });

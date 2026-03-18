@@ -3,12 +3,9 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-const HEADING = '#1a0010';
-const MUTED = '#555555';
-const ACCENT = '#880E4F';
 
 export default function BirthdateScreen() {
   const router = useRouter();
@@ -19,14 +16,18 @@ export default function BirthdateScreen() {
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
     return age;
   };
 
   const age = calculateAge(date);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowPicker(false);
+    if (Platform.OS === 'android') {
+      setShowPicker(false);
+    }
     if (selectedDate) {
       setDate(selectedDate);
       console.log('User selected birthdate:', selectedDate);
@@ -34,23 +35,38 @@ export default function BirthdateScreen() {
   };
 
   const handleContinue = async () => {
-    if (age < 18) { Alert.alert('Edad mínima', 'Debes tener al menos 18 años para usar Nospi.'); return; }
+    if (age < 18) {
+      Alert.alert('Edad mínima', 'Debes tener al menos 18 años para usar Nospi.');
+      return;
+    }
+
     console.log('User entered birthdate:', date, 'Age:', age);
+    
     await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
     await AsyncStorage.setItem('onboarding_age', age.toString());
+    
     router.push('/onboarding/gender');
   };
 
   const canContinue = age >= 18;
   const ageText = age.toString();
-  const formattedDate = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+  const formattedDate = date.toLocaleDateString('es-ES', { 
+    day: '2-digit', 
+    month: 'long', 
+    year: 'numeric' 
+  });
 
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      style={styles.gradient}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
       <View style={styles.container}>
         <View style={styles.content}>
           <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
-
+          
           {Platform.OS === 'web' ? (
             <View style={styles.webDateContainer}>
               <input
@@ -64,11 +80,26 @@ export default function BirthdateScreen() {
                     setDate(new Date(y, m - 1, d));
                   }
                 }}
-                style={{ fontSize: 18, padding: '12px 20px', borderRadius: 12, border: '2px solid #E5E7EB', color: HEADING, backgroundColor: '#F9FAFB', width: '100%', boxSizing: 'border-box', outline: 'none', cursor: 'pointer' } as any}
+                style={{
+                  fontSize: 18,
+                  padding: '12px 20px',
+                  borderRadius: 12,
+                  border: `2px solid ${nospiColors.purpleLight}`,
+                  color: nospiColors.purpleDark,
+                  backgroundColor: 'rgba(255,255,255,0.9)',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  cursor: 'pointer',
+                } as any}
               />
             </View>
           ) : (
-            <TouchableOpacity style={styles.dateDisplayContainer} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
+            <TouchableOpacity 
+              style={styles.dateDisplayContainer}
+              onPress={() => setShowPicker(true)}
+              activeOpacity={0.7}
+            >
               <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
               <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
             </TouchableOpacity>
@@ -83,11 +114,14 @@ export default function BirthdateScreen() {
                 onChange={handleDateChange}
                 maximumDate={new Date()}
                 minimumDate={new Date(1940, 0, 1)}
-                textColor={HEADING}
+                textColor={nospiColors.purpleDark}
                 style={styles.picker}
               />
               {Platform.OS === 'ios' && (
-                <TouchableOpacity style={styles.doneButton} onPress={() => setShowPicker(false)}>
+                <TouchableOpacity 
+                  style={styles.doneButton}
+                  onPress={() => setShowPicker(false)}
+                >
                   <Text style={styles.doneButtonText}>Listo</Text>
                 </TouchableOpacity>
               )}
@@ -102,40 +136,139 @@ export default function BirthdateScreen() {
 
           <Text style={styles.note}>Tu perfil muestra tu edad, no tu fecha de nacimiento</Text>
 
-          <View style={[styles.buttonWrapper, !canContinue && styles.buttonDisabled]}>
-            <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.buttonGradient}>
-              <TouchableOpacity style={styles.buttonInner} onPress={handleContinue} disabled={!canContinue} activeOpacity={0.8}>
-                <Text style={styles.buttonText}>Continuar</Text>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
+          <TouchableOpacity
+            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>Continuar</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1a0010', marginBottom: 32, textAlign: 'center' },
-  webDateContainer: { marginBottom: 24, width: '100%' },
-  dateDisplayContainer: { backgroundColor: '#F9FAFB', borderWidth: 2, borderColor: '#E5E7EB', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 24 },
-  dateDisplayLabel: { fontSize: 14, color: MUTED, marginBottom: 8 },
-  dateDisplayValue: { fontSize: 22, color: HEADING, fontWeight: '700' },
-  pickerContainer: { marginBottom: 24, backgroundColor: '#F9FAFB', borderRadius: 16, overflow: 'hidden', paddingVertical: 8 },
-  picker: { width: '100%' },
-  doneButton: { backgroundColor: ACCENT, marginHorizontal: 16, marginTop: 8, marginBottom: 8, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  doneButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  ageContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  ageLabel: { fontSize: 20, color: HEADING, marginRight: 8 },
-  ageValue: { fontSize: 40, fontWeight: 'bold', color: HEADING },
-  ageYears: { fontSize: 20, color: HEADING, marginLeft: 4 },
-  note: { fontSize: 14, color: MUTED, textAlign: 'center', marginBottom: 32, lineHeight: 20 },
-  buttonWrapper: { borderRadius: 16, overflow: 'hidden' },
-  buttonGradient: { borderRadius: 16 },
-  buttonInner: { paddingVertical: 18, paddingHorizontal: 32, alignItems: 'center' },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  webDateContainer: {
+    marginBottom: 24,
+    width: '100%',
+  },
+  dateDisplayContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 2,
+    borderColor: nospiColors.purpleLight,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dateDisplayLabel: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
+    marginBottom: 8,
+  },
+  dateDisplayValue: {
+    fontSize: 22,
+    color: nospiColors.purpleDark,
+    fontWeight: '700',
+  },
+  pickerContainer: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    paddingVertical: 8,
+  },
+  picker: {
+    width: '100%',
+  },
+  doneButton: {
+    backgroundColor: nospiColors.purpleDark,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  ageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  ageLabel: {
+    fontSize: 20,
+    color: nospiColors.purpleDark,
+    marginRight: 8,
+  },
+  ageValue: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  ageYears: {
+    fontSize: 20,
+    color: nospiColors.purpleDark,
+    marginLeft: 4,
+  },
+  note: {
+    fontSize: 14,
+    color: nospiColors.purpleDark,
+    opacity: 0.7,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
+  },
+  continueButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  continueButtonDisabled: {
+    backgroundColor: 'rgba(107, 33, 168, 0.4)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  continueButtonText: {
+    color: nospiColors.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
 });

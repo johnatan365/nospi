@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
+import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -12,11 +13,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const HEADING = '#1a0010';
-const BODY = '#333333';
-const MUTED = '#555555';
-const ACCENT = '#880E4F';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,13 +25,20 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
+    // Listen for deep link events (OAuth callback)
     const subscription = Linking.addEventListener('url', ({ url }) => {
       console.log('LoginScreen: Received URL callback:', url);
+      
+      // Check if this is an OAuth callback
       if (url.includes('auth/callback')) {
         console.log('LoginScreen: OAuth callback detected, navigating to callback screen');
+        // The callback screen will handle the session
       }
     });
-    return () => { subscription.remove(); };
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const showErrorAlert = (title: string, message: string) => {
@@ -45,16 +48,46 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) { setError('Por favor ingresa tu email y contraseña'); return; }
-    setLoading(true); setError('');
+    if (!email || !password) {
+      setError('Por favor ingresa tu email y contraseña');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
     console.log('User attempting login with email:', email);
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) { console.error('Login error:', error); setError('Email o contraseña incorrectos'); return; }
-      if (!data.user) { setError('Error al iniciar sesión'); return; }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+        setError('Email o contraseña incorrectos');
+        return;
+      }
+
+      if (!data.user) {
+        console.error('No user data returned');
+        setError('Error al iniciar sesión');
+        return;
+      }
+
       console.log('Login successful, user:', data.user.id);
-      const { data: profile, error: profileError } = await supabase.from('users').select('id').eq('id', data.user.id).maybeSingle();
-      if (profileError) console.error('Error checking profile:', profileError);
+
+      // Check if user has a profile
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Error checking profile:', profileError);
+      }
+
       if (!profile) {
         console.log('No profile found, redirecting to onboarding');
         router.replace('/onboarding/name');
@@ -72,45 +105,80 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     console.log('User tapped Login with Google');
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
+
     try {
+      // Store login intent in AsyncStorage so callback knows this is a login flow
       await AsyncStorage.setItem('oauth_flow_type', 'login');
       console.log('LoginScreen: Stored oauth_flow_type as login');
+      
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl, skipBrowserRedirect: false, queryParams: { access_type: 'offline', prompt: 'consent' } } });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
       if (error) {
         console.error('Google OAuth error:', error);
+        
+        // Check for specific OAuth configuration errors
         if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
-          showErrorAlert('Configuración Pendiente', 'El inicio de sesión con Google no está disponible en este momento. Por favor usa el inicio de sesión con email.');
+          showErrorAlert(
+            'Configuración Pendiente',
+            'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el inicio de sesión con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
+          );
         } else {
           setError('Error al conectar con Google. Por favor intenta de nuevo.');
         }
-        setLoading(false); return;
+        
+        setLoading(false);
+        return;
       }
+
       console.log('Google OAuth initiated:', data);
+      
       if (data.url) {
         console.log('LoginScreen: Opening Google OAuth URL');
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('LoginScreen: WebBrowser result type:', result.type);
+
         if (result.type === 'success' && result.url) {
           console.log('LoginScreen: OAuth success, callback URL:', result.url);
-          const parsedUrl = new URL(result.url);
+          const callbackUrl = result.url;
+
+          // PKCE flow: extract the `code` param and let the callback screen exchange it
+          const parsedUrl = new URL(callbackUrl);
           const code = parsedUrl.searchParams.get('code');
+
+          // Also check for legacy implicit-flow tokens in query or hash
           let accessToken = parsedUrl.searchParams.get('access_token');
           let refreshToken = parsedUrl.searchParams.get('refresh_token');
           if (!accessToken || !refreshToken) {
-            const hash = result.url.split('#')[1] || '';
+            const hash = callbackUrl.split('#')[1] || '';
             const hashParams = new URLSearchParams(hash);
             accessToken = accessToken || hashParams.get('access_token');
             refreshToken = refreshToken || hashParams.get('refresh_token');
           }
+
           if (code) {
             console.log('LoginScreen: PKCE code found, navigating to callback screen');
             router.push({ pathname: '/auth/callback', params: { code } });
           } else if (accessToken && refreshToken) {
             console.log('LoginScreen: Implicit tokens found, navigating to callback screen');
-            router.push({ pathname: '/auth/callback', params: { access_token: accessToken, refresh_token: refreshToken } });
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
+            });
           } else {
             console.log('LoginScreen: No code or tokens in URL, navigating to callback screen anyway');
             router.push('/auth/callback');
@@ -126,72 +194,135 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error('Google login failed:', error);
+      
+      // Check if it's a configuration error
       if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
-        showErrorAlert('Configuración Pendiente', 'El inicio de sesión con Google no está disponible en este momento. Por favor usa el inicio de sesión con email.');
+        showErrorAlert(
+          'Configuración Pendiente',
+          'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el inicio de sesión con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
+        );
       } else {
         setError('Error al iniciar sesión con Google');
       }
+      
       setLoading(false);
     }
   };
 
   const handleAppleLogin = async () => {
     console.log('User tapped Login with Apple');
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
+
     try {
+      // Store login intent in AsyncStorage so callback knows this is a login flow
       await AsyncStorage.setItem('oauth_flow_type', 'login');
+      console.log('LoginScreen: Stored oauth_flow_type as login');
+      
       const redirectUrl = Linking.createURL('auth/callback');
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: redirectUrl, skipBrowserRedirect: false } });
+      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
+
       if (error) {
         console.error('Apple OAuth error:', error);
+        
+        // Check for specific OAuth configuration errors
         if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
-          showErrorAlert('Configuración Pendiente', 'El inicio de sesión con Apple no está disponible en este momento. Por favor usa el inicio de sesión con email.');
+          showErrorAlert(
+            'Configuración Pendiente',
+            'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el inicio de sesión con email o contacta al administrador.'
+          );
         } else {
           setError('Error al conectar con Apple. Por favor intenta de nuevo.');
         }
-        setLoading(false); return;
+        
+        setLoading(false);
+        return;
       }
+
+      console.log('Apple OAuth initiated:', data);
+      
       if (data.url) {
+        console.log('LoginScreen: Opening Apple OAuth URL');
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('LoginScreen: Apple WebBrowser result type:', result.type);
+
         if (result.type === 'success' && result.url) {
-          const parsedUrl = new URL(result.url);
+          console.log('LoginScreen: Apple OAuth success, callback URL:', result.url);
+          const callbackUrl = result.url;
+
+          // PKCE flow: extract the `code` param and let the callback screen exchange it
+          const parsedUrl = new URL(callbackUrl);
           const code = parsedUrl.searchParams.get('code');
+
+          // Also check for legacy implicit-flow tokens in query or hash
           let accessToken = parsedUrl.searchParams.get('access_token');
           let refreshToken = parsedUrl.searchParams.get('refresh_token');
           if (!accessToken || !refreshToken) {
-            const hash = result.url.split('#')[1] || '';
+            const hash = callbackUrl.split('#')[1] || '';
             const hashParams = new URLSearchParams(hash);
             accessToken = accessToken || hashParams.get('access_token');
             refreshToken = refreshToken || hashParams.get('refresh_token');
           }
+
           if (code) {
+            console.log('LoginScreen: Apple PKCE code found, navigating to callback screen');
             router.push({ pathname: '/auth/callback', params: { code } });
           } else if (accessToken && refreshToken) {
-            router.push({ pathname: '/auth/callback', params: { access_token: accessToken, refresh_token: refreshToken } });
+            console.log('LoginScreen: Apple implicit tokens found, navigating to callback screen');
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
+            });
           } else {
+            console.log('LoginScreen: No code or tokens in Apple URL, navigating to callback screen anyway');
             router.push('/auth/callback');
           }
         } else if (result.type === 'cancel') {
+          console.log('LoginScreen: User cancelled Apple OAuth');
           setError('Inicio de sesión cancelado');
           setLoading(false);
         } else {
+          console.log('LoginScreen: Apple OAuth result type:', result.type);
           setLoading(false);
         }
       }
     } catch (error: any) {
       console.error('Apple login failed:', error);
-      setError('Error al iniciar sesión con Apple');
+      
+      // Check if it's a configuration error
+      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
+        showErrorAlert(
+          'Configuración Pendiente',
+          'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el inicio de sesión con email o contacta al administrador.'
+        );
+      } else {
+        setError('Error al iniciar sesión con Apple');
+      }
+      
       setLoading(false);
     }
   };
 
+  const appleIconText = '';
   const googleIconText = 'G';
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.screen}>
+      <LinearGradient
+        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
         <ScrollView contentContainerStyle={styles.container}>
           <View style={styles.content}>
             <Text style={styles.title}>Bienvenido de nuevo</Text>
@@ -202,24 +333,51 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <View style={styles.inputWrapper}>
                 <MaterialIcons name="email" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput style={styles.inputWithIcon} placeholder="Email" placeholderTextColor="#999" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
+
               <View style={styles.inputWrapper}>
                 <MaterialIcons name="lock" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput style={styles.inputWithIcon} placeholder="Contraseña" placeholderTextColor="#999" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} />
-                <TouchableOpacity onPress={() => { console.log('Toggle password visibility'); setShowPassword(!showPassword); }} style={styles.eyeButton}>
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  onPress={() => { console.log('Toggle password visibility'); setShowPassword(!showPassword); }}
+                  style={styles.eyeButton}
+                >
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={[styles.loginButtonWrapper, loading && styles.loginButtonDisabled]}>
-              <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.loginButtonGradient}>
-                <TouchableOpacity style={styles.loginButtonInner} onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
-                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.loginButtonText}>Iniciar Sesión</Text>}
-                </TouchableOpacity>
-              </LinearGradient>
-            </View>
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color={nospiColors.white} />
+              ) : (
+                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              )}
+            </TouchableOpacity>
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -228,11 +386,24 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.socialButtonsContainer}>
-              <TouchableOpacity style={styles.socialButton} onPress={handleGoogleLogin} disabled={loading} activeOpacity={0.8}>
-                <View style={styles.googleIconContainer}><Text style={styles.googleIcon}>{googleIconText}</Text></View>
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={handleGoogleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <View style={styles.googleIconContainer}>
+                  <Text style={styles.googleIcon}>{googleIconText}</Text>
+                </View>
                 <Text style={styles.socialButtonText}>Google</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton} onPress={handleAppleLogin} disabled={loading} activeOpacity={0.8}>
+
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={handleAppleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
                 <View style={styles.appleIconContainer}>
                   <RNImage source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
                 </View>
@@ -240,67 +411,263 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => { console.log('User pressed back on login'); router.back(); }} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
               <Text style={styles.backButtonText}>Volver</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
 
-        <Modal visible={showErrorModal} transparent animationType="fade" onRequestClose={() => setShowErrorModal(false)}>
+        {/* Error Modal for OAuth Configuration Issues */}
+        <Modal
+          visible={showErrorModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowErrorModal(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.errorModalContent}>
               <Text style={styles.errorModalTitle}>⚠️ Configuración Pendiente</Text>
               <Text style={styles.errorModalText}>{errorModalMessage}</Text>
-              <View style={styles.errorModalButtonWrapper}>
-                <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.errorModalButtonGradient}>
-                  <TouchableOpacity style={styles.errorModalButtonInner} onPress={() => setShowErrorModal(false)} activeOpacity={0.8}>
-                    <Text style={styles.errorModalButtonText}>Entendido</Text>
-                  </TouchableOpacity>
-                </LinearGradient>
-              </View>
+              <TouchableOpacity
+                style={styles.errorModalButton}
+                onPress={() => setShowErrorModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.errorModalButtonText}>Entendido</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
-      </View>
+      </LinearGradient>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  title: { fontSize: 32, fontWeight: 'bold', color: HEADING, marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 18, color: MUTED, marginBottom: 40, textAlign: 'center' },
-  errorText: { fontSize: 14, color: '#FF6B6B', backgroundColor: '#FFF5F5', padding: 12, borderRadius: 8, marginBottom: 16, textAlign: 'center', borderWidth: 1, borderColor: '#FFCDD2' },
-  inputContainer: { gap: 16, marginBottom: 24 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  inputIcon: { marginLeft: 16, marginRight: 8 },
-  inputWithIcon: { flex: 1, paddingVertical: 16, paddingRight: 8, fontSize: 16, color: BODY },
-  eyeButton: { paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'stretch' },
-  loginButtonWrapper: { borderRadius: 30, overflow: 'hidden', marginBottom: 24 },
-  loginButtonGradient: { borderRadius: 30 },
-  loginButtonInner: { paddingVertical: 18, alignItems: 'center' },
-  loginButtonDisabled: { opacity: 0.6 },
-  loginButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-  dividerText: { marginHorizontal: 16, fontSize: 14, color: MUTED, fontWeight: '600' },
-  socialButtonsContainer: { flexDirection: 'row', gap: 16, marginBottom: 24 },
-  socialButton: { flex: 1, backgroundColor: '#FFFFFF', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  googleIconContainer: { width: 28, height: 28, marginRight: 8, justifyContent: 'center', alignItems: 'center' },
-  googleIcon: { fontSize: 20, color: '#4285F4', fontWeight: 'bold', lineHeight: 24, marginTop: 4 },
-  appleIconImage: { width: 28, height: 28 },
-  appleIconContainer: { width: 28, height: 28, marginRight: 8, justifyContent: 'center', alignItems: 'center' },
-  socialButtonText: { fontSize: 16, color: BODY, fontWeight: '600' },
-  backButton: { alignItems: 'center', paddingVertical: 12 },
-  backButtonText: { fontSize: 16, color: MUTED, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  errorModalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 32, width: '100%', maxWidth: 400, alignItems: 'center' },
-  errorModalTitle: { fontSize: 24, fontWeight: 'bold', color: '#FF6B6B', marginBottom: 16, textAlign: 'center' },
-  errorModalText: { fontSize: 16, color: BODY, lineHeight: 24, marginBottom: 24, textAlign: 'center' },
-  errorModalButtonWrapper: { borderRadius: 16, overflow: 'hidden', width: '100%' },
-  errorModalButtonGradient: { borderRadius: 16 },
-  errorModalButtonInner: { paddingVertical: 16, paddingHorizontal: 48, alignItems: 'center' },
-  errorModalButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 18,
+    color: nospiColors.purpleDark,
+    opacity: 0.8,
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#FF6B6B',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: nospiColors.white,
+    borderRadius: 16,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginLeft: 16,
+    marginRight: 8,
+  },
+  inputWithIcon: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingRight: 8,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+  },
+  input: {
+    backgroundColor: nospiColors.white,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    fontSize: 16,
+    color: '#333',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  loginButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 18,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loginButtonDisabled: {
+    backgroundColor: nospiColors.purpleMid,
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    color: nospiColors.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: nospiColors.purpleDark,
+    opacity: 0.2,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 24,
+  },
+  socialButton: {
+    flex: 1,
+    backgroundColor: nospiColors.white,
+    paddingVertical: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleIconContainer: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    fontSize: 20,
+    color: '#4285F4',
+    fontWeight: 'bold',
+    lineHeight: 24,
+    marginTop: 4,
+  },
+  appleIconImage: {
+    width: 28,
+    height: 28,
+  },
+  appleIconContainer: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appleIcon: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+  backButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorModalContent: {
+    backgroundColor: nospiColors.white,
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  errorModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorModalText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  errorModalButton: {
+    backgroundColor: nospiColors.purpleDark,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  errorModalButtonText: {
+    color: nospiColors.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
 });

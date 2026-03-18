@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { nospiColors } from '@/constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
+// Required: completes the auth session on Android so the browser tab closes cleanly
 WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthCallbackScreen() {
@@ -20,32 +23,43 @@ export default function AuthCallbackScreen() {
 
     const handleCallback = async () => {
       try {
+        // ── Step 1: Try to get the PKCE code from route params (passed by login/register screens)
         let code = params.code as string | undefined;
 
+        // ── Step 2: If no code in params, check the initial deep-link URL (Android cold-start)
         if (!code) {
           const initialUrl = await Linking.getInitialURL();
           console.log('AuthCallbackScreen: Initial URL:', initialUrl);
+
           if (initialUrl) {
             const parsed = new URL(initialUrl);
             code = parsed.searchParams.get('code') ?? undefined;
+
+            // Also check hash fragment (some Supabase configs use implicit flow fallback)
             if (!code) {
               const hash = initialUrl.split('#')[1] || '';
               const hashParams = new URLSearchParams(hash);
               code = hashParams.get('code') ?? undefined;
             }
+
             console.log('AuthCallbackScreen: Code from initial URL:', !!code);
           }
         }
 
+        // ── Step 3: Also check for legacy token params (implicit flow / direct navigation)
         let accessToken = params.access_token as string | undefined;
         let refreshToken = params.refresh_token as string | undefined;
 
+        // ── Step 4: Exchange PKCE code for session (primary path on native)
         if (code) {
           console.log('AuthCallbackScreen: Exchanging PKCE code for session...');
           setStatus('Verificando código...');
+
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
           if (error) {
             console.error('AuthCallbackScreen: Error exchanging code:', error);
+            // Fall through to token path or getSession fallback
           } else if (data.session) {
             console.log('AuthCallbackScreen: Session obtained via code exchange, user:', data.session.user.id);
             await processUserProfile(data.session.user);
@@ -53,10 +67,16 @@ export default function AuthCallbackScreen() {
           }
         }
 
+        // ── Step 5: Set session directly from tokens (legacy / implicit flow)
         if (accessToken && refreshToken) {
           console.log('AuthCallbackScreen: Setting session from tokens');
           setStatus('Estableciendo sesión...');
-          const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
           if (error) {
             console.error('AuthCallbackScreen: Error setting session from tokens:', error);
           } else if (data.session) {
@@ -66,24 +86,32 @@ export default function AuthCallbackScreen() {
           }
         }
 
+        // ── Step 6: Fallback — poll getSession (handles web implicit flow auto-detection)
         console.log('AuthCallbackScreen: Fallback — polling getSession...');
         setStatus('Esperando sesión...');
+
+        // Give Supabase a moment to process the auth state change
         await new Promise(resolve => setTimeout(resolve, 1500));
+
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
         if (sessionError) {
           console.error('AuthCallbackScreen: Error getting session:', sessionError);
           setStatus('Error al obtener la sesión');
           setTimeout(() => router.replace('/welcome'), 2000);
           return;
         }
+
         if (session) {
           console.log('AuthCallbackScreen: Session found via getSession, user:', session.user.id);
           await processUserProfile(session.user);
           return;
         }
 
+        // ── Step 7: Last resort — listen for auth state change with timeout
         console.log('AuthCallbackScreen: No session yet, listening for auth state change...');
         setStatus('Esperando confirmación...');
+
         let resolved = false;
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
           console.log('AuthCallbackScreen: Auth state change:', event);
@@ -93,6 +121,8 @@ export default function AuthCallbackScreen() {
             await processUserProfile(newSession.user);
           }
         });
+
+        // 10-second timeout
         setTimeout(() => {
           if (!resolved) {
             resolved = true;
@@ -102,6 +132,7 @@ export default function AuthCallbackScreen() {
             setTimeout(() => router.replace('/welcome'), 2000);
           }
         }, 10000);
+
       } catch (error) {
         console.error('AuthCallbackScreen: Unexpected error processing callback:', error);
         setStatus('Error al procesar la autenticación');
@@ -117,7 +148,10 @@ export default function AuthCallbackScreen() {
         await AsyncStorage.removeItem('oauth_flow_type');
 
         const { data: existingProfile, error: profileError } = await supabase
-          .from('users').select('*').eq('id', googleUser.id).maybeSingle();
+          .from('users')
+          .select('*')
+          .eq('id', googleUser.id)
+          .maybeSingle();
 
         if (profileError && profileError.code !== 'PGRST116') {
           console.error('AuthCallbackScreen: Error checking profile:', profileError);
@@ -127,20 +161,57 @@ export default function AuthCallbackScreen() {
           return;
         }
 
+        // REGISTRO: crear perfil si no existe
         if (!existingProfile && flowType === 'register') {
           console.log('AuthCallbackScreen: Registration flow — creating new profile');
           setStatus('Creando perfil...');
-          const [nameData, birthdateData, ageData, genderData, interestedInData, ageRangeData, countryData, cityData, phoneData, photoData, interestsData, personalityData, compatibilityData] = await Promise.all([
-            AsyncStorage.getItem('onboarding_name'), AsyncStorage.getItem('onboarding_birthdate'), AsyncStorage.getItem('onboarding_age'), AsyncStorage.getItem('onboarding_gender'), AsyncStorage.getItem('onboarding_interested_in'), AsyncStorage.getItem('onboarding_age_range'), AsyncStorage.getItem('onboarding_country'), AsyncStorage.getItem('onboarding_city'), AsyncStorage.getItem('onboarding_phone'), AsyncStorage.getItem('onboarding_photo'), AsyncStorage.getItem('onboarding_interests'), AsyncStorage.getItem('onboarding_personality'), AsyncStorage.getItem('onboarding_compatibility'),
+
+          const [
+            nameData, birthdateData, ageData, genderData,
+            interestedInData, ageRangeData, countryData, cityData,
+            phoneData, photoData, interestsData, personalityData, compatibilityData,
+          ] = await Promise.all([
+            AsyncStorage.getItem('onboarding_name'),
+            AsyncStorage.getItem('onboarding_birthdate'),
+            AsyncStorage.getItem('onboarding_age'),
+            AsyncStorage.getItem('onboarding_gender'),
+            AsyncStorage.getItem('onboarding_interested_in'),
+            AsyncStorage.getItem('onboarding_age_range'),
+            AsyncStorage.getItem('onboarding_country'),
+            AsyncStorage.getItem('onboarding_city'),
+            AsyncStorage.getItem('onboarding_phone'),
+            AsyncStorage.getItem('onboarding_photo'),
+            AsyncStorage.getItem('onboarding_interests'),
+            AsyncStorage.getItem('onboarding_personality'),
+            AsyncStorage.getItem('onboarding_compatibility'),
           ]);
+
           const metadata = googleUser.user_metadata || {};
           const name = nameData || metadata.full_name || metadata.name || '';
           const googlePhotoUrl = metadata.avatar_url || metadata.picture || null;
           const uploadedPhoto = photoData || '';
           const finalPhoto = uploadedPhoto.trim() !== '' ? uploadedPhoto : googlePhotoUrl;
+
           const { error: insertError } = await supabase.from('users').insert({
-            id: googleUser.id, email: googleUser.email || '', name, birthdate: birthdateData || '', age: ageData ? parseInt(ageData) : 18, gender: genderData || 'hombre', interested_in: interestedInData || 'ambos', age_range_min: ageRangeData ? JSON.parse(ageRangeData).min : 18, age_range_max: ageRangeData ? JSON.parse(ageRangeData).max : 60, country: countryData || 'Colombia', city: cityData || 'Medellín', phone: phoneData ? JSON.parse(phoneData).phoneNumber : '', profile_photo_url: finalPhoto, interests: interestsData ? JSON.parse(interestsData) : [], personality_traits: personalityData ? JSON.parse(personalityData) : [], compatibility_percentage: compatibilityData ? parseInt(compatibilityData) : 95, notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+            id: googleUser.id,
+            email: googleUser.email || '',
+            name,
+            birthdate: birthdateData || '',
+            age: ageData ? parseInt(ageData) : 18,
+            gender: genderData || 'hombre',
+            interested_in: interestedInData || 'ambos',
+            age_range_min: ageRangeData ? JSON.parse(ageRangeData).min : 18,
+            age_range_max: ageRangeData ? JSON.parse(ageRangeData).max : 60,
+            country: countryData || 'Colombia',
+            city: cityData || 'Medellín',
+            phone: phoneData ? JSON.parse(phoneData).phoneNumber : '',
+            profile_photo_url: finalPhoto,
+            interests: interestsData ? JSON.parse(interestsData) : [],
+            personality_traits: personalityData ? JSON.parse(personalityData) : [],
+            compatibility_percentage: compatibilityData ? parseInt(compatibilityData) : 95,
+            notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
           });
+
           if (insertError) {
             console.error('AuthCallbackScreen: Error creating profile:', insertError);
             setStatus('Error al crear el perfil');
@@ -148,13 +219,21 @@ export default function AuthCallbackScreen() {
             setTimeout(() => router.replace('/onboarding/register'), 2000);
             return;
           }
-          await AsyncStorage.multiRemove(['onboarding_interests','onboarding_personality','onboarding_name','onboarding_birthdate','onboarding_age','onboarding_gender','onboarding_interested_in','onboarding_age_range','onboarding_country','onboarding_city','onboarding_phone','onboarding_photo','onboarding_compatibility']);
+
+          await AsyncStorage.multiRemove([
+            'onboarding_interests', 'onboarding_personality', 'onboarding_name',
+            'onboarding_birthdate', 'onboarding_age', 'onboarding_gender',
+            'onboarding_interested_in', 'onboarding_age_range', 'onboarding_country',
+            'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
+          ]);
+
           console.log('AuthCallbackScreen: Profile created, navigating to events');
           setStatus('¡Registro exitoso!');
           setTimeout(() => router.replace('/(tabs)/events'), 500);
           return;
         }
 
+        // LOGIN: perfil debe existir
         if (!existingProfile) {
           console.log('AuthCallbackScreen: No profile found — must register first');
           setStatus('Registro requerido');
@@ -163,9 +242,11 @@ export default function AuthCallbackScreen() {
           return;
         }
 
+        // Perfil existe — login exitoso
         console.log('AuthCallbackScreen: Login successful, navigating to events');
         setStatus('¡Bienvenido!');
         setTimeout(() => router.replace('/(tabs)/events'), 500);
+
       } catch (error) {
         console.error('AuthCallbackScreen: Error processing profile:', error);
         setStatus('Error al procesar el perfil');
@@ -178,17 +259,22 @@ export default function AuthCallbackScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      style={styles.container}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
       <View style={styles.content}>
-        <ActivityIndicator size="large" color="#880E4F" />
+        <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         <Text style={styles.text}>{status}</Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1 },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  text: { marginTop: 16, fontSize: 16, color: '#1a0010', textAlign: 'center' },
+  text: { marginTop: 16, fontSize: 16, color: nospiColors.purpleDark, textAlign: 'center' },
 });
