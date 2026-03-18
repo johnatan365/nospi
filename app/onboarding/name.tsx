@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function NameScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleContinue = async () => {
     if (name.trim().length < 2) {
@@ -39,7 +40,7 @@ export default function NameScreen() {
           <Text style={styles.subtitle}>Así es como aparecerá en tu perfil</Text>
           
           <TextInput
-            style={styles.input}
+            style={[styles.input, isFocused && styles.inputFocused]}
             value={name}
             onChangeText={setName}
             placeholder="Tu nombre"
@@ -48,6 +49,8 @@ export default function NameScreen() {
             maxLength={50}
             selectionColor="#880E4F"
             underlineColorAndroid="transparent"
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
 
           <TouchableOpacity
@@ -100,6 +103,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#333',
     marginBottom: 24,
+  },
+  inputFocused: {
+    borderColor: 'rgba(240, 98, 146, 0.50)',
   },
   continueButton: {
     backgroundColor: '#880E4F',

@@ -49,6 +49,7 @@ export default function PhoneScreen() {
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const debounceRef = useRef<any>(null);
   const [search, setSearch] = useState('');
+  const [isPhoneFocused, setIsPhoneFocused] = useState(false);
 
   const filteredCountries = COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -152,7 +153,7 @@ export default function PhoneScreen() {
 
             {/* Phone number input */}
             <TextInput
-              style={styles.phoneInput}
+              style={[styles.phoneInput, isPhoneFocused && styles.phoneInputFocused]}
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="Número de celular"
@@ -161,6 +162,8 @@ export default function PhoneScreen() {
               maxLength={selectedCountry.digits + 2}
               selectionColor="#880E4F"
               underlineColorAndroid="transparent"
+              onFocus={() => setIsPhoneFocused(true)}
+              onBlur={() => setIsPhoneFocused(false)}
             />
           </View>
 
@@ -282,6 +285,9 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)',
     borderRadius: 16, paddingVertical: 18, paddingHorizontal: 20,
     fontSize: 18, color: '#333',
+  },
+  phoneInputFocused: {
+    borderColor: 'rgba(240, 98, 146, 0.80)',
   },
 
   hint: { fontSize: 13, color: '#FFFFFF', opacity: 0.7, marginBottom: 24, textAlign: 'center' },

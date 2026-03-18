@@ -23,6 +23,9 @@ export default function RegisterScreen() {
   const [errorModalMessage, setErrorModalMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
   useEffect(() => {
     // Listen for deep link events (OAuth callback)
@@ -494,7 +497,7 @@ export default function RegisterScreen() {
             {error ? <Text style={styles.errorTextModal}>{error}</Text> : null}
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, emailFocused && styles.inputFocused]}
               placeholder="Email"
               placeholderTextColor="#999"
               value={email}
@@ -502,9 +505,13 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              selectionColor="#880E4F"
+              underlineColorAndroid="transparent"
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
             />
 
-            <View style={styles.passwordWrapper}>
+            <View style={[styles.passwordWrapper, passwordFocused && styles.passwordWrapperFocused]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Contraseña"
@@ -514,6 +521,10 @@ export default function RegisterScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                selectionColor="#880E4F"
+                underlineColorAndroid="transparent"
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
               />
               <TouchableOpacity
                 onPress={() => { console.log('Toggle register password visibility'); setShowPassword(!showPassword); }}
@@ -523,7 +534,7 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.passwordWrapper}>
+            <View style={[styles.passwordWrapper, confirmPasswordFocused && styles.passwordWrapperFocused]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Confirmar Contraseña"
@@ -533,6 +544,10 @@ export default function RegisterScreen() {
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                selectionColor="#880E4F"
+                underlineColorAndroid="transparent"
+                onFocus={() => setConfirmPasswordFocused(true)}
+                onBlur={() => setConfirmPasswordFocused(false)}
               />
               <TouchableOpacity
                 onPress={() => { console.log('Toggle register confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }}
@@ -748,6 +763,8 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#F5F5F5',
+    borderWidth: 2,
+    borderColor: 'transparent',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
@@ -755,12 +772,20 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 16,
   },
+  inputFocused: {
+    borderColor: 'rgba(240, 98, 146, 0.50)',
+  },
   passwordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+    borderWidth: 2,
+    borderColor: 'transparent',
     borderRadius: 16,
     marginBottom: 16,
+  },
+  passwordWrapperFocused: {
+    borderColor: 'rgba(240, 98, 146, 0.50)',
   },
   passwordInput: {
     flex: 1,
@@ -776,20 +801,32 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   registerButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
     paddingVertical: 18,
-    borderRadius: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
     marginBottom: 12,
   },
   registerButtonDisabled: {
-    backgroundColor: nospiColors.purpleMid,
-    opacity: 0.6,
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   registerButtonText: {
-    color: nospiColors.white,
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   cancelButton: {
     backgroundColor: '#E0E0E0',
