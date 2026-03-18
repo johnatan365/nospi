@@ -432,13 +432,13 @@ export default function MatchSelectionScreen({
   if (loadingVoteStatus) {
     return (
       <LinearGradient
-        colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+          <ActivityIndicator size="large" color="#F06292" />
           <Text style={styles.loadingText}>Cargando...</Text>
         </View>
       </LinearGradient>
@@ -447,7 +447,7 @@ export default function MatchSelectionScreen({
 
   return (
     <LinearGradient
-      colors={['#1a0b2e', '#2d1b4e', '#4a2c6e']}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -546,7 +546,7 @@ export default function MatchSelectionScreen({
 
         {userHasVoted && !canContinue && (
           <View style={styles.waitingCard}>
-            <ActivityIndicator size="large" color={nospiColors.purpleMid} />
+            <ActivityIndicator size="large" color="#AD1457" />
             <Text style={styles.waitingText}>
               ⏳ Esperando a que todos elijan... ({totalVotes}/{totalParticipants})
             </Text>
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 18,
     fontWeight: '600',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -654,8 +654,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   participantCardSelected: {
-    borderColor: nospiColors.purpleMid,
-    backgroundColor: 'rgba(233, 213, 255, 0.95)',
+    borderColor: '#AD1457',
+    backgroundColor: 'rgba(173, 20, 87, 0.12)',
   },
   participantCardDisabled: {
     opacity: 0.6,
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(173, 20, 87, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   participantPhotoPlaceholderText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   participantDetails: {
     flex: 1,
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginBottom: 4,
   },
   participantOccupation: {
@@ -699,7 +699,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   selectedBadge: {
-    backgroundColor: nospiColors.purpleMid,
+    backgroundColor: '#AD1457',
     borderRadius: 12,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -720,17 +720,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   noneCardSelected: {
-    borderColor: nospiColors.purpleMid,
-    backgroundColor: 'rgba(233, 213, 255, 0.95)',
+    borderColor: '#AD1457',
+    backgroundColor: 'rgba(173, 20, 87, 0.12)',
   },
   noneText: {
     fontSize: 16,
     fontWeight: '600',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginRight: 8,
   },
   confirmButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 32,
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     textAlign: 'center',
     fontWeight: '600',
     marginTop: 16,
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: nospiColors.purpleMid,
+    backgroundColor: '#AD1457',
     opacity: 0.4,
   },
   glowCircleOuter: {
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
   matchTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginBottom: 20,
     textAlign: 'center',
     letterSpacing: 1,

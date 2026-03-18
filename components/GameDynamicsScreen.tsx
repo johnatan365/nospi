@@ -155,8 +155,8 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
   },
 };
 
-// Free phase uses a deep neutral gradient (no purple)
-const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#0a0a0f', '#141428', '#1e1e3c'];
+// Free phase uses the brand dark gradient
+const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1a0010', '#880E4F', '#AD1457'];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
   

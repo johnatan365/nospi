@@ -746,7 +746,7 @@ export default function InteraccionScreen() {
   if (!appointment) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -793,7 +793,7 @@ export default function InteraccionScreen() {
 
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -948,7 +948,7 @@ export default function InteraccionScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
   },
   eventInfoCard: {
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
   preEventTipTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.95)',
     marginBottom: 4,
   },
   preEventTipText: {
@@ -1235,11 +1235,11 @@ const styles = StyleSheet.create({
   eventType: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   eventTime: {
     fontSize: 15,
-    color: nospiColors.purpleMid,
+    color: '#AD1457',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
   codeEntryTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -1275,7 +1275,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: '#F06292',
   },
   codeErrorText: {
     fontSize: 13,
@@ -1284,7 +1284,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   confirmCodeButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
@@ -1359,7 +1359,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(173, 20, 87, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
   participantListPhotoText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   participantListName: {
     fontSize: 15,
@@ -1386,13 +1386,13 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#880E4F',
     textAlign: 'center',
     marginBottom: 8,
   },
   infoTextSecondary: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#666',
     textAlign: 'center',
   },
   continueButton: {

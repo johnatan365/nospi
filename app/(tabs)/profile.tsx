@@ -575,7 +575,7 @@ export default function ProfileScreen() {
     const errorMessage = error || 'Error al cargar el perfil';
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -601,7 +601,7 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -827,9 +827,9 @@ export default function ProfileScreen() {
                   step={1}
                   value={editAgeRangeMin}
                   onValueChange={handleMinAgeChange}
-                  minimumTrackTintColor={nospiColors.purpleDark}
+                  minimumTrackTintColor="#880E4F"
                   maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor={nospiColors.purpleDark}
+                  thumbTintColor="#880E4F"
                 />
                 <View style={styles.ageSliderRow}>
                   <Text style={styles.ageSliderLabel}>Máximo</Text>
@@ -842,9 +842,9 @@ export default function ProfileScreen() {
                   step={1}
                   value={editAgeRangeMax}
                   onValueChange={handleMaxAgeChange}
-                  minimumTrackTintColor={nospiColors.purpleDark}
+                  minimumTrackTintColor="#880E4F"
                   maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor={nospiColors.purpleDark}
+                  thumbTintColor="#880E4F"
                 />
               </View>
 
@@ -1171,7 +1171,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   retryButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -1198,7 +1198,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(173, 20, 87, 0.20)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -1208,7 +1208,7 @@ const styles = StyleSheet.create({
   profilePhotoPlaceholderText: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
   },
   photoOverlay: {
     position: 'absolute',
@@ -1232,7 +1232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: nospiColors.purpleDark,
+    borderColor: '#880E4F',
   },
   editPhotoIconText: {
     fontSize: 16,
@@ -1255,10 +1255,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: nospiColors.purpleDark,
+    borderColor: '#880E4F',
   },
   editButtonText: {
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginBottom: 12,
   },
   sectionSubtitle: {
@@ -1301,13 +1301,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tag: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: 'rgba(173, 20, 87, 0.12)',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
   },
   tagText: {
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginBottom: 8,
   },
   modalSubtitle: {
@@ -1403,8 +1403,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   optionButtonActive: {
-    backgroundColor: nospiColors.purpleLight,
-    borderColor: nospiColors.purpleDark,
+    backgroundColor: 'rgba(173, 20, 87, 0.12)',
+    borderColor: '#880E4F',
   },
   optionButtonText: {
     fontSize: 14,
@@ -1412,7 +1412,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   optionButtonTextActive: {
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   ageSliderSection: {
     backgroundColor: '#F5F5F5',
@@ -1433,7 +1433,7 @@ const styles = StyleSheet.create({
   },
   ageSliderValue: {
     fontSize: 18,
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     fontWeight: 'bold',
   },
   ageSlider: {
@@ -1456,8 +1456,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   tagEditActive: {
-    backgroundColor: nospiColors.purpleLight,
-    borderColor: nospiColors.purpleDark,
+    backgroundColor: 'rgba(173, 20, 87, 0.12)',
+    borderColor: '#880E4F',
   },
   tagEditText: {
     color: '#666',
@@ -1465,10 +1465,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tagEditTextActive: {
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   saveButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -1501,8 +1501,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxActive: {
-    backgroundColor: nospiColors.purpleDark,
-    borderColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
+    borderColor: '#880E4F',
   },
   checkmark: {
     color: nospiColors.white,
@@ -1544,12 +1544,12 @@ const styles = StyleSheet.create({
   pickerModalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   pickerModalClose: {
     fontSize: 16,
     fontWeight: '600',
-    color: nospiColors.purpleMid,
+    color: '#AD1457',
   },
   picker: {
     width: '100%',

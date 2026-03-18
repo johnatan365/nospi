@@ -570,7 +570,7 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#F06292" />
           <Text style={styles.loadingText}>Cargando perfil...</Text>
         </View>
       </LinearGradient>
@@ -581,7 +581,7 @@ export default function ProfileScreen() {
     const errorMessage = error || 'Error al cargar el perfil';
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -607,7 +607,7 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -814,11 +814,11 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeMin} - {editAgeRangeMax} años</Text>
+              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
               <View style={styles.ageSliderSection}>
                 <View style={styles.ageSliderRow}>
                   <Text style={styles.ageSliderLabel}>Mínimo</Text>
-                  <Text style={styles.ageSliderValue}>{editAgeRangeMin}</Text>
+                  <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
                 </View>
                 <Slider
                   style={styles.ageSlider}
@@ -826,14 +826,14 @@ export default function ProfileScreen() {
                   maximumValue={59}
                   step={1}
                   value={editAgeRangeMin}
-                  onValueChange={(value) => { const v = Math.round(value); if (v < editAgeRangeMax) setEditAgeRangeMin(v); }}
-                  minimumTrackTintColor={nospiColors.purpleDark}
+                  onValueChange={handleMinAgeChange}
+                  minimumTrackTintColor="#880E4F"
                   maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor={nospiColors.purpleDark}
+                  thumbTintColor="#880E4F"
                 />
                 <View style={styles.ageSliderRow}>
                   <Text style={styles.ageSliderLabel}>Máximo</Text>
-                  <Text style={styles.ageSliderValue}>{editAgeRangeMax}</Text>
+                  <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
                 </View>
                 <Slider
                   style={styles.ageSlider}
@@ -841,10 +841,10 @@ export default function ProfileScreen() {
                   maximumValue={60}
                   step={1}
                   value={editAgeRangeMax}
-                  onValueChange={(value) => { const v = Math.round(value); if (v > editAgeRangeMin) setEditAgeRangeMax(v); }}
-                  minimumTrackTintColor={nospiColors.purpleDark}
+                  onValueChange={handleMaxAgeChange}
+                  minimumTrackTintColor="#880E4F"
                   maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor={nospiColors.purpleDark}
+                  thumbTintColor="#880E4F"
                 />
               </View>
 
@@ -854,13 +854,7 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     key={index}
                     style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
-                    onPress={() => {
-                      if (editInterests.includes(interest)) {
-                        setEditInterests(editInterests.filter(i => i !== interest));
-                      } else {
-                        setEditInterests([...editInterests, interest]);
-                      }
-                    }}
+                    onPress={() => toggleInterest(interest)}
                   >
                     <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>{interest}</Text>
                   </TouchableOpacity>
@@ -873,13 +867,7 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     key={index}
                     style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
-                    onPress={() => {
-                      if (editPersonality.includes(trait)) {
-                        setEditPersonality(editPersonality.filter(t => t !== trait));
-                      } else {
-                        setEditPersonality([...editPersonality, trait]);
-                      }
-                    }}
+                    onPress={() => togglePersonality(trait)}
                   >
                     <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>{trait}</Text>
                   </TouchableOpacity>
@@ -962,7 +950,7 @@ export default function ProfileScreen() {
               color="#000000"
               dropdownIconColor="#000000"
             >
-              {(CITIES_BY_COUNTRY[editCountry] || []).map((city) => (
+              {availableCities.map((city) => (
                 <Picker.Item key={city} label={city} value={city} color="#000000" />
               ))}
             </Picker>
@@ -1154,46 +1142,46 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   loadingText: { marginTop: 16, fontSize: 16, color: '#FFFFFF', textAlign: 'center' },
   errorText: { fontSize: 16, color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
-  retryButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 },
+  retryButton: { backgroundColor: '#880E4F', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 },
   retryButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
   profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
-  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: nospiColors.purpleLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
-  profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: nospiColors.purpleDark },
+  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
-  editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: nospiColors.purpleDark },
+  editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#880E4F' },
   editPhotoIconText: { fontSize: 16 },
   name: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 4 },
   age: { fontSize: 18, color: '#FFFFFF', opacity: 0.8, marginBottom: 16 },
-  editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: nospiColors.purpleDark },
-  editButtonText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
+  editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: '#880E4F' },
+  editButtonText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 12 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12 },
   sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
   infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { backgroundColor: nospiColors.purpleLight, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  tagText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
+  tag: { backgroundColor: 'rgba(173, 20, 87, 0.12)', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  tagText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
   emptyText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
   signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
   signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 8 },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#880E4F', marginBottom: 8 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
   notificationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
   notificationOptionText: { fontSize: 16, color: '#333' },
   checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
-  checkboxActive: { backgroundColor: nospiColors.purpleDark, borderColor: nospiColors.purpleDark },
+  checkboxActive: { backgroundColor: '#880E4F', borderColor: '#880E4F' },
   checkmark: { color: nospiColors.white, fontSize: 16, fontWeight: 'bold' },
   modalCloseButton: { backgroundColor: '#E0E0E0', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
   modalCloseButtonText: { color: '#333', fontSize: 16, fontWeight: '600' },
   passwordError: { fontSize: 14, color: '#EF4444', marginBottom: 12, textAlign: 'center' },
   modalInput: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: '#333', marginBottom: 8 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
-  saveButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
+  saveButton: { backgroundColor: '#880E4F', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   modalScrollView: { maxHeight: '90%' },
   modalScrollContent: { flexGrow: 1 },
@@ -1201,24 +1189,24 @@ const styles = StyleSheet.create({
   pickerButtonText: { fontSize: 16, color: '#333' },
   optionsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   optionButton: { flex: 1, backgroundColor: '#F5F5F5', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: '#E0E0E0' },
-  optionButtonActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  optionButtonActive: { backgroundColor: 'rgba(173, 20, 87, 0.12)', borderColor: '#880E4F' },
   optionButtonText: { fontSize: 14, color: '#666', fontWeight: '600' },
-  optionButtonTextActive: { color: nospiColors.purpleDark },
+  optionButtonTextActive: { color: '#880E4F' },
   ageSliderSection: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, marginBottom: 8 },
   ageSliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   ageSliderLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
-  ageSliderValue: { fontSize: 18, color: nospiColors.purpleDark, fontWeight: 'bold' },
+  ageSliderValue: { fontSize: 18, color: '#880E4F', fontWeight: 'bold' },
   ageSlider: { width: '100%', height: 40, marginBottom: 12 },
   tagsEditContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   tagEdit: { backgroundColor: '#F5F5F5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: '#E0E0E0' },
-  tagEditActive: { backgroundColor: nospiColors.purpleLight, borderColor: nospiColors.purpleDark },
+  tagEditActive: { backgroundColor: 'rgba(173, 20, 87, 0.12)', borderColor: '#880E4F' },
   tagEditText: { color: '#666', fontSize: 14, fontWeight: '600' },
-  tagEditTextActive: { color: nospiColors.purpleDark },
+  tagEditTextActive: { color: '#880E4F' },
   pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   pickerModalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
-  pickerModalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
-  pickerModalClose: { fontSize: 16, fontWeight: '600', color: nospiColors.purpleMid },
+  pickerModalTitle: { fontSize: 18, fontWeight: '700', color: '#880E4F' },
+  pickerModalClose: { fontSize: 16, fontWeight: '600', color: '#AD1457' },
   picker: { width: '100%', height: 200 },
   passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
   passwordModalInput: { flex: 1, paddingVertical: 14, paddingLeft: 16, paddingRight: 8, fontSize: 16, color: '#333' },
