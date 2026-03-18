@@ -55,7 +55,7 @@ export default function PhotoScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -120,13 +120,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 40,
     textAlign: 'center',
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 4,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(255, 255, 255, 0.60)',
   },
   photo: {
     width: '100%',
@@ -161,21 +161,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(107, 33, 168, 0.4)',
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   skipButtonText: {
-    color: nospiColors.purpleDark,
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 16,
     fontWeight: '600',
     textDecorationLine: 'underline',

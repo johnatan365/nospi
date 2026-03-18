@@ -65,9 +65,9 @@ export default function AgeRangeScreen() {
                 step={1}
                 value={ageRange.min}
                 onValueChange={handleMinChange}
-                minimumTrackTintColor={nospiColors.purpleDark}
-                maximumTrackTintColor="rgba(107, 33, 168, 0.2)"
-                thumbTintColor={nospiColors.purpleDark}
+                minimumTrackTintColor="#FFFFFF"
+                maximumTrackTintColor="rgba(255, 255, 255, 0.35)"
+                thumbTintColor="#FFFFFF"
               />
             </View>
 
@@ -83,9 +83,9 @@ export default function AgeRangeScreen() {
                 step={1}
                 value={ageRange.max}
                 onValueChange={handleMaxChange}
-                minimumTrackTintColor={nospiColors.purpleDark}
-                maximumTrackTintColor="rgba(107, 33, 168, 0.2)"
-                thumbTintColor={nospiColors.purpleDark}
+                minimumTrackTintColor="#FFFFFF"
+                maximumTrackTintColor="rgba(255, 255, 255, 0.35)"
+                thumbTintColor="#FFFFFF"
               />
             </View>
           </View>
@@ -169,14 +169,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 5,
   },
   continueButtonText: {

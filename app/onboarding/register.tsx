@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
-import { Image as RNImage } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform, Image as RNImage } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -416,11 +415,11 @@ export default function RegisterScreen() {
     }
   };
 
-  const googleIconText = 'G';
+  const googleIconSource = require('@/assets/images/36fc1573-7337-44cc-b5f5-28d149e96745.png');
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -452,7 +451,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               <View style={styles.googleIconContainer}>
-                <Text style={styles.googleIcon}>{googleIconText}</Text>
+                <RNImage source={googleIconSource} style={styles.googleIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.buttonTextDark}>Regístrate con Google</Text>
             </TouchableOpacity>
@@ -609,13 +608,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 40,
     textAlign: 'center',
@@ -684,12 +683,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  googleIcon: {
-    fontSize: 20,
-    color: '#4285F4',
-    fontWeight: 'bold',
-    lineHeight: 24,
-    marginTop: 4,
+  googleIconImage: {
+    width: 24,
+    height: 24,
   },
   emailIcon: {
     marginRight: 12,
@@ -715,8 +711,8 @@ const styles = StyleSheet.create({
   },
   termsText: {
     fontSize: 12,
-    color: nospiColors.purpleDark,
-    opacity: 0.7,
+    color: '#FFFFFF',
+    opacity: 0.85,
     textAlign: 'center',
     lineHeight: 18,
   },

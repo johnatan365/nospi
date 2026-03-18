@@ -174,6 +174,9 @@ const styles = StyleSheet.create({
   webDateContainer: {
     marginBottom: 24,
     width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'center',
+    overflow: 'hidden',
   },
   dateDisplayContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

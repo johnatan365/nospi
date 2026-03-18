@@ -156,9 +156,11 @@ export default function PhoneScreen() {
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="Número de celular"
-              placeholderTextColor="rgba(107, 33, 168, 0.4)"
+              placeholderTextColor="rgba(136, 14, 79, 0.4)"
               keyboardType="phone-pad"
               maxLength={selectedCountry.digits + 2}
+              selectionColor="#880E4F"
+              underlineColorAndroid="transparent"
             />
           </View>
 
@@ -288,13 +290,13 @@ const styles = StyleSheet.create({
 
   // Continue button
   continueButton: {
-    backgroundColor: nospiColors.purpleDark, paddingVertical: 18,
-    borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#880E4F', paddingVertical: 18,
+    borderRadius: 30, alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 8, elevation: 5,
-    borderWidth: 1.5, borderColor: 'rgba(240, 98, 146, 0.40)',
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
+    borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)',
   },
-  continueButtonDisabled: { backgroundColor: 'rgba(136, 14, 79, 0.4)', shadowOpacity: 0, elevation: 0, borderWidth: 0 },
+  continueButtonDisabled: { backgroundColor: 'rgba(136, 14, 79, 0.4)', shadowOpacity: 0, elevation: 0, borderColor: 'rgba(255, 255, 255, 0.20)' },
   continueButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
   // Country modal

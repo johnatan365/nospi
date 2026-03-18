@@ -312,7 +312,7 @@ export default function LoginScreen() {
   };
 
   const appleIconText = '';
-  const googleIconText = 'G';
+  const googleIconSource = require('@/assets/images/36fc1573-7337-44cc-b5f5-28d149e96745.png');
 
   return (
     <>
@@ -393,7 +393,7 @@ export default function LoginScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.googleIconContainer}>
-                  <Text style={styles.googleIcon}>{googleIconText}</Text>
+                  <RNImage source={googleIconSource} style={styles.googleIconImage} resizeMode="contain" />
                 </View>
                 <Text style={styles.socialButtonText}>Google</Text>
               </TouchableOpacity>
@@ -594,12 +594,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  googleIcon: {
-    fontSize: 20,
-    color: '#4285F4',
-    fontWeight: 'bold',
-    lineHeight: 24,
-    marginTop: 4,
+  googleIconImage: {
+    width: 24,
+    height: 24,
   },
   appleIconImage: {
     width: 28,

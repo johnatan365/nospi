@@ -43,9 +43,11 @@ export default function NameScreen() {
             value={name}
             onChangeText={setName}
             placeholder="Tu nombre"
-            placeholderTextColor="rgba(107, 33, 168, 0.4)"
+            placeholderTextColor="rgba(136, 14, 79, 0.4)"
             autoFocus
             maxLength={50}
+            selectionColor="#880E4F"
+            underlineColorAndroid="transparent"
           />
 
           <TouchableOpacity
@@ -91,7 +93,7 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderColor: 'rgba(255, 255, 255, 0.70)',
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 20,
@@ -103,17 +105,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
     shadowColor: nospiColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 5,
   },
   continueButtonDisabled: {
     backgroundColor: 'rgba(136, 14, 79, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
     shadowOpacity: 0,
     elevation: 0,
   },
