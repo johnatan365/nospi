@@ -14,7 +14,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 // IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
-const logoSource = require('../assets/images/8d9ebee9-7cf1-4330-95b5-d58afb2283d8.png');
+const logoSource = require('../assets/images/b91bc029-a507-43b6-8dc9-61e6e588c5c9.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -141,14 +141,19 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -156,18 +161,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.9)',
   },
   secondaryButtonText: {
-    color: '#FFFFFF',
+    color: '#F06292',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
