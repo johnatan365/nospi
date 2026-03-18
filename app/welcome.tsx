@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { Asset } from 'expo-asset';
@@ -15,6 +16,22 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 // IMPORTANTE: Guarda el archivo nospi_icon_atrevido.png en assets/images/
 const logoSource = require('../assets/images/b91bc029-a507-43b6-8dc9-61e6e588c5c9.png');
+
+const GRADIENT_COLORS: [string, string, string] = ['#1a0010', '#880E4F', '#AD1457'];
+
+function GradientText({ text, style }: { text: string; style: object }) {
+  return (
+    <MaskedView maskElement={<Text style={style}>{text}</Text>}>
+      <LinearGradient
+        colors={GRADIENT_COLORS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <Text style={[style, { opacity: 0 }]}>{text}</Text>
+      </LinearGradient>
+    </MaskedView>
+  );
+}
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -34,10 +51,12 @@ export default function WelcomeScreen() {
   }, []);
 
   const handleStart = () => {
+    console.log('[WelcomeScreen] Empezar button pressed');
     router.push('/onboarding/interests');
   };
 
   const handleLogin = () => {
+    console.log('[WelcomeScreen] Ya tengo una cuenta button pressed');
     router.push('/login');
   };
 
@@ -72,7 +91,7 @@ export default function WelcomeScreen() {
               onPress={handleStart}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>Empezar</Text>
+              <GradientText text="Empezar" style={styles.primaryButtonText} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -80,7 +99,7 @@ export default function WelcomeScreen() {
               onPress={handleLogin}
               activeOpacity={0.8}
             >
-              <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
+              <GradientText text="Ya tengo una cuenta" style={styles.secondaryButtonText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -141,37 +160,40 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryButton: {
-    backgroundColor: '#880E4F',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
+    shadowColor: '#1a0010',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
+    borderWidth: 1,
+    borderColor: '#AD1457',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: 'rgba(240, 98, 146, 0.50)',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#AD1457',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#1a0010',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   secondaryButtonText: {
-    color: '#F06292',
     fontSize: 18,
     fontWeight: '600',
   },
