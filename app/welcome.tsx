@@ -13,7 +13,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-const logoSource = require('../assets/images/a275cc63-abaf-41ee-86a5-91d9b271777e.png');
+const logoSource = require('../assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
