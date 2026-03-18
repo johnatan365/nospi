@@ -418,7 +418,7 @@ export default function RegisterScreen() {
     }
   };
 
-  const googleIconSource = require('@/assets/images/36fc1573-7337-44cc-b5f5-28d149e96745.png');
+  const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
 
   return (
     <LinearGradient
@@ -699,8 +699,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   googleIconImage: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
   },
   emailIcon: {
     marginRight: 12,
