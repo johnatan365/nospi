@@ -731,7 +731,7 @@ export default function InteraccionScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -1112,13 +1112,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
     marginTop: 48,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 24,
   },
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     textAlign: 'center',
   },
   eventInfoCard: {
@@ -1160,12 +1160,12 @@ const styles = StyleSheet.create({
   preEventTipTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   preEventTipText: {
     fontSize: 14,
-    color: '#4B5563',
+    color: 'rgba(255,255,255,0.75)',
     lineHeight: 20,
   },
   eventInfoIcon: {
@@ -1175,19 +1175,19 @@ const styles = StyleSheet.create({
   eventInfoTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   eventInfoDate: {
     fontSize: 16,
-    color: '#333',
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 8,
     textAlign: 'center',
   },
   eventInfoTime: {
     fontSize: 18,
     fontWeight: '600',
-    color: nospiColors.purpleMid,
+    color: '#F06292',
   },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   countdownLabel: {
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     marginBottom: 8,
     fontWeight: '600',
   },
@@ -1207,7 +1207,7 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '800',
     fontStyle: 'italic',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 2,
     textShadowColor: 'rgba(0,0,0,0.15)',
@@ -1329,11 +1329,11 @@ const styles = StyleSheet.create({
   participantsListTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
     flex: 1,
   },
   participantCountBadge: {
-    backgroundColor: nospiColors.purpleMid,
+    backgroundColor: '#880E4F',
     borderRadius: 16,
     paddingVertical: 5,
     paddingHorizontal: 12,
@@ -1386,13 +1386,13 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 16,
     fontWeight: '600',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 8,
   },
   infoTextSecondary: {
     fontSize: 13,
-    color: '#666',
+    color: 'rgba(255,255,255,0.65)',
     textAlign: 'center',
   },
   continueButton: {

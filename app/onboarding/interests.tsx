@@ -71,7 +71,7 @@ export default function InterestsScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -156,25 +156,25 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 24,
     textAlign: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 4,
   },
   counter: {
     fontSize: 14,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.7,
     marginBottom: 16,
   },
@@ -184,28 +184,28 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: nospiColors.purpleLight,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
   },
   chipSelected: {
-    backgroundColor: nospiColors.purpleDark,
-    borderColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
+    borderColor: '#F06292',
   },
   chipText: {
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
   },
   chipTextSelected: {
-    color: nospiColors.white,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   continueButton: {
-    backgroundColor: nospiColors.purpleDark,
+    backgroundColor: '#880E4F',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   continueButtonDisabled: {
-    backgroundColor: 'rgba(107, 33, 168, 0.4)',
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
     shadowOpacity: 0,
     elevation: 0,
   },
