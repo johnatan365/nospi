@@ -39,7 +39,7 @@ export default function AgeRangeScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 40,
     textAlign: 'center',
   },

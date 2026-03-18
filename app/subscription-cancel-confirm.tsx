@@ -66,10 +66,10 @@ export default function SubscriptionCancelConfirmScreen() {
 
   return (
     <LinearGradient
-      colors={[nospiColors.purpleDark, nospiColors.purpleMid, nospiColors.purpleLight]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
     >
       <Stack.Screen options={{ headerShown: true, title: 'Cancelar Plan', headerBackTitle: 'Atrás' }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>

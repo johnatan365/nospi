@@ -731,13 +731,13 @@ export default function InteraccionScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
         </View>
       </LinearGradient>
     );
@@ -746,7 +746,7 @@ export default function InteraccionScreen() {
   if (!appointment) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -793,7 +793,7 @@ export default function InteraccionScreen() {
 
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -948,7 +948,7 @@ export default function InteraccionScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -1112,13 +1112,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
     marginTop: 48,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 24,
   },

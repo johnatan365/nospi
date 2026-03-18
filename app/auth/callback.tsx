@@ -260,7 +260,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.container}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
