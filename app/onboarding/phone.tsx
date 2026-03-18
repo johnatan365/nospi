@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   countryButton: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderWidth: 2, borderColor: nospiColors.purpleLight,
     borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
     gap: 4,
   },
@@ -277,12 +277,12 @@ const styles = StyleSheet.create({
   phoneInput: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderWidth: 2, borderColor: nospiColors.purpleLight,
     borderRadius: 16, paddingVertical: 18, paddingHorizontal: 20,
-    fontSize: 18, color: '#333',
+    fontSize: 18, color: nospiColors.purpleDark,
   },
 
-  hint: { fontSize: 13, color: '#FFFFFF', opacity: 0.7, marginBottom: 24, textAlign: 'center' },
+  hint: { fontSize: 13, color: nospiColors.purpleDark, opacity: 0.6, marginBottom: 24, textAlign: 'center' },
   hintDone: { color: '#16a34a', opacity: 1, fontWeight: '600' },
   hintTaken: { color: '#dc2626', opacity: 1, fontWeight: '600' },
 
@@ -291,10 +291,9 @@ const styles = StyleSheet.create({
     backgroundColor: nospiColors.purpleDark, paddingVertical: 18,
     borderRadius: 16, alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 8, elevation: 5,
-    borderWidth: 1.5, borderColor: 'rgba(240, 98, 146, 0.40)',
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
-  continueButtonDisabled: { backgroundColor: 'rgba(136, 14, 79, 0.4)', shadowOpacity: 0, elevation: 0, borderWidth: 0 },
+  continueButtonDisabled: { backgroundColor: 'rgba(107,33,168,0.4)', shadowOpacity: 0, elevation: 0 },
   continueButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
   // Country modal
@@ -306,7 +305,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '700', color: nospiColors.purpleDark },
   modalClose: { fontSize: 20, color: nospiColors.purpleDark, padding: 4 },
   searchInput: {
-    margin: 16, borderWidth: 1.5, borderColor: 'rgba(240, 98, 146, 0.40)',
+    margin: 16, borderWidth: 1.5, borderColor: nospiColors.purpleLight,
     borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, color: '#333',
   },
@@ -314,7 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14, gap: 12,
   },
-  countryRowSelected: { backgroundColor: 'rgba(136, 14, 79, 0.08)' },
+  countryRowSelected: { backgroundColor: 'rgba(107,33,168,0.08)' },
   rowFlag: { fontSize: 26 },
   rowName: { flex: 1, fontSize: 16, color: '#222' },
   rowCode: { fontSize: 15, color: nospiColors.purpleDark, fontWeight: '600' },

@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
   eventName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
   },
   eventType: {
     fontSize: 16,
-    color: '#AD1457',
+    color: nospiColors.purpleMid,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   eventParticipants: {
     fontSize: 14,
-    color: '#AD1457',
+    color: nospiColors.purpleMid,
     fontWeight: '600',
     marginBottom: 8,
   },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     opacity: 0.7,
   },

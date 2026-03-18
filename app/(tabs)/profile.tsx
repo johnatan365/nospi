@@ -564,7 +564,7 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Cargando perfil...</Text>
         </View>
       </LinearGradient>
@@ -575,7 +575,7 @@ export default function ProfileScreen() {
     const errorMessage = error || 'Error al cargar el perfil';
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -601,7 +601,7 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -1240,12 +1240,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 4,
   },
   age: {
     fontSize: 18,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     opacity: 0.8,
     marginBottom: 16,
   },

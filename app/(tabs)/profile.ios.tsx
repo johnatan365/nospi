@@ -570,7 +570,7 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Cargando perfil...</Text>
         </View>
       </LinearGradient>
@@ -581,7 +581,7 @@ export default function ProfileScreen() {
     const errorMessage = error || 'Error al cargar el perfil';
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -607,7 +607,7 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -1163,8 +1163,8 @@ const styles = StyleSheet.create({
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
   editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: nospiColors.purpleDark },
   editPhotoIconText: { fontSize: 16 },
-  name: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 4 },
-  age: { fontSize: 18, color: '#FFFFFF', opacity: 0.8, marginBottom: 16 },
+  name: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 4 },
+  age: { fontSize: 18, color: nospiColors.purpleDark, opacity: 0.8, marginBottom: 16 },
   editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: nospiColors.purpleDark },
   editButtonText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },

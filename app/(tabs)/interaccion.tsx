@@ -737,7 +737,7 @@ export default function InteraccionScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
         </View>
       </LinearGradient>
     );
@@ -746,7 +746,7 @@ export default function InteraccionScreen() {
   if (!appointment) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -793,7 +793,7 @@ export default function InteraccionScreen() {
 
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -948,7 +948,7 @@ export default function InteraccionScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
   },
   eventInfoCard: {
@@ -1160,12 +1160,12 @@ const styles = StyleSheet.create({
   preEventTipTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 4,
   },
   preEventTipText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
+    color: '#4B5563',
     lineHeight: 20,
   },
   eventInfoIcon: {
@@ -1175,19 +1175,19 @@ const styles = StyleSheet.create({
   eventInfoTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     marginBottom: 16,
   },
   eventInfoDate: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#333',
     marginBottom: 8,
     textAlign: 'center',
   },
   eventInfoTime: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F06292',
+    color: nospiColors.purpleMid,
   },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   countdownLabel: {
     fontSize: 14,
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     marginBottom: 8,
     fontWeight: '600',
   },
@@ -1207,7 +1207,7 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '800',
     fontStyle: 'italic',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 2,
     textShadowColor: 'rgba(0,0,0,0.15)',
@@ -1329,11 +1329,11 @@ const styles = StyleSheet.create({
   participantsListTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     flex: 1,
   },
   participantCountBadge: {
-    backgroundColor: '#880E4F',
+    backgroundColor: nospiColors.purpleMid,
     borderRadius: 16,
     paddingVertical: 5,
     paddingHorizontal: 12,
@@ -1386,13 +1386,13 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     marginBottom: 8,
   },
   infoTextSecondary: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#666',
     textAlign: 'center',
   },
   continueButton: {

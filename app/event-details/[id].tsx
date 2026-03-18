@@ -167,7 +167,7 @@ export default function EventDetailsScreen() {
       >
         <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
         </View>
       </LinearGradient>
     );
@@ -176,7 +176,7 @@ export default function EventDetailsScreen() {
   if (!event) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -197,7 +197,7 @@ export default function EventDetailsScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
   },
   eventCard: {

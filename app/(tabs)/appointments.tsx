@@ -637,22 +637,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 40,
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: nospiColors.purpleDark,
   },
   filterText: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
   },
   filterTextActive: {
-    color: '#880E4F',
+    color: 'white',
   },
   scrollView: {
     flex: 1,
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   appointmentName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
   },
   appointmentCity: {
     fontSize: 14,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: nospiColors.purpleDark,
     textAlign: 'center',
     opacity: 0.7,
   },
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: nospiColors.purpleDark,
     marginBottom: 12,
     textAlign: 'center',
   },
