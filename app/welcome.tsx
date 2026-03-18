@@ -161,9 +161,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   secondaryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#880E4F',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.40)',
+    borderColor: 'rgba(240, 98, 146, 0.40)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
@@ -171,9 +171,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 5,
   },
   secondaryButtonText: {
     color: '#FFFFFF',
