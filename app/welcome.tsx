@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: '#880E4F',
     borderWidth: 1.5,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
+    borderColor: 'rgba(255, 255, 255, 0.50)',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 30,
