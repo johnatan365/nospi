@@ -111,13 +111,13 @@ export default function EventsScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+        colors={['#1a0010', '#880E4F', '#AD1457']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          <ActivityIndicator size="large" color="#FFFFFF" />
         </View>
       </LinearGradient>
     );
@@ -125,7 +125,7 @@ export default function EventsScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F3E8FF', '#E9D5FF', nospiColors.purpleLight, nospiColors.purpleMid]}
+      colors={['#1a0010', '#880E4F', '#AD1457']}
       style={styles.gradient}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
@@ -196,13 +196,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     marginBottom: 8,
     marginTop: 48,
   },
   subtitle: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginBottom: 32,
   },
@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
   eventName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#880E4F',
   },
   eventType: {
     fontSize: 16,
-    color: nospiColors.purpleMid,
+    color: '#AD1457',
     fontWeight: '600',
     marginTop: 4,
   },
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   eventParticipants: {
     fontSize: 14,
-    color: nospiColors.purpleMid,
+    color: '#AD1457',
     fontWeight: '600',
     marginBottom: 8,
   },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: nospiColors.purpleDark,
+    color: '#FFFFFF',
     textAlign: 'center',
     opacity: 0.7,
   },
