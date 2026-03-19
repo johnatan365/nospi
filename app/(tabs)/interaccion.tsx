@@ -89,6 +89,7 @@ export default function InteraccionScreen() {
   const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [codeError, setCodeError] = useState('');
+  const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [startingExperience, setStartingExperience] = useState(false);
   
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
@@ -986,12 +987,14 @@ export default function InteraccionScreen() {
             <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
             
             <TextInput
-              style={styles.codeInput}
+              style={[styles.codeInput, codeInputFocused && styles.codeInputFocused]}
               value={confirmationCode}
               onChangeText={(text) => {
                 setConfirmationCode(text);
                 setCodeError('');
               }}
+              onFocus={() => setCodeInputFocused(true)}
+              onBlur={() => setCodeInputFocused(false)}
               placeholder="Código"
               placeholderTextColor="#999"
               keyboardType="default"
@@ -1206,7 +1209,6 @@ const styles = StyleSheet.create({
   countdownTime: {
     fontSize: 48,
     fontWeight: '800',
-    fontStyle: 'italic',
     color: '#880E4F',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 2,
@@ -1276,6 +1278,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 2,
     borderColor: '#F06292',
+  },
+  codeInputFocused: {
+    borderColor: '#880E4F',
   },
   codeErrorText: {
     fontSize: 13,

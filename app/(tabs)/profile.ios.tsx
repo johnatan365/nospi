@@ -689,12 +689,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Intereses</Text>
-          <View style={styles.tagsContainer}>
+          <Text style={styles.sectionTitle}>Gustos</Text>
+          <View style={styles.chipsContainer}>
             {profile.interests.length > 0 ? (
               profile.interests.map((interest, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{interest}</Text>
+                <View key={index} style={styles.chip}>
+                  <Text style={styles.chipText}>{interest}</Text>
                 </View>
               ))
             ) : (
@@ -705,11 +705,11 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personalidad</Text>
-          <View style={styles.tagsContainer}>
+          <View style={styles.chipsContainer}>
             {profile.personality_traits.length > 0 ? (
               profile.personality_traits.map((trait, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{trait}</Text>
+                <View key={index} style={styles.chip}>
+                  <Text style={styles.chipText}>{trait}</Text>
                 </View>
               ))
             ) : (
@@ -1164,9 +1164,12 @@ const styles = StyleSheet.create({
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { backgroundColor: 'rgba(173, 20, 87, 0.12)', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
   tagText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)' },
+  chipText: { color: '#880E4F', fontSize: 14, fontWeight: '500' },
   emptyText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
-  signOutButton: { backgroundColor: '#880E4F', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
-  signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  signOutButton: { backgroundColor: '#880E4F', borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 32, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  signOutButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#880E4F', marginBottom: 8 },

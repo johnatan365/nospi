@@ -8,25 +8,25 @@ export default function TabLayout() {
     {
       name: 'events',
       route: '/(tabs)/events',
-      icon: 'star',
+      icon: 'star.fill',
       label: 'Eventos',
     },
     {
       name: 'appointments',
       route: '/(tabs)/appointments',
-      icon: 'bookmark',
+      icon: 'bookmark.fill',
       label: 'Citas',
     },
     {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
-      icon: 'message',
+      icon: 'message.fill',
       label: 'Interacción',
     },
     {
       name: 'profile',
       route: '/(tabs)/profile',
-      icon: 'person',
+      icon: 'person.fill',
       label: 'Perfil',
     },
   ];

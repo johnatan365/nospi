@@ -902,7 +902,7 @@ export default function SubscriptionPlansScreen() {
             </View>
           </View>
           <View style={[styles.benefitRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.benefitIcon, { color: '#880E4F' }]}>♥</Text>
+            <Text style={[styles.benefitIcon, { color: '#E53935' }]}>♥</Text>
             <View style={styles.benefitTextWrap}>
               <Text style={styles.benefitTitle}>Experiencia única</Text>
               <Text style={styles.benefitDesc}>Disfruta de una experiencia social inolvidable.</Text>

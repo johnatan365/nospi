@@ -683,12 +683,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Intereses</Text>
-          <View style={styles.tagsContainer}>
+          <Text style={styles.sectionTitle}>Gustos</Text>
+          <View style={styles.chipsContainer}>
             {profile.interests.length > 0 ? (
               profile.interests.map((interest, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{interest}</Text>
+                <View key={index} style={styles.chip}>
+                  <Text style={styles.chipText}>{interest}</Text>
                 </View>
               ))
             ) : (
@@ -699,11 +699,11 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personalidad</Text>
-          <View style={styles.tagsContainer}>
+          <View style={styles.chipsContainer}>
             {profile.personality_traits.length > 0 ? (
               profile.personality_traits.map((trait, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{trait}</Text>
+                <View key={index} style={styles.chip}>
+                  <Text style={styles.chipText}>{trait}</Text>
                 </View>
               ))
             ) : (
@@ -733,7 +733,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
@@ -1311,6 +1311,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
+  },
+  chipText: {
+    color: '#880E4F',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   emptyText: {
     fontSize: 14,
     color: '#999',
@@ -1318,16 +1336,26 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     backgroundColor: '#880E4F',
-    paddingVertical: 16,
-    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
     marginBottom: 32,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   signOutButtonText: {
-    color: nospiColors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   modalOverlay: {
     flex: 1,
