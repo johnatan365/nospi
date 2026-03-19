@@ -4,11 +4,11 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icono Nospi.png",
+    "icon": "./assets/images/nospi_icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icono Nospi.png",
+      "image": "./assets/images/nospi_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#E9D5FF"
     },
@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icono Nospi.png",
+        "foregroundImage": "./assets/images/nospi_icon.png",
         "backgroundColor": "#E9D5FF"
       },
       "edgeToEdgeEnabled": true,
