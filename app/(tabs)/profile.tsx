@@ -1317,7 +1317,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   signOutButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#880E4F',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',

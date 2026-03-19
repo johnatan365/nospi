@@ -129,6 +129,11 @@ export default function EventDetailsScreen() {
     });
   };
 
+  const handleCancel = () => {
+    console.log('User pressed Cancelar in event details');
+    router.back();
+  };
+
   const handleConfirm = async () => {
     setConfirming(true);
     
@@ -202,7 +207,15 @@ export default function EventDetailsScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{
+        headerShown: true,
+        title: 'Detalles del Evento',
+        headerLeft: () => (
+          <TouchableOpacity onPress={handleCancel} style={{ paddingHorizontal: 8 }}>
+            <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '500' }}>Cancelar</Text>
+          </TouchableOpacity>
+        ),
+      }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.eventCard}>
           {/* Header - Icon and Title */}

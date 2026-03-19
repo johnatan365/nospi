@@ -23,6 +23,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
 
   const handleTabPress = (route: string) => {
+    console.log('Tab pressed:', route);
     router.push(route as any);
   };
 
@@ -31,9 +32,9 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const isActive = pathname === tab.route || pathname.startsWith(tab.route);
-          const iconColor = isActive ? '#FFFFFF' : '#9CA3AF';
-          const labelColor = isActive ? '#FFFFFF' : '#6B7280';
-          const backgroundColor = isActive ? nospiColors.purpleDark : 'transparent';
+          const iconColor = '#880E4F';
+          const labelColor = isActive ? '#880E4F' : '#c2185b';
+          const backgroundColor = isActive ? 'rgba(136, 14, 79, 0.10)' : 'transparent';
 
           return (
             <TouchableOpacity
@@ -70,15 +71,15 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#1a0010',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(240, 98, 146, 0.30)',
+    borderTopColor: 'rgba(136, 14, 79, 0.12)',
     paddingTop: 4,
     paddingBottom: 4,
     paddingHorizontal: 8,
-    shadowColor: '#000',
+    shadowColor: '#880E4F',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 10,
   },

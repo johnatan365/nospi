@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
   tag: { backgroundColor: 'rgba(173, 20, 87, 0.12)', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
   tagText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
   emptyText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
-  signOutButton: { backgroundColor: '#F44336', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
+  signOutButton: { backgroundColor: '#880E4F', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 16, marginBottom: 32 },
   signOutButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },

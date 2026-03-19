@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
+    color: '#880E4F',
     textAlign: 'center',
   },
   eventInfoCard: {
@@ -1295,14 +1295,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   confirmedCard: {
-    backgroundColor: 'rgba(240, 98, 146, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
+    borderColor: 'rgba(136, 14, 79, 0.15)',
   },
   confirmedIcon: {
     fontSize: 36,

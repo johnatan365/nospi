@@ -756,12 +756,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cancelButton: {
-    backgroundColor: '#EF4444',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: '#880E4F',
   },
   cancelButtonText: {
     color: 'white',
