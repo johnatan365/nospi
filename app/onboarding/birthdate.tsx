@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -82,15 +81,22 @@ export default function BirthdateScreen() {
                 }}
                 style={{
                   fontSize: 18,
-                  padding: '12px 20px',
-                  borderRadius: 12,
-                  border: `2px solid ${nospiColors.purpleLight}`,
-                  color: nospiColors.purpleDark,
+                  padding: '14px 16px',
+                  borderRadius: 16,
+                  border: '2px solid rgba(240, 98, 146, 0.50)',
+                  color: '#880E4F',
                   backgroundColor: 'rgba(255,255,255,0.9)',
                   width: '100%',
+                  maxWidth: '100%',
                   boxSizing: 'border-box',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none',
                   outline: 'none',
                   cursor: 'pointer',
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  display: 'block',
                 } as any}
               />
             </View>
@@ -163,6 +169,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     alignSelf: 'center',
+    overflow: 'hidden',
   },
   title: {
     fontSize: 28,
@@ -177,6 +184,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     alignSelf: 'center',
     overflow: 'hidden',
+    paddingHorizontal: 0,
   },
   dateDisplayContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
