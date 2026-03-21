@@ -4,13 +4,13 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/nospi_icon.png",
+    "icon": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/nospi_icon.png",
+      "image": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a0010"
+      "backgroundColor": "#A0005A"
     },
     "ios": {
       "supportsTablet": true,
@@ -30,8 +30,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/nospi_icon.png",
-        "backgroundColor": "#1a0010"
+        "foregroundImage": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
+        "backgroundColor": "#A0005A"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nospi.jaxper",
