@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/images/nospi_icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#E9D5FF"
+      "backgroundColor": "#1a0010"
     },
     "ios": {
       "supportsTablet": true,
@@ -31,7 +31,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/nospi_icon.png",
-        "backgroundColor": "#E9D5FF"
+        "backgroundColor": "#1a0010"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nospi.jaxper",
