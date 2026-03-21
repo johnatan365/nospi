@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
@@ -10,7 +8,14 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+
+// Use Ionicons only on native where fonts load fast, emoji on web
+let Ionicons: any = null;
+let MaterialIcons: any = null;
+if (Platform.OS !== 'web') {
+  Ionicons = require('@expo/vector-icons').Ionicons;
+  MaterialIcons = require('@expo/vector-icons/MaterialIcons').default;
+}
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -332,7 +337,11 @@ export default function LoginScreen() {
 
             <View style={styles.inputContainer}>
               <View style={styles.inputWrapper}>
-                <MaterialIcons name="email" size={20} color="#666" style={styles.inputIcon} />
+                {Platform.OS === 'web' ? (
+                  <Text style={[styles.inputIcon, {fontSize: 18}]}>✉️</Text>
+                ) : (
+                  MaterialIcons && <MaterialIcons name="email" size={20} color="#666" style={styles.inputIcon} />
+                )}
                 <TextInput
                   style={styles.inputWithIcon}
                   placeholder="Email"
@@ -346,7 +355,11 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <MaterialIcons name="lock" size={20} color="#666" style={styles.inputIcon} />
+                {Platform.OS === 'web' ? (
+                  <Text style={[styles.inputIcon, {fontSize: 18}]}>🔒</Text>
+                ) : (
+                  MaterialIcons && <MaterialIcons name="lock" size={20} color="#666" style={styles.inputIcon} />
+                )}
                 <TextInput
                   style={styles.inputWithIcon}
                   placeholder="Contraseña"
@@ -361,7 +374,11 @@ export default function LoginScreen() {
                   onPress={() => { console.log('Toggle password visibility'); setShowPassword(!showPassword); }}
                   style={styles.eyeButton}
                 >
-                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+                  {Platform.OS === 'web' ? (
+                    <Text style={{fontSize: 18}}>{showPassword ? '🙈' : '👁️'}</Text>
+                  ) : (
+                    Ionicons && <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
