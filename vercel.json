@@ -1,10 +1,13 @@
 {
-  "rewrites": [
+  "redirects": [
     {
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "admin.nospi.co" }],
-      "destination": "/admin/$1"
-    },
+      "destination": "https://app.nospi.co/admin/$1",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     {
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "app.nospi.co" }],
