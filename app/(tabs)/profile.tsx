@@ -14,6 +14,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
+import { getCached, setCached, clearCached } from '@/utils/cache';
+
+const CACHE_KEY = 'cache_profile';
 
 interface UserProfile {
   id: string;
@@ -73,9 +76,6 @@ const AVAILABLE_PERSONALITY = [
   '🤓 Geek', '🌟 Carismático', '💼 Profesional', '🎨 Artístico', '🏆 Competitivo',
 ];
 
-// Cache TTL: 120 seconds — profile changes infrequently
-const CACHE_TTL_MS = 120_000;
-
 export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
   const router = useRouter();
@@ -131,17 +131,26 @@ export default function ProfileScreen() {
       return;
     }
 
-    // Use cache if fresh and not forced
-    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
-      console.log('ProfileScreen: Using cached profile data');
+    // 1. Show in-memory cache instantly
+    if (!force && cacheRef.current) {
       setProfile(cacheRef.current.data);
       populateEditFields(cacheRef.current.data);
       setLoading(false);
-      return;
+    } else if (!force) {
+      // 2. Try AsyncStorage for cross-session persistence
+      const persisted = await getCached<UserProfile>(CACHE_KEY);
+      if (persisted) {
+        console.log('ProfileScreen: Showing persisted cache');
+        cacheRef.current = { data: persisted, timestamp: Date.now() };
+        setProfile(persisted);
+        populateEditFields(persisted);
+        setLoading(false);
+      }
     }
 
+    // 3. Always fetch fresh in background (or immediately if forced)
     try {
-      setLoading(true);
+      if (force) setLoading(true);
       setError(null);
       console.log('ProfileScreen: Fetching profile from Supabase for user:', user.id);
 
@@ -195,6 +204,7 @@ export default function ProfileScreen() {
 
         console.log('ProfileScreen: Default profile created');
         cacheRef.current = { data: defaultProfile as UserProfile, timestamp: Date.now() };
+        setCached(CACHE_KEY, defaultProfile as UserProfile);
         setProfile(defaultProfile as UserProfile);
         populateEditFields(defaultProfile as UserProfile);
         setLoading(false);
@@ -202,8 +212,8 @@ export default function ProfileScreen() {
       }
 
       console.log('ProfileScreen: Profile loaded successfully:', data.name);
-      // Store base URL in cache — no cache-busting on every load
       cacheRef.current = { data: data as UserProfile, timestamp: Date.now() };
+      setCached(CACHE_KEY, data as UserProfile);
       setProfile(data as UserProfile);
       populateEditFields(data as UserProfile);
     } catch (err) {
@@ -323,7 +333,10 @@ export default function ProfileScreen() {
       setProfile(prev => {
         if (!prev) return null;
         const updated = { ...prev, profile_photo_url: cacheBustedUrl };
-        cacheRef.current = { data: { ...updated, profile_photo_url: basePhotoUrl }, timestamp: Date.now() };
+        const toCache = { ...updated, profile_photo_url: basePhotoUrl };
+        cacheRef.current = { data: toCache, timestamp: Date.now() };
+        clearCached(CACHE_KEY);
+        setCached(CACHE_KEY, toCache);
         return updated;
       });
 
@@ -376,6 +389,7 @@ export default function ProfileScreen() {
           age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
         };
         cacheRef.current = { data: updated, timestamp: Date.now() };
+        setCached(CACHE_KEY, updated);
         return updated;
       });
       setEditModalVisible(false);
@@ -401,6 +415,7 @@ export default function ProfileScreen() {
 
       const updated = { ...profile, notification_preferences: newPreferences };
       cacheRef.current = { data: updated, timestamp: Date.now() };
+      setCached(CACHE_KEY, updated);
       setProfile(updated);
     } catch (err) {
       console.error('Failed to update preferences:', err);

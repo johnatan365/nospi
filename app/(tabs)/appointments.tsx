@@ -8,6 +8,9 @@ import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
+import { getCached, setCached, clearCached } from '@/utils/cache';
+
+const CACHE_KEY_PREFIX = 'cache_appointments';
 
 interface Appointment {
   id: string;
@@ -33,9 +36,6 @@ interface Appointment {
 
 type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
-// Cache TTL: 30 seconds per filter
-const CACHE_TTL_MS = 30_000;
-
 export default function AppointmentsScreen() {
   const { user } = useSupabase();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -52,8 +52,8 @@ export default function AppointmentsScreen() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
 
-  // Per-filter cache
-  const cacheRef = useRef<Record<FilterType, { data: Appointment[]; timestamp: number } | null>>({
+  // Per-filter in-memory cache (keeps data across filter switches within same session)
+  const cacheRef = useRef<Record<FilterType, Appointment[] | null>>({
     confirmadas: null,
     anteriores: null,
     canceladas: null,
@@ -71,73 +71,90 @@ export default function AppointmentsScreen() {
     }
   }, []);
 
-  const loadAppointments = useCallback(async (force = false) => {
-    if (!user?.id) return;
+  const fetchFreshAppointments = useCallback(async (filterType: FilterType): Promise<Appointment[] | null> => {
+    if (!user?.id) return null;
 
-    // Use cache if fresh and not forced
-    const cached = cacheRef.current[filter];
-    if (!force && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      console.log('AppointmentsScreen: Using cached data for filter:', filter);
-      setAppointments(cached.data);
-      setLoading(false);
-      return;
+    let statusFilter = 'confirmada';
+    if (filterType === 'anteriores') statusFilter = 'anterior';
+    else if (filterType === 'canceladas') statusFilter = 'cancelada';
+
+    console.log('AppointmentsScreen: Fetching appointments, filter:', filterType, 'user:', user.id);
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .select(`
+        id,
+        status,
+        payment_status,
+        created_at,
+        events!inner (
+          id,
+          name,
+          city,
+          type,
+          date,
+          time,
+          location,
+          location_name,
+          location_address,
+          maps_link,
+          is_location_revealed,
+          event_status,
+          start_time
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('status', statusFilter)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('AppointmentsScreen: Error loading appointments:', error);
+      return null;
     }
 
-    try {
-      setLoading(true);
-      console.log('AppointmentsScreen: Fetching appointments, filter:', filter, 'user:', user.id);
+    const transformed = (data || []).map(apt => ({
+      ...apt,
+      event: apt.events as any,
+    })) as Appointment[];
 
-      let statusFilter = 'confirmada';
-      if (filter === 'anteriores') statusFilter = 'anterior';
-      else if (filter === 'canceladas') statusFilter = 'cancelada';
+    console.log('AppointmentsScreen: Loaded', transformed.length, 'appointments for filter:', filterType);
+    return transformed;
+  }, [user]);
 
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          status,
-          payment_status,
-          created_at,
-          events!inner (
-            id,
-            name,
-            city,
-            type,
-            date,
-            time,
-            location,
-            location_name,
-            location_address,
-            maps_link,
-            is_location_revealed,
-            event_status,
-            start_time
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', statusFilter)
-        .order('created_at', { ascending: false });
+  const loadAppointments = useCallback(async (filterType: FilterType = filter) => {
+    if (!user?.id) return;
 
-      if (error) {
-        console.error('AppointmentsScreen: Error loading appointments:', error);
-        return;
+    const cacheKey = `${CACHE_KEY_PREFIX}_${filterType}`;
+
+    // 1. Show in-memory cache instantly (no async needed)
+    if (cacheRef.current[filterType]) {
+      setAppointments(cacheRef.current[filterType]!);
+      setLoading(false);
+    } else {
+      // 2. Try AsyncStorage for cross-session persistence
+      const persisted = await getCached<Appointment[]>(cacheKey);
+      if (persisted) {
+        console.log('AppointmentsScreen: Showing persisted cache for filter:', filterType);
+        cacheRef.current[filterType] = persisted;
+        setAppointments(persisted);
+        setLoading(false);
       }
+    }
 
-      const transformedAppointments = (data || []).map(apt => ({
-        ...apt,
-        event: apt.events as any,
-      }));
-
-      console.log('AppointmentsScreen: Loaded', transformedAppointments.length, 'appointments');
-
-      cacheRef.current[filter] = { data: transformedAppointments as Appointment[], timestamp: Date.now() };
-      setAppointments(transformedAppointments as Appointment[]);
+    // 3. Always revalidate in background
+    try {
+      const fresh = await fetchFreshAppointments(filterType);
+      if (fresh !== null) {
+        cacheRef.current[filterType] = fresh;
+        setAppointments(fresh);
+        setCached(cacheKey, fresh);
+      }
     } catch (error) {
       console.error('AppointmentsScreen: Failed to load appointments:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, filter]);
+  }, [user, filter, fetchFreshAppointments]);
 
   useFocusEffect(
     useCallback(() => {
@@ -161,8 +178,9 @@ export default function AppointmentsScreen() {
                 await AsyncStorage.removeItem('pending_event_confirmation');
                 setShowPaymentSuccessModal(true);
                 // Invalidate cache and reload
-                cacheRef.current[filter] = null;
-                loadAppointments(true);
+                cacheRef.current['confirmadas'] = null;
+                clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
+                loadAppointments('confirmadas');
               }
             }, 2000);
           }
@@ -250,9 +268,12 @@ export default function AppointmentsScreen() {
 
       setShowCancelModal(false);
       setAppointmentToCancel(null);
-      // Invalidate cache and reload
-      cacheRef.current[filter] = null;
-      loadAppointments(true);
+      // Invalidate all appointment caches since cancel affects multiple filters
+      cacheRef.current['confirmadas'] = null;
+      cacheRef.current['canceladas'] = null;
+      clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
+      clearCached(`${CACHE_KEY_PREFIX}_canceladas`);
+      loadAppointments(filter);
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
     }

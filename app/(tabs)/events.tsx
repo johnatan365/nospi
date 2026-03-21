@@ -7,6 +7,9 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
+import { getCached, setCached } from '@/utils/cache';
+
+const CACHE_KEY = 'cache_events';
 
 interface Event {
   id: string;
@@ -21,27 +24,14 @@ interface Event {
   is_full: boolean;
 }
 
-// Cache TTL: 60 seconds
-const CACHE_TTL_MS = 60_000;
-
 export default function EventsScreen() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Module-level cache so it persists across tab switches
-  const cacheRef = useRef<{ data: Event[]; timestamp: number } | null>(null);
   const currentUserIdRef = useRef<string | null>(null);
 
-  const loadEvents = useCallback(async (force = false) => {
-    // Use cache if fresh and not forced
-    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
-      console.log('EventsScreen: Using cached events data');
-      setEvents(cacheRef.current.data);
-      setLoading(false);
-      return;
-    }
-
+  const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
     // Resolve user id once
     if (!currentUserIdRef.current) {
       const { data: { user } } = await supabase.auth.getUser();
@@ -51,52 +41,63 @@ export default function EventsScreen() {
       }
     }
 
-    if (!currentUserIdRef.current) {
-      setLoading(false);
-      return;
+    if (!currentUserIdRef.current) return null;
+
+    console.log('EventsScreen: Fetching events from Supabase for user:', currentUserIdRef.current);
+
+    const [appointmentsResult, eventsResult] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('event_id')
+        .eq('user_id', currentUserIdRef.current)
+        .in('status', ['confirmada', 'anterior'])
+        .eq('payment_status', 'completed'),
+      supabase
+        .from('events')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
+        .eq('event_status', 'published')
+        .order('date', { ascending: true }),
+    ]);
+
+    if (appointmentsResult.error) {
+      console.error('EventsScreen: Error loading user appointments:', appointmentsResult.error);
+    }
+    if (eventsResult.error) {
+      console.error('EventsScreen: Error loading events:', eventsResult.error);
+      return null;
     }
 
+    const purchasedEventIds = appointmentsResult.data?.map(apt => apt.event_id) || [];
+    const availableEvents = (eventsResult.data || []).filter(
+      event => !purchasedEventIds.includes(event.id) && !event.is_full
+    );
+
+    console.log('EventsScreen: Available events fetched:', availableEvents.length);
+    return availableEvents;
+  }, []);
+
+  const loadEvents = useCallback(async () => {
+    // 1. Load from AsyncStorage immediately — show data with no skeleton
+    const cached = await getCached<Event[]>(CACHE_KEY);
+    if (cached) {
+      console.log('EventsScreen: Showing cached data instantly');
+      setEvents(cached);
+      setLoading(false);
+    }
+
+    // 2. Always fetch fresh in background
     try {
-      console.log('EventsScreen: Fetching events from Supabase for user:', currentUserIdRef.current);
-
-      const [appointmentsResult, eventsResult] = await Promise.all([
-        supabase
-          .from('appointments')
-          .select('event_id')
-          .eq('user_id', currentUserIdRef.current)
-          .in('status', ['confirmada', 'anterior'])
-          .eq('payment_status', 'completed'),
-        supabase
-          .from('events')
-          .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
-          .eq('event_status', 'published')
-          .order('date', { ascending: true }),
-      ]);
-
-      if (appointmentsResult.error) {
-        console.error('EventsScreen: Error loading user appointments:', appointmentsResult.error);
+      const fresh = await fetchFresh();
+      if (fresh !== null) {
+        setEvents(fresh);
+        setCached(CACHE_KEY, fresh);
       }
-      if (eventsResult.error) {
-        console.error('EventsScreen: Error loading events:', eventsResult.error);
-        setLoading(false);
-        return;
-      }
-
-      const purchasedEventIds = appointmentsResult.data?.map(apt => apt.event_id) || [];
-      const availableEvents = (eventsResult.data || []).filter(
-        event => !purchasedEventIds.includes(event.id) && !event.is_full
-      );
-
-      console.log('EventsScreen: Available events fetched:', availableEvents.length);
-
-      cacheRef.current = { data: availableEvents, timestamp: Date.now() };
-      setEvents(availableEvents);
     } catch (error) {
       console.error('EventsScreen: Failed to load events:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchFresh]);
 
   useFocusEffect(
     useCallback(() => {

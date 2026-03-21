@@ -9,6 +9,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
+import { getCached, setCached, clearCached } from '@/utils/cache';
+
+const CACHE_KEY = 'cache_interaccion';
 
 interface Event {
   id: string;
@@ -67,9 +70,6 @@ interface Participant {
 }
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
-
-// Cache TTL: 30 seconds
-const CACHE_TTL_MS = 30_000;
 
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
@@ -237,38 +237,49 @@ export default function InteraccionScreen() {
     }
   }, []);
 
-  const loadAppointment = useCallback(async (force = false) => {
+  const applyAppointmentData = useCallback((apt: Appointment | null) => {
+    setAppointment(apt);
+    if (apt) {
+      if (!apt.location_confirmed) {
+        setCheckInPhase('code_entry');
+        setGamePhase('intro');
+      } else {
+        setCheckInPhase('confirmed');
+        if (apt.event?.game_phase) {
+          setGamePhase(apt.event.game_phase);
+          const gp = apt.event.game_phase;
+          if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
+            setUserReadyForRules(true);
+            setUserReadyForGame(true);
+          }
+        }
+      }
+      if (apt.event?.start_time) checkIfEventDay(apt.event.start_time);
+    }
+  }, [checkIfEventDay]);
+
+  const loadAppointment = useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
     }
 
-    // Use cache if fresh and not forced
-    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
-      console.log('InteraccionScreen: Using cached appointment data');
-      const cached = cacheRef.current.data;
-      setAppointment(cached);
-      if (cached) {
-        if (!cached.location_confirmed) {
-          setCheckInPhase('code_entry');
-          setGamePhase('intro');
-        } else {
-          setCheckInPhase('confirmed');
-          if (cached.event?.game_phase) {
-            setGamePhase(cached.event.game_phase);
-            const gp = cached.event.game_phase;
-            if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
-              setUserReadyForRules(true);
-              setUserReadyForGame(true);
-            }
-          }
-        }
-        if (cached.event?.start_time) checkIfEventDay(cached.event.start_time);
-      }
+    // 1. Show in-memory cache instantly
+    if (cacheRef.current) {
+      applyAppointmentData(cacheRef.current.data);
       setLoading(false);
-      return;
+    } else {
+      // 2. Try AsyncStorage for cross-session persistence
+      const persisted = await getCached<Appointment | null>(CACHE_KEY);
+      if (persisted !== null) {
+        console.log('InteraccionScreen: Showing persisted cache');
+        cacheRef.current = { data: persisted, timestamp: Date.now() };
+        applyAppointmentData(persisted);
+        setLoading(false);
+      }
     }
 
+    // 3. Always fetch fresh in background
     try {
       console.log('InteraccionScreen: Fetching appointment from Supabase for user:', user.id);
 
@@ -319,6 +330,7 @@ export default function InteraccionScreen() {
 
       if (!data || data.length === 0) {
         cacheRef.current = { data: null, timestamp: Date.now() };
+        setCached(CACHE_KEY, null);
         setAppointment(null);
         setLoading(false);
         return;
@@ -348,45 +360,32 @@ export default function InteraccionScreen() {
 
       if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
         cacheRef.current = { data: null, timestamp: Date.now() };
+        setCached(CACHE_KEY, null);
         setAppointment(null);
         setLoading(false);
         return;
       }
 
-      cacheRef.current = { data: appointmentData as any, timestamp: Date.now() };
-      setAppointment(appointmentData as any);
+      const freshApt = appointmentData as any as Appointment;
+      cacheRef.current = { data: freshApt, timestamp: Date.now() };
+      setCached(CACHE_KEY, freshApt);
+      applyAppointmentData(freshApt);
 
-      if (!appointmentData.location_confirmed) {
-        setCheckInPhase('code_entry');
-        setGamePhase('intro');
-      } else {
-        setCheckInPhase('confirmed');
-        if (appointmentData.event?.game_phase) {
-          setGamePhase(appointmentData.event.game_phase);
-          const gp = appointmentData.event.game_phase;
-          if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
-            setUserReadyForRules(true);
-            setUserReadyForGame(true);
-          }
-        }
+      if (freshApt.event?.start_time) {
+        scheduleNotifications(freshApt.event.start_time);
       }
 
-      if (appointmentData.event && appointmentData.event.start_time) {
-        checkIfEventDay(appointmentData.event.start_time);
-        scheduleNotifications(appointmentData.event.start_time);
+      if (freshApt.event_id) {
+        loadActiveParticipants(freshApt.event_id);
       }
 
-      if (appointmentData.event_id) {
-        loadActiveParticipants(appointmentData.event_id);
-      }
-
-      console.log('InteraccionScreen: Appointment loaded, event_id:', appointmentData.event_id);
+      console.log('InteraccionScreen: Appointment loaded, event_id:', freshApt.event_id);
     } catch (error) {
       console.error('InteraccionScreen: Failed to load appointment:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
+  }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
 
   const handleCodeConfirmation = useCallback(async () => {
     if (!appointment || !user) return;
@@ -451,6 +450,7 @@ export default function InteraccionScreen() {
 
       // Invalidate cache after check-in
       cacheRef.current = null;
+      clearCached(CACHE_KEY);
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error during check-in:', error);
@@ -527,6 +527,7 @@ export default function InteraccionScreen() {
           if (newEvent.event_status === 'closed') {
             setAppointment(null);
             cacheRef.current = null;
+            clearCached(CACHE_KEY);
             return;
           }
 
@@ -571,6 +572,7 @@ export default function InteraccionScreen() {
           if (newAppointment.status === 'anterior') {
             setAppointment(null);
             cacheRef.current = null;
+            clearCached(CACHE_KEY);
             setLoading(false);
           }
         }
@@ -708,6 +710,7 @@ export default function InteraccionScreen() {
     console.log('User finished game, navigating to appointments');
     setAppointment(null);
     cacheRef.current = null;
+    clearCached(CACHE_KEY);
     router.replace('/(tabs)/appointments');
   }, [router]);
 
