@@ -99,7 +99,7 @@ export default function PaymentCallbackScreen() {
     console.log('payment-callback: URL params:', localSearchParams);
 
     if (isWeb) {
-      // On web, Wompi redirects to https://nospi.vercel.app/payment-callback.
+      // On web, Wompi redirects to https://app.nospi.co/payment-callback.
       // Store the status so the web polling in subscription-plans can pick it up,
       // then show the "return to app" instructions card.
       const urlStatus = (localSearchParams.payment_status as string) || 'unknown';

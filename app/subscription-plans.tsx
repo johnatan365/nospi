@@ -33,7 +33,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // - Native (iOS/Android): must use the app scheme so the OS routes it back into the app.
 //   https:// redirects on mobile open the browser, NOT the app, unless App Links are
 //   fully configured with a verified domain. nospi:// is always safe on native.
-const WEB_REDIRECT_URL = 'https://nospi.vercel.app/payment-callback';
+const WEB_REDIRECT_URL = 'https://app.nospi.co/payment-callback';
 const NATIVE_REDIRECT_URL = 'nospi://payment-callback';
 
 export default function SubscriptionPlansScreen() {
