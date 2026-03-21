@@ -872,7 +872,22 @@ export default function SubscriptionPlansScreen() {
 
   return (
     <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
-      <Stack.Screen options={{ headerShown: true, title: 'Pago del Evento', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{
+        headerShown: true,
+        title: 'Pago del Evento',
+        headerBackTitle: 'Atrás',
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[SubscriptionPlans] Cancel pressed — navigating to /(tabs)');
+              router.replace('/(tabs)');
+            }}
+            style={{ paddingHorizontal: 8 }}
+          >
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16, fontWeight: '500' }}>Cancelar</Text>
+          </TouchableOpacity>
+        ),
+      }} />
       
       
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>

@@ -1163,12 +1163,12 @@ const styles = StyleSheet.create({
   preEventTipTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.95)',
+    color: '#880E4F',
     marginBottom: 4,
   },
   preEventTipText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
+    color: '#444',
     lineHeight: 20,
   },
   eventInfoIcon: {
@@ -1178,19 +1178,19 @@ const styles = StyleSheet.create({
   eventInfoTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#880E4F',
     marginBottom: 16,
   },
   eventInfoDate: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#444',
     marginBottom: 8,
     textAlign: 'center',
   },
   eventInfoTime: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F06292',
+    color: '#AD1457',
   },
   countdownCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
