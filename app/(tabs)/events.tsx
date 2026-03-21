@@ -1,10 +1,12 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
+import { SkeletonBox } from '@/components/SkeletonBox';
 
 interface Event {
   id: string;
@@ -19,109 +21,126 @@ interface Event {
   is_full: boolean;
 }
 
+// Cache TTL: 60 seconds
+const CACHE_TTL_MS = 60_000;
+
 export default function EventsScreen() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const getCurrentUser = async () => {
+  // Module-level cache so it persists across tab switches
+  const cacheRef = useRef<{ data: Event[]; timestamp: number } | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  const loadEvents = useCallback(async (force = false) => {
+    // Use cache if fresh and not forced
+    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
+      console.log('EventsScreen: Using cached events data');
+      setEvents(cacheRef.current.data);
+      setLoading(false);
+      return;
+    }
+
+    // Resolve user id once
+    if (!currentUserIdRef.current) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setCurrentUserId(user.id);
-        console.log('Current user ID:', user.id);
+        currentUserIdRef.current = user.id;
+        console.log('EventsScreen: Resolved current user ID:', user.id);
       }
-    };
-    getCurrentUser();
-  }, []);
+    }
 
-  const loadEvents = useCallback(async () => {
-    if (!currentUserId) return;
+    if (!currentUserIdRef.current) {
+      setLoading(false);
+      return;
+    }
 
     try {
-      console.log('Loading published events for user:', currentUserId);
-      
-      // First, get all events the user has already purchased/confirmed
-      const { data: userAppointments, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select('event_id')
-        .eq('user_id', currentUserId)
-        .in('status', ['confirmada', 'anterior'])
-        .eq('payment_status', 'completed');
+      console.log('EventsScreen: Fetching events from Supabase for user:', currentUserIdRef.current);
 
-      if (appointmentsError) {
-        console.error('Error loading user appointments:', appointmentsError);
+      const [appointmentsResult, eventsResult] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('event_id')
+          .eq('user_id', currentUserIdRef.current)
+          .in('status', ['confirmada', 'anterior'])
+          .eq('payment_status', 'completed'),
+        supabase
+          .from('events')
+          .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
+          .eq('event_status', 'published')
+          .order('date', { ascending: true }),
+      ]);
+
+      if (appointmentsResult.error) {
+        console.error('EventsScreen: Error loading user appointments:', appointmentsResult.error);
       }
-
-      const purchasedEventIds = userAppointments?.map(apt => apt.event_id) || [];
-      console.log('User has purchased events:', purchasedEventIds);
-
-      // Load only published events (exclude closed and draft events)
-      // Closed events should not appear in the app
-      const { data, error } = await supabase
-        .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
-        .eq('event_status', 'published')
-        .order('date', { ascending: true });
-
-      if (error) {
-        console.error('Error loading events:', error);
+      if (eventsResult.error) {
+        console.error('EventsScreen: Error loading events:', eventsResult.error);
+        setLoading(false);
         return;
       }
 
-      // Filter out events the user has already purchased AND events marked as full
-      const availableEvents = (data || []).filter(event => 
-        !purchasedEventIds.includes(event.id) && !event.is_full
+      const purchasedEventIds = appointmentsResult.data?.map(apt => apt.event_id) || [];
+      const availableEvents = (eventsResult.data || []).filter(
+        event => !purchasedEventIds.includes(event.id) && !event.is_full
       );
-      
-      console.log('Total published events:', data?.length || 0);
-      console.log('Available events (not purchased and not full):', availableEvents.length);
-      
+
+      console.log('EventsScreen: Available events fetched:', availableEvents.length);
+
+      cacheRef.current = { data: availableEvents, timestamp: Date.now() };
       setEvents(availableEvents);
     } catch (error) {
-      console.error('Failed to load events:', error);
+      console.error('EventsScreen: Failed to load events:', error);
     } finally {
       setLoading(false);
     }
-  }, [currentUserId]);
+  }, []);
 
-  useEffect(() => {
-    if (currentUserId) {
+  useFocusEffect(
+    useCallback(() => {
+      console.log('EventsScreen: Tab focused');
       loadEvents();
-    }
-  }, [currentUserId, loadEvents]);
+    }, [loadEvents])
+  );
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     };
     return date.toLocaleDateString('es-ES', options);
   };
 
   const handleEventPress = (event: Event) => {
-    console.log('User tapped event:', event.id);
+    console.log('User tapped event:', event.id, event.name);
     router.push(`/event-details/${event.id}`);
   };
 
-  if (loading) {
-    return (
-      <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+  const renderSkeleton = () => (
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <SkeletonBox height={40} width="60%" borderRadius={8} style={{ marginBottom: 8, marginTop: 48 }} />
+      <SkeletonBox height={20} width="80%" borderRadius={6} style={{ marginBottom: 32 }} />
+      {[1, 2, 3].map(i => (
+        <View key={i} style={styles.skeletonCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <SkeletonBox width={48} height={48} borderRadius={24} style={{ marginRight: 16 }} />
+            <View style={{ flex: 1 }}>
+              <SkeletonBox height={22} width="70%" borderRadius={6} style={{ marginBottom: 8 }} />
+              <SkeletonBox height={16} width="40%" borderRadius={6} />
+            </View>
+          </View>
+          <SkeletonBox height={16} width="90%" borderRadius={6} style={{ marginBottom: 6 }} />
+          <SkeletonBox height={16} width="50%" borderRadius={6} style={{ marginBottom: 6 }} />
+          <SkeletonBox height={14} width="35%" borderRadius={6} />
         </View>
-      </LinearGradient>
-    );
-  }
+      ))}
+    </ScrollView>
+  );
 
   return (
     <LinearGradient
@@ -130,49 +149,53 @@ export default function EventsScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Eventos Disponibles</Text>
-        <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
+      {loading ? (
+        renderSkeleton()
+      ) : (
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Eventos Disponibles</Text>
+          <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
 
-        {events.map((event) => {
-          const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
-          const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
-          const dateText = formatDate(event.date);
-          const participantsText = `${event.max_participants} participantes`;
+          {events.map((event) => {
+            const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
+            const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
+            const dateText = formatDate(event.date);
+            const participantsText = `${event.max_participants} participantes`;
 
-          return (
-            <TouchableOpacity
-              key={event.id}
-              style={styles.eventCard}
-              onPress={() => handleEventPress(event)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.eventHeader}>
-                <Text style={styles.eventIcon}>{eventIcon}</Text>
-                <View style={styles.eventHeaderText}>
-                  <Text style={styles.eventName}>{event.name}</Text>
-                  <Text style={styles.eventType}>{eventTypeText}</Text>
+            return (
+              <TouchableOpacity
+                key={event.id}
+                style={styles.eventCard}
+                onPress={() => handleEventPress(event)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.eventHeader}>
+                  <Text style={styles.eventIcon}>{eventIcon}</Text>
+                  <View style={styles.eventHeaderText}>
+                    <Text style={styles.eventName}>{event.name}</Text>
+                    <Text style={styles.eventType}>{eventTypeText}</Text>
+                  </View>
                 </View>
-              </View>
 
-              <Text style={styles.eventDate}>{dateText}</Text>
-              <Text style={styles.eventTime}>{event.time}</Text>
-              <Text style={styles.eventCity}>📍 {event.city}</Text>
-              {event.description && (
-                <Text style={styles.eventDescription}>{event.description}</Text>
-              )}
-              <Text style={styles.eventParticipants}>{participantsText}</Text>
-              <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
-            </TouchableOpacity>
-          );
-        })}
+                <Text style={styles.eventDate}>{dateText}</Text>
+                <Text style={styles.eventTime}>{event.time}</Text>
+                <Text style={styles.eventCity}>📍 {event.city}</Text>
+                {event.description && (
+                  <Text style={styles.eventDescription}>{event.description}</Text>
+                )}
+                <Text style={styles.eventParticipants}>{participantsText}</Text>
+                <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
+              </TouchableOpacity>
+            );
+          })}
 
-        {events.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No hay eventos disponibles en este momento</Text>
-          </View>
-        )}
-      </ScrollView>
+          {events.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No hay eventos disponibles en este momento</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </LinearGradient>
   );
 }
@@ -188,10 +211,11 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 100,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  skeletonCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
   },
   title: {
     fontSize: 32,

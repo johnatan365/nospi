@@ -1,12 +1,13 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Linking } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { SkeletonBox } from '@/components/SkeletonBox';
 
 interface Appointment {
   id: string;
@@ -32,6 +33,9 @@ interface Appointment {
 
 type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
+// Cache TTL: 30 seconds per filter
+const CACHE_TTL_MS = 30_000;
+
 export default function AppointmentsScreen() {
   const { user } = useSupabase();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -48,6 +52,13 @@ export default function AppointmentsScreen() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
 
+  // Per-filter cache
+  const cacheRef = useRef<Record<FilterType, { data: Appointment[]; timestamp: number } | null>>({
+    confirmadas: null,
+    anteriores: null,
+    canceladas: null,
+  });
+
   const checkFirstTimeNotificationPrompt = useCallback(async () => {
     try {
       const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
@@ -60,20 +71,25 @@ export default function AppointmentsScreen() {
     }
   }, []);
 
-  const loadAppointments = useCallback(async () => {
-    if (!user?.id) {
+  const loadAppointments = useCallback(async (force = false) => {
+    if (!user?.id) return;
+
+    // Use cache if fresh and not forced
+    const cached = cacheRef.current[filter];
+    if (!force && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log('AppointmentsScreen: Using cached data for filter:', filter);
+      setAppointments(cached.data);
+      setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
+      console.log('AppointmentsScreen: Fetching appointments, filter:', filter, 'user:', user.id);
 
       let statusFilter = 'confirmada';
-      if (filter === 'anteriores') {
-        statusFilter = 'anterior';
-      } else if (filter === 'canceladas') {
-        statusFilter = 'cancelada';
-      }
+      if (filter === 'anteriores') statusFilter = 'anterior';
+      else if (filter === 'canceladas') statusFilter = 'cancelada';
 
       const { data, error } = await supabase
         .from('appointments')
@@ -103,20 +119,21 @@ export default function AppointmentsScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading appointments:', error);
+        console.error('AppointmentsScreen: Error loading appointments:', error);
         return;
       }
 
-      
-      // Transform the data to match our interface (events -> event)
       const transformedAppointments = (data || []).map(apt => ({
         ...apt,
-        event: apt.events as any
+        event: apt.events as any,
       }));
-      
+
+      console.log('AppointmentsScreen: Loaded', transformedAppointments.length, 'appointments');
+
+      cacheRef.current[filter] = { data: transformedAppointments as Appointment[], timestamp: Date.now() };
       setAppointments(transformedAppointments as Appointment[]);
     } catch (error) {
-      console.error('Failed to load appointments:', error);
+      console.error('AppointmentsScreen: Failed to load appointments:', error);
     } finally {
       setLoading(false);
     }
@@ -124,14 +141,15 @@ export default function AppointmentsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('AppointmentsScreen: Tab focused');
       loadAppointments();
-      // Verificar si viene de un pago PSE exitoso
+
+      // Check for PSE payment pending
       AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {
         if (pending === 'true') {
           await AsyncStorage.removeItem('pse_payment_pending');
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
           if (pendingEventId && user?.id) {
-            // Esperar un poco para que el callback de MP haya procesado
             setTimeout(async () => {
               const { data: existing } = await supabase
                 .from('appointments')
@@ -142,61 +160,62 @@ export default function AppointmentsScreen() {
               if (existing) {
                 await AsyncStorage.removeItem('pending_event_confirmation');
                 setShowPaymentSuccessModal(true);
-                loadAppointments();
+                // Invalidate cache and reload
+                cacheRef.current[filter] = null;
+                loadAppointments(true);
               }
             }, 2000);
           }
         }
       });
-    }, [loadAppointments, user?.id])
-  );
 
-  useEffect(() => {
-    if (user) {
-      loadAppointments();
-      checkFirstTimeNotificationPrompt();
-    }
-  }, [user, filter, loadAppointments, checkFirstTimeNotificationPrompt]);
+      if (user) {
+        checkFirstTimeNotificationPrompt();
+      }
+    }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
+  );
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     };
     return date.toLocaleDateString('es-ES', options);
   };
 
+  const handleFilterChange = (newFilter: FilterType) => {
+    console.log('User tapped appointments filter:', newFilter);
+    setFilter(newFilter);
+  };
+
   const handleCancelPress = (appointment: Appointment) => {
+    console.log('User tapped cancel appointment:', appointment.id);
     setAppointmentToCancel(appointment);
     setShowCancelModal(true);
   };
 
   const confirmCancel = async () => {
     if (!appointmentToCancel || !appointmentToCancel.event) return;
+    console.log('User confirmed cancel appointment:', appointmentToCancel.id);
 
     try {
-      
-      // Calculate if cancellation is 24 hours before event
-      const eventStartTime = appointmentToCancel.event.start_time 
-        ? new Date(appointmentToCancel.event.start_time) 
+      const eventStartTime = appointmentToCancel.event.start_time
+        ? new Date(appointmentToCancel.event.start_time)
         : new Date(appointmentToCancel.event.date);
-      
+
       const now = new Date();
       const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
       const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-      
       const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
-      
-      
-      // Update appointment status to cancelada
+
       const { error: appointmentError } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           status: 'cancelada',
-          payment_status: isWithinRefundWindow ? 'refunded' : 'completed'
+          payment_status: isWithinRefundWindow ? 'refunded' : 'completed',
         })
         .eq('id', appointmentToCancel.id);
 
@@ -205,39 +224,35 @@ export default function AppointmentsScreen() {
         return;
       }
 
-      // If within refund window, add to virtual balance
       if (isWithinRefundWindow) {
         const refundAmount = PRECIO_EVENTO_COP;
-        
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
           user_id_param: user?.id,
-          amount_param: refundAmount
+          amount_param: refundAmount,
         });
 
         if (balanceError) {
           console.error('Error updating virtual balance:', balanceError);
-          // Try direct update as fallback
           const { data: userData } = await supabase
             .from('users')
             .select('virtual_balance')
             .eq('id', user?.id)
             .single();
-          
+
           const currentBalance = userData?.virtual_balance || 0;
           const newBalance = currentBalance + refundAmount;
-          
           await supabase
             .from('users')
             .update({ virtual_balance: newBalance })
             .eq('id', user?.id);
-          
-        } else {
         }
       }
 
       setShowCancelModal(false);
       setAppointmentToCancel(null);
-      loadAppointments();
+      // Invalidate cache and reload
+      cacheRef.current[filter] = null;
+      loadAppointments(true);
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
     }
@@ -252,6 +267,7 @@ export default function AppointmentsScreen() {
 
   const saveNotificationPreferences = async () => {
     try {
+      console.log('User saving notification preferences');
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: notificationPreferences })
@@ -287,25 +303,37 @@ export default function AppointmentsScreen() {
   };
 
   const handleOpenMaps = (mapsLink: string) => {
+    console.log('User tapped open maps:', mapsLink);
     Linking.openURL(mapsLink).catch(err => {
       console.error('Failed to open maps link:', err);
     });
   };
 
-  if (loading) {
-    return (
-      <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+  const renderSkeleton = () => (
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+      {[1, 2].map(i => (
+        <View key={i} style={styles.skeletonCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <SkeletonBox width={48} height={48} borderRadius={24} style={{ marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+              <SkeletonBox height={20} width="65%" borderRadius={6} style={{ marginBottom: 8 }} />
+              <SkeletonBox height={14} width="40%" borderRadius={6} />
+            </View>
+            <SkeletonBox width={80} height={28} borderRadius={12} />
+          </View>
+          <SkeletonBox height={16} width="85%" borderRadius={6} style={{ marginBottom: 6 }} />
+          <SkeletonBox height={16} width="45%" borderRadius={6} style={{ marginBottom: 6 }} />
+          <SkeletonBox height={14} width="70%" borderRadius={6} />
         </View>
-      </LinearGradient>
-    );
-  }
+      ))}
+    </ScrollView>
+  );
+
+  const emptyText = filter === 'confirmadas'
+    ? 'No tienes citas confirmadas'
+    : filter === 'canceladas'
+    ? 'No tienes citas canceladas'
+    : 'No tienes citas anteriores';
 
   return (
     <LinearGradient
@@ -321,9 +349,9 @@ export default function AppointmentsScreen() {
         <View style={styles.filterContainer}>
           <TouchableOpacity
             style={[styles.filterButton, filter === 'confirmadas' && styles.filterButtonActive]}
-            onPress={() => setFilter('confirmadas')}
+            onPress={() => handleFilterChange('confirmadas')}
           >
-            <Text 
+            <Text
               style={[styles.filterText, filter === 'confirmadas' && styles.filterTextActive]}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -333,9 +361,9 @@ export default function AppointmentsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.filterButton, filter === 'canceladas' && styles.filterButtonActive]}
-            onPress={() => setFilter('canceladas')}
+            onPress={() => handleFilterChange('canceladas')}
           >
-            <Text 
+            <Text
               style={[styles.filterText, filter === 'canceladas' && styles.filterTextActive]}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -345,9 +373,9 @@ export default function AppointmentsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.filterButton, filter === 'anteriores' && styles.filterButtonActive]}
-            onPress={() => setFilter('anteriores')}
+            onPress={() => handleFilterChange('anteriores')}
           >
-            <Text 
+            <Text
               style={[styles.filterText, filter === 'anteriores' && styles.filterTextActive]}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -357,115 +385,104 @@ export default function AppointmentsScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-          {appointments.map((appointment) => {
-            // ATOMIC JSX: Extract all logic and conditionals BEFORE the return
-            // Defensive check: Skip if event is null or undefined
-            if (!appointment.event) {
-              return null;
-            }
+        {loading ? (
+          renderSkeleton()
+        ) : (
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+            {appointments.map((appointment) => {
+              if (!appointment.event) return null;
 
-            const eventType = appointment.event.type || 'restaurant';
-            const eventTypeText = eventType === 'bar' ? 'Bar' : 'Restaurante';
-            const eventIcon = eventType === 'bar' ? '🍸' : '🍽️';
-            const eventName = appointment.event.name || eventTypeText;
-            const eventCity = appointment.event.city || '';
-            const eventDate = appointment.event.date || '';
-            const eventTime = appointment.event.time || '';
-            
-            // Show location if revealed
-            const locationRevealed = appointment.event.is_location_revealed || false;
-            
-            const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
-            const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
-            
-            const eventLocation = locationRevealed && appointment.event.location_name 
-              ? appointment.event.location_name 
-              : '';
-            
-            const eventAddress = locationRevealed && appointment.event.location_address
-              ? appointment.event.location_address
-              : null;
-            
-            const mapsLink = locationRevealed && appointment.event.maps_link
-              ? appointment.event.maps_link
-              : null;
-            
-            const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
-            const statusColor = getStatusColor(appointment.status);
-            const statusText = getStatusText(appointment.status);
-            const isConfirmed = appointment.status === 'confirmada';
+              const eventType = appointment.event.type || 'restaurant';
+              const eventTypeText = eventType === 'bar' ? 'Bar' : 'Restaurante';
+              const eventIcon = eventType === 'bar' ? '🍸' : '🍽️';
+              const eventName = appointment.event.name || eventTypeText;
+              const eventCity = appointment.event.city || '';
+              const eventDate = appointment.event.date || '';
+              const eventTime = appointment.event.time || '';
 
-            return (
-              <View key={appointment.id} style={styles.appointmentCard}>
-                <View style={styles.appointmentHeader}>
-                  <Text style={styles.appointmentIcon}>{eventIcon}</Text>
-                  <View style={styles.appointmentHeaderText}>
-                    <Text style={styles.appointmentName}>{eventName}</Text>
-                    <Text style={styles.appointmentCity}>{eventCity}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.statusText}>{statusText}</Text>
-                  </View>
-                </View>
+              const locationRevealed = appointment.event.is_location_revealed || false;
+              const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
+              const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
 
-                <Text style={styles.appointmentDate}>{dateText}</Text>
-                <Text style={styles.appointmentTime}>{eventTime}</Text>
-                
-                {shouldShowLocationPlaceholder && (
-                  <Text style={styles.appointmentLocation}>Ubicación se revelará 48 horas antes del evento</Text>
-                )}
-                
-                {locationRevealed && (
-                  <>
-                    <Text style={styles.appointmentLocation}>{eventLocation}</Text>
-                    {eventAddress && (
-                      <Text style={styles.appointmentAddress}>{eventAddress}</Text>
-                    )}
-                    {mapsLink && (
-                      <TouchableOpacity
-                        style={styles.mapsButton}
-                        onPress={() => handleOpenMaps(mapsLink)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
+              const eventLocation = locationRevealed && appointment.event.location_name
+                ? appointment.event.location_name
+                : '';
+              const eventAddress = locationRevealed && appointment.event.location_address
+                ? appointment.event.location_address
+                : null;
+              const mapsLink = locationRevealed && appointment.event.maps_link
+                ? appointment.event.maps_link
+                : null;
 
-                {isConfirmed && (
-                  <>
-                    <View style={styles.refundInfoCard}>
-                      <Text style={styles.refundInfoText}>
-                        💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
-                      </Text>
+              const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
+              const statusColor = getStatusColor(appointment.status);
+              const statusText = getStatusText(appointment.status);
+              const isConfirmed = appointment.status === 'confirmada';
+
+              return (
+                <View key={appointment.id} style={styles.appointmentCard}>
+                  <View style={styles.appointmentHeader}>
+                    <Text style={styles.appointmentIcon}>{eventIcon}</Text>
+                    <View style={styles.appointmentHeaderText}>
+                      <Text style={styles.appointmentName}>{eventName}</Text>
+                      <Text style={styles.appointmentCity}>{eventCity}</Text>
                     </View>
-                    
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => handleCancelPress(appointment)}
-                    >
-                      <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            );
-          })}
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.statusText}>{statusText}</Text>
+                    </View>
+                  </View>
 
-          {appointments.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {filter === 'confirmadas' 
-                  ? 'No tienes citas confirmadas' 
-                  : filter === 'canceladas'
-                  ? 'No tienes citas canceladas'
-                  : 'No tienes citas anteriores'}
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+                  <Text style={styles.appointmentDate}>{dateText}</Text>
+                  <Text style={styles.appointmentTime}>{eventTime}</Text>
+
+                  {shouldShowLocationPlaceholder && (
+                    <Text style={styles.appointmentLocation}>Ubicación se revelará 48 horas antes del evento</Text>
+                  )}
+
+                  {locationRevealed && (
+                    <>
+                      <Text style={styles.appointmentLocation}>{eventLocation}</Text>
+                      {eventAddress && (
+                        <Text style={styles.appointmentAddress}>{eventAddress}</Text>
+                      )}
+                      {mapsLink && (
+                        <TouchableOpacity
+                          style={styles.mapsButton}
+                          onPress={() => handleOpenMaps(mapsLink)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.mapsButtonText}>🗺️ Abrir en Maps</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+
+                  {isConfirmed && (
+                    <>
+                      <View style={styles.refundInfoCard}>
+                        <Text style={styles.refundInfoText}>
+                          💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => handleCancelPress(appointment)}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              );
+            })}
+
+            {appointments.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>{emptyText}</Text>
+              </View>
+            )}
+          </ScrollView>
+        )}
 
         {/* Notification Preferences Modal */}
         <Modal
@@ -544,22 +561,20 @@ export default function AppointmentsScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
               {appointmentToCancel && appointmentToCancel.event && (() => {
-                const eventStartTime = appointmentToCancel.event.start_time 
-                  ? new Date(appointmentToCancel.event.start_time) 
+                const eventStartTime = appointmentToCancel.event.start_time
+                  ? new Date(appointmentToCancel.event.start_time)
                   : new Date(appointmentToCancel.event.date);
                 const now = new Date();
                 const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
                 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
                 const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
-                
+
                 const refundMessage = isWithinRefundWindow
                   ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${PRECIO_EVENTO_COP.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
                   : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
-                
+
                 return (
-                  <Text style={styles.modalSubtitle}>
-                    {refundMessage}
-                  </Text>
+                  <Text style={styles.modalSubtitle}>{refundMessage}</Text>
                 );
               })()}
 
@@ -614,11 +629,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 48,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -660,6 +670,12 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 24,
     paddingBottom: 100,
+  },
+  skeletonCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
   },
   appointmentCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

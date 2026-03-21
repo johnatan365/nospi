@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -10,7 +10,8 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { SkeletonBox } from '@/components/SkeletonBox';
 
 interface UserProfile {
   id: string;
@@ -38,16 +39,8 @@ interface UserProfile {
 }
 
 const COUNTRIES = [
-  'Colombia',
-  'Argentina',
-  'Brasil',
-  'Chile',
-  'Ecuador',
-  'España',
-  'Estados Unidos',
-  'México',
-  'Perú',
-  'Venezuela',
+  'Colombia', 'Argentina', 'Brasil', 'Chile', 'Ecuador',
+  'España', 'Estados Unidos', 'México', 'Perú', 'Venezuela',
 ];
 
 const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
@@ -78,6 +71,9 @@ const AVAILABLE_PERSONALITY = [
   '🤓 Geek', '🌟 Carismático', '💼 Profesional', '🎨 Artístico', '🏆 Competitivo',
 ];
 
+// Cache TTL: 120 seconds
+const CACHE_TTL_MS = 120_000;
+
 export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
   const router = useRouter();
@@ -90,7 +86,6 @@ export default function ProfileScreen() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
 
-  // Edit form state
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editCountry, setEditCountry] = useState('');
@@ -101,7 +96,6 @@ export default function ProfileScreen() {
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
-  // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -111,18 +105,40 @@ export default function ProfileScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const loadProfile = useCallback(async () => {
+  // Cache ref — avoids re-fetching on every tab focus
+  const cacheRef = useRef<{ data: UserProfile; timestamp: number } | null>(null);
+
+  const populateEditFields = (profileData: UserProfile) => {
+    setEditName(profileData.name || '');
+    setEditPhone(profileData.phone || '');
+    setEditCountry(profileData.country || 'Colombia');
+    setEditCity(profileData.city || 'Medellín');
+    setEditInterestedIn(profileData.interested_in || 'ambos');
+    setEditAgeRangeMin(profileData.age_range_min || 18);
+    setEditAgeRangeMax(profileData.age_range_max || 60);
+    setEditInterests(profileData.interests || []);
+    setEditPersonality(profileData.personality_traits || []);
+  };
+
+  const loadProfile = useCallback(async (force = false) => {
+    if (!user?.id) {
+      setError('No se encontró información de usuario');
+      setLoading(false);
+      return;
+    }
+
+    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
+      console.log('ProfileScreen (iOS): Using cached profile data');
+      setProfile(cacheRef.current.data);
+      populateEditFields(cacheRef.current.data);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Loading user profile for user:', user?.id);
-      
-      if (!user?.id) {
-        console.log('❌ No user ID available');
-        setError('No se encontró información de usuario');
-        setLoading(false);
-        return;
-      }
+      console.log('ProfileScreen (iOS): Fetching profile from Supabase for user:', user.id);
 
       const { data, error: fetchError } = await supabase
         .from('users')
@@ -131,23 +147,19 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('❌ Error loading profile:', fetchError);
+        console.error('ProfileScreen (iOS): Error loading profile:', fetchError);
         setError('Error al cargar el perfil: ' + fetchError.message);
         setLoading(false);
         return;
       }
 
       if (!data) {
-        console.log('⚠️ No profile data found, creating default profile');
-        
-        // Get user metadata from auth
+        console.log('ProfileScreen (iOS): No profile found, creating default');
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const metadata = authUser?.user_metadata || {};
-        
         const fullName = metadata.full_name || metadata.name || authUser?.email?.split('@')[0] || 'Usuario';
         const profilePhotoUrl = metadata.avatar_url || metadata.picture || null;
-        
-        // Create a default profile
+
         const defaultProfile = {
           id: user.id,
           email: user.email || '',
@@ -165,85 +177,53 @@ export default function ProfileScreen() {
           interests: [],
           personality_traits: [],
           compatibility_percentage: 95,
-          notification_preferences: {
-            whatsapp: false,
-            email: true,
-            sms: false,
-            push: true,
-          },
+          notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
         };
 
-        console.log('📝 Creating default profile:', defaultProfile);
-
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert(defaultProfile);
-
+        const { error: insertError } = await supabase.from('users').insert(defaultProfile);
         if (insertError) {
-          console.error('❌ Error creating default profile:', insertError);
+          console.error('ProfileScreen (iOS): Error creating default profile:', insertError);
           setError('Error al crear el perfil: ' + insertError.message);
           setLoading(false);
           return;
         }
 
-        console.log('✅ Default profile created');
-        setProfile(defaultProfile);
-        setEditName(defaultProfile.name);
-        setEditPhone(defaultProfile.phone);
-        setEditCountry(defaultProfile.country);
-        setEditCity(defaultProfile.city);
-        setEditInterestedIn(defaultProfile.interested_in);
-        setEditAgeRangeMin(defaultProfile.age_range_min);
-        setEditAgeRangeMax(defaultProfile.age_range_max);
-        setEditInterests(defaultProfile.interests);
-        setEditPersonality(defaultProfile.personality_traits);
-        
+        console.log('ProfileScreen (iOS): Default profile created');
+        cacheRef.current = { data: defaultProfile as UserProfile, timestamp: Date.now() };
+        setProfile(defaultProfile as UserProfile);
+        populateEditFields(defaultProfile as UserProfile);
         setLoading(false);
         return;
       }
 
-      const profileData = data;
-      console.log('✅ Profile loaded successfully:', profileData.name);
-      
-      // Add cache-busting to profile photo URL when loading
-      if (profileData.profile_photo_url) {
-        const baseUrl = profileData.profile_photo_url.split('?')[0];
-        const cacheBustedUrl = `${baseUrl}?t=${Date.now()}`;
-        console.log('🔄 Cache-busted photo URL:', cacheBustedUrl);
-        profileData.profile_photo_url = cacheBustedUrl;
-      }
-      
-      setProfile(profileData);
-      setEditName(profileData.name || '');
-      setEditPhone(profileData.phone || '');
-      setEditCountry(profileData.country || 'Colombia');
-      setEditCity(profileData.city || 'Medellín');
-      setEditInterestedIn(profileData.interested_in || 'ambos');
-      setEditAgeRangeMin(profileData.age_range_min || 18);
-      setEditAgeRangeMax(profileData.age_range_max || 60);
-      setEditInterests(profileData.interests || []);
-      setEditPersonality(profileData.personality_traits || []);
-    } catch (error) {
-      console.error('❌ Failed to load profile:', error);
+      console.log('ProfileScreen (iOS): Profile loaded successfully:', data.name);
+      cacheRef.current = { data: data as UserProfile, timestamp: Date.now() };
+      setProfile(data as UserProfile);
+      populateEditFields(data as UserProfile);
+    } catch (err) {
+      console.error('ProfileScreen (iOS): Failed to load profile:', err);
       setError('Error inesperado al cargar el perfil');
     } finally {
       setLoading(false);
     }
   }, [user?.id, user?.email]);
 
-  useEffect(() => {
-    if (user) {
-      loadProfile();
-    }
-  }, [user, loadProfile]);
+  useFocusEffect(
+    useCallback(() => {
+      console.log('ProfileScreen (iOS): Tab focused');
+      if (user) {
+        loadProfile();
+      }
+    }, [user, loadProfile])
+  );
 
   const handleSignOut = async () => {
     try {
-      console.log('User signing out...');
+      console.log('User tapped sign out');
       await signOut();
       router.replace('/welcome');
-    } catch (error) {
-      console.error('Sign out failed:', error);
+    } catch (err) {
+      console.error('Sign out failed:', err);
     }
   };
 
@@ -259,9 +239,7 @@ export default function ProfileScreen() {
 
   const handlePhotoPress = async () => {
     console.log('User tapped profile photo to edit');
-    
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
     if (permissionResult.granted === false) {
       Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
       return;
@@ -272,13 +250,12 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
-      // Request base64 so we have a reliable data source on iOS
       base64: true,
     });
 
     if (!result.canceled && result.assets && result.assets[0]) {
       const asset = result.assets[0];
-      console.log('📸 Image selected, URI:', asset.uri, 'has base64:', !!asset.base64);
+      console.log('Image selected, URI:', asset.uri, 'has base64:', !!asset.base64);
       await uploadPhoto(asset.uri, asset.base64 || null);
     }
   };
@@ -286,114 +263,71 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string, base64Data: string | null) => {
     setUploadingPhoto(true);
     try {
-      console.log('🖼️ === UPLOADING PROFILE PHOTO (iOS) ===');
-      console.log('URI:', uri);
-
-      // On iOS, always use jpeg — the picker compresses to JPEG regardless of source format
+      console.log('ProfileScreen (iOS): Uploading profile photo');
       const MIME_TYPE = 'image/jpeg';
       const FILE_EXT = 'jpg';
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${FILE_EXT}`;
       const filePath = `${user?.id}/${fileName}`;
 
-      console.log('📤 Preparing upload — bucket: profile-photos, path:', filePath);
-
-      // Build upload payload: prefer base64 (most reliable on iOS Expo Go),
-      // fall back to fetch→blob which also works for file:// URIs on iOS.
       let uploadPayload: ArrayBuffer | Blob;
       if (base64Data) {
-        console.log('📦 Using base64 data for upload');
         const binaryStr = atob(base64Data);
         const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
         uploadPayload = bytes.buffer;
       } else {
-        // fetch() handles file:// URIs correctly on iOS
-        console.log('📦 Falling back to fetch→blob for upload');
         const fetchResponse = await fetch(uri);
-        if (!fetchResponse.ok) {
-          throw new Error(`Failed to read image file: ${fetchResponse.status}`);
-        }
+        if (!fetchResponse.ok) throw new Error(`Failed to read image file: ${fetchResponse.status}`);
         uploadPayload = await fetchResponse.blob();
       }
 
-      console.log('📤 Uploading to Supabase Storage...');
-
-      // Delete old photos first (best-effort, don't block on failure)
-      console.log('🗑️ Deleting old photos...');
       const { data: existingFiles } = await supabase.storage
         .from('profile-photos')
-        .list(user?.id || '', {
-          search: user?.id || '',
-        });
+        .list(user?.id || '', { search: user?.id || '' });
 
       if (existingFiles && existingFiles.length > 0) {
         const filesToDelete = existingFiles.map(f => `${user?.id}/${f.name}`);
-        const { error: deleteError } = await supabase.storage
-          .from('profile-photos')
-          .remove(filesToDelete);
-        
-        if (deleteError) {
-          console.error('⚠️ Error deleting old photos (non-fatal):', deleteError);
-        } else {
-          console.log('✅ Deleted old photos:', filesToDelete);
-        }
+        await supabase.storage.from('profile-photos').remove(filesToDelete);
       }
 
-      // Upload new photo with explicit JPEG content type
-      const { data: uploadResult, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, uploadPayload, {
-          contentType: MIME_TYPE,
-          cacheControl: '0',
-          upsert: true,
-        });
+        .upload(filePath, uploadPayload, { contentType: MIME_TYPE, cacheControl: '3600', upsert: true });
 
       if (uploadError) {
-        console.error('❌ Upload error:', uploadError);
+        console.error('ProfileScreen (iOS): Upload error:', uploadError);
         Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
         return;
       }
 
-      console.log('✅ Upload successful:', uploadResult);
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
-
+      const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
       const basePhotoUrl = urlData.publicUrl;
-      console.log('🔗 Base public URL:', basePhotoUrl);
+      console.log('ProfileScreen (iOS): Photo uploaded, URL:', basePhotoUrl);
 
-      // Update database with base URL
       const { error: updateError } = await supabase
         .from('users')
         .update({ profile_photo_url: basePhotoUrl })
         .eq('id', user?.id);
 
       if (updateError) {
-        console.error('❌ Database update error:', updateError);
+        console.error('ProfileScreen (iOS): Database update error:', updateError);
         Alert.alert('Error', 'No se pudo actualizar el perfil');
         return;
       }
 
-      console.log('✅ Database updated successfully');
-      
-      // Force immediate UI update with cache-busted URL
       const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
-      console.log('🔄 Updating UI with cache-busted URL:', cacheBustedUrl);
-      
-      setProfile(prev => prev ? { 
-        ...prev, 
-        profile_photo_url: cacheBustedUrl 
-      } : null);
-      
-      console.log('✅ === PHOTO UPLOAD COMPLETE ===');
+      setProfile(prev => {
+        if (!prev) return null;
+        const updated = { ...prev, profile_photo_url: cacheBustedUrl };
+        cacheRef.current = { data: { ...updated, profile_photo_url: basePhotoUrl }, timestamp: Date.now() };
+        return updated;
+      });
+
+      console.log('ProfileScreen (iOS): Photo upload complete');
       Alert.alert('Éxito', 'Foto de perfil actualizada');
-    } catch (error) {
-      console.error('❌ Failed to upload photo:', error);
+    } catch (err) {
+      console.error('ProfileScreen (iOS): Failed to upload photo:', err);
       Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
     } finally {
       setUploadingPhoto(false);
@@ -407,19 +341,13 @@ export default function ProfileScreen() {
     }
 
     try {
-      console.log('Saving profile changes...');
+      console.log('User saving profile changes');
       const { error } = await supabase
         .from('users')
         .update({
-          name: editName,
-          phone: editPhone,
-          country: editCountry,
-          city: editCity,
-          interested_in: editInterestedIn,
-          age_range_min: editAgeRangeMin,
-          age_range_max: editAgeRangeMax,
-          interests: editInterests,
-          personality_traits: editPersonality,
+          name: editName, phone: editPhone, country: editCountry, city: editCity,
+          interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
+          age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
         })
         .eq('id', user?.id);
 
@@ -429,50 +357,44 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('Profile updated successfully');
-      setProfile(prev => prev ? {
-        ...prev,
-        name: editName,
-        phone: editPhone,
-        country: editCountry,
-        city: editCity,
-        interested_in: editInterestedIn,
-        age_range_min: editAgeRangeMin,
-        age_range_max: editAgeRangeMax,
-        interests: editInterests,
-        personality_traits: editPersonality,
-      } : null);
+      console.log('ProfileScreen (iOS): Profile updated successfully');
+      setProfile(prev => {
+        if (!prev) return null;
+        const updated = {
+          ...prev,
+          name: editName, phone: editPhone, country: editCountry, city: editCity,
+          interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
+          age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
+        };
+        cacheRef.current = { data: updated, timestamp: Date.now() };
+        return updated;
+      });
       setEditModalVisible(false);
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
-    } catch (error) {
-      console.error('Failed to update profile:', error);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
       Alert.alert('Error', 'No se pudo actualizar el perfil');
     }
   };
 
   const toggleNotification = async (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
     if (!profile) return;
-
-    const newPreferences = {
-      ...profile.notification_preferences,
-      [type]: !profile.notification_preferences[type],
-    };
+    const newPreferences = { ...profile.notification_preferences, [type]: !profile.notification_preferences[type] };
 
     try {
-      console.log('Updating notification preferences:', type);
+      console.log('User toggling notification preference:', type);
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: newPreferences })
         .eq('id', user?.id);
 
-      if (error) {
-        console.error('Error updating preferences:', error);
-        return;
-      }
+      if (error) { console.error('Error updating preferences:', error); return; }
 
-      setProfile({ ...profile, notification_preferences: newPreferences });
-    } catch (error) {
-      console.error('Failed to update preferences:', error);
+      const updated = { ...profile, notification_preferences: newPreferences };
+      cacheRef.current = { data: updated, timestamp: Date.now() };
+      setProfile(updated);
+    } catch (err) {
+      console.error('Failed to update preferences:', err);
     }
   };
 
@@ -494,69 +416,51 @@ export default function ProfileScreen() {
 
   const handleMinAgeChange = (value: number) => {
     const newMin = Math.round(value);
-    if (newMin < editAgeRangeMax) {
-      setEditAgeRangeMin(newMin);
-    }
+    if (newMin < editAgeRangeMax) setEditAgeRangeMin(newMin);
   };
 
   const handleMaxAgeChange = (value: number) => {
     const newMax = Math.round(value);
-    if (newMax > editAgeRangeMin) {
-      setEditAgeRangeMax(newMax);
-    }
+    if (newMax > editAgeRangeMin) setEditAgeRangeMax(newMax);
   };
 
   const handleChangePassword = async () => {
     console.log('User attempting to change password');
     setPasswordError('');
 
-    // Validation
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordError('Por favor completa todos los campos');
       return;
     }
-
     if (newPassword.length < 6) {
       setPasswordError('La nueva contraseña debe tener al menos 6 caracteres');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setPasswordError('Las contraseñas no coinciden');
       return;
     }
 
     try {
-      // Verify current password by attempting to sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: profile?.email || '',
         password: currentPassword,
       });
+      if (signInError) { setPasswordError('La contraseña actual es incorrecta'); return; }
 
-      if (signInError) {
-        setPasswordError('La contraseña actual es incorrecta');
-        return;
-      }
-
-      // Update password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) {
         console.error('Error updating password:', updateError);
         setPasswordError('No se pudo actualizar la contraseña');
         return;
       }
 
-      console.log('Password updated successfully');
+      console.log('ProfileScreen (iOS): Password updated successfully');
       Alert.alert('Éxito', 'Contraseña actualizada correctamente');
       setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      console.error('Failed to change password:', error);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (err) {
+      console.error('Failed to change password:', err);
       setPasswordError('Error al cambiar la contraseña');
     }
   };
@@ -569,10 +473,22 @@ export default function ProfileScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F06292" />
-          <Text style={styles.loadingText}>Cargando perfil...</Text>
-        </View>
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <View style={[styles.header, { alignItems: 'center' }]}>
+            <SkeletonBox width={120} height={120} borderRadius={60} style={{ marginBottom: 16 }} />
+            <SkeletonBox height={28} width="50%" borderRadius={8} style={{ marginBottom: 8 }} />
+            <SkeletonBox height={18} width="30%" borderRadius={6} style={{ marginBottom: 16 }} />
+            <SkeletonBox height={36} width={140} borderRadius={20} />
+          </View>
+          {[1, 2, 3].map(i => (
+            <View key={i} style={styles.skeletonSection}>
+              <SkeletonBox height={20} width="45%" borderRadius={6} style={{ marginBottom: 16 }} />
+              <SkeletonBox height={14} width="90%" borderRadius={6} style={{ marginBottom: 10 }} />
+              <SkeletonBox height={14} width="75%" borderRadius={6} style={{ marginBottom: 10 }} />
+              <SkeletonBox height={14} width="60%" borderRadius={6} />
+            </View>
+          ))}
+        </ScrollView>
       </LinearGradient>
     );
   }
@@ -588,7 +504,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => loadProfile(true)}>
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
@@ -617,16 +533,12 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
             {profile.profile_photo_url ? (
               <View>
-                <Image 
-                  source={{ uri: profile.profile_photo_url }} 
+                <Image
+                  source={{ uri: profile.profile_photo_url }}
                   style={styles.profilePhoto}
                   key={profile.profile_photo_url}
                 />
-                {uploadingPhoto && (
-                  <View style={styles.photoOverlay}>
-                    <ActivityIndicator size="large" color={nospiColors.white} />
-                  </View>
-                )}
+                {uploadingPhoto && <View style={styles.photoOverlay} />}
                 <View style={styles.editPhotoIcon}>
                   <Text style={styles.editPhotoIconText}>✏️</Text>
                 </View>
@@ -644,249 +556,107 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.age}>{profile.age} años</Text>
-          
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={handleEditPress}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={styles.editButton} onPress={handleEditPress} activeOpacity={0.8}>
             <Text style={styles.editButtonText}>Editar Perfil</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Información Personal</Text>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email:</Text>
-            <Text style={styles.infoValue}>{profile.email}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Teléfono:</Text>
-            <Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Género:</Text>
-            <Text style={styles.infoValue}>{genderText}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Interesado en:</Text>
-            <Text style={styles.infoValue}>{interestedInText}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Rango de edad:</Text>
-            <Text style={styles.infoValue}>{ageRangeText}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Ubicación:</Text>
-            <Text style={styles.infoValue}>{locationText}</Text>
-          </View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Email:</Text><Text style={styles.infoValue}>{profile.email}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Teléfono:</Text><Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Género:</Text><Text style={styles.infoValue}>{genderText}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Interesado en:</Text><Text style={styles.infoValue}>{interestedInText}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Rango de edad:</Text><Text style={styles.infoValue}>{ageRangeText}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>Ubicación:</Text><Text style={styles.infoValue}>{locationText}</Text></View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Gustos</Text>
           <View style={styles.chipsContainer}>
-            {profile.interests.length > 0 ? (
-              profile.interests.map((interest, index) => (
-                <View key={index} style={styles.chip}>
-                  <Text style={styles.chipText}>{interest}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No has agregado intereses aún</Text>
-            )}
+            {profile.interests.length > 0 ? profile.interests.map((interest, index) => (
+              <View key={index} style={styles.chip}><Text style={styles.chipText}>{interest}</Text></View>
+            )) : <Text style={styles.emptyText}>No has agregado intereses aún</Text>}
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personalidad</Text>
           <View style={styles.chipsContainer}>
-            {profile.personality_traits.length > 0 ? (
-              profile.personality_traits.map((trait, index) => (
-                <View key={index} style={styles.chip}>
-                  <Text style={styles.chipText}>{trait}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No has agregado rasgos de personalidad aún</Text>
-            )}
+            {profile.personality_traits.length > 0 ? profile.personality_traits.map((trait, index) => (
+              <View key={index} style={styles.chip}><Text style={styles.chipText}>{trait}</Text></View>
+            )) : <Text style={styles.emptyText}>No has agregado rasgos de personalidad aún</Text>}
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.section}
-          onPress={handleNotificationPress}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.section} onPress={handleNotificationPress} activeOpacity={0.8}>
           <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
           <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.section}
-          onPress={() => setShowPasswordModal(true)}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.section} onPress={() => setShowPasswordModal(true)} activeOpacity={0.8}>
           <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
           <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
 
       {/* Edit Profile Modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
+      <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Editar Perfil</Text>
-
               <Text style={styles.inputLabel}>Nombre</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Tu nombre"
-                placeholderTextColor="#999"
-              />
-
+              <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
               <Text style={styles.inputLabel}>Teléfono</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editPhone}
-                onChangeText={setEditPhone}
-                placeholder="Tu teléfono"
-                placeholderTextColor="#999"
-                keyboardType="phone-pad"
-              />
-
+              <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} placeholder="Tu teléfono" placeholderTextColor="#999" keyboardType="phone-pad" />
               <Text style={styles.inputLabel}>País</Text>
-              <TouchableOpacity
-                style={styles.pickerButton}
-                onPress={() => setShowCountryPicker(true)}
-              >
+              <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCountry}</Text>
               </TouchableOpacity>
-
               <Text style={styles.inputLabel}>Ciudad</Text>
-              <TouchableOpacity
-                style={styles.pickerButton}
-                onPress={() => setShowCityPicker(true)}
-              >
+              <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCityPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCity}</Text>
               </TouchableOpacity>
-
               <Text style={styles.inputLabel}>Interesado en</Text>
               <View style={styles.optionsRow}>
-                <TouchableOpacity
-                  style={[styles.optionButton, editInterestedIn === 'hombres' && styles.optionButtonActive]}
-                  onPress={() => setEditInterestedIn('hombres')}
-                >
-                  <Text style={[styles.optionButtonText, editInterestedIn === 'hombres' && styles.optionButtonTextActive]}>Hombres</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, editInterestedIn === 'mujeres' && styles.optionButtonActive]}
-                  onPress={() => setEditInterestedIn('mujeres')}
-                >
-                  <Text style={[styles.optionButtonText, editInterestedIn === 'mujeres' && styles.optionButtonTextActive]}>Mujeres</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, editInterestedIn === 'ambos' && styles.optionButtonActive]}
-                  onPress={() => setEditInterestedIn('ambos')}
-                >
-                  <Text style={[styles.optionButtonText, editInterestedIn === 'ambos' && styles.optionButtonTextActive]}>Ambos</Text>
-                </TouchableOpacity>
+                {(['hombres', 'mujeres', 'ambos'] as const).map(opt => (
+                  <TouchableOpacity key={opt} style={[styles.optionButton, editInterestedIn === opt && styles.optionButtonActive]} onPress={() => setEditInterestedIn(opt)}>
+                    <Text style={[styles.optionButtonText, editInterestedIn === opt && styles.optionButtonTextActive]}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-
               <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
               <View style={styles.ageSliderSection}>
-                <View style={styles.ageSliderRow}>
-                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
-                  <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
-                </View>
-                <Slider
-                  style={styles.ageSlider}
-                  minimumValue={18}
-                  maximumValue={59}
-                  step={1}
-                  value={editAgeRangeMin}
-                  onValueChange={handleMinAgeChange}
-                  minimumTrackTintColor="#880E4F"
-                  maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor="#880E4F"
-                />
-                <View style={styles.ageSliderRow}>
-                  <Text style={styles.ageSliderLabel}>Máximo</Text>
-                  <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
-                </View>
-                <Slider
-                  style={styles.ageSlider}
-                  minimumValue={19}
-                  maximumValue={60}
-                  step={1}
-                  value={editAgeRangeMax}
-                  onValueChange={handleMaxAgeChange}
-                  minimumTrackTintColor="#880E4F"
-                  maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor="#880E4F"
-                />
+                <View style={styles.ageSliderRow}><Text style={styles.ageSliderLabel}>Mínimo</Text><Text style={styles.ageSliderValue}>{editMinAgeText}</Text></View>
+                <Slider style={styles.ageSlider} minimumValue={18} maximumValue={59} step={1} value={editAgeRangeMin} onValueChange={handleMinAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
+                <View style={styles.ageSliderRow}><Text style={styles.ageSliderLabel}>Máximo</Text><Text style={styles.ageSliderValue}>{editMaxAgeText}</Text></View>
+                <Slider style={styles.ageSlider} minimumValue={19} maximumValue={60} step={1} value={editAgeRangeMax} onValueChange={handleMaxAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
               </View>
-
               <Text style={styles.inputLabel}>Intereses</Text>
               <View style={styles.tagsEditContainer}>
                 {AVAILABLE_INTERESTS.map((interest, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]}
-                    onPress={() => toggleInterest(interest)}
-                  >
+                  <TouchableOpacity key={index} style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]} onPress={() => toggleInterest(interest)}>
                     <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>{interest}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
               <Text style={styles.inputLabel}>Personalidad</Text>
               <View style={styles.tagsEditContainer}>
                 {AVAILABLE_PERSONALITY.map((trait, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]}
-                    onPress={() => togglePersonality(trait)}
-                  >
+                  <TouchableOpacity key={index} style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]} onPress={() => togglePersonality(trait)}>
                     <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>{trait}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSaveProfile}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} activeOpacity={0.8}>
                 <Text style={styles.saveButtonText}>Guardar Cambios</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setEditModalVisible(false)}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setEditModalVisible(false)} activeOpacity={0.8}>
                 <Text style={styles.modalCloseButtonText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
@@ -895,170 +665,67 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Country Picker Modal */}
-      <Modal
-        visible={showCountryPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCountryPicker(false)}
-      >
+      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
         <View style={styles.pickerModalOverlay}>
           <View style={styles.pickerModalContent}>
             <View style={styles.pickerModalHeader}>
               <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
-              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
-                <Text style={styles.pickerModalClose}>Listo</Text>
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
             </View>
-            <Picker
-              selectedValue={editCountry}
-              onValueChange={(value) => {
-                setEditCountry(value);
-                const cities = CITIES_BY_COUNTRY[value] || [];
-                if (cities.length > 0) setEditCity(cities[0]);
-              }}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {COUNTRIES.map((country) => (
-                <Picker.Item key={country} label={country} value={country} color="#000000" />
-              ))}
+            <Picker selectedValue={editCountry} onValueChange={(value) => { setEditCountry(value); const cities = CITIES_BY_COUNTRY[value] || []; if (cities.length > 0) setEditCity(cities[0]); }} style={styles.picker} color="#000000" dropdownIconColor="#000000">
+              {COUNTRIES.map(country => <Picker.Item key={country} label={country} value={country} color="#000000" />)}
             </Picker>
           </View>
         </View>
       </Modal>
 
       {/* City Picker Modal */}
-      <Modal
-        visible={showCityPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCityPicker(false)}
-      >
+      <Modal visible={showCityPicker} transparent animationType="slide" onRequestClose={() => setShowCityPicker(false)}>
         <View style={styles.pickerModalOverlay}>
           <View style={styles.pickerModalContent}>
             <View style={styles.pickerModalHeader}>
               <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-                <Text style={styles.pickerModalClose}>Listo</Text>
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
             </View>
-            <Picker
-              selectedValue={editCity}
-              onValueChange={(value) => setEditCity(value)}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {availableCities.map((city) => (
-                <Picker.Item key={city} label={city} value={city} color="#000000" />
-              ))}
+            <Picker selectedValue={editCity} onValueChange={(value) => setEditCity(value)} style={styles.picker} color="#000000" dropdownIconColor="#000000">
+              {availableCities.map(city => <Picker.Item key={city} label={city} value={city} color="#000000" />)}
             </Picker>
           </View>
         </View>
       </Modal>
 
       {/* Password Change Modal */}
-      <Modal
-        visible={showPasswordModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPasswordModal(false)}
-      >
+      <Modal visible={showPasswordModal} transparent animationType="slide" onRequestClose={() => setShowPasswordModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
             <Text style={styles.modalSubtitle}>Ingresa tu contraseña actual y la nueva</Text>
-
             <Text style={styles.inputLabel}>Contraseña Actual *</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput
-                style={styles.passwordModalInput}
-                placeholder="Contraseña actual"
-                placeholderTextColor="#999"
-                secureTextEntry={!showCurrentPassword}
-                value={currentPassword}
-                onChangeText={(text) => {
-                  setCurrentPassword(text);
-                  setPasswordError('');
-                }}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => { console.log('Toggle current password visibility'); setShowCurrentPassword(!showCurrentPassword); }}
-                style={styles.passwordEyeButton}
-              >
+              <TextInput style={styles.passwordModalInput} placeholder="Contraseña actual" placeholderTextColor="#999" secureTextEntry={!showCurrentPassword} value={currentPassword} onChangeText={(text) => { setCurrentPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TouchableOpacity onPress={() => { console.log('Toggle current password visibility'); setShowCurrentPassword(!showCurrentPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
-
             <Text style={styles.inputLabel}>Nueva Contraseña *</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput
-                style={styles.passwordModalInput}
-                placeholder="Nueva contraseña (mínimo 6 caracteres)"
-                placeholderTextColor="#999"
-                secureTextEntry={!showNewPassword}
-                value={newPassword}
-                onChangeText={(text) => {
-                  setNewPassword(text);
-                  setPasswordError('');
-                }}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => { console.log('Toggle new password visibility'); setShowNewPassword(!showNewPassword); }}
-                style={styles.passwordEyeButton}
-              >
+              <TextInput style={styles.passwordModalInput} placeholder="Nueva contraseña (mínimo 6 caracteres)" placeholderTextColor="#999" secureTextEntry={!showNewPassword} value={newPassword} onChangeText={(text) => { setNewPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TouchableOpacity onPress={() => { console.log('Toggle new password visibility'); setShowNewPassword(!showNewPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
-
             <Text style={styles.inputLabel}>Confirmar Nueva Contraseña *</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput
-                style={styles.passwordModalInput}
-                placeholder="Confirma la nueva contraseña"
-                placeholderTextColor="#999"
-                secureTextEntry={!showConfirmPassword}
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setPasswordError('');
-                }}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => { console.log('Toggle confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }}
-                style={styles.passwordEyeButton}
-              >
+              <TextInput style={styles.passwordModalInput} placeholder="Confirma la nueva contraseña" placeholderTextColor="#999" secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={(text) => { setConfirmPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TouchableOpacity onPress={() => { console.log('Toggle confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
-
-            {passwordError ? (
-              <Text style={styles.passwordError}>{passwordError}</Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleChangePassword}
-              activeOpacity={0.8}
-            >
+            {passwordError ? <Text style={styles.passwordError}>{passwordError}</Text> : null}
+            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} activeOpacity={0.8}>
               <Text style={styles.saveButtonText}>Cambiar Contraseña</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => {
-                setShowPasswordModal(false);
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                setPasswordError('');
-              }}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setShowPasswordModal(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError(''); }} activeOpacity={0.8}>
               <Text style={styles.modalCloseButtonText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
@@ -1066,66 +733,23 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Notification Preferences Modal */}
-      <Modal
-        visible={notificationModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setNotificationModalVisible(false)}
-      >
+      <Modal visible={notificationModalVisible} transparent animationType="slide" onRequestClose={() => setNotificationModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
             <Text style={styles.modalSubtitle}>¿Cómo quieres que te recordemos las citas?</Text>
-
-            <TouchableOpacity
-              style={styles.notificationOption}
-              onPress={() => toggleNotification('whatsapp')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.notificationOptionText}>WhatsApp</Text>
-              <View style={[styles.checkbox, profile.notification_preferences.whatsapp && styles.checkboxActive]}>
-                {profile.notification_preferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.notificationOption}
-              onPress={() => toggleNotification('email')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.notificationOptionText}>Correo Electrónico</Text>
-              <View style={[styles.checkbox, profile.notification_preferences.email && styles.checkboxActive]}>
-                {profile.notification_preferences.email && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.notificationOption}
-              onPress={() => toggleNotification('sms')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.notificationOptionText}>SMS</Text>
-              <View style={[styles.checkbox, profile.notification_preferences.sms && styles.checkboxActive]}>
-                {profile.notification_preferences.sms && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.notificationOption}
-              onPress={() => toggleNotification('push')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.notificationOptionText}>Notificaciones Push</Text>
-              <View style={[styles.checkbox, profile.notification_preferences.push && styles.checkboxActive]}>
-                {profile.notification_preferences.push && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setNotificationModalVisible(false)}
-              activeOpacity={0.8}
-            >
+            {(['whatsapp', 'email', 'sms', 'push'] as const).map(type => {
+              const labels = { whatsapp: 'WhatsApp', email: 'Correo Electrónico', sms: 'SMS', push: 'Notificaciones Push' };
+              return (
+                <TouchableOpacity key={type} style={styles.notificationOption} onPress={() => toggleNotification(type)} activeOpacity={0.8}>
+                  <Text style={styles.notificationOptionText}>{labels[type]}</Text>
+                  <View style={[styles.checkbox, profile.notification_preferences[type] && styles.checkboxActive]}>
+                    {profile.notification_preferences[type] && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setNotificationModalVisible(false)} activeOpacity={0.8}>
               <Text style={styles.modalCloseButtonText}>Cerrar</Text>
             </TouchableOpacity>
           </View>
@@ -1140,6 +764,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  skeletonSection: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 20, marginBottom: 16 },
   loadingText: { marginTop: 16, fontSize: 16, color: '#FFFFFF', textAlign: 'center' },
   errorText: { fontSize: 16, color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
   retryButton: { backgroundColor: '#880E4F', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 },
@@ -1148,7 +773,7 @@ const styles = StyleSheet.create({
   profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
-  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
+  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60 },
   editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#880E4F' },
   editPhotoIconText: { fontSize: 16 },
   name: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 4 },
@@ -1161,9 +786,6 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
   infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
-  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { backgroundColor: 'rgba(173, 20, 87, 0.12)', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  tagText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)' },
   chipText: { color: '#880E4F', fontSize: 14, fontWeight: '500' },

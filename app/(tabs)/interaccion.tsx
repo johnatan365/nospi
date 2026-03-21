@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
+import { SkeletonBox } from '@/components/SkeletonBox';
 
 interface Event {
   id: string;
@@ -67,6 +68,9 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
+// Cache TTL: 30 seconds
+const CACHE_TTL_MS = 30_000;
+
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -91,9 +95,8 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [startingExperience, setStartingExperience] = useState(false);
-  
+
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
-  
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
   // Per-user flow states
@@ -104,19 +107,20 @@ export default function InteraccionScreen() {
   const divertidoScaleAnim = useRef(new Animated.Value(0)).current;
   const divertidoFadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Cache ref to avoid re-fetching on every focus
+  const cacheRef = useRef<{ data: Appointment | null; timestamp: number } | null>(null);
+
   const checkIfEventDay = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
-    
-    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
-    
-    const isSameDay = 
+
+    const isSameDay =
       now.getFullYear() === eventDate.getFullYear() &&
       now.getMonth() === eventDate.getMonth() &&
       now.getDate() === eventDate.getDate();
-    
+
+    const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 0, 0, 0, 0);
     const isAfterMidnight = now >= eventDayStart;
-    
     const isToday = isSameDay && isAfterMidnight;
     setIsEventDay(isToday);
   }, []);
@@ -124,11 +128,9 @@ export default function InteraccionScreen() {
   const updateCountdown = useCallback((startTime: string) => {
     const now = new Date();
     const eventDate = new Date(startTime);
-    
-    // Calculate time until exact appointment time (for code entry)
+
     const diffToEventTime = eventDate.getTime() - now.getTime();
-    
-    // Calculate time until 10 minutes after appointment (for "Continuar" button)
+
     const eventDatePlus10 = new Date(startTime);
     eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 10);
     const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
@@ -139,7 +141,6 @@ export default function InteraccionScreen() {
       setCheckInPhase('code_entry');
     }
 
-    // Display countdown to 10 minutes after appointment
     if (diffToPlus10 <= 0) {
       setCountdownDisplay('Ahora');
       return;
@@ -154,28 +155,19 @@ export default function InteraccionScreen() {
   }, [appointment, checkInPhase]);
 
   const requestNotificationPermissions = useCallback(async () => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      return;
-    }
-
+    if (Platform.OS === 'web') return;
     try {
-      const { status } = await Notifications.requestPermissionsAsync();
+      await Notifications.requestPermissionsAsync();
     } catch (error) {
       console.error('Error requesting notification permissions:', error);
     }
   }, []);
 
   const scheduleNotifications = useCallback(async (startTime: string) => {
-    // Skip on web - notifications not fully supported
-    if (Platform.OS === 'web') {
-      return;
-    }
-
+    if (Platform.OS === 'web') return;
     try {
       const eventDate = new Date(startTime);
       const now = new Date();
-
       await Notifications.cancelAllScheduledNotificationsAsync();
 
       if (eventDate > now) {
@@ -210,12 +202,11 @@ export default function InteraccionScreen() {
 
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
-      
       const { data, error } = await supabase
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
-        console.error('❌ Error loading participants:', error);
+        console.error('Error loading participants:', error);
         return;
       }
 
@@ -236,25 +227,51 @@ export default function InteraccionScreen() {
             phone: item.user_phone || '',
             city: item.user_city || '',
             profile_photo_url: item.user_profile_photo_url || null,
-            interested_in: item.user_interested_in || ''
-          }
+            interested_in: item.user_interested_in || '',
+          },
         }));
 
-      
       setActiveParticipants(participants);
     } catch (error) {
-      console.error('❌ Failed to load participants:', error);
+      console.error('Failed to load participants:', error);
     }
   }, []);
 
-  const loadAppointment = useCallback(async () => {
+  const loadAppointment = useCallback(async (force = false) => {
     if (!user) {
       setLoading(false);
       return;
     }
 
+    // Use cache if fresh and not forced
+    if (!force && cacheRef.current && Date.now() - cacheRef.current.timestamp < CACHE_TTL_MS) {
+      console.log('InteraccionScreen: Using cached appointment data');
+      const cached = cacheRef.current.data;
+      setAppointment(cached);
+      if (cached) {
+        if (!cached.location_confirmed) {
+          setCheckInPhase('code_entry');
+          setGamePhase('intro');
+        } else {
+          setCheckInPhase('confirmed');
+          if (cached.event?.game_phase) {
+            setGamePhase(cached.event.game_phase);
+            const gp = cached.event.game_phase;
+            if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
+              setUserReadyForRules(true);
+              setUserReadyForGame(true);
+            }
+          }
+        }
+        if (cached.event?.start_time) checkIfEventDay(cached.event.start_time);
+      }
+      setLoading(false);
+      return;
+    }
+
     try {
-      
+      console.log('InteraccionScreen: Fetching appointment from Supabase for user:', user.id);
+
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -295,19 +312,20 @@ export default function InteraccionScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error loading appointment:', error);
+        console.error('InteraccionScreen: Error loading appointment:', error);
         setLoading(false);
         return;
       }
-      
+
       if (!data || data.length === 0) {
+        cacheRef.current = { data: null, timestamp: Date.now() };
         setAppointment(null);
         setLoading(false);
         return;
       }
 
       const now = new Date();
-      
+
       const todayConfirmedAppointment = data.find(apt => {
         if (apt.status !== 'confirmada') return false;
         if (!apt.event?.start_time) return false;
@@ -327,26 +345,24 @@ export default function InteraccionScreen() {
       });
 
       const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
-      
-      
+
       if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
+        cacheRef.current = { data: null, timestamp: Date.now() };
         setAppointment(null);
         setLoading(false);
         return;
       }
-      
+
+      cacheRef.current = { data: appointmentData as any, timestamp: Date.now() };
       setAppointment(appointmentData as any);
-      
-      // If user hasn't confirmed location, force them to code_entry phase regardless of event's game_phase
+
       if (!appointmentData.location_confirmed) {
         setCheckInPhase('code_entry');
-        setGamePhase('intro'); // Keep in intro phase until they confirm
+        setGamePhase('intro');
       } else {
         setCheckInPhase('confirmed');
-        
         if (appointmentData.event?.game_phase) {
           setGamePhase(appointmentData.event.game_phase);
-          // Already confirmed and game is active: skip intro screens on reload
           const gp = appointmentData.event.game_phase;
           if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
             setUserReadyForRules(true);
@@ -354,32 +370,33 @@ export default function InteraccionScreen() {
           }
         }
       }
-      
+
       if (appointmentData.event && appointmentData.event.start_time) {
         checkIfEventDay(appointmentData.event.start_time);
         scheduleNotifications(appointmentData.event.start_time);
       }
-      
+
       if (appointmentData.event_id) {
         loadActiveParticipants(appointmentData.event_id);
       }
+
+      console.log('InteraccionScreen: Appointment loaded, event_id:', appointmentData.event_id);
     } catch (error) {
-      console.error('Failed to load appointment:', error);
+      console.error('InteraccionScreen: Failed to load appointment:', error);
     } finally {
       setLoading(false);
     }
   }, [user, checkIfEventDay, scheduleNotifications, loadActiveParticipants]);
 
   const handleCodeConfirmation = useCallback(async () => {
-    
     if (!appointment || !user) return;
+    console.log('User submitting confirmation code');
 
     const enteredCode = confirmationCode.trim();
     const eventCode = appointment.event.confirmation_code;
-    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '') 
-      ? '1986' 
+    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '')
+      ? '1986'
       : eventCode.trim();
-    
 
     if (enteredCode !== expectedCode) {
       setCodeError('Código incorrecto.');
@@ -393,20 +410,18 @@ export default function InteraccionScreen() {
 
       setCheckInPhase('confirmed');
       setConfirmationCode('');
-      
+
       setAppointment(prev => ({
         ...prev!,
         arrival_status: 'on_time',
         checked_in_at: confirmedAt,
         location_confirmed: true,
       }));
-      
-      // This allows the user to join the game that's already in progress WITHOUT waiting for realtime
+
       if (appointment.event?.game_phase) {
         setGamePhase(appointment.event.game_phase);
       }
-      
-      // Now perform database updates in the background
+
       const { error: updateError } = await supabase
         .from('event_participants')
         .upsert({
@@ -415,18 +430,16 @@ export default function InteraccionScreen() {
           confirmed: true,
           check_in_time: confirmedAt,
         }, {
-          onConflict: 'event_id,user_id'
+          onConflict: 'event_id,user_id',
         });
 
       if (updateError) {
         console.error('Error updating event_participants:', updateError);
-        // Revert optimistic update on error
         setCheckInPhase('code_entry');
         setCodeError('No se pudo registrar tu llegada.');
         return;
       }
 
-      
       await supabase
         .from('appointments')
         .update({
@@ -435,45 +448,36 @@ export default function InteraccionScreen() {
           location_confirmed: true,
         })
         .eq('id', appointment.id);
-      
+
+      // Invalidate cache after check-in
+      cacheRef.current = null;
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
       console.error('Error during check-in:', error);
-      // Revert optimistic update on error
       setCheckInPhase('code_entry');
       setCodeError('Ocurrió un error.');
     }
   }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(async () => {
-    
-    if (!appointment?.event_id || startingExperience) {
-      return;
-    }
+    if (!appointment?.event_id || startingExperience) return;
 
-    // If game is already in progress (another user started it), just update local state
     if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
       return;
     }
 
-    if (activeParticipants.length < 2) {
-      return;
-    }
+    if (activeParticipants.length < 2) return;
 
+    console.log('User starting experience, participants:', activeParticipants.length);
     setStartingExperience(true);
-    
+
     try {
-      
-      // Select random starter
       const randomIndex = Math.floor(Math.random() * activeParticipants.length);
       const starterUserId = activeParticipants[randomIndex].user_id;
-      
-      // Get first question from divertido level
       const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
-      
-      
+
       setGamePhase('questions');
-      
+
       const { error } = await supabase
         .from('events')
         .update({
@@ -488,17 +492,13 @@ export default function InteraccionScreen() {
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error starting experience:', error);
-        // Revert optimistic update on error
+        console.error('Error starting experience:', error);
         setGamePhase('intro');
         setStartingExperience(false);
         return;
       }
-
-      
     } catch (error) {
-      console.error('❌ Unexpected error:', error);
-      // Revert optimistic update on error
+      console.error('Unexpected error starting experience:', error);
       setGamePhase('intro');
       setStartingExperience(false);
     } finally {
@@ -511,8 +511,6 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment?.event_id || !appointment?.id || !user) return;
 
-
-    // Subscribe to event changes
     const eventChannel = supabase
       .channel(`event_state_${appointment.event_id}`)
       .on(
@@ -525,16 +523,15 @@ export default function InteraccionScreen() {
         },
         (payload) => {
           const newEvent = payload.new as any;
-          
+
           if (newEvent.event_status === 'closed') {
             setAppointment(null);
+            cacheRef.current = null;
             return;
           }
-          
-          // This prevents users who haven't entered the code from seeing the game
+
           setAppointment(prev => {
             if (!prev) return prev;
-            
             const updatedAppointment = {
               ...prev,
               event: {
@@ -545,21 +542,19 @@ export default function InteraccionScreen() {
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
                 current_question_starter_id: newEvent.current_question_starter_id,
-                event_status: newEvent.event_status
-              }
+                event_status: newEvent.event_status,
+              },
             };
-            
+
             if (prev.location_confirmed && newEvent.game_phase) {
               setGamePhase(newEvent.game_phase);
-            } else {
             }
-            
+
             return updatedAppointment;
           });
         }
       )
-      .subscribe((status) => {
-      });
+      .subscribe();
 
     const appointmentChannel = supabase
       .channel(`appointment_${appointment.id}`)
@@ -573,19 +568,14 @@ export default function InteraccionScreen() {
         },
         (payload) => {
           const newAppointment = payload.new as any;
-          
           if (newAppointment.status === 'anterior') {
             setAppointment(null);
+            cacheRef.current = null;
             setLoading(false);
-            return;
           }
-          
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-        }
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(eventChannel);
@@ -595,13 +585,10 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      
+      console.log('InteraccionScreen: Tab focused');
       if (user) {
         loadAppointment();
       }
-      
-      return () => {
-      };
     }, [user, loadAppointment])
   );
 
@@ -610,7 +597,6 @@ export default function InteraccionScreen() {
       const interval = setInterval(() => {
         updateCountdown(appointment.event.start_time!);
       }, 1000);
-
       return () => clearInterval(interval);
     }
   }, [appointment, updateCountdown]);
@@ -622,7 +608,6 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment || !user) return;
 
-    
     loadActiveParticipants(appointment.event_id);
 
     const channel = supabase
@@ -635,7 +620,7 @@ export default function InteraccionScreen() {
           table: 'event_participants',
           filter: `event_id=eq.${appointment.event_id}`,
         },
-        (payload) => {
+        () => {
           loadActiveParticipants(appointment.event_id);
         }
       )
@@ -651,7 +636,7 @@ export default function InteraccionScreen() {
   // Rules screen 20-second countdown
   useEffect(() => {
     if (!userReadyForRules || userReadyForGame) return;
-    
+
     setRulesCountdown(20);
     const interval = setInterval(() => {
       setRulesCountdown(prev => {
@@ -666,7 +651,6 @@ export default function InteraccionScreen() {
     return () => clearInterval(interval);
   }, [userReadyForRules, userReadyForGame]);
 
-  // Show divertido level modal animation
   const showDivertidoModalAnimation = useCallback(() => {
     setShowDivertidoModal(true);
     divertidoScaleAnim.setValue(0);
@@ -702,30 +686,28 @@ export default function InteraccionScreen() {
           }),
         ]).start(() => {
           setShowDivertidoModal(false);
-          // ONLY set local state - do NOT touch DB here
           setUserReadyForGame(true);
         });
       }, 2000);
     });
   }, [divertidoScaleAnim, divertidoFadeAnim]);
 
-  // Handle "Continuar" per-user (local only - does NOT trigger DB changes)
   const handleUserContinue = useCallback(() => {
+    console.log('User tapped Continuar to proceed to rules');
     setUserReadyForRules(true);
   }, []);
 
-  // When user finishes the intro flow (Comenzar), start game in DB if not already started
   useEffect(() => {
     if (!userReadyForGame) return;
-    // Only start the game if it hasn't been started by another user yet
     if (gamePhase !== 'questions' && gamePhase !== 'question_active' && gamePhase !== 'level_transition' && gamePhase !== 'finished' && gamePhase !== 'free_phase') {
       handleStartExperience();
     }
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
-  // Handle game finish - navigate to appointments tab (anteriores)
   const handleFinishGame = useCallback(() => {
+    console.log('User finished game, navigating to appointments');
     setAppointment(null);
+    cacheRef.current = null;
     router.replace('/(tabs)/appointments');
   }, [router]);
 
@@ -737,9 +719,19 @@ export default function InteraccionScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-        </View>
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <SkeletonBox height={32} width="70%" borderRadius={8} style={{ marginBottom: 10, marginTop: 48 }} />
+          <SkeletonBox height={18} width="50%" borderRadius={6} style={{ marginBottom: 24 }} />
+          <View style={styles.skeletonCard}>
+            <SkeletonBox height={20} width="60%" borderRadius={6} style={{ marginBottom: 12 }} />
+            <SkeletonBox height={52} width="80%" borderRadius={8} style={{ alignSelf: 'center', marginBottom: 8 }} />
+          </View>
+          <View style={styles.skeletonCard}>
+            <SkeletonBox height={20} width="50%" borderRadius={6} style={{ marginBottom: 12 }} />
+            <SkeletonBox height={16} width="90%" borderRadius={6} style={{ marginBottom: 8 }} />
+            <SkeletonBox height={16} width="70%" borderRadius={6} />
+          </View>
+        </ScrollView>
       </LinearGradient>
     );
   }
@@ -803,7 +795,6 @@ export default function InteraccionScreen() {
           <Text style={styles.title}>Tu Evento Nospi</Text>
           <Text style={styles.subtitle}>¡Se acerca una gran experiencia!</Text>
 
-          {/* Countdown card */}
           <View style={[styles.eventInfoCard, { marginBottom: 16 }]}>
             <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
             <Text style={[styles.eventInfoTitle, { fontSize: 22, marginBottom: 6 }]}>{countdownText}</Text>
@@ -811,7 +802,6 @@ export default function InteraccionScreen() {
             <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
           </View>
 
-          {/* Puntualidad */}
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>⏰</Text>
             <View style={{ flex: 1 }}>
@@ -820,7 +810,6 @@ export default function InteraccionScreen() {
             </View>
           </View>
 
-          {/* Instrucción */}
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>💬</Text>
             <View style={{ flex: 1 }}>
@@ -828,14 +817,12 @@ export default function InteraccionScreen() {
               <Text style={styles.preEventTipText}>Abre esta pestaña para confirmar tu asistencia e iniciar la experiencia con los demás.</Text>
             </View>
           </View>
-
         </ScrollView>
       </LinearGradient>
     );
   }
 
   if ((gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') && userReadyForRules && userReadyForGame) {
-    
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
@@ -844,13 +831,12 @@ export default function InteraccionScreen() {
       occupation: p.profiles?.city || 'Ciudad',
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
-      presented: p.is_presented
+      presented: p.is_presented,
     }));
-    
+
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} onFinish={handleFinishGame} />;
   }
-  
-  // ── Rules/Intro Screen (per-user, atrevido theme) ──────────────────────────
+
   if (userReadyForRules && !userReadyForGame && checkInPhase === 'confirmed') {
     return (
       <LinearGradient
@@ -860,34 +846,26 @@ export default function InteraccionScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
-          {/* Header icon */}
           <Text style={styles.rulesIcon}>🎲</Text>
-          
           <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
 
-          {/* Rules card */}
           <View style={styles.rulesCard}>
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🎯</Text>
               <Text style={styles.rulesText}>Pasarás por 3 niveles: Divertido, Sensual y Atrevido.</Text>
             </View>
-            
             <View style={styles.rulesDivider} />
-            
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>👥</Text>
               <Text style={styles.rulesText}>Todos deben responder cada pregunta para avanzar a la siguiente.</Text>
             </View>
-            
             <View style={styles.rulesDivider} />
-            
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🥃</Text>
               <Text style={styles.rulesText}>Si alguien no responde, deberá tomar un shot o cumplir un reto del grupo.</Text>
             </View>
           </View>
 
-          {/* Countdown or Comenzar button */}
           {rulesCountdown > 0 ? (
             <View style={styles.rulesCountdownContainer}>
               <Text style={styles.rulesCountdownLabel}>Léelo con calma</Text>
@@ -906,7 +884,6 @@ export default function InteraccionScreen() {
           )}
         </ScrollView>
 
-        {/* Divertido Level Modal Overlay */}
         {showDivertidoModal && (
           <View style={styles.divertidoOverlay}>
             <Animated.View
@@ -935,16 +912,15 @@ export default function InteraccionScreen() {
     );
   }
 
-
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
-  
+
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
   const locationText = locationRevealed && appointment.event.location_name
     ? appointment.event.location_name
     : '';
-  
+
   const participantCountText = activeParticipants.length.toString();
 
   return (
@@ -985,7 +961,7 @@ export default function InteraccionScreen() {
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
             <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-            
+
             <TextInput
               style={[styles.codeInput, codeInputFocused && styles.codeInputFocused]}
               value={confirmationCode}
@@ -1033,22 +1009,21 @@ export default function InteraccionScreen() {
                   <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
               </View>
-              
+
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => {
                     const displayName = participant.profiles?.name || 'Participante';
-                    
                     return (
                       <React.Fragment key={index}>
-                      <View style={styles.participantListItem}>
-                        <View style={styles.participantListPhotoPlaceholder}>
-                          <Text style={styles.participantListPhotoText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
+                        <View style={styles.participantListItem}>
+                          <View style={styles.participantListPhotoPlaceholder}>
+                            <Text style={styles.participantListPhotoText}>
+                              {displayName.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.participantListName}>{displayName}</Text>
                         </View>
-                        <Text style={styles.participantListName}>{displayName}</Text>
-                      </View>
                       </React.Fragment>
                     );
                   })}
@@ -1097,464 +1072,84 @@ export default function InteraccionScreen() {
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 24,
-    paddingBottom: 120,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 48,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    marginBottom: 24,
-  },
-  placeholderContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 40,
-    alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  placeholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#880E4F',
-    textAlign: 'center',
-  },
-  eventInfoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-  },
-  preEventTipCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 12,
-  },
-  preEventTipIcon: {
-    fontSize: 26,
-    marginTop: 2,
-  },
-  preEventTipTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#880E4F',
-    marginBottom: 4,
-  },
-  preEventTipText: {
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-  },
-  eventInfoIcon: {
-    fontSize: 60,
-    marginBottom: 16,
-  },
-  eventInfoTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#880E4F',
-    marginBottom: 16,
-  },
-  eventInfoDate: {
-    fontSize: 16,
-    color: '#444',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  eventInfoTime: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#AD1457',
-  },
-  countdownCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  countdownLabel: {
-    fontSize: 14,
-    color: '#880E4F',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  countdownTime: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#880E4F',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-    letterSpacing: 2,
-    textShadowColor: 'rgba(0,0,0,0.15)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  eventCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  eventIconLarge: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  eventHeaderText: {
-    flex: 1,
-  },
-  eventType: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#880E4F',
-  },
-  eventTime: {
-    fontSize: 15,
-    color: '#AD1457',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  eventLocation: {
-    fontSize: 13,
-    color: '#666',
-  },
-  codeEntryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  gradient: { flex: 1 },
+  container: { flex: 1 },
+  contentContainer: { padding: 24, paddingBottom: 120 },
+  skeletonCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 16,
     padding: 18,
     marginBottom: 12,
   },
-  codeEntryTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#880E4F',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  codeEntrySubtitle: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  codeInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: '#F06292',
-  },
-  codeInputFocused: {
-    borderColor: '#880E4F',
-  },
-  codeErrorText: {
-    fontSize: 13,
-    color: '#EF4444',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  confirmCodeButton: {
-    backgroundColor: '#880E4F',
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-  },
-  confirmCodeButtonText: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  confirmedCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(136, 14, 79, 0.15)',
-  },
-  confirmedIcon: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  confirmedText: {
-    fontSize: 15,
-    color: '#880E4F',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  participantsListCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  participantsListHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  participantsListTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#880E4F',
-    flex: 1,
-  },
-  participantCountBadge: {
-    backgroundColor: '#880E4F',
-    borderRadius: 16,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    minWidth: 40,
-    alignItems: 'center',
-  },
-  participantCountText: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  participantsList: {
-    marginTop: 6,
-  },
-  participantListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  participantListPhotoPlaceholder: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(173, 20, 87, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  participantListPhotoText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#880E4F',
-  },
-  participantListName: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  infoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#880E4F',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  infoTextSecondary: {
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'center',
-  },
-  continueButton: {
-    backgroundColor: '#880E4F',
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
-    elevation: 10,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.50)',
-  },
-  continueButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-
-  // ── Rules/Intro Screen (atrevido theme) ──────────────────────────────────────
-  rulesIcon: {
-    fontSize: 72,
-    marginBottom: 16,
-  },
-  rulesTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 24,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  rulesCard: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(240,98,146,0.30)',
-    padding: 24,
-    width: '100%',
-    marginBottom: 32,
-  },
-  rulesRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  rulesEmoji: {
-    fontSize: 26,
-    marginTop: 2,
-  },
-  rulesText: {
-    flex: 1,
-    fontSize: 17,
-    color: '#FFFFFF',
-    lineHeight: 24,
-    fontWeight: '400',
-  },
-  rulesDivider: {
-    height: 1,
-    backgroundColor: 'rgba(240,98,146,0.20)',
-    marginVertical: 16,
-  },
-  rulesCountdownContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  rulesCountdownLabel: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 14,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
-  rulesCountdownCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2.5,
-    borderColor: '#F06292',
-    backgroundColor: 'rgba(240,98,146,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rulesCountdownNumber: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: '#F06292',
-  },
-  comenzarButton: {
-    backgroundColor: '#880E4F',
-    borderRadius: 50,
-    paddingVertical: 18,
-    paddingHorizontal: 56,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(240,98,146,0.50)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
-    elevation: 10,
-    marginTop: 8,
-  },
-  comenzarButtonText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-
-  // ── Divertido Level Modal ────────────────────────────────────────────────────
-  divertidoOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  divertidoCard: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    minWidth: 280,
-  },
-  divertidoCardGradient: {
-    padding: 48,
-    alignItems: 'center',
-    borderRadius: 32,
-  },
-  divertidoEmoji: {
-    fontSize: 100,
-    marginBottom: 24,
-  },
-  divertidoModalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  divertidoModalLevel: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 8, marginTop: 48 },
+  subtitle: { fontSize: 16, color: '#FFFFFF', opacity: 0.8, marginBottom: 24 },
+  placeholderContainer: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 20, padding: 40, alignItems: 'center' },
+  placeholderIcon: { fontSize: 80, marginBottom: 24 },
+  placeholderText: { fontSize: 18, fontWeight: '600', color: '#880E4F', textAlign: 'center' },
+  eventInfoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 20, padding: 24, alignItems: 'center' },
+  preEventTipCard: { backgroundColor: 'rgba(255, 255, 255, 0.92)', borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: 12 },
+  preEventTipIcon: { fontSize: 26, marginTop: 2 },
+  preEventTipTitle: { fontSize: 15, fontWeight: '700', color: '#880E4F', marginBottom: 4 },
+  preEventTipText: { fontSize: 14, color: '#444', lineHeight: 20 },
+  eventInfoIcon: { fontSize: 60, marginBottom: 16 },
+  eventInfoTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 16 },
+  eventInfoDate: { fontSize: 16, color: '#444', marginBottom: 8, textAlign: 'center' },
+  eventInfoTime: { fontSize: 18, fontWeight: '600', color: '#AD1457' },
+  countdownCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 18, alignItems: 'center', marginBottom: 12 },
+  countdownLabel: { fontSize: 14, color: '#880E4F', marginBottom: 8, fontWeight: '600' },
+  countdownTime: { fontSize: 48, fontWeight: '800', color: '#880E4F', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.15)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  eventCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 14, marginBottom: 12 },
+  eventHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  eventIconLarge: { fontSize: 32, marginRight: 12 },
+  eventHeaderText: { flex: 1 },
+  eventType: { fontSize: 20, fontWeight: 'bold', color: '#880E4F' },
+  eventTime: { fontSize: 15, color: '#AD1457', fontWeight: '600', marginTop: 2 },
+  eventLocation: { fontSize: 13, color: '#666' },
+  codeEntryCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 18, marginBottom: 12 },
+  codeEntryTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', textAlign: 'center', marginBottom: 6 },
+  codeEntrySubtitle: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 18 },
+  codeInput: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 14, fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 10, borderWidth: 2, borderColor: '#F06292' },
+  codeInputFocused: { borderColor: '#880E4F' },
+  codeErrorText: { fontSize: 13, color: '#EF4444', textAlign: 'center', marginBottom: 10 },
+  confirmCodeButton: { backgroundColor: '#880E4F', borderRadius: 14, padding: 16, alignItems: 'center' },
+  confirmCodeButtonText: { fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' },
+  confirmedCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(136, 14, 79, 0.15)' },
+  confirmedIcon: { fontSize: 36, marginBottom: 8 },
+  confirmedText: { fontSize: 15, color: '#880E4F', textAlign: 'center', fontWeight: '600' },
+  participantsListCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
+  participantsListHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  participantsListTitle: { fontSize: 16, fontWeight: 'bold', color: '#880E4F', flex: 1 },
+  participantCountBadge: { backgroundColor: '#880E4F', borderRadius: 16, paddingVertical: 5, paddingHorizontal: 12, minWidth: 40, alignItems: 'center' },
+  participantCountText: { fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' },
+  participantsList: { marginTop: 6 },
+  participantListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  participantListPhotoPlaceholder: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(173, 20, 87, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  participantListPhotoText: { fontSize: 14, fontWeight: 'bold', color: '#880E4F' },
+  participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
+  buttonDisabled: { opacity: 0.5 },
+  infoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
+  infoText: { fontSize: 16, fontWeight: '600', color: '#880E4F', textAlign: 'center', marginBottom: 8 },
+  infoTextSecondary: { fontSize: 13, color: '#666', textAlign: 'center' },
+  continueButton: { backgroundColor: '#880E4F', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)' },
+  continueButtonText: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', letterSpacing: 0.5 },
+  rulesIcon: { fontSize: 72, marginBottom: 16 },
+  rulesTitle: { fontSize: 30, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 24, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  rulesCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(240,98,146,0.30)', padding: 24, width: '100%', marginBottom: 32 },
+  rulesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  rulesEmoji: { fontSize: 26, marginTop: 2 },
+  rulesText: { flex: 1, fontSize: 17, color: '#FFFFFF', lineHeight: 24, fontWeight: '400' },
+  rulesDivider: { height: 1, backgroundColor: 'rgba(240,98,146,0.20)', marginVertical: 16 },
+  rulesCountdownContainer: { alignItems: 'center', marginTop: 8 },
+  rulesCountdownLabel: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 14, fontWeight: '500', letterSpacing: 0.5 },
+  rulesCountdownCircle: { width: 72, height: 72, borderRadius: 36, borderWidth: 2.5, borderColor: '#F06292', backgroundColor: 'rgba(240,98,146,0.12)', justifyContent: 'center', alignItems: 'center' },
+  rulesCountdownNumber: { fontSize: 30, fontWeight: '700', color: '#F06292' },
+  comenzarButton: { backgroundColor: '#880E4F', borderRadius: 50, paddingVertical: 18, paddingHorizontal: 56, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(240,98,146,0.50)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginTop: 8 },
+  comenzarButtonText: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1 },
+  divertidoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  divertidoCard: { borderRadius: 32, overflow: 'hidden', minWidth: 280 },
+  divertidoCardGradient: { padding: 48, alignItems: 'center', borderRadius: 32 },
+  divertidoEmoji: { fontSize: 100, marginBottom: 24 },
+  divertidoModalTitle: { fontSize: 20, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: 10, textAlign: 'center' },
+  divertidoModalLevel: { fontSize: 38, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
 });
