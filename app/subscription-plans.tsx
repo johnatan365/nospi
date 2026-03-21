@@ -879,8 +879,8 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-              console.log('[SubscriptionPlans] Cancel pressed — navigating to /(tabs)');
-              router.replace('/(tabs)');
+              console.log('[SubscriptionPlans] Cancel pressed — going back');
+              router.back();
             }}
             style={{ paddingHorizontal: 8 }}
           >
