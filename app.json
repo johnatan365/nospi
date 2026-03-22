@@ -96,7 +96,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icono Nospi.png",
+          "icon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
           "color": "#E9D5FF",
           "sounds": []
         }
