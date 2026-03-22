@@ -4,7 +4,7 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
+    "icon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -79,7 +79,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/icono Nospi.png",
+      "favicon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
       "bundler": "metro",
       "output": "single"
     },
