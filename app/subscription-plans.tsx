@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -121,30 +120,44 @@ export default function SubscriptionPlansScreen() {
   // subscription-plans.tsx only initiates payments.
   // All callback processing is handled exclusively in payment-callback.tsx.
 
-  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance') => {
+  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string) => {
     try {
-      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod);
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod, 'eventIdParam:', eventIdParam);
+      
+      // Use passed eventId first, fallback to AsyncStorage
+      const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
-        console.log('No pending event ID found');
+        console.error('confirmAppointment: No pending event ID found — neither param nor AsyncStorage');
         return;
       }
+      console.log('confirmAppointment: Using eventId:', pendingEventId);
+      
+      // Refresh session to ensure we have a valid one
+      try { await supabase.auth.refreshSession(); } catch {}
+      
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || user?.id;
       if (!userId) { 
-        console.error('confirmAppointment: no userId'); 
+        console.error('confirmAppointment: no userId — session may have expired'); 
         return; 
       }
+      console.log('confirmAppointment: userId:', userId);
+      
       const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
       if (!existing) {
         console.log('Creating appointment for event:', pendingEventId);
-        await supabase.from('appointments').insert({ 
+        const { error: insertError } = await supabase.from('appointments').insert({ 
           user_id: userId, 
           event_id: pendingEventId, 
           status: 'confirmada', 
           payment_status: 'completed' 
         });
-        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+        if (insertError) {
+          console.error('confirmAppointment: Insert error:', insertError);
+        } else {
+          console.log('confirmAppointment: Appointment created successfully');
+          await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+        }
       } else {
         console.log('Appointment already exists');
       }
@@ -248,9 +261,9 @@ export default function SubscriptionPlansScreen() {
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
         console.log('[CardPayment] APPROVED — reading pendingEventId before confirmAppointment');
-        // Get the event ID BEFORE confirming (confirmAppointment removes it from AsyncStorage)
         const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-        await confirmAppointment(result.transactionId || '', 'card');
+        console.log('[CardPayment] pendingEventId from AsyncStorage:', pendingEventId);
+        await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
         if (pendingEventId) {
           console.log('[CardPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
           router.replace({
@@ -315,7 +328,8 @@ export default function SubscriptionPlansScreen() {
             setNequiStatus('idle');
             console.log('[NequiPayment] APPROVED — reading pendingEventId before confirmAppointment');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            await confirmAppointment(result.transactionId || '', 'nequi');
+            console.log('[NequiPayment] pendingEventId from AsyncStorage:', pendingEventId);
+            await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
             if (pendingEventId) {
               console.log('[NequiPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
               router.replace({
@@ -326,14 +340,14 @@ export default function SubscriptionPlansScreen() {
               console.log('[NequiPayment] No pendingEventId found, showing success modal');
               setShowSuccessModal(true);
             }
-          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 24) {
+          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 40) {
             clearInterval(poll);
             setProcessingMethod(null);
             setNequiStatus('idle');
-            showAlert(attempts >= 24 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 24 ? 'No se recibió confirmación de Nequi.' : 'El pago fue rechazado.');
+            showAlert(attempts >= 40 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 40 ? 'No se recibió confirmación de Nequi. Por favor intenta de nuevo.' : 'El pago fue rechazado.');
           }
-        } catch (e) { if (attempts >= 24) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
-      }, 5000);
+        } catch (e) { if (attempts >= 40) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
+      }, 3000);
     } catch (error: any) {
       showAlert('Error Nequi', error.message);
       setProcessingMethod(null);

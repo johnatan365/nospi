@@ -261,20 +261,20 @@ export default function PhoneScreen() {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: 24 },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
+  content: { width: '100%', maxWidth: 400, alignSelf: 'center', overflow: 'hidden' },
   title: {
     fontSize: 28, fontWeight: 'bold', color: '#FFFFFF',
     marginBottom: 32, textAlign: 'center',
   },
 
   // Phone row
-  phoneRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  phoneRow: { flexDirection: 'row', gap: 8, marginBottom: 8, width: '100%', overflow: 'hidden' },
   countryButton: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)',
-    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
-    gap: 4,
+    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 10,
+    gap: 4, flexShrink: 0,
   },
   countryFlag: { fontSize: 22 },
   countryCode: { fontSize: 16, color: nospiColors.purpleDark, fontWeight: '700' },
@@ -283,8 +283,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)',
-    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 20,
-    fontSize: 18, color: '#333',
+    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 14,
+    fontSize: 18, color: '#333', minWidth: 0,
   },
   phoneInputFocused: {
     borderColor: 'rgba(240, 98, 146, 0.80)',

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -277,7 +276,13 @@ export default function ProfileScreen() {
     setUploadingPhoto(true);
     try {
       console.log('ProfileScreen: Uploading profile photo, URI:', uri);
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      
+      // On web, blob URIs don't have file extensions - default to jpg
+      let fileExt = 'jpg';
+      if (Platform.OS !== 'web') {
+        fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      }
+      
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
       const filePath = `${user?.id}/${fileName}`;
@@ -291,7 +296,8 @@ export default function ProfileScreen() {
         uploadData = bytes.buffer;
       } else {
         const response = await fetch(uri);
-        uploadData = await response.arrayBuffer();
+        const blob = await response.blob();
+        uploadData = await new Response(blob).arrayBuffer();
       }
 
       const { data: existingFiles } = await supabase.storage
