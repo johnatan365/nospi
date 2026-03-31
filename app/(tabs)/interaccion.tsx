@@ -244,6 +244,8 @@ export default function InteraccionScreen() {
         setCheckInPhase('code_entry');
         setGamePhase('intro');
       } else {
+        // User already confirmed their code — it's definitely event day
+        setIsEventDay(true);
         setCheckInPhase('confirmed');
         if (apt.event?.game_phase) {
           setGamePhase(apt.event.game_phase);
