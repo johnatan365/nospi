@@ -13,6 +13,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { SupabaseProvider } from "@/contexts/SupabaseContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
@@ -43,6 +44,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
       <SupabaseProvider>
         <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
           <SystemBars style="auto" />
@@ -71,6 +73,7 @@ export default function RootLayout() {
           </Stack>
         </ThemeProvider>
       </SupabaseProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }
