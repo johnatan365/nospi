@@ -29,7 +29,7 @@ const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { user, loading, signInWithApple } = useAuth();
+  const { user, loading } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -154,14 +154,68 @@ export default function LoginScreen() {
     console.log('LoginScreen: user tapped Sign in with Apple');
     setError('');
     setSubmitting(true);
+
     try {
-      await signInWithApple();
-    } catch (err: any) {
-      console.error('LoginScreen: Apple sign in error:', err);
-      if (err?.message !== 'canceled') {
-        setError('Error al iniciar sesión con Apple');
+      await AsyncStorage.setItem('oauth_flow_type', 'login');
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
+
+      if (error) {
+        console.error('Apple OAuth error:', error);
+        setError('Error al conectar con Apple. Intenta de nuevo.');
+        setSubmitting(false);
+        return;
       }
-    } finally {
+
+      console.log('Apple OAuth initiated:', data);
+
+      if (data.url) {
+        console.log('LoginScreen: Opening Apple OAuth URL');
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: WebBrowser result type:', result.type);
+
+        if (result.type === 'success' && result.url) {
+          const callbackUrl = result.url;
+          const parsedUrl = new URL(callbackUrl);
+          const code = parsedUrl.searchParams.get('code');
+
+          let accessToken = parsedUrl.searchParams.get('access_token');
+          let refreshToken = parsedUrl.searchParams.get('refresh_token');
+          if (!accessToken || !refreshToken) {
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
+          }
+
+          if (code) {
+            router.push({ pathname: '/auth/callback', params: { code } });
+          } else if (accessToken && refreshToken) {
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
+            });
+          } else {
+            router.push('/auth/callback');
+          }
+        } else if (result.type === 'cancel') {
+          setError('Inicio de sesión cancelado');
+          setSubmitting(false);
+        } else {
+          setSubmitting(false);
+        }
+      }
+    } catch (err: any) {
+      console.error('Apple login failed:', err);
+      setError('Error al iniciar sesión con Apple');
       setSubmitting(false);
     }
   };
