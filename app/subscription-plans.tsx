@@ -198,23 +198,26 @@ export default function SubscriptionPlansScreen() {
       }
       console.log('confirmAppointment: userId:', userId);
       
-      const { data: existing } = await supabase.from('appointments').select('id').eq('user_id', userId).eq('event_id', pendingEventId).maybeSingle();
-      if (!existing) {
-        console.log('Creating appointment for event:', pendingEventId);
-        const { error: insertError } = await supabase.from('appointments').insert({ 
-          user_id: userId, 
-          event_id: pendingEventId, 
-          status: 'confirmada', 
-          payment_status: 'completed' 
-        });
-        if (insertError) {
-          console.error('confirmAppointment: Insert error:', insertError);
-        } else {
-          console.log('confirmAppointment: Appointment created successfully');
-          await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-        }
+      console.log('Upserting appointment for event:', pendingEventId);
+      const { error: upsertError } = await supabase
+        .from('appointments')
+        .upsert(
+          {
+            user_id: userId,
+            event_id: pendingEventId,
+            status: 'confirmada',
+            payment_status: 'completed',
+            transaction_id: transactionId,
+            payment_method: paymentMethod,
+            confirmed_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,event_id', ignoreDuplicates: false }
+        );
+      if (upsertError) {
+        console.warn('confirmAppointment: Upsert warning (may be duplicate):', upsertError);
       } else {
-        console.log('Appointment already exists');
+        console.log('confirmAppointment: Appointment upserted successfully');
+        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
     } catch (e) { 
