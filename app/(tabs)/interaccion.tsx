@@ -104,6 +104,7 @@ export default function InteraccionScreen() {
   const [userReadyForRules, setUserReadyForRules] = useState(false);
   const [userReadyForGame, setUserReadyForGame] = useState(false);
   const [rulesCountdown, setRulesCountdown] = useState(20);
+  const rulesCountdownRef = useRef(20);
   const [showDivertidoModal, setShowDivertidoModal] = useState(false);
   const divertidoScaleAnim = useRef(new Animated.Value(0)).current;
   const divertidoFadeAnim = useRef(new Animated.Value(0)).current;
@@ -255,14 +256,31 @@ export default function InteraccionScreen() {
         // Restore all persisted per-user progress atomically so the render
         // never sees an inconsistent intermediate state (e.g. checkInPhase
         // 'confirmed' but both ready flags still false).
-        const [savedReadyForRules, savedReadyForGame, savedCheckInPhase] = await Promise.all([
+        const [savedReadyForRules, savedReadyForGame, savedCheckInPhase, savedRulesCountdown] = await Promise.all([
           AsyncStorage.getItem(`nospi_readyForRules_${apt.event_id}`),
           AsyncStorage.getItem(`nospi_readyForGame_${apt.event_id}`),
           AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`),
+          AsyncStorage.getItem(`nospi_rulesCountdown_${apt.event_id}`),
         ]);
 
         const restoredReadyForRules = savedReadyForRules === 'true';
-        const restoredReadyForGame = savedReadyForGame === 'true';
+        let restoredReadyForGame = savedReadyForGame === 'true';
+
+        // Bug 1 fix: if the game is already in an active phase and the user
+        // confirmed the rules, they must be ready for the game — force it true
+        // and persist it so future refreshes also work.
+        const activeGamePhases = ['questions', 'question_active', 'level_transition', 'finished', 'free_phase'];
+        const currentPhase = apt.event?.game_phase ?? '';
+        if (restoredReadyForRules && activeGamePhases.includes(currentPhase) && !restoredReadyForGame) {
+          restoredReadyForGame = true;
+          AsyncStorage.setItem(`nospi_readyForGame_${apt.event_id}`, 'true');
+        }
+
+        // Bug 2 fix: restore the saved countdown value so a refresh doesn't
+        // reset it back to 20.
+        const parsedCountdown = savedRulesCountdown !== null ? parseInt(savedRulesCountdown, 10) : 20;
+        const restoredRulesCountdown = !isNaN(parsedCountdown) && parsedCountdown >= 0 ? parsedCountdown : 20;
+
         // Fall back to 'confirmed' (location_confirmed is true) if nothing persisted yet
         const restoredCheckInPhase: CheckInPhase =
           savedCheckInPhase === 'confirmed' || savedCheckInPhase === 'code_entry' || savedCheckInPhase === 'waiting'
@@ -273,12 +291,15 @@ export default function InteraccionScreen() {
           restoredReadyForRules,
           restoredReadyForGame,
           restoredCheckInPhase,
+          restoredRulesCountdown,
         });
 
-        // Apply all three in one synchronous batch so React renders them together
+        // Apply all in one synchronous batch so React renders them together
         setUserReadyForRules(restoredReadyForRules);
         setUserReadyForGame(restoredReadyForGame);
         setCheckInPhase(restoredCheckInPhase);
+        rulesCountdownRef.current = restoredRulesCountdown;
+        setRulesCountdown(restoredRulesCountdown);
       }
       if (apt.event?.start_time) checkIfEventDay(apt.event.start_time);
     }
@@ -668,18 +689,30 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!userReadyForRules || userReadyForGame) return;
 
-    setRulesCountdown(20);
+    // Use the ref value (restored from AsyncStorage) as the starting point
+    // instead of always resetting to 20, so refreshes resume where they left off.
+    const startValue = rulesCountdownRef.current;
+    setRulesCountdown(startValue);
+
+    if (startValue <= 0) return;
+
     const interval = setInterval(() => {
       setRulesCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
+        const next = prev <= 1 ? 0 : prev - 1;
+        rulesCountdownRef.current = next;
+        // Persist every tick so a refresh restores the correct value
+        if (appointment?.event_id) {
+          AsyncStorage.setItem(`nospi_rulesCountdown_${appointment.event_id}`, String(next));
         }
-        return prev - 1;
+        if (next <= 0) {
+          clearInterval(interval);
+        }
+        return next;
       });
     }, 1000);
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userReadyForRules, userReadyForGame]);
 
   const showDivertidoModalAnimation = useCallback(() => {
@@ -748,6 +781,7 @@ export default function InteraccionScreen() {
         AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`),
         AsyncStorage.removeItem(`nospi_readyForGame_${appointment.event_id}`),
         AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`),
+        AsyncStorage.removeItem(`nospi_rulesCountdown_${appointment.event_id}`),
       ]);
     }
     setAppointment(null);
