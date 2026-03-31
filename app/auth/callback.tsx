@@ -236,9 +236,9 @@ export default function AuthCallbackScreen() {
         // LOGIN: perfil debe existir
         if (!existingProfile) {
           console.log('AuthCallbackScreen: No profile found — must register first');
-          setStatus('Registro requerido');
+          setStatus('Debes registrarte primero antes de iniciar sesión');
           await supabase.auth.signOut();
-          setTimeout(() => router.replace('/onboarding/register'), 2000);
+          setTimeout(() => router.replace('/welcome'), 2500);
           return;
         }
 

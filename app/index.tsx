@@ -44,26 +44,20 @@ export default function Index() {
             }
 
             if (!profile) {
-              // User authenticated via Google but no profile in users table
-              console.log('Index: Google user authenticated but no profile found. Signing out.');
+              // User authenticated via Google/Apple but no profile in users table
+              console.log('Index: OAuth user authenticated but no profile found. Signing out.');
               await supabase.auth.signOut();
               
               if (Platform.OS === 'web') {
-                const shouldRegister = window.confirm(
-                  'Debes registrarte primero en la aplicación antes de iniciar sesión con Google.\n\n¿Ir a registro?'
-                );
-                if (shouldRegister) {
-                  router.replace('/onboarding/register');
-                } else {
-                  router.replace('/welcome');
-                }
+                window.alert('Debes registrarte primero antes de iniciar sesión.');
               } else {
                 Alert.alert(
                   'Registro Requerido',
-                  'Debes registrarte primero en la aplicación antes de iniciar sesión con Google.',
-                  [{ text: 'OK', onPress: () => router.replace('/onboarding/register') }]
+                  'Debes registrarte primero antes de iniciar sesión.',
+                  [{ text: 'OK' }]
                 );
               }
+              router.replace('/welcome');
               return;
             }
 
