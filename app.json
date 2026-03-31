@@ -17,8 +17,8 @@
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -86,21 +86,23 @@
     "plugins": [
       "expo-font",
       "expo-router",
+      "expo-apple-authentication",
       "expo-web-browser",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icono Nospi.png",
+          "icon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
           "color": "#E9D5FF",
           "sounds": []
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "scheme": "nospi",
     "experiments": {
