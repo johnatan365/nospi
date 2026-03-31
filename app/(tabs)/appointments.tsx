@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -159,7 +158,19 @@ export default function AppointmentsScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('AppointmentsScreen: Tab focused');
-      loadAppointments();
+
+      // Si viene de un pago exitoso, invalidar caché antes de cargar para mostrar la cita nueva.
+      AsyncStorage.getItem('should_check_notification_prompt').then(async (shouldCheck) => {
+        if (shouldCheck === 'true') {
+          console.log('AppointmentsScreen: pago reciente detectado, invalidando caché');
+          cacheRef.current['confirmadas'] = null;
+          await clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
+          await AsyncStorage.removeItem('should_check_notification_prompt');
+        }
+        loadAppointments();
+      }).catch(() => {
+        loadAppointments();
+      });
 
       // Check for PSE payment pending
       AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {

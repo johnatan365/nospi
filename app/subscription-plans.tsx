@@ -253,6 +253,8 @@ export default function SubscriptionPlansScreen() {
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
+      // Marcar que hay una cita nueva para que el tab de Citas invalide su caché.
+      await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       return true;
     } catch (e) { 
       console.error('Error confirmando cita:', e);
@@ -263,6 +265,7 @@ export default function SubscriptionPlansScreen() {
   const handleSuccess = async () => {
     await confirmAppointment('', 'virtual_balance');
     console.log('Appointment confirmed, showing success modal');
+    await AsyncStorage.setItem('should_check_notification_prompt', 'true');
     setShowSuccessModal(true);
   };
 

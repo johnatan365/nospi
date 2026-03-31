@@ -223,6 +223,8 @@ export default function PaymentCallbackScreen() {
           // Step 5: Cleanup AFTER appointment is confirmed.
           await cleanupAsyncStorage();
           await AsyncStorage.removeItem('nospi_payment_processing');
+          // Garantizar que el tab de citas invalide su caché al recibir foco.
+          await AsyncStorage.setItem('should_check_notification_prompt', 'true');
 
           console.log('payment-callback (mobile): navigating to event-details with paymentSuccess=true, eventId:', eventId);
 
