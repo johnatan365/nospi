@@ -806,6 +806,56 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+
+          {/* Country Picker Modal */}
+          <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContent}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+                  <TouchableOpacity onPress={() => setShowCountryPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
+                </View>
+                <Picker
+                  selectedValue={editCountry}
+                  onValueChange={(value) => {
+                    setEditCountry(value);
+                    const cities = CITIES_BY_COUNTRY[value] || [];
+                    if (cities.length > 0) setEditCity(cities[0]);
+                    if (Platform.OS === 'android') setShowCountryPicker(false);
+                  }}
+                  style={styles.picker}
+                  color="#000000"
+                  dropdownIconColor="#000000"
+                >
+                  {COUNTRIES.map(country => <Picker.Item key={country} label={country} value={country} color="#000000" />)}
+                </Picker>
+              </View>
+            </View>
+          </Modal>
+
+          {/* City Picker Modal */}
+          <Modal visible={showCityPicker} transparent animationType="slide" onRequestClose={() => setShowCityPicker(false)}>
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContent}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
+                  <TouchableOpacity onPress={() => setShowCityPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
+                </View>
+                <Picker
+                  selectedValue={editCity}
+                  onValueChange={(value) => {
+                    setEditCity(value);
+                    if (Platform.OS === 'android') setShowCityPicker(false);
+                  }}
+                  style={styles.picker}
+                  color="#000000"
+                  dropdownIconColor="#000000"
+                >
+                  {availableCities.map(city => <Picker.Item key={city} label={city} value={city} color="#000000" />)}
+                </Picker>
+              </View>
+            </View>
+          </Modal>
         </View>
       </Modal>
 
@@ -856,56 +906,6 @@ export default function ProfileScreen() {
             ItemSeparatorComponent={() => <View style={styles.phoneRowSeparator} />}
           />
         </SafeAreaView>
-      </Modal>
-
-      {/* Country Picker Modal */}
-      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContent}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
-              <TouchableOpacity onPress={() => setShowCountryPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
-            </View>
-            <Picker
-              selectedValue={editCountry}
-              onValueChange={(value) => {
-                setEditCountry(value);
-                const cities = CITIES_BY_COUNTRY[value] || [];
-                if (cities.length > 0) setEditCity(cities[0]);
-                if (Platform.OS === 'android') setShowCountryPicker(false);
-              }}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {COUNTRIES.map(country => <Picker.Item key={country} label={country} value={country} color="#000000" />)}
-            </Picker>
-          </View>
-        </View>
-      </Modal>
-
-      {/* City Picker Modal */}
-      <Modal visible={showCityPicker} transparent animationType="slide" onRequestClose={() => setShowCityPicker(false)}>
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContent}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
-            </View>
-            <Picker
-              selectedValue={editCity}
-              onValueChange={(value) => {
-                setEditCity(value);
-                if (Platform.OS === 'android') setShowCityPicker(false);
-              }}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {availableCities.map(city => <Picker.Item key={city} label={city} value={city} color="#000000" />)}
-            </Picker>
-          </View>
-        </View>
       </Modal>
 
       {/* Password Change Modal */}
