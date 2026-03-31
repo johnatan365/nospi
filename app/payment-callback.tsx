@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Platform, ScrollView, Image, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -178,6 +177,10 @@ export default function PaymentCallbackScreen() {
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
 
+          // Marcar que payment-callback está manejando este pago
+          // para evitar que subscription-plans lo procese en paralelo.
+          await AsyncStorage.setItem('nospi_payment_processing', 'true');
+
           // Step 3: Resolve userId with 3 fallbacks so bank redirects never lose the session.
           await supabase.auth.refreshSession().catch(() => {});
 
@@ -219,6 +222,7 @@ export default function PaymentCallbackScreen() {
 
           // Step 5: Cleanup AFTER appointment is confirmed.
           await cleanupAsyncStorage();
+          await AsyncStorage.removeItem('nospi_payment_processing');
 
           console.log('payment-callback (mobile): navigating to event-details with paymentSuccess=true, eventId:', eventId);
 

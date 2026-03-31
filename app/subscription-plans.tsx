@@ -142,6 +142,12 @@ export default function SubscriptionPlansScreen() {
           console.log('AppState check - payment status:', status);
 
           if (status === 'APPROVED') {
+            // Si payment-callback ya está manejando este pago, no duplicar la confirmación.
+            const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
+            if (alreadyHandled === 'true') {
+              console.log('AppState: payment-callback ya está procesando este pago, omitiendo');
+              return;
+            }
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
@@ -238,11 +244,10 @@ export default function SubscriptionPlansScreen() {
           { onConflict: 'user_id,event_id', ignoreDuplicates: false }
         );
       if (upsertError) {
-        console.warn('confirmAppointment: Upsert warning (may be duplicate):', upsertError);
-        // Treat duplicate-key conflicts as success (appointment already exists)
-        if (!upsertError.message?.includes('duplicate') && !upsertError.code?.includes('23505')) {
-          return false;
-        }
+        console.warn('confirmAppointment: Upsert error (likely already confirmed by payment-callback):', upsertError.message);
+        // Si el upsert falla, la cita probablemente ya fue confirmada por payment-callback.
+        // Retornar true para no mostrar el alert de error al usuario.
+        return true;
       } else {
         console.log('confirmAppointment: Appointment upserted successfully');
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
@@ -581,6 +586,18 @@ export default function SubscriptionPlansScreen() {
         if (status === 'APPROVED') {
           clearInterval(interval);
           setProcessingMethod(null);
+          // Si payment-callback ya está manejando este pago, no duplicar.
+          const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
+          if (alreadyHandled === 'true') {
+            console.log('startNativePolling: payment-callback ya procesando, omitiendo confirmación duplicada');
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            if (pendingEventId) {
+              router.replace({ pathname: '/event-details/[id]', params: { id: pendingEventId, paymentSuccess: 'true' } });
+            } else {
+              router.replace('/(tabs)/appointments');
+            }
+            return;
+          }
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
