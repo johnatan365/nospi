@@ -229,6 +229,9 @@ export default function SubscriptionPlansScreen() {
       console.log('confirmAppointment: userId:', userId);
       
       console.log('Upserting appointment for event:', pendingEventId);
+
+      // Intento 1: upsert con campos extendidos
+      let writeOk = false;
       const { error: upsertError } = await supabase
         .from('appointments')
         .upsert(
@@ -243,17 +246,42 @@ export default function SubscriptionPlansScreen() {
           },
           { onConflict: 'user_id,event_id', ignoreDuplicates: false }
         );
+
       if (upsertError) {
-        console.warn('confirmAppointment: Upsert error (likely already confirmed by payment-callback):', upsertError.message);
-        // Si el upsert falla, la cita probablemente ya fue confirmada por payment-callback.
-        // Retornar true para no mostrar el alert de error al usuario.
-        return true;
+        console.warn('confirmAppointment: upsert extendido falló, intentando solo campos base:', upsertError.message);
+        // Intento 2: upsert solo con campos base (por si faltan columnas en el schema)
+        const { error: upsertBaseError } = await supabase
+          .from('appointments')
+          .upsert(
+            { user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' },
+            { onConflict: 'user_id,event_id', ignoreDuplicates: false }
+          );
+        if (upsertBaseError) {
+          console.error('confirmAppointment: upsert base también falló:', upsertBaseError.message);
+        } else {
+          writeOk = true;
+        }
       } else {
-        console.log('confirmAppointment: Appointment upserted successfully');
-        await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+        console.log('confirmAppointment: upsert exitoso');
+        writeOk = true;
       }
+
+      // Verificar que la fila realmente existe en DB con status='confirmada'
+      const { data: verification } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('user_id', userId)
+        .eq('event_id', pendingEventId)
+        .eq('status', 'confirmada')
+        .maybeSingle();
+
+      if (!verification) {
+        console.error('confirmAppointment: verificación post-write falló — cita no encontrada en DB');
+        return false;
+      }
+
+      console.log('confirmAppointment: cita verificada en DB id:', verification.id);
       await AsyncStorage.removeItem('pending_event_confirmation');
-      // Marcar que hay una cita nueva para que el tab de Citas invalide su caché.
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       return true;
     } catch (e) { 
@@ -532,6 +560,15 @@ export default function SubscriptionPlansScreen() {
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
       }
+      // Guardar el token de sesión para que payment-callback pueda restaurar la sesión
+      // cuando el usuario vuelve del browser externo (PSE/Bancolombia abren un navegador).
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession?.access_token) {
+          await AsyncStorage.setItem('nospi_access_token', currentSession.access_token);
+          await AsyncStorage.setItem('nospi_refresh_token', currentSession.refresh_token || '');
+        }
+      } catch {}
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
         window.localStorage.setItem('nospi_payment_method', 'bancolombia');
@@ -854,6 +891,15 @@ export default function SubscriptionPlansScreen() {
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
       }
+      // Guardar el token de sesión para que payment-callback pueda restaurar la sesión
+      // cuando el usuario vuelve del browser externo (PSE/Bancolombia abren un navegador).
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession?.access_token) {
+          await AsyncStorage.setItem('nospi_access_token', currentSession.access_token);
+          await AsyncStorage.setItem('nospi_refresh_token', currentSession.refresh_token || '');
+        }
+      } catch {}
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_transaction_id', data.transactionId);
         window.localStorage.setItem('nospi_payment_method', 'pse');
