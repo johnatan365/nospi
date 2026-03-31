@@ -117,6 +117,108 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
+  // Definida con useCallback y colocada antes de los useEffects que la referencian
+  // para evitar el error "Cannot access before initialization".
+  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
+    try {
+      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod, 'eventIdParam:', eventIdParam);
+      
+      // Use passed eventId first, fallback to AsyncStorage
+      const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
+      if (!pendingEventId) {
+        console.error('confirmAppointment: No pending event ID found — neither param nor AsyncStorage');
+        return false;
+      }
+      console.log('confirmAppointment: Using eventId:', pendingEventId);
+      
+      // Refresh session to ensure we have a valid one
+      try { await supabase.auth.refreshSession(); } catch {}
+
+      let userId: string | null = null;
+
+      // 1. Try getSession
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        userId = session?.user?.id || null;
+      } catch {}
+
+      // 2. If still null, try getUser (makes a network call, more reliable)
+      if (!userId) {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          userId = authUser?.id || null;
+        } catch {}
+      }
+
+      // 3. If still null, use user from component scope
+      if (!userId) {
+        userId = user?.id || null;
+      }
+
+      if (!userId) {
+        console.error('confirmAppointment: no userId after all fallbacks');
+        return false;
+      }
+      console.log('confirmAppointment: userId:', userId);
+      
+      console.log('Upserting appointment for event:', pendingEventId);
+
+      // Intento 1: upsert con campos extendidos
+      const { error: upsertError } = await supabase
+        .from('appointments')
+        .upsert(
+          {
+            user_id: userId,
+            event_id: pendingEventId,
+            status: 'confirmada',
+            payment_status: 'completed',
+            transaction_id: transactionId,
+            payment_method: paymentMethod,
+            confirmed_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,event_id', ignoreDuplicates: false }
+        );
+
+      if (upsertError) {
+        console.warn('confirmAppointment: upsert extendido falló, intentando solo campos base:', upsertError.message);
+        // Intento 2: upsert solo con campos base (por si faltan columnas en el schema)
+        const { error: upsertBaseError } = await supabase
+          .from('appointments')
+          .upsert(
+            { user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' },
+            { onConflict: 'user_id,event_id', ignoreDuplicates: false }
+          );
+        if (upsertBaseError) {
+          console.error('confirmAppointment: upsert base también falló:', upsertBaseError.message);
+        }
+      } else {
+        console.log('confirmAppointment: upsert exitoso');
+      }
+
+      // Verificar que la fila realmente existe en DB con status='confirmada'
+      const { data: verification } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('user_id', userId)
+        .eq('event_id', pendingEventId)
+        .eq('status', 'confirmada')
+        .maybeSingle();
+
+      if (!verification) {
+        console.error('confirmAppointment: verificación post-write falló — cita no encontrada en DB');
+        return false;
+      }
+
+      console.log('confirmAppointment: cita verificada en DB id:', verification.id);
+      await AsyncStorage.removeItem('pending_event_confirmation');
+      await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+      return true;
+    } catch (e) { 
+      console.error('Error confirmando cita:', e);
+      return false;
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
@@ -185,110 +287,6 @@ export default function SubscriptionPlansScreen() {
 
   // subscription-plans.tsx only initiates payments.
   // All callback processing is handled exclusively in payment-callback.tsx.
-
-  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
-    try {
-      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod, 'eventIdParam:', eventIdParam);
-      
-      // Use passed eventId first, fallback to AsyncStorage
-      const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        console.error('confirmAppointment: No pending event ID found — neither param nor AsyncStorage');
-        return false;
-      }
-      console.log('confirmAppointment: Using eventId:', pendingEventId);
-      
-      // Refresh session to ensure we have a valid one
-      try { await supabase.auth.refreshSession(); } catch {}
-
-      let userId: string | null = null;
-
-      // 1. Try getSession
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        userId = session?.user?.id || null;
-      } catch {}
-
-      // 2. If still null, try getUser (makes a network call, more reliable)
-      if (!userId) {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          userId = authUser?.id || null;
-        } catch {}
-      }
-
-      // 3. If still null, use user from component scope
-      if (!userId) {
-        userId = user?.id || null;
-      }
-
-      if (!userId) {
-        console.error('confirmAppointment: no userId after all fallbacks');
-        return false;
-      }
-      console.log('confirmAppointment: userId:', userId);
-      
-      console.log('Upserting appointment for event:', pendingEventId);
-
-      // Intento 1: upsert con campos extendidos
-      let writeOk = false;
-      const { error: upsertError } = await supabase
-        .from('appointments')
-        .upsert(
-          {
-            user_id: userId,
-            event_id: pendingEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-            transaction_id: transactionId,
-            payment_method: paymentMethod,
-            confirmed_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-        );
-
-      if (upsertError) {
-        console.warn('confirmAppointment: upsert extendido falló, intentando solo campos base:', upsertError.message);
-        // Intento 2: upsert solo con campos base (por si faltan columnas en el schema)
-        const { error: upsertBaseError } = await supabase
-          .from('appointments')
-          .upsert(
-            { user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' },
-            { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-          );
-        if (upsertBaseError) {
-          console.error('confirmAppointment: upsert base también falló:', upsertBaseError.message);
-        } else {
-          writeOk = true;
-        }
-      } else {
-        console.log('confirmAppointment: upsert exitoso');
-        writeOk = true;
-      }
-
-      // Verificar que la fila realmente existe en DB con status='confirmada'
-      const { data: verification } = await supabase
-        .from('appointments')
-        .select('id, status')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .eq('status', 'confirmada')
-        .maybeSingle();
-
-      if (!verification) {
-        console.error('confirmAppointment: verificación post-write falló — cita no encontrada en DB');
-        return false;
-      }
-
-      console.log('confirmAppointment: cita verificada en DB id:', verification.id);
-      await AsyncStorage.removeItem('pending_event_confirmation');
-      await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-      return true;
-    } catch (e) { 
-      console.error('Error confirmando cita:', e);
-      return false;
-    }
-  };
 
   const handleSuccess = async () => {
     await confirmAppointment('', 'virtual_balance');
