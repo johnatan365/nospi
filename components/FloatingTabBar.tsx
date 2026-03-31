@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
@@ -32,9 +31,9 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const isActive = pathname === tab.route || pathname.startsWith(tab.route);
-          const iconColor = '#880E4F';
-          const labelColor = isActive ? '#880E4F' : '#c2185b';
-          const backgroundColor = isActive ? 'rgba(136, 14, 79, 0.10)' : 'transparent';
+          const iconColor = isActive ? '#880E4F' : '#8E8E93';
+          const labelColor = isActive ? '#880E4F' : '#8E8E93';
+          const backgroundColor = isActive ? 'rgba(136, 14, 79, 0.08)' : 'transparent';
 
           return (
             <TouchableOpacity
@@ -73,11 +72,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(136, 14, 79, 0.12)',
+    borderTopColor: 'rgba(0, 0, 0, 0.08)',
     paddingTop: 4,
     paddingBottom: 4,
     paddingHorizontal: 8,
-    shadowColor: '#880E4F',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
