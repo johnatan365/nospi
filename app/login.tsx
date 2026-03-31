@@ -295,8 +295,15 @@ export default function LoginScreen() {
   };
 
   const toggleMode = () => {
-    console.log('LoginScreen: toggling mode to', isSignUp ? 'sign in' : 'sign up');
-    setIsSignUp(!isSignUp);
+    if (!isSignUp) {
+      // User tapped "Regístrate" → send to welcome screen
+      console.log('LoginScreen: user wants to register, redirecting to welcome');
+      router.replace('/welcome');
+      return;
+    }
+    // User is in signup mode and tapped "Inicia sesión" → switch to login
+    console.log('LoginScreen: toggling mode to sign in');
+    setIsSignUp(false);
     setError('');
     setName('');
     setEmail('');
