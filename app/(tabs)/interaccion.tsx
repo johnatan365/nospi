@@ -237,7 +237,7 @@ export default function InteraccionScreen() {
     }
   }, []);
 
-  const applyAppointmentData = useCallback((apt: Appointment | null) => {
+  const applyAppointmentData = useCallback(async (apt: Appointment | null) => {
     setAppointment(apt);
     if (apt) {
       if (!apt.location_confirmed) {
@@ -247,11 +247,20 @@ export default function InteraccionScreen() {
         setCheckInPhase('confirmed');
         if (apt.event?.game_phase) {
           setGamePhase(apt.event.game_phase);
-          const gp = apt.event.game_phase;
-          if (gp === 'questions' || gp === 'question_active' || gp === 'level_transition' || gp === 'finished' || gp === 'free_phase') {
-            setUserReadyForRules(true);
-            setUserReadyForGame(true);
-          }
+        }
+        
+        // Restore user's personal progress from AsyncStorage
+        // Each user must go through rules + comenzar independently
+        const savedReadyForRules = await AsyncStorage.getItem(`nospi_readyForRules_${apt.event_id}`);
+        const savedReadyForGame = await AsyncStorage.getItem(`nospi_readyForGame_${apt.event_id}`);
+        
+        if (savedReadyForRules === 'true') {
+          setUserReadyForRules(true);
+          console.log('[Interaccion] Restored userReadyForRules=true from AsyncStorage');
+        }
+        if (savedReadyForGame === 'true') {
+          setUserReadyForGame(true);
+          console.log('[Interaccion] Restored userReadyForGame=true from AsyncStorage');
         }
       }
       if (apt.event?.start_time) checkIfEventDay(apt.event.start_time);
@@ -689,15 +698,21 @@ export default function InteraccionScreen() {
         ]).start(() => {
           setShowDivertidoModal(false);
           setUserReadyForGame(true);
+          if (appointment?.event_id) {
+            AsyncStorage.setItem(`nospi_readyForGame_${appointment.event_id}`, 'true');
+          }
         });
       }, 2000);
     });
   }, [divertidoScaleAnim, divertidoFadeAnim]);
 
-  const handleUserContinue = useCallback(() => {
+  const handleUserContinue = useCallback(async () => {
     console.log('User tapped Continuar to proceed to rules');
     setUserReadyForRules(true);
-  }, []);
+    if (appointment?.event_id) {
+      await AsyncStorage.setItem(`nospi_readyForRules_${appointment.event_id}`, 'true');
+    }
+  }, [appointment?.event_id]);
 
   useEffect(() => {
     if (!userReadyForGame) return;
@@ -706,13 +721,17 @@ export default function InteraccionScreen() {
     }
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
-  const handleFinishGame = useCallback(() => {
+  const handleFinishGame = useCallback(async () => {
     console.log('User finished game, navigating to appointments');
+    if (appointment?.event_id) {
+      await AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`);
+      await AsyncStorage.removeItem(`nospi_readyForGame_${appointment.event_id}`);
+    }
     setAppointment(null);
     cacheRef.current = null;
     clearCached(CACHE_KEY);
     router.replace('/(tabs)/appointments');
-  }, [router]);
+  }, [router, appointment?.event_id]);
 
   if (loading) {
     return (
