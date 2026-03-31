@@ -240,6 +240,7 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const tokenData = await tokenRes.json();
+      console.log('[CardPayment] Token response status:', tokenRes.status, 'has token:', !!tokenData.data?.id);
       if (!tokenRes.ok || !tokenData.data?.id) {
         const msgs = tokenData.error?.messages;
         const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
@@ -256,7 +257,8 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
-      if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar el pago');
+      console.log('[CardPayment] Wompi response:', JSON.stringify(result));
+      if (!response.ok || result.error) throw new Error(result.error || `Error al procesar el pago (HTTP ${response.status})`);
 
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
@@ -275,17 +277,55 @@ export default function SubscriptionPlansScreen() {
           setShowSuccessModal(true);
         }
       } else if (result.status === 'PENDING') {
+        // Card payment is pending — poll until approved or rejected
+        console.log('[CardPayment] PENDING — starting polling for transaction:', result.transactionId);
         setShowCardForm(false);
-        Toast.show({
-          type: 'info',
-          text1: 'Pago en proceso',
-          text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
-          visibilityTime: 5000,
-          position: 'top',
-        });
-        router.replace('/(tabs)/appointments');
+        showAlert('Procesando pago', 'Tu pago con tarjeta está siendo verificado. Por favor espera...');
+        
+        let cardAttempts = 0;
+        const cardPoll = setInterval(async () => {
+          cardAttempts++;
+          try {
+            const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
+            const data = await res.json();
+            const status = data.data?.status;
+            console.log(`[CardPayment] Polling attempt ${cardAttempts}: ${status}`);
+            
+            if (status === 'APPROVED') {
+              clearInterval(cardPoll);
+              setProcessingMethod(null);
+              console.log('[CardPayment] APPROVED after polling');
+              const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+              await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
+              if (pendingEventId) {
+                router.replace({
+                  pathname: '/event-details/[id]',
+                  params: { id: pendingEventId, paymentSuccess: 'true' },
+                });
+              } else {
+                setShowSuccessModal(true);
+              }
+            } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status)) {
+              clearInterval(cardPoll);
+              setProcessingMethod(null);
+              showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor intenta con otra tarjeta.');
+            } else if (cardAttempts >= 20) {
+              clearInterval(cardPoll);
+              setProcessingMethod(null);
+              showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
+              router.replace('/(tabs)/appointments');
+            }
+          } catch (e) {
+            console.error('[CardPayment] Polling error:', e);
+            if (cardAttempts >= 20) {
+              clearInterval(cardPoll);
+              setProcessingMethod(null);
+            }
+          }
+        }, 3000);
+        return; // Don't call setProcessingMethod in finally
       } else {
-        throw new Error('Pago rechazado. Intenta con otra tarjeta.');
+        throw new Error(`Pago rechazado (${result.status || 'sin estado'}). Intenta con otra tarjeta.`);
       }
     } catch (error: any) {
       showAlert('Error en tarjeta', error.message);
