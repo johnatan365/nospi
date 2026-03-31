@@ -194,18 +194,30 @@ export default function SubscriptionPlansScreen() {
       
       // Refresh session to ensure we have a valid one
       try { await supabase.auth.refreshSession(); } catch {}
-      
-      let { data: { session } } = await supabase.auth.getSession();
-      // Fallback: try getSession again if refreshSession didn't populate it
-      if (!session) {
+
+      let userId: string | null = null;
+
+      // 1. Try getSession
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        userId = session?.user?.id || null;
+      } catch {}
+
+      // 2. If still null, try getUser (makes a network call, more reliable)
+      if (!userId) {
         try {
-          const fallback = await supabase.auth.getSession();
-          session = fallback.data.session;
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          userId = authUser?.id || null;
         } catch {}
       }
-      const userId = session?.user?.id || user?.id;
-      if (!userId) { 
-        console.error('confirmAppointment: no userId after refresh + fallback — session may have expired');
+
+      // 3. If still null, use user from component scope
+      if (!userId) {
+        userId = user?.id || null;
+      }
+
+      if (!userId) {
+        console.error('confirmAppointment: no userId after all fallbacks');
         return false;
       }
       console.log('confirmAppointment: userId:', userId);
