@@ -146,6 +146,8 @@ export default function ProfileScreen() {
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
+  const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const debounceRef = useRef<any>(null);
 
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -302,6 +304,7 @@ export default function ProfileScreen() {
 
   const handleEditPress = () => {
     console.log('User tapped edit profile');
+    setPhoneStatus('idle');
     setEditModalVisible(true);
   };
 
@@ -412,6 +415,14 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     if (!editName.trim() || !editPhoneNumber.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      return;
+    }
+    if (phoneStatus === 'taken') {
+      Alert.alert('Error', 'Este número de teléfono ya está registrado por otro usuario.');
+      return;
+    }
+    if (phoneStatus === 'checking') {
+      Alert.alert('Espera', 'Verificando disponibilidad del número...');
       return;
     }
 
@@ -549,6 +560,37 @@ export default function ProfileScreen() {
       setPasswordError('Error al cambiar la contraseña');
     }
   };
+
+  const checkPhoneExists = async (full: string): Promise<boolean> => {
+    const withoutPlus = full.replace('+', '');
+    const digitsOnly = full.replace(/^\+\d{2,3}/, '');
+    console.log('ProfileScreen: Checking phone duplicate for:', full);
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
+      .neq('id', user?.id)
+      .maybeSingle();
+    if (error) { console.error('ProfileScreen: Phone check error:', error); return false; }
+    return !!data;
+  };
+
+  useEffect(() => {
+    const cleanNumber = editPhoneNumber.replace(/\D/g, '');
+    if (cleanNumber.length !== editPhoneCountry.digits) {
+      setPhoneStatus('idle');
+      return;
+    }
+    setPhoneStatus('checking');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      const full = editPhoneCountry.code + cleanNumber;
+      console.log('ProfileScreen: Debounced phone check triggered for:', full);
+      const exists = await checkPhoneExists(full);
+      setPhoneStatus(exists ? 'taken' : 'available');
+    }, 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [editPhoneNumber, editPhoneCountry]);
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||
@@ -760,6 +802,11 @@ export default function ProfileScreen() {
                   keyboardType="phone-pad"
                 />
               </View>
+              {phoneStatus !== 'idle' && (
+                <Text style={{ fontSize: 12, marginTop: 4, color: phoneStatus === 'taken' ? '#e53e3e' : phoneStatus === 'available' ? '#38a169' : '#888' }}>
+                  {phoneStatus === 'taken' ? '❌ Este número ya está registrado' : phoneStatus === 'available' ? '✅ Número disponible' : '🔍 Verificando...'}
+                </Text>
+              )}
 
               <Text style={styles.inputLabel}>País</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
@@ -821,7 +868,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} activeOpacity={0.8}>
                 <Text style={styles.saveButtonText}>Guardar Cambios</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setEditModalVisible(false)} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setPhoneStatus('idle'); setEditModalVisible(false); }} activeOpacity={0.8}>
                 <Text style={styles.modalCloseButtonText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
