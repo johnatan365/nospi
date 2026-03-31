@@ -299,6 +299,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           const starter = activeParticipants.find((p) => p.user_id === data.current_question_starter_id);
           setStarterParticipant(starter || null);
         }
+
+        // Calculate remaining timer from updated_at
+        if (data.updated_at) {
+          const elapsed = (Date.now() - new Date(data.updated_at).getTime()) / 1000;
+          const remaining = TIMER_DURATION - elapsed;
+          console.log(`[Timer] Restoring timer: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
+          startTimer(remaining);
+        }
       } else if (data.game_phase === 'level_transition') {
         setGamePhase('level_transition');
       } else if (data.game_phase === 'finished') {
@@ -339,6 +347,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
+
+            // Calculate remaining timer from updated_at
+            if (newEvent.updated_at) {
+              const elapsed = (Date.now() - new Date(newEvent.updated_at).getTime()) / 1000;
+              const remaining = TIMER_DURATION - elapsed;
+              console.log(`[Timer] Real-time update: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
+              startTimer(remaining);
+            }
           } else if (newEvent.game_phase === 'level_transition') {
             setGamePhase('level_transition');
           } else if (newEvent.game_phase === 'finished') {
@@ -356,9 +372,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   }, [appointment?.event_id, activeParticipants]);
 
   // Countdown timer logic
-  const startTimer = useCallback(() => {
+  const startTimer = useCallback((initialTime?: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setTimeLeft(TIMER_DURATION);
+    const startValue = initialTime !== undefined ? Math.max(0, Math.round(initialTime)) : TIMER_DURATION;
+    console.log(`[Timer] Starting countdown from ${startValue}s`);
+    setTimeLeft(startValue);
+    if (startValue <= 0) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -371,16 +390,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     }, 1000);
   }, []);
 
-  // Reset timer whenever the question changes
+  // Clean up timer on unmount
   useEffect(() => {
-    if (gamePhase === 'questions' && currentQuestion) {
-      console.log(`[Timer] Starting 60s countdown for question index ${currentQuestionIndex}`);
-      startTimer();
-    }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentQuestionIndex, currentQuestion, gamePhase, startTimer]);
+  }, []);
 
   // Level transition animation function
   const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
@@ -453,6 +468,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setCurrentQuestion(nextQuestion);
         const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
         setStarterParticipant(newStarter || null);
+        startTimer(); // Start fresh 60s timer immediately
 
         const { error } = await supabase
           .from('events')
@@ -499,6 +515,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           setCurrentQuestion(firstQuestion);
           const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
           setStarterParticipant(newStarter || null);
+          startTimer(); // Start fresh 60s timer for new level
 
           const { error } = await supabase
             .from('events')
