@@ -521,6 +521,9 @@ export default function SubscriptionPlansScreen() {
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'bancolombia');
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
+      if (currentUser?.id) {
+        await AsyncStorage.setItem('nospi_user_id', currentUser.id);
+      }
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
         window.localStorage.setItem('nospi_payment_method', 'bancolombia');
@@ -828,6 +831,9 @@ export default function SubscriptionPlansScreen() {
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
+      if (currentUser?.id) {
+        await AsyncStorage.setItem('nospi_user_id', currentUser.id);
+      }
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_transaction_id', data.transactionId);
         window.localStorage.setItem('nospi_payment_method', 'pse');
