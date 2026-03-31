@@ -17,6 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { nospiColors } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
 const appleIconSource = require('@/assets/images/icon_apple.png');
@@ -98,14 +104,72 @@ export default function LoginScreen() {
     console.log('LoginScreen: user tapped Sign in with Google');
     setError('');
     setSubmitting(true);
+
     try {
-      await signInWithGoogle();
-    } catch (err: any) {
-      console.error('LoginScreen: Google sign in error:', err);
-      if (err?.message !== 'canceled') {
-        setError('Error al iniciar sesión con Google');
+      await AsyncStorage.setItem('oauth_flow_type', 'login');
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError('Error al conectar con Google. Intenta de nuevo.');
+        setSubmitting(false);
+        return;
       }
-    } finally {
+
+      console.log('Google OAuth initiated:', data);
+
+      if (data.url) {
+        console.log('LoginScreen: Opening Google OAuth URL');
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('LoginScreen: WebBrowser result type:', result.type);
+
+        if (result.type === 'success' && result.url) {
+          const callbackUrl = result.url;
+          const parsedUrl = new URL(callbackUrl);
+          const code = parsedUrl.searchParams.get('code');
+
+          let accessToken = parsedUrl.searchParams.get('access_token');
+          let refreshToken = parsedUrl.searchParams.get('refresh_token');
+          if (!accessToken || !refreshToken) {
+            const hash = callbackUrl.split('#')[1] || '';
+            const hashParams = new URLSearchParams(hash);
+            accessToken = accessToken || hashParams.get('access_token');
+            refreshToken = refreshToken || hashParams.get('refresh_token');
+          }
+
+          if (code) {
+            router.push({ pathname: '/auth/callback', params: { code } });
+          } else if (accessToken && refreshToken) {
+            router.push({
+              pathname: '/auth/callback',
+              params: { access_token: accessToken, refresh_token: refreshToken },
+            });
+          } else {
+            router.push('/auth/callback');
+          }
+        } else if (result.type === 'cancel') {
+          setError('Inicio de sesión cancelado');
+          setSubmitting(false);
+        } else {
+          setSubmitting(false);
+        }
+      }
+    } catch (err: any) {
+      console.error('Google login failed:', err);
+      setError('Error al iniciar sesión con Google');
       setSubmitting(false);
     }
   };
