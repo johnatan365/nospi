@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -153,7 +152,7 @@ export default function LoginScreen() {
             <View style={styles.content}>
               {/* Logo */}
               <Image
-                source={require('@/assets/images/logo_380.png')}
+                source={require('@/assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
