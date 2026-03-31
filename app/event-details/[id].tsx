@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -148,14 +147,21 @@ export default function EventDetailsScreen() {
       if (existingAppointment) {
         if (existingAppointment.status === 'confirmada' || existingAppointment.payment_status === 'completed') {
           setConfirming(false);
-          router.push('/(tabs)/appointments');
+          router.replace('/(tabs)/appointments');
           return;
         }
       }
 
-      await AsyncStorage.setItem('pending_event_confirmation', id as string);
+      const eventId = Array.isArray(id) ? id[0] : id as string;
+      await AsyncStorage.setItem('pending_event_confirmation', eventId);
       setConfirming(false);
-      router.push('/subscription-plans');
+      // En web, router.push puede pasar por index.tsx causando pantalla en blanco.
+      // router.replace navega directamente sin re-evaluar la ruta raíz.
+      if (Platform.OS === 'web') {
+        router.replace('/subscription-plans');
+      } else {
+        router.push('/subscription-plans');
+      }
     } catch (error) {
       console.error('Failed to process confirmation:', error);
       setConfirming(false);
