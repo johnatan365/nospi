@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -39,6 +39,49 @@ interface UserProfile {
     sms: boolean;
     push: boolean;
   };
+}
+
+// ── Phone country data ────────────────────────────────────────────────────────
+const PHONE_COUNTRIES = [
+  { name: 'Colombia',        code: '+57',  flag: '🇨🇴', digits: 10, starts: ['3'] },
+  { name: 'Argentina',       code: '+54',  flag: '🇦🇷', digits: 10, starts: ['1','2','3','4','9'] },
+  { name: 'Bolivia',         code: '+591', flag: '🇧🇴', digits: 8,  starts: ['6','7'] },
+  { name: 'Brasil',          code: '+55',  flag: '🇧🇷', digits: 11, starts: ['1','2','3','4','5','6','7','8','9'] },
+  { name: 'Canadá',          code: '+1',   flag: '🇨🇦', digits: 10, starts: ['2','3','4','5','6','7','8','9'] },
+  { name: 'Chile',           code: '+56',  flag: '🇨🇱', digits: 9,  starts: ['9'] },
+  { name: 'Costa Rica',      code: '+506', flag: '🇨🇷', digits: 8,  starts: ['6','7','8'] },
+  { name: 'Cuba',            code: '+53',  flag: '🇨🇺', digits: 8,  starts: ['5'] },
+  { name: 'Ecuador',         code: '+593', flag: '🇪🇨', digits: 9,  starts: ['9'] },
+  { name: 'El Salvador',     code: '+503', flag: '🇸🇻', digits: 8,  starts: ['6','7'] },
+  { name: 'España',          code: '+34',  flag: '🇪🇸', digits: 9,  starts: ['6','7'] },
+  { name: 'Estados Unidos',  code: '+1',   flag: '🇺🇸', digits: 10, starts: ['2','3','4','5','6','7','8','9'] },
+  { name: 'Guatemala',       code: '+502', flag: '🇬🇹', digits: 8,  starts: ['3','4','5'] },
+  { name: 'Honduras',        code: '+504', flag: '🇭🇳', digits: 8,  starts: ['3','8','9'] },
+  { name: 'México',          code: '+52',  flag: '🇲🇽', digits: 10, starts: ['1','2','3','4','5','6','7','8','9'] },
+  { name: 'Nicaragua',       code: '+505', flag: '🇳🇮', digits: 8,  starts: ['8'] },
+  { name: 'Panamá',          code: '+507', flag: '🇵🇦', digits: 8,  starts: ['6'] },
+  { name: 'Paraguay',        code: '+595', flag: '🇵🇾', digits: 9,  starts: ['9'] },
+  { name: 'Perú',            code: '+51',  flag: '🇵🇪', digits: 9,  starts: ['9'] },
+  { name: 'Puerto Rico',     code: '+1',   flag: '🇵🇷', digits: 10, starts: ['7'] },
+  { name: 'Rep. Dominicana', code: '+1',   flag: '🇩🇴', digits: 10, starts: ['8','9'] },
+  { name: 'Uruguay',         code: '+598', flag: '🇺🇾', digits: 9,  starts: ['9'] },
+  { name: 'Venezuela',       code: '+58',  flag: '🇻🇪', digits: 10, starts: ['4'] },
+];
+
+const DEFAULT_PHONE_COUNTRY = PHONE_COUNTRIES[0]; // Colombia +57
+
+function parsePhoneIntoCountryAndNumber(phone: string): { country: typeof PHONE_COUNTRIES[0]; number: string } {
+  if (!phone || !phone.startsWith('+')) {
+    return { country: DEFAULT_PHONE_COUNTRY, number: phone || '' };
+  }
+  // Sort by code length descending for longest-match-first
+  const sorted = [...PHONE_COUNTRIES].sort((a, b) => b.code.length - a.code.length);
+  for (const c of sorted) {
+    if (phone.startsWith(c.code)) {
+      return { country: c, number: phone.slice(c.code.length) };
+    }
+  }
+  return { country: DEFAULT_PHONE_COUNTRY, number: phone };
 }
 
 const COUNTRIES = [
@@ -96,6 +139,12 @@ export default function ProfileScreen() {
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
+  // Phone country selector state
+  const [editPhoneCountry, setEditPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
+  const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -118,6 +167,10 @@ export default function ProfileScreen() {
     setEditAgeRangeMax(profileData.age_range_max || 60);
     setEditInterests(profileData.interests || []);
     setEditPersonality(profileData.personality_traits || []);
+    // Parse phone into country + number
+    const parsed = parsePhoneIntoCountryAndNumber(profileData.phone || '');
+    setEditPhoneCountry(parsed.country);
+    setEditPhoneNumber(parsed.number);
   };
 
   const loadProfile = useCallback(async (force = false) => {
@@ -350,17 +403,19 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!editName.trim() || !editPhone.trim()) {
+    if (!editName.trim() || !editPhoneNumber.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
+
+    const combinedPhone = editPhoneCountry.code + editPhoneNumber;
 
     try {
       console.log('User saving profile changes');
       const { error } = await supabase
         .from('users')
         .update({
-          name: editName, phone: editPhone, country: editCountry, city: editCity,
+          name: editName, phone: combinedPhone, country: editCountry, city: editCity,
           interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
           age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
         })
@@ -377,7 +432,7 @@ export default function ProfileScreen() {
         if (!prev) return null;
         const updated = {
           ...prev,
-          name: editName, phone: editPhone, country: editCountry, city: editCity,
+          name: editName, phone: combinedPhone, country: editCountry, city: editCity,
           interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
           age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
         };
@@ -482,6 +537,11 @@ export default function ProfileScreen() {
     }
   };
 
+  const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||
+    c.code.includes(phoneCountrySearch)
+  );
+
   if (loading) {
     return (
       <LinearGradient
@@ -537,6 +597,8 @@ export default function ProfileScreen() {
   const editAgeRangeText = `${editAgeRangeMin} - ${editAgeRangeMax} años`;
   const editMinAgeText = editAgeRangeMin.toString();
   const editMaxAgeText = editAgeRangeMax.toString();
+  const phoneCountryFlag = editPhoneCountry.flag;
+  const phoneCountryCode = editPhoneCountry.code;
 
   return (
     <LinearGradient
@@ -629,8 +691,27 @@ export default function ProfileScreen() {
               <Text style={styles.modalTitle}>Editar Perfil</Text>
               <Text style={styles.inputLabel}>Nombre</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
+
               <Text style={styles.inputLabel}>Teléfono</Text>
-              <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} placeholder="Tu teléfono" placeholderTextColor="#999" keyboardType="phone-pad" />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, minWidth: 90, flex: 0 }]}
+                  onPress={() => { console.log('User tapped phone country selector'); setShowPhoneCountryModal(true); }}
+                >
+                  <Text style={{ fontSize: 18 }}>{phoneCountryFlag}</Text>
+                  <Text style={{ marginLeft: 6, color: '#000', fontSize: 15 }}>{phoneCountryCode}</Text>
+                  <Text style={{ marginLeft: 4, color: '#666' }}>▾</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  value={editPhoneNumber}
+                  onChangeText={setEditPhoneNumber}
+                  placeholder="Tu teléfono"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
               <Text style={styles.inputLabel}>País</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCountry}</Text>
@@ -681,6 +762,55 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* Phone Country Picker Modal */}
+      <Modal
+        visible={showPhoneCountryModal}
+        animationType="slide"
+        onRequestClose={() => { setShowPhoneCountryModal(false); setPhoneCountrySearch(''); }}
+      >
+        <SafeAreaView style={styles.phoneModalSafe}>
+          <View style={styles.phoneModalHeader}>
+            <Text style={styles.phoneModalTitle}>Selecciona tu país</Text>
+            <TouchableOpacity onPress={() => { setShowPhoneCountryModal(false); setPhoneCountrySearch(''); }}>
+              <Text style={styles.phoneModalClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.phoneSearchInput}
+            value={phoneCountrySearch}
+            onChangeText={setPhoneCountrySearch}
+            placeholder="Buscar país o código..."
+            placeholderTextColor="#999"
+            autoCorrect={false}
+          />
+          <FlatList
+            data={filteredPhoneCountries}
+            keyExtractor={(_, i) => String(i)}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.phoneCountryRow,
+                  item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && styles.phoneCountryRowSelected,
+                ]}
+                onPress={() => {
+                  console.log('User selected phone country:', item.name, item.code);
+                  setEditPhoneCountry(item);
+                  setEditPhoneNumber('');
+                  setShowPhoneCountryModal(false);
+                  setPhoneCountrySearch('');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.phoneRowFlag}>{item.flag}</Text>
+                <Text style={styles.phoneRowName}>{item.name}</Text>
+                <Text style={styles.phoneRowCode}>{item.code}</Text>
+              </TouchableOpacity>
+            )}
+            ItemSeparatorComponent={() => <View style={styles.phoneRowSeparator} />}
+          />
+        </SafeAreaView>
+      </Modal>
+
       {/* Country Picker Modal */}
       <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
         <View style={styles.pickerModalOverlay}>
@@ -689,7 +819,18 @@ export default function ProfileScreen() {
               <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
               <TouchableOpacity onPress={() => setShowCountryPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
             </View>
-            <Picker selectedValue={editCountry} onValueChange={(value) => { setEditCountry(value); const cities = CITIES_BY_COUNTRY[value] || []; if (cities.length > 0) setEditCity(cities[0]); }} style={styles.picker} color="#000000" dropdownIconColor="#000000">
+            <Picker
+              selectedValue={editCountry}
+              onValueChange={(value) => {
+                setEditCountry(value);
+                const cities = CITIES_BY_COUNTRY[value] || [];
+                if (cities.length > 0) setEditCity(cities[0]);
+                if (Platform.OS === 'android') setShowCountryPicker(false);
+              }}
+              style={styles.picker}
+              color="#000000"
+              dropdownIconColor="#000000"
+            >
               {COUNTRIES.map(country => <Picker.Item key={country} label={country} value={country} color="#000000" />)}
             </Picker>
           </View>
@@ -704,7 +845,16 @@ export default function ProfileScreen() {
               <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
               <TouchableOpacity onPress={() => setShowCityPicker(false)}><Text style={styles.pickerModalClose}>Listo</Text></TouchableOpacity>
             </View>
-            <Picker selectedValue={editCity} onValueChange={(value) => setEditCity(value)} style={styles.picker} color="#000000" dropdownIconColor="#000000">
+            <Picker
+              selectedValue={editCity}
+              onValueChange={(value) => {
+                setEditCity(value);
+                if (Platform.OS === 'android') setShowCityPicker(false);
+              }}
+              style={styles.picker}
+              color="#000000"
+              dropdownIconColor="#000000"
+            >
               {availableCities.map(city => <Picker.Item key={city} label={city} value={city} color="#000000" />)}
             </Picker>
           </View>
@@ -844,13 +994,40 @@ const styles = StyleSheet.create({
   tagEditActive: { backgroundColor: 'rgba(173, 20, 87, 0.12)', borderColor: '#880E4F' },
   tagEditText: { color: '#666', fontSize: 14, fontWeight: '600' },
   tagEditTextActive: { color: '#880E4F' },
-  pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  pickerModalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: Platform.OS === 'android' ? 'center' : 'flex-end',
+    alignItems: Platform.OS === 'android' ? 'center' : 'stretch',
+    paddingHorizontal: Platform.OS === 'android' ? 20 : 0,
+  },
+  pickerModalContent: {
+    backgroundColor: nospiColors.white,
+    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: Platform.OS === 'ios' ? 0 : 24,
+    borderBottomRightRadius: Platform.OS === 'ios' ? 0 : 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    width: Platform.OS === 'android' ? '100%' : undefined,
+  },
   pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
   pickerModalTitle: { fontSize: 18, fontWeight: '700', color: '#880E4F' },
   pickerModalClose: { fontSize: 16, fontWeight: '600', color: '#AD1457' },
-  picker: { width: '100%', height: 200 },
+  picker: { width: '100%', height: Platform.OS === 'ios' ? 200 : 50 },
   passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
   passwordModalInput: { flex: 1, paddingVertical: 14, paddingLeft: 16, paddingRight: 8, fontSize: 16, color: '#333' },
   passwordEyeButton: { paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'stretch' },
+  // Phone country modal styles
+  phoneModalSafe: { flex: 1, backgroundColor: '#fff' },
+  phoneModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  phoneModalTitle: { fontSize: 20, fontWeight: '700', color: '#880E4F' },
+  phoneModalClose: { fontSize: 20, color: '#880E4F', padding: 4 },
+  phoneSearchInput: { margin: 16, borderWidth: 1.5, borderColor: 'rgba(240, 98, 146, 0.40)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#333' },
+  phoneCountryRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 12 },
+  phoneCountryRowSelected: { backgroundColor: 'rgba(136, 14, 79, 0.08)' },
+  phoneRowFlag: { fontSize: 26 },
+  phoneRowName: { flex: 1, fontSize: 16, color: '#222' },
+  phoneRowCode: { fontSize: 15, color: '#880E4F', fontWeight: '600' },
+  phoneRowSeparator: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 58 },
 });
