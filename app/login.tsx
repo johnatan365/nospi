@@ -29,7 +29,7 @@ const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { user, loading, signInWithEmail, signUpWithEmail, signInWithApple, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithApple } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -39,13 +39,30 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Navigate after successful auth
+  // Navigate after successful auth (better-auth)
   useEffect(() => {
     if (user) {
-      console.log('LoginScreen: user authenticated, navigating to tabs', user.id);
+      console.log('LoginScreen: user authenticated via AuthContext, navigating to tabs', user.id);
       router.replace('/(tabs)');
     }
   }, [user]);
+
+  // Also listen for Supabase auth changes (Google login uses Supabase directly)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('LoginScreen: Supabase session detected (Google login), user:', session.user.id);
+        // Small delay to let the auth callback process the profile
+        setTimeout(() => {
+          router.replace('/(tabs)/events');
+        }, 500);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -63,22 +80,71 @@ export default function LoginScreen() {
 
     try {
       if (isSignUp) {
-        await signUpWithEmail(email.trim(), password, name.trim());
+        // Registro con Supabase
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { full_name: name.trim() },
+          },
+        });
+
+        if (error) {
+          console.error('SignUp error:', error);
+          if (error.message.includes('already')) {
+            setError('Ya existe una cuenta con este email');
+          } else {
+            setError('Error al crear cuenta. Intenta de nuevo.');
+          }
+          return;
+        }
+
+        if (data.user) {
+          console.log('SignUp successful, user:', data.user.id);
+          router.replace('/onboarding/name');
+        }
       } else {
-        await signInWithEmail(email.trim(), password);
+        // Login con Supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          console.error('Login error:', error);
+          setError('Email o contraseña incorrectos');
+          return;
+        }
+
+        if (!data.user) {
+          setError('Error al iniciar sesión');
+          return;
+        }
+
+        console.log('Login successful, user:', data.user.id);
+
+        // Check if user has a profile
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('Error checking profile:', profileError);
+        }
+
+        if (!profile) {
+          console.log('No profile found, redirecting to onboarding');
+          router.replace('/onboarding/name');
+        } else {
+          console.log('Profile found, redirecting to events');
+          router.replace('/(tabs)/events');
+        }
       }
     } catch (err: any) {
       console.error('LoginScreen: email auth error:', err);
-      const msg = err?.message ?? '';
-      if (msg.includes('Invalid email') || msg.includes('invalid_email')) {
-        setError('Email inválido');
-      } else if (msg.includes('password') || msg.includes('credentials')) {
-        setError('Email o contraseña incorrectos');
-      } else if (msg.includes('already') || msg.includes('exists')) {
-        setError('Ya existe una cuenta con este email');
-      } else {
-        setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
-      }
+      setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
     }
