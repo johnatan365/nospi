@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -246,24 +247,38 @@ export default function InteraccionScreen() {
       } else {
         // User already confirmed their code — it's definitely event day
         setIsEventDay(true);
-        setCheckInPhase('confirmed');
+
         if (apt.event?.game_phase) {
           setGamePhase(apt.event.game_phase);
         }
-        
-        // Restore user's personal progress from AsyncStorage
-        // Each user must go through rules + comenzar independently
-        const savedReadyForRules = await AsyncStorage.getItem(`nospi_readyForRules_${apt.event_id}`);
-        const savedReadyForGame = await AsyncStorage.getItem(`nospi_readyForGame_${apt.event_id}`);
-        
-        if (savedReadyForRules === 'true') {
-          setUserReadyForRules(true);
-          console.log('[Interaccion] Restored userReadyForRules=true from AsyncStorage');
-        }
-        if (savedReadyForGame === 'true') {
-          setUserReadyForGame(true);
-          console.log('[Interaccion] Restored userReadyForGame=true from AsyncStorage');
-        }
+
+        // Restore all persisted per-user progress atomically so the render
+        // never sees an inconsistent intermediate state (e.g. checkInPhase
+        // 'confirmed' but both ready flags still false).
+        const [savedReadyForRules, savedReadyForGame, savedCheckInPhase] = await Promise.all([
+          AsyncStorage.getItem(`nospi_readyForRules_${apt.event_id}`),
+          AsyncStorage.getItem(`nospi_readyForGame_${apt.event_id}`),
+          AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`),
+        ]);
+
+        const restoredReadyForRules = savedReadyForRules === 'true';
+        const restoredReadyForGame = savedReadyForGame === 'true';
+        // Fall back to 'confirmed' (location_confirmed is true) if nothing persisted yet
+        const restoredCheckInPhase: CheckInPhase =
+          savedCheckInPhase === 'confirmed' || savedCheckInPhase === 'code_entry' || savedCheckInPhase === 'waiting'
+            ? (savedCheckInPhase as CheckInPhase)
+            : 'confirmed';
+
+        console.log('[Interaccion] Restored from AsyncStorage:', {
+          restoredReadyForRules,
+          restoredReadyForGame,
+          restoredCheckInPhase,
+        });
+
+        // Apply all three in one synchronous batch so React renders them together
+        setUserReadyForRules(restoredReadyForRules);
+        setUserReadyForGame(restoredReadyForGame);
+        setCheckInPhase(restoredCheckInPhase);
       }
       if (apt.event?.start_time) checkIfEventDay(apt.event.start_time);
     }
@@ -420,6 +435,9 @@ export default function InteraccionScreen() {
 
       setCheckInPhase('confirmed');
       setConfirmationCode('');
+      if (appointment.event_id) {
+        AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
+      }
 
       setAppointment(prev => ({
         ...prev!,
@@ -726,8 +744,11 @@ export default function InteraccionScreen() {
   const handleFinishGame = useCallback(async () => {
     console.log('User finished game, navigating to appointments');
     if (appointment?.event_id) {
-      await AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`);
-      await AsyncStorage.removeItem(`nospi_readyForGame_${appointment.event_id}`);
+      await Promise.all([
+        AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`),
+        AsyncStorage.removeItem(`nospi_readyForGame_${appointment.event_id}`),
+        AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`),
+      ]);
     }
     setAppointment(null);
     cacheRef.current = null;
