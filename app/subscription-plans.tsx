@@ -146,14 +146,19 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
-            if (pendingEventId) {
-              router.replace({
-                pathname: '/event-details/[id]',
-                params: { id: pendingEventId, paymentSuccess: 'true' },
-              });
+            const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
+            if (success) {
+              if (pendingEventId) {
+                router.replace({
+                  pathname: '/event-details/[id]',
+                  params: { id: pendingEventId, paymentSuccess: 'true' },
+                });
+              } else {
+                setShowSuccessModal(true);
+              }
             } else {
-              setShowSuccessModal(true);
+              showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+              router.replace('/(tabs)/appointments');
             }
           } else if (status === 'DECLINED' || status === 'VOIDED') {
             await AsyncStorage.removeItem('nospi_transaction_id');
@@ -175,7 +180,7 @@ export default function SubscriptionPlansScreen() {
   // subscription-plans.tsx only initiates payments.
   // All callback processing is handled exclusively in payment-callback.tsx.
 
-  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string) => {
+  const confirmAppointment = async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
     try {
       console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod, 'eventIdParam:', eventIdParam);
       
@@ -183,18 +188,25 @@ export default function SubscriptionPlansScreen() {
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
         console.error('confirmAppointment: No pending event ID found — neither param nor AsyncStorage');
-        return;
+        return false;
       }
       console.log('confirmAppointment: Using eventId:', pendingEventId);
       
       // Refresh session to ensure we have a valid one
       try { await supabase.auth.refreshSession(); } catch {}
       
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+      // Fallback: try getSession again if refreshSession didn't populate it
+      if (!session) {
+        try {
+          const fallback = await supabase.auth.getSession();
+          session = fallback.data.session;
+        } catch {}
+      }
       const userId = session?.user?.id || user?.id;
       if (!userId) { 
-        console.error('confirmAppointment: no userId — session may have expired'); 
-        return; 
+        console.error('confirmAppointment: no userId after refresh + fallback — session may have expired');
+        return false;
       }
       console.log('confirmAppointment: userId:', userId);
       
@@ -215,13 +227,19 @@ export default function SubscriptionPlansScreen() {
         );
       if (upsertError) {
         console.warn('confirmAppointment: Upsert warning (may be duplicate):', upsertError);
+        // Treat duplicate-key conflicts as success (appointment already exists)
+        if (!upsertError.message?.includes('duplicate') && !upsertError.code?.includes('23505')) {
+          return false;
+        }
       } else {
         console.log('confirmAppointment: Appointment upserted successfully');
         await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       }
       await AsyncStorage.removeItem('pending_event_confirmation');
+      return true;
     } catch (e) { 
-      console.error('Error confirmando cita:', e); 
+      console.error('Error confirmando cita:', e);
+      return false;
     }
   };
 
@@ -552,14 +570,19 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
-          if (pendingEventId) {
-            router.replace({
-              pathname: '/event-details/[id]',
-              params: { id: pendingEventId, paymentSuccess: 'true' },
-            });
+          const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
+          if (success) {
+            if (pendingEventId) {
+              router.replace({
+                pathname: '/event-details/[id]',
+                params: { id: pendingEventId, paymentSuccess: 'true' },
+              });
+            } else {
+              setShowSuccessModal(true);
+            }
           } else {
-            setShowSuccessModal(true);
+            showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+            router.replace('/(tabs)/appointments');
           }
         } else if (status === 'DECLINED' || status === 'VOIDED') {
           clearInterval(interval);
@@ -613,8 +636,13 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           try { await supabase.auth.refreshSession(); } catch {}
-          await confirmAppointment(transactionId, paymentMethod);
-          setShowSuccessModal(true);
+          const success = await confirmAppointment(transactionId, paymentMethod);
+          if (success) {
+            setShowSuccessModal(true);
+          } else {
+            showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+            router.replace('/(tabs)/appointments');
+          }
         } else if (status === 'PENDING') {
           if (attempts >= maxAttempts) {
             clearInterval(interval);
