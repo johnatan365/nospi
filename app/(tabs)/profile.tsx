@@ -7,7 +7,6 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -935,20 +934,25 @@ export default function ProfileScreen() {
                 <Text style={styles.pickerModalClose}>Listo</Text>
               </TouchableOpacity>
             </View>
-            <Picker
-              selectedValue={editCountry}
-              onValueChange={(value) => {
-                setEditCountry(value);
-                const cities = CITIES_BY_COUNTRY[value] || [];
-                if (cities.length > 0) setEditCity(cities[0]);
-                if (Platform.OS === 'android') setShowCountryPicker(false);
-              }}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {COUNTRIES.map(country => <Picker.Item key={country} label={country} value={country} color="#000000" />)}
-            </Picker>
+            <ScrollView style={styles.pickerListScroll}>
+              {COUNTRIES.map(country => (
+                <TouchableOpacity
+                  key={country}
+                  style={[styles.pickerListItem, editCountry === country && styles.pickerListItemSelected]}
+                  onPress={() => {
+                    console.log('User selected country:', country);
+                    setEditCountry(country);
+                    const cities = CITIES_BY_COUNTRY[country] || [];
+                    if (cities.length > 0) setEditCity(cities[0]);
+                    setShowCountryPicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerListItemText, editCountry === country && styles.pickerListItemTextSelected]}>{country}</Text>
+                  {editCountry === country && <Text style={styles.pickerListItemCheck}>✓</Text>}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -963,18 +967,23 @@ export default function ProfileScreen() {
                 <Text style={styles.pickerModalClose}>Listo</Text>
               </TouchableOpacity>
             </View>
-            <Picker
-              selectedValue={editCity}
-              onValueChange={(value) => {
-                setEditCity(value);
-                if (Platform.OS === 'android') setShowCityPicker(false);
-              }}
-              style={styles.picker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {availableCities.map(city => <Picker.Item key={city} label={city} value={city} color="#000000" />)}
-            </Picker>
+            <ScrollView style={styles.pickerListScroll}>
+              {availableCities.map(city => (
+                <TouchableOpacity
+                  key={city}
+                  style={[styles.pickerListItem, editCity === city && styles.pickerListItemSelected]}
+                  onPress={() => {
+                    console.log('User selected city:', city);
+                    setEditCity(city);
+                    setShowCityPicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerListItemText, editCity === city && styles.pickerListItemTextSelected]}>{city}</Text>
+                  {editCity === city && <Text style={styles.pickerListItemCheck}>✓</Text>}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1120,24 +1129,23 @@ const styles = StyleSheet.create({
   pickerModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: Platform.OS === 'android' ? 'center' : 'flex-end',
-    alignItems: Platform.OS === 'android' ? 'center' : 'stretch',
-    paddingHorizontal: Platform.OS === 'android' ? 20 : 0,
+    justifyContent: 'flex-end',
   },
   pickerModalContent: {
     backgroundColor: nospiColors.white,
-    borderRadius: 24,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    borderBottomLeftRadius: Platform.OS === 'ios' ? 0 : 24,
-    borderBottomRightRadius: Platform.OS === 'ios' ? 0 : 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    width: Platform.OS === 'android' ? '100%' : undefined,
+    maxHeight: '60%',
   },
   pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 0, 0, 0.1)' },
   pickerModalTitle: { fontSize: 18, fontWeight: '700', color: '#880E4F' },
   pickerModalClose: { fontSize: 16, fontWeight: '600', color: '#AD1457' },
-  picker: { width: '100%', height: Platform.OS === 'ios' ? 200 : 50 },
+  pickerListScroll: { maxHeight: 320 },
+  pickerListItem: { paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  pickerListItemSelected: { backgroundColor: 'rgba(136, 14, 79, 0.08)' },
+  pickerListItemText: { fontSize: 16, color: '#333' },
+  pickerListItemTextSelected: { color: '#880E4F', fontWeight: '600' },
+  pickerListItemCheck: { fontSize: 16, color: '#880E4F', fontWeight: 'bold' },
   passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
   passwordModalInput: { flex: 1, paddingVertical: 14, paddingLeft: 16, paddingRight: 8, fontSize: 16, color: '#333' },
   passwordEyeButton: { paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'stretch' },
