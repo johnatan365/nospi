@@ -1,318 +1,136 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Image as RNImage } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
-import { nospiColors } from '@/constants/Colors';
-import { supabase } from '@/lib/supabase';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useAuth } from '@/contexts/AuthContext';
+import { nospiColors } from '@/constants/Colors';
 
-WebBrowser.maybeCompleteAuthSession();
+const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
+const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { user, loading, signInWithEmail, signUpWithEmail, signInWithApple, signInWithGoogle } = useAuth();
+
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorModalMessage, setErrorModalMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
+  // Navigate after successful auth
   useEffect(() => {
-    // Listen for deep link events (OAuth callback)
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('LoginScreen: Received URL callback:', url);
-      
-      // Check if this is an OAuth callback
-      if (url.includes('auth/callback')) {
-        console.log('LoginScreen: OAuth callback detected, navigating to callback screen');
-        // The callback screen will handle the session
-      }
-    });
+    if (user) {
+      console.log('LoginScreen: user authenticated, navigating to tabs', user.id);
+      router.replace('/(tabs)');
+    }
+  }, [user]);
 
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  const showErrorAlert = (title: string, message: string) => {
-    console.error(`${title}: ${message}`);
-    setErrorModalMessage(message);
-    setShowErrorModal(true);
-  };
-
-  const handleLogin = async () => {
-    if (!email || !password) {
+  const handleEmailAuth = async () => {
+    if (!email.trim() || !password.trim()) {
       setError('Por favor ingresa tu email y contraseña');
       return;
     }
+    if (isSignUp && !name.trim()) {
+      setError('Por favor ingresa tu nombre');
+      return;
+    }
 
-    setLoading(true);
+    setSubmitting(true);
     setError('');
-    console.log('User attempting login with email:', email);
+    console.log(`LoginScreen: ${isSignUp ? 'sign up' : 'sign in'} with email:`, email);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('Login error:', error);
+      if (isSignUp) {
+        await signUpWithEmail(email.trim(), password, name.trim());
+      } else {
+        await signInWithEmail(email.trim(), password);
+      }
+    } catch (err: any) {
+      console.error('LoginScreen: email auth error:', err);
+      const msg = err?.message ?? '';
+      if (msg.includes('Invalid email') || msg.includes('invalid_email')) {
+        setError('Email inválido');
+      } else if (msg.includes('password') || msg.includes('credentials')) {
         setError('Email o contraseña incorrectos');
-        return;
-      }
-
-      if (!data.user) {
-        console.error('No user data returned');
-        setError('Error al iniciar sesión');
-        return;
-      }
-
-      console.log('Login successful, user:', data.user.id);
-
-      // Check if user has a profile
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Error checking profile:', profileError);
-      }
-
-      if (!profile) {
-        console.log('No profile found, redirecting to onboarding');
-        router.replace('/onboarding/name');
+      } else if (msg.includes('already') || msg.includes('exists')) {
+        setError('Ya existe una cuenta con este email');
       } else {
-        console.log('Profile found, redirecting to events');
-        router.replace('/(tabs)/events');
+        setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
       }
-    } catch (error) {
-      console.error('Login failed:', error);
-      setError('Error al iniciar sesión. Intenta de nuevo.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    console.log('User tapped Login with Google');
-    setLoading(true);
+  const handleApple = async () => {
+    console.log('LoginScreen: user tapped Sign in with Apple');
     setError('');
-
+    setSubmitting(true);
     try {
-      // Store login intent in AsyncStorage so callback knows this is a login flow
-      await AsyncStorage.setItem('oauth_flow_type', 'login');
-      console.log('LoginScreen: Stored oauth_flow_type as login');
-      
-      const redirectUrl = Linking.createURL('auth/callback');
-      console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-
-      if (error) {
-        console.error('Google OAuth error:', error);
-        
-        // Check for specific OAuth configuration errors
-        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
-          showErrorAlert(
-            'Configuración Pendiente',
-            'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el inicio de sesión con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
-          );
-        } else {
-          setError('Error al conectar con Google. Por favor intenta de nuevo.');
-        }
-        
-        setLoading(false);
-        return;
-      }
-
-      console.log('Google OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('LoginScreen: Opening Google OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: WebBrowser result type:', result.type);
-
-        if (result.type === 'success' && result.url) {
-          console.log('LoginScreen: OAuth success, callback URL:', result.url);
-          const callbackUrl = result.url;
-
-          // PKCE flow: extract the `code` param and let the callback screen exchange it
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          // Also check for legacy implicit-flow tokens in query or hash
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            console.log('LoginScreen: PKCE code found, navigating to callback screen');
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            console.log('LoginScreen: Implicit tokens found, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            console.log('LoginScreen: No code or tokens in URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
-          console.log('LoginScreen: User cancelled OAuth');
-          setError('Inicio de sesión cancelado');
-          setLoading(false);
-        } else {
-          console.log('LoginScreen: OAuth result type:', result.type);
-          setLoading(false);
-        }
-      }
-    } catch (error: any) {
-      console.error('Google login failed:', error);
-      
-      // Check if it's a configuration error
-      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
-        showErrorAlert(
-          'Configuración Pendiente',
-          'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el inicio de sesión con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
-        );
-      } else {
-        setError('Error al iniciar sesión con Google');
-      }
-      
-      setLoading(false);
-    }
-  };
-
-  const handleAppleLogin = async () => {
-    console.log('User tapped Login with Apple');
-    setLoading(true);
-    setError('');
-
-    try {
-      // Store login intent in AsyncStorage so callback knows this is a login flow
-      await AsyncStorage.setItem('oauth_flow_type', 'login');
-      console.log('LoginScreen: Stored oauth_flow_type as login');
-      
-      const redirectUrl = Linking.createURL('auth/callback');
-      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
-        },
-      });
-
-      if (error) {
-        console.error('Apple OAuth error:', error);
-        
-        // Check for specific OAuth configuration errors
-        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
-          showErrorAlert(
-            'Configuración Pendiente',
-            'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el inicio de sesión con email o contacta al administrador.'
-          );
-        } else {
-          setError('Error al conectar con Apple. Por favor intenta de nuevo.');
-        }
-        
-        setLoading(false);
-        return;
-      }
-
-      console.log('Apple OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('LoginScreen: Opening Apple OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: Apple WebBrowser result type:', result.type);
-
-        if (result.type === 'success' && result.url) {
-          console.log('LoginScreen: Apple OAuth success, callback URL:', result.url);
-          const callbackUrl = result.url;
-
-          // PKCE flow: extract the `code` param and let the callback screen exchange it
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          // Also check for legacy implicit-flow tokens in query or hash
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            console.log('LoginScreen: Apple PKCE code found, navigating to callback screen');
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            console.log('LoginScreen: Apple implicit tokens found, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            console.log('LoginScreen: No code or tokens in Apple URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
-          console.log('LoginScreen: User cancelled Apple OAuth');
-          setError('Inicio de sesión cancelado');
-          setLoading(false);
-        } else {
-          console.log('LoginScreen: Apple OAuth result type:', result.type);
-          setLoading(false);
-        }
-      }
-    } catch (error: any) {
-      console.error('Apple login failed:', error);
-      
-      // Check if it's a configuration error
-      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
-        showErrorAlert(
-          'Configuración Pendiente',
-          'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el inicio de sesión con email o contacta al administrador.'
-        );
-      } else {
+      await signInWithApple();
+    } catch (err: any) {
+      console.error('LoginScreen: Apple sign in error:', err);
+      if (err?.message !== 'canceled') {
         setError('Error al iniciar sesión con Apple');
       }
-      
-      setLoading(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const appleIconText = '';
-  const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
+  const handleGoogle = async () => {
+    console.log('LoginScreen: user tapped Sign in with Google');
+    setError('');
+    setSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      console.error('LoginScreen: Google sign in error:', err);
+      if (err?.message !== 'canceled') {
+        setError('Error al iniciar sesión con Google');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleMode = () => {
+    console.log('LoginScreen: toggling mode to', isSignUp ? 'sign in' : 'sign up');
+    setIsSignUp(!isSignUp);
+    setError('');
+    setName('');
+    setEmail('');
+    setPassword('');
+  };
+
+  const togglePasswordVisibility = () => {
+    console.log('LoginScreen: toggling password visibility');
+    setShowPassword(!showPassword);
+  };
+
+  const isLoading = loading || submitting;
+  const eyeIcon = showPassword ? 'eye-off-outline' : 'eye-outline';
+  const titleText = isSignUp ? 'Crear cuenta' : 'Bienvenido de nuevo';
+  const subtitleText = isSignUp ? 'Únete a Nospi' : 'Inicia sesión para continuar';
+  const submitText = isSignUp ? 'Crear cuenta' : 'Iniciar sesión';
+  const toggleText = isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate';
 
   return (
     <>
@@ -323,350 +141,348 @@ export default function LoginScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.container}>
-          <View style={styles.content}>
-            <Text style={styles.title}>Bienvenido de nuevo</Text>
-            <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons name="email" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.inputWithIcon}
-                  placeholder="Email"
-                  placeholderTextColor="#999"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <View style={styles.inputWrapper}>
-                <MaterialIcons name="lock" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.inputWithIcon}
-                  placeholder="Contraseña"
-                  placeholderTextColor="#999"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  onPress={() => { console.log('Toggle password visibility'); setShowPassword(!showPassword); }}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color={nospiColors.white} />
-              ) : (
-                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>O continúa con</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.socialButtonsContainer}>
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={handleGoogleLogin}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <View style={styles.googleIconContainer}>
-                  <RNImage source={googleIconSource} style={styles.googleIconImage} resizeMode="contain" />
-                </View>
-                <Text style={styles.socialButtonText}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={handleAppleLogin}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <View style={styles.appleIconContainer}>
-                  <RNImage source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
-                </View>
-                <Text style={styles.socialButtonText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.backButtonText}>Volver</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-
-        {/* Error Modal for OAuth Configuration Issues */}
-        <Modal
-          visible={showErrorModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowErrorModal(false)}
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.errorModalContent}>
-              <Text style={styles.errorModalTitle}>⚠️ Configuración Pendiente</Text>
-              <Text style={styles.errorModalText}>{errorModalMessage}</Text>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
+              {/* Logo */}
+              <Image
+                source={require('@/assets/images/logo_380.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+
+              <Text style={styles.title}>{titleText}</Text>
+              <Text style={styles.subtitle}>{subtitleText}</Text>
+
+              {/* Error */}
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle-outline" size={16} color="#FF6B6B" />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {/* Social buttons — Apple FIRST (App Store requirement) */}
               <TouchableOpacity
-                style={styles.errorModalButton}
-                onPress={() => setShowErrorModal(false)}
-                activeOpacity={0.8}
+                style={styles.appleButton}
+                onPress={handleApple}
+                disabled={isLoading}
+                activeOpacity={0.85}
               >
-                <Text style={styles.errorModalButtonText}>Entendido</Text>
+                <Image source={appleIconSource} style={styles.appleIcon} resizeMode="contain" />
+                <Text style={styles.appleButtonText}>Continuar con Apple</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogle}
+                disabled={isLoading}
+                activeOpacity={0.85}
+              >
+                <Image source={googleIconSource} style={styles.googleIcon} resizeMode="contain" />
+                <Text style={styles.googleButtonText}>Continuar con Google</Text>
+              </TouchableOpacity>
+
+              {/* Divider */}
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>o con email</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* Email form */}
+              <View style={styles.form}>
+                {isSignUp ? (
+                  <View style={styles.inputWrapper}>
+                    <MaterialIcons name="person" size={20} color="#999" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Nombre completo"
+                      placeholderTextColor="#999"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      editable={!isLoading}
+                    />
+                  </View>
+                ) : null}
+
+                <View style={styles.inputWrapper}>
+                  <MaterialIcons name="email" size={20} color="#999" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    placeholderTextColor="#999"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <MaterialIcons name="lock" size={20} color="#999" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Contraseña"
+                    placeholderTextColor="#999"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    onPress={togglePasswordVisibility}
+                    style={styles.eyeButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name={eyeIcon} size={22} color="#999" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Submit */}
+              <TouchableOpacity
+                style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+                onPress={handleEmailAuth}
+                disabled={isLoading}
+                activeOpacity={0.85}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={nospiColors.white} />
+                ) : (
+                  <Text style={styles.submitButtonText}>{submitText}</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Toggle sign in / sign up */}
+              <TouchableOpacity
+                style={styles.toggleButton}
+                onPress={toggleMode}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleText}>{toggleText}</Text>
+              </TouchableOpacity>
+
+              {/* Back */}
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => { console.log('LoginScreen: user tapped back'); router.back(); }}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.backText}>Volver</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   gradient: {
     flex: 1,
   },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 48,
   },
   content: {
     width: '100%',
     maxWidth: 400,
     alignSelf: 'center',
   },
+  logo: {
+    width: 100,
+    height: 100,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 30,
+    fontWeight: '800',
+    color: nospiColors.white,
     textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    marginBottom: 40,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
+    marginBottom: 32,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 20,
   },
   errorText: {
+    flex: 1,
     fontSize: 14,
     color: '#FF6B6B',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    textAlign: 'center',
   },
-  inputContainer: {
-    gap: 16,
+  appleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 16,
+    paddingVertical: 16,
+    marginBottom: 12,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  appleIcon: {
+    width: 22,
+    height: 22,
+  },
+  appleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: nospiColors.white,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: nospiColors.white,
+    borderRadius: 16,
+    paddingVertical: 16,
     marginBottom: 24,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  googleIcon: {
+    width: 22,
+    height: 22,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  dividerText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  form: {
+    gap: 14,
+    marginBottom: 20,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: nospiColors.white,
-    borderRadius: 16,
-    shadowColor: nospiColors.black,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   inputIcon: {
-    marginLeft: 16,
-    marginRight: 8,
-  },
-  inputWithIcon: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingRight: 8,
-    fontSize: 16,
-    color: '#333',
-  },
-  eyeButton: {
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    alignSelf: 'stretch',
+    marginRight: 10,
   },
   input: {
-    backgroundColor: nospiColors.white,
+    flex: 1,
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
     fontSize: 16,
-    color: '#333',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    color: '#1a1a1a',
   },
-  loginButton: {
+  eyeButton: {
+    paddingLeft: 8,
+    paddingVertical: 4,
+  },
+  submitButton: {
     backgroundColor: '#880E4F',
-    paddingVertical: 18,
     borderRadius: 30,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000000',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240,98,146,0.4)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(240, 98, 146, 0.40)',
   },
-  loginButtonDisabled: {
-    backgroundColor: '#AD1457',
+  submitButtonDisabled: {
     opacity: 0.6,
   },
-  loginButtonText: {
-    color: nospiColors.white,
-    fontSize: 18,
+  submitButtonText: {
+    fontSize: 17,
     fontWeight: '700',
+    color: nospiColors.white,
+    letterSpacing: 0.3,
   },
-  divider: {
-    flexDirection: 'row',
+  toggleButton: {
     alignItems: 'center',
-    marginBottom: 24,
+    paddingVertical: 10,
+    marginBottom: 4,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(240, 98, 146, 0.40)',
-    opacity: 1,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '600',
-  },
-  socialButtonsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
-  },
-  socialButton: {
-    flex: 1,
-    backgroundColor: nospiColors.white,
-    paddingVertical: 16,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  googleIconContainer: {
-    width: 28,
-    height: 28,
-    marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleIconImage: {
-    width: 22,
-    height: 22,
-  },
-  appleIconImage: {
-    width: 28,
-    height: 28,
-  },
-  appleIconContainer: {
-    width: 28,
-    height: 28,
-    marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appleIcon: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  socialButtonText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '600',
+  toggleText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   backButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  backButtonText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorModalContent: {
-    backgroundColor: nospiColors.white,
-    borderRadius: 24,
-    padding: 32,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  errorModalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FF6B6B',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  errorModalText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  errorModalButton: {
-    backgroundColor: nospiColors.purpleDark,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  errorModalButtonText: {
-    color: nospiColors.white,
-    fontSize: 18,
-    fontWeight: '700',
+  backText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
   },
 });
