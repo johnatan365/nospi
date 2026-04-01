@@ -235,7 +235,22 @@ export default function SubscriptionPlansScreen() {
           if (age > 10 * 60 * 1000) return;
         }
 
-        console.log('App became active, checking pending payment:', storedTxId);
+        // Para tarjeta de crédito: el pago es síncrono (sin browser redirect).
+        // Cualquier transacción de tarjeta en AsyncStorage es de un intento previo fallido.
+        // Limpiar silenciosamente sin consultar Wompi ni mostrar alertas.
+        if (storedMethod === 'card') {
+          console.log('AppState: limpiando transacción de tarjeta obsoleta:', storedTxId);
+          await AsyncStorage.multiRemove([
+            'nospi_transaction_id',
+            'nospi_payment_method',
+            'nospi_payment_opened_time',
+            'nospi_access_token',
+            'nospi_refresh_token',
+          ]);
+          return;
+        }
+
+        console.log('App became active, checking pending payment:', storedTxId, 'method:', storedMethod);
 
         try {
           const res = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
@@ -269,20 +284,16 @@ export default function SubscriptionPlansScreen() {
               router.replace('/(tabs)/appointments');
             }
           } else if (status === 'DECLINED' || status === 'VOIDED' || status === 'ERROR') {
-            // Limpiar el AsyncStorage siempre que la transacción esté finalizada.
-            await AsyncStorage.removeItem('nospi_transaction_id');
-            await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_opened_time');
-            await AsyncStorage.removeItem('nospi_access_token');
-            await AsyncStorage.removeItem('nospi_refresh_token');
-            // Solo mostrar alerta para PSE/Bancolombia. Para tarjeta, el alert
-            // ya fue mostrado por el polling de tarjeta. Evita alertas duplicadas
-            // o alertas fantasma al volver a abrir la app.
-            if (storedMethod !== 'card') {
-              showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
-            }
+            await AsyncStorage.multiRemove([
+              'nospi_transaction_id',
+              'nospi_payment_method',
+              'nospi_payment_opened_time',
+              'nospi_access_token',
+              'nospi_refresh_token',
+            ]);
+            showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
           }
-          // If PENDING, do nothing — let the user wait or the polling handle it
+          // Si PENDING: no hacer nada, payment-callback lo maneja al volver del browser
         } catch (e) {
           console.error('AppState payment check error:', e);
         }
