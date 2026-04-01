@@ -13,6 +13,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
 
+// Card brand detection
+function getCardBrand(rawNumber: string): 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover' | null {
+  const n = rawNumber.replace(/\D/g, '');
+  if (!n) return null;
+  if (n.startsWith('4')) return 'visa';
+  if (/^3[47]/.test(n)) return 'amex';
+  if (/^30[0-5]/.test(n) || /^36/.test(n) || /^38/.test(n)) return 'diners';
+  if (/^6011/.test(n) || /^65/.test(n) || /^64[4-9]/.test(n)) return 'discover';
+  const num6 = parseInt(n.slice(0, 6), 10);
+  if (/^5[1-5]/.test(n)) return 'mastercard';
+  if (n.length >= 4) {
+    const num4 = parseInt(n.slice(0, 4), 10);
+    if (num4 >= 2221 && num4 <= 2720) return 'mastercard';
+  }
+  if (n.length >= 6 && num6 >= 622126 && num6 <= 622925) return 'discover';
+  return null;
+}
+
+const CARD_BRAND_COLORS: Record<string, string> = {
+  visa: '#1A1F71',
+  mastercard: '#EB001B',
+  amex: '#007BC1',
+  diners: '#004A97',
+  discover: '#FF6600',
+};
+
+const CARD_BRAND_LABELS: Record<string, string> = {
+  visa: 'VISA',
+  mastercard: 'MASTERCARD',
+  amex: 'AMEX',
+  diners: 'DINERS',
+  discover: 'DISCOVER',
+};
+
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
   if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
@@ -1067,9 +1101,20 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.inputLabel}>Nombre del titular</Text>
               <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
               <Text style={styles.inputLabel}>Número de tarjeta</Text>
-              <TextInput style={styles.input} placeholder="0000 0000 0000 0000" value={cardNumber}
-                onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
-                keyboardType="numeric" maxLength={19} returnKeyType="next" />
+              <View style={styles.cardNumberRow}>
+                <TextInput style={[styles.input, { flex: 1, borderWidth: 0, padding: 0 }]} placeholder="0000 0000 0000 0000" value={cardNumber}
+                  onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
+                  keyboardType="numeric" maxLength={19} returnKeyType="next" />
+                {(() => {
+                  const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
+                  if (!brand) return null;
+                  return (
+                    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
+                      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
+                    </View>
+                  );
+                })()}
+              </View>
               <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.inputLabel}>Vencimiento</Text>
@@ -1431,6 +1476,9 @@ const styles = StyleSheet.create({
   formAmount: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 20 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#444', marginBottom: 6, marginTop: 12 },
   input: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA', color: '#111' },
+  cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 2, backgroundColor: '#FAFAFA' },
+  cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   row: { flexDirection: 'row' },
   installmentsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   installmentBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#F9F9F9' },

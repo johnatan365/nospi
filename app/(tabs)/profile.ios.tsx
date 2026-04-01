@@ -759,13 +759,74 @@ export default function ProfileScreen() {
               )}
 
               <Text style={styles.inputLabel}>País</Text>
-              <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
-                <Text style={styles.pickerButtonText}>{editCountry}</Text>
+              <TouchableOpacity
+                style={[styles.pickerButton, showCountryPicker && styles.pickerButtonActive]}
+                onPress={() => {
+                  console.log('User tapped country picker, toggling:', !showCountryPicker);
+                  setShowCountryPicker(prev => !prev);
+                  setShowCityPicker(false);
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.pickerButtonText}>{editCountry}</Text>
+                  <Text style={{ color: '#888', fontSize: 14 }}>{showCountryPicker ? '▲' : '▼'}</Text>
+                </View>
               </TouchableOpacity>
+              {showCountryPicker && (
+                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled>
+                  {COUNTRIES.map(country => (
+                    <TouchableOpacity
+                      key={country}
+                      style={[styles.inlinePickerItem, editCountry === country && styles.inlinePickerItemSelected]}
+                      onPress={() => {
+                        console.log('User selected country:', country);
+                        setEditCountry(country);
+                        const cities = CITIES_BY_COUNTRY[country] || [];
+                        if (cities.length > 0) setEditCity(cities[0]);
+                        setShowCountryPicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.inlinePickerItemText, editCountry === country && styles.inlinePickerItemTextSelected]}>{country}</Text>
+                      {editCountry === country && <Text style={styles.inlinePickerItemCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
               <Text style={styles.inputLabel}>Ciudad</Text>
-              <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCityPicker(true)}>
-                <Text style={styles.pickerButtonText}>{editCity}</Text>
+              <TouchableOpacity
+                style={[styles.pickerButton, showCityPicker && styles.pickerButtonActive]}
+                onPress={() => {
+                  console.log('User tapped city picker, toggling:', !showCityPicker);
+                  setShowCityPicker(prev => !prev);
+                  setShowCountryPicker(false);
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.pickerButtonText}>{editCity}</Text>
+                  <Text style={{ color: '#888', fontSize: 14 }}>{showCityPicker ? '▲' : '▼'}</Text>
+                </View>
               </TouchableOpacity>
+              {showCityPicker && (
+                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled>
+                  {availableCities.map(city => (
+                    <TouchableOpacity
+                      key={city}
+                      style={[styles.inlinePickerItem, editCity === city && styles.inlinePickerItemSelected]}
+                      onPress={() => {
+                        console.log('User selected city:', city);
+                        setEditCity(city);
+                        setShowCityPicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.inlinePickerItemText, editCity === city && styles.inlinePickerItemTextSelected]}>{city}</Text>
+                      {editCity === city && <Text style={styles.inlinePickerItemCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
               <Text style={styles.inputLabel}>Interesado en</Text>
               <View style={styles.optionsRow}>
                 {(['hombres', 'mujeres', 'ambos'] as const).map(opt => (
@@ -805,70 +866,6 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Country Picker Modal */}
-      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContent}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
-              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
-                <Text style={styles.pickerModalClose}>Listo</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.pickerListScroll}>
-              {COUNTRIES.map(country => (
-                <TouchableOpacity
-                  key={country}
-                  style={[styles.pickerListItem, editCountry === country && styles.pickerListItemSelected]}
-                  onPress={() => {
-                    console.log('User selected country:', country);
-                    setEditCountry(country);
-                    const cities = CITIES_BY_COUNTRY[country] || [];
-                    if (cities.length > 0) setEditCity(cities[0]);
-                    setShowCountryPicker(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.pickerListItemText, editCountry === country && styles.pickerListItemTextSelected]}>{country}</Text>
-                  {editCountry === country && <Text style={styles.pickerListItemCheck}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* City Picker Modal */}
-      <Modal visible={showCityPicker} transparent animationType="slide" onRequestClose={() => setShowCityPicker(false)}>
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContent}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Selecciona tu ciudad</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-                <Text style={styles.pickerModalClose}>Listo</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.pickerListScroll}>
-              {availableCities.map(city => (
-                <TouchableOpacity
-                  key={city}
-                  style={[styles.pickerListItem, editCity === city && styles.pickerListItemSelected]}
-                  onPress={() => {
-                    console.log('User selected city:', city);
-                    setEditCity(city);
-                    setShowCityPicker(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.pickerListItemText, editCity === city && styles.pickerListItemTextSelected]}>{city}</Text>
-                  {editCity === city && <Text style={styles.pickerListItemCheck}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
         </View>
       </Modal>
 
@@ -1037,8 +1034,15 @@ const styles = StyleSheet.create({
   saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   modalScrollView: { maxHeight: '90%' },
   modalScrollContent: { flexGrow: 1 },
-  pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8 },
+  pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 4 },
+  pickerButtonActive: { borderColor: '#880E4F', backgroundColor: 'rgba(136,14,79,0.06)' },
   pickerButtonText: { fontSize: 16, color: '#333' },
+  inlinePickerList: { maxHeight: 200, borderWidth: 1.5, borderColor: '#E0E0E0', borderRadius: 12, backgroundColor: '#fff', marginBottom: 8, overflow: 'hidden' },
+  inlinePickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  inlinePickerItemSelected: { backgroundColor: 'rgba(136,14,79,0.08)' },
+  inlinePickerItemText: { fontSize: 15, color: '#333' },
+  inlinePickerItemTextSelected: { color: '#880E4F', fontWeight: '600' },
+  inlinePickerItemCheck: { fontSize: 15, color: '#880E4F', fontWeight: 'bold' },
   optionsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   optionButton: { flex: 1, backgroundColor: '#F5F5F5', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: '#E0E0E0' },
   optionButtonActive: { backgroundColor: 'rgba(173, 20, 87, 0.12)', borderColor: '#880E4F' },
