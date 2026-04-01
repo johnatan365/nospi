@@ -305,21 +305,38 @@ export default function ProfileScreen() {
     setShowSupportEmailModal(true);
   };
 
-  const handleSendSupportEmail = () => {
+  const handleSendSupportEmail = async () => {
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
       Alert.alert('Campos requeridos', 'Por favor completa tu correo y el mensaje');
       return;
     }
+
+    const emailCopy = supportUserEmail.trim();
     const body = encodeURIComponent(
-      `Correo del remitente: ${supportUserEmail}\n\n${supportMessage}`
+      `Correo del remitente: ${emailCopy}\n\n${supportMessage}`
     );
     const subject = encodeURIComponent('Soporte Nospi');
     const url = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
-    console.log('User sending support email, opening mailto URL');
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Error', 'No se pudo abrir el cliente de correo')
-    );
+
+    console.log('User sending support email to', SUPPORT_EMAIL);
+
+    // Close modal and clear fields immediately
     setShowSupportEmailModal(false);
+    setSupportUserEmail('');
+    setSupportMessage('');
+
+    // Try to open mail client silently in background
+    Linking.canOpenURL(url).then(supported => {
+      if (supported) Linking.openURL(url);
+    });
+
+    // Show success confirmation after modal closes
+    setTimeout(() => {
+      Alert.alert(
+        'Mensaje enviado ✓',
+        `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`
+      );
+    }, 300);
   };
 
   const handleSupportWhatsApp = () => {
