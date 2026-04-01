@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Modal, Alert, SafeAreaView,
@@ -78,6 +78,7 @@ export default function SubscriptionPlansScreen() {
   const isProcessing = (m: string) => processingMethod === m;
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
@@ -269,21 +270,6 @@ export default function SubscriptionPlansScreen() {
           if (age > 10 * 60 * 1000) return;
         }
 
-        // Para tarjeta de crédito: el pago es síncrono (sin browser redirect).
-        // Cualquier transacción de tarjeta en AsyncStorage es de un intento previo fallido.
-        // Limpiar silenciosamente sin consultar Wompi ni mostrar alertas.
-        if (storedMethod === 'card') {
-          console.log('AppState: limpiando transacción de tarjeta obsoleta:', storedTxId);
-          await AsyncStorage.multiRemove([
-            'nospi_transaction_id',
-            'nospi_payment_method',
-            'nospi_payment_opened_time',
-            'nospi_access_token',
-            'nospi_refresh_token',
-          ]);
-          return;
-        }
-
         console.log('App became active, checking pending payment:', storedTxId, 'method:', storedMethod);
 
         try {
@@ -326,8 +312,75 @@ export default function SubscriptionPlansScreen() {
               'nospi_refresh_token',
             ]);
             showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
+          } else if (status === 'PENDING' && storedMethod === 'card') {
+            // The app was backgrounded during 3DS — the polling interval may have been killed.
+            // Restart a short-interval poll (3s, max 10 attempts) to catch the APPROVED status.
+            if (threeDsPollRef.current) {
+              console.log('AppState: card PENDING — poll already running, skipping restart');
+              return;
+            }
+            console.log('AppState: card PENDING after returning from 3DS — restarting poll for tx:', storedTxId);
+            let resumeAttempts = 0;
+            const maxResumeAttempts = 10;
+            threeDsPollRef.current = setInterval(async () => {
+              resumeAttempts++;
+              try {
+                const pollRes = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
+                const pollData = await pollRes.json();
+                const pollStatus = pollData.data?.status;
+                console.log(`[CardPayment] Resume poll attempt ${resumeAttempts}/${maxResumeAttempts}: ${pollStatus}`);
+
+                if (pollStatus === 'APPROVED') {
+                  clearInterval(threeDsPollRef.current!);
+                  threeDsPollRef.current = null;
+                  await AsyncStorage.multiRemove([
+                    'nospi_transaction_id',
+                    'nospi_payment_method',
+                    'nospi_payment_opened_time',
+                    'nospi_access_token',
+                    'nospi_refresh_token',
+                  ]);
+                  const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+                  const success = await confirmAppointment(storedTxId, 'card', pendingEventId || undefined);
+                  if (success) {
+                    if (pendingEventId) {
+                      router.replace({
+                        pathname: '/event-details/[id]',
+                        params: { id: pendingEventId, paymentSuccess: 'true' },
+                      });
+                    } else {
+                      setShowSuccessModal(true);
+                    }
+                  } else {
+                    showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+                    router.replace('/(tabs)/appointments');
+                  }
+                } else if (pollStatus === 'DECLINED' || pollStatus === 'VOIDED' || pollStatus === 'ERROR') {
+                  clearInterval(threeDsPollRef.current!);
+                  threeDsPollRef.current = null;
+                  await AsyncStorage.multiRemove([
+                    'nospi_transaction_id',
+                    'nospi_payment_method',
+                    'nospi_payment_opened_time',
+                    'nospi_access_token',
+                    'nospi_refresh_token',
+                  ]);
+                  showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
+                } else if (resumeAttempts >= maxResumeAttempts) {
+                  clearInterval(threeDsPollRef.current!);
+                  threeDsPollRef.current = null;
+                  console.log('[CardPayment] Resume poll exhausted — leaving background poll to handle it');
+                }
+              } catch (e) {
+                console.error('[CardPayment] Resume poll error:', e);
+                if (resumeAttempts >= maxResumeAttempts) {
+                  clearInterval(threeDsPollRef.current!);
+                  threeDsPollRef.current = null;
+                }
+              }
+            }, 3000);
           }
-          // Si PENDING: no hacer nada, payment-callback lo maneja al volver del browser
+          // For non-card PENDING: payment-callback handles it on browser return
         } catch (e) {
           console.error('AppState payment check error:', e);
         }
@@ -491,8 +544,8 @@ export default function SubscriptionPlansScreen() {
 
         if (threeDsUrl && Platform.OS !== 'web') {
           // En mobile: abrir la URL de 3DS en el browser nativo.
-          // Wompi redirigirá de vuelta a la app usando el scheme nospi://
-          // después de que el usuario complete la autenticación.
+          // Wompi redirigirá de vuelta a WEB_REDIRECT_URL (HTTPS) after 3DS.
+          // The AppState 'active' event fires when the user returns to the app.
           console.log('[CardPayment] 3DS requerido en mobile, abriendo:', threeDsUrl);
           await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'card');
@@ -505,7 +558,77 @@ export default function SubscriptionPlansScreen() {
             }
           } catch {}
           await Linking.openURL(threeDsUrl);
-          // payment-callback.tsx manejará el resultado cuando el usuario vuelva.
+
+          // Start a background poll (5s, max 36 attempts = 3 min) so that if the
+          // AppState event fires before 3DS completes, the poll will catch APPROVED.
+          if (threeDsPollRef.current) {
+            clearInterval(threeDsPollRef.current);
+            threeDsPollRef.current = null;
+          }
+          const bgTxId = result.transactionId || '';
+          let bgAttempts = 0;
+          const bgMaxAttempts = 36;
+          console.log('[CardPayment] Starting background 3DS poll for tx:', bgTxId);
+          threeDsPollRef.current = setInterval(async () => {
+            bgAttempts++;
+            try {
+              const bgRes = await fetch(`${WOMPI_API_URL}/transactions/${bgTxId}`);
+              const bgData = await bgRes.json();
+              const bgStatus = bgData.data?.status;
+              console.log(`[CardPayment] Background 3DS poll attempt ${bgAttempts}/${bgMaxAttempts}: ${bgStatus}`);
+
+              if (bgStatus === 'APPROVED') {
+                clearInterval(threeDsPollRef.current!);
+                threeDsPollRef.current = null;
+                await AsyncStorage.multiRemove([
+                  'nospi_transaction_id',
+                  'nospi_payment_method',
+                  'nospi_payment_opened_time',
+                  'nospi_access_token',
+                  'nospi_refresh_token',
+                ]);
+                const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+                const success = await confirmAppointment(bgTxId, 'card', pendingEventId || undefined);
+                if (success) {
+                  if (pendingEventId) {
+                    router.replace({
+                      pathname: '/event-details/[id]',
+                      params: { id: pendingEventId, paymentSuccess: 'true' },
+                    });
+                  } else {
+                    setShowSuccessModal(true);
+                  }
+                } else {
+                  showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+                  router.replace('/(tabs)/appointments');
+                }
+              } else if (bgStatus === 'DECLINED' || bgStatus === 'VOIDED' || bgStatus === 'ERROR') {
+                clearInterval(threeDsPollRef.current!);
+                threeDsPollRef.current = null;
+                await AsyncStorage.multiRemove([
+                  'nospi_transaction_id',
+                  'nospi_payment_method',
+                  'nospi_payment_opened_time',
+                  'nospi_access_token',
+                  'nospi_refresh_token',
+                ]);
+                showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
+              } else if (bgAttempts >= bgMaxAttempts) {
+                clearInterval(threeDsPollRef.current!);
+                threeDsPollRef.current = null;
+                console.log('[CardPayment] Background 3DS poll exhausted without resolution');
+                showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
+                router.replace('/(tabs)/appointments');
+              }
+            } catch (e) {
+              console.error('[CardPayment] Background 3DS poll error:', e);
+              if (bgAttempts >= bgMaxAttempts) {
+                clearInterval(threeDsPollRef.current!);
+                threeDsPollRef.current = null;
+              }
+            }
+          }, 5000);
+
           setProcessingMethod(null);
           return;
         }
