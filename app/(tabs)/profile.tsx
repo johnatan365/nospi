@@ -159,6 +159,7 @@ export default function ProfileScreen() {
   const [showSupportEmailModal, setShowSupportEmailModal] = useState(false);
   const [supportUserEmail, setSupportUserEmail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
+  const [sendingSupportEmail, setSendingSupportEmail] = useState(false);
 
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -312,31 +313,42 @@ export default function ProfileScreen() {
     }
 
     const emailCopy = supportUserEmail.trim();
-    const body = encodeURIComponent(
-      `Correo del remitente: ${emailCopy}\n\n${supportMessage}`
-    );
-    const subject = encodeURIComponent('Soporte Nospi');
-    const url = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+    console.log('User sending support email via API, from:', emailCopy);
 
-    console.log('User sending support email to', SUPPORT_EMAIL);
+    setSendingSupportEmail(true);
+    try {
+      console.log('Network request: POST https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email');
+      const response = await fetch('https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: emailCopy, message: supportMessage }),
+      });
 
-    // Close modal and clear fields immediately
-    setShowSupportEmailModal(false);
-    setSupportUserEmail('');
-    setSupportMessage('');
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('Support email API error:', response.status, errText);
+        Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
+        return;
+      }
 
-    // Try to open mail client silently in background
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) Linking.openURL(url);
-    });
+      const data = await response.json();
+      console.log('Support email API response:', data);
 
-    // Show success confirmation after modal closes
-    setTimeout(() => {
-      Alert.alert(
-        'Mensaje enviado ✓',
-        `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`
-      );
-    }, 300);
+      if (data.success === true) {
+        setShowSupportEmailModal(false);
+        setSupportUserEmail('');
+        setSupportMessage('');
+        Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
+      } else {
+        console.error('Support email API returned success=false:', data);
+        Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
+      }
+    } catch (err) {
+      console.error('Support email network error:', err);
+      Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
+    } finally {
+      setSendingSupportEmail(false);
+    }
   };
 
   const handleSupportWhatsApp = () => {
@@ -1144,8 +1156,8 @@ export default function ProfileScreen() {
               textAlignVertical="top"
             />
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSendSupportEmail} activeOpacity={0.8}>
-              <Text style={styles.saveButtonText}>Enviar mensaje</Text>
+            <TouchableOpacity style={[styles.saveButton, sendingSupportEmail && { opacity: 0.6 }]} onPress={handleSendSupportEmail} activeOpacity={0.8} disabled={sendingSupportEmail}>
+              <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowSupportEmailModal(false)} activeOpacity={0.8}>
               <Text style={styles.modalCloseButtonText}>Cancelar</Text>
