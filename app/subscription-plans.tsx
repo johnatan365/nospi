@@ -400,20 +400,79 @@ export default function SubscriptionPlansScreen() {
           setShowSuccessModal(true);
         }
       } else if (result.status === 'PENDING') {
-        // Card payment is pending — poll until approved or rejected
-        console.log('[CardPayment] PENDING — starting polling for transaction:', result.transactionId);
+        // Card payment is pending — puede requerir autenticación 3DS en mobile.
+        console.log('[CardPayment] PENDING — transactionId:', result.transactionId);
+        console.log('[CardPayment] Full result:', JSON.stringify(result));
         setShowCardForm(false);
+
+        // Detectar si Wompi requiere 3DS (redirect de autenticación).
+        // En mobile la URL llega en diferentes campos según la versión de la API.
+        const threeDsUrl =
+          result.redirectUrl ||
+          result.redirect_url ||
+          result.payment_method?.extra?.async_payment_url ||
+          result.data?.payment_method?.extra?.async_payment_url ||
+          null;
+
+        if (threeDsUrl && Platform.OS !== 'web') {
+          // En mobile: abrir la URL de 3DS en el browser nativo.
+          // Wompi redirigirá de vuelta a la app usando el scheme nospi://
+          // después de que el usuario complete la autenticación.
+          console.log('[CardPayment] 3DS requerido en mobile, abriendo:', threeDsUrl);
+          await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
+          await AsyncStorage.setItem('nospi_payment_method', 'card');
+          await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
+          try {
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (currentSession?.access_token) {
+              await AsyncStorage.setItem('nospi_access_token', currentSession.access_token);
+              await AsyncStorage.setItem('nospi_refresh_token', currentSession.refresh_token || '');
+            }
+          } catch {}
+          await Linking.openURL(threeDsUrl);
+          // payment-callback.tsx manejará el resultado cuando el usuario vuelva.
+          setProcessingMethod(null);
+          return;
+        }
+
         showAlert('Procesando pago', 'Tu pago con tarjeta está siendo verificado. Por favor espera...');
         
         let cardAttempts = 0;
+        // En mobile sin 3DS url: aumentar el intervalo y los intentos para dar más tiempo.
+        const pollInterval = Platform.OS === 'web' ? 3000 : 5000;
+        const maxAttempts = Platform.OS === 'web' ? 20 : 36; // 36 × 5s = 3 minutos en mobile
         const cardPoll = setInterval(async () => {
           cardAttempts++;
           try {
             const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
             const data = await res.json();
             const status = data.data?.status;
-            console.log(`[CardPayment] Polling attempt ${cardAttempts}: ${status}`);
+            console.log(`[CardPayment] Polling attempt ${cardAttempts}/${maxAttempts}: ${status}`);
             
+            // Verificar si apareció URL de 3DS durante el polling (a veces llega tarde)
+            const pollingThreeDsUrl =
+              data.data?.payment_method?.extra?.async_payment_url ||
+              data.data?.redirect_url ||
+              null;
+
+            if (pollingThreeDsUrl && Platform.OS !== 'web' && cardAttempts <= 3) {
+              clearInterval(cardPoll);
+              setProcessingMethod(null);
+              console.log('[CardPayment] 3DS URL detectada en polling, abriendo:', pollingThreeDsUrl);
+              await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
+              await AsyncStorage.setItem('nospi_payment_method', 'card');
+              await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
+              try {
+                const { data: { session: cs } } = await supabase.auth.getSession();
+                if (cs?.access_token) {
+                  await AsyncStorage.setItem('nospi_access_token', cs.access_token);
+                  await AsyncStorage.setItem('nospi_refresh_token', cs.refresh_token || '');
+                }
+              } catch {}
+              await Linking.openURL(pollingThreeDsUrl);
+              return;
+            }
+
             if (status === 'APPROVED') {
               clearInterval(cardPoll);
               setProcessingMethod(null);
@@ -431,8 +490,13 @@ export default function SubscriptionPlansScreen() {
             } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status)) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor intenta con otra tarjeta.');
-            } else if (cardAttempts >= 20) {
+              // En mobile, DECLINED tras PENDING casi siempre es 3DS no completado.
+              if (Platform.OS !== 'web') {
+                showAlert('Autenticación requerida', 'Tu banco requiere autenticación adicional. Intenta de nuevo o usa otro método de pago.');
+              } else {
+                showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor intenta con otra tarjeta.');
+              }
+            } else if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
               showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
@@ -440,12 +504,12 @@ export default function SubscriptionPlansScreen() {
             }
           } catch (e) {
             console.error('[CardPayment] Polling error:', e);
-            if (cardAttempts >= 20) {
+            if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
             }
           }
-        }, 3000);
+        }, pollInterval);
         return; // Don't call setProcessingMethod in finally
       } else {
         throw new Error(`Pago rechazado (${result.status || 'sin estado'}). Detalle: ${JSON.stringify(result.error || result.message || result)}`);
