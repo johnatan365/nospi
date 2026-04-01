@@ -415,8 +415,9 @@ export default function SubscriptionPlansScreen() {
           userId: currentUser.id,
           eventId: pendingEventId,
           // redirect_url es REQUERIDO por Wompi para transacciones que necesiten 3DS.
-          // Sin este campo, Wompi declina instantáneamente si el banco exige autenticación.
-          redirectUrl: Platform.OS === 'web' ? WEB_REDIRECT_URL : NATIVE_REDIRECT_URL,
+          // Wompi solo acepta URLs https:// — el deep link nospi:// causa INPUT_VALIDATION_ERROR.
+          // Siempre usamos la URL web; payment-callback.tsx maneja el retorno en ambas plataformas.
+          redirectUrl: WEB_REDIRECT_URL,
         }),
       });
       const result = await response.json();
