@@ -1,7 +1,14 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+// ============================================================
+// DATOS DE CONTACTO DE SOPORTE — modifica aquí si cambian
+// ============================================================
+const SUPPORT_EMAIL = 'nospisocial@gmail.com';
+const SUPPORT_WHATSAPP = '573192099123'; // formato: código país + número, sin + ni espacios
+// ============================================================
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -146,6 +153,11 @@ export default function ProfileScreen() {
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const debounceRef = useRef<any>(null);
 
+  // Support modal state
+  const [showSupportEmailModal, setShowSupportEmailModal] = useState(false);
+  const [supportUserEmail, setSupportUserEmail] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -282,6 +294,38 @@ export default function ProfileScreen() {
       }
     }, [user, loadProfile])
   );
+
+  const handleSupportEmail = () => {
+    console.log('User tapped support email button');
+    setSupportUserEmail(profile?.email || '');
+    setSupportMessage('');
+    setShowSupportEmailModal(true);
+  };
+
+  const handleSendSupportEmail = () => {
+    if (!supportUserEmail.trim() || !supportMessage.trim()) {
+      Alert.alert('Campos requeridos', 'Por favor completa tu correo y el mensaje');
+      return;
+    }
+    const body = encodeURIComponent(
+      `Correo del remitente: ${supportUserEmail}\n\n${supportMessage}`
+    );
+    const subject = encodeURIComponent('Soporte Nospi');
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+    console.log('User sending support email, opening mailto URL');
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Error', 'No se pudo abrir el cliente de correo')
+    );
+    setShowSupportEmailModal(false);
+  };
+
+  const handleSupportWhatsApp = () => {
+    console.log('User tapped support WhatsApp button');
+    const url = `https://wa.me/${SUPPORT_WHATSAPP}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Error', 'No se pudo abrir WhatsApp')
+    );
+  };
 
   const handleSignOut = async () => {
     try {
@@ -719,6 +763,27 @@ export default function ProfileScreen() {
           <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
         </TouchableOpacity>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Soporte</Text>
+          <Text style={styles.sectionSubtitle}>¿Necesitas ayuda? Contáctanos</Text>
+          <View style={styles.supportButtonsRow}>
+            <TouchableOpacity style={styles.supportCard} onPress={handleSupportEmail} activeOpacity={0.8}>
+              <View style={styles.supportIconCircle}>
+                <Ionicons name="mail-outline" size={22} color="#880E4F" />
+              </View>
+              <Text style={styles.supportCardTitle}>Correo</Text>
+              <Text style={styles.supportCardSub}>Envíanos un mensaje</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.supportCard} onPress={handleSupportWhatsApp} activeOpacity={0.8}>
+              <View style={styles.supportIconCircle}>
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#880E4F" />
+              </View>
+              <Text style={styles.supportCardTitle}>WhatsApp</Text>
+              <Text style={styles.supportCardSub}>Chatea con nosotros</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
@@ -916,6 +981,47 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* Support Email Modal */}
+      <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={() => setShowSupportEmailModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Contactar Soporte</Text>
+            <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
+
+            <Text style={styles.inputLabel}>Tu correo electrónico</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={supportUserEmail}
+              onChangeText={setSupportUserEmail}
+              placeholder="tu@correo.com"
+              placeholderTextColor="#999"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.inputLabel}>Mensaje</Text>
+            <TextInput
+              style={[styles.modalInput, styles.supportMessageInput]}
+              value={supportMessage}
+              onChangeText={setSupportMessage}
+              placeholder="Describe tu consulta o problema..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity style={styles.saveButton} onPress={handleSendSupportEmail} activeOpacity={0.8}>
+              <Text style={styles.saveButtonText}>Enviar mensaje</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowSupportEmailModal(false)} activeOpacity={0.8}>
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Password Change Modal */}
       <Modal visible={showPasswordModal} transparent animationType="slide" onRequestClose={() => setShowPasswordModal(false)}>
         <View style={styles.modalOverlay}>
@@ -1091,4 +1197,10 @@ const styles = StyleSheet.create({
   phoneRowName: { flex: 1, fontSize: 16, color: '#222' },
   phoneRowCode: { fontSize: 15, color: '#880E4F', fontWeight: '600' },
   phoneRowSeparator: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 58 },
+  supportButtonsRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  supportCard: { flex: 1, backgroundColor: 'rgba(136, 14, 79, 0.06)', borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(136, 14, 79, 0.15)' },
+  supportIconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(136, 14, 79, 0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  supportCardTitle: { fontSize: 15, fontWeight: '700', color: '#880E4F', marginBottom: 4 },
+  supportCardSub: { fontSize: 12, color: '#666', textAlign: 'center' },
+  supportMessageInput: { height: 120, paddingTop: 14 },
 });
