@@ -268,11 +268,19 @@ export default function SubscriptionPlansScreen() {
               showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
               router.replace('/(tabs)/appointments');
             }
-          } else if (status === 'DECLINED' || status === 'VOIDED') {
+          } else if (status === 'DECLINED' || status === 'VOIDED' || status === 'ERROR') {
+            // Limpiar el AsyncStorage siempre que la transacción esté finalizada.
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
-            showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
+            await AsyncStorage.removeItem('nospi_access_token');
+            await AsyncStorage.removeItem('nospi_refresh_token');
+            // Solo mostrar alerta para PSE/Bancolombia. Para tarjeta, el alert
+            // ya fue mostrado por el polling de tarjeta. Evita alertas duplicadas
+            // o alertas fantasma al volver a abrir la app.
+            if (storedMethod !== 'card') {
+              showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
+            }
           }
           // If PENDING, do nothing — let the user wait or the polling handle it
         } catch (e) {
@@ -340,6 +348,15 @@ export default function SubscriptionPlansScreen() {
       showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
       return;
     }
+    // Limpiar cualquier transacción anterior antes de iniciar un nuevo intento.
+    // Esto evita que el AppState handler encuentre un ID obsoleto y muestre alertas fantasma.
+    await AsyncStorage.multiRemove([
+      'nospi_transaction_id',
+      'nospi_payment_method',
+      'nospi_payment_opened_time',
+      'nospi_access_token',
+      'nospi_refresh_token',
+    ]);
     setProcessingMethod('card');
     try {
       const currentUser = await getSession();
@@ -490,12 +507,14 @@ export default function SubscriptionPlansScreen() {
             } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status)) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              // En mobile, DECLINED tras PENDING casi siempre es 3DS no completado.
-              if (Platform.OS !== 'web') {
-                showAlert('Autenticación requerida', 'Tu banco requiere autenticación adicional. Intenta de nuevo o usa otro método de pago.');
-              } else {
-                showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor intenta con otra tarjeta.');
-              }
+              // Limpiar AsyncStorage para que el AppState handler no dispare
+              // un alert fantasma la próxima vez que la app vuelva al primer plano.
+              await AsyncStorage.removeItem('nospi_transaction_id');
+              await AsyncStorage.removeItem('nospi_payment_method');
+              await AsyncStorage.removeItem('nospi_payment_opened_time');
+              await AsyncStorage.removeItem('nospi_access_token');
+              await AsyncStorage.removeItem('nospi_refresh_token');
+              showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
             } else if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
