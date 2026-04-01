@@ -405,7 +405,19 @@ export default function SubscriptionPlansScreen() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-card-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ cardToken, acceptanceToken, personalDataToken, installments: parseInt(cardInstallments), amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({
+          cardToken,
+          acceptanceToken,
+          personalDataToken,
+          installments: parseInt(cardInstallments),
+          amountCOP: priceCOP,
+          userEmail: userProfile?.email || currentUser.email || '',
+          userId: currentUser.id,
+          eventId: pendingEventId,
+          // redirect_url es REQUERIDO por Wompi para transacciones que necesiten 3DS.
+          // Sin este campo, Wompi declina instantáneamente si el banco exige autenticación.
+          redirectUrl: Platform.OS === 'web' ? WEB_REDIRECT_URL : NATIVE_REDIRECT_URL,
+        }),
       });
       const result = await response.json();
       console.log('[CardPayment] Full charge response:', JSON.stringify(result));
