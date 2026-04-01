@@ -1118,6 +1118,9 @@ export default function SubscriptionPlansScreen() {
       const pseRedirectUrl = WEB_REDIRECT_URL; // Wompi PSE requires HTTPS on all platforms
       console.log('PSE redirect URL:', pseRedirectUrl);
 
+      const pseUserType = pseLegalIdType === 'NIT' ? 1 : 0;
+      console.log('PSE user type mapped:', pseLegalIdType, '->', pseUserType);
+
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
@@ -1131,7 +1134,7 @@ export default function SubscriptionPlansScreen() {
           userFullName: userProfile?.name || currentUser.email || '',
           userPhone: cleanPhone,
           userLegalId: cleanLegalId,
-          userLegalIdType: pseLegalIdType,
+          userLegalIdType: pseUserType,
           financialInstitutionCode: pseBankCode,
           redirectUrl: pseRedirectUrl
         }),
