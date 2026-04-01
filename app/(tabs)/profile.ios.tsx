@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, FlatList, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -141,7 +141,7 @@ export default function ProfileScreen() {
   // Phone country selector state
   const [editPhoneCountry, setEditPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
-  const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
+  const [showPhoneCountryPicker, setShowPhoneCountryPicker] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const debounceRef = useRef<any>(null);
@@ -727,24 +727,35 @@ export default function ProfileScreen() {
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent}>
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="always">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Editar Perfil</Text>
               <Text style={styles.inputLabel}>Nombre</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
 
               <Text style={styles.inputLabel}>Teléfono</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, minWidth: 90, flex: 0 }]}
-                  onPress={() => { console.log('User tapped phone country selector'); setShowPhoneCountryModal(true); }}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.pickerButton,
+                    showPhoneCountryPicker && styles.pickerButtonActive,
+                    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, minWidth: 100, flex: 0, marginBottom: 0 },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => {
+                    console.log('User tapped phone country selector, toggling:', !showPhoneCountryPicker);
+                    setShowPhoneCountryPicker(prev => !prev);
+                    setShowCountryPicker(false);
+                    setShowCityPicker(false);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={{ fontSize: 18 }}>{phoneCountryFlag}</Text>
-                  <Text style={{ marginLeft: 6, color: '#000', fontSize: 15 }}>{phoneCountryCode}</Text>
-                  <Text style={{ marginLeft: 4, color: '#666' }}>▾</Text>
-                </TouchableOpacity>
+                  <Text style={{ marginLeft: 6, color: '#333', fontSize: 15, fontWeight: '500' }}>{phoneCountryCode}</Text>
+                  <Text style={{ marginLeft: 4, color: '#888', fontSize: 12 }}>{showPhoneCountryPicker ? '▲' : '▼'}</Text>
+                </Pressable>
                 <TextInput
-                  style={[styles.modalInput, { flex: 1 }]}
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
                   value={editPhoneNumber}
                   onChangeText={setEditPhoneNumber}
                   placeholder="Tu teléfono"
@@ -752,6 +763,42 @@ export default function ProfileScreen() {
                   keyboardType="phone-pad"
                 />
               </View>
+              {showPhoneCountryPicker && (
+                <View style={{ marginBottom: 4 }}>
+                  <TextInput
+                    style={[styles.phoneSearchInput, { margin: 0, marginBottom: 4 }]}
+                    value={phoneCountrySearch}
+                    onChangeText={setPhoneCountrySearch}
+                    placeholder="Buscar país o código..."
+                    placeholderTextColor="#999"
+                    autoCorrect={false}
+                  />
+                  <ScrollView style={styles.inlinePickerList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {filteredPhoneCountries.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.inlinePickerItem,
+                          item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && styles.inlinePickerItemSelected,
+                        ]}
+                        onPress={() => {
+                          console.log('User selected phone country:', item.name, item.code);
+                          setEditPhoneCountry(item);
+                          setEditPhoneNumber('');
+                          setShowPhoneCountryPicker(false);
+                          setPhoneCountrySearch('');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 20, marginRight: 10 }}>{item.flag}</Text>
+                        <Text style={[styles.inlinePickerItemText, { flex: 1 }, item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && styles.inlinePickerItemTextSelected]}>{item.name}</Text>
+                        <Text style={{ fontSize: 14, color: '#880E4F', fontWeight: '600', marginRight: 6 }}>{item.code}</Text>
+                        {item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && <Text style={styles.inlinePickerItemCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
               {phoneStatus !== 'idle' && (
                 <Text style={{ fontSize: 12, marginTop: 4, color: phoneStatus === 'taken' ? '#e53e3e' : phoneStatus === 'available' ? '#38a169' : '#888' }}>
                   {phoneStatus === 'taken' ? '❌ Este número ya está registrado' : phoneStatus === 'available' ? '✅ Número disponible' : '🔍 Verificando...'}
@@ -773,7 +820,7 @@ export default function ProfileScreen() {
                 </View>
               </TouchableOpacity>
               {showCountryPicker && (
-                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled>
+                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
                   {COUNTRIES.map(country => (
                     <TouchableOpacity
                       key={country}
@@ -809,7 +856,7 @@ export default function ProfileScreen() {
                 </View>
               </TouchableOpacity>
               {showCityPicker && (
-                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled>
+                <ScrollView style={styles.inlinePickerList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
                   {availableCities.map(city => (
                     <TouchableOpacity
                       key={city}
@@ -867,55 +914,6 @@ export default function ProfileScreen() {
             </View>
           </ScrollView>
         </View>
-      </Modal>
-
-      {/* Phone Country Picker Modal */}
-      <Modal
-        visible={showPhoneCountryModal}
-        animationType="slide"
-        onRequestClose={() => { setShowPhoneCountryModal(false); setPhoneCountrySearch(''); }}
-      >
-        <SafeAreaView style={styles.phoneModalSafe}>
-          <View style={styles.phoneModalHeader}>
-            <Text style={styles.phoneModalTitle}>Selecciona tu país</Text>
-            <TouchableOpacity onPress={() => { setShowPhoneCountryModal(false); setPhoneCountrySearch(''); }}>
-              <Text style={styles.phoneModalClose}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.phoneSearchInput}
-            value={phoneCountrySearch}
-            onChangeText={setPhoneCountrySearch}
-            placeholder="Buscar país o código..."
-            placeholderTextColor="#999"
-            autoCorrect={false}
-          />
-          <FlatList
-            data={filteredPhoneCountries}
-            keyExtractor={(_, i) => String(i)}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.phoneCountryRow,
-                  item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && styles.phoneCountryRowSelected,
-                ]}
-                onPress={() => {
-                  console.log('User selected phone country:', item.name, item.code);
-                  setEditPhoneCountry(item);
-                  setEditPhoneNumber('');
-                  setShowPhoneCountryModal(false);
-                  setPhoneCountrySearch('');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.phoneRowFlag}>{item.flag}</Text>
-                <Text style={styles.phoneRowName}>{item.name}</Text>
-                <Text style={styles.phoneRowCode}>{item.code}</Text>
-              </TouchableOpacity>
-            )}
-            ItemSeparatorComponent={() => <View style={styles.phoneRowSeparator} />}
-          />
-        </SafeAreaView>
       </Modal>
 
       {/* Password Change Modal */}
