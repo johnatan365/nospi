@@ -1631,6 +1631,15 @@ export default function AdminPanelScreen() {
           >
             <Text style={styles.actionButtonTextSecondary}>Monitoreo en Tiempo Real</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#059669' }]}
+            onPress={exportAllParticipantsToExcel}
+            disabled={exportingAll}
+          >
+            <Text style={styles.actionButtonText}>
+              {exportingAll ? '⏳ Generando Excel...' : '📥 Descargar todos los participantes (Excel)'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1687,6 +1696,114 @@ export default function AdminPanelScreen() {
         })}
       </View>
     );
+  };
+
+  const [exportingAll, setExportingAll] = useState(false);
+
+  const exportAllParticipantsToExcel = async () => {
+    setExportingAll(true);
+    try {
+      // Traer todas las citas con info de usuario y evento
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, user_id, event_id, status, payment_status, created_at,
+          users!inner (
+            id, name, email, phone, city, country,
+            interested_in, gender, age, age_range_min, age_range_max
+          ),
+          events!inner (
+            id, name, type, city, date, start_time, event_status
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) { window.alert('Error al cargar datos: ' + error.message); return; }
+      if (!data || data.length === 0) { window.alert('No hay participantes registrados.'); return; }
+
+      // Traer todas las calificaciones de una vez
+      const { data: ratingsData } = await supabase
+        .from('event_ratings')
+        .select('rated_user_id, event_id, rating');
+
+      // Construir mapa de calificaciones: key = userId_eventId
+      const ratingsMap: Record<string, { sum: number; count: number }> = {};
+      for (const r of (ratingsData || [])) {
+        const key = `${r.rated_user_id}_${r.event_id}`;
+        if (!ratingsMap[key]) ratingsMap[key] = { sum: 0, count: 0 };
+        ratingsMap[key].sum += r.rating;
+        ratingsMap[key].count += 1;
+      }
+
+      const statusLabel = (s: string) =>
+        s === 'confirmada' ? 'Confirmada' : s === 'cancelada' ? 'Cancelada' : s === 'anterior' ? 'Anterior' : s;
+
+      const eventStatusLabel = (s: string) =>
+        s === 'published' ? 'Publicado' : s === 'closed' ? 'Cerrado' : 'Borrador';
+
+      const rows = data.map((apt: any, i: number) => {
+        const u = apt.users;
+        const ev = apt.events;
+        const rKey = `${apt.user_id}_${apt.event_id}`;
+        const rData = ratingsMap[rKey];
+        const avgRating = rData ? (rData.sum / rData.count).toFixed(1) : '';
+        const ratingStr = rData ? `${avgRating}/5 (${rData.count} votos)` : 'Sin calificación';
+
+        const eventDate = ev.start_time
+          ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+          : ev.date || '';
+
+        const eventName = ev.name || `${ev.type} - ${ev.city}`;
+
+        return {
+          '#': i + 1,
+          'Evento': eventName,
+          'Fecha evento': eventDate,
+          'Estado evento': eventStatusLabel(ev.event_status),
+          'Estado participante': statusLabel(apt.status),
+          'Nombre': u.name || '',
+          'Email': u.email || '',
+          'Teléfono': u.phone || '',
+          'Ciudad': u.city || '',
+          'País': u.country || '',
+          'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
+          'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+          'Edad': u.age || '',
+          'Rango edad mín': u.age_range_min || 18,
+          'Rango edad máx': u.age_range_max || 99,
+          'Calificación recibida': ratingStr,
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      // Ajustar anchos de columna
+      ws['!cols'] = [
+        { wch: 5 },  // #
+        { wch: 28 }, // Evento
+        { wch: 16 }, // Fecha evento
+        { wch: 14 }, // Estado evento
+        { wch: 18 }, // Estado participante
+        { wch: 22 }, // Nombre
+        { wch: 28 }, // Email
+        { wch: 14 }, // Teléfono
+        { wch: 14 }, // Ciudad
+        { wch: 12 }, // País
+        { wch: 12 }, // Género
+        { wch: 14 }, // Interesado en
+        { wch: 8  }, // Edad
+        { wch: 14 }, // Rango mín
+        { wch: 14 }, // Rango máx
+        { wch: 22 }, // Calificación
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Todos los participantes');
+      XLSX.writeFile(wb, `todos_participantes_nospi_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (err: any) {
+      console.error('exportAllParticipants error:', err);
+      window.alert('Error al exportar: ' + err.message);
+    } finally {
+      setExportingAll(false);
+    }
   };
 
   const exportUsersToExcel = () => {
@@ -1895,14 +2012,23 @@ export default function AdminPanelScreen() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <Text style={styles.sectionTitle}>Participantes por Evento</Text>
-          {filtered.length > 0 && selectedEvent && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {filtered.length > 0 && selectedEvent && (
+              <button
+                onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
+                style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                📥 Este evento ({participantTab})
+              </button>
+            )}
             <button
-              onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
-              style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              onClick={exportAllParticipantsToExcel}
+              disabled={exportingAll}
+              style={{ backgroundColor: '#6B21A8', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: exportingAll ? 0.7 : 1 }}
             >
-              📥 Descargar Excel ({participantTab})
+              {exportingAll ? '⏳ Generando...' : '📥 Todos los eventos'}
             </button>
-          )}
+          </div>
         </div>
 
         {/* Selector de evento */}
