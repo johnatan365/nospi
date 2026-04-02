@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -149,6 +148,12 @@ export default function AdminPanelScreen() {
   const [selectedAttendeeToMove, setSelectedAttendeeToMove] = useState<EventAttendee | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>('');
   const [movingAttendee, setMovingAttendee] = useState(false);
+
+  // Manual confirmation
+  const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
+  const [manualConfirmEventId, setManualConfirmEventId] = useState<string>('');
+  const [manualConfirmEmail, setManualConfirmEmail] = useState('');
+  const [manualConfirming, setManualConfirming] = useState(false);
 
   // Event creation/edit modal
   const [showEventModal, setShowEventModal] = useState(false);
@@ -759,6 +764,63 @@ export default function AdminPanelScreen() {
     } catch (error) {
       console.error('Unexpected error saving event:', error);
       window.alert('Error inesperado: ' + String(error));
+    }
+  };
+
+  const handleManualConfirm = async () => {
+    if (!manualConfirmEmail.trim() || !manualConfirmEventId) {
+      window.alert('Ingresa el email del usuario');
+      return;
+    }
+    setManualConfirming(true);
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .ilike('email', manualConfirmEmail.trim())
+        .maybeSingle();
+
+      if (userError || !userData) {
+        window.alert('No se encontró ningún usuario con ese email');
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('user_id', userData.id)
+        .eq('event_id', manualConfirmEventId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from('appointments')
+          .update({ status: 'confirmada', payment_status: 'completed' })
+          .eq('id', existing.id);
+        if (updateError) throw updateError;
+        window.alert(`${userData.name} ya tenía cita. Se actualizó a confirmada.`);
+      } else {
+        const { error: insertError } = await supabase
+          .from('appointments')
+          .insert({
+            user_id: userData.id,
+            event_id: manualConfirmEventId,
+            status: 'confirmada',
+            payment_status: 'completed',
+            confirmed_at: new Date().toISOString(),
+          });
+        if (insertError) throw insertError;
+        window.alert(`✅ ${userData.name} fue confirmado manualmente en el evento.`);
+      }
+
+      setShowManualConfirmModal(false);
+      setManualConfirmEmail('');
+      setManualConfirmEventId('');
+      loadDashboardData();
+    } catch (err: any) {
+      window.alert(err.message || 'Error inesperado');
+    } finally {
+      setManualConfirming(false);
     }
   };
 
@@ -1806,6 +1868,18 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                   </TouchableOpacity>
 
                   <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#059669' }]}
+                    onPress={() => {
+                      setManualConfirmEventId(selectedEventForConfig.id);
+                      setManualConfirmEmail('');
+                      setShowConfigModal(false);
+                      setShowManualConfirmModal(true);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>✅ Confirmar usuario manualmente</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
                     onPress={() => {
                       setShowConfigModal(false);
@@ -2504,6 +2578,61 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           </View>
         </View>
       </Modal>
+      {/* Manual Confirmation Modal */}
+      <Modal
+        visible={showManualConfirmModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowManualConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.moveAttendeeModalContent, { maxHeight: 360 }]}>
+            <View style={styles.moveAttendeeModalHeader}>
+              <Text style={styles.moveAttendeeModalTitle}>✅ Confirmar manualmente</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowManualConfirmModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.moveAttendeeModalBody, { gap: 16 }]}>
+              <Text style={{ fontSize: 14, color: '#6B7280' }}>
+                Ingresa el email del usuario para confirmarlo sin pago. Solo el admin puede hacer esto.
+              </Text>
+              <Text style={styles.inputLabel}>Email del usuario</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="ejemplo@correo.com"
+                value={manualConfirmEmail}
+                onChangeText={setManualConfirmEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+              <View style={styles.moveAttendeeModalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowManualConfirmModal(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#059669' }, manualConfirming && styles.modalButtonDisabled]}
+                  onPress={handleManualConfirm}
+                  disabled={manualConfirming}
+                >
+                  {manualConfirming
+                    ? <ActivityIndicator size="small" color="white" />
+                    : <Text style={styles.modalButtonTextConfirm}>Confirmar</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }

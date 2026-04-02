@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -104,6 +103,12 @@ export default function AdminPanelScreen() {
   const [selectedAttendeeToMove, setSelectedAttendeeToMove] = useState<EventAttendee | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>('');
   const [movingAttendee, setMovingAttendee] = useState(false);
+
+  // Manual confirmation modal
+  const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
+  const [manualConfirmEventId, setManualConfirmEventId] = useState<string>('');
+  const [manualConfirmEmail, setManualConfirmEmail] = useState('');
+  const [manualConfirming, setManualConfirming] = useState(false);
 
   // Event creation modal
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
@@ -453,6 +458,69 @@ export default function AdminPanelScreen() {
         },
       ]
     );
+  };
+
+  const handleManualConfirm = async () => {
+    if (!manualConfirmEmail.trim() || !manualConfirmEventId) {
+      Alert.alert('Error', 'Ingresa el email del usuario y selecciona el evento');
+      return;
+    }
+    setManualConfirming(true);
+    try {
+      // Buscar usuario por email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .ilike('email', manualConfirmEmail.trim())
+        .maybeSingle();
+
+      if (userError || !userData) {
+        Alert.alert('Error', 'No se encontró ningún usuario con ese email');
+        return;
+      }
+
+      // Verificar si ya tiene cita en ese evento
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('user_id', userData.id)
+        .eq('event_id', manualConfirmEventId)
+        .maybeSingle();
+
+      if (existing) {
+        // Ya existe — actualizar a confirmada
+        const { error: updateError } = await supabase
+          .from('appointments')
+          .update({ status: 'confirmada', payment_status: 'completed' })
+          .eq('id', existing.id);
+        if (updateError) throw updateError;
+        Alert.alert('Listo', `${userData.name} ya tenía cita. Se actualizó a confirmada.`);
+      } else {
+        // Crear nueva cita sin pago
+        const { error: insertError } = await supabase
+          .from('appointments')
+          .insert({
+            user_id: userData.id,
+            event_id: manualConfirmEventId,
+            status: 'confirmada',
+            payment_status: 'completed',
+            confirmed_at: new Date().toISOString(),
+          });
+        if (insertError) throw insertError;
+        Alert.alert('Listo', `${userData.name} fue confirmado manualmente en el evento.`);
+      }
+
+      setShowManualConfirmModal(false);
+      setManualConfirmEmail('');
+      setManualConfirmEventId('');
+      loadDashboardData();
+      // Recargar asistentes si el modal está abierto
+      if (selectedEvent) handleViewAttendees(selectedEvent);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Error inesperado');
+    } finally {
+      setManualConfirming(false);
+    }
   };
 
   const handleDateChange = (event: any, date?: Date) => {
@@ -915,6 +983,17 @@ export default function AdminPanelScreen() {
                 onPress={() => handleViewAttendees(event)}
               >
                 <Text style={styles.viewAttendeesButtonText}>👥 Ver Asistentes ({eventAppointmentsCount})</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.viewAttendeesButton, { backgroundColor: '#059669', marginTop: 8 }]}
+                onPress={() => {
+                  setManualConfirmEventId(event.id);
+                  setManualConfirmEmail('');
+                  setShowManualConfirmModal(true);
+                }}
+              >
+                <Text style={styles.viewAttendeesButtonText}>✅ Confirmar usuario manualmente</Text>
               </TouchableOpacity>
               
               {!locationRevealed && (
@@ -1547,6 +1626,62 @@ export default function AdminPanelScreen() {
             </View>
           </View>
         </Modal>
+      {/* Manual Confirmation Modal */}
+      <Modal
+        visible={showManualConfirmModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowManualConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.moveAttendeeModalContent, { maxHeight: 360 }]}>
+            <View style={styles.moveAttendeeModalHeader}>
+              <Text style={styles.moveAttendeeModalTitle}>✅ Confirmar manualmente</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowManualConfirmModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.moveAttendeeModalBody, { gap: 16 }]}>
+              <Text style={{ fontSize: 14, color: '#6B7280' }}>
+                Ingresa el email del usuario para confirmarlo en el evento sin que haya pagado.
+                Solo tú como admin puedes hacer esto.
+              </Text>
+              <Text style={styles.inputLabel}>Email del usuario</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="ejemplo@correo.com"
+                value={manualConfirmEmail}
+                onChangeText={setManualConfirmEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+              <View style={styles.moveAttendeeModalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowManualConfirmModal(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#059669' }, manualConfirming && styles.modalButtonDisabled]}
+                  onPress={handleManualConfirm}
+                  disabled={manualConfirming}
+                >
+                  {manualConfirming
+                    ? <ActivityIndicator size="small" color="white" />
+                    : <Text style={styles.modalButtonTextConfirm}>Confirmar</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       </LinearGradient>
     </>
   );
