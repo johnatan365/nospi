@@ -157,6 +157,7 @@ export default function ProfileScreen() {
 
   // Support modal state
   const [showSupportEmailModal, setShowSupportEmailModal] = useState(false);
+  const [supportSenderName, setSupportSenderName] = useState('');
   const [supportUserEmail, setSupportUserEmail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [sendingSupportEmail, setSendingSupportEmail] = useState(false);
@@ -301,9 +302,17 @@ export default function ProfileScreen() {
 
   const handleSupportEmail = () => {
     console.log('User tapped support email button');
+    setSupportSenderName(profile?.name || '');
     setSupportUserEmail(profile?.email || '');
     setSupportMessage('');
     setShowSupportEmailModal(true);
+  };
+
+  const closeSupportModal = () => {
+    setShowSupportEmailModal(false);
+    setSupportSenderName('');
+    setSupportUserEmail('');
+    setSupportMessage('');
   };
 
   const handleSendSupportEmail = async () => {
@@ -312,14 +321,15 @@ export default function ProfileScreen() {
       return;
     }
 
+    const nameCopy = supportSenderName.trim();
     const emailCopy = supportUserEmail.trim();
     const messageCopy = supportMessage.trim();
-    console.log('User tapped Enviar in support email modal, from:', emailCopy);
+    console.log('User tapped Enviar in support email modal, from:', emailCopy, 'name:', nameCopy);
 
     setSendingSupportEmail(true);
     try {
       const EDGE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email';
-      console.log('Network request: POST', EDGE_URL, { userEmail: emailCopy, messageLength: messageCopy.length });
+      console.log('Network request: POST', EDGE_URL, { senderEmail: emailCopy, senderName: nameCopy, messageLength: messageCopy.length });
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
@@ -330,7 +340,7 @@ export default function ProfileScreen() {
           'Content-Type': 'application/json',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ userEmail: emailCopy, message: messageCopy }),
+        body: JSON.stringify({ senderEmail: emailCopy, senderName: nameCopy, message: messageCopy }),
       });
 
       console.log('Support email API response status:', response.status);
@@ -345,11 +355,11 @@ export default function ProfileScreen() {
       const responseText = await response.text();
       console.log('Support email API response body:', responseText);
 
-      // Accept any 2xx response as success — Resend returns { id: "..." }, not { success: true }
-      setShowSupportEmailModal(false);
-      setSupportUserEmail('');
-      setSupportMessage('');
-      Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
+      // Close modal first, then show Alert after animation completes
+      closeSupportModal();
+      setTimeout(() => {
+        Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
+      }, 300);
     } catch (err) {
       console.error('Support email network error:', err);
       Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
@@ -1133,11 +1143,21 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Support Email Modal */}
-      <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={() => setShowSupportEmailModal(false)}>
+      <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={closeSupportModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Contactar Soporte</Text>
             <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
+
+            <Text style={styles.inputLabel}>Nombre</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={supportSenderName}
+              onChangeText={setSupportSenderName}
+              placeholder="Tu nombre"
+              placeholderTextColor="#999"
+              autoCorrect={false}
+            />
 
             <Text style={styles.inputLabel}>Tu correo electrónico</Text>
             <TextInput
@@ -1166,7 +1186,7 @@ export default function ProfileScreen() {
             <TouchableOpacity style={[styles.saveButton, sendingSupportEmail && { opacity: 0.6 }]} onPress={handleSendSupportEmail} activeOpacity={0.8} disabled={sendingSupportEmail}>
               <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowSupportEmailModal(false)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={closeSupportModal} activeOpacity={0.8}>
               <Text style={styles.modalCloseButtonText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
