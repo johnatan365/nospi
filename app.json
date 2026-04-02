@@ -4,7 +4,7 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -18,8 +18,8 @@
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -93,7 +93,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia."
         }
       ],
       [
