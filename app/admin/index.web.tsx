@@ -607,39 +607,70 @@ export default function AdminPanelScreen() {
 
   const saveEventQuestions = async (eventId: string) => {
     try {
-      // Delete existing questions for this event
-      await supabase
-        .from('event_questions')
-        .delete()
-        .eq('event_id', eventId);
+      // Verificar si el admin agregó preguntas custom para este evento
+      const hasCustomQuestions = Object.values(eventQuestions).some(
+        (list) => list.some((q) => q.trim().length > 0)
+      );
 
-      // Insert new questions
-      const questionsToInsert: any[] = [];
-      let orderCounter = 0;
+      if (hasCustomQuestions) {
+        // El admin configuró preguntas específicas — usarlas
+        await supabase.from('event_questions').delete().eq('event_id', eventId);
 
-      for (const [level, questionsList] of Object.entries(eventQuestions)) {
-        questionsList.forEach((questionText) => {
-          if (questionText.trim()) {
-            questionsToInsert.push({
-              event_id: eventId,
-              level: level,
-              question_text: questionText.trim(),
-              question_order: orderCounter++,
-              is_default: false,
-            });
-          }
-        });
-      }
+        const questionsToInsert: any[] = [];
+        let orderCounter = 0;
 
-      if (questionsToInsert.length > 0) {
-        const { error } = await supabase
+        for (const [level, questionsList] of Object.entries(eventQuestions)) {
+          questionsList.forEach((questionText) => {
+            if (questionText.trim()) {
+              questionsToInsert.push({
+                event_id: eventId,
+                level,
+                question_text: questionText.trim(),
+                question_order: orderCounter++,
+                is_default: false,
+              });
+            }
+          });
+        }
+
+        const { error } = await supabase.from('event_questions').insert(questionsToInsert);
+        if (error) {
+          console.error('Error saving custom event questions:', error);
+          window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
+        }
+      } else {
+        // No hay preguntas custom — copiar las globales (event_id = null) al evento
+        const { data: globalQuestions, error: fetchError } = await supabase
+          .from('event_questions')
+          .select('level, question_text, question_order')
+          .is('event_id', null)
+          .order('level', { ascending: true })
+          .order('question_order', { ascending: true });
+
+        if (fetchError || !globalQuestions || globalQuestions.length === 0) {
+          console.log('saveEventQuestions: no hay preguntas globales para copiar');
+          return;
+        }
+
+        // Borrar preguntas previas del evento (por si es una edición)
+        await supabase.from('event_questions').delete().eq('event_id', eventId);
+
+        const questionsToInsert = globalQuestions.map((q, index) => ({
+          event_id: eventId,
+          level: q.level,
+          question_text: q.question_text,
+          question_order: index,
+          is_default: true,
+        }));
+
+        const { error: insertError } = await supabase
           .from('event_questions')
           .insert(questionsToInsert);
 
-        if (error) {
-          console.error('Error saving event questions:', error);
-          window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
+        if (insertError) {
+          console.error('Error copiando preguntas globales al evento:', insertError);
         } else {
+          console.log(`saveEventQuestions: ${questionsToInsert.length} preguntas globales copiadas al evento`);
         }
       }
     } catch (error) {
@@ -1364,6 +1395,86 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     setShowConfigModal(true);
   };
 
+  const handleSyncQuestionsToAllEvents = async () => {
+    const confirmed = window.confirm(
+      '¿Copiar las preguntas globales a TODOS los eventos que no tienen preguntas propias? ' +
+      'Los eventos que ya tienen preguntas configuradas NO serán modificados.'
+    );
+    if (!confirmed) return;
+
+    setLoadingQuestions(true);
+    try {
+      // 1. Traer todas las preguntas globales
+      const { data: globalQuestions, error: fetchError } = await supabase
+        .from('event_questions')
+        .select('level, question_text, question_order')
+        .is('event_id', null)
+        .order('level', { ascending: true })
+        .order('question_order', { ascending: true });
+
+      if (fetchError || !globalQuestions || globalQuestions.length === 0) {
+        window.alert('No hay preguntas globales para sincronizar. Agrega preguntas primero.');
+        return;
+      }
+
+      // 2. Traer todos los eventos publicados y en borrador
+      const { data: allEvents, error: eventsError } = await supabase
+        .from('events')
+        .select('id')
+        .in('event_status', ['published', 'draft']);
+
+      if (eventsError || !allEvents || allEvents.length === 0) {
+        window.alert('No se encontraron eventos.');
+        return;
+      }
+
+      // 3. Para cada evento, verificar si ya tiene preguntas propias
+      let synced = 0;
+      let skipped = 0;
+
+      for (const event of allEvents) {
+        const { data: existing } = await supabase
+          .from('event_questions')
+          .select('id')
+          .eq('event_id', event.id)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          skipped++;
+          continue; // Ya tiene preguntas — no tocar
+        }
+
+        // No tiene preguntas — copiar las globales
+        const toInsert = globalQuestions.map((q, index) => ({
+          event_id: event.id,
+          level: q.level,
+          question_text: q.question_text,
+          question_order: index,
+          is_default: true,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('event_questions')
+          .insert(toInsert);
+
+        if (!insertError) synced++;
+      }
+
+      window.alert(
+        `✅ Sincronización completada.
+` +
+        `• ${synced} evento(s) actualizados con las preguntas globales.
+` +
+        `• ${skipped} evento(s) omitidos (ya tenían preguntas propias).`
+      );
+    } catch (err: any) {
+      console.error('handleSyncQuestionsToAllEvents error:', err);
+      window.alert('Error inesperado: ' + err.message);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
   const renderQuestions = () => {
     return (
       <View style={styles.listContainer}>
@@ -1421,6 +1532,14 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           </TouchableOpacity>
           <TouchableOpacity style={styles.bulkActionButton} onPress={handleMassUpload}>
             <Text style={styles.bulkActionButtonText}>📤 Cargar desde CSV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkActionButton, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#059669' }]}
+            onPress={handleSyncQuestionsToAllEvents}
+          >
+            <Text style={[styles.bulkActionButtonText, { color: '#065F46' }]}>
+              📋 Sincronizar a todos los eventos
+            </Text>
           </TouchableOpacity>
         </View>
 
