@@ -310,39 +310,46 @@ export default function ProfileScreen() {
     }
 
     const emailCopy = supportUserEmail.trim();
-    console.log('User sending support email via API, from:', emailCopy);
+    const messageCopy = supportMessage.trim();
+    console.log('User tapped Enviar in support email modal, from:', emailCopy);
 
     setSendingSupportEmail(true);
     try {
-      console.log('Network request: POST https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email');
-      const response = await fetch('https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email', {
+      const EDGE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email';
+      console.log('Network request: POST', EDGE_URL, { userEmail: emailCopy, messageLength: messageCopy.length });
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      const response = await fetch(EDGE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail: emailCopy, message: supportMessage }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ userEmail: emailCopy, message: messageCopy }),
       });
+
+      console.log('Support email API response status:', response.status);
 
       if (!response.ok) {
         const errText = await response.text();
         console.error('Support email API error:', response.status, errText);
-        Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
+        Alert.alert('Error al enviar', `Código ${response.status}: ${errText || 'Error desconocido'}`);
         return;
       }
 
-      const data = await response.json();
-      console.log('Support email API response:', data);
+      const responseText = await response.text();
+      console.log('Support email API response body:', responseText);
 
-      if (data.success === true) {
-        setShowSupportEmailModal(false);
-        setSupportUserEmail('');
-        setSupportMessage('');
-        Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
-      } else {
-        console.error('Support email API returned success=false:', data);
-        Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
-      }
+      // Accept any 2xx response as success — Resend returns { id: "..." }, not { success: true }
+      setShowSupportEmailModal(false);
+      setSupportUserEmail('');
+      setSupportMessage('');
+      Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
     } catch (err) {
       console.error('Support email network error:', err);
-      Alert.alert('Error', 'No se pudo enviar el mensaje. Por favor intenta de nuevo.');
+      Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
     } finally {
       setSendingSupportEmail(false);
     }
