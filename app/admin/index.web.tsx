@@ -75,7 +75,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'config';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -125,6 +125,13 @@ export default function AdminPanelScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
+
+  // App config state
+  const [configEventPrice, setConfigEventPrice] = useState('');
+  const [configSupportEmail, setConfigSupportEmail] = useState('');
+  const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
 
   // Dashboard stats
   const [totalEvents, setTotalEvents] = useState(0);
@@ -210,12 +217,19 @@ export default function AdminPanelScreen() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
 
+  // Matches and ratings state
+  const [loadingMatches, setLoadingMatches] = useState(false);
+  const [eventMatches, setEventMatches] = useState<any[]>([]);
+  const [eventRatings, setEventRatings] = useState<any[]>([]);
+  const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
+
   useEffect(() => {
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
       loadDashboardData();
+      loadAppConfig();
     }
   }, [isAuthenticated, currentView]);
 
@@ -271,6 +285,41 @@ export default function AdminPanelScreen() {
       supabase.removeChannel(channel);
     };
   }, [isAuthenticated, selectedEventForMonitoring]);
+
+  const loadAppConfig = async () => {
+    const { data, error } = await supabase.from('app_config').select('key, value');
+    if (error || !data) return;
+    for (const row of data) {
+      if (row.key === 'event_price') setConfigEventPrice(row.value);
+      if (row.key === 'support_email') setConfigSupportEmail(row.value);
+      if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    setConfigSaved(null);
+    try {
+      const rows = [
+        { key: 'event_price', value: configEventPrice.trim() },
+        { key: 'support_email', value: configSupportEmail.trim() },
+        { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
+      ];
+      const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
+      if (error) {
+        console.error('Error saving config:', error.message);
+        setConfigSaved('error');
+        return;
+      }
+      setConfigSaved('success');
+      setTimeout(() => setConfigSaved(null), 3000);
+    } catch (err) {
+      console.error('Unexpected error saving config:', err);
+      setConfigSaved('error');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const handlePasswordSubmit = () => {
     if (adminPassword === 'nospi2024') {
@@ -1591,6 +1640,114 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const renderConfig = () => {
+    const toastColor = configSaved === 'success' ? '#10B981' : '#EF4444';
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>⚙️ Configuración de la App</Text>
+        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 28 }}>
+          Estos valores se aplican globalmente en la app. Los cambios se reflejan en tiempo real para todos los usuarios.
+        </Text>
+
+        {configSaved && (
+          <div style={{
+            backgroundColor: toastColor, color: 'white', borderRadius: 12,
+            padding: '14px 20px', marginBottom: 20, fontSize: 15, fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            {configSaved === 'success' ? '✅ Configuración guardada correctamente' : '❌ Error al guardar, intenta de nuevo'}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
+          {/* Precio */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #6B21A8' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              💰 Precio del Evento
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
+              Valor en pesos colombianos (COP), sin puntos ni comas
+            </div>
+            <input
+              type="number"
+              value={configEventPrice}
+              onChange={(e) => setConfigEventPrice(e.target.value)}
+              placeholder="30000"
+              style={{
+                width: '100%', backgroundColor: '#F5F3FF', border: '2px solid #DDD6FE',
+                borderRadius: 10, padding: '12px 14px', fontSize: 18, fontWeight: 700,
+                color: '#6B21A8', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
+              Actualmente: <strong>$ {Number(configEventPrice || 0).toLocaleString('es-CO')} COP</strong>
+            </div>
+          </div>
+
+          {/* Email */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #3B82F6' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              ✉️ Email de Soporte
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
+              Dirección de correo que verán los usuarios en la pestaña Perfil
+            </div>
+            <input
+              type="email"
+              value={configSupportEmail}
+              onChange={(e) => setConfigSupportEmail(e.target.value)}
+              placeholder="soporte@nospi.app"
+              style={{
+                width: '100%', backgroundColor: '#EFF6FF', border: '2px solid #BFDBFE',
+                borderRadius: 10, padding: '12px 14px', fontSize: 15,
+                color: '#1D4ED8', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* WhatsApp */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #10B981' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              💬 WhatsApp de Soporte
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
+              Número con código de país, sin + ni espacios. Ej: 573001234567
+            </div>
+            <input
+              type="tel"
+              value={configSupportWhatsapp}
+              onChange={(e) => setConfigSupportWhatsapp(e.target.value)}
+              placeholder="573001234567"
+              style={{
+                width: '100%', backgroundColor: '#ECFDF5', border: '2px solid #A7F3D0',
+                borderRadius: 10, padding: '12px 14px', fontSize: 15,
+                color: '#065F46', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
+              Link generado: <strong>wa.me/{configSupportWhatsapp}</strong>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={handleSaveConfig}
+          disabled={savingConfig}
+          style={{
+            backgroundColor: savingConfig ? '#9CA3AF' : '#6B21A8',
+            color: 'white', border: 'none', borderRadius: 14,
+            padding: '16px 40px', fontSize: 17, fontWeight: 700,
+            cursor: savingConfig ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 10,
+            transition: 'background 0.2s',
+          }}
+        >
+          {savingConfig ? '⏳ Guardando...' : '💾 Guardar Configuración'}
+        </button>
+      </View>
+    );
+  };
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -2448,6 +2605,14 @@ export default function AdminPanelScreen() {
               🔴 En Vivo
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, currentView === 'config' && styles.tabActive]}
+            onPress={() => setCurrentView('config')}
+          >
+            <Text style={[styles.tabText, currentView === 'config' && styles.tabTextActive]}>
+              ⚙️ Config
+            </Text>
+          </TouchableOpacity>
 
         </View>
 
@@ -2459,6 +2624,7 @@ export default function AdminPanelScreen() {
           {currentView === 'participants' && renderParticipants()}
           {currentView === 'questions' && renderQuestions()}
           {currentView === 'realtime' && renderRealtime()}
+          {currentView === 'config' && renderConfig()}
         </ScrollView>
       </View>
 
