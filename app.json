@@ -13,7 +13,6 @@
       "backgroundColor": "#A0005A"
     },
     "ios": {
-      "icon": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
@@ -30,10 +29,9 @@
       }
     },
     "android": {
-      "icon": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
-        "backgroundColor": "#A0005A"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nospi.jaxper",
