@@ -130,6 +130,7 @@ export default function AdminPanelScreen() {
   const [configEventPrice, setConfigEventPrice] = useState('');
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
+  const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
 
@@ -293,6 +294,7 @@ export default function AdminPanelScreen() {
       if (row.key === 'event_price') setConfigEventPrice(row.value);
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
+      if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
     }
   };
 
@@ -304,6 +306,7 @@ export default function AdminPanelScreen() {
         { key: 'event_price', value: configEventPrice.trim() },
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
+        { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -1728,10 +1731,47 @@ export default function AdminPanelScreen() {
               Link generado: <strong>wa.me/{configSupportWhatsapp}</strong>
             </div>
           </div>
-        </div>
+          {/* Toggle Pago de Prueba */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${configTestPaymentEnabled ? '#F59E0B' : '#9CA3AF'}` }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: configTestPaymentEnabled ? '#92400E' : '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              🧪 Botón Pago de Prueba
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
+              Muestra u oculta el botón "Pago de Prueba (TEST)" en la pantalla de pago de la app
+            </div>
+            <div
+              onClick={() => setConfigTestPaymentEnabled(!configTestPaymentEnabled)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
+                backgroundColor: configTestPaymentEnabled ? '#FEF3C7' : '#F3F4F6',
+                borderRadius: 12, padding: '14px 18px',
+                border: `2px solid ${configTestPaymentEnabled ? '#F59E0B' : '#E5E7EB'}`,
+                transition: 'all 0.2s', userSelect: 'none',
+              }}
+            >
+              {/* Toggle pill */}
+              <div style={{
+                width: 52, height: 28, borderRadius: 14, position: 'relative', flexShrink: 0,
+                backgroundColor: configTestPaymentEnabled ? '#F59E0B' : '#D1D5DB',
+                transition: 'background 0.2s',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 3, left: configTestPaymentEnabled ? 27 : 3,
+                  width: 22, height: 22, borderRadius: '50%', backgroundColor: 'white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: configTestPaymentEnabled ? '#92400E' : '#6B7280' }}>
+                  {configTestPaymentEnabled ? '✅ Activado — visible en la app' : '⛔ Desactivado — oculto en la app'}
+                </div>
+                <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                  {configTestPaymentEnabled ? 'El botón 🧪 aparece en la pantalla de pago' : 'Los usuarios no ven el botón de prueba'}
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <button
-          onClick={handleSaveConfig}
           disabled={savingConfig}
           style={{
             backgroundColor: savingConfig ? '#9CA3AF' : '#6B21A8',

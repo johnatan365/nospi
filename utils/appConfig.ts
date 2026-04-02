@@ -4,12 +4,14 @@ export interface AppConfig {
   event_price: string;
   support_email: string;
   support_whatsapp: string;
+  test_payment_enabled: string; // 'true' | 'false'
 }
 
 const DEFAULTS: AppConfig = {
   event_price: '30000',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
+  test_payment_enabled: 'false',
 };
 
 let cachedConfig: AppConfig | null = null;
@@ -41,6 +43,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       if (row.key === 'event_price') config.event_price = row.value;
       if (row.key === 'support_email') config.support_email = row.value;
       if (row.key === 'support_whatsapp') config.support_whatsapp = row.value;
+      if (row.key === 'test_payment_enabled') config.test_payment_enabled = row.value;
     }
 
     console.log('[AppConfig] Config loaded:', config);
