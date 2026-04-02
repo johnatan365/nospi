@@ -159,6 +159,7 @@ export default function ProfileScreen() {
   const [supportUserEmail, setSupportUserEmail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [sendingSupportEmail, setSendingSupportEmail] = useState(false);
+  const [supportEmailSent, setSupportEmailSent] = useState(false);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -306,14 +307,20 @@ export default function ProfileScreen() {
   };
 
   const closeSupportModal = () => {
+    console.log('[SupportEmail iOS] User closed support modal');
     setShowSupportEmailModal(false);
     setSupportSenderName('');
     setSupportUserEmail('');
     setSupportMessage('');
+    setSupportEmailSent(false);
   };
 
   const handleSendSupportEmail = async () => {
+    console.log('[SupportEmail iOS] handleSendSupportEmail called');
+    console.log('[SupportEmail iOS] Fields — email:', supportUserEmail.trim(), '| message length:', supportMessage.trim().length, '| name:', supportSenderName.trim());
+
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
+      console.log('[SupportEmail iOS] Validation failed: missing email or message');
       Alert.alert('Campos requeridos', 'Por favor completa tu correo y el mensaje');
       return;
     }
@@ -321,16 +328,20 @@ export default function ProfileScreen() {
     const nameCopy = supportSenderName.trim();
     const emailCopy = supportUserEmail.trim();
     const messageCopy = supportMessage.trim();
-    console.log('User tapped Enviar in support email modal, from:', emailCopy, 'name:', nameCopy);
+    console.log('[SupportEmail iOS] User tapped Enviar — from:', emailCopy, '| name:', nameCopy, '| messageLength:', messageCopy.length);
 
     setSendingSupportEmail(true);
+    console.log('[SupportEmail iOS] sendingSupportEmail set to true');
+
     try {
       const EDGE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email';
-      console.log('Network request: POST', EDGE_URL, { senderEmail: emailCopy, senderName: nameCopy, messageLength: messageCopy.length });
+      console.log('[SupportEmail iOS] Before fetch — POST', EDGE_URL);
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+      console.log('[SupportEmail iOS] Auth token present:', !!accessToken);
 
+      console.log('[SupportEmail iOS] Sending fetch request...');
       const response = await fetch(EDGE_URL, {
         method: 'POST',
         headers: {
@@ -340,28 +351,29 @@ export default function ProfileScreen() {
         body: JSON.stringify({ senderEmail: emailCopy, senderName: nameCopy, message: messageCopy }),
       });
 
-      console.log('Support email API response status:', response.status);
+      console.log('[SupportEmail iOS] After fetch — response.status:', response.status, '| response.ok:', response.ok);
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('Support email API error:', response.status, errText);
+        console.error('[SupportEmail iOS] API error — status:', response.status, '| body:', errText);
         Alert.alert('Error al enviar', `Código ${response.status}: ${errText || 'Error desconocido'}`);
         return;
       }
 
       const responseText = await response.text();
-      console.log('Support email API response body:', responseText);
+      console.log('[SupportEmail iOS] API success — response body:', responseText);
+      console.log('[SupportEmail iOS] Showing inline success state');
 
-      // Close modal first, then show Alert after animation completes
-      closeSupportModal();
-      setTimeout(() => {
-        Alert.alert('Mensaje enviado ✓', `Hemos recibido tu mensaje. Te responderemos pronto a ${emailCopy}.`);
-      }, 300);
+      setSupportSenderName('');
+      setSupportUserEmail('');
+      setSupportMessage('');
+      setSupportEmailSent(true);
     } catch (err) {
-      console.error('Support email network error:', err);
+      console.error('[SupportEmail iOS] Network/unexpected error:', err);
       Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
     } finally {
       setSendingSupportEmail(false);
+      console.log('[SupportEmail iOS] sendingSupportEmail set to false (finally block)');
     }
   };
 
@@ -1031,49 +1043,67 @@ export default function ProfileScreen() {
       <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={closeSupportModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Contactar Soporte</Text>
-            <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
+            {supportEmailSent ? (
+              <View style={styles.supportSuccessContainer}>
+                <View style={styles.supportSuccessIconCircle}>
+                  <Text style={styles.supportSuccessIcon}>✓</Text>
+                </View>
+                <Text style={styles.supportSuccessTitle}>¡Mensaje enviado!</Text>
+                <Text style={styles.supportSuccessSubtext}>
+                  Te responderemos pronto a
+                </Text>
+                <Text style={styles.supportSuccessEmail}>{profile?.email || ''}</Text>
+                <TouchableOpacity style={styles.saveButton} onPress={closeSupportModal} activeOpacity={0.8}>
+                  <Text style={styles.saveButtonText}>Cerrar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>Contactar Soporte</Text>
+                <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
 
-            <Text style={styles.inputLabel}>Nombre</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={supportSenderName}
-              onChangeText={setSupportSenderName}
-              placeholder="Tu nombre"
-              placeholderTextColor="#999"
-              autoCorrect={false}
-            />
+                <Text style={styles.inputLabel}>Nombre</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={supportSenderName}
+                  onChangeText={setSupportSenderName}
+                  placeholder="Tu nombre"
+                  placeholderTextColor="#999"
+                  autoCorrect={false}
+                />
 
-            <Text style={styles.inputLabel}>Tu correo electrónico</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={supportUserEmail}
-              onChangeText={setSupportUserEmail}
-              placeholder="tu@correo.com"
-              placeholderTextColor="#999"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+                <Text style={styles.inputLabel}>Tu correo electrónico</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={supportUserEmail}
+                  onChangeText={setSupportUserEmail}
+                  placeholder="tu@correo.com"
+                  placeholderTextColor="#999"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
 
-            <Text style={styles.inputLabel}>Mensaje</Text>
-            <TextInput
-              style={[styles.modalInput, styles.supportMessageInput]}
-              value={supportMessage}
-              onChangeText={setSupportMessage}
-              placeholder="Describe tu consulta o problema..."
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-            />
+                <Text style={styles.inputLabel}>Mensaje</Text>
+                <TextInput
+                  style={[styles.modalInput, styles.supportMessageInput]}
+                  value={supportMessage}
+                  onChangeText={setSupportMessage}
+                  placeholder="Describe tu consulta o problema..."
+                  placeholderTextColor="#999"
+                  multiline
+                  numberOfLines={5}
+                  textAlignVertical="top"
+                />
 
-            <TouchableOpacity style={[styles.saveButton, sendingSupportEmail && { opacity: 0.6 }]} onPress={handleSendSupportEmail} activeOpacity={0.8} disabled={sendingSupportEmail}>
-              <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={closeSupportModal} activeOpacity={0.8}>
-              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={[styles.saveButton, sendingSupportEmail && { opacity: 0.6 }]} onPress={handleSendSupportEmail} activeOpacity={0.8} disabled={sendingSupportEmail}>
+                  <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalCloseButton} onPress={closeSupportModal} activeOpacity={0.8}>
+                  <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1259,4 +1289,10 @@ const styles = StyleSheet.create({
   supportCardTitle: { fontSize: 15, fontWeight: '700', color: '#880E4F', marginBottom: 4 },
   supportCardSub: { fontSize: 12, color: '#666', textAlign: 'center' },
   supportMessageInput: { height: 120, paddingTop: 14 },
+  supportSuccessContainer: { alignItems: 'center', paddingVertical: 24 },
+  supportSuccessIconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  supportSuccessIcon: { fontSize: 36, color: '#2E7D32', fontWeight: 'bold' },
+  supportSuccessTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
+  supportSuccessSubtext: { fontSize: 15, color: '#666', textAlign: 'center' },
+  supportSuccessEmail: { fontSize: 15, color: '#333', fontWeight: '600', textAlign: 'center', marginBottom: 28 },
 });
