@@ -1729,7 +1729,7 @@ export default function AdminPanelScreen() {
         'Rango edad mín': u.age_range_min || 18,
         'Rango edad máx': u.age_range_max || 99,
         'Estado': statusLabel,
-        'Estado pago': a.payment_status === 'completed' ? 'Pagado' : 'Pendiente',
+        'Calificación': (a as any).avgRating != null ? `${((a as any).avgRating).toFixed(1)}/5 (${(a as any).ratingCount} votos)` : 'Sin calificación',
       };
     });
     if (data.length === 0) { window.alert('No hay participantes en esta pestaña para exportar'); return; }
@@ -1743,31 +1743,51 @@ export default function AdminPanelScreen() {
   const loadParticipantAttendees = async (eventId: string) => {
     setLoadingParticipantAttendees(true);
     try {
-      // Traer TODOS los estados (confirmada, cancelada, anterior) para mostrar en subpestañas
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id, user_id, event_id, status, payment_status, created_at,
-          users!inner (
-            id, name, email, phone, city, country,
-            interested_in, gender, age, age_range_min, age_range_max
-          )
-        `)
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false });
+      // Traer TODOS los estados (confirmada, cancelada, anterior)
+      const [aptsResult, ratingsResult] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select(`
+            id, user_id, event_id, status, payment_status, created_at,
+            users!inner (
+              id, name, email, phone, city, country,
+              interested_in, gender, age, age_range_min, age_range_max
+            )
+          `)
+          .eq('event_id', eventId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('event_ratings')
+          .select('rated_user_id, rating')
+          .eq('event_id', eventId),
+      ]);
 
-      if (error) { window.alert('Error al cargar participantes: ' + error.message); return; }
+      if (aptsResult.error) { window.alert('Error al cargar participantes: ' + aptsResult.error.message); return; }
 
-      const transformed = (data || []).map((att: any) => ({
-        id: att.id, user_id: att.user_id, event_id: att.event_id,
-        status: att.status, payment_status: att.payment_status, created_at: att.created_at,
-        users: {
-          id: att.users.id, name: att.users.name, email: att.users.email,
-          phone: att.users.phone, city: att.users.city, country: att.users.country,
-          interested_in: att.users.interested_in, gender: att.users.gender,
-          age: att.users.age, age_range_min: att.users.age_range_min, age_range_max: att.users.age_range_max,
-        },
-      }));
+      // Calcular promedio de calificaciones por usuario
+      const ratingsMap: Record<string, { sum: number; count: number }> = {};
+      for (const r of (ratingsResult.data || [])) {
+        if (!ratingsMap[r.rated_user_id]) ratingsMap[r.rated_user_id] = { sum: 0, count: 0 };
+        ratingsMap[r.rated_user_id].sum += r.rating;
+        ratingsMap[r.rated_user_id].count += 1;
+      }
+
+      const transformed = (aptsResult.data || []).map((att: any) => {
+        const rData = ratingsMap[att.user_id];
+        const avgRating = rData ? (rData.sum / rData.count) : null;
+        return {
+          id: att.id, user_id: att.user_id, event_id: att.event_id,
+          status: att.status, payment_status: att.payment_status, created_at: att.created_at,
+          avgRating,
+          ratingCount: rData?.count || 0,
+          users: {
+            id: att.users.id, name: att.users.name, email: att.users.email,
+            phone: att.users.phone, city: att.users.city, country: att.users.country,
+            interested_in: att.users.interested_in, gender: att.users.gender,
+            age: att.users.age, age_range_min: att.users.age_range_min, age_range_max: att.users.age_range_max,
+          },
+        };
+      });
       setParticipantAttendees(transformed);
     } catch (err: any) {
       console.error('loadParticipantAttendees error:', err);
@@ -1778,7 +1798,7 @@ export default function AdminPanelScreen() {
   };
 
   const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad'];
-  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Pago'];
+  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   const cellStyle: any = {
     padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
@@ -1971,7 +1991,6 @@ export default function AdminPanelScreen() {
                     const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
                     const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
                     const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
-                    const paid = att.payment_status === 'completed';
                     const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                     return (
                       <tr key={att.id} style={row}>
@@ -1991,9 +2010,18 @@ export default function AdminPanelScreen() {
                         <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
-                          <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: paid ? '#D1FAE5' : '#FEF3C7', color: paid ? '#065F46' : '#92400E' }}>
-                            {paid ? 'Pagado' : 'Pendiente'}
-                          </span>
+                          {(att as any).avgRating != null ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                              <span style={{ fontSize: 15 }}>
+                                {'⭐'.repeat(Math.round((att as any).avgRating))}{'☆'.repeat(5 - Math.round((att as any).avgRating))}
+                              </span>
+                              <span style={{ fontSize: 11, color: '#6B7280' }}>
+                                {((att as any).avgRating).toFixed(1)}/5 · {(att as any).ratingCount} voto{(att as any).ratingCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>
+                          )}
                         </td>
                       </tr>
                     );
