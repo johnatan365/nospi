@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // ============================================================
@@ -849,8 +849,9 @@ export default function ProfileScreen() {
 
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="always">
+          <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Editar Perfil</Text>
               <Text style={styles.inputLabel}>Nombre</Text>
@@ -880,10 +881,17 @@ export default function ProfileScreen() {
                 <TextInput
                   style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
                   value={editPhoneNumber}
-                  onChangeText={setEditPhoneNumber}
+                  onChangeText={(value) => {
+                    const cleaned = value.replace(/\D/g, '').slice(0, 10);
+                    console.log('Phone number input changed:', cleaned);
+                    setEditPhoneNumber(cleaned);
+                  }}
                   placeholder="Tu teléfono"
                   placeholderTextColor="#999"
                   keyboardType="phone-pad"
+                  maxLength={10}
+                  returnKeyType="done"
+                  onSubmitEditing={() => { console.log('Phone input done pressed'); Keyboard.dismiss(); }}
                 />
               </View>
               {showPhoneCountryPicker && (
@@ -1037,6 +1045,7 @@ export default function ProfileScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Support Email Modal */}
