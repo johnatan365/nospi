@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Alert, useWindowDimensions } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -72,6 +72,8 @@ type EventTab = 'published' | 'closed' | 'draft';
 
 export default function AdminPanelScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const isSmallScreen = screenWidth < 768;
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -844,46 +846,73 @@ export default function AdminPanelScreen() {
       { label: 'Total Citas', value: totalAppointments, color: nospiColors.purpleLight },
     ];
 
+    const exportLabel = exporting ? 'Exportando...' : '📊 Exportar Asistentes a Excel';
+
     return (
       <View style={styles.dashboardContainer}>
-        <Text style={styles.sectionTitle}>Panel de Control</Text>
-        <View style={styles.statsGrid}>
+        <Text style={[styles.sectionTitle, isSmallScreen && styles.sectionTitleSmall]}>
+          Panel de Control
+        </Text>
+        <View style={[styles.statsGrid, isSmallScreen && styles.statsGridSmall]}>
           {statsData.map((stat, index) => (
-            <View key={index} style={[styles.statCard, { borderLeftColor: stat.color }]}>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+            <View
+              key={index}
+              style={[
+                styles.statCard,
+                { borderLeftColor: stat.color },
+                isSmallScreen && styles.statCardSmall,
+              ]}
+            >
+              <Text style={[styles.statValue, isSmallScreen && styles.statValueSmall]}>
+                {stat.value}
+              </Text>
+              <Text style={[styles.statLabel, isSmallScreen && styles.statLabelSmall]}>
+                {stat.label}
+              </Text>
             </View>
           ))}
         </View>
 
         <View style={styles.quickActions}>
-          <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
+          <Text style={[styles.quickActionsTitle, isSmallScreen && styles.quickActionsTitleSmall]}>
+            Acciones Rápidas
+          </Text>
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => setShowCreateEventModal(true)}
+            style={[styles.actionButton, isSmallScreen && styles.actionButtonSmall]}
+            onPress={() => {
+              console.log('Quick action pressed: Crear Nuevo Evento');
+              setShowCreateEventModal(true);
+            }}
           >
             <Text style={styles.actionButtonText}>+ Crear Nuevo Evento</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={() => setCurrentView('events')}
+            style={[styles.actionButton, styles.actionButtonSecondary, isSmallScreen && styles.actionButtonSmall]}
+            onPress={() => {
+              console.log('Quick action pressed: Ver Todos los Eventos');
+              setCurrentView('events');
+            }}
           >
             <Text style={styles.actionButtonTextSecondary}>Ver Todos los Eventos</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={() => setCurrentView('users')}
+            style={[styles.actionButton, styles.actionButtonSecondary, isSmallScreen && styles.actionButtonSmall]}
+            onPress={() => {
+              console.log('Quick action pressed: Ver Usuarios');
+              setCurrentView('users');
+            }}
           >
             <Text style={styles.actionButtonTextSecondary}>Ver Usuarios</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: nospiColors.purpleDark }]}
-            onPress={handleExportAllAttendees}
+            style={[styles.actionButton, { backgroundColor: nospiColors.purpleDark }, isSmallScreen && styles.actionButtonSmall]}
+            onPress={() => {
+              console.log('Quick action pressed: Exportar Asistentes');
+              handleExportAllAttendees();
+            }}
             disabled={exporting}
           >
-            <Text style={styles.actionButtonText}>
-              {exporting ? 'Exportando...' : '📊 Exportar Todos los Asistentes a Excel'}
-            </Text>
+            <Text style={styles.actionButtonText}>{exportLabel}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -907,32 +936,74 @@ export default function AdminPanelScreen() {
         </View>
 
         {/* Event Tabs */}
-        <View style={styles.eventTabsContainer}>
-          <TouchableOpacity
-            style={[styles.eventTab, eventTab === 'published' && styles.eventTabActive]}
-            onPress={() => setEventTab('published')}
-          >
-            <Text style={[styles.eventTabText, eventTab === 'published' && styles.eventTabTextActive]}>
-              ✅ Publicados ({events.filter(e => e.event_status === 'published').length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.eventTab, eventTab === 'closed' && styles.eventTabActive]}
-            onPress={() => setEventTab('closed')}
-          >
-            <Text style={[styles.eventTabText, eventTab === 'closed' && styles.eventTabTextActive]}>
-              🔒 Cerrados ({events.filter(e => e.event_status === 'closed').length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.eventTab, eventTab === 'draft' && styles.eventTabActive]}
-            onPress={() => setEventTab('draft')}
-          >
-            <Text style={[styles.eventTabText, eventTab === 'draft' && styles.eventTabTextActive]}>
-              📝 Borradores ({events.filter(e => e.event_status === 'draft').length})
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {isSmallScreen ? (
+          <View style={styles.eventTabsVertical}>
+            {([
+              { key: 'published', icon: '✅', label: 'Publicados' },
+              { key: 'closed',    icon: '🔒', label: 'Cerrados' },
+              { key: 'draft',     icon: '📝', label: 'Borradores' },
+            ] as const).map(({ key, icon, label }) => {
+              const count = events.filter(e => e.event_status === key).length;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.eventTabVertical, eventTab === key && styles.eventTabVerticalActive]}
+                  onPress={() => {
+                    console.log(`Event sub-tab pressed: ${label}`);
+                    setEventTab(key);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.eventTabVerticalIcon}>{icon}</Text>
+                  <Text style={[styles.eventTabVerticalText, eventTab === key && styles.eventTabVerticalTextActive]}>
+                    {label}
+                  </Text>
+                  <View style={[styles.eventTabBadge, eventTab === key && styles.eventTabBadgeActive]}>
+                    <Text style={[styles.eventTabBadgeText, eventTab === key && styles.eventTabBadgeTextActive]}>
+                      {count}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.eventTabsContainer}>
+            <TouchableOpacity
+              style={[styles.eventTab, eventTab === 'published' && styles.eventTabActive]}
+              onPress={() => {
+                console.log('Event sub-tab pressed: Publicados');
+                setEventTab('published');
+              }}
+            >
+              <Text style={[styles.eventTabText, eventTab === 'published' && styles.eventTabTextActive]}>
+                ✅ Publicados ({events.filter(e => e.event_status === 'published').length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.eventTab, eventTab === 'closed' && styles.eventTabActive]}
+              onPress={() => {
+                console.log('Event sub-tab pressed: Cerrados');
+                setEventTab('closed');
+              }}
+            >
+              <Text style={[styles.eventTabText, eventTab === 'closed' && styles.eventTabTextActive]}>
+                🔒 Cerrados ({events.filter(e => e.event_status === 'closed').length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.eventTab, eventTab === 'draft' && styles.eventTabActive]}
+              onPress={() => {
+                console.log('Event sub-tab pressed: Borradores');
+                setEventTab('draft');
+              }}
+            >
+              <Text style={[styles.eventTabText, eventTab === 'draft' && styles.eventTabTextActive]}>
+                📝 Borradores ({events.filter(e => e.event_status === 'draft').length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {filteredEvents.map((event) => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
@@ -1205,43 +1276,92 @@ export default function AdminPanelScreen() {
       >
         <View style={styles.container}>
           {/* Navigation Tabs */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'dashboard' && styles.tabActive]}
-              onPress={() => setCurrentView('dashboard')}
+          {isSmallScreen ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tabBarSmall}
+              contentContainerStyle={styles.tabBarSmallContent}
             >
-              <Text style={[styles.tabText, currentView === 'dashboard' && styles.tabTextActive]}>
-                Dashboard
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'events' && styles.tabActive]}
-              onPress={() => setCurrentView('events')}
-            >
-              <Text style={[styles.tabText, currentView === 'events' && styles.tabTextActive]}>
-                Eventos
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'users' && styles.tabActive]}
-              onPress={() => setCurrentView('users')}
-            >
-              <Text style={[styles.tabText, currentView === 'users' && styles.tabTextActive]}>
-                Usuarios
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, currentView === 'appointments' && styles.tabActive]}
-              onPress={() => setCurrentView('appointments')}
-            >
-              <Text style={[styles.tabText, currentView === 'appointments' && styles.tabTextActive]}>
-                Citas
-              </Text>
-            </TouchableOpacity>
-          </View>
+              {([
+                { key: 'dashboard', icon: '📊', label: 'Dashboard' },
+                { key: 'events',    icon: '📅', label: 'Eventos' },
+                { key: 'users',     icon: '👥', label: 'Usuarios' },
+                { key: 'appointments', icon: '📋', label: 'Citas' },
+              ] as const).map(({ key, icon, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.tabSmall, currentView === key && styles.tabSmallActive]}
+                  onPress={() => {
+                    console.log(`Admin tab pressed: ${label}`);
+                    setCurrentView(key);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.tabSmallIcon}>{icon}</Text>
+                  <Text style={[styles.tabSmallText, currentView === key && styles.tabSmallTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.tabBar}>
+              <TouchableOpacity
+                style={[styles.tab, currentView === 'dashboard' && styles.tabActive]}
+                onPress={() => {
+                  console.log('Admin tab pressed: Dashboard');
+                  setCurrentView('dashboard');
+                }}
+              >
+                <Text style={[styles.tabText, currentView === 'dashboard' && styles.tabTextActive]}>
+                  Dashboard
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, currentView === 'events' && styles.tabActive]}
+                onPress={() => {
+                  console.log('Admin tab pressed: Eventos');
+                  setCurrentView('events');
+                }}
+              >
+                <Text style={[styles.tabText, currentView === 'events' && styles.tabTextActive]}>
+                  Eventos
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, currentView === 'users' && styles.tabActive]}
+                onPress={() => {
+                  console.log('Admin tab pressed: Usuarios');
+                  setCurrentView('users');
+                }}
+              >
+                <Text style={[styles.tabText, currentView === 'users' && styles.tabTextActive]}>
+                  Usuarios
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, currentView === 'appointments' && styles.tabActive]}
+                onPress={() => {
+                  console.log('Admin tab pressed: Citas');
+                  setCurrentView('appointments');
+                }}
+              >
+                <Text style={[styles.tabText, currentView === 'appointments' && styles.tabTextActive]}>
+                  Citas
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Content */}
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={[
+              styles.contentContainer,
+              isSmallScreen && styles.contentContainerSmall,
+            ]}
+          >
             {currentView === 'dashboard' && renderDashboard()}
             {currentView === 'events' && renderEvents()}
             {currentView === 'users' && renderUsers()}
@@ -1779,12 +1899,53 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: nospiColors.purpleDark,
   },
+  // Small screen tab bar — horizontal scrollable strip
+  tabBarSmall: {
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingTop: Platform.OS === 'android' ? 44 : 0,
+    flexGrow: 0,
+  },
+  tabBarSmallContent: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  tabSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    minHeight: 44,
+    backgroundColor: '#F3F4F6',
+    gap: 6,
+  },
+  tabSmallActive: {
+    backgroundColor: nospiColors.purpleDark,
+  },
+  tabSmallIcon: {
+    fontSize: 16,
+  },
+  tabSmallText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  tabSmallTextActive: {
+    color: '#FFFFFF',
+  },
   content: {
     flex: 1,
   },
   contentContainer: {
     padding: 24,
     paddingBottom: 100,
+  },
+  contentContainerSmall: {
+    padding: 14,
+    paddingBottom: 80,
   },
   dashboardContainer: {
     flex: 1,
@@ -1795,11 +1956,19 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     marginBottom: 24,
   },
+  sectionTitleSmall: {
+    fontSize: 22,
+    marginBottom: 16,
+  },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -8,
     marginBottom: 32,
+  },
+  statsGridSmall: {
+    marginHorizontal: -5,
+    marginBottom: 20,
   },
   statCard: {
     width: '48%',
@@ -1814,16 +1983,28 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  statCardSmall: {
+    padding: 14,
+    margin: 5,
+    borderRadius: 12,
+  },
   statValue: {
     fontSize: 36,
     fontWeight: 'bold',
     color: nospiColors.purpleDark,
     marginBottom: 8,
   },
+  statValueSmall: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
   statLabel: {
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '600',
+  },
+  statLabelSmall: {
+    fontSize: 12,
   },
   quickActions: {
     backgroundColor: 'white',
@@ -1841,12 +2022,22 @@ const styles = StyleSheet.create({
     color: nospiColors.purpleDark,
     marginBottom: 16,
   },
+  quickActionsTitleSmall: {
+    fontSize: 17,
+    marginBottom: 12,
+  },
   actionButton: {
     backgroundColor: nospiColors.purpleDark,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  actionButtonSmall: {
+    padding: 14,
+    minHeight: 48,
   },
   actionButtonText: {
     color: 'white',
@@ -1912,6 +2103,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   eventTabTextActive: {
+    color: 'white',
+  },
+  // Small screen vertical event tabs
+  eventTabsVertical: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  eventTabVertical: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    minHeight: 64,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    gap: 4,
+  },
+  eventTabVerticalActive: {
+    backgroundColor: nospiColors.purpleDark,
+    borderColor: nospiColors.purpleDark,
+  },
+  eventTabVerticalIcon: {
+    fontSize: 18,
+  },
+  eventTabVerticalText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  eventTabVerticalTextActive: {
+    color: 'white',
+  },
+  eventTabBadge: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    minWidth: 22,
+    alignItems: 'center',
+  },
+  eventTabBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  eventTabBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  eventTabBadgeTextActive: {
     color: 'white',
   },
   listItem: {
