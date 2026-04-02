@@ -204,6 +204,7 @@ export default function AdminPanelScreen() {
   const [selectedParticipantEventId, setSelectedParticipantEventId] = useState<string>('');
   const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
   const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
+  const [participantTab, setParticipantTab] = useState<'confirmada' | 'cancelada' | 'anterior'>('confirmada');
 
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -1711,8 +1712,10 @@ export default function AdminPanelScreen() {
 
   const exportParticipantsToExcel = (eventName: string) => {
     if (participantAttendees.length === 0) { window.alert('No hay participantes para exportar'); return; }
-    const data = participantAttendees.map((a, i) => {
+    const filtered = participantAttendees.filter(a => a.status === participantTab);
+    const data = filtered.map((a, i) => {
       const u = a.users as any;
+      const statusLabel = a.status === 'confirmada' ? 'Confirmada' : a.status === 'cancelada' ? 'Cancelada' : 'Anterior';
       return {
         '#': i + 1,
         'Nombre': u.name || '',
@@ -1725,9 +1728,11 @@ export default function AdminPanelScreen() {
         'Edad': u.age || '',
         'Rango edad mín': u.age_range_min || 18,
         'Rango edad máx': u.age_range_max || 99,
+        'Estado': statusLabel,
         'Estado pago': a.payment_status === 'completed' ? 'Pagado' : 'Pendiente',
       };
     });
+    if (data.length === 0) { window.alert('No hay participantes en esta pestaña para exportar'); return; }
     const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -1738,26 +1743,42 @@ export default function AdminPanelScreen() {
   const loadParticipantAttendees = async (eventId: string) => {
     setLoadingParticipantAttendees(true);
     try {
-      const { data, error } = await supabase.rpc('get_event_attendees_for_admin', { p_event_id: eventId });
+      // Traer TODOS los estados (confirmada, cancelada, anterior) para mostrar en subpestañas
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, user_id, event_id, status, payment_status, created_at,
+          users!inner (
+            id, name, email, phone, city, country,
+            interested_in, gender, age, age_range_min, age_range_max
+          )
+        `)
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
       if (error) { window.alert('Error al cargar participantes: ' + error.message); return; }
+
       const transformed = (data || []).map((att: any) => ({
         id: att.id, user_id: att.user_id, event_id: att.event_id,
         status: att.status, payment_status: att.payment_status, created_at: att.created_at,
         users: {
-          id: att.user_id, name: att.user_name, email: att.user_email,
-          phone: att.user_phone, city: att.user_city, country: att.user_country,
-          interested_in: att.user_interested_in, gender: att.user_gender,
-          age: att.user_age, age_range_min: att.user_age_range_min, age_range_max: att.user_age_range_max,
+          id: att.users.id, name: att.users.name, email: att.users.email,
+          phone: att.users.phone, city: att.users.city, country: att.users.country,
+          interested_in: att.users.interested_in, gender: att.users.gender,
+          age: att.users.age, age_range_min: att.users.age_range_min, age_range_max: att.users.age_range_max,
         },
       }));
       setParticipantAttendees(transformed);
+    } catch (err: any) {
+      console.error('loadParticipantAttendees error:', err);
+      window.alert('Error inesperado al cargar participantes');
     } finally {
       setLoadingParticipantAttendees(false);
     }
   };
 
   const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad'];
-  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Pago'];
+  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Pago'];
 
   const cellStyle: any = {
     padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
@@ -1831,24 +1852,41 @@ export default function AdminPanelScreen() {
 
   const renderParticipants = () => {
     const selectedEvent = events.find(e => e.id === selectedParticipantEventId);
+    const filtered = participantAttendees.filter(a => a.status === participantTab);
+
+    const tabConfig: Array<{ key: 'confirmada' | 'cancelada' | 'anterior'; label: string; emoji: string; color: string; bg: string }> = [
+      { key: 'confirmada', label: 'Confirmadas', emoji: '✅', color: '#065F46', bg: '#D1FAE5' },
+      { key: 'cancelada',  label: 'Canceladas',  emoji: '❌', color: '#92400E', bg: '#FEF3C7' },
+      { key: 'anterior',   label: 'Anteriores',  emoji: '🕐', color: '#1D4ED8', bg: '#DBEAFE' },
+    ];
+
+    const statusBadge = (status: string) => {
+      const cfg = tabConfig.find(t => t.key === status);
+      if (!cfg) return null;
+      return (
+        <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: cfg.bg, color: cfg.color }}>
+          {cfg.emoji} {cfg.label.slice(0, -2)}
+        </span>
+      );
+    };
+
     return (
       <View style={styles.listContainer}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <Text style={styles.sectionTitle}>Participantes por Evento</Text>
-          {participantAttendees.length > 0 && selectedEvent && (
+          {filtered.length > 0 && selectedEvent && (
             <button
               onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
-              style={{
-                backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10,
-                padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              }}
+              style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
             >
-              📥 Descargar Excel
+              📥 Descargar Excel ({participantTab})
             </button>
           )}
         </div>
 
-        <div style={{ marginBottom: 20 }}>
+        {/* Selector de evento */}
+        <div style={{ marginBottom: 16 }}>
           <select
             style={{ backgroundColor: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 15, width: '100%', color: '#374151', outline: 'none' }}
             value={selectedParticipantEventId}
@@ -1856,10 +1894,11 @@ export default function AdminPanelScreen() {
               const id = e.target.value;
               setSelectedParticipantEventId(id);
               setParticipantAttendees([]);
+              setParticipantTab('confirmada');
               if (id) loadParticipantAttendees(id);
             }}
           >
-            <option value="">— Selecciona un evento para ver sus participantes —</option>
+            <option value="">— Selecciona un evento —</option>
             {events.map(ev => (
               <option key={ev.id} value={ev.id}>
                 {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : ev.date} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
@@ -1879,25 +1918,55 @@ export default function AdminPanelScreen() {
           </View>
         ) : (
           <>
+            {/* Info del evento */}
             {selectedEvent && (
-              <div style={{ backgroundColor: '#F5F3FF', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <div style={{ backgroundColor: '#F5F3FF', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 14, color: '#6B21A8', fontWeight: 700 }}>{selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}</span>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>👥 {participantAttendees.length} participante{participantAttendees.length !== 1 ? 's' : ''}</span>
                 <span style={{ fontSize: 14, color: '#6B7280' }}>📅 {selectedEvent.start_time ? new Date(selectedEvent.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : selectedEvent.date}</span>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>👥 {participantAttendees.length} total</span>
               </div>
             )}
 
+            {/* Sub-pestañas */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid #EDE9FE', paddingBottom: 0 }}>
+              {tabConfig.map(({ key, label, emoji }) => {
+                const count = participantAttendees.filter(a => a.status === key).length;
+                const active = participantTab === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setParticipantTab(key)}
+                    style={{
+                      padding: '10px 20px', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                      borderRadius: '8px 8px 0 0', transition: 'all 0.15s',
+                      backgroundColor: active ? '#6B21A8' : 'transparent',
+                      color: active ? 'white' : '#6B7280',
+                      borderBottom: active ? '2px solid #6B21A8' : '2px solid transparent',
+                      marginBottom: -2,
+                    }}
+                  >
+                    {emoji} {label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 4, backgroundColor: active ? 'rgba(255,255,255,0.2)' : '#EDE9FE', color: active ? 'white' : '#6B21A8', borderRadius: 20, padding: '1px 8px' }}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tabla */}
             <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
                 <thead>
                   <tr>
                     {TABLE_HEADERS_PARTICIPANTS.map(h => <th key={h} style={headerCellStyle}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {participantAttendees.length === 0 ? (
-                    <tr><td colSpan={11} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay participantes confirmados en este evento</td></tr>
-                  ) : participantAttendees.map((att, i) => {
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
+                        No hay participantes {participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento
+                      </td>
+                    </tr>
+                  ) : filtered.map((att, i) => {
                     const u = att.users as any;
                     const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
                     const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -1920,6 +1989,7 @@ export default function AdminPanelScreen() {
                         <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
                         <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
                           <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: paid ? '#D1FAE5' : '#FEF3C7', color: paid ? '#065F46' : '#92400E' }}>
                             {paid ? 'Pagado' : 'Pendiente'}
