@@ -559,6 +559,7 @@ export default function InteraccionScreen() {
   }, [appointment, activeParticipants, startingExperience, gamePhase]);
 
   const appointmentId = appointment?.id ?? null;
+  const appointmentEventId = appointment?.event_id ?? null;
 
   useEffect(() => {
     if (!appointmentEventId || !appointmentId || !user) return;
@@ -667,8 +668,6 @@ export default function InteraccionScreen() {
   useEffect(() => {
     requestNotificationPermissions();
   }, [requestNotificationPermissions]);
-
-  const appointmentEventId = appointment?.event_id ?? null;
 
   useEffect(() => {
     if (!appointmentEventId || !user) return;
