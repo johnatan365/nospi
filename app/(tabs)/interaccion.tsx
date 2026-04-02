@@ -558,13 +558,15 @@ export default function InteraccionScreen() {
     }
   }, [appointment, activeParticipants, startingExperience, gamePhase]);
 
+  const appointmentId = appointment?.id ?? null;
+
   useEffect(() => {
-    if (!appointment?.event_id || !appointment?.id || !user) return;
+    if (!appointmentEventId || !appointmentId || !user) return;
 
-    const eventChannelName = `event_state_${appointment.event_id}`;
-    const appointmentChannelName = `appointment_${appointment.id}`;
+    const eventChannelName = `event_state_${appointmentEventId}`;
+    const appointmentChannelName = `appointment_${appointmentId}`;
 
-    // Remove any stale channels with the same name before subscribing
+    // Always remove any existing channels with these names before creating new ones
     const staleEventChannel = supabase.getChannels().find(c => c.topic === `realtime:${eventChannelName}`);
     if (staleEventChannel) supabase.removeChannel(staleEventChannel);
     const staleAppointmentChannel = supabase.getChannels().find(c => c.topic === `realtime:${appointmentChannelName}`);
@@ -578,7 +580,7 @@ export default function InteraccionScreen() {
           event: 'UPDATE',
           schema: 'public',
           table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
+          filter: `id=eq.${appointmentEventId}`,
         },
         (payload) => {
           const newEvent = payload.new as any;
@@ -624,7 +626,7 @@ export default function InteraccionScreen() {
           event: 'UPDATE',
           schema: 'public',
           table: 'appointments',
-          filter: `id=eq.${appointment.id}`,
+          filter: `id=eq.${appointmentId}`,
         },
         (payload) => {
           const newAppointment = payload.new as any;
@@ -642,7 +644,7 @@ export default function InteraccionScreen() {
       supabase.removeChannel(eventChannel);
       supabase.removeChannel(appointmentChannel);
     };
-  }, [appointment?.event_id, appointment?.id, user]);
+  }, [appointmentEventId, appointmentId, user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -673,8 +675,14 @@ export default function InteraccionScreen() {
 
     loadActiveParticipants(appointmentEventId);
 
+    const channelName = `participants_${appointmentEventId}`;
+    const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+
     const channel = supabase
-      .channel(`participants_${appointmentEventId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
