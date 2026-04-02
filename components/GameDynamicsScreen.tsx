@@ -319,32 +319,50 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     restoreStateFromDatabase();
   }, [appointment?.event_id, activeParticipants]);
 
+  // Keep a ref to activeParticipants so the realtime handler always has the latest
+  // value without needing to be in the useEffect dependency array (which would
+  // cause the channel to be torn down and re-created on every render, triggering
+  // the "cannot add postgres_changes callbacks after subscribe()" error).
+  const activeParticipantsRef = useRef(activeParticipants);
+  useEffect(() => {
+    activeParticipantsRef.current = activeParticipants;
+  }, [activeParticipants]);
+
   // Subscribe to event_state changes
   useEffect(() => {
-    if (!appointment?.event_id) return;
+    const eventId = appointment?.event_id ?? null;
+    if (!eventId) return;
 
+    const channelName = `game_${eventId}`;
+
+    // Remove any existing channel with this name before creating a new one
+    const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
 
     const channel = supabase
-      .channel(`game_${appointment.event_id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'events',
-          filter: `id=eq.${appointment.event_id}`,
+          filter: `id=eq.${eventId}`,
         },
         (payload) => {
           const newEvent = payload.new as any;
-          
+          console.log('[Realtime] Event UPDATE received:', newEvent.game_phase);
+
           if (newEvent.game_phase === 'questions' || newEvent.game_phase === 'question_active') {
             setGamePhase('questions');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
             setCurrentQuestion(newEvent.current_question || null);
-            
+
             if (newEvent.current_question_starter_id) {
-              const starter = activeParticipants.find((p) => p.user_id === newEvent.current_question_starter_id);
+              const starter = activeParticipantsRef.current.find((p) => p.user_id === newEvent.current_question_starter_id);
               setStarterParticipant(starter || null);
             }
 
@@ -369,7 +387,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id, activeParticipants]);
+  }, [appointment?.event_id]); // primitive dep only — NOT the full appointment object or activeParticipants
 
   // Countdown timer logic
   const startTimer = useCallback((initialTime?: number) => {
