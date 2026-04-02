@@ -2,14 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// ============================================================
-// DATOS DE CONTACTO DE SOPORTE — modifica aquí si cambian
-// ============================================================
-const SUPPORT_EMAIL = 'nospisocial@gmail.com';
-const SUPPORT_WHATSAPP = '573192099123'; // formato: código país + número, sin + ni espacios
-// ============================================================
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
@@ -126,6 +121,7 @@ const AVAILABLE_PERSONALITY = [
 
 export default function ProfileScreen() {
   const { user, signOut } = useSupabase();
+  const { appConfig } = useAppConfig();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -381,8 +377,8 @@ export default function ProfileScreen() {
   };
 
   const handleSupportWhatsApp = () => {
-    console.log('User tapped support WhatsApp button');
-    const url = `https://wa.me/${SUPPORT_WHATSAPP}`;
+    console.log('User tapped support WhatsApp button, number:', appConfig.support_whatsapp);
+    const url = `https://wa.me/${appConfig.support_whatsapp}`;
     Linking.openURL(url).catch(() =>
       Alert.alert('Error', 'No se pudo abrir WhatsApp')
     );

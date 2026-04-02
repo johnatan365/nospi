@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
+import { nospiColors } from '@/constants/Colors';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,6 +38,7 @@ type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
 export default function AppointmentsScreen() {
   const { user } = useSupabase();
+  const { appConfig } = useAppConfig();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('confirmadas');
@@ -254,7 +256,7 @@ export default function AppointmentsScreen() {
       }
 
       if (isWithinRefundWindow) {
-        const refundAmount = PRECIO_EVENTO_COP;
+        const refundAmount = parseInt(appConfig.event_price, 10) || 30000;
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
           user_id_param: user?.id,
           amount_param: refundAmount,
@@ -601,8 +603,9 @@ export default function AppointmentsScreen() {
                 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
                 const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
 
+                const eventPriceNum = parseInt(appConfig.event_price, 10) || 30000;
                 const refundMessage = isWithinRefundWindow
-                  ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${PRECIO_EVENTO_COP.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
+                  ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${eventPriceNum.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
                   : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
 
                 return (

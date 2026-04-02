@@ -14,6 +14,7 @@ import {
 } from "@react-navigation/native";
 import { SupabaseProvider } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
@@ -46,6 +47,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
       <SupabaseProvider>
+      <AppConfigProvider>
         <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
           <SystemBars style="auto" />
           <StatusBar style="dark" />
@@ -72,6 +74,7 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
         </ThemeProvider>
+      </AppConfigProvider>
       </SupabaseProvider>
       </AuthProvider>
     </GestureHandlerRootView>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Alert, useWindowDimensions } from 'react-native';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -67,7 +68,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments';
+type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'config';
 type EventTab = 'published' | 'closed' | 'draft';
 
 export default function AdminPanelScreen() {
@@ -79,6 +80,14 @@ export default function AdminPanelScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
+
+  // App config state
+  const { appConfig, refreshConfig } = useAppConfig();
+  const [configEventPrice, setConfigEventPrice] = useState('');
+  const [configSupportEmail, setConfigSupportEmail] = useState('');
+  const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configToast, setConfigToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // NEW: Event tab state
   const [eventTab, setEventTab] = useState<EventTab>('published');
@@ -141,6 +150,13 @@ export default function AdminPanelScreen() {
       loadDashboardData();
     }
   }, [isAuthenticated, currentView]);
+
+  // Sync local config form fields when appConfig changes
+  useEffect(() => {
+    setConfigEventPrice(appConfig.event_price);
+    setConfigSupportEmail(appConfig.support_email);
+    setConfigSupportWhatsapp(appConfig.support_whatsapp);
+  }, [appConfig]);
 
   const handlePasswordSubmit = () => {
     console.log('Admin authentication attempt');
@@ -838,6 +854,103 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const handleSaveConfig = async () => {
+    console.log('Admin tapped Save Config — event_price:', configEventPrice, 'support_email:', configSupportEmail, 'support_whatsapp:', configSupportWhatsapp);
+    setSavingConfig(true);
+    setConfigToast(null);
+    try {
+      const rows = [
+        { key: 'event_price', value: configEventPrice.trim() },
+        { key: 'support_email', value: configSupportEmail.trim() },
+        { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
+      ];
+      const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
+      if (error) {
+        console.error('[AdminConfig] Error saving config:', error.message);
+        setConfigToast({ type: 'error', message: 'Error al guardar: ' + error.message });
+        return;
+      }
+      console.log('[AdminConfig] Config saved successfully');
+      await refreshConfig();
+      setConfigToast({ type: 'success', message: 'Configuración guardada correctamente' });
+    } catch (err) {
+      console.error('[AdminConfig] Unexpected error saving config:', err);
+      setConfigToast({ type: 'error', message: 'Error inesperado al guardar' });
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const renderConfig = () => {
+    const toastBg = configToast?.type === 'success' ? '#10B981' : '#EF4444';
+    return (
+      <View style={styles.listContainer}>
+        <Text style={[styles.sectionTitle, isSmallScreen && styles.sectionTitleSmall]}>
+          Configuración
+        </Text>
+
+        {configToast && (
+          <View style={[styles.configToast, { backgroundColor: toastBg }]}>
+            <Text style={styles.configToastText}>{configToast.message}</Text>
+          </View>
+        )}
+
+        <View style={styles.configCard}>
+          <Text style={styles.configCardTitle}>Precio del Evento (COP)</Text>
+          <Text style={styles.configCardHint}>Valor en pesos colombianos, sin puntos ni comas</Text>
+          <TextInput
+            style={styles.configInput}
+            value={configEventPrice}
+            onChangeText={(t) => { console.log('Admin editing event_price:', t); setConfigEventPrice(t); setConfigToast(null); }}
+            placeholder="30000"
+            keyboardType="numeric"
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+
+        <View style={styles.configCard}>
+          <Text style={styles.configCardTitle}>Email de Soporte</Text>
+          <Text style={styles.configCardHint}>Dirección de correo que verán los usuarios</Text>
+          <TextInput
+            style={styles.configInput}
+            value={configSupportEmail}
+            onChangeText={(t) => { console.log('Admin editing support_email:', t); setConfigSupportEmail(t); setConfigToast(null); }}
+            placeholder="soporte@nospi.app"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+
+        <View style={styles.configCard}>
+          <Text style={styles.configCardTitle}>WhatsApp de Soporte</Text>
+          <Text style={styles.configCardHint}>Número con código de país, sin + ni espacios (ej: 573001234567)</Text>
+          <TextInput
+            style={styles.configInput}
+            value={configSupportWhatsapp}
+            onChangeText={(t) => { console.log('Admin editing support_whatsapp:', t); setConfigSupportWhatsapp(t); setConfigToast(null); }}
+            placeholder="573001234567"
+            keyboardType="phone-pad"
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.configSaveButton, savingConfig && { opacity: 0.6 }]}
+          onPress={handleSaveConfig}
+          disabled={savingConfig}
+          activeOpacity={0.8}
+        >
+          {savingConfig
+            ? <ActivityIndicator size="small" color="white" />
+            : <Text style={styles.configSaveButtonText}>Guardar Configuración</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -1288,6 +1401,7 @@ export default function AdminPanelScreen() {
                 { key: 'events',    icon: '📅', label: 'Eventos' },
                 { key: 'users',     icon: '👥', label: 'Usuarios' },
                 { key: 'appointments', icon: '📋', label: 'Citas' },
+                { key: 'config',    icon: '⚙️', label: 'Config' },
               ] as const).map(({ key, icon, label }) => (
                 <TouchableOpacity
                   key={key}
@@ -1351,6 +1465,17 @@ export default function AdminPanelScreen() {
                   Citas
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, currentView === 'config' && styles.tabActive]}
+                onPress={() => {
+                  console.log('Admin tab pressed: Configuración');
+                  setCurrentView('config');
+                }}
+              >
+                <Text style={[styles.tabText, currentView === 'config' && styles.tabTextActive]}>
+                  ⚙️ Config
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1366,6 +1491,7 @@ export default function AdminPanelScreen() {
             {currentView === 'events' && renderEvents()}
             {currentView === 'users' && renderUsers()}
             {currentView === 'appointments' && renderAppointments()}
+            {currentView === 'config' && renderConfig()}
           </ScrollView>
         </View>
 
@@ -2722,5 +2848,64 @@ const styles = StyleSheet.create({
   datePickerButtonText: {
     fontSize: 16,
     color: '#333',
+  },
+  configCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  configCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: nospiColors.purpleDark,
+    marginBottom: 4,
+  },
+  configCardHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  configInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    color: '#111827',
+  },
+  configSaveButton: {
+    backgroundColor: nospiColors.purpleDark,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 32,
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  configSaveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  configToast: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  configToastText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

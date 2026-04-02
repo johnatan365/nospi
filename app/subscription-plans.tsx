@@ -5,7 +5,8 @@ import {
   Image, TextInput, KeyboardAvoidingView, Platform, Keyboard, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { nospiColors, PRECIO_EVENTO_COP } from '@/constants/Colors';
+import { nospiColors } from '@/constants/Colors';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -72,6 +73,7 @@ const NATIVE_REDIRECT_URL = 'nospi://payment-callback';
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
   const { user } = useSupabase();
+  const { appConfig } = useAppConfig();
 
   const [processingMethod, setProcessingMethod] = useState<string | null>(null);
   const processing = processingMethod !== null;
@@ -138,7 +140,7 @@ export default function SubscriptionPlansScreen() {
     }
   }, [pseBanks]);
 
-  const priceCOP = PRECIO_EVENTO_COP;
+  const priceCOP = parseInt(appConfig.event_price, 10) || 30000;
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
