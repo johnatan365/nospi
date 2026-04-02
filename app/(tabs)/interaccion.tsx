@@ -561,8 +561,17 @@ export default function InteraccionScreen() {
   useEffect(() => {
     if (!appointment?.event_id || !appointment?.id || !user) return;
 
+    const eventChannelName = `event_state_${appointment.event_id}`;
+    const appointmentChannelName = `appointment_${appointment.id}`;
+
+    // Remove any stale channels with the same name before subscribing
+    const staleEventChannel = supabase.getChannels().find(c => c.topic === `realtime:${eventChannelName}`);
+    if (staleEventChannel) supabase.removeChannel(staleEventChannel);
+    const staleAppointmentChannel = supabase.getChannels().find(c => c.topic === `realtime:${appointmentChannelName}`);
+    if (staleAppointmentChannel) supabase.removeChannel(staleAppointmentChannel);
+
     const eventChannel = supabase
-      .channel(`event_state_${appointment.event_id}`)
+      .channel(eventChannelName)
       .on(
         'postgres_changes',
         {
@@ -608,7 +617,7 @@ export default function InteraccionScreen() {
       .subscribe();
 
     const appointmentChannel = supabase
-      .channel(`appointment_${appointment.id}`)
+      .channel(appointmentChannelName)
       .on(
         'postgres_changes',
         {
@@ -657,23 +666,25 @@ export default function InteraccionScreen() {
     requestNotificationPermissions();
   }, [requestNotificationPermissions]);
 
-  useEffect(() => {
-    if (!appointment || !user) return;
+  const appointmentEventId = appointment?.event_id ?? null;
 
-    loadActiveParticipants(appointment.event_id);
+  useEffect(() => {
+    if (!appointmentEventId || !user) return;
+
+    loadActiveParticipants(appointmentEventId);
 
     const channel = supabase
-      .channel(`participants_${appointment.event_id}`)
+      .channel(`participants_${appointmentEventId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'event_participants',
-          filter: `event_id=eq.${appointment.event_id}`,
+          filter: `event_id=eq.${appointmentEventId}`,
         },
         () => {
-          loadActiveParticipants(appointment.event_id);
+          loadActiveParticipants(appointmentEventId);
         }
       )
       .subscribe();
@@ -681,7 +692,7 @@ export default function InteraccionScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment, user, loadActiveParticipants]);
+  }, [appointmentEventId, user, loadActiveParticipants]);
 
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
 
