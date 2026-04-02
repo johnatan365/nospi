@@ -276,7 +276,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         .from('events')
         .select('*')
         .eq('id', appointment.event_id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('❌ Error fetching event state:', error);
