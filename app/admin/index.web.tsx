@@ -1771,7 +1771,10 @@ export default function AdminPanelScreen() {
               </div>
             </div>
           </div>
+        </div>
 
+        <button
+          onClick={handleSaveConfig}
           disabled={savingConfig}
           style={{
             backgroundColor: savingConfig ? '#9CA3AF' : '#6B21A8',
