@@ -74,7 +74,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'questions' | 'realtime';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -198,6 +198,11 @@ export default function AdminPanelScreen() {
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
+
+  // Participantes por evento
+  const [selectedParticipantEventId, setSelectedParticipantEventId] = useState<string>('');
+  const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
+  const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
 
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -1689,74 +1694,258 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     );
   };
 
+  const exportUsersToExcel = () => {
+    if (users.length === 0) { window.alert('No hay usuarios para exportar'); return; }
+    const rows = [
+      ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad mín', 'Rango edad máx'],
+      ...users.map((u, i) => [
+        i + 1,
+        u.name || '',
+        u.email || '',
+        u.phone || '',
+        u.city || '',
+        u.country || '',
+        u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
+        u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+        u.age || '',
+        u.age_range_min || 18,
+        u.age_range_max || 99,
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '''')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `usuarios_nospi_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const exportParticipantsToExcel = (eventName: string) => {
+    if (participantAttendees.length === 0) { window.alert('No hay participantes para exportar'); return; }
+    const rows = [
+      ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad mín', 'Rango edad máx', 'Estado pago'],
+      ...participantAttendees.map((a, i) => [
+        i + 1,
+        a.users.name || '',
+        a.users.email || '',
+        a.users.phone || '',
+        a.users.city || '',
+        a.users.country || '',
+        a.users.gender === 'hombre' ? 'Hombre' : a.users.gender === 'mujer' ? 'Mujer' : 'No especificado',
+        a.users.interested_in === 'hombres' ? 'Hombres' : a.users.interested_in === 'mujeres' ? 'Mujeres' : a.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+        a.users.age || '',
+        (a.users as any).age_range_min || 18,
+        (a.users as any).age_range_max || 99,
+        a.payment_status === 'completed' ? 'Pagado' : 'Pendiente',
+      ]),
+    ];
+    const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '''')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const loadParticipantAttendees = async (eventId: string) => {
+    setLoadingParticipantAttendees(true);
+    try {
+      const { data, error } = await supabase.rpc('get_event_attendees_for_admin', { p_event_id: eventId });
+      if (error) { window.alert('Error al cargar participantes: ' + error.message); return; }
+      const transformed = (data || []).map((att: any) => ({
+        id: att.id, user_id: att.user_id, event_id: att.event_id,
+        status: att.status, payment_status: att.payment_status, created_at: att.created_at,
+        users: {
+          id: att.user_id, name: att.user_name, email: att.user_email,
+          phone: att.user_phone, city: att.user_city, country: att.user_country,
+          interested_in: att.user_interested_in, gender: att.user_gender,
+          age: att.user_age, age_range_min: att.user_age_range_min, age_range_max: att.user_age_range_max,
+        },
+      }));
+      setParticipantAttendees(transformed);
+    } finally {
+      setLoadingParticipantAttendees(false);
+    }
+  };
+
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad'];
+  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Pago'];
+
+  const cellStyle: any = {
+    padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
+    whiteSpace: 'nowrap', verticalAlign: 'middle',
+  };
+  const headerCellStyle: any = {
+    padding: '12px 14px', fontSize: 12, fontWeight: 700, color: '#6B21A8',
+    backgroundColor: '#F5F3FF', textTransform: 'uppercase', letterSpacing: '0.05em',
+    whiteSpace: 'nowrap', borderBottom: '2px solid #DDD6FE', position: 'sticky', top: 0,
+  };
+  const rowEvenStyle: any = { backgroundColor: '#FAFAFA' };
+  const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
+
   const renderUsers = () => {
     return (
       <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Usuarios Registrados ({users.length})</Text>
-        {users.map((user) => {
-          const interestedInText = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
-          const genderText = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : 'No especificado';
-          
-          return (
-            <View key={user.id} style={styles.listItem}>
-              <Text style={styles.listItemTitle}>{user.name}</Text>
-              <Text style={styles.listItemDetail}>📧 Email: {user.email}</Text>
-              <Text style={styles.listItemDetail}>📱 Teléfono: {user.phone}</Text>
-              <Text style={styles.listItemDetail}>
-                📍 Ubicación: {user.city}, {user.country}
-              </Text>
-              <Text style={styles.listItemDetail}>👤 Género: {genderText}</Text>
-              <Text style={styles.listItemDetail}>💝 Interesado en: {interestedInText}</Text>
-              {user.age && <Text style={styles.listItemDetail}>🎂 Edad: {user.age} años</Text>}
-            </View>
-          );
-        })}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <Text style={styles.sectionTitle}>Usuarios Registrados ({users.length})</Text>
+          <button
+            onClick={exportUsersToExcel}
+            style={{
+              backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10,
+              padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            📥 Descargar Excel
+          </button>
+        </div>
+
+        <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <thead>
+              <tr>
+                {TABLE_HEADERS_USERS.map(h => <th key={h} style={headerCellStyle}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr><td colSpan={10} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
+              ) : users.map((user, i) => {
+                const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
+                const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
+                const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
+                const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
+                return (
+                  <tr key={user.id} style={row}>
+                    <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
+                    <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{user.name}</td>
+                    <td style={cellStyle}>{user.email}</td>
+                    <td style={cellStyle}>{user.phone}</td>
+                    <td style={cellStyle}>{user.city}</td>
+                    <td style={cellStyle}>{user.country}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: user.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: user.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>
+                        {gender}
+                      </span>
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>{user.age || '—'}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </View>
     );
   };
 
-  const renderAppointments = () => {
+  const renderParticipants = () => {
+    const selectedEvent = events.find(e => e.id === selectedParticipantEventId);
     return (
       <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Citas y Reservas ({appointments.length})</Text>
-        {appointments.map((appointment) => {
-          const statusColor = appointment.status === 'confirmed' ? '#10B981' : '#F59E0B';
-          const paymentColor = appointment.payment_status === 'paid' ? '#10B981' : '#EF4444';
-          const confirmationCode = appointment.events.confirmation_code || '1986';
-          const interestedInText = appointment.users.interested_in === 'hombres' ? 'Hombres' : appointment.users.interested_in === 'mujeres' ? 'Mujeres' : appointment.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
-          const genderText = appointment.users.gender === 'hombre' ? 'Hombre' : appointment.users.gender === 'mujer' ? 'Mujer' : 'No especificado';
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+          <Text style={styles.sectionTitle}>Participantes por Evento</Text>
+          {participantAttendees.length > 0 && selectedEvent && (
+            <button
+              onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
+              style={{
+                backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10,
+                padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              📥 Descargar Excel
+            </button>
+          )}
+        </div>
 
-          return (
-            <View key={appointment.id} style={styles.listItem}>
-              <View style={styles.listItemHeader}>
-                <Text style={styles.listItemTitle}>{appointment.users.name}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                  <Text style={styles.statusBadgeText}>{appointment.status}</Text>
-                </View>
-              </View>
-              <Text style={styles.listItemDetail}>
-                🎉 Evento: {appointment.events.name || `${appointment.events.type} - ${appointment.events.city}`}
-              </Text>
-              <Text style={styles.listItemDetail}>
-                📅 Fecha: {appointment.events.date} a las {appointment.events.time}
-              </Text>
-              <View style={styles.codeHighlight}>
-                <Text style={styles.codeLabel}>🔑 Código del evento:</Text>
-                <Text style={styles.codeValue}>{confirmationCode}</Text>
-              </View>
-              <Text style={styles.listItemDetail}>📧 Email: {appointment.users.email}</Text>
-              <Text style={styles.listItemDetail}>📱 Teléfono: {appointment.users.phone}</Text>
-              <Text style={styles.listItemDetail}>👤 Género: {genderText}</Text>
-              <Text style={styles.listItemDetail}>💝 Interesado en: {interestedInText}</Text>
-              {appointment.users.age && <Text style={styles.listItemDetail}>🎂 Edad: {appointment.users.age} años</Text>}
-              <View style={[styles.statusBadge, { backgroundColor: paymentColor, marginTop: 8 }]}>
-                <Text style={styles.statusBadgeText}>
-                  💳 Pago: {appointment.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
+        <div style={{ marginBottom: 20 }}>
+          <select
+            style={{ backgroundColor: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 15, width: '100%', color: '#374151', outline: 'none' }}
+            value={selectedParticipantEventId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setSelectedParticipantEventId(id);
+              setParticipantAttendees([]);
+              if (id) loadParticipantAttendees(id);
+            }}
+          >
+            <option value="">— Selecciona un evento para ver sus participantes —</option>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : ev.date} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {!selectedParticipantEventId ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF', fontSize: 16 }}>
+            Selecciona un evento para ver sus participantes
+          </div>
+        ) : loadingParticipantAttendees ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+            <Text style={styles.loadingText}>Cargando participantes...</Text>
+          </View>
+        ) : (
+          <>
+            {selectedEvent && (
+              <div style={{ backgroundColor: '#F5F3FF', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, color: '#6B21A8', fontWeight: 700 }}>{selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}</span>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>👥 {participantAttendees.length} participante{participantAttendees.length !== 1 ? 's' : ''}</span>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>📅 {selectedEvent.start_time ? new Date(selectedEvent.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : selectedEvent.date}</span>
+              </div>
+            )}
+
+            <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050 }}>
+                <thead>
+                  <tr>
+                    {TABLE_HEADERS_PARTICIPANTS.map(h => <th key={h} style={headerCellStyle}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {participantAttendees.length === 0 ? (
+                    <tr><td colSpan={11} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay participantes confirmados en este evento</td></tr>
+                  ) : participantAttendees.map((att, i) => {
+                    const u = att.users as any;
+                    const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
+                    const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
+                    const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
+                    const paid = att.payment_status === 'completed';
+                    const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
+                    return (
+                      <tr key={att.id} style={row}>
+                        <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
+                        <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{u.name}</td>
+                        <td style={cellStyle}>{u.email}</td>
+                        <td style={cellStyle}>{u.phone}</td>
+                        <td style={cellStyle}>{u.city}</td>
+                        <td style={cellStyle}>{u.country}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>
+                          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: u.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: u.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>
+                            {gender}
+                          </span>
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>
+                          <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: paid ? '#D1FAE5' : '#FEF3C7', color: paid ? '#065F46' : '#92400E' }}>
+                            {paid ? 'Pagado' : 'Pendiente'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </View>
     );
   };
@@ -2022,11 +2211,11 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, currentView === 'appointments' && styles.tabActive]}
-            onPress={() => setCurrentView('appointments')}
+            style={[styles.tab, currentView === 'participants' && styles.tabActive]}
+            onPress={() => setCurrentView('participants')}
           >
-            <Text style={[styles.tabText, currentView === 'appointments' && styles.tabTextActive]}>
-              📅 Citas
+            <Text style={[styles.tabText, currentView === 'participants' && styles.tabTextActive]}>
+              👥 Participantes
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2056,7 +2245,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           {currentView === 'dashboard' && renderDashboard()}
           {currentView === 'events' && renderEvents()}
           {currentView === 'users' && renderUsers()}
-          {currentView === 'appointments' && renderAppointments()}
+          {currentView === 'participants' && renderParticipants()}
           {currentView === 'questions' && renderQuestions()}
           {currentView === 'realtime' && renderRealtime()}
         </ScrollView>
@@ -2129,17 +2318,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
 
 
 
-                  <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: '#EC4899' }]}
-                    onPress={() => {
-                      setShowConfigModal(false);
-                      setSelectedEventForMatches(selectedEventForConfig.id);
-                      loadEventMatchesAndRatings(selectedEventForConfig.id);
-                      setCurrentView('matches');
-                    }}
-                  >
-                    <Text style={styles.configActionButtonText}>💜 Ver Matches y Calificaciones</Text>
-                  </TouchableOpacity>
+
 
                   {selectedEventForConfig.event_status === 'draft' && (
                     <TouchableOpacity
