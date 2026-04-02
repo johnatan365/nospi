@@ -4,7 +4,7 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
+    "icon": "./assets/images/f7263e97-1368-42c4-b125-69e000be248f.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
+        "foregroundImage": "./assets/images/f7263e97-1368-42c4-b125-69e000be248f.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
@@ -79,7 +79,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
+      "favicon": "./assets/images/f7263e97-1368-42c4-b125-69e000be248f.png",
       "bundler": "metro",
       "output": "single"
     },
@@ -97,7 +97,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/2f4fa62b-a413-48e6-b757-0188ee01079a.png",
+          "icon": "./assets/images/f7263e97-1368-42c4-b125-69e000be248f.png",
           "color": "#E9D5FF",
           "sounds": []
         }
