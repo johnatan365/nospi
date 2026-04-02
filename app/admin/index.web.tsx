@@ -74,7 +74,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'realtime';
+type AdminView = 'dashboard' | 'events' | 'users' | 'appointments' | 'questions' | 'realtime';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -1364,6 +1364,116 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
     setShowConfigModal(true);
   };
 
+  const renderQuestions = () => {
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>Preguntas Globales</Text>
+        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 24 }}>
+          Estas preguntas aplican a todos los eventos. Puedes reordenarlas arrastrando.
+        </Text>
+
+        <View style={styles.levelSelector}>
+          <TouchableOpacity
+            style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
+            onPress={() => { setSelectedLevel('divertido'); setTimeout(loadQuestions, 0); }}
+          >
+            <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
+              😄 Divertido
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
+            onPress={() => { setSelectedLevel('sensual'); setTimeout(loadQuestions, 0); }}
+          >
+            <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
+              😘 Sensual
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
+            onPress={() => { setSelectedLevel('atrevido'); setTimeout(loadQuestions, 0); }}
+          >
+            <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
+              🔥 Atrevido
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.addQuestionSection}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Nueva pregunta..."
+            value={newQuestionText}
+            onChangeText={setNewQuestionText}
+            onSubmitEditing={handleAddQuestion}
+          />
+          <TouchableOpacity style={styles.addButton} onPress={handleAddQuestion}>
+            <Text style={styles.addButtonText}>+ Agregar</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.bulkActionsSection}>
+          <TouchableOpacity style={styles.bulkActionButton} onPress={handleRestoreDefaultQuestions}>
+            <Text style={styles.bulkActionButtonText}>🔄 Restaurar predeterminadas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bulkActionButton} onPress={handleDownloadTemplate}>
+            <Text style={styles.bulkActionButtonText}>📥 Descargar plantilla CSV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bulkActionButton} onPress={handleMassUpload}>
+            <Text style={styles.bulkActionButtonText}>📤 Cargar desde CSV</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loadingQuestions ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+            <Text style={styles.loadingText}>Cargando preguntas...</Text>
+          </View>
+        ) : questions.length === 0 ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
+              No hay preguntas para este nivel. Agrega una o restaura las predeterminadas.
+            </Text>
+          </View>
+        ) : (
+          <View>
+            {questions.map((question, index) => (
+              <div
+                key={question.id}
+                draggable
+                onDragStart={() => handleDragStart(question.id)}
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(question.id)}
+                style={{ cursor: 'grab', opacity: draggedQuestionId === question.id ? 0.5 : 1 }}
+              >
+                <View style={styles.questionItem}>
+                  <Text style={styles.dragHandle}>⋮⋮</Text>
+                  <Text style={styles.questionNumber}>#{index + 1}</Text>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                    value={question.question_text}
+                    onChangeText={(text) => {
+                      const updated = [...questions];
+                      updated[index].question_text = text;
+                      setQuestions(updated);
+                    }}
+                    onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
+                  />
+                  <TouchableOpacity
+                    style={styles.deleteQuestionButton}
+                    onPress={() => handleDeleteQuestion(question.id)}
+                  >
+                    <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </div>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -1803,6 +1913,17 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.tab, currentView === 'questions' && styles.tabActive]}
+            onPress={() => {
+              setCurrentView('questions');
+              loadQuestions();
+            }}
+          >
+            <Text style={[styles.tabText, currentView === 'questions' && styles.tabTextActive]}>
+              ❓ Preguntas
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.tab, currentView === 'realtime' && styles.tabActive]}
             onPress={() => setCurrentView('realtime')}
           >
@@ -1819,6 +1940,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           {currentView === 'events' && renderEvents()}
           {currentView === 'users' && renderUsers()}
           {currentView === 'appointments' && renderAppointments()}
+          {currentView === 'questions' && renderQuestions()}
           {currentView === 'realtime' && renderRealtime()}
         </ScrollView>
       </View>
@@ -1888,16 +2010,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                     <Text style={styles.configActionButtonText}>🔔 Enviar Recordatorio Ahora</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleMid }]}
-                    onPress={() => {
-                      setShowConfigModal(false);
-                      setShowQuestionsModal(true);
-                      loadQuestions();
-                    }}
-                  >
-                    <Text style={styles.configActionButtonText}>❓ Gestionar Preguntas</Text>
-                  </TouchableOpacity>
+
 
                   <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#EC4899' }]}
