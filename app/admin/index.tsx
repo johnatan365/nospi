@@ -504,7 +504,6 @@ export default function AdminPanelScreen() {
             event_id: manualConfirmEventId,
             status: 'confirmada',
             payment_status: 'completed',
-            confirmed_at: new Date().toISOString(),
           });
         if (insertError) throw insertError;
         Alert.alert('Listo', `${userData.name} fue confirmado manualmente en el evento.`);
