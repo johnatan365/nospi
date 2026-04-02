@@ -537,11 +537,9 @@ export default function AdminPanelScreen() {
       confirmation_code: '1986',
     });
     // Load default questions for new event
-    setEventQuestions({
-      divertido: DEFAULT_QUESTIONS_DATA.divertido.slice(0, 5),
-      sensual: DEFAULT_QUESTIONS_DATA.sensual.slice(0, 5),
-      atrevido: DEFAULT_QUESTIONS_DATA.atrevido.slice(0, 5),
-    });
+    // No precargar preguntas hardcodeadas — saveEventQuestions copiará
+    // automáticamente las preguntas globales de la DB al crear el evento.
+    setEventQuestions({ divertido: [], sensual: [], atrevido: [] });
     setShowEventQuestionsSection(false);
     setShowEventModal(true);
   };
