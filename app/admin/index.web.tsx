@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
+import * as XLSX from 'xlsx';
 
 
 interface Event {
@@ -1135,27 +1136,23 @@ export default function AdminPanelScreen() {
 
   // NEW: Download template for mass upload
   const handleDownloadTemplate = () => {
-    const template = `nivel,pregunta
-divertido,¿Cuál es tu mayor sueño?
-sensual,¿Qué te atrae de una persona?
-atrevido,¿Cuál es tu secreto mejor guardado?`;
-
-    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'plantilla_preguntas.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const data = [
+      { nivel: 'divertido', pregunta: '¿Cuál es tu mayor sueño?' },
+      { nivel: 'sensual',   pregunta: '¿Qué te atrae de una persona?' },
+      { nivel: 'atrevido',  pregunta: '¿Cuál es tu secreto mejor guardado?' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(data);
+    // Ajustar ancho de columnas
+    ws['!cols'] = [{ wch: 12 }, { wch: 60 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+    XLSX.writeFile(wb, 'plantilla_preguntas.xlsx');
   };
 
-  // NEW: Mass upload questions from CSV
   const handleMassUpload = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv';
+    input.accept = '.xlsx,.xls,.csv';
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -1163,26 +1160,25 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const text = event.target?.result as string;
-          const lines = text.split('\n').filter(line => line.trim());
-          
-          // Skip header
-          const dataLines = lines.slice(1);
-          
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
           const questionsToInsert: any[] = [];
           let orderCounter = 0;
 
-          for (const line of dataLines) {
-            const [level, questionText] = line.split(',').map(s => s.trim());
-            
+          for (const row of rows) {
+            const level = String(row.nivel || row.Nivel || row.NIVEL || '').trim().toLowerCase();
+            const questionText = String(row.pregunta || row.Pregunta || row.PREGUNTA || '').trim();
+
             if (!level || !questionText) continue;
-            if (!['divertido', 'sensual', 'atrevido'].includes(level)) {
-              continue;
-            }
+            if (!['divertido', 'sensual', 'atrevido'].includes(level)) continue;
 
             questionsToInsert.push({
               event_id: null,
-              level: level,
+              level,
               question_text: questionText,
               question_order: orderCounter++,
               is_default: true,
@@ -1190,13 +1186,11 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           }
 
           if (questionsToInsert.length === 0) {
-            window.alert('No se encontraron preguntas válidas en el archivo');
+            window.alert('No se encontraron preguntas válidas. Asegúrate de usar las columnas "nivel" y "pregunta".');
             return;
           }
 
-          const { error } = await supabase
-            .from('event_questions')
-            .insert(questionsToInsert);
+          const { error } = await supabase.from('event_questions').insert(questionsToInsert);
 
           if (error) {
             console.error('Error uploading questions:', error);
@@ -1207,11 +1201,11 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
           window.alert(`✅ Se cargaron ${questionsToInsert.length} preguntas exitosamente`);
           loadQuestions();
         } catch (error) {
-          console.error('Failed to parse CSV:', error);
-          window.alert('Error al procesar el archivo CSV');
+          console.error('Failed to parse file:', error);
+          window.alert('Error al procesar el archivo. Asegúrate de que sea un Excel (.xlsx) o CSV válido.');
         }
       };
-      reader.readAsText(file);
+      reader.readAsArrayBuffer(file);
     };
     input.click();
   };
@@ -1531,10 +1525,10 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
             <Text style={styles.bulkActionButtonText}>🔄 Restaurar predeterminadas</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.bulkActionButton} onPress={handleDownloadTemplate}>
-            <Text style={styles.bulkActionButtonText}>📥 Descargar plantilla CSV</Text>
+            <Text style={styles.bulkActionButtonText}>📥 Descargar plantilla Excel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.bulkActionButton} onPress={handleMassUpload}>
-            <Text style={styles.bulkActionButtonText}>📤 Cargar desde CSV</Text>
+            <Text style={styles.bulkActionButtonText}>📤 Cargar desde Excel (.xlsx)</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.bulkActionButton, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#059669' }]}
@@ -1696,56 +1690,49 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
 
   const exportUsersToExcel = () => {
     if (users.length === 0) { window.alert('No hay usuarios para exportar'); return; }
-    const rows = [
-      ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad mín', 'Rango edad máx'],
-      ...users.map((u, i) => [
-        i + 1,
-        u.name || '',
-        u.email || '',
-        u.phone || '',
-        u.city || '',
-        u.country || '',
-        u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
-        u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
-        u.age || '',
-        u.age_range_min || 18,
-        u.age_range_max || 99,
-      ]),
-    ];
-    const csv = rows.map(r => r.map(c => ['"', String(c).replace(/"/g, '""'), '"'].join('')).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `usuarios_nospi_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const data = users.map((u, i) => ({
+      '#': i + 1,
+      'Nombre': u.name || '',
+      'Email': u.email || '',
+      'Teléfono': u.phone || '',
+      'Ciudad': u.city || '',
+      'País': u.country || '',
+      'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
+      'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+      'Edad': u.age || '',
+      'Rango edad mín': u.age_range_min || 18,
+      'Rango edad máx': u.age_range_max || 99,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
+    XLSX.writeFile(wb, `usuarios_nospi_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportParticipantsToExcel = (eventName: string) => {
     if (participantAttendees.length === 0) { window.alert('No hay participantes para exportar'); return; }
-    const rows = [
-      ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad mín', 'Rango edad máx', 'Estado pago'],
-      ...participantAttendees.map((a, i) => [
-        i + 1,
-        a.users.name || '',
-        a.users.email || '',
-        a.users.phone || '',
-        a.users.city || '',
-        a.users.country || '',
-        a.users.gender === 'hombre' ? 'Hombre' : a.users.gender === 'mujer' ? 'Mujer' : 'No especificado',
-        a.users.interested_in === 'hombres' ? 'Hombres' : a.users.interested_in === 'mujeres' ? 'Mujeres' : a.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
-        a.users.age || '',
-        (a.users as any).age_range_min || 18,
-        (a.users as any).age_range_max || 99,
-        a.payment_status === 'completed' ? 'Pagado' : 'Pendiente',
-      ]),
-    ];
+    const data = participantAttendees.map((a, i) => {
+      const u = a.users as any;
+      return {
+        '#': i + 1,
+        'Nombre': u.name || '',
+        'Email': u.email || '',
+        'Teléfono': u.phone || '',
+        'Ciudad': u.city || '',
+        'País': u.country || '',
+        'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
+        'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+        'Edad': u.age || '',
+        'Rango edad mín': u.age_range_min || 18,
+        'Rango edad máx': u.age_range_max || 99,
+        'Estado pago': a.payment_status === 'completed' ? 'Pagado' : 'Pendiente',
+      };
+    });
     const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const csv = rows.map(r => r.map(c => ['"', String(c).replace(/"/g, '""'), '"'].join('')).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Participantes');
+    XLSX.writeFile(wb, `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const loadParticipantAttendees = async (eventId: string) => {
@@ -2930,13 +2917,13 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
                   style={styles.bulkActionButton}
                   onPress={handleDownloadTemplate}
                 >
-                  <Text style={styles.bulkActionButtonText}>📥 Descargar Plantilla CSV</Text>
+                  <Text style={styles.bulkActionButtonText}>📥 Descargar Plantilla Excel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.bulkActionButton}
                   onPress={handleMassUpload}
                 >
-                  <Text style={styles.bulkActionButtonText}>📤 Cargar desde CSV</Text>
+                  <Text style={styles.bulkActionButtonText}>📤 Cargar desde Excel (.xlsx)</Text>
                 </TouchableOpacity>
               </View>
 
