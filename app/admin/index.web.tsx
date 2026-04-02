@@ -1712,7 +1712,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
         u.age_range_max || 99,
       ]),
     ];
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '''')}"`).join(',')).join('\n');
+    const csv = rows.map(r => r.map(c => ['"', String(c).replace(/"/g, '""'), '"'].join('')).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1740,7 +1740,7 @@ atrevido,¿Cuál es tu secreto mejor guardado?`;
       ]),
     ];
     const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '''')}"`).join(',')).join('\n');
+    const csv = rows.map(r => r.map(c => ['"', String(c).replace(/"/g, '""'), '"'].join('')).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
