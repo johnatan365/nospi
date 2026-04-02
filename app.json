@@ -4,7 +4,7 @@
     "slug": "nospi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
+    "icon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -13,6 +13,7 @@
       "backgroundColor": "#A0005A"
     },
     "ios": {
+      "icon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
@@ -29,8 +30,9 @@
       }
     },
     "android": {
+      "icon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
+        "foregroundImage": "./assets/images/0c1ed55a-9054-4f64-8e0b-fafefd7bcaf1.png",
         "backgroundColor": "#A0005A"
       },
       "edgeToEdgeEnabled": true,
@@ -79,7 +81,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
+      "favicon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
       "bundler": "metro",
       "output": "single"
     },
@@ -97,7 +99,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/bf17c82a-1a8a-4940-a19d-50db823613a5.png",
+          "icon": "./assets/images/a12bc15a-afa0-463a-9d2b-980556554968.png",
           "color": "#E9D5FF",
           "sounds": []
         }
