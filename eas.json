@@ -21,5 +21,8 @@
         "ascApiKeyPath": "/root/.eas/keys/TXWNB8PB9B.p8"
       }
     }
+  },
+  "hooks": {
+    "pre-submit": "mkdir -p /root/.eas/keys && echo $EXPO_ASC_API_KEY_P8 | base64 -d > /root/.eas/keys/TXWNB8PB9B.p8"
   }
 }
