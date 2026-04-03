@@ -1,53 +1,89 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
-import { Platform } from "react-native";
-
-type Status = "processing" | "success" | "error";
+import React, { useEffect, useState } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
+import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackScreen() {
-  const [status, setStatus] = useState<Status>("processing");
-  const [message, setMessage] = useState("Processing authentication...");
+  const [message, setMessage] = useState('Procesando autenticación...');
 
   useEffect(() => {
-    if (Platform.OS !== "web") return;
+    if (Platform.OS !== 'web') return;
     handleCallback();
   }, []);
 
-  const handleCallback = () => {
+  const handleCallback = async () => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get("better_auth_token");
-      const error = urlParams.get("error");
+      console.log('[AuthCallback] Processing OAuth callback');
+      const url = window.location.href;
+      const hashParams: Record<string, string> = {};
+      const queryParams: Record<string, string> = {};
 
-      if (error) {
-        setStatus("error");
-        setMessage(`Authentication failed: ${error}`);
-        window.opener?.postMessage({ type: "oauth-error", error }, window.location.origin);
-        return;
-      }
+      const fragment = url.includes('#') ? url.split('#')[1] : '';
+      const query = url.includes('?') ? url.split('?')[1]?.split('#')[0] : '';
 
-      if (token) {
-        setStatus("success");
-        setMessage("Authentication successful! Closing...");
-        window.opener?.postMessage({ type: "oauth-success", token }, window.location.origin);
-        setTimeout(() => window.close(), 1000);
+      fragment.split('&').forEach(pair => {
+        const [k, v] = pair.split('=');
+        if (k && v) hashParams[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' '));
+      });
+      query.split('&').forEach(pair => {
+        const [k, v] = pair.split('=');
+        if (k && v) queryParams[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' '));
+      });
+
+      let session = null;
+
+      if (hashParams.access_token && hashParams.refresh_token) {
+        console.log('[AuthCallback] Setting session from hash params (implicit flow)');
+        const { data, error } = await supabase.auth.setSession({
+          access_token: hashParams.access_token,
+          refresh_token: hashParams.refresh_token,
+        });
+        if (error) throw error;
+        session = data.session;
+      } else if (queryParams.code) {
+        console.log('[AuthCallback] Exchanging code for session (PKCE flow)');
+        const { data, error } = await supabase.auth.exchangeCodeForSession(queryParams.code);
+        if (error) throw error;
+        session = data.session;
       } else {
-        setStatus("error");
-        setMessage("No authentication token received");
-        window.opener?.postMessage({ type: "oauth-error", error: "No token" }, window.location.origin);
+        console.log('[AuthCallback] Letting Supabase detect session from URL');
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
       }
-    } catch (err) {
-      setStatus("error");
-      setMessage("Failed to process authentication");
-      console.error("Auth callback error:", err);
+
+      if (session) {
+        console.log('[AuthCallback] Session established successfully');
+        setMessage('¡Autenticación exitosa!');
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: 'oauth-success', token: session.access_token },
+            window.location.origin
+          );
+          setTimeout(() => window.close(), 500);
+        } else {
+          window.location.href = '/';
+        }
+      } else {
+        throw new Error('No session established');
+      }
+    } catch (err: any) {
+      console.error('[AuthCallback] Auth callback error:', err);
+      setMessage('Error de autenticación');
+      if (window.opener) {
+        window.opener.postMessage(
+          { type: 'oauth-error', error: err?.message || 'Authentication failed' },
+          window.location.origin
+        );
+        setTimeout(() => window.close(), 1500);
+      } else {
+        setTimeout(() => { window.location.href = '/login'; }, 2000);
+      }
     }
   };
 
   return (
     <View style={styles.container}>
-      {status === "processing" && <ActivityIndicator size="large" color="#007AFF" />}
-      {status === "success" && <Text style={styles.successIcon}>✓</Text>}
-      {status === "error" && <Text style={styles.errorIcon}>✗</Text>}
+      <ActivityIndicator size="large" color="#AD1457" />
       <Text style={styles.message}>{message}</Text>
     </View>
   );
@@ -56,23 +92,15 @@ export default function AuthCallbackScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
-    backgroundColor: "#fff",
-  },
-  successIcon: {
-    fontSize: 48,
-    color: "#34C759",
-  },
-  errorIcon: {
-    fontSize: 48,
-    color: "#FF3B30",
+    backgroundColor: '#1a0010',
   },
   message: {
     fontSize: 18,
     marginTop: 20,
-    textAlign: "center",
-    color: "#333",
+    textAlign: 'center',
+    color: '#fff',
   },
 });

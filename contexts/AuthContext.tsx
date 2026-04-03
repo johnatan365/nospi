@@ -135,52 +135,6 @@ async function openOAuthBrowser(provider: "google" | "apple"): Promise<void> {
   }
 }
 
-// ─── Web popup helper (unchanged from original) ───────────────────────────────
-
-function openOAuthPopup(provider: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
-    const width = 500;
-    const height = 600;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-      popupUrl,
-      "oauth-popup",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-      reject(new Error("Failed to open popup. Please allow popups."));
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === "oauth-success" && event.data?.token) {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        resolve(event.data.token);
-      } else if (event.data?.type === "oauth-error") {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        reject(new Error(event.data.error || "OAuth failed"));
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Authentication cancelled"));
-      }
-    }, 500);
-  });
-}
-
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -218,11 +172,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     console.log("[AuthContext] signInWithGoogle pressed");
     if (Platform.OS === "web") {
-      // Web: use popup flow (existing behaviour)
-      await openOAuthPopup("google");
-    } else {
-      await openOAuthBrowser("google");
+      console.log("[AuthContext] signInWithGoogle: web — using Supabase OAuth redirect");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error("[AuthContext] signInWithGoogle web error:", error.message);
+        throw error;
+      }
+      // Supabase redirects the browser — no further action needed
+      return;
     }
+    await openOAuthBrowser("google");
   };
 
   const signInWithApple = async () => {
@@ -250,12 +214,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       console.log("[AuthContext] Apple sign-in success");
-    } else if (Platform.OS === "web") {
-      await openOAuthPopup("apple");
-    } else {
-      // Android — use browser flow
-      await openOAuthBrowser("apple");
+      return;
     }
+    if (Platform.OS === "web") {
+      console.log("[AuthContext] signInWithApple: web — using Supabase OAuth redirect");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "apple",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error("[AuthContext] signInWithApple web error:", error.message);
+        throw error;
+      }
+      return;
+    }
+    // Android — use browser flow
+    await openOAuthBrowser("apple");
   };
 
   // ── Sign out ────────────────────────────────────────────────────────────────

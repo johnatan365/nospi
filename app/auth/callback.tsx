@@ -1,41 +1,44 @@
 import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; access_token?: string; refresh_token?: string }>();
 
   useEffect(() => {
-    async function handleCallback() {
-      console.log('AuthCallback: handling OAuth callback, params:', JSON.stringify(params));
-      try {
-        const { code, access_token, refresh_token } = params;
+    console.log('[AuthCallback] mounted, platform:', Platform.OS);
 
-        if (code) {
-          console.log('AuthCallback: exchanging code for session');
-          await supabase.auth.exchangeCodeForSession(code as string);
-          console.log('AuthCallback: code exchange successful');
-        } else if (access_token && refresh_token) {
-          console.log('AuthCallback: setting session from tokens');
-          await supabase.auth.setSession({
-            access_token: access_token as string,
-            refresh_token: refresh_token as string,
-          });
-          console.log('AuthCallback: session set successfully');
-        } else {
-          console.warn('AuthCallback: no code or tokens found in params');
+    if (Platform.OS === 'web') {
+      // With detectSessionInUrl: true, Supabase auto-exchanges the PKCE code
+      // when the client initialises on this page. We just wait for SIGNED_IN.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log('[AuthCallback] auth state change:', event, 'session:', !!session);
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          console.log('[AuthCallback] signed in — redirecting to root');
+          subscription.unsubscribe();
+          router.replace('/');
         }
-      } catch (e) {
-        console.error('AuthCallback: error handling callback:', e);
-      } finally {
-        console.log('AuthCallback: redirecting to root');
+      });
+
+      // Fallback: if no SIGNED_IN fires within 5 s, redirect anyway
+      const timeout = setTimeout(() => {
+        console.warn('[AuthCallback] timeout — redirecting to root without confirmed session');
+        subscription.unsubscribe();
         router.replace('/');
-      }
+      }, 5000);
+
+      return () => {
+        subscription.unsubscribe();
+        clearTimeout(timeout);
+      };
+    } else {
+      // Native: the deep-link is handled inside AuthContext / openOAuthBrowser.
+      // This route should not normally be reached on native, but redirect just in case.
+      console.log('[AuthCallback] native — redirecting to root');
+      router.replace('/');
     }
-    handleCallback();
-  }, []);
+  }, [router]);
 
   return (
     <View style={styles.container}>
