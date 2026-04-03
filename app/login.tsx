@@ -126,8 +126,13 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithApple();
-      console.log('LoginScreen: Apple sign-in completed, session confirmed — navigating');
-      router.replace('/');
+      // On web, signInWithApple() triggers a full browser redirect — never reaches here.
+      // On native, session is confirmed — navigate to root.
+      if (Platform.OS !== 'web') {
+        console.log('LoginScreen: Apple sign-in completed, session confirmed — navigating');
+        router.replace('/');
+      }
+      // On web: stay in submitting=true — the browser is already redirecting
     } catch (err: any) {
       console.error('LoginScreen: Apple sign-in error:', err);
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
@@ -135,7 +140,6 @@ export default function LoginScreen() {
       } else {
         setError('Error al iniciar sesión con Apple');
       }
-    } finally {
       setSubmitting(false);
     }
   };
@@ -146,8 +150,13 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      console.log('LoginScreen: Google sign-in completed, session confirmed — navigating');
-      router.replace('/');
+      // On web, signInWithGoogle() triggers a full browser redirect — never reaches here.
+      // On native, session is confirmed — navigate to root.
+      if (Platform.OS !== 'web') {
+        console.log('LoginScreen: Google sign-in completed, session confirmed — navigating');
+        router.replace('/');
+      }
+      // On web: stay in submitting=true — the browser is already redirecting
     } catch (err: any) {
       console.error('LoginScreen: Google sign-in error:', err);
       if (err?.message?.includes('cancel')) {
@@ -155,7 +164,6 @@ export default function LoginScreen() {
       } else {
         setError('Error al iniciar sesión con Google');
       }
-    } finally {
       setSubmitting(false);
     }
   };

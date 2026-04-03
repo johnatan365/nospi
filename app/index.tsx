@@ -92,6 +92,19 @@ export default function Index() {
           setIsCheckingProfile(false);
         }
       } else {
+        if (Platform.OS === 'web') {
+          // On web, check if we're on the auth callback page or if URL has OAuth params.
+          // If so, Supabase's detectSessionInUrl is still processing — don't redirect yet.
+          const currentPath = window.location.pathname;
+          const hasOAuthParams =
+            window.location.search.includes('code=') ||
+            window.location.hash.includes('access_token');
+          if (currentPath.includes('auth') || hasOAuthParams) {
+            console.log('Index: Web OAuth callback in progress — skipping redirect');
+            return;
+          }
+        }
+
         // Double-check with Supabase directly — SupabaseContext may not have
         // propagated the SIGNED_IN event yet (race after OAuth callback).
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
