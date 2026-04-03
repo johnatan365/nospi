@@ -72,7 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  // Track whether the initial fetch has completed to prevent flicker
   const initialFetchDone = React.useRef(false);
 
   useEffect(() => {
@@ -95,11 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      // FIX: Only set loading=true on the very first fetch.
-      // Before this fix, every deep link from OAuth (Google/Apple) triggered
-      // fetchUser() which set loading=true, causing the tab layout to show
-      // a spinner (via useAuth().isLoading), then loading=false showed tabs,
-      // then another event triggered fetchUser() again = flicker loop.
       if (!initialFetchDone.current) {
         setLoading(true);
       }
