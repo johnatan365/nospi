@@ -1,10 +1,11 @@
 
 import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
@@ -26,19 +27,24 @@ interface Event {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const { user } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   const currentUserIdRef = useRef<string | null>(null);
 
   const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
-    // Resolve user id once
-    if (!currentUserIdRef.current) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        currentUserIdRef.current = user.id;
-        console.log('EventsScreen: Resolved current user ID:', user.id);
+    // Use user from context (already resolved) — fall back to direct API call
+    const userId = user?.id ?? currentUserIdRef.current;
+    if (!userId) {
+      // Last resort: resolve from Supabase auth directly
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        currentUserIdRef.current = authUser.id;
+        console.log('EventsScreen: Resolved current user ID from auth:', authUser.id);
       }
+    } else {
+      currentUserIdRef.current = userId;
     }
 
     if (!currentUserIdRef.current) return null;
@@ -101,9 +107,16 @@ export default function EventsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('EventsScreen: Tab focused');
-      loadEvents();
-    }, [loadEvents])
+      console.log('EventsScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
+      const task = InteractionManager.runAfterInteractions(() => {
+        loadEvents();
+      });
+      return () => task.cancel();
+    }, [user?.id, loadEvents])
   );
 
   const formatDate = (dateString: string) => {

@@ -3,11 +3,19 @@ import { ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 export default function TabLayout() {
   const { isLoading } = useAuth();
+  const { loading: supabaseLoading } = useSupabase();
 
-  if (isLoading) {
+  // Block tab rendering until BOTH auth systems have fully resolved.
+  // This prevents tabs from mounting and firing data fetches before the
+  // Supabase session is established after an OAuth redirect.
+  const isAuthReady = !isLoading && !supabaseLoading;
+
+  if (!isAuthReady) {
+    console.log('TabLayout: waiting for auth — isLoading:', isLoading, 'supabaseLoading:', supabaseLoading);
     return (
       <View style={{ flex: 1, backgroundColor: '#1a0010', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#AD1457" />

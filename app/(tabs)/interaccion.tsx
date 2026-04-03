@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -640,11 +640,16 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('InteraccionScreen: Tab focused');
-      if (user) {
-        loadAppointment();
+      console.log('InteraccionScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
       }
-    }, [user, loadAppointment])
+      const task = InteractionManager.runAfterInteractions(() => {
+        loadAppointment();
+      });
+      return () => task.cancel();
+    }, [user?.id, loadAppointment])
   );
 
   useEffect(() => {

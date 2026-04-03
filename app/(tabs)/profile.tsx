@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard, InteractionManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -290,11 +290,16 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('ProfileScreen: Tab focused');
-      if (user) {
-        loadProfile();
+      console.log('ProfileScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
       }
-    }, [user, loadProfile])
+      const task = InteractionManager.runAfterInteractions(() => {
+        loadProfile();
+      });
+      return () => task.cancel();
+    }, [user?.id, loadProfile])
   );
 
   const handleSupportEmail = () => {

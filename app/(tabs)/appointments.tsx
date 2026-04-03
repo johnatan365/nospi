@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -159,50 +159,61 @@ export default function AppointmentsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('AppointmentsScreen: Tab focused');
+      console.log('AppointmentsScreen: Tab focused, user:', user?.id ?? 'none');
 
-      // Si viene de un pago exitoso, invalidar caché antes de cargar para mostrar la cita nueva.
-      AsyncStorage.getItem('should_check_notification_prompt').then(async (shouldCheck) => {
-        if (shouldCheck === 'true') {
-          console.log('AppointmentsScreen: pago reciente detectado, invalidando caché');
-          cacheRef.current['confirmadas'] = null;
-          await clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
-          await AsyncStorage.removeItem('should_check_notification_prompt');
-        }
-        loadAppointments();
-      }).catch(() => {
-        loadAppointments();
-      });
-
-      // Check for PSE payment pending
-      AsyncStorage.getItem('pse_payment_pending').then(async (pending) => {
-        if (pending === 'true') {
-          await AsyncStorage.removeItem('pse_payment_pending');
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          if (pendingEventId && user?.id) {
-            setTimeout(async () => {
-              const { data: existing } = await supabase
-                .from('appointments')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('event_id', pendingEventId)
-                .maybeSingle();
-              if (existing) {
-                await AsyncStorage.removeItem('pending_event_confirmation');
-                setShowPaymentSuccessModal(true);
-                // Invalidate cache and reload
-                cacheRef.current['confirmadas'] = null;
-                clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
-                loadAppointments('confirmadas');
-              }
-            }, 2000);
-          }
-        }
-      });
-
-      if (user) {
-        checkFirstTimeNotificationPrompt();
+      if (!user?.id) {
+        setLoading(false);
+        return;
       }
+
+      const task = InteractionManager.runAfterInteractions(async () => {
+        // Si viene de un pago exitoso, invalidar caché antes de cargar para mostrar la cita nueva.
+        try {
+          const shouldCheck = await AsyncStorage.getItem('should_check_notification_prompt');
+          if (shouldCheck === 'true') {
+            console.log('AppointmentsScreen: pago reciente detectado, invalidando caché');
+            cacheRef.current['confirmadas'] = null;
+            await clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
+            await AsyncStorage.removeItem('should_check_notification_prompt');
+          }
+        } catch {
+          // ignore
+        }
+        loadAppointments();
+
+        // Check for PSE payment pending
+        try {
+          const pending = await AsyncStorage.getItem('pse_payment_pending');
+          if (pending === 'true') {
+            await AsyncStorage.removeItem('pse_payment_pending');
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            if (pendingEventId && user?.id) {
+              setTimeout(async () => {
+                const { data: existing } = await supabase
+                  .from('appointments')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .eq('event_id', pendingEventId)
+                  .maybeSingle();
+                if (existing) {
+                  await AsyncStorage.removeItem('pending_event_confirmation');
+                  setShowPaymentSuccessModal(true);
+                  // Invalidate cache and reload
+                  cacheRef.current['confirmadas'] = null;
+                  clearCached(`${CACHE_KEY_PREFIX}_confirmadas`);
+                  loadAppointments('confirmadas');
+                }
+              }, 2000);
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        checkFirstTimeNotificationPrompt();
+      });
+
+      return () => task.cancel();
     }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
   );
 
