@@ -18,66 +18,76 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Track whether we've received a definitive auth event so we don't clear
-  // loading prematurely on INITIAL_SESSION with a null session during OAuth.
-  const authSettledRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     console.log('SupabaseProvider: Initializing auth state');
 
-    // Listen for auth changes FIRST so we don't miss the SIGNED_IN event
-    // that fires right after the OAuth redirect is processed.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
-        console.log('SupabaseProvider: Auth state changed', event, session ? 'User logged in' : 'No session');
+        console.log('SupabaseProvider: Auth state changed', event, session ? 'session present' : 'no session');
 
-        // INITIAL_SESSION with a null session during OAuth means the session
-        // hasn't been exchanged yet — don't clear loading, wait for SIGNED_IN.
-        if (event === 'INITIAL_SESSION' && session === null && !authSettledRef.current) {
-          console.log('SupabaseProvider: INITIAL_SESSION with null session — waiting for SIGNED_IN');
-          // Still update state but keep loading=true so tabs don't render yet.
-          // We'll clear loading after a short safety timeout below.
+        if (event === 'INITIAL_SESSION') {
+          if (session) {
+            // Sesión existente (email login o sesión guardada) → resolver inmediatamente
+            console.log('SupabaseProvider: INITIAL_SESSION with session — settling immediately');
+            setSession(session);
+            setUser(session.user);
+            setLoading(false);
+          } else {
+            // Sin sesión todavía — puede ser OAuth en progreso
+            // Esperar hasta 800ms por SIGNED_IN antes de resolver como "no logueado"
+            console.log('SupabaseProvider: INITIAL_SESSION null — waiting 500ms for SIGNED_IN (OAuth)');
+            timeoutRef.current = setTimeout(() => {
+              console.log('SupabaseProvider: OAuth wait timeout — user is not logged in');
+              setLoading(false);
+            }, 500);
+          }
+        } else if (event === 'SIGNED_IN') {
+          // Cancelar el timeout si estaba esperando
+          console.log('SupabaseProvider: SIGNED_IN — updating session');
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        } else if (event === 'SIGNED_OUT') {
+          console.log('SupabaseProvider: SIGNED_OUT — clearing session');
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
           setSession(null);
           setUser(null);
-          return;
+          setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log('SupabaseProvider: TOKEN_REFRESHED — updating session');
+          setSession(session);
+          setUser(session?.user ?? null);
+          // No cambiar loading
+        } else {
+          // Any other event (USER_UPDATED, etc.) — update state only.
+          setSession(session);
+          setUser(session?.user ?? null);
         }
-
-        setSession(session);
-        setUser(session?.user ?? null);
-        authSettledRef.current = true;
-        setLoading(false);
       }
     );
 
-    // Get initial session — this resolves quickly for email/password (session
-    // already in AsyncStorage) and also covers the case where onAuthStateChange
-    // never fires SIGNED_IN (e.g. no session at all on first launch).
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('SupabaseProvider: getSession resolved', session ? 'User logged in' : 'No session');
-      if (!authSettledRef.current) {
-        // onAuthStateChange hasn't fired a definitive event yet — use this result.
-        setSession(session);
-        setUser(session?.user ?? null);
-        authSettledRef.current = true;
-        setLoading(false);
-      }
-    });
-
-    // Safety valve: if after 5 s we still haven't settled (e.g. OAuth exchange
-    // is taking very long), clear loading so the app doesn't hang forever.
-    const safetyTimer = setTimeout(() => {
-      if (!authSettledRef.current) {
-        console.warn('SupabaseProvider: Safety timeout — clearing loading after 5s');
-        authSettledRef.current = true;
-        setLoading(false);
-      }
-    }, 5000);
-
-    // Refrescar sesión cuando la app vuelve al primer plano
-    // Esto evita que usuarios de Google pierdan sesión al volver de Safari
+    // Refresh session when app comes back to foreground.
     const handleAppState = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
-        await supabase.auth.getSession();
+        try {
+          console.log('SupabaseProvider: App became active, refreshing session');
+          const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+          if (refreshedSession) {
+            setSession(refreshedSession);
+            setUser(refreshedSession.user);
+          }
+        } catch (err) {
+          console.warn('SupabaseProvider: AppState session refresh error (ignored):', err);
+        }
       }
     });
 
@@ -85,8 +95,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       console.log('SupabaseProvider: Cleaning up auth listener');
       subscription.unsubscribe();
       handleAppState.remove();
-      clearTimeout(safetyTimer);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = async () => {

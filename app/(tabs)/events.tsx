@@ -1,6 +1,6 @@
 
-import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, InteractionManager } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
@@ -31,31 +31,16 @@ export default function EventsScreen() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const currentUserIdRef = useRef<string | null>(null);
-
   const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
-    // Use user from context (already resolved) — fall back to direct API call
-    const userId = user?.id ?? currentUserIdRef.current;
-    if (!userId) {
-      // Last resort: resolve from Supabase auth directly
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        currentUserIdRef.current = authUser.id;
-        console.log('EventsScreen: Resolved current user ID from auth:', authUser.id);
-      }
-    } else {
-      currentUserIdRef.current = userId;
-    }
+    if (!user?.id) return null;
 
-    if (!currentUserIdRef.current) return null;
-
-    console.log('EventsScreen: Fetching events from Supabase for user:', currentUserIdRef.current);
+    console.log('EventsScreen: Fetching events from Supabase for user:', user.id);
 
     const [appointmentsResult, eventsResult] = await Promise.all([
       supabase
         .from('appointments')
         .select('event_id')
-        .eq('user_id', currentUserIdRef.current)
+        .eq('user_id', user.id)
         .in('status', ['confirmada', 'anterior'])
         .eq('payment_status', 'completed'),
       supabase
@@ -80,7 +65,7 @@ export default function EventsScreen() {
 
     console.log('EventsScreen: Available events fetched:', availableEvents.length);
     return availableEvents;
-  }, []);
+  }, [user?.id]);
 
   const loadEvents = useCallback(async () => {
     // 1. Load from AsyncStorage immediately — show data with no skeleton
@@ -112,10 +97,7 @@ export default function EventsScreen() {
         setLoading(false);
         return;
       }
-      const task = InteractionManager.runAfterInteractions(() => {
-        loadEvents();
-      });
-      return () => task.cancel();
+      loadEvents();
     }, [user?.id, loadEvents])
   );
 

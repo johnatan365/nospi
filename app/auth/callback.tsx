@@ -32,14 +32,24 @@ export default function AuthCallbackScreen() {
           console.log('AuthCallbackScreen: Initial URL:', initialUrl);
 
           if (initialUrl) {
-            const parsed = new URL(initialUrl);
-            code = parsed.searchParams.get('code') ?? undefined;
+            // Use Linking.parse — safe on Hermes/native, unlike `new URL()`
+            const parsedInitial = Linking.parse(initialUrl);
+            const qp = parsedInitial.queryParams ?? {};
+            code = typeof qp.code === 'string' ? qp.code : undefined;
 
             // Also check hash fragment (some Supabase configs use implicit flow fallback)
             if (!code) {
               const hash = initialUrl.split('#')[1] || '';
-              const hashParams = new URLSearchParams(hash);
-              code = hashParams.get('code') ?? undefined;
+              if (hash) {
+                const hashPairs = hash.split('&');
+                for (const pair of hashPairs) {
+                  const [k, v] = pair.split('=');
+                  if (k && decodeURIComponent(k) === 'code' && v) {
+                    code = decodeURIComponent(v);
+                    break;
+                  }
+                }
+              }
             }
 
             console.log('AuthCallbackScreen: Code from initial URL:', !!code);
@@ -227,9 +237,9 @@ export default function AuthCallbackScreen() {
             'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
           ]);
 
-          console.log('AuthCallbackScreen: Profile created, navigating to events');
+          console.log('AuthCallbackScreen: Profile created, navigating to /');
           setStatus('¡Registro exitoso!');
-          setTimeout(() => router.replace('/(tabs)/events'), 500);
+          router.replace('/');
           return;
         }
 
@@ -243,9 +253,9 @@ export default function AuthCallbackScreen() {
         }
 
         // Perfil existe — login exitoso
-        console.log('AuthCallbackScreen: Login successful, navigating to events');
+        console.log('AuthCallbackScreen: Login successful, navigating to /');
         setStatus('¡Bienvenido!');
-        setTimeout(() => router.replace('/(tabs)/events'), 500);
+        router.replace('/');
 
       } catch (error) {
         console.error('AuthCallbackScreen: Error processing profile:', error);

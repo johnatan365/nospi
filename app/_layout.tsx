@@ -11,7 +11,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
+import { SupabaseProvider } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
@@ -20,9 +20,8 @@ import { SystemBars } from "react-native-edge-to-edge";
 
 SplashScreen.preventAutoHideAsync();
 
-// Inner component has access to SupabaseProvider context so it can
-// wait for auth state before hiding the splash screen — preventing
-// the white flash / flicker on launch in TestFlight.
+// Inner component hides the splash screen as soon as fonts are loaded.
+// Auth loading is handled within screens — we do NOT block the splash on auth.
 function RootLayoutInner() {
   const [loaded] = useFonts({
     SpaceMonoRegular: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -33,56 +32,51 @@ function RootLayoutInner() {
 
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-  const { loading: authLoading } = useSupabase();
-
-  const appReady = loaded && !authLoading;
 
   useEffect(() => {
-    console.log('Root layout: fonts loaded =', loaded, 'auth loading =', authLoading);
-    if (appReady) {
-      console.log('Root layout: app ready, hiding splash screen');
-      SplashScreen.hideAsync();
+    console.log('Root layout: fonts loaded =', loaded);
+    if (loaded) {
+      console.log('Root layout: fonts ready, hiding splash screen');
+      SplashScreen.hideAsync().catch((err) => {
+        console.warn('Root layout: SplashScreen.hideAsync error (ignored):', err);
+      });
     }
-  }, [appReady, loaded, authLoading]);
+  }, [loaded]);
 
-  // Keep splash visible until both fonts AND auth state are resolved.
-  // Returning null here keeps the native splash screen showing (since
-  // SplashScreen.hideAsync has not been called yet).
-  if (!appReady) {
+  // Only block on fonts — auth loading is handled within screens.
+  if (!loaded) {
     return null;
   }
 
   return (
-    <AuthProvider>
-      <AppConfigProvider>
-        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-          <SystemBars style="auto" />
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="welcome" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Rango de Edad', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
-            <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
-            <Stack.Screen name="admin" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-        </ThemeProvider>
-      </AppConfigProvider>
-    </AuthProvider>
+    <AppConfigProvider>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <SystemBars style="auto" />
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Rango de Edad', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
+          <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+      </ThemeProvider>
+    </AppConfigProvider>
   );
 }
 
@@ -90,7 +84,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SupabaseProvider>
-        <RootLayoutInner />
+        <AuthProvider>
+          <RootLayoutInner />
+        </AuthProvider>
       </SupabaseProvider>
     </GestureHandlerRootView>
   );
