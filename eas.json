@@ -10,7 +10,7 @@
       "autoIncrement": true
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": false
     }
   },
   "submit": {
