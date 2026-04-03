@@ -256,7 +256,7 @@ export default function AuthCallbackScreen() {
     };
 
     handleCallback();
-  }, []);
+  }, [params, router]);
 
   return (
     <LinearGradient

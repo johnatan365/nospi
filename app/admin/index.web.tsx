@@ -2191,7 +2191,7 @@ export default function AdminPanelScreen() {
     const selectedEvent = events.find(e => e.id === selectedParticipantEventId);
     const filtered = participantAttendees.filter(a => a.status === participantTab);
 
-    const tabConfig: Array<{ key: 'confirmada' | 'cancelada' | 'anterior'; label: string; emoji: string; color: string; bg: string }> = [
+    const tabConfig: { key: 'confirmada' | 'cancelada' | 'anterior'; label: string; emoji: string; color: string; bg: string }[] = [
       { key: 'confirmada', label: 'Confirmadas', emoji: '✅', color: '#065F46', bg: '#D1FAE5' },
       { key: 'cancelada',  label: 'Canceladas',  emoji: '❌', color: '#92400E', bg: '#FEF3C7' },
       { key: 'anterior',   label: 'Anteriores',  emoji: '🕐', color: '#1D4ED8', bg: '#DBEAFE' },

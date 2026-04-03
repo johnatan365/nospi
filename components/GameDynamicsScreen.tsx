@@ -317,7 +317,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     };
 
     restoreStateFromDatabase();
-  }, [appointment?.event_id, activeParticipants]);
+  }, [appointment?.event_id, activeParticipants, startTimer]);
 
   // Keep a ref to activeParticipants so the realtime handler always has the latest
   // value without needing to be in the useEffect dependency array (which would
@@ -387,7 +387,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [appointment?.event_id]); // primitive dep only — NOT the full appointment object or activeParticipants
+  }, [appointment?.event_id, startTimer]); // primitive dep only — NOT the full appointment object or activeParticipants
 
   // Countdown timer logic
   const startTimer = useCallback((initialTime?: number) => {
@@ -588,7 +588,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, showLevelTransitionAnimation]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, showLevelTransitionAnimation, startTimer]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;

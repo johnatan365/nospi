@@ -203,7 +203,7 @@ export default function AppointmentsScreen() {
       if (user) {
         checkFirstTimeNotificationPrompt();
       }
-    }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
+    }, [loadAppointments, user, checkFirstTimeNotificationPrompt])
   );
 
   const formatDate = (dateString: string) => {

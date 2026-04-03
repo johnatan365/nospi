@@ -775,7 +775,7 @@ export default function InteraccionScreen() {
         });
       }, 2000);
     });
-  }, [divertidoScaleAnim, divertidoFadeAnim]);
+  }, [divertidoScaleAnim, divertidoFadeAnim, appointment?.event_id]);
 
   const handleUserContinue = useCallback(async () => {
     console.log('User tapped Continuar to proceed to rules');

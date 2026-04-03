@@ -152,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async () => {
     if (Platform.OS === "ios") {
       // Native Apple Sign In on iOS — shows the system Face ID / password modal
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const AppleAuthentication = require("expo-apple-authentication");
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [

@@ -7,7 +7,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 interface Event {

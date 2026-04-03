@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
@@ -658,7 +658,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const checkPhoneExists = async (full: string): Promise<boolean> => {
+  const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
     const withoutPlus = full.replace('+', '');
     const digitsOnly = full.replace(/^\+\d{2,3}/, '');
     console.log('ProfileScreen: Checking phone duplicate for:', full);
@@ -670,7 +670,7 @@ export default function ProfileScreen() {
       .maybeSingle();
     if (error) { console.error('ProfileScreen: Phone check error:', error); return false; }
     return !!data;
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     const cleanNumber = editPhoneNumber.replace(/\D/g, '');
@@ -687,7 +687,7 @@ export default function ProfileScreen() {
       setPhoneStatus(exists ? 'taken' : 'available');
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [editPhoneNumber, editPhoneCountry]);
+  }, [editPhoneNumber, editPhoneCountry, checkPhoneExists]);
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||

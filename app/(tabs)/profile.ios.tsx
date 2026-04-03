@@ -645,7 +645,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const checkPhoneExists = async (full: string): Promise<boolean> => {
+  const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
     const withoutPlus = full.replace('+', '');
     const digitsOnly = full.replace(/^\+\d{2,3}/, '');
     console.log('ProfileScreen (iOS): Checking phone duplicate for:', full);
@@ -657,7 +657,7 @@ export default function ProfileScreen() {
       .maybeSingle();
     if (error) { console.error('ProfileScreen (iOS): Phone check error:', error); return false; }
     return !!data;
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     const cleanNumber = editPhoneNumber.replace(/\D/g, '');
@@ -674,7 +674,7 @@ export default function ProfileScreen() {
       setPhoneStatus(exists ? 'taken' : 'available');
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [editPhoneNumber, editPhoneCountry]);
+  }, [editPhoneNumber, editPhoneCountry, checkPhoneExists]);
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||

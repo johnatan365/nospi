@@ -391,7 +391,7 @@ export default function SubscriptionPlansScreen() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [confirmAppointment, showAlert, router]);
+  }, [confirmAppointment, router]);
 
   // subscription-plans.tsx only initiates payments.
   // All callback processing is handled exclusively in payment-callback.tsx.
@@ -949,7 +949,7 @@ export default function SubscriptionPlansScreen() {
         }
       }
     }, 5000);
-  }, [confirmAppointment, showAlert, router]);
+  }, [confirmAppointment, router]);
 
   const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
@@ -1026,7 +1026,7 @@ export default function SubscriptionPlansScreen() {
         if (attempts >= maxAttempts) clearInterval(interval);
       }
     }, 5000);
-  }, [confirmAppointment, showAlert, router]);
+  }, [confirmAppointment, router]);
 
     // ========== TEST PAYMENT HANDLER - DELETE BEFORE PRODUCTION ==========
   const handleTestPayment = async () => {

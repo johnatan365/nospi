@@ -45,7 +45,7 @@ export default function LoginScreen() {
       console.log('LoginScreen: user authenticated via AuthContext, navigating to tabs', user.id);
       router.replace('/(tabs)');
     }
-  }, [user]);
+  }, [user, router]);
 
   // Also listen for Supabase auth changes (Google login uses Supabase directly)
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function LoginScreen() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
