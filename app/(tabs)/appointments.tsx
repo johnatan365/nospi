@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -203,7 +203,7 @@ export default function AppointmentsScreen() {
       if (user) {
         checkFirstTimeNotificationPrompt();
       }
-    }, [loadAppointments, user, checkFirstTimeNotificationPrompt])
+    }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
   );
 
   const formatDate = (dateString: string) => {
@@ -300,21 +300,29 @@ export default function AppointmentsScreen() {
   };
 
   const saveNotificationPreferences = async () => {
+    if (!user?.id) {
+      console.error('saveNotificationPreferences: user is null');
+      Alert.alert('Error', 'No se pudo identificar tu usuario. Intenta cerrar sesión y volver a entrar.');
+      return;
+    }
     try {
-      console.log('User saving notification preferences');
+      console.log('User saving notification preferences for user:', user.id, notificationPreferences);
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: notificationPreferences })
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (error) {
         console.error('Error saving notification preferences:', error);
+        Alert.alert('Error', 'No se pudieron guardar las preferencias: ' + error.message);
         return;
       }
 
+      console.log('Notification preferences saved successfully');
       setShowNotificationModal(false);
     } catch (error) {
       console.error('Failed to save notification preferences:', error);
+      Alert.alert('Error', 'Error inesperado al guardar preferencias');
     }
   };
 
