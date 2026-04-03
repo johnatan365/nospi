@@ -1,4 +1,5 @@
 
+import "react-native-url-polyfill/auto";
 import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
@@ -9,10 +10,9 @@ import { StatusBar } from "expo-status-bar";
 import {
   DarkTheme,
   DefaultTheme,
-  Theme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SupabaseProvider } from "@/contexts/SupabaseContext";
+import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
@@ -21,7 +21,10 @@ import { SystemBars } from "react-native-edge-to-edge";
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+// Inner component has access to SupabaseProvider context so it can
+// wait for auth state before hiding the splash screen — preventing
+// the white flash / flicker on launch in TestFlight.
+function RootLayoutInner() {
   const [loaded] = useFonts({
     SpaceMonoRegular: require("../assets/fonts/SpaceMono-Regular.ttf"),
     SpaceMonoBold: require("../assets/fonts/SpaceMono-Bold.ttf"),
@@ -31,22 +34,27 @@ export default function RootLayout() {
 
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
+  const { loading: authLoading } = useSupabase();
+
+  const appReady = loaded && !authLoading;
 
   useEffect(() => {
-    console.log('Root layout mounted');
-    if (loaded) {
+    console.log('Root layout: fonts loaded =', loaded, 'auth loading =', authLoading);
+    if (appReady) {
+      console.log('Root layout: app ready, hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [appReady, loaded, authLoading]);
 
-  if (!loaded) {
+  // Keep splash visible until both fonts AND auth state are resolved.
+  // Returning null here keeps the native splash screen showing (since
+  // SplashScreen.hideAsync has not been called yet).
+  if (!appReady) {
     return null;
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-      <SupabaseProvider>
+    <AuthProvider>
       <AppConfigProvider>
         <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
           <SystemBars style="auto" />
@@ -75,8 +83,16 @@ export default function RootLayout() {
           </Stack>
         </ThemeProvider>
       </AppConfigProvider>
+    </AuthProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SupabaseProvider>
+        <RootLayoutInner />
       </SupabaseProvider>
-      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

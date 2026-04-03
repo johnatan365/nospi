@@ -300,31 +300,33 @@ export default function AppointmentsScreen() {
   };
 
   const saveNotificationPreferences = async () => {
+    console.log('User tapped Guardar Preferencias', notificationPreferences);
+
+    // Always persist locally first so preferences are never lost
+    await AsyncStorage.setItem('notification_preferences', JSON.stringify(notificationPreferences));
+    await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+    setShowNotificationModal(false);
+
     if (!user?.id) {
-      console.error('saveNotificationPreferences: user is null');
-      Alert.alert('Error', 'No se pudo identificar tu usuario. Intenta cerrar sesión y volver a entrar.');
-      setShowNotificationModal(false);
+      console.warn('saveNotificationPreferences: no user id, saved locally only');
       return;
     }
+
+    // Sync to Supabase in the background — do not block or alert the user on failure
     try {
-      console.log('User saving notification preferences for user:', user.id, notificationPreferences);
+      console.log('saveNotificationPreferences: syncing to Supabase for user:', user.id);
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: notificationPreferences })
         .eq('id', user.id);
 
       if (error) {
-        console.error('Error saving notification preferences:', error);
-        Alert.alert('Error', 'No se pudieron guardar las preferencias: ' + error.message);
+        console.error('saveNotificationPreferences: Supabase error (non-blocking):', error.message);
       } else {
-        console.log('Notification preferences saved successfully');
+        console.log('saveNotificationPreferences: synced to Supabase successfully');
       }
     } catch (error) {
-      console.error('Failed to save notification preferences:', error);
-      Alert.alert('Error', 'Error inesperado al guardar preferencias');
-    } finally {
-      await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
-      setShowNotificationModal(false);
+      console.error('saveNotificationPreferences: network error (non-blocking):', error);
     }
   };
 
