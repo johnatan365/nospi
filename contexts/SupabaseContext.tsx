@@ -35,13 +35,23 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             setUser(session.user);
             setLoading(false);
           } else {
-            // Sin sesión todavía — puede ser OAuth en progreso
-            // Esperar hasta 800ms por SIGNED_IN antes de resolver como "no logueado"
-            console.log('SupabaseProvider: INITIAL_SESSION null — waiting 500ms for SIGNED_IN (OAuth)');
-            timeoutRef.current = setTimeout(() => {
-              console.log('SupabaseProvider: OAuth wait timeout — user is not logged in');
+            // No session yet — could be a cold start or OAuth in progress.
+            // We do NOT set a timeout here; instead we resolve loading=false
+            // only after we've confirmed there is truly no session via getSession().
+            console.log('SupabaseProvider: INITIAL_SESSION null — confirming with getSession()');
+            supabase.auth.getSession().then(({ data: { session: s } }) => {
+              if (s) {
+                console.log('SupabaseProvider: getSession found session, updating state');
+                setSession(s);
+                setUser(s.user);
+              } else {
+                console.log('SupabaseProvider: getSession confirmed no session — user is not logged in');
+              }
               setLoading(false);
-            }, 500);
+            }).catch(() => {
+              console.warn('SupabaseProvider: getSession error, resolving loading');
+              setLoading(false);
+            });
           }
         } else if (event === 'SIGNED_IN') {
           // Cancelar el timeout si estaba esperando

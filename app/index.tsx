@@ -9,9 +9,15 @@ export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
+  const [waitingForContext, setWaitingForContext] = useState(false);
 
   useEffect(() => {
-    console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id);
+    console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
+
+    // If we were waiting for context and user has now arrived, clear the flag.
+    if (waitingForContext && user) {
+      setWaitingForContext(false);
+    }
 
     if (loading) return;
 
@@ -86,15 +92,26 @@ export default function Index() {
           setIsCheckingProfile(false);
         }
       } else {
-        console.log('Index: No user, redirecting to welcome');
+        // Double-check with Supabase directly — SupabaseContext may not have
+        // propagated the SIGNED_IN event yet (race after OAuth callback).
+        console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
+        const { data: { session: directSession } } = await supabase.auth.getSession();
+        if (directSession?.user) {
+          console.log('Index: Direct session found, waiting for context to catch up...');
+          // Show spinner and wait — SupabaseContext will fire SIGNED_IN and
+          // re-trigger this effect with user !== null.
+          setWaitingForContext(true);
+          return;
+        }
+        console.log('Index: No session found, redirecting to welcome');
         router.replace('/welcome');
       }
     };
 
     checkProfileAndNavigate();
-  }, [loading, user, router]);
+  }, [loading, user, router, waitingForContext]);
 
-  if (loading || isCheckingProfile) {
+  if (loading || isCheckingProfile || waitingForContext) {
     console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);
     return (
       <View style={styles.loadingContainer}>

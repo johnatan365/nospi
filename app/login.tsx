@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { user, loading, signInWithApple, signInWithGoogle } = useAuth();
+  const { loading, signInWithApple, signInWithGoogle } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -33,14 +33,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Navigate after successful auth (better-auth)
-  useEffect(() => {
-    if (user) {
-      console.log('LoginScreen: user authenticated via AuthContext, navigating to tabs', user.id);
-      router.replace('/(tabs)');
-    }
-  }, [user, router]);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -134,7 +126,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithApple();
-      console.log('LoginScreen: Apple sign-in completed');
+      console.log('LoginScreen: Apple sign-in completed, session confirmed — navigating');
+      router.replace('/');
     } catch (err: any) {
       console.error('LoginScreen: Apple sign-in error:', err);
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
@@ -153,7 +146,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      console.log('LoginScreen: Google sign-in completed');
+      console.log('LoginScreen: Google sign-in completed, session confirmed — navigating');
+      router.replace('/');
     } catch (err: any) {
       console.error('LoginScreen: Google sign-in error:', err);
       if (err?.message?.includes('cancel')) {
