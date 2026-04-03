@@ -1,313 +1,143 @@
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View, StyleSheet, Alert, Platform } from 'react-native';
+import { useSupabase } from '@/contexts/SupabaseContext';
+import { nospiColors } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
 
-import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons";
-import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
-import React, { useEffect, useState } from "react";
-import { Stack } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { useSupabase } from "@/contexts/SupabaseContext";
-import { testSupabaseConnection } from "@/lib/supabase";
-import { testDatabaseConnection } from "@/utils/supabaseApi";
-import { IconSymbol } from "@/components/IconSymbol";
-import { nospiColors } from "@/constants/Colors";
-
-const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  header: {
-    marginBottom: 30,
-    marginTop: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: nospiColors.white,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: nospiColors.white,
-    opacity: 0.7,
-  },
-  statusCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  statusIcon: {
-    marginRight: 16,
-  },
-  statusContent: {
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 4,
-    color: nospiColors.white,
-  },
-  statusMessage: {
-    fontSize: 14,
-    color: nospiColors.white,
-    opacity: 0.7,
-  },
-  infoCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    backgroundColor: "rgba(255,255,255,0.95)",
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-    color: nospiColors.purpleDark,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: nospiColors.gray500,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: nospiColors.gray800,
-  },
-  button: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
-    backgroundColor: nospiColors.purpleDark,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: nospiColors.white,
-  },
-  successCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginTop: 20,
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
-  },
-  successTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 12,
-    color: "#10b981",
-  },
-  successText: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: "#10b981",
-  },
-});
-
-export default function HomeScreen() {
-  const { colors } = useTheme();
-  const { user, loading: authLoading } = useSupabase();
-  const [connectionStatus, setConnectionStatus] = useState<{
-    connected: boolean;
-    error?: string;
-  } | null>(null);
-  const [dbStatus, setDbStatus] = useState<{
-    connected: boolean;
-    error?: string;
-    tableExists?: boolean;
-  } | null>(null);
-  const [testing, setTesting] = useState(false);
+export default function Index() {
+  const router = useRouter();
+  const { user, loading } = useSupabase();
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   useEffect(() => {
-    console.log("HomeScreen: Component mounted");
-    checkConnection();
-  }, []);
-
-  const checkConnection = async () => {
-    console.log("HomeScreen: Testing Supabase connection");
-    setTesting(true);
+    console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id);
     
-    const authResult = await testSupabaseConnection();
-    setConnectionStatus(authResult);
-    
-    const dbResult = await testDatabaseConnection();
-    setDbStatus(dbResult);
-    
-    setTesting(false);
-    console.log("HomeScreen: Connection test results", { authResult, dbResult });
-  };
+    const checkProfileAndNavigate = async () => {
+      if (!loading) {
+        if (user) {
+          console.log('Index: User authenticated, checking profile existence');
+          setIsCheckingProfile(true);
+          
+          try {
+            // Check if user profile exists in users table
+            const { data: profile, error: profileError } = await supabase
+              .from('users')
+              .select('id, name, email')
+              .eq('id', user.id)
+              .maybeSingle();
 
-  const isAuthConnected = connectionStatus?.connected ?? false;
-  const isDbConnected = dbStatus?.connected ?? false;
-  const isFullyConnected = isAuthConnected && isDbConnected;
-  
-  const statusColor = isFullyConnected ? "#10b981" : "#ef4444";
-  const statusBgColor = isFullyConnected ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)";
-  const statusText = isFullyConnected ? "Connected" : "Not Connected";
-  const statusIcon = isFullyConnected ? "check-circle" : "error";
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error('Index: Error checking profile:', profileError);
+              
+              if (Platform.OS === 'web') {
+                window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              } else {
+                Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              }
+              
+              await supabase.auth.signOut();
+              router.replace('/welcome');
+              return;
+            }
 
-  return (
-    <React.Fragment>
-      <Stack.Screen
-        options={{
-          title: "Supabase Connection",
-          headerRight: () => <HeaderRightButton />,
-          headerLeft: () => <HeaderLeftButton />,
-        }}
-      />
-      <LinearGradient
-        colors={['#1a0010', '#880E4F', '#AD1457']}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              Supabase Status
-            </Text>
-            <Text style={styles.subtitle}>
-              Connection and configuration
-            </Text>
-          </View>
+            if (!profile) {
+              // User authenticated via Google/Apple but no profile in users table
+              console.log('Index: OAuth user authenticated but no profile found. Signing out.');
+              await supabase.auth.signOut();
+              
+              if (Platform.OS === 'web') {
+                window.alert('Debes registrarte primero antes de iniciar sesión.');
+              } else {
+                Alert.alert(
+                  'Registro Requerido',
+                  'Debes registrarte primero antes de iniciar sesión.',
+                  [{ text: 'OK' }]
+                );
+              }
+              router.replace('/welcome');
+              return;
+            }
 
-          {testing || authLoading ? (
-            <View style={styles.statusCard}>
-              <ActivityIndicator size="large" color={nospiColors.purpleLight} style={styles.statusIcon} />
-              <View style={styles.statusContent}>
-                <Text style={styles.statusTitle}>
-                  Testing Connection...
-                </Text>
-                <Text style={styles.statusMessage}>
-                  Please wait
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={[styles.statusCard, { backgroundColor: isFullyConnected ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)" }]}>
-              <IconSymbol
-                android_material_icon_name={statusIcon}
-                size={40}
-                color={statusColor}
-                style={styles.statusIcon}
-              />
-              <View style={styles.statusContent}>
-                <Text style={[styles.statusTitle, { color: statusColor }]}>
-                  {statusText}
-                </Text>
-                <Text style={[styles.statusMessage, { color: statusColor, opacity: 1 }]}>
-                  {isFullyConnected
-                    ? "Supabase is ready to use"
-                    : connectionStatus?.error || dbStatus?.error || "Unable to connect"}
-                </Text>
-              </View>
-            </View>
-          )}
+            console.log('Index: Profile exists, checking for pending payment...');
 
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>
-              Connection Details
-            </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Auth Connection
-              </Text>
-              <Text style={[styles.infoValue, { color: isAuthConnected ? "#10b981" : "#ef4444" }]}>
-                {isAuthConnected ? "✓ Connected" : "✗ Failed"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Database Connection
-              </Text>
-              <Text style={[styles.infoValue, { color: isDbConnected ? "#10b981" : "#ef4444" }]}>
-                {isDbConnected ? "✓ Connected" : "✗ Failed"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Notes Table
-              </Text>
-              <Text style={[styles.infoValue, { color: dbStatus?.tableExists ? "#10b981" : "#ef4444" }]}>
-                {dbStatus?.tableExists ? "✓ Created" : "✗ Missing"}
-              </Text>
-            </View>
-          </View>
+            // Verificar si hay pago pendiente de Bancolombia/PSE
+            // En web: revisar URL params
+            // En nativo: revisar AsyncStorage
+            let hasPendingPayment = false;
+            let paymentStatus = '';
+            let transactionId = '';
 
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>
-              User Information
-            </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Auth Status
-              </Text>
-              <Text style={styles.infoValue}>
-                {user ? "Authenticated" : "Not authenticated"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                User ID
-              </Text>
-              <Text style={styles.infoValue}>
-                {user?.id ? `${user.id.substring(0, 8)}...` : "None"}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>
-                Email
-              </Text>
-              <Text style={styles.infoValue}>
-                {user?.email || "None"}
-              </Text>
-            </View>
-          </View>
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              const urlParams = new URLSearchParams(window.location.search);
+              paymentStatus = urlParams.get('payment_status') || '';
+              transactionId = urlParams.get('transaction_id') || '';
+              if (paymentStatus) hasPendingPayment = true;
+            }
 
-          <TouchableOpacity
-            style={styles.button}
-            onPress={checkConnection}
-            disabled={testing}
-          >
-            <Text style={styles.buttonText}>
-              Test Connection Again
-            </Text>
-          </TouchableOpacity>
+            if (!hasPendingPayment) {
+              const pending = await AsyncStorage.getItem('pse_payment_pending');
+              if (pending === 'true') hasPendingPayment = true;
+            }
 
-          {isFullyConnected && (
-            <View style={styles.successCard}>
-              <Text style={styles.successTitle}>
-                ✓ Successfully Connected!
-              </Text>
-              <Text style={styles.successText}>
-                • Supabase client initialized
-              </Text>
-              <Text style={styles.successText}>
-                • Database connection verified
-              </Text>
-              <Text style={styles.successText}>
-                • Notes table created with RLS policies
-              </Text>
-              <Text style={styles.successText}>
-                • Ready to build your app!
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </LinearGradient>
-    </React.Fragment>
-  );
+            if (hasPendingPayment) {
+              console.log('Index: Pending payment detected, redirecting to subscription-plans');
+              let target = '/subscription-plans';
+              if (paymentStatus) {
+                target += '?payment_status=' + paymentStatus;
+                if (transactionId) target += '&transaction_id=' + transactionId;
+              }
+              router.replace(target as any);
+            } else {
+              console.log('Index: No pending payment, redirecting to events');
+              router.replace('/(tabs)/events');
+            }
+          } catch (error) {
+            console.error('Index: Unexpected error during profile check:', error);
+            
+            if (Platform.OS === 'web') {
+              window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            } else {
+              Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            }
+            
+            await supabase.auth.signOut();
+            router.replace('/welcome');
+          } finally {
+            setIsCheckingProfile(false);
+            setInitialCheckDone(true);
+          }
+        } else {
+          console.log('Index: No user, redirecting to welcome');
+          setInitialCheckDone(true);
+          router.replace('/welcome');
+        }
+      }
+    };
+
+    checkProfileAndNavigate();
+  }, [loading, user, router]);
+
+  // Show loading while checking auth state or profile
+  if (!initialCheckDone || isCheckingProfile) {
+    console.log('Index: Showing loading indicator');
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#F06292" />
+      </View>
+    );
+  }
+
+  return null;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a0010',
+  },
+});
