@@ -94,6 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
+      // FIX: Only set loading=true on the very first fetch to prevent
+      // OAuth flicker. Deep links from Google/Apple used to trigger
+      // fetchUser() which reset loading=true causing repeated spinner.
       if (!initialFetchDone.current) {
         setLoading(true);
       }

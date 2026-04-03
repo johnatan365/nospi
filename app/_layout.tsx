@@ -1,61 +1,97 @@
-import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Stack } from 'expo-router';
-import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
-import { useAuth } from '@/contexts/AuthContext';
+import "react-native-url-polyfill/auto";
+import { useNetworkState } from "expo-network";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { Stack } from "expo-router";
+import "react-native-reanimated";
+import { useFonts } from "expo-font";
+import React, { useEffect } from "react";
+import { StatusBar } from "expo-status-bar";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "@react-navigation/native";
+import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AppConfigProvider } from "@/contexts/AppConfigContext";
+import * as SplashScreen from "expo-splash-screen";
+import { useColorScheme } from "react-native";
+import { SystemBars } from "react-native-edge-to-edge";
 
-export default function TabLayout() {
-  const { isLoading } = useAuth();
+SplashScreen.preventAutoHideAsync();
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a0010', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#AD1457" />
-      </View>
-    );
+// Inner component has access to SupabaseProvider context so it can
+// wait for auth state before hiding the splash screen — preventing
+// the white flash / flicker on launch in TestFlight.
+function RootLayoutInner() {
+  const [loaded] = useFonts({
+    SpaceMonoRegular: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    SpaceMonoBold: require("../assets/fonts/SpaceMono-Bold.ttf"),
+    SpaceMonoItalic: require("../assets/fonts/SpaceMono-Italic.ttf"),
+    SpaceMonoBoldItalic: require("../assets/fonts/SpaceMono-BoldItalic.ttf"),
+  });
+
+  const colorScheme = useColorScheme();
+  const { isConnected } = useNetworkState();
+  const { loading: authLoading } = useSupabase();
+
+  const appReady = loaded && !authLoading;
+
+  useEffect(() => {
+    console.log('Root layout: fonts loaded =', loaded, 'auth loading =', authLoading);
+    if (appReady) {
+      console.log('Root layout: app ready, hiding splash screen');
+      SplashScreen.hideAsync();
+    }
+  }, [appReady, loaded, authLoading]);
+
+  // Keep splash visible until both fonts AND auth state are resolved.
+  // Returning null here keeps the native splash screen showing (since
+  // SplashScreen.hideAsync has not been called yet).
+  if (!appReady) {
+    return null;
   }
 
-  const tabs: TabBarItem[] = [
-    {
-      name: 'events',
-      route: '/(tabs)/events',
-      icon: 'calendar-today',
-      label: 'Eventos',
-    },
-    {
-      name: 'appointments',
-      route: '/(tabs)/appointments',
-      icon: 'check-circle',
-      label: 'Citas',
-    },
-    {
-      name: 'interaccion',
-      route: '/(tabs)/interaccion',
-      icon: 'chat',
-      label: 'Interacción',
-    },
-    {
-      name: 'profile',
-      route: '/(tabs)/profile',
-      icon: 'person',
-      label: 'Perfil',
-    },
-  ];
-
   return (
-    <>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-        }}
-      >
-        <Stack.Screen key="events" name="events" />
-        <Stack.Screen key="appointments" name="appointments" />
-        <Stack.Screen key="interaccion" name="interaccion" />
-        <Stack.Screen key="profile" name="profile" />
-      </Stack>
-      <FloatingTabBar tabs={tabs} />
-    </>
+    <AuthProvider>
+      <AppConfigProvider>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <SystemBars style="auto" />
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="welcome" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+            <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Rango de Edad', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
+            <Stack.Screen name="admin" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </ThemeProvider>
+      </AppConfigProvider>
+    </AuthProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SupabaseProvider>
+        <RootLayoutInner />
+      </SupabaseProvider>
+    </GestureHandlerRootView>
   );
 }
