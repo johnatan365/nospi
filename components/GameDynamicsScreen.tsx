@@ -266,6 +266,25 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     loadQuestions();
   }, [appointment.event_id]);
 
+  // Countdown timer logic
+  const startTimer = useCallback((initialTime?: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    const startValue = initialTime !== undefined ? Math.max(0, Math.round(initialTime)) : TIMER_DURATION;
+    console.log(`[Timer] Starting countdown from ${startValue}s`);
+    setTimeLeft(startValue);
+    if (startValue <= 0) return;
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          console.log('[Timer] Countdown reached 0 — revealing continue button');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
   // Restore state from event_state
   useEffect(() => {
     if (!appointment?.event_id) return;
@@ -388,25 +407,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
       supabase.removeChannel(channel);
     };
   }, [appointment?.event_id, startTimer]); // primitive dep only — NOT the full appointment object or activeParticipants
-
-  // Countdown timer logic
-  const startTimer = useCallback((initialTime?: number) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    const startValue = initialTime !== undefined ? Math.max(0, Math.round(initialTime)) : TIMER_DURATION;
-    console.log(`[Timer] Starting countdown from ${startValue}s`);
-    setTimeLeft(startValue);
-    if (startValue <= 0) return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          console.log('[Timer] Countdown reached 0 — revealing continue button');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
 
   // Clean up timer on unmount
   useEffect(() => {
