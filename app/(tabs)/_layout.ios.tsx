@@ -1,20 +1,12 @@
-
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
-  const { isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a0010', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#AD1457" />
-      </View>
-    );
-  }
+  // NOTE: Removed useAuth().isLoading gate — all real auth goes through
+  // Supabase, not better-auth. Each tab handles its own loading state.
+  // The old gate caused flicker on OAuth sign-in because deep links
+  // triggered fetchUser() which reset loading=true repeatedly.
 
   const tabs: TabBarItem[] = [
     {

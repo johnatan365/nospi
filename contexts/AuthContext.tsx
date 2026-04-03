@@ -72,17 +72,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const initialFetchDone = React.useRef(false);
 
   useEffect(() => {
-    fetchUser();
+    fetchUser(true);
 
     const subscription = Linking.addEventListener("url", (event) => {
       console.log("Deep link received, refreshing user session");
-      fetchUser();
+      fetchUser(false);
     });
 
     const intervalId = setInterval(() => {
-      fetchUser();
+      fetchUser(false);
     }, 5 * 60 * 1000);
 
     return () => {
@@ -91,9 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const fetchUser = async () => {
+  const fetchUser = async (isInitial = false) => {
     try {
-      setLoading(true);
+      // Only set loading=true on the very first fetch to avoid flicker
+      if (!initialFetchDone.current) {
+        setLoading(true);
+      }
       const session = await authClient.getSession();
       if (session?.data?.user) {
         setUser(session.data.user as User);
@@ -108,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Failed to fetch user:", error);
       setUser(null);
     } finally {
+      initialFetchDone.current = true;
       setLoading(false);
       setIsLoading(false);
     }
