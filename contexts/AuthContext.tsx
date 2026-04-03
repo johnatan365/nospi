@@ -15,7 +15,6 @@ import React, {
 } from "react";
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { useSupabase } from "@/contexts/SupabaseContext";
 import { User } from "@supabase/supabase-js";
@@ -105,7 +104,10 @@ async function waitForSession(maxWaitMs = 5000): Promise<void> {
  * Resolves only after the session is confirmed in Supabase.
  */
 async function openOAuthBrowser(provider: "google" | "apple"): Promise<void> {
-  const redirectUrl = Linking.createURL("/auth/callback");
+  // Hardcoded to match the Android intentFilter (host="auth", path="/callback")
+  // and iOS CFBundleURLTypes. Linking.createURL('/auth/callback') would produce
+  // nospi:///auth/callback (triple-slash, no host) which does NOT match.
+  const redirectUrl = "nospi://auth/callback";
   console.log("[AuthContext] OAuth redirectUrl:", redirectUrl);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -122,7 +124,11 @@ async function openOAuthBrowser(provider: "google" | "apple"): Promise<void> {
   }
 
   console.log("[AuthContext] Opening browser for provider:", provider);
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+  const result = await WebBrowser.openAuthSessionAsync(
+    data.url,
+    redirectUrl,
+    { showInRecents: false }
+  );
   console.log("[AuthContext] Browser result type:", result.type);
 
   if (result.type === "success" && result.url) {
