@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
@@ -220,9 +221,12 @@ export default function LoginScreen() {
         return;
       }
 
+      console.log('LoginScreen: Apple OAuth URL generated:', data.url?.substring(0, 100));
       console.log('LoginScreen: Opening Apple OAuth URL in browser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, 'nospi://');
       console.log('LoginScreen: Apple WebBrowser result type:', result.type);
+      // TEMP DEBUG - remove after fixing
+      Alert.alert('OAuth Debug', `Result type: ${result.type}\nURL: ${(result as any).url || 'none'}`);
 
       if (result.type !== 'success') {
         if (result.type === 'cancel') {
@@ -333,9 +337,12 @@ export default function LoginScreen() {
         return;
       }
 
+      console.log('LoginScreen: Google OAuth URL generated:', data.url?.substring(0, 100));
       console.log('LoginScreen: Opening Google OAuth URL in browser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, 'nospi://');
       console.log('LoginScreen: Google WebBrowser result type:', result.type);
+      // TEMP DEBUG - remove after fixing
+      Alert.alert('OAuth Debug', `Result type: ${result.type}\nURL: ${(result as any).url || 'none'}`);
 
       if (result.type !== 'success') {
         if (result.type === 'cancel') {
