@@ -212,7 +212,7 @@ export default function AppointmentsScreen() {
 
         checkFirstTimeNotificationPrompt();
       })();
-    }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
+    }, [loadAppointments, user?.id, checkFirstTimeNotificationPrompt])
   );
 
   const formatDate = (dateString: string) => {

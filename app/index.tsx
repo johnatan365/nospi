@@ -29,39 +29,22 @@ export default function Index() {
             .eq('id', user.id)
             .maybeSingle();
 
-            if (!profile) {
-              // User authenticated via Google/Apple but hasn't completed onboarding yet
-              console.log('Index: No profile found, redirecting to onboarding to complete registration');
-              router.replace('/onboarding/name');
-              return;
-            }
-
+          if (profileError) {
+            console.error('Index: Error fetching profile:', profileError);
             if (Platform.OS === 'web') {
               window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
             } else {
               Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
             }
-
             await supabase.auth.signOut();
             router.replace('/welcome');
             return;
           }
 
           if (!profile) {
-            // User authenticated via Google/Apple but no profile in users table
-            console.log('Index: OAuth user authenticated but no profile found. Signing out.');
-            await supabase.auth.signOut();
-
-            if (Platform.OS === 'web') {
-              window.alert('Debes registrarte primero antes de iniciar sesión.');
-            } else {
-              Alert.alert(
-                'Registro Requerido',
-                'Debes registrarte primero antes de iniciar sesión.',
-                [{ text: 'OK' }]
-              );
-            }
-            router.replace('/welcome');
+            // User authenticated via Google/Apple but hasn't completed onboarding yet
+            console.log('Index: No profile found, redirecting to onboarding to complete registration');
+            router.replace('/onboarding/name');
             return;
           }
 

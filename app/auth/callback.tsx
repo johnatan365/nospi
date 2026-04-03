@@ -49,6 +49,7 @@ export default function AuthCallback() {
     };
 
     handleCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

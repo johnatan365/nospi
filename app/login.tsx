@@ -297,11 +297,6 @@ export default function LoginScreen() {
         setError('No se recibió el código de autenticación de Apple.');
         setSubmitting(false);
       }
-
-      console.log('LoginScreen: Opening Apple OAuth URL in browser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      console.log('LoginScreen: Apple WebBrowser result type:', result.type);
-      handleOAuthResult(result);
     } catch (err: any) {
       console.error('Apple login failed:', err);
       setError('Error al iniciar sesión con Apple');
@@ -415,11 +410,6 @@ export default function LoginScreen() {
         setError('No se recibió el código de autenticación de Google.');
         setSubmitting(false);
       }
-
-      console.log('LoginScreen: Opening Google OAuth URL in browser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      console.log('LoginScreen: Google WebBrowser result type:', result.type);
-      handleOAuthResult(result);
     } catch (err: any) {
       console.error('Google login failed:', err);
       setError('Error al iniciar sesión con Google');
