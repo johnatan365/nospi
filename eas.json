@@ -12,5 +12,13 @@
     "production": {
       "autoIncrement": true
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascApiKeyIssuerId": "43508854-2831-4642-85ce-ed89c3180641",
+        "ascApiKeyId": "QVXMAKZ9MX"
+      }
+    }
   }
 }
