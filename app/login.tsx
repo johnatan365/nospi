@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
@@ -19,18 +18,13 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-WebBrowser.maybeCompleteAuthSession();
 
 const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
 const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, signInWithApple, signInWithGoogle } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -134,212 +128,21 @@ export default function LoginScreen() {
     }
   };
 
-  // Parse query params and hash fragment from a deep-link URL without using
-  // `new URL()`, which is not reliably available in Hermes on native.
-  const parseOAuthCallbackUrl = (callbackUrl: string): { code?: string; access_token?: string; refresh_token?: string } => {
-    try {
-      // Use Linking.parse which is safe on all platforms
-      const parsed = Linking.parse(callbackUrl);
-      const queryParams = parsed.queryParams ?? {};
-
-      const code = typeof queryParams.code === 'string' ? queryParams.code : undefined;
-      let accessToken = typeof queryParams.access_token === 'string' ? queryParams.access_token : undefined;
-      let refreshToken = typeof queryParams.refresh_token === 'string' ? queryParams.refresh_token : undefined;
-
-      // Also check hash fragment (implicit flow fallback)
-      if (!accessToken || !refreshToken) {
-        const hash = callbackUrl.split('#')[1] || '';
-        if (hash) {
-          const hashPairs = hash.split('&');
-          const hashMap: Record<string, string> = {};
-          for (const pair of hashPairs) {
-            const [k, v] = pair.split('=');
-            if (k && v) hashMap[decodeURIComponent(k)] = decodeURIComponent(v);
-          }
-          accessToken = accessToken || hashMap['access_token'];
-          refreshToken = refreshToken || hashMap['refresh_token'];
-        }
-      }
-
-      return { code, access_token: accessToken, refresh_token: refreshToken };
-    } catch (err) {
-      console.warn('LoginScreen: parseOAuthCallbackUrl error:', err);
-      return {};
-    }
-  };
-
-  const handleOAuthResult = (result: WebBrowser.WebBrowserAuthSessionResult) => {
-    if (result.type === 'success' && result.url) {
-      console.log('LoginScreen: OAuth success, callback URL received');
-      const { code, access_token, refresh_token } = parseOAuthCallbackUrl(result.url);
-      console.log('LoginScreen: parsed params — code:', !!code, 'access_token:', !!access_token);
-
-      if (code) {
-        router.push({ pathname: '/auth/callback', params: { code } });
-      } else if (access_token && refresh_token) {
-        router.push({
-          pathname: '/auth/callback',
-          params: { access_token, refresh_token },
-        });
-      } else {
-        // No params extracted — navigate to callback screen which will poll getSession
-        console.warn('LoginScreen: No code or tokens in callback URL, navigating to callback screen anyway');
-        router.push('/auth/callback');
-      }
-    } else if (result.type === 'cancel') {
-      console.log('LoginScreen: OAuth cancelled by user');
-      setError('Inicio de sesión cancelado');
-      setSubmitting(false);
-    } else {
-      console.log('LoginScreen: OAuth result type:', result.type);
-      setSubmitting(false);
-    }
-  };
-
-  // Build the correct redirect URL depending on platform.
-  // On web, browsers cannot handle custom schemes (nospi://), so we use the
-  // current HTTPS origin. On native we use the app deep-link scheme.
-  const getRedirectUrl = () => {
-    if (Platform.OS === 'web') {
-      return `${window.location.origin}/auth/callback`;
-    }
-    return Linking.createURL('/auth/callback');
-  };
-
-  // Shared helper: handle the WebBrowser result on native (parse code / tokens
-  // and exchange them for a Supabase session).
-  const handleNativeOAuthResult = async (
-    result: WebBrowser.WebBrowserAuthSessionResult,
-    providerName: string,
-  ): Promise<boolean> => {
-    if (result.type === 'cancel') {
-      console.log(`LoginScreen: ${providerName} OAuth cancelled by user`);
-      setError('Inicio de sesión cancelado');
-      setSubmitting(false);
-      return false;
-    }
-    if (result.type !== 'success') {
-      console.log(`LoginScreen: ${providerName} WebBrowser result type:`, result.type);
-      setSubmitting(false);
-      return false;
-    }
-
-    const callbackUrl = result.url;
-    console.log(`LoginScreen: ${providerName} callback URL received`);
-
-    // Parse query params manually — no new URLSearchParams() on Hermes
-    let code: string | null = null;
-    let accessToken: string | null = null;
-    let refreshToken: string | null = null;
-
-    const queryPart = callbackUrl.split('?')[1] || '';
-    const queryBeforeHash = queryPart.split('#')[0];
-    if (queryBeforeHash) {
-      for (const pair of queryBeforeHash.split('&')) {
-        const eqIdx = pair.indexOf('=');
-        if (eqIdx === -1) continue;
-        const key = pair.substring(0, eqIdx);
-        const val = decodeURIComponent(pair.substring(eqIdx + 1));
-        if (key === 'code') code = val;
-      }
-    }
-
-    // Hash fragment fallback (implicit flow)
-    const hashPart = callbackUrl.split('#')[1] || '';
-    if (!code && hashPart) {
-      for (const pair of hashPart.split('&')) {
-        const eqIdx = pair.indexOf('=');
-        if (eqIdx === -1) continue;
-        const key = pair.substring(0, eqIdx);
-        const val = decodeURIComponent(pair.substring(eqIdx + 1));
-        if (key === 'access_token') accessToken = val;
-        if (key === 'refresh_token') refreshToken = val;
-      }
-    }
-
-    if (code) {
-      console.log(`LoginScreen: ${providerName} PKCE code found, exchanging for session...`);
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) {
-        console.error(`LoginScreen: ${providerName} code exchange error:`, exchangeError);
-        setError(`Error al completar el inicio de sesión con ${providerName}.`);
-        setSubmitting(false);
-        return false;
-      }
-      console.log(`LoginScreen: ${providerName} session established`);
-      router.replace('/');
-      return true;
-    } else if (accessToken && refreshToken) {
-      console.log(`LoginScreen: ${providerName} implicit tokens found, setting session...`);
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (sessionError) {
-        console.error(`LoginScreen: ${providerName} set session error:`, sessionError);
-        setError(`Error al completar el inicio de sesión con ${providerName}.`);
-        setSubmitting(false);
-        return false;
-      }
-      console.log(`LoginScreen: ${providerName} session set`);
-      router.replace('/');
-      return true;
-    } else {
-      console.warn(`LoginScreen: No code or tokens in ${providerName} callback URL`);
-      setError(`No se recibió el código de autenticación de ${providerName}.`);
-      setSubmitting(false);
-      return false;
-    }
-  };
-
   const handleApple = async () => {
     console.log('LoginScreen: user tapped Sign in with Apple');
     setError('');
     setSubmitting(true);
-
     try {
-      await AsyncStorage.setItem('oauth_flow_type', 'login');
-      const redirectUrl = getRedirectUrl();
-      console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
-
-      const isWeb = Platform.OS === 'web';
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: redirectUrl,
-          // On web we let the browser handle the redirect natively (no skipBrowserRedirect)
-          skipBrowserRedirect: !isWeb,
-        },
-      });
-
-      if (error || !data?.url) {
-        console.error('Apple OAuth error:', error);
-        setError('Error al conectar con Apple. Intenta de nuevo.');
-        setSubmitting(false);
-        return;
-      }
-
-      console.log('LoginScreen: Apple OAuth URL generated:', data.url.substring(0, 100));
-
-      if (isWeb) {
-        // On web: navigate the browser directly to the OAuth URL.
-        // Supabase will redirect back to the HTTPS callback URL and
-        // detectSessionInUrl will pick up the session automatically.
-        console.log('LoginScreen: web — redirecting browser to Apple OAuth URL');
-        window.location.href = data.url;
-        // No further code runs after this redirect
-        return;
-      }
-
-      // Native: open in-app browser and handle the deep-link callback
-      console.log('LoginScreen: native — opening Apple OAuth URL in WebBrowser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, Linking.createURL('/'));
-      console.log('LoginScreen: Apple WebBrowser result type:', result.type);
-      await handleNativeOAuthResult(result, 'Apple');
+      await signInWithApple();
+      console.log('LoginScreen: Apple sign-in completed');
     } catch (err: any) {
-      console.error('Apple login failed:', err);
-      setError('Error al iniciar sesión con Apple');
+      console.error('LoginScreen: Apple sign-in error:', err);
+      if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
+        setError('Inicio de sesión cancelado');
+      } else {
+        setError('Error al iniciar sesión con Apple');
+      }
+    } finally {
       setSubmitting(false);
     }
   };
@@ -348,50 +151,17 @@ export default function LoginScreen() {
     console.log('LoginScreen: user tapped Sign in with Google');
     setError('');
     setSubmitting(true);
-
     try {
-      await AsyncStorage.setItem('oauth_flow_type', 'login');
-      const redirectUrl = getRedirectUrl();
-      console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
-
-      const isWeb = Platform.OS === 'web';
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: !isWeb,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-
-      if (error || !data?.url) {
-        console.error('Google OAuth error:', error);
-        setError('Error al conectar con Google. Intenta de nuevo.');
-        setSubmitting(false);
-        return;
-      }
-
-      console.log('LoginScreen: Google OAuth URL generated:', data.url.substring(0, 100));
-
-      if (isWeb) {
-        // On web: navigate the browser directly to the OAuth URL.
-        console.log('LoginScreen: web — redirecting browser to Google OAuth URL');
-        window.location.href = data.url;
-        return;
-      }
-
-      // Native: open in-app browser and handle the deep-link callback
-      console.log('LoginScreen: native — opening Google OAuth URL in WebBrowser');
-      const result = await WebBrowser.openAuthSessionAsync(data.url, Linking.createURL('/'));
-      console.log('LoginScreen: Google WebBrowser result type:', result.type);
-      await handleNativeOAuthResult(result, 'Google');
+      await signInWithGoogle();
+      console.log('LoginScreen: Google sign-in completed');
     } catch (err: any) {
-      console.error('Google login failed:', err);
-      setError('Error al iniciar sesión con Google');
+      console.error('LoginScreen: Google sign-in error:', err);
+      if (err?.message?.includes('cancel')) {
+        setError('Inicio de sesión cancelado');
+      } else {
+        setError('Error al iniciar sesión con Google');
+      }
+    } finally {
       setSubmitting(false);
     }
   };

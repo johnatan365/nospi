@@ -1,19 +1,18 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 export default function Index() {
   const router = useRouter();
-  const { user, loading } = useSupabase();
+  const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id);
 
-    // Do not navigate while auth is still loading — OAuth session may still be arriving
     if (loading) return;
 
     const checkProfileAndNavigate = async () => {
@@ -22,7 +21,6 @@ export default function Index() {
         setIsCheckingProfile(true);
 
         try {
-          // Check if user profile exists in users table
           const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('id, name, email')
@@ -36,21 +34,18 @@ export default function Index() {
             } else {
               Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
             }
-            await supabase.auth.signOut();
             router.replace('/welcome');
             return;
           }
 
           if (!profile) {
-            // User authenticated via Google/Apple but hasn't completed onboarding yet
-            console.log('Index: No profile found, redirecting to onboarding to complete registration');
+            console.log('Index: No profile found, redirecting to onboarding');
             router.replace('/onboarding/name');
             return;
           }
 
           console.log('Index: Profile exists, checking for pending payment...');
 
-          // Verificar si hay pago pendiente de Bancolombia/PSE
           let hasPendingPayment = false;
           let paymentStatus = '';
           let transactionId = '';
@@ -81,14 +76,11 @@ export default function Index() {
           }
         } catch (error) {
           console.error('Index: Unexpected error during profile check:', error);
-
           if (Platform.OS === 'web') {
             window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           } else {
             Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           }
-
-          await supabase.auth.signOut();
           router.replace('/welcome');
         } finally {
           setIsCheckingProfile(false);
@@ -102,9 +94,6 @@ export default function Index() {
     checkProfileAndNavigate();
   }, [loading, user, router]);
 
-  // Show loading while auth state is being resolved or profile is being checked.
-  // IMPORTANT: while loading === true we must NOT navigate — the OAuth session
-  // may still be arriving (SIGNED_IN fires after INITIAL_SESSION null).
   if (loading || isCheckingProfile) {
     console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);
     return (
