@@ -17,7 +17,8 @@
     "production": {
       "ios": {
         "ascApiKeyIssuerId": "43508854-2831-4642-85ce-ed89c3180641",
-        "ascApiKeyId": "TXWNB8PB9B"
+        "ascApiKeyId": "TXWNB8PB9B",
+        "ascApiKeyPath": "/root/.eas/keys/TXWNB8PB9B.p8"
       }
     }
   }
