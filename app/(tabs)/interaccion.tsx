@@ -640,11 +640,13 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('InteraccionScreen: Tab focused');
-      if (user) {
-        loadAppointment();
+      console.log('InteraccionScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
       }
-    }, [user, loadAppointment])
+      loadAppointment();
+    }, [user?.id, loadAppointment])
   );
 
   useEffect(() => {

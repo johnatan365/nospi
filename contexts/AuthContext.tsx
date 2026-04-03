@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const initialFetchDone = React.useRef(false);
 
   useEffect(() => {
     fetchUser();
@@ -93,7 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      setLoading(true);
+      // FIX: Only set loading=true on the very first fetch to prevent
+      // OAuth flicker. Deep links from Google/Apple used to trigger
+      // fetchUser() which reset loading=true causing repeated spinner.
+      if (!initialFetchDone.current) {
+        setLoading(true);
+      }
       const session = await authClient.getSession();
       if (session?.data?.user) {
         setUser(session.data.user as User);
@@ -108,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Failed to fetch user:", error);
       setUser(null);
     } finally {
+      initialFetchDone.current = true;
       setLoading(false);
       setIsLoading(false);
     }

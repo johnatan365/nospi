@@ -290,11 +290,13 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('ProfileScreen: Tab focused');
-      if (user) {
-        loadProfile();
+      console.log('ProfileScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
       }
-    }, [user, loadProfile])
+      loadProfile();
+    }, [user?.id, loadProfile])
   );
 
   const handleSupportEmail = () => {

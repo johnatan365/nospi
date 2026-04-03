@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
@@ -18,32 +18,76 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     console.log('SupabaseProvider: Initializing auth state');
-    
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('SupabaseProvider: Initial session loaded', session ? 'User logged in' : 'No session');
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
-        console.log('SupabaseProvider: Auth state changed', event, session ? 'User logged in' : 'No session');
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+        console.log('SupabaseProvider: Auth state changed', event, session ? 'session present' : 'no session');
+
+        if (event === 'INITIAL_SESSION') {
+          if (session) {
+            // Sesión existente (email login o sesión guardada) → resolver inmediatamente
+            console.log('SupabaseProvider: INITIAL_SESSION with session — settling immediately');
+            setSession(session);
+            setUser(session.user);
+            setLoading(false);
+          } else {
+            // Sin sesión todavía — puede ser OAuth en progreso
+            // Esperar hasta 800ms por SIGNED_IN antes de resolver como "no logueado"
+            console.log('SupabaseProvider: INITIAL_SESSION null — waiting 500ms for SIGNED_IN (OAuth)');
+            timeoutRef.current = setTimeout(() => {
+              console.log('SupabaseProvider: OAuth wait timeout — user is not logged in');
+              setLoading(false);
+            }, 500);
+          }
+        } else if (event === 'SIGNED_IN') {
+          // Cancelar el timeout si estaba esperando
+          console.log('SupabaseProvider: SIGNED_IN — updating session');
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        } else if (event === 'SIGNED_OUT') {
+          console.log('SupabaseProvider: SIGNED_OUT — clearing session');
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log('SupabaseProvider: TOKEN_REFRESHED — updating session');
+          setSession(session);
+          setUser(session?.user ?? null);
+          // No cambiar loading
+        } else {
+          // Any other event (USER_UPDATED, etc.) — update state only.
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
       }
     );
 
-    // Refrescar sesión cuando la app vuelve al primer plano
-    // Esto evita que usuarios de Google pierdan sesión al volver de Safari
+    // Refresh session when app comes back to foreground.
     const handleAppState = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
-        await supabase.auth.getSession();
+        try {
+          console.log('SupabaseProvider: App became active, refreshing session');
+          const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+          if (refreshedSession) {
+            setSession(refreshedSession);
+            setUser(refreshedSession.user);
+          }
+        } catch (err) {
+          console.warn('SupabaseProvider: AppState session refresh error (ignored):', err);
+        }
       }
     });
 
@@ -51,7 +95,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       console.log('SupabaseProvider: Cleaning up auth listener');
       subscription.unsubscribe();
       handleAppState.remove();
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = async () => {

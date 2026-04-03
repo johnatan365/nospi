@@ -133,6 +133,68 @@ export default function LoginScreen() {
     }
   };
 
+  // Parse query params and hash fragment from a deep-link URL without using
+  // `new URL()`, which is not reliably available in Hermes on native.
+  const parseOAuthCallbackUrl = (callbackUrl: string): { code?: string; access_token?: string; refresh_token?: string } => {
+    try {
+      // Use Linking.parse which is safe on all platforms
+      const parsed = Linking.parse(callbackUrl);
+      const queryParams = parsed.queryParams ?? {};
+
+      const code = typeof queryParams.code === 'string' ? queryParams.code : undefined;
+      let accessToken = typeof queryParams.access_token === 'string' ? queryParams.access_token : undefined;
+      let refreshToken = typeof queryParams.refresh_token === 'string' ? queryParams.refresh_token : undefined;
+
+      // Also check hash fragment (implicit flow fallback)
+      if (!accessToken || !refreshToken) {
+        const hash = callbackUrl.split('#')[1] || '';
+        if (hash) {
+          const hashPairs = hash.split('&');
+          const hashMap: Record<string, string> = {};
+          for (const pair of hashPairs) {
+            const [k, v] = pair.split('=');
+            if (k && v) hashMap[decodeURIComponent(k)] = decodeURIComponent(v);
+          }
+          accessToken = accessToken || hashMap['access_token'];
+          refreshToken = refreshToken || hashMap['refresh_token'];
+        }
+      }
+
+      return { code, access_token: accessToken, refresh_token: refreshToken };
+    } catch (err) {
+      console.warn('LoginScreen: parseOAuthCallbackUrl error:', err);
+      return {};
+    }
+  };
+
+  const handleOAuthResult = (result: WebBrowser.WebBrowserAuthSessionResult) => {
+    if (result.type === 'success' && result.url) {
+      console.log('LoginScreen: OAuth success, callback URL received');
+      const { code, access_token, refresh_token } = parseOAuthCallbackUrl(result.url);
+      console.log('LoginScreen: parsed params — code:', !!code, 'access_token:', !!access_token);
+
+      if (code) {
+        router.push({ pathname: '/auth/callback', params: { code } });
+      } else if (access_token && refresh_token) {
+        router.push({
+          pathname: '/auth/callback',
+          params: { access_token, refresh_token },
+        });
+      } else {
+        // No params extracted — navigate to callback screen which will poll getSession
+        console.warn('LoginScreen: No code or tokens in callback URL, navigating to callback screen anyway');
+        router.push('/auth/callback');
+      }
+    } else if (result.type === 'cancel') {
+      console.log('LoginScreen: OAuth cancelled by user');
+      setError('Inicio de sesión cancelado');
+      setSubmitting(false);
+    } else {
+      console.log('LoginScreen: OAuth result type:', result.type);
+      setSubmitting(false);
+    }
+  };
+
   const handleApple = async () => {
     console.log('LoginScreen: user tapped Sign in with Apple');
     setError('');
@@ -235,6 +297,11 @@ export default function LoginScreen() {
         setError('No se recibió el código de autenticación de Apple.');
         setSubmitting(false);
       }
+
+      console.log('LoginScreen: Opening Apple OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('LoginScreen: Apple WebBrowser result type:', result.type);
+      handleOAuthResult(result);
     } catch (err: any) {
       console.error('Apple login failed:', err);
       setError('Error al iniciar sesión con Apple');
@@ -348,6 +415,11 @@ export default function LoginScreen() {
         setError('No se recibió el código de autenticación de Google.');
         setSubmitting(false);
       }
+
+      console.log('LoginScreen: Opening Google OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('LoginScreen: Google WebBrowser result type:', result.type);
+      handleOAuthResult(result);
     } catch (err: any) {
       console.error('Google login failed:', err);
       setError('Error al iniciar sesión con Google');

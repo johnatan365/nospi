@@ -1,10 +1,11 @@
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
@@ -26,30 +27,20 @@ interface Event {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const { user } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const currentUserIdRef = useRef<string | null>(null);
-
   const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
-    // Resolve user id once
-    if (!currentUserIdRef.current) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        currentUserIdRef.current = user.id;
-        console.log('EventsScreen: Resolved current user ID:', user.id);
-      }
-    }
+    if (!user?.id) return null;
 
-    if (!currentUserIdRef.current) return null;
-
-    console.log('EventsScreen: Fetching events from Supabase for user:', currentUserIdRef.current);
+    console.log('EventsScreen: Fetching events from Supabase for user:', user.id);
 
     const [appointmentsResult, eventsResult] = await Promise.all([
       supabase
         .from('appointments')
         .select('event_id')
-        .eq('user_id', currentUserIdRef.current)
+        .eq('user_id', user.id)
         .in('status', ['confirmada', 'anterior'])
         .eq('payment_status', 'completed'),
       supabase
@@ -74,7 +65,7 @@ export default function EventsScreen() {
 
     console.log('EventsScreen: Available events fetched:', availableEvents.length);
     return availableEvents;
-  }, []);
+  }, [user?.id]);
 
   const loadEvents = useCallback(async () => {
     // 1. Load from AsyncStorage immediately — show data with no skeleton
@@ -101,9 +92,13 @@ export default function EventsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('EventsScreen: Tab focused');
+      console.log('EventsScreen: Tab focused, user:', user?.id ?? 'none');
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
       loadEvents();
-    }, [loadEvents])
+    }, [user?.id, loadEvents])
   );
 
   const formatDate = (dateString: string) => {
