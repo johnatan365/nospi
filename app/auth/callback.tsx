@@ -227,9 +227,9 @@ export default function AuthCallbackScreen() {
             'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
           ]);
 
-          console.log('AuthCallbackScreen: Profile created, navigating to events');
+          console.log('AuthCallbackScreen: Profile created, navigating to /');
           setStatus('¡Registro exitoso!');
-          setTimeout(() => router.replace('/(tabs)/events'), 500);
+          router.replace('/');
           return;
         }
 
@@ -243,9 +243,9 @@ export default function AuthCallbackScreen() {
         }
 
         // Perfil existe — login exitoso
-        console.log('AuthCallbackScreen: Login successful, navigating to events');
+        console.log('AuthCallbackScreen: Login successful, navigating to /');
         setStatus('¡Bienvenido!');
-        setTimeout(() => router.replace('/(tabs)/events'), 500);
+        router.replace('/');
 
       } catch (error) {
         console.error('AuthCallbackScreen: Error processing profile:', error);

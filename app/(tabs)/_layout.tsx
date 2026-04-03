@@ -1,11 +1,21 @@
 import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 export default function TabLayout() {
-  // By the time this layout renders, both auth systems have already settled
-  // (the root _layout.tsx gates on both supabaseLoading and authLoading before
-  // rendering the Stack). No additional loading check needed here.
+  const { loading: supabaseLoading } = useSupabase();
+
+  // Show a spinner while Supabase session is being established.
+  // This prevents the OAuth flicker: tabs render only once the session is ready.
+  if (supabaseLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a0010' }}>
+        <ActivityIndicator size="large" color="#F06292" />
+      </View>
+    );
+  }
 
   const tabs: TabBarItem[] = [
     {

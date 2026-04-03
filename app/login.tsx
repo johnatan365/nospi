@@ -47,23 +47,6 @@ export default function LoginScreen() {
     }
   }, [user, router]);
 
-  // Also listen for Supabase auth changes (Google login uses Supabase directly)
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('LoginScreen: Supabase session detected (Google login), user:', session.user.id);
-        // Small delay to let the auth callback process the profile
-        setTimeout(() => {
-          router.replace('/(tabs)/events');
-        }, 500);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router]);
-
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
       setError('Por favor ingresa tu email y contraseña');

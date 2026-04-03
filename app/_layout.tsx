@@ -11,8 +11,8 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SupabaseProvider } from "@/contexts/SupabaseContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
@@ -20,9 +20,8 @@ import { SystemBars } from "react-native-edge-to-edge";
 
 SplashScreen.preventAutoHideAsync();
 
-// Inner component has access to BOTH auth contexts so it can wait for
-// both to settle before hiding the splash screen — preventing the white
-// flash / flicker on launch and after OAuth in TestFlight.
+// Inner component hides the splash screen as soon as fonts are loaded.
+// Auth loading is handled within screens — we do NOT block the splash on auth.
 function RootLayoutInner() {
   const [loaded] = useFonts({
     SpaceMonoRegular: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -33,23 +32,17 @@ function RootLayoutInner() {
 
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-  const { loading: supabaseLoading } = useSupabase();
-  const { isLoading: authLoading } = useAuth();
-
-  // App is ready only when fonts are loaded AND both auth systems have settled.
-  const appReady = loaded && !supabaseLoading && !authLoading;
 
   useEffect(() => {
-    console.log('Root layout: fonts loaded =', loaded, 'supabaseLoading =', supabaseLoading, 'authLoading =', authLoading);
-    if (appReady) {
-      console.log('Root layout: app ready, hiding splash screen');
+    console.log('Root layout: fonts loaded =', loaded);
+    if (loaded) {
+      console.log('Root layout: fonts ready, hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [appReady, loaded, supabaseLoading, authLoading]);
+  }, [loaded]);
 
-  // Keep splash visible until fonts AND both auth states are resolved.
-  // Returning null keeps the native splash screen showing.
-  if (!appReady) {
+  // Only block on fonts — auth loading is handled within screens.
+  if (!loaded) {
     return null;
   }
 
