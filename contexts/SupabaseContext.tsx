@@ -78,11 +78,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     // Refresh session when app comes back to foreground.
     const handleAppState = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
-        console.log('SupabaseProvider: App became active, refreshing session');
-        const { data: { session: refreshedSession } } = await supabase.auth.getSession();
-        if (refreshedSession) {
-          setSession(refreshedSession);
-          setUser(refreshedSession.user);
+        try {
+          console.log('SupabaseProvider: App became active, refreshing session');
+          const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+          if (refreshedSession) {
+            setSession(refreshedSession);
+            setUser(refreshedSession.user);
+          }
+        } catch (err) {
+          console.warn('SupabaseProvider: AppState session refresh error (ignored):', err);
         }
       }
     });

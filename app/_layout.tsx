@@ -37,7 +37,9 @@ function RootLayoutInner() {
     console.log('Root layout: fonts loaded =', loaded);
     if (loaded) {
       console.log('Root layout: fonts ready, hiding splash screen');
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch((err) => {
+        console.warn('Root layout: SplashScreen.hideAsync error (ignored):', err);
+      });
     }
   }, [loaded]);
 

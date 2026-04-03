@@ -32,14 +32,24 @@ export default function AuthCallbackScreen() {
           console.log('AuthCallbackScreen: Initial URL:', initialUrl);
 
           if (initialUrl) {
-            const parsed = new URL(initialUrl);
-            code = parsed.searchParams.get('code') ?? undefined;
+            // Use Linking.parse — safe on Hermes/native, unlike `new URL()`
+            const parsedInitial = Linking.parse(initialUrl);
+            const qp = parsedInitial.queryParams ?? {};
+            code = typeof qp.code === 'string' ? qp.code : undefined;
 
             // Also check hash fragment (some Supabase configs use implicit flow fallback)
             if (!code) {
               const hash = initialUrl.split('#')[1] || '';
-              const hashParams = new URLSearchParams(hash);
-              code = hashParams.get('code') ?? undefined;
+              if (hash) {
+                const hashPairs = hash.split('&');
+                for (const pair of hashPairs) {
+                  const [k, v] = pair.split('=');
+                  if (k && decodeURIComponent(k) === 'code' && v) {
+                    code = decodeURIComponent(v);
+                    break;
+                  }
+                }
+              }
             }
 
             console.log('AuthCallbackScreen: Code from initial URL:', !!code);
