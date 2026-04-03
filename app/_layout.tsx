@@ -12,7 +12,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SupabaseProvider, useSupabase } from "@/contexts/SupabaseContext";
+import { SupabaseProvider } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
@@ -34,21 +34,18 @@ function RootLayoutInner() {
 
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-  const { loading: authLoading } = useSupabase();
-
-  const appReady = loaded && !authLoading;
+  const appReady = loaded;
 
   useEffect(() => {
-    console.log('Root layout: fonts loaded =', loaded, 'auth loading =', authLoading);
+    console.log('Root layout: fonts loaded =', loaded);
     if (appReady) {
-      console.log('Root layout: app ready, hiding splash screen');
+      console.log('Root layout: fonts ready, hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [appReady, loaded, authLoading]);
+  }, [appReady, loaded]);
 
-  // Keep splash visible until both fonts AND auth state are resolved.
-  // Returning null here keeps the native splash screen showing (since
-  // SplashScreen.hideAsync has not been called yet).
+  // Keep splash visible until fonts are loaded.
+  // index.tsx will show a spinner while auth resolves.
   if (!appReady) {
     return null;
   }

@@ -47,23 +47,6 @@ export default function LoginScreen() {
     }
   }, [user, router]);
 
-  // Also listen for Supabase auth changes (Google login uses Supabase directly)
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('LoginScreen: Supabase session detected (Google login), user:', session.user.id);
-        // Small delay to let the auth callback process the profile
-        setTimeout(() => {
-          router.replace('/(tabs)/events');
-        }, 500);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router]);
-
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
       setError('Por favor ingresa tu email y contraseña');
@@ -157,61 +140,100 @@ export default function LoginScreen() {
 
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'login');
-      const redirectUrl = Linking.createURL('auth/callback');
+      const redirectUrl = 'nospi://auth/callback';
       console.log('LoginScreen: Apple OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
         },
       });
 
-      if (error) {
+      if (error || !data?.url) {
         console.error('Apple OAuth error:', error);
         setError('Error al conectar con Apple. Intenta de nuevo.');
         setSubmitting(false);
         return;
       }
 
-      console.log('Apple OAuth initiated:', data);
+      console.log('LoginScreen: Opening Apple OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('LoginScreen: Apple WebBrowser result type:', result.type);
 
-      if (data.url) {
-        console.log('LoginScreen: Opening Apple OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: WebBrowser result type:', result.type);
-
-        if (result.type === 'success' && result.url) {
-          const callbackUrl = result.url;
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
+      if (result.type !== 'success') {
+        if (result.type === 'cancel') {
           setError('Inicio de sesión cancelado');
-          setSubmitting(false);
-        } else {
-          setSubmitting(false);
         }
+        setSubmitting(false);
+        return;
+      }
+
+      const callbackUrl = result.url;
+      console.log('LoginScreen: Apple callback URL received:', callbackUrl);
+
+      // Parse query params manually — no new URLSearchParams() on Hermes
+      let code: string | null = null;
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      const queryPart = callbackUrl.split('?')[1] || '';
+      const queryBeforeHash = queryPart.split('#')[0];
+      if (queryBeforeHash) {
+        const pairs = queryBeforeHash.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'code') code = val;
+        }
+      }
+
+      // Parse hash fragment (implicit flow fallback)
+      const hashPart = callbackUrl.split('#')[1] || '';
+      if (!code && hashPart) {
+        const pairs = hashPart.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'access_token') accessToken = val;
+          if (key === 'refresh_token') refreshToken = val;
+        }
+      }
+
+      if (code) {
+        console.log('LoginScreen: Apple PKCE code found, exchanging for session...');
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          console.error('LoginScreen: Apple code exchange error:', exchangeError);
+          setError('Error al completar el inicio de sesión con Apple.');
+          setSubmitting(false);
+          return;
+        }
+        console.log('LoginScreen: Apple session established, navigating to index for routing');
+        router.replace('/');
+      } else if (accessToken && refreshToken) {
+        console.log('LoginScreen: Apple implicit tokens found, setting session...');
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          console.error('LoginScreen: Apple set session error:', sessionError);
+          setError('Error al completar el inicio de sesión con Apple.');
+          setSubmitting(false);
+          return;
+        }
+        console.log('LoginScreen: Apple session set, navigating to index for routing');
+        router.replace('/');
+      } else {
+        console.warn('LoginScreen: No code or tokens in Apple callback URL:', callbackUrl);
+        setError('No se recibió el código de autenticación de Apple.');
+        setSubmitting(false);
       }
     } catch (err: any) {
       console.error('Apple login failed:', err);
@@ -227,14 +249,14 @@ export default function LoginScreen() {
 
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'login');
-      const redirectUrl = Linking.createURL('auth/callback');
+      const redirectUrl = 'nospi://auth/callback';
       console.log('LoginScreen: Google OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -242,50 +264,89 @@ export default function LoginScreen() {
         },
       });
 
-      if (error) {
+      if (error || !data?.url) {
         console.error('Google OAuth error:', error);
         setError('Error al conectar con Google. Intenta de nuevo.');
         setSubmitting(false);
         return;
       }
 
-      console.log('Google OAuth initiated:', data);
+      console.log('LoginScreen: Opening Google OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('LoginScreen: Google WebBrowser result type:', result.type);
 
-      if (data.url) {
-        console.log('LoginScreen: Opening Google OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('LoginScreen: WebBrowser result type:', result.type);
-
-        if (result.type === 'success' && result.url) {
-          const callbackUrl = result.url;
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
+      if (result.type !== 'success') {
+        if (result.type === 'cancel') {
           setError('Inicio de sesión cancelado');
-          setSubmitting(false);
-        } else {
-          setSubmitting(false);
         }
+        setSubmitting(false);
+        return;
+      }
+
+      const callbackUrl = result.url;
+      console.log('LoginScreen: Google callback URL received:', callbackUrl);
+
+      // Parse query params manually — no new URLSearchParams() on Hermes
+      let code: string | null = null;
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      const queryPart = callbackUrl.split('?')[1] || '';
+      const queryBeforeHash = queryPart.split('#')[0];
+      if (queryBeforeHash) {
+        const pairs = queryBeforeHash.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'code') code = val;
+        }
+      }
+
+      // Parse hash fragment (implicit flow fallback)
+      const hashPart = callbackUrl.split('#')[1] || '';
+      if (!code && hashPart) {
+        const pairs = hashPart.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'access_token') accessToken = val;
+          if (key === 'refresh_token') refreshToken = val;
+        }
+      }
+
+      if (code) {
+        console.log('LoginScreen: Google PKCE code found, exchanging for session...');
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          console.error('LoginScreen: Google code exchange error:', exchangeError);
+          setError('Error al completar el inicio de sesión con Google.');
+          setSubmitting(false);
+          return;
+        }
+        console.log('LoginScreen: Google session established, navigating to index for routing');
+        router.replace('/');
+      } else if (accessToken && refreshToken) {
+        console.log('LoginScreen: Google implicit tokens found, setting session...');
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          console.error('LoginScreen: Google set session error:', sessionError);
+          setError('Error al completar el inicio de sesión con Google.');
+          setSubmitting(false);
+          return;
+        }
+        console.log('LoginScreen: Google session set, navigating to index for routing');
+        router.replace('/');
+      } else {
+        console.warn('LoginScreen: No code or tokens in Google callback URL:', callbackUrl);
+        setError('No se recibió el código de autenticación de Google.');
+        setSubmitting(false);
       }
     } catch (err: any) {
       console.error('Google login failed:', err);

@@ -56,26 +56,23 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // Store registration intent in AsyncStorage so callback knows this is a registration flow
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       console.log('RegisterScreen: Stored oauth_flow_type as register');
-      
-      const redirectUrl = Linking.createURL('auth/callback');
+
+      const redirectUrl = 'nospi://auth/callback';
       console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
         },
       });
 
-      if (error) {
+      if (error || !data?.url) {
         console.error('Apple OAuth error:', error);
-        
-        // Check for specific OAuth configuration errors
-        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
+        if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
             'Configuración Pendiente',
             'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
@@ -83,62 +80,72 @@ export default function RegisterScreen() {
         } else {
           setError('Error al conectar con Apple. Por favor intenta de nuevo.');
         }
-        
         setLoading(false);
         return;
       }
 
-      console.log('Apple OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('RegisterScreen: Opening Apple OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('RegisterScreen: Apple WebBrowser result type:', result.type);
+      console.log('RegisterScreen: Opening Apple OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('RegisterScreen: Apple WebBrowser result type:', result.type);
 
-        if (result.type === 'success' && result.url) {
-          console.log('RegisterScreen: Apple OAuth success, callback URL:', result.url);
-          const callbackUrl = result.url;
-
-          // PKCE flow: extract the `code` param and let the callback screen exchange it
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          // Also check for legacy implicit-flow tokens in query or hash
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            console.log('RegisterScreen: Apple PKCE code found, navigating to callback screen');
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            console.log('RegisterScreen: Apple implicit tokens found, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            console.log('RegisterScreen: No code or tokens in Apple URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
+      if (result.type !== 'success') {
+        if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled Apple OAuth');
           setError('Registro cancelado');
-          setLoading(false);
-        } else {
-          console.log('RegisterScreen: Apple OAuth result type:', result.type);
-          setLoading(false);
         }
+        setLoading(false);
+        return;
+      }
+
+      const callbackUrl = result.url;
+      console.log('RegisterScreen: Apple callback URL received:', callbackUrl);
+
+      // Parse query params manually — no new URLSearchParams() on Hermes
+      let code: string | null = null;
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      const queryPart = callbackUrl.split('?')[1] || '';
+      const queryBeforeHash = queryPart.split('#')[0];
+      if (queryBeforeHash) {
+        const pairs = queryBeforeHash.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'code') code = val;
+        }
+      }
+
+      const hashPart = callbackUrl.split('#')[1] || '';
+      if (!code && hashPart) {
+        const pairs = hashPart.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'access_token') accessToken = val;
+          if (key === 'refresh_token') refreshToken = val;
+        }
+      }
+
+      if (code) {
+        console.log('RegisterScreen: Apple PKCE code found, navigating to callback screen');
+        router.push({ pathname: '/auth/callback', params: { code } });
+      } else if (accessToken && refreshToken) {
+        console.log('RegisterScreen: Apple implicit tokens found, navigating to callback screen');
+        router.push({
+          pathname: '/auth/callback',
+          params: { access_token: accessToken, refresh_token: refreshToken },
+        });
+      } else {
+        console.warn('RegisterScreen: No code or tokens in Apple callback URL:', callbackUrl);
+        router.push('/auth/callback');
       }
     } catch (error: any) {
       console.error('Apple sign-up failed:', error);
-      
-      // Check if it's a configuration error
       if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
         showErrorAlert(
           'Configuración Pendiente',
@@ -147,7 +154,6 @@ export default function RegisterScreen() {
       } else {
         setError('Error al registrarse con Apple');
       }
-      
       setLoading(false);
     }
   };
@@ -158,18 +164,17 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      // Store registration intent in AsyncStorage so callback knows this is a registration flow
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       console.log('RegisterScreen: Stored oauth_flow_type as register');
-      
-      const redirectUrl = Linking.createURL('auth/callback');
+
+      const redirectUrl = 'nospi://auth/callback';
       console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -177,11 +182,9 @@ export default function RegisterScreen() {
         },
       });
 
-      if (error) {
+      if (error || !data?.url) {
         console.error('Google OAuth error:', error);
-        
-        // Check for specific OAuth configuration errors
-        if (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider')) {
+        if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
             'Configuración Pendiente',
             'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
@@ -189,62 +192,72 @@ export default function RegisterScreen() {
         } else {
           setError('Error al conectar con Google. Por favor intenta de nuevo.');
         }
-        
         setLoading(false);
         return;
       }
 
-      console.log('Google OAuth initiated:', data);
-      
-      if (data.url) {
-        console.log('RegisterScreen: Opening Google OAuth URL');
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('RegisterScreen: Google WebBrowser result type:', result.type);
+      console.log('RegisterScreen: Opening Google OAuth URL in browser');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      console.log('RegisterScreen: Google WebBrowser result type:', result.type);
 
-        if (result.type === 'success' && result.url) {
-          console.log('RegisterScreen: Google OAuth success, callback URL:', result.url);
-          const callbackUrl = result.url;
-
-          // PKCE flow: extract the `code` param and let the callback screen exchange it
-          const parsedUrl = new URL(callbackUrl);
-          const code = parsedUrl.searchParams.get('code');
-
-          // Also check for legacy implicit-flow tokens in query or hash
-          let accessToken = parsedUrl.searchParams.get('access_token');
-          let refreshToken = parsedUrl.searchParams.get('refresh_token');
-          if (!accessToken || !refreshToken) {
-            const hash = callbackUrl.split('#')[1] || '';
-            const hashParams = new URLSearchParams(hash);
-            accessToken = accessToken || hashParams.get('access_token');
-            refreshToken = refreshToken || hashParams.get('refresh_token');
-          }
-
-          if (code) {
-            console.log('RegisterScreen: Google PKCE code found, navigating to callback screen');
-            router.push({ pathname: '/auth/callback', params: { code } });
-          } else if (accessToken && refreshToken) {
-            console.log('RegisterScreen: Google implicit tokens found, navigating to callback screen');
-            router.push({
-              pathname: '/auth/callback',
-              params: { access_token: accessToken, refresh_token: refreshToken },
-            });
-          } else {
-            console.log('RegisterScreen: No code or tokens in Google URL, navigating to callback screen anyway');
-            router.push('/auth/callback');
-          }
-        } else if (result.type === 'cancel') {
+      if (result.type !== 'success') {
+        if (result.type === 'cancel') {
           console.log('RegisterScreen: User cancelled Google OAuth');
           setError('Registro cancelado');
-          setLoading(false);
-        } else {
-          console.log('RegisterScreen: Google OAuth result type:', result.type);
-          setLoading(false);
         }
+        setLoading(false);
+        return;
+      }
+
+      const callbackUrl = result.url;
+      console.log('RegisterScreen: Google callback URL received:', callbackUrl);
+
+      // Parse query params manually — no new URLSearchParams() on Hermes
+      let code: string | null = null;
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      const queryPart = callbackUrl.split('?')[1] || '';
+      const queryBeforeHash = queryPart.split('#')[0];
+      if (queryBeforeHash) {
+        const pairs = queryBeforeHash.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'code') code = val;
+        }
+      }
+
+      const hashPart = callbackUrl.split('#')[1] || '';
+      if (!code && hashPart) {
+        const pairs = hashPart.split('&');
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'access_token') accessToken = val;
+          if (key === 'refresh_token') refreshToken = val;
+        }
+      }
+
+      if (code) {
+        console.log('RegisterScreen: Google PKCE code found, navigating to callback screen');
+        router.push({ pathname: '/auth/callback', params: { code } });
+      } else if (accessToken && refreshToken) {
+        console.log('RegisterScreen: Google implicit tokens found, navigating to callback screen');
+        router.push({
+          pathname: '/auth/callback',
+          params: { access_token: accessToken, refresh_token: refreshToken },
+        });
+      } else {
+        console.warn('RegisterScreen: No code or tokens in Google callback URL:', callbackUrl);
+        router.push('/auth/callback');
       }
     } catch (error: any) {
       console.error('Google sign-up failed:', error);
-      
-      // Check if it's a configuration error
       if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
         showErrorAlert(
           'Configuración Pendiente',
@@ -253,7 +266,6 @@ export default function RegisterScreen() {
       } else {
         setError('Error al registrarse con Google');
       }
-      
       setLoading(false);
     }
   };

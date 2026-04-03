@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Alert, Platform } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -44,20 +44,9 @@ export default function Index() {
             }
 
             if (!profile) {
-              // User authenticated via Google/Apple but no profile in users table
-              console.log('Index: OAuth user authenticated but no profile found. Signing out.');
-              await supabase.auth.signOut();
-              
-              if (Platform.OS === 'web') {
-                window.alert('Debes registrarte primero antes de iniciar sesión.');
-              } else {
-                Alert.alert(
-                  'Registro Requerido',
-                  'Debes registrarte primero antes de iniciar sesión.',
-                  [{ text: 'OK' }]
-                );
-              }
-              router.replace('/welcome');
+              // User authenticated via Google/Apple but hasn't completed onboarding yet
+              console.log('Index: No profile found, redirecting to onboarding to complete registration');
+              router.replace('/onboarding/name');
               return;
             }
 
