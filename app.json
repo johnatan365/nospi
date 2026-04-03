@@ -13,6 +13,7 @@
       "backgroundColor": "#A0005A"
     },
     "ios": {
+      "buildNumber": "5",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
