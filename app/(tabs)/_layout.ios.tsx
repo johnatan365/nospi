@@ -1,19 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
-  const { isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a0010', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#AD1457" />
-      </View>
-    );
-  }
+  // By the time this layout renders, both auth systems have already settled
+  // (the root _layout.tsx gates on both supabaseLoading and authLoading before
+  // rendering the Stack). No additional loading check needed here.
 
   const tabs: TabBarItem[] = [
     {

@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
@@ -112,10 +112,7 @@ export default function EventsScreen() {
         setLoading(false);
         return;
       }
-      const task = InteractionManager.runAfterInteractions(() => {
-        loadEvents();
-      });
-      return () => task.cancel();
+      loadEvents();
     }, [user?.id, loadEvents])
   );
 

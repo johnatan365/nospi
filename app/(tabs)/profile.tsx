@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -295,10 +295,7 @@ export default function ProfileScreen() {
         setLoading(false);
         return;
       }
-      const task = InteractionManager.runAfterInteractions(() => {
-        loadProfile();
-      });
-      return () => task.cancel();
+      loadProfile();
     }, [user?.id, loadProfile])
   );
 

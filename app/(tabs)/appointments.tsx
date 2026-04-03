@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -166,7 +166,7 @@ export default function AppointmentsScreen() {
         return;
       }
 
-      const task = InteractionManager.runAfterInteractions(async () => {
+      (async () => {
         // Si viene de un pago exitoso, invalidar caché antes de cargar para mostrar la cita nueva.
         try {
           const shouldCheck = await AsyncStorage.getItem('should_check_notification_prompt');
@@ -211,9 +211,7 @@ export default function AppointmentsScreen() {
         }
 
         checkFirstTimeNotificationPrompt();
-      });
-
-      return () => task.cancel();
+      })();
     }, [loadAppointments, user?.id, filter, checkFirstTimeNotificationPrompt])
   );
 
