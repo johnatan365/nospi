@@ -9,7 +9,8 @@
     "web": "EXPO_NO_TELEMETRY=1 expo start --web",
     "build:web": "expo export -p web && npx workbox generateSW workbox-config.js",
     "build:android": "expo prebuild -p android",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "prepare-asc-key": "mkdir -p /root/.eas/keys && echo $EXPO_ASC_API_KEY_P8 | base64 -d > /root/.eas/keys/TXWNB8PB9B.p8"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
