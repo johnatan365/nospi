@@ -303,6 +303,7 @@ export default function AppointmentsScreen() {
     if (!user?.id) {
       console.error('saveNotificationPreferences: user is null');
       Alert.alert('Error', 'No se pudo identificar tu usuario. Intenta cerrar sesión y volver a entrar.');
+      setShowNotificationModal(false);
       return;
     }
     try {
@@ -315,14 +316,15 @@ export default function AppointmentsScreen() {
       if (error) {
         console.error('Error saving notification preferences:', error);
         Alert.alert('Error', 'No se pudieron guardar las preferencias: ' + error.message);
-        return;
+      } else {
+        console.log('Notification preferences saved successfully');
       }
-
-      console.log('Notification preferences saved successfully');
-      setShowNotificationModal(false);
     } catch (error) {
       console.error('Failed to save notification preferences:', error);
       Alert.alert('Error', 'Error inesperado al guardar preferencias');
+    } finally {
+      await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
+      setShowNotificationModal(false);
     }
   };
 

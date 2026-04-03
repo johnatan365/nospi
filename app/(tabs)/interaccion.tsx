@@ -156,15 +156,6 @@ export default function InteraccionScreen() {
     setCountdownDisplay(countdownText);
   }, [appointment, checkInPhase]);
 
-  const requestNotificationPermissions = useCallback(async () => {
-    if (Platform.OS === 'web') return;
-    try {
-      await Notifications.requestPermissionsAsync();
-    } catch (error) {
-      console.error('Error requesting notification permissions:', error);
-    }
-  }, []);
-
   const scheduleNotifications = useCallback(async (startTime: string) => {
     if (Platform.OS === 'web') return;
     try {
@@ -664,10 +655,6 @@ export default function InteraccionScreen() {
       return () => clearInterval(interval);
     }
   }, [appointment, updateCountdown]);
-
-  useEffect(() => {
-    requestNotificationPermissions();
-  }, [requestNotificationPermissions]);
 
   useEffect(() => {
     if (!appointmentEventId || !user) return;
