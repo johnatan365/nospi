@@ -15,6 +15,7 @@ import React, {
 } from "react";
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { useSupabase } from "@/contexts/SupabaseContext";
 import { User } from "@supabase/supabase-js";
@@ -197,31 +198,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithApple = async () => {
     console.log("[AuthContext] signInWithApple pressed");
+
     if (Platform.OS === "ios") {
-      // Native Apple Sign In — shows system Face ID / password modal
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const AppleAuthentication = require("expo-apple-authentication");
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) {
-        throw new Error("No identity token received from Apple");
+      // Check if running in Expo Go — native Apple Sign In doesn't work there
+      // because the id_token audience is host.exp.Exponent, not our bundle ID
+      const isExpoGo = Constants.appOwnership === "expo";
+
+      if (!isExpoGo) {
+        // Standalone build — use native Apple Sign In modal
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const AppleAuthentication = require("expo-apple-authentication");
+          const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+              AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+              AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+          });
+          if (!credential.identityToken) {
+            throw new Error("No identity token received from Apple");
+          }
+          console.log("[AuthContext] Apple native credential received, signing in with Supabase");
+          const { error } = await supabase.auth.signInWithIdToken({
+            provider: "apple",
+            token: credential.identityToken,
+          });
+          if (error) {
+            console.error("[AuthContext] Apple signInWithIdToken error:", error.message);
+            throw error;
+          }
+          console.log("[AuthContext] Apple sign-in success");
+          return;
+        } catch (err: any) {
+          // If it's a cancellation, rethrow so the UI can handle it
+          if (err?.code === "ERR_REQUEST_CANCELED" || err?.code === "ERR_CANCELED") {
+            throw err;
+          }
+          // For other errors (e.g. audience mismatch), fall through to browser flow
+          console.warn("[AuthContext] Native Apple Sign In failed, falling back to browser flow:", err?.message);
+        }
+      } else {
+        console.log("[AuthContext] Running in Expo Go — using browser OAuth flow for Apple");
       }
-      console.log("[AuthContext] Apple native credential received, signing in with Supabase");
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "apple",
-        token: credential.identityToken,
-      });
-      if (error) {
-        console.error("[AuthContext] Apple signInWithIdToken error:", error.message);
-        throw error;
-      }
-      console.log("[AuthContext] Apple sign-in success");
+
+      // Fallback: browser-based OAuth (works in Expo Go and as backup)
+      await openOAuthBrowser("apple");
       return;
     }
+
     if (Platform.OS === "web") {
       console.log("[AuthContext] signInWithApple: web — using Supabase OAuth redirect");
       const { error } = await supabase.auth.signInWithOAuth({
@@ -236,6 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
+
     // Android — use browser flow
     await openOAuthBrowser("apple");
   };
