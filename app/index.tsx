@@ -5,6 +5,53 @@ import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-nati
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * Read all onboarding keys from AsyncStorage in one shot.
+ */
+async function readOnboardingData() {
+  const keys = [
+    'onboarding_interests',
+    'onboarding_personality',
+    'onboarding_name',
+    'onboarding_birthdate',
+    'onboarding_age',
+    'onboarding_gender',
+    'onboarding_interested_in',
+    'onboarding_age_range',
+    'onboarding_country',
+    'onboarding_city',
+    'onboarding_phone',
+    'onboarding_photo',
+    'onboarding_compatibility',
+  ];
+  const pairs = await AsyncStorage.multiGet(keys);
+  const map: Record<string, string | null> = {};
+  for (const [k, v] of pairs) map[k] = v;
+  return map;
+}
+
+/**
+ * Clear all onboarding keys + the oauth flow flag from AsyncStorage.
+ */
+async function clearOnboardingData() {
+  await AsyncStorage.multiRemove([
+    'onboarding_interests',
+    'onboarding_personality',
+    'onboarding_name',
+    'onboarding_birthdate',
+    'onboarding_age',
+    'onboarding_gender',
+    'onboarding_interested_in',
+    'onboarding_age_range',
+    'onboarding_country',
+    'onboarding_city',
+    'onboarding_phone',
+    'onboarding_photo',
+    'onboarding_compatibility',
+    'oauth_flow_type',
+  ]);
+}
+
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -45,7 +92,96 @@ export default function Index() {
           }
 
           if (!profile) {
-            console.log('Index: No profile found, redirecting to onboarding');
+            // Check whether the user was mid-registration when they signed in via OAuth.
+            // If so, we have locally-stored onboarding data — use it to create the profile
+            // right here instead of sending them back to the name screen.
+            const oauthFlowType = await AsyncStorage.getItem('oauth_flow_type');
+            console.log('Index: No profile found, oauth_flow_type:', oauthFlowType);
+
+            if (oauthFlowType === 'register') {
+              console.log('Index: OAuth register flow detected — creating profile from onboarding data');
+              const stored = await readOnboardingData();
+
+              // User-entered data takes priority; OAuth provider metadata is the fallback.
+              const oauthMeta = user.user_metadata ?? {};
+              const oauthName: string = oauthMeta.full_name || oauthMeta.name || '';
+              const oauthPhoto: string = oauthMeta.avatar_url || oauthMeta.picture || '';
+
+              const name: string = stored['onboarding_name'] || oauthName;
+              const photo: string | null = stored['onboarding_photo'] || oauthPhoto || null;
+              const birthdate: string = stored['onboarding_birthdate'] || '';
+              const age: number = stored['onboarding_age'] ? parseInt(stored['onboarding_age']!) : 18;
+              const gender: string = stored['onboarding_gender'] || 'hombre';
+              const interestedIn: string = stored['onboarding_interested_in'] || 'ambos';
+              const ageRange = stored['onboarding_age_range']
+                ? JSON.parse(stored['onboarding_age_range']!)
+                : { min: 18, max: 60 };
+              const country: string = stored['onboarding_country'] || 'Colombia';
+              const city: string = stored['onboarding_city'] || 'Medellín';
+              const phoneInfo = stored['onboarding_phone']
+                ? JSON.parse(stored['onboarding_phone']!)
+                : { phoneNumber: '' };
+              const interests: string[] = stored['onboarding_interests']
+                ? JSON.parse(stored['onboarding_interests']!)
+                : [];
+              const personality: string[] = stored['onboarding_personality']
+                ? JSON.parse(stored['onboarding_personality']!)
+                : [];
+              const compatibility: number = stored['onboarding_compatibility']
+                ? parseInt(stored['onboarding_compatibility']!)
+                : 95;
+
+              console.log('Index: Creating profile — name:', name, 'photo from user:', !!stored['onboarding_photo'], 'photo from oauth:', !!oauthPhoto);
+
+              const { error: insertError } = await supabase.from('users').insert({
+                id: user.id,
+                email: user.email ?? '',
+                name,
+                birthdate,
+                age,
+                gender,
+                interested_in: interestedIn,
+                age_range_min: ageRange.min,
+                age_range_max: ageRange.max,
+                country,
+                city,
+                phone: phoneInfo.phoneNumber || '',
+                profile_photo_url: photo,
+                interests,
+                personality_traits: personality,
+                compatibility_percentage: compatibility,
+                notification_preferences: {
+                  whatsapp: false,
+                  email: true,
+                  sms: false,
+                  push: true,
+                },
+              });
+
+              if (insertError) {
+                console.error('Index: Profile insert error:', insertError.message);
+                // If it's a duplicate (race condition), just proceed to events
+                if (!insertError.message.includes('duplicate') && !insertError.message.includes('already exists')) {
+                  if (Platform.OS === 'web') {
+                    window.alert('Error al crear tu perfil. Por favor, intenta de nuevo.');
+                  } else {
+                    Alert.alert('Error', 'Error al crear tu perfil. Por favor, intenta de nuevo.');
+                  }
+                  router.replace('/welcome');
+                  return;
+                }
+              } else {
+                console.log('Index: Profile created successfully from onboarding data');
+              }
+
+              await clearOnboardingData();
+              console.log('Index: Onboarding data cleared, navigating to events');
+              router.replace('/(tabs)/events');
+              return;
+            }
+
+            // No pending registration data — send to normal onboarding start
+            console.log('Index: No profile and no pending registration, redirecting to onboarding/name');
             router.replace('/onboarding/name');
             return;
           }
