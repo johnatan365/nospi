@@ -99,6 +99,44 @@ export default function Index() {
             console.log('Index: No profile found, oauth_flow_type:', oauthFlowType);
 
             if (oauthFlowType === 'register') {
+              // Guard: check if a profile already exists for this email (different auth identity).
+              // This happens when a user registered via email/password and now tries to sign up
+              // again via Google/Apple with the same email address.
+              const userEmail = user.email ?? '';
+              console.log('Index: OAuth register — checking for existing profile by email:', userEmail);
+
+              if (userEmail) {
+                const { data: existingByEmail, error: emailCheckError } = await supabase
+                  .from('users')
+                  .select('id, email')
+                  .eq('email', userEmail)
+                  .maybeSingle();
+
+                if (emailCheckError) {
+                  console.error('Index: Error checking email existence:', emailCheckError);
+                  // Non-fatal — fall through and let the insert attempt handle it
+                } else if (existingByEmail) {
+                  console.warn('Index: OAuth register blocked — email already registered:', userEmail);
+                  // Sign the user out so they are not left in a half-authenticated state
+                  await supabase.auth.signOut();
+                  await clearOnboardingData();
+
+                  if (Platform.OS === 'web') {
+                    window.alert(
+                      'Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.'
+                    );
+                    router.replace('/login');
+                  } else {
+                    Alert.alert(
+                      'Correo ya registrado',
+                      'Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.',
+                      [{ text: 'Ir a iniciar sesión', onPress: () => router.replace('/login') }]
+                    );
+                  }
+                  return;
+                }
+              }
+
               console.log('Index: OAuth register flow detected — creating profile from onboarding data');
               const stored = await readOnboardingData();
 
