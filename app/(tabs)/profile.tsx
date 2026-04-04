@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -148,8 +148,8 @@ export default function ProfileScreen() {
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
-  const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
-  const debounceRef = useRef<any>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [showPhoneTakenModal, setShowPhoneTakenModal] = useState(false);
 
   // Support modal state
   const [showSupportEmailModal, setShowSupportEmailModal] = useState(false);
@@ -403,7 +403,6 @@ export default function ProfileScreen() {
 
   const handleEditPress = () => {
     console.log('User tapped edit profile');
-    setPhoneStatus('idle');
     setEditModalVisible(true);
   };
 
@@ -516,19 +515,27 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
-    if (phoneStatus === 'taken') {
-      Alert.alert('Error', 'Este número de teléfono ya está registrado por otro usuario.');
-      return;
-    }
-    if (phoneStatus === 'checking') {
-      Alert.alert('Espera', 'Verificando disponibilidad del número...');
-      return;
-    }
 
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
+    const originalPhone = profile?.phone || '';
+
+    console.log('User tapped Guardar Cambios');
+    setSavingProfile(true);
 
     try {
-      console.log('User saving profile changes');
+      // Only check availability if the phone number changed
+      if (combinedPhone !== originalPhone) {
+        console.log('ProfileScreen: Phone changed, checking availability for:', combinedPhone);
+        const taken = await checkPhoneExists(combinedPhone);
+        if (taken) {
+          console.log('ProfileScreen: Phone already taken, showing modal');
+          setSavingProfile(false);
+          setShowPhoneTakenModal(true);
+          return;
+        }
+      }
+
+      console.log('ProfileScreen: Saving profile changes');
       const { error } = await supabase
         .from('users')
         .update({
@@ -568,6 +575,8 @@ export default function ProfileScreen() {
     } catch (err) {
       console.error('Failed to update profile:', err);
       Alert.alert('Error', 'No se pudo actualizar el perfil');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -673,23 +682,6 @@ export default function ProfileScreen() {
     if (error) { console.error('ProfileScreen: Phone check error:', error); return false; }
     return !!data;
   }, [user?.id]);
-
-  useEffect(() => {
-    const cleanNumber = editPhoneNumber.replace(/\D/g, '');
-    if (cleanNumber.length !== editPhoneCountry.digits) {
-      setPhoneStatus('idle');
-      return;
-    }
-    setPhoneStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const full = editPhoneCountry.code + cleanNumber;
-      console.log('ProfileScreen: Debounced phone check triggered for:', full);
-      const exists = await checkPhoneExists(full);
-      setPhoneStatus(exists ? 'taken' : 'available');
-    }, 600);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [editPhoneNumber, editPhoneCountry, checkPhoneExists]);
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||
@@ -930,12 +922,6 @@ export default function ProfileScreen() {
                   onSubmitEditing={() => { console.log('Phone input done pressed'); Keyboard.dismiss(); }}
                 />
               </View>
-              {phoneStatus !== 'idle' && (
-                <Text style={{ fontSize: 12, marginTop: 4, color: phoneStatus === 'taken' ? '#e53e3e' : phoneStatus === 'available' ? '#38a169' : '#888' }}>
-                  {phoneStatus === 'taken' ? '❌ Este número ya está registrado' : phoneStatus === 'available' ? '✅ Número disponible' : '🔍 Verificando...'}
-                </Text>
-              )}
-
               <Text style={styles.inputLabel}>País</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCountry}</Text>
@@ -993,10 +979,10 @@ export default function ProfileScreen() {
                 ))}
               </View>
 
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} activeOpacity={0.8}>
-                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+              <TouchableOpacity style={[styles.saveButton, savingProfile && { opacity: 0.7 }]} onPress={handleSaveProfile} activeOpacity={0.8} disabled={savingProfile}>
+                {savingProfile ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveButtonText}>Guardar Cambios</Text>}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setPhoneStatus('idle'); setEditModalVisible(false); }} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setEditModalVisible(false)} activeOpacity={0.8}>
                 <Text style={styles.modalCloseButtonText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
@@ -1255,6 +1241,22 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Phone Taken Modal */}
+      <Modal visible={showPhoneTakenModal} transparent animationType="fade" onRequestClose={() => setShowPhoneTakenModal(false)}>
+        <View style={styles.phoneTakenOverlay}>
+          <View style={styles.phoneTakenCard}>
+            <Text style={styles.phoneTakenTitle}>⚠️ Número en uso</Text>
+            <Text style={styles.phoneTakenMsg}>Este número ya está en uso por otra cuenta. Por favor usa un número diferente.</Text>
+            <TouchableOpacity
+              style={styles.phoneTakenBtn}
+              onPress={() => { console.log('User dismissed phone taken modal'); setShowPhoneTakenModal(false); }}
+            >
+              <Text style={styles.phoneTakenBtnText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -1373,4 +1375,11 @@ const styles = StyleSheet.create({
   supportSuccessTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
   supportSuccessSubtext: { fontSize: 15, color: '#666', textAlign: 'center' },
   supportSuccessEmail: { fontSize: 15, color: '#333', fontWeight: '600', textAlign: 'center', marginBottom: 28 },
+  // Phone taken modal
+  phoneTakenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  phoneTakenCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, alignItems: 'center' },
+  phoneTakenTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', marginBottom: 14, textAlign: 'center' },
+  phoneTakenMsg: { fontSize: 16, color: '#6B7280', marginBottom: 24, textAlign: 'center', lineHeight: 24 },
+  phoneTakenBtn: { backgroundColor: '#880E4F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%' },
+  phoneTakenBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
 });

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Modal, FlatList, SafeAreaView,
+  KeyboardAvoidingView, Platform, Modal, FlatList, SafeAreaView, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -46,8 +46,6 @@ export default function PhoneScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [checking, setChecking] = useState(false);
-  const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
-  const debounceRef = useRef<any>(null);
   const [search, setSearch] = useState('');
   const [isPhoneFocused, setIsPhoneFocused] = useState(false);
 
@@ -58,33 +56,13 @@ export default function PhoneScreen() {
 
   const cleanNumber = phoneNumber.replace(/\D/g, '');
 
-  // Realtime duplicate check when number is complete
-  useEffect(() => {
-    if (cleanNumber.length !== selectedCountry.digits) {
-      setPhoneStatus('idle');
-      return;
-    }
-    setPhoneStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const full = selectedCountry.code + cleanNumber;
-      const exists = await checkPhoneExists(full);
-      setPhoneStatus(exists ? 'taken' : 'available');
-    }, 600);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [cleanNumber, selectedCountry]);
+  const canContinue = cleanNumber.length === selectedCountry.digits && !checking;
 
-  // Button enabled only when exact digit count is reached
-  const canContinue = cleanNumber.length === selectedCountry.digits && !checking && phoneStatus !== "taken" && phoneStatus !== "checking";
-
-  const hintText =
-    phoneStatus === 'taken'    ? '❌ Este número ya está registrado' :
-    phoneStatus === 'available'? '✅ Número disponible' :
-    phoneStatus === 'checking' ? '🔍 Verificando...' :
-    `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
+  const hintText = `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
 
   const checkPhoneExists = async (full: string): Promise<boolean> => {
     try {
+      console.log('[PhoneScreen] Checking phone availability for:', full);
       const withoutPlus = full.replace('+', '');
       const digitsOnly = full.replace(/^\+\d{2,3}/, '');
       const { data, error } = await supabase
@@ -92,15 +70,22 @@ export default function PhoneScreen() {
         .select('id')
         .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
         .maybeSingle();
-      if (error) { console.error(error); return false; }
+      if (error) { console.error('[PhoneScreen] Phone check error:', error); return false; }
+      console.log('[PhoneScreen] Phone check result — taken:', !!data);
       return !!data;
-    } catch { return false; }
+    } catch (err) {
+      console.error('[PhoneScreen] Phone check network error:', err);
+      return false;
+    }
   };
 
   const handleContinue = async () => {
+    console.log('[PhoneScreen] User tapped Continuar, number:', cleanNumber, 'country:', selectedCountry.code);
+
     // Validate prefix
     const startsOk = selectedCountry.starts.some(p => cleanNumber.startsWith(p));
     if (!startsOk) {
+      console.log('[PhoneScreen] Invalid prefix for country:', selectedCountry.name);
       setErrorMessage(`Para ${selectedCountry.name} el número debe empezar con ${selectedCountry.starts.join(' o ')}.`);
       setShowErrorModal(true);
       return;
@@ -108,15 +93,23 @@ export default function PhoneScreen() {
 
     setChecking(true);
     const full = selectedCountry.code + cleanNumber;
-    const exists = await checkPhoneExists(full);
+    let exists = false;
+    try {
+      exists = await checkPhoneExists(full);
+    } catch (err) {
+      console.error('[PhoneScreen] Unexpected error during phone check:', err);
+      // On network error, allow proceeding
+    }
     setChecking(false);
 
     if (exists) {
+      console.log('[PhoneScreen] Phone already taken, showing modal');
       setErrorMessage('Este número ya está registrado. Usa otro número o inicia sesión con tu cuenta existente.');
       setShowErrorModal(true);
       return;
     }
 
+    console.log('[PhoneScreen] Phone available, saving and navigating');
     await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
       countryCode: selectedCountry.code,
       phoneNumber: full,
@@ -143,7 +136,7 @@ export default function PhoneScreen() {
             {/* Country selector button */}
             <TouchableOpacity
               style={styles.countryButton}
-              onPress={() => setShowCountryModal(true)}
+              onPress={() => { console.log('[PhoneScreen] User tapped country selector'); setShowCountryModal(true); }}
               activeOpacity={0.75}
             >
               <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
@@ -167,13 +160,7 @@ export default function PhoneScreen() {
             />
           </View>
 
-          <Text style={[
-            styles.hint,
-            phoneStatus === 'available' && styles.hintDone,
-            phoneStatus === 'taken' && styles.hintTaken,
-          ]}>
-            {hintText}
-          </Text>
+          <Text style={styles.hint}>{hintText}</Text>
 
           <TouchableOpacity
             style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
@@ -181,9 +168,11 @@ export default function PhoneScreen() {
             disabled={!canContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>
-              {checking ? 'Verificando...' : 'Continuar'}
-            </Text>
+            {checking ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continuar</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -221,6 +210,7 @@ export default function PhoneScreen() {
                   item.name === selectedCountry.name && item.code === selectedCountry.code && styles.countryRowSelected,
                 ]}
                 onPress={() => {
+                  console.log('[PhoneScreen] User selected country:', item.name, item.code);
                   setSelectedCountry(item);
                   setPhoneNumber('');
                   setShowCountryModal(false);
@@ -238,7 +228,7 @@ export default function PhoneScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* ── Error modal ── */}
+      {/* ── Error / taken modal ── */}
       <Modal
         visible={showErrorModal}
         transparent
@@ -249,7 +239,10 @@ export default function PhoneScreen() {
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>⚠️ Número Inválido</Text>
             <Text style={styles.errorMsg}>{errorMessage}</Text>
-            <TouchableOpacity style={styles.errorBtn} onPress={() => setShowErrorModal(false)}>
+            <TouchableOpacity
+              style={styles.errorBtn}
+              onPress={() => { console.log('[PhoneScreen] User dismissed error modal'); setShowErrorModal(false); }}
+            >
               <Text style={styles.errorBtnText}>Entendido</Text>
             </TouchableOpacity>
           </View>
@@ -292,8 +285,6 @@ const styles = StyleSheet.create({
   },
 
   hint: { fontSize: 13, color: '#FFFFFF', opacity: 0.7, marginBottom: 24, textAlign: 'center' },
-  hintDone: { color: '#16a34a', opacity: 1, fontWeight: '600' },
-  hintTaken: { color: '#dc2626', opacity: 1, fontWeight: '600' },
 
   // Continue button
   continueButton: {
