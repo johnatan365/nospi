@@ -179,29 +179,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     console.log("[AuthContext] signInWithGoogle pressed");
     if (Platform.OS === "web") {
-      const PROD_CALLBACK = "https://app.nospi.co/auth/callback";
-      const callbackURL =
-        typeof window !== "undefined" && window.location.hostname !== "localhost"
-          ? PROD_CALLBACK
-          : `${window.location.origin}/auth/callback`;
-      console.log("[AuthContext] signInWithGoogle: web — redirecting to Google OAuth, callbackURL:", callbackURL);
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      console.log("[AuthContext] signInWithGoogle: web — using Supabase OAuth redirect");
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: callbackURL,
-          skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) {
         console.error("[AuthContext] signInWithGoogle web error:", error.message);
         throw error;
       }
-      // Supabase should have already redirected the browser via skipBrowserRedirect:false.
-      // As a belt-and-suspenders fallback, redirect manually if we still have the URL.
-      if (data?.url) {
-        console.log("[AuthContext] signInWithGoogle: manually redirecting to OAuth URL");
-        window.location.href = data.url;
-      }
+      // Supabase redirects the browser — no further action needed
       return;
     }
     await openOAuthBrowser("google");
@@ -258,23 +247,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (Platform.OS === "web") {
-      const callbackURL = `${window.location.origin}/auth/callback`;
-      console.log("[AuthContext] signInWithApple: web — redirecting to Apple OAuth, callbackURL:", callbackURL);
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      console.log("[AuthContext] signInWithApple: web — using Supabase OAuth redirect");
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
-          redirectTo: callbackURL,
-          skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) {
         console.error("[AuthContext] signInWithApple web error:", error.message);
         throw error;
-      }
-      // Belt-and-suspenders: redirect manually if browser wasn't redirected already
-      if (data?.url) {
-        console.log("[AuthContext] signInWithApple: manually redirecting to OAuth URL");
-        window.location.href = data.url;
       }
       return;
     }

@@ -1,63 +1,15 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Modal, Text, TouchableOpacity, Platform, Alert } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-
-/**
- * Read all onboarding keys from AsyncStorage in one shot.
- */
-async function readOnboardingData() {
-  const keys = [
-    'onboarding_interests',
-    'onboarding_personality',
-    'onboarding_name',
-    'onboarding_birthdate',
-    'onboarding_age',
-    'onboarding_gender',
-    'onboarding_interested_in',
-    'onboarding_age_range',
-    'onboarding_country',
-    'onboarding_city',
-    'onboarding_phone',
-    'onboarding_photo',
-    'onboarding_compatibility',
-  ];
-  const pairs = await AsyncStorage.multiGet(keys);
-  const map: Record<string, string | null> = {};
-  for (const [k, v] of pairs) map[k] = v;
-  return map;
-}
-
-/**
- * Clear all onboarding keys + the oauth flow flag from AsyncStorage.
- */
-async function clearOnboardingData() {
-  await AsyncStorage.multiRemove([
-    'onboarding_interests',
-    'onboarding_personality',
-    'onboarding_name',
-    'onboarding_birthdate',
-    'onboarding_age',
-    'onboarding_gender',
-    'onboarding_interested_in',
-    'onboarding_age_range',
-    'onboarding_country',
-    'onboarding_city',
-    'onboarding_phone',
-    'onboarding_photo',
-    'onboarding_compatibility',
-    'oauth_flow_type',
-  ]);
-}
 
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [waitingForContext, setWaitingForContext] = useState(false);
-  const [showEmailTakenModal, setShowEmailTakenModal] = useState(false);
 
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
@@ -93,123 +45,7 @@ export default function Index() {
           }
 
           if (!profile) {
-            // Check whether the user was mid-registration when they signed in via OAuth.
-            // If so, we have locally-stored onboarding data — use it to create the profile
-            // right here instead of sending them back to the name screen.
-            const oauthFlowType = await AsyncStorage.getItem('oauth_flow_type');
-            console.log('Index: No profile found, oauth_flow_type:', oauthFlowType);
-
-            if (oauthFlowType === 'register') {
-              // Guard: check if a profile already exists for this email (different auth identity).
-              // This happens when a user registered via email/password and now tries to sign up
-              // again via Google/Apple with the same email address.
-              const userEmail = user.email ?? '';
-              console.log('Index: OAuth register — checking for existing profile by email:', userEmail);
-
-              if (userEmail) {
-                const { data: existingByEmail, error: emailCheckError } = await supabase
-                  .from('users')
-                  .select('id, email')
-                  .eq('email', userEmail)
-                  .maybeSingle();
-
-                if (emailCheckError) {
-                  console.error('Index: Error checking email existence:', emailCheckError);
-                  // Non-fatal — fall through and let the insert attempt handle it
-                } else if (existingByEmail) {
-                  console.warn('Index: OAuth register blocked — email already registered:', userEmail);
-                  // Sign the user out so they are not left in a half-authenticated state
-                  await supabase.auth.signOut();
-                  await clearOnboardingData();
-                  // Show in-place modal — do NOT navigate away automatically
-                  setShowEmailTakenModal(true);
-                  return;
-                }
-              }
-
-              console.log('Index: OAuth register flow detected — creating profile from onboarding data');
-              const stored = await readOnboardingData();
-
-              // User-entered data takes priority; OAuth provider metadata is the fallback.
-              const oauthMeta = user.user_metadata ?? {};
-              const oauthName: string = oauthMeta.full_name || oauthMeta.name || '';
-              const oauthPhoto: string = oauthMeta.avatar_url || oauthMeta.picture || '';
-
-              const name: string = stored['onboarding_name'] || oauthName;
-              const photo: string | null = stored['onboarding_photo'] || oauthPhoto || null;
-              const birthdate: string = stored['onboarding_birthdate'] || '';
-              const age: number = stored['onboarding_age'] ? parseInt(stored['onboarding_age']!) : 18;
-              const gender: string = stored['onboarding_gender'] || 'hombre';
-              const interestedIn: string = stored['onboarding_interested_in'] || 'ambos';
-              const ageRange = stored['onboarding_age_range']
-                ? JSON.parse(stored['onboarding_age_range']!)
-                : { min: 18, max: 60 };
-              const country: string = stored['onboarding_country'] || 'Colombia';
-              const city: string = stored['onboarding_city'] || 'Medellín';
-              const phoneInfo = stored['onboarding_phone']
-                ? JSON.parse(stored['onboarding_phone']!)
-                : { phoneNumber: '' };
-              const interests: string[] = stored['onboarding_interests']
-                ? JSON.parse(stored['onboarding_interests']!)
-                : [];
-              const personality: string[] = stored['onboarding_personality']
-                ? JSON.parse(stored['onboarding_personality']!)
-                : [];
-              const compatibility: number = stored['onboarding_compatibility']
-                ? parseInt(stored['onboarding_compatibility']!)
-                : 95;
-
-              console.log('Index: Creating profile — name:', name, 'photo from user:', !!stored['onboarding_photo'], 'photo from oauth:', !!oauthPhoto);
-
-              const { error: insertError } = await supabase.from('users').insert({
-                id: user.id,
-                email: user.email ?? '',
-                name,
-                birthdate,
-                age,
-                gender,
-                interested_in: interestedIn,
-                age_range_min: ageRange.min,
-                age_range_max: ageRange.max,
-                country,
-                city,
-                phone: phoneInfo.phoneNumber || '',
-                profile_photo_url: photo,
-                interests,
-                personality_traits: personality,
-                compatibility_percentage: compatibility,
-                notification_preferences: {
-                  whatsapp: false,
-                  email: true,
-                  sms: false,
-                  push: true,
-                },
-              });
-
-              if (insertError) {
-                console.error('Index: Profile insert error:', insertError.message);
-                // If it's a duplicate (race condition), just proceed to events
-                if (!insertError.message.includes('duplicate') && !insertError.message.includes('already exists')) {
-                  if (Platform.OS === 'web') {
-                    window.alert('Error al crear tu perfil. Por favor, intenta de nuevo.');
-                  } else {
-                    Alert.alert('Error', 'Error al crear tu perfil. Por favor, intenta de nuevo.');
-                  }
-                  router.replace('/welcome');
-                  return;
-                }
-              } else {
-                console.log('Index: Profile created successfully from onboarding data');
-              }
-
-              await clearOnboardingData();
-              console.log('Index: Onboarding data cleared, navigating to events');
-              router.replace('/(tabs)/events');
-              return;
-            }
-
-            // No pending registration data — send to normal onboarding start
-            console.log('Index: No profile and no pending registration, redirecting to onboarding/name');
+            console.log('Index: No profile found, redirecting to onboarding');
             router.replace('/onboarding/name');
             return;
           }
@@ -297,48 +133,6 @@ export default function Index() {
     );
   }
 
-  const handleGoToLogin = () => {
-    console.log('EmailTakenModal: User tapped "Ir a iniciar sesión"');
-    setShowEmailTakenModal(false);
-    router.replace('/login');
-  };
-
-  const handleDismissModal = () => {
-    console.log('EmailTakenModal: User dismissed modal');
-    setShowEmailTakenModal(false);
-  };
-
-  if (showEmailTakenModal) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Modal
-          visible={showEmailTakenModal}
-          transparent
-          animationType="fade"
-          onRequestClose={handleDismissModal}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <View style={styles.modalIconContainer}>
-                <Text style={styles.modalIcon}>✉️</Text>
-              </View>
-              <Text style={styles.modalTitle}>Correo ya registrado</Text>
-              <Text style={styles.modalMessage}>
-                Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.
-              </Text>
-              <TouchableOpacity style={styles.modalPrimaryButton} onPress={handleGoToLogin}>
-                <Text style={styles.modalPrimaryButtonText}>Ir a iniciar sesión</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSecondaryButton} onPress={handleDismissModal}>
-                <Text style={styles.modalSecondaryButtonText}>Entendido</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    );
-  }
-
   return null;
 }
 
@@ -348,67 +142,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a0010',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: '#2a0018',
-    borderRadius: 20,
-    padding: 28,
-    width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(173, 20, 87, 0.3)',
-  },
-  modalIconContainer: {
-    marginBottom: 16,
-  },
-  modalIcon: {
-    fontSize: 48,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  modalMessage: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.75)',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  modalPrimaryButton: {
-    backgroundColor: '#AD1457',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  modalPrimaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalSecondaryButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-  },
-  modalSecondaryButtonText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 15,
-    fontWeight: '500',
   },
 });
