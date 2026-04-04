@@ -1,0 +1,120 @@
+{
+  "expo": {
+    "owner": "nospi",
+    "name": "Nospi",
+    "slug": "nospi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#A0005A"
+    },
+    "ios": {
+      "buildNumber": "16",
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.nospi",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "nospi"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.nospi",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "nospi",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            },
+            {
+              "scheme": "https",
+              "host": "wjdiraurfbawotlcndmk.supabase.co",
+              "pathPrefix": "/auth/v1/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "android.intent.action.VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "nospi",
+              "host": "payment-callback"
+            }
+          ],
+          "category": [
+            "android.intent.category.DEFAULT",
+            "android.intent.category.BROWSABLE"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+          "color": "#E9D5FF",
+          "sounds": []
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "scheme": "nospi",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "supabaseUrl": "https://wjdiraurfbawotlcndmk.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8",
+      "backendUrl": "https://pkmmkvxxec6pq2yagafutursvswbt8aj.app.specular.dev"
+    }
+  }
+}

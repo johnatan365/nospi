@@ -1,0 +1,295 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { nospiColors } from '@/constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+export default function BirthdateScreen() {
+  const router = useRouter();
+  const [date, setDate] = useState(new Date(2000, 0, 1));
+  const [showPicker, setShowPicker] = useState(false);
+
+  const calculateAge = (birthDate: Date) => {
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const age = calculateAge(date);
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowPicker(false);
+    }
+    if (selectedDate) {
+      setDate(selectedDate);
+      console.log('User selected birthdate:', selectedDate);
+    }
+  };
+
+  const handleContinue = async () => {
+    if (age < 18) {
+      Alert.alert('Edad mínima', 'Debes tener al menos 18 años para usar Nospi.');
+      return;
+    }
+
+    console.log('User entered birthdate:', date, 'Age:', age);
+    
+    await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
+    await AsyncStorage.setItem('onboarding_age', age.toString());
+    
+    router.push('/onboarding/gender');
+  };
+
+  const canContinue = age >= 18;
+  const ageText = age.toString();
+  const formattedDate = date.toLocaleDateString('es-ES', { 
+    day: '2-digit', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+
+  return (
+    <LinearGradient
+      colors={['#1a0010', '#880E4F', '#AD1457']}
+      style={styles.gradient}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
+          
+          {Platform.OS === 'web' ? (
+            <View style={styles.webDateContainer}>
+              <input
+                type="date"
+                value={date.toISOString().split('T')[0]}
+                max={new Date().toISOString().split('T')[0]}
+                min="1940-01-01"
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [y, m, d] = e.target.value.split('-').map(Number);
+                    setDate(new Date(y, m - 1, d));
+                  }
+                }}
+                style={{
+                  fontSize: 18,
+                  padding: '14px 16px',
+                  borderRadius: 16,
+                  border: '2px solid rgba(240, 98, 146, 0.50)',
+                  color: '#880E4F',
+                  backgroundColor: 'rgba(255,255,255,0.9)',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  display: 'block',
+                } as any}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.dateDisplayContainer}
+              onPress={() => setShowPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
+              <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
+            </TouchableOpacity>
+          )}
+
+          {Platform.OS !== 'web' && showPicker && (
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                minimumDate={new Date(1940, 0, 1)}
+                textColor={nospiColors.purpleDark}
+                style={styles.picker}
+              />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity 
+                  style={styles.doneButton}
+                  onPress={() => setShowPicker(false)}
+                >
+                  <Text style={styles.doneButtonText}>Listo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          <View style={styles.ageContainer}>
+            <Text style={styles.ageLabel}>Tu edad:</Text>
+            <Text style={styles.ageValue}>{ageText}</Text>
+            <Text style={styles.ageYears}>años</Text>
+          </View>
+
+          <Text style={styles.note}>Tu perfil muestra tu edad, no tu fecha de nacimiento</Text>
+
+          <TouchableOpacity
+            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>Continuar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  webDateContainer: {
+    marginBottom: 24,
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'center',
+    overflow: 'hidden',
+    paddingHorizontal: 0,
+  },
+  dateDisplayContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 2,
+    borderColor: 'rgba(240, 98, 146, 0.50)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+    width: '100%',
+    alignContent: 'center',
+  },
+  dateDisplayLabel: {
+    fontSize: 14,
+    color: '#880E4F',
+    opacity: 0.8,
+    marginBottom: 8,
+  },
+  dateDisplayValue: {
+    fontSize: 22,
+    color: '#880E4F',
+    fontWeight: '700',
+  },
+  pickerContainer: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    paddingVertical: 8,
+  },
+  picker: {
+    width: '100%',
+  },
+  doneButton: {
+    backgroundColor: nospiColors.purpleDark,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    color: nospiColors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  ageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  ageLabel: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginRight: 8,
+  },
+  ageValue: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  ageYears: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginLeft: 4,
+  },
+  note: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
+  },
+  continueButton: {
+    backgroundColor: '#880E4F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  continueButtonDisabled: {
+    backgroundColor: 'rgba(136, 14, 79, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  continueButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+});
