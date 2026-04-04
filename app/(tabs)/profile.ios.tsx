@@ -1165,8 +1165,8 @@ export default function ProfileScreen() {
       <Modal visible={showPhoneTakenModal} transparent animationType="fade" onRequestClose={() => setShowPhoneTakenModal(false)}>
         <View style={styles.phoneTakenOverlay}>
           <View style={styles.phoneTakenCard}>
-            <Text style={styles.phoneTakenTitle}>⚠️ Número en uso</Text>
-            <Text style={styles.phoneTakenMsg}>Este número ya está en uso por otra cuenta. Por favor usa un número diferente.</Text>
+            <Text style={styles.phoneTakenTitle}>⚠️ Número de celular ya registrado</Text>
+            <Text style={styles.phoneTakenMsg}>No se pudo guardar. El número de celular que ingresaste ya está registrado por otro usuario. Por favor ingresa un número diferente.</Text>
             <TouchableOpacity
               style={styles.phoneTakenBtn}
               onPress={() => { console.log('User dismissed phone taken modal'); setShowPhoneTakenModal(false); }}
