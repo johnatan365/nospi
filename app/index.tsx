@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Modal, Text, TouchableOpacity } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -57,6 +57,7 @@ export default function Index() {
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [waitingForContext, setWaitingForContext] = useState(false);
+  const [showEmailTakenModal, setShowEmailTakenModal] = useState(false);
 
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
@@ -120,19 +121,8 @@ export default function Index() {
                   // Sign the user out so they are not left in a half-authenticated state
                   await supabase.auth.signOut();
                   await clearOnboardingData();
-
-                  if (Platform.OS === 'web') {
-                    window.alert(
-                      'Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.'
-                    );
-                    router.replace('/login');
-                  } else {
-                    Alert.alert(
-                      'Correo ya registrado',
-                      'Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.',
-                      [{ text: 'Ir a iniciar sesión', onPress: () => router.replace('/login') }]
-                    );
-                  }
+                  // Show in-place modal — do NOT navigate away automatically
+                  setShowEmailTakenModal(true);
                   return;
                 }
               }
@@ -307,6 +297,48 @@ export default function Index() {
     );
   }
 
+  const handleGoToLogin = () => {
+    console.log('EmailTakenModal: User tapped "Ir a iniciar sesión"');
+    setShowEmailTakenModal(false);
+    router.replace('/login');
+  };
+
+  const handleDismissModal = () => {
+    console.log('EmailTakenModal: User dismissed modal');
+    setShowEmailTakenModal(false);
+  };
+
+  if (showEmailTakenModal) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Modal
+          visible={showEmailTakenModal}
+          transparent
+          animationType="fade"
+          onRequestClose={handleDismissModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalIconContainer}>
+                <Text style={styles.modalIcon}>✉️</Text>
+              </View>
+              <Text style={styles.modalTitle}>Correo ya registrado</Text>
+              <Text style={styles.modalMessage}>
+                Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.
+              </Text>
+              <TouchableOpacity style={styles.modalPrimaryButton} onPress={handleGoToLogin}>
+                <Text style={styles.modalPrimaryButtonText}>Ir a iniciar sesión</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSecondaryButton} onPress={handleDismissModal}>
+                <Text style={styles.modalSecondaryButtonText}>Entendido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
   return null;
 }
 
@@ -316,5 +348,67 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a0010',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#2a0018',
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(173, 20, 87, 0.3)',
+  },
+  modalIconContainer: {
+    marginBottom: 16,
+  },
+  modalIcon: {
+    fontSize: 48,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.75)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  modalPrimaryButton: {
+    backgroundColor: '#AD1457',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSecondaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalSecondaryButtonText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 15,
+    fontWeight: '500',
   },
 });
