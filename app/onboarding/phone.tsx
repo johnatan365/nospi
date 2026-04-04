@@ -169,7 +169,8 @@ export default function PhoneScreen() {
 
           <Text style={[
             styles.hint,
-            cleanNumber.length === selectedCountry.digits && styles.hintDone,
+            phoneStatus === 'available' && styles.hintDone,
+            phoneStatus === 'taken' && styles.hintTaken,
           ]}>
             {hintText}
           </Text>
