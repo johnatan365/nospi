@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Modal, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Modal, Text, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 

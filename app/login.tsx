@@ -233,16 +233,18 @@ export default function LoginScreen() {
                 </View>
               ) : null}
 
-              {/* Social buttons — Apple FIRST (App Store requirement) */}
-              <TouchableOpacity
-                style={styles.appleButton}
-                onPress={handleApple}
-                disabled={isLoading}
-                activeOpacity={0.85}
-              >
-                <Image source={appleIconSource} style={styles.appleIcon} resizeMode="contain" />
-                <Text style={styles.appleButtonText}>Continuar con Apple</Text>
-              </TouchableOpacity>
+              {/* Social buttons — Apple FIRST (App Store requirement), hidden on web */}
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity
+                  style={styles.appleButton}
+                  onPress={handleApple}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  <Image source={appleIconSource} style={styles.appleIcon} resizeMode="contain" />
+                  <Text style={styles.appleButtonText}>Continuar con Apple</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={styles.googleButton}
