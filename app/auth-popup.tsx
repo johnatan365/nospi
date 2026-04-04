@@ -4,6 +4,17 @@ import { Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * auth-popup.tsx — legacy route kept for backward compatibility.
+ *
+ * On web the OAuth flow is a full browser redirect initiated directly from
+ * AuthContext (signInWithGoogle / signInWithApple). This screen is NOT used
+ * in the web flow. It is only kept so that any stale deep-links or bookmarks
+ * don't 404.
+ *
+ * If somehow reached on web with a provider param, it falls through to the
+ * same Supabase redirect that AuthContext would have done.
+ */
 export default function AuthPopupScreen() {
   const { provider } = useLocalSearchParams<{ provider: string }>();
 
@@ -12,24 +23,22 @@ export default function AuthPopupScreen() {
 
     const validProviders = ['apple', 'google'];
     if (!provider || !validProviders.includes(provider)) {
-      console.log('[AuthPopup] Invalid provider:', provider);
-      window.opener?.postMessage({ type: 'oauth-error', error: 'Invalid provider' }, window.location.origin);
+      console.log('[AuthPopup] No valid provider param — nothing to do');
       return;
     }
 
-    console.log('[AuthPopup] Starting OAuth with provider:', provider);
+    console.log('[AuthPopup] Fallback: triggering Supabase OAuth redirect for provider:', provider);
     supabase.auth.signInWithOAuth({
       provider: provider as 'google' | 'apple',
       options: {
-        redirectTo: `${window.location.origin}/auth-callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         skipBrowserRedirect: false,
       },
     }).then(({ error }) => {
       if (error) {
-        console.log('[AuthPopup] OAuth error:', error.message);
-        window.opener?.postMessage({ type: 'oauth-error', error: error.message }, window.location.origin);
+        console.error('[AuthPopup] OAuth error:', error.message);
       }
-      // Supabase will redirect the popup window to Google/Apple, then back to /auth-callback
+      // Supabase will redirect the browser to the provider, then back to /auth/callback
     });
   }, [provider]);
 

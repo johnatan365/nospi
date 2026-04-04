@@ -3,7 +3,6 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
 // Get Supabase credentials from app.json extra config
@@ -17,14 +16,31 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Create Supabase client with AsyncStorage for session persistence
+// On web, Supabase needs a synchronous localStorage-based storage so that
+// detectSessionInUrl and PKCE code-verifier storage work correctly.
+// AsyncStorage is async-only and breaks the PKCE exchange on web.
+const webStorage = Platform.OS === 'web'
+  ? {
+      getItem: (key: string): string | null => {
+        try { return localStorage.getItem(key); } catch { return null; }
+      },
+      setItem: (key: string, value: string): void => {
+        try { localStorage.setItem(key, value); } catch { /* ignore */ }
+      },
+      removeItem: (key: string): void => {
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+      },
+    }
+  : undefined;
+
+// Create Supabase client with platform-appropriate storage
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: Platform.OS === 'web' ? webStorage : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web', // Only enable on web, native uses manual token extraction
-    flowType: 'pkce', // Use PKCE flow for better security
+    detectSessionInUrl: Platform.OS === 'web', // Only enable on web; native uses manual token extraction
+    flowType: 'pkce', // PKCE for both web and native
   },
 });
 

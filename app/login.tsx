@@ -82,7 +82,15 @@ export default function LoginScreen() {
 
         if (error) {
           console.error('Login error:', error);
-          setError('Email o contraseña incorrectos');
+          const isNotFound =
+            error.message.toLowerCase().includes('invalid login credentials') ||
+            error.message.toLowerCase().includes('user not found') ||
+            error.message.toLowerCase().includes('invalid credentials');
+          if (isNotFound) {
+            setError('Este usuario no está registrado. Por favor crea una cuenta.');
+          } else {
+            setError('Email o contraseña incorrectos');
+          }
           return;
         }
 
@@ -93,7 +101,8 @@ export default function LoginScreen() {
 
         console.log('Login successful, user:', data.user.id);
 
-        // Check if user has a profile
+        // Check if user has a profile — a login attempt for a user without a profile
+        // means their account is incomplete; show an error instead of sending to onboarding.
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id')
@@ -105,12 +114,14 @@ export default function LoginScreen() {
         }
 
         if (!profile) {
-          console.log('No profile found, redirecting to onboarding');
-          router.replace('/onboarding/name');
-        } else {
-          console.log('Profile found, redirecting to events');
-          router.replace('/(tabs)/events');
+          console.log('Login: no profile found for existing auth user — showing error');
+          setError('Este usuario no está registrado. Por favor crea una cuenta.');
+          await supabase.auth.signOut();
+          return;
         }
+
+        console.log('Profile found, redirecting to events');
+        router.replace('/(tabs)/events');
       }
     } catch (err: any) {
       console.error('LoginScreen: email auth error:', err);
