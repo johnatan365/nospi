@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,6 +34,14 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Mostrar error si viene de redirect con parámetro
+  const { error: routeError } = useLocalSearchParams<{ error: string }>();
+  React.useEffect(() => {
+    if (routeError === 'no_profile') {
+      setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+    }
+  }, [routeError]);
+
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
       setError('Por favor ingresa tu email y contraseña');
@@ -50,7 +58,6 @@ export default function LoginScreen() {
 
     try {
       if (isSignUp) {
-        // Registro con Supabase
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -74,7 +81,6 @@ export default function LoginScreen() {
           router.replace('/onboarding/name');
         }
       } else {
-        // Login con Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
@@ -93,7 +99,6 @@ export default function LoginScreen() {
 
         console.log('Login successful, user:', data.user.id);
 
-        // Check if user has a profile
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id')
@@ -126,13 +131,10 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithApple();
-      // On web, signInWithApple() triggers a full browser redirect — never reaches here.
-      // On native, session is confirmed — navigate to root.
       if (Platform.OS !== 'web') {
         console.log('LoginScreen: Apple sign-in completed, session confirmed — navigating');
         router.replace('/');
       }
-      // On web: stay in submitting=true — the browser is already redirecting
     } catch (err: any) {
       console.error('LoginScreen: Apple sign-in error:', err);
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
@@ -150,13 +152,10 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      // On web, signInWithGoogle() triggers a full browser redirect — never reaches here.
-      // On native, session is confirmed — navigate to root.
       if (Platform.OS !== 'web') {
         console.log('LoginScreen: Google sign-in completed, session confirmed — navigating');
         router.replace('/');
       }
-      // On web: stay in submitting=true — the browser is already redirecting
     } catch (err: any) {
       console.error('LoginScreen: Google sign-in error:', err);
       if (err?.message?.includes('cancel')) {
@@ -170,12 +169,10 @@ export default function LoginScreen() {
 
   const toggleMode = () => {
     if (!isSignUp) {
-      // User tapped "Regístrate" → send to welcome screen
       console.log('LoginScreen: user wants to register, redirecting to welcome');
       router.replace('/welcome');
       return;
     }
-    // User is in signup mode and tapped "Inicia sesión" → switch to login
     console.log('LoginScreen: toggling mode to sign in');
     setIsSignUp(false);
     setError('');
@@ -215,7 +212,6 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.content}>
-              {/* Logo */}
               <Image
                 source={require('@/assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png')}
                 style={styles.logo}
@@ -225,7 +221,6 @@ export default function LoginScreen() {
               <Text style={styles.title}>{titleText}</Text>
               <Text style={styles.subtitle}>{subtitleText}</Text>
 
-              {/* Error */}
               {error ? (
                 <View style={styles.errorContainer}>
                   <Ionicons name="alert-circle-outline" size={16} color="#FF6B6B" />
@@ -233,7 +228,6 @@ export default function LoginScreen() {
                 </View>
               ) : null}
 
-              {/* Social buttons — Apple FIRST (App Store requirement) */}
               <TouchableOpacity
                 style={styles.appleButton}
                 onPress={handleApple}
@@ -254,21 +248,19 @@ export default function LoginScreen() {
                 <Text style={styles.googleButtonText}>Continuar con Google</Text>
               </TouchableOpacity>
 
-              {/* Divider */}
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText}>o con email</Text>
                 <View style={styles.dividerLine} />
               </View>
 
-              {/* Email form */}
               <View style={styles.form}>
                 {isSignUp ? (
                   <View style={styles.inputWrapper}>
                     <MaterialIcons name="person" size={20} color="#999" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Nombre completo"
+                      placeholder="Nombre"
                       placeholderTextColor="#999"
                       value={name}
                       onChangeText={setName}
@@ -317,7 +309,6 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {/* Submit */}
               <TouchableOpacity
                 style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
                 onPress={handleEmailAuth}
@@ -331,7 +322,6 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Toggle sign in / sign up */}
               <TouchableOpacity
                 style={styles.toggleButton}
                 onPress={toggleMode}
@@ -341,7 +331,6 @@ export default function LoginScreen() {
                 <Text style={styles.toggleText}>{toggleText}</Text>
               </TouchableOpacity>
 
-              {/* Back */}
               <TouchableOpacity
                 style={styles.backButton}
                 onPress={() => { console.log('LoginScreen: user tapped back'); router.back(); }}
