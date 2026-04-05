@@ -45,14 +45,13 @@ export default function Index() {
           }
 
           if (!profile) {
-            console.log('Index: No profile found for OAuth user — signing out and showing error');
-            await supabase.auth.signOut();
-            if (Platform.OS === 'web') {
-              window.alert('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
-            } else {
-              Alert.alert('Cuenta no encontrada', 'No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+            console.log('Index: No profile found for OAuth user — signing out and redirecting');
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutError) {
+              console.error('Index: Error signing out:', signOutError);
             }
-            router.replace('/login');
+            router.replace('/login?error=no_profile');
             return;
           }
 
@@ -99,8 +98,6 @@ export default function Index() {
         }
       } else {
         if (Platform.OS === 'web') {
-          // On web, check if we're on the auth callback page or if URL has OAuth params.
-          // If so, Supabase's detectSessionInUrl is still processing — don't redirect yet.
           const currentPath = window.location.pathname;
           const hasOAuthParams =
             window.location.search.includes('code=') ||
@@ -111,14 +108,10 @@ export default function Index() {
           }
         }
 
-        // Double-check with Supabase directly — SupabaseContext may not have
-        // propagated the SIGNED_IN event yet (race after OAuth callback).
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
           console.log('Index: Direct session found, waiting for context to catch up...');
-          // Show spinner and wait — SupabaseContext will fire SIGNED_IN and
-          // re-trigger this effect with user !== null.
           setWaitingForContext(true);
           return;
         }
