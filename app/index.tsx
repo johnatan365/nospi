@@ -45,8 +45,14 @@ export default function Index() {
           }
 
           if (!profile) {
-            console.log('Index: No profile found, redirecting to onboarding');
-            router.replace('/onboarding/name');
+            console.log('Index: No profile found for OAuth user — signing out and showing error');
+            await supabase.auth.signOut();
+            if (Platform.OS === 'web') {
+              window.alert('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+            } else {
+              Alert.alert('Cuenta no encontrada', 'No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+            }
+            router.replace('/login');
             return;
           }
 
