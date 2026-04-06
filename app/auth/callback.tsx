@@ -1,69 +1,93 @@
-import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+/**
+ * app/auth/callback.tsx
+ *
+ * Web-only route that handles the OAuth redirect from Google / Apple.
+ * Supabase redirects to https://app.nospi.co/auth/callback?code=...
+ * This page exchanges the code for a session and sends the user to /
+ * where index.tsx takes over (checks profile, routes to events or error).
+ */
+
+import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; access_token?: string; refresh_token?: string }>();
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    console.log('[AuthCallback] mounted, platform:', Platform.OS);
-
-    async function handleCallback() {
-      try {
-        if (Platform.OS === 'web') {
-          // With detectSessionInUrl: true, Supabase auto-exchanges the PKCE code
-          // when the client initialises on this page. We just wait for SIGNED_IN.
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log('[AuthCallback] auth state change:', event, 'session:', !!session);
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-              console.log('[AuthCallback] signed in — redirecting to root');
-              subscription.unsubscribe();
-              router.replace('/');
-            }
-          });
-
-          // Fallback: if no SIGNED_IN fires within 5 s, redirect anyway
-          const timeout = setTimeout(() => {
-            console.warn('[AuthCallback] timeout — redirecting to root without confirmed session');
-            subscription.unsubscribe();
-            router.replace('/');
-          }, 5000);
-
-          return () => {
-            subscription.unsubscribe();
-            clearTimeout(timeout);
-          };
-        } else {
-          // Native fallback: openOAuthBrowser in AuthContext handles the callback
-          // inline via result.url. This screen is only reached if the deep link
-          // somehow bypasses that flow (e.g. cold-start from a background tap).
-          console.log('[AuthCallback] native fallback — params:', JSON.stringify(params));
-          const { code, access_token, refresh_token } = params;
-          if (code) {
-            console.log('[AuthCallback] exchanging PKCE code for session');
-            await supabase.auth.exchangeCodeForSession(code);
-          } else if (access_token && refresh_token) {
-            console.log('[AuthCallback] setting session from tokens');
-            await supabase.auth.setSession({ access_token, refresh_token });
-          } else {
-            console.warn('[AuthCallback] native — no code or tokens, redirecting to root');
-          }
-          router.replace('/');
-        }
-      } catch (e) {
-        console.error('[AuthCallback] error:', e);
-        router.replace('/');
-      }
+    if (Platform.OS !== 'web') {
+      // This route only makes sense on web
+      router.replace('/');
+      return;
     }
+
+    const handleCallback = async () => {
+      try {
+        const url = window.location.href;
+        console.log('[AuthCallback] Processing OAuth callback:', url);
+
+        const params: Record<string, string> = {};
+
+        // Try fragment first (implicit flow), then query string (PKCE flow)
+        const fragment = url.includes('#') ? url.split('#')[1] : '';
+        const query = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+        const raw = fragment || query;
+
+        raw.split('&').forEach((pair) => {
+          const [k, v] = pair.split('=');
+          if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+        });
+
+        console.log('[AuthCallback] Params keys:', Object.keys(params));
+
+        if (params.error) {
+          console.error('[AuthCallback] OAuth error:', params.error, params.error_description);
+          setErrorMsg(params.error_description || 'Error en autenticación');
+          setTimeout(() => router.replace('/login?error=oauth_error'), 2000);
+          return;
+        }
+
+        if (params.access_token && params.refresh_token) {
+          console.log('[AuthCallback] Setting session from tokens');
+          const { error } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+          if (error) throw error;
+        } else if (params.code) {
+          console.log('[AuthCallback] Exchanging code for session');
+          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+          if (error) throw error;
+        } else {
+          console.warn('[AuthCallback] No tokens or code found');
+          router.replace('/login?error=oauth_error');
+          return;
+        }
+
+        console.log('[AuthCallback] Session established, redirecting to /');
+        router.replace('/');
+      } catch (err: any) {
+        console.error('[AuthCallback] Unexpected error:', err);
+        setErrorMsg('Error al completar el inicio de sesión');
+        setTimeout(() => router.replace('/login?error=oauth_error'), 2000);
+      }
+    };
 
     handleCallback();
   }, []);
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#AD1457" />
+      {errorMsg ? (
+        <Text style={styles.errorText}>{errorMsg}</Text>
+      ) : (
+        <>
+          <ActivityIndicator size="large" color="#AD1457" />
+          <Text style={styles.loadingText}>Completando inicio de sesión...</Text>
+        </>
+      )}
     </View>
   );
 }
@@ -74,5 +98,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a0010',
+    gap: 16,
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
 });
