@@ -98,16 +98,32 @@ export default function Index() {
         }
       } else {
         if (Platform.OS === 'web') {
-          const currentPath = window.location.pathname;
-          const hasOAuthParams =
-            window.location.search.includes('code=') ||
-            window.location.hash.includes('access_token');
-          if (currentPath.includes('auth') || hasOAuthParams) {
-            console.log('Index: Web OAuth callback in progress — skipping redirect');
+          const search = window.location.search;
+          const hash = window.location.hash;
+
+          // Si hay un code OAuth en la raíz, redirigir a /auth/callback para procesarlo
+          if (search.includes('code=')) {
+            console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
+            router.replace(('/auth/callback' + search) as any);
+            return;
+          }
+
+          // Si hay tokens en el hash, redirigir a /auth/callback
+          if (hash.includes('access_token')) {
+            console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
+            router.replace(('/auth/callback' + hash) as any);
+            return;
+          }
+
+          // Si estamos en una ruta /auth/*, dejar que el callback la maneje
+          if (window.location.pathname.includes('/auth/')) {
+            console.log('Index: Already on auth route — skipping redirect');
             return;
           }
         }
 
+        // Double-check con Supabase directamente — el contexto puede no haber
+        // propagado el SIGNED_IN event aún (race después de OAuth callback).
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
