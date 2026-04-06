@@ -110,7 +110,9 @@ export default function RegisterScreen() {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
-      const redirectUrl = 'nospi://auth/callback';
+      const redirectUrl = Platform.OS === 'web'
+        ? `${window.location.origin}/auth/callback`
+        : 'nospi://auth/callback';
       console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -218,7 +220,9 @@ export default function RegisterScreen() {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
-      const redirectUrl = 'nospi://auth/callback';
+      const redirectUrl = Platform.OS === 'web'
+        ? `${window.location.origin}/auth/callback`
+        : 'nospi://auth/callback';
       console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
