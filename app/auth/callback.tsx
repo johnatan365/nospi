@@ -1,10 +1,10 @@
 /**
  * app/auth/callback.tsx
  *
- * Web-only route that handles the OAuth redirect from Google / Apple.
- * Supabase redirects to https://app.nospi.co/auth/callback?code=...
- * This page exchanges the code for a session and sends the user to /
- * where index.tsx takes over (checks profile, routes to events or error).
+ * Web-only route que maneja el OAuth redirect de Google / Apple.
+ * Con implicit flow, Supabase procesa los tokens del hash automáticamente
+ * via detectSessionInUrl. Este componente solo espera que la sesión
+ * se confirme y redirige a / donde index.tsx toma el control.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -18,7 +18,6 @@ export default function AuthCallback() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      // This route only makes sense on web
       router.replace('/');
       return;
     }
@@ -28,13 +27,12 @@ export default function AuthCallback() {
         const url = window.location.href;
         console.log('[AuthCallback] Processing OAuth callback:', url);
 
+        const search = window.location.search;
+        const hash = window.location.hash;
+
+        // Verificar si hay error explícito en la URL
         const params: Record<string, string> = {};
-
-        // Try fragment first (implicit flow), then query string (PKCE flow)
-        const fragment = url.includes('#') ? url.split('#')[1] : '';
-        const query = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
-        const raw = fragment || query;
-
+        const raw = (hash.startsWith('#') ? hash.slice(1) : '') || search.slice(1);
         raw.split('&').forEach((pair) => {
           const [k, v] = pair.split('=');
           if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
@@ -43,12 +41,15 @@ export default function AuthCallback() {
         console.log('[AuthCallback] Params keys:', Object.keys(params));
 
         if (params.error) {
-          console.error('[AuthCallback] OAuth error:', params.error, params.error_description);
+          console.error('[AuthCallback] OAuth error:', params.error);
           setErrorMsg(params.error_description || 'Error en autenticación');
           setTimeout(() => router.replace('/login?error=oauth_error'), 2000);
           return;
         }
 
+        // Con implicit flow, Supabase ya procesó los tokens via detectSessionInUrl.
+        // Solo necesitamos esperar a que la sesión esté disponible.
+        // Si hay tokens o code en la URL, intercambiarlos manualmente como fallback.
         if (params.access_token && params.refresh_token) {
           console.log('[AuthCallback] Setting session from tokens');
           const { error } = await supabase.auth.setSession({
@@ -61,13 +62,30 @@ export default function AuthCallback() {
           const { error } = await supabase.auth.exchangeCodeForSession(params.code);
           if (error) throw error;
         } else {
-          console.warn('[AuthCallback] No tokens or code found');
-          router.replace('/login?error=oauth_error');
-          return;
+          // No hay tokens ni code — puede que Supabase ya los procesó.
+          // Esperar un momento y verificar si hay sesión activa.
+          console.log('[AuthCallback] No tokens in URL — checking if Supabase already processed them');
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        console.log('[AuthCallback] Session established, redirecting to /');
-        router.replace('/');
+        // Verificar si hay sesión (ya sea procesada por nosotros o por Supabase)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[AuthCallback] Session confirmed, redirecting to /');
+          router.replace('/');
+        } else {
+          // Esperar un poco más — Supabase puede estar procesando aún
+          console.log('[AuthCallback] No session yet, waiting...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const { data: { session: session2 } } = await supabase.auth.getSession();
+          if (session2) {
+            console.log('[AuthCallback] Session confirmed after wait, redirecting to /');
+            router.replace('/');
+          } else {
+            console.warn('[AuthCallback] No session after wait, redirecting to login');
+            router.replace('/login?error=oauth_error');
+          }
+        }
       } catch (err: any) {
         console.error('[AuthCallback] Unexpected error:', err);
         setErrorMsg('Error al completar el inicio de sesión');
