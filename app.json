@@ -16,7 +16,7 @@
     "ios": {
       "buildNumber": "16",
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.nospi",
+      "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
@@ -36,7 +36,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.nospi",
+      "package": "app.nospi.mobile",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -116,7 +116,6 @@
       "router": {},
       "supabaseUrl": "https://wjdiraurfbawotlcndmk.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8",
-      "backendUrl": "https://pkmmkvxxec6pq2yagafutursvswbt8aj.app.specular.dev",
       "eas": {
         "projectId": "eb69c602-6e33-4a44-811a-8c63a62c243f"
       }
