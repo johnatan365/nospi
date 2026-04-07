@@ -99,7 +99,7 @@ export default function Index() {
                 const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
                 const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
 
-                const { error: insertError } = await supabase.from('users').insert({
+                const { error: insertError } = await supabase.from('users').upsert({
                   id: user.id,
                   email: user.email,
                   name: d['onboarding_name'] || '',
