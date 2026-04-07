@@ -148,6 +148,7 @@ export default function ProfileScreen() {
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
   const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
+  const [phoneInlineError, setPhoneInlineError] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -512,10 +513,10 @@ export default function ProfileScreen() {
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
 
     // Verificar si el número ya está registrado por otro usuario
+    setPhoneInlineError('');
     const phoneTaken = await checkPhoneExists(combinedPhone);
     if (phoneTaken) {
-      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
-      setShowPhoneErrorModal(true);
+      setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
       return;
     }
 
@@ -1029,10 +1030,16 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              {phoneInlineError ? (
+                <View style={styles.phoneInlineErrorBox}>
+                  <Text style={styles.phoneInlineErrorText}>⚠️ {phoneInlineError}</Text>
+                </View>
+              ) : null}
+
               <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} activeOpacity={0.8}>
                 <Text style={styles.saveButtonText}>Guardar Cambios</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setPhoneStatus('idle'); setEditModalVisible(false); }} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setPhoneStatus('idle'); setPhoneInlineError(''); setEditModalVisible(false); }} activeOpacity={0.8}>
                 <Text style={styles.modalCloseButtonText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
@@ -1224,6 +1231,12 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
   saveButton: { backgroundColor: '#880E4F', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
+  phoneInlineErrorBox: {
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    borderWidth: 1, borderColor: 'rgba(220, 38, 38, 0.3)',
+    borderRadius: 12, padding: 12, marginBottom: 12,
+  },
+  phoneInlineErrorText: { color: '#dc2626', fontSize: 14, textAlign: 'center', lineHeight: 20 },
   modalScrollView: { maxHeight: '90%' },
   modalScrollContent: { flexGrow: 1 },
   pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 4 },
