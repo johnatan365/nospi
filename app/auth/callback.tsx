@@ -1,99 +1,130 @@
 /**
  * app/auth/callback.tsx
  *
- * Web-only route que maneja el OAuth redirect de Google / Apple.
- * Con implicit flow, Supabase procesa los tokens del hash automáticamente
- * via detectSessionInUrl. Este componente solo espera que la sesión
- * se confirme y redirige a / donde index.tsx toma el control.
+ * Maneja el OAuth redirect de Google / Apple tanto en web como en nativo.
+ *
+ * En nativo: register.tsx navega aquí con { code } o { access_token, refresh_token }
+ *   como route params de expo-router (useLocalSearchParams).
+ *
+ * En web: Supabase redirige el browser aquí con los params en el hash o query string.
+ *   Supabase puede haber procesado los tokens automáticamente via detectSessionInUrl.
+ *
+ * En ambos casos, después de establecer la sesión, redirige a / donde
+ * index.tsx decide a dónde ir según si existe perfil o no.
  */
 
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthCallback() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{
+    code?: string;
+    access_token?: string;
+    refresh_token?: string;
+  }>();
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      router.replace('/');
-      return;
-    }
-
     const handleCallback = async () => {
       try {
-        const url = window.location.href;
-        console.log('[AuthCallback] Processing OAuth callback:', url);
+        let code: string | undefined;
+        let accessToken: string | undefined;
+        let refreshToken: string | undefined;
 
-        const search = window.location.search;
-        const hash = window.location.hash;
+        if (Platform.OS !== 'web') {
+          // ── Nativo: los params vienen de expo-router (register.tsx los pasó) ──
+          code = routeParams.code;
+          accessToken = routeParams.access_token;
+          refreshToken = routeParams.refresh_token;
+          console.log('[AuthCallback] Native — params from expo-router:', {
+            hasCode: !!code,
+            hasTokens: !!(accessToken && refreshToken),
+          });
+        } else {
+          // ── Web: los params vienen del hash o query string del browser ──
+          const search = window.location.search;
+          const hash = window.location.hash;
+          console.log('[AuthCallback] Web — processing URL:', window.location.href);
 
-        // Verificar si hay error explícito en la URL
-        const params: Record<string, string> = {};
-        const raw = (hash.startsWith('#') ? hash.slice(1) : '') || search.slice(1);
-        raw.split('&').forEach((pair) => {
-          const [k, v] = pair.split('=');
-          if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
-        });
+          const webParams: Record<string, string> = {};
+          const raw = (hash.startsWith('#') ? hash.slice(1) : '') || search.slice(1);
+          raw.split('&').forEach((pair) => {
+            const [k, v] = pair.split('=');
+            if (k && v) webParams[decodeURIComponent(k)] = decodeURIComponent(v);
+          });
 
-        console.log('[AuthCallback] Params keys:', Object.keys(params));
+          console.log('[AuthCallback] Web params keys:', Object.keys(webParams));
 
-        if (params.error) {
-          console.error('[AuthCallback] OAuth error:', params.error);
-          setErrorMsg(params.error_description || 'Error en autenticación');
-          setTimeout(() => router.replace('/login?error=oauth_error'), 2000);
+          if (webParams.error) {
+            console.error('[AuthCallback] OAuth error from provider:', webParams.error);
+            setErrorMsg(webParams.error_description || 'Error en autenticación');
+            setTimeout(() => router.replace('/login?error=oauth_error' as any), 2000);
+            return;
+          }
+
+          code = webParams.code;
+          accessToken = webParams.access_token;
+          refreshToken = webParams.refresh_token;
+        }
+
+        // ── Procesar tokens o code ──────────────────────────────────────────────
+
+        if (accessToken && refreshToken) {
+          console.log('[AuthCallback] Setting session from access_token + refresh_token');
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) {
+            console.error('[AuthCallback] setSession error:', error.message);
+            throw error;
+          }
+        } else if (code) {
+          console.log('[AuthCallback] Exchanging code for session');
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('[AuthCallback] exchangeCodeForSession error:', error.message);
+            throw error;
+          }
+        } else {
+          // En web, Supabase puede haber procesado los tokens automáticamente
+          // via detectSessionInUrl. Esperar a que la sesión esté disponible.
+          console.log('[AuthCallback] No tokens/code — waiting for Supabase to process automatically');
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
+        // ── Verificar sesión y navegar ──────────────────────────────────────────
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[AuthCallback] Session confirmed, navigating to /');
+          router.replace('/');
           return;
         }
 
-        // Con implicit flow, Supabase ya procesó los tokens via detectSessionInUrl.
-        // Solo necesitamos esperar a que la sesión esté disponible.
-        // Si hay tokens o code en la URL, intercambiarlos manualmente como fallback.
-        if (params.access_token && params.refresh_token) {
-          console.log('[AuthCallback] Setting session from tokens');
-          const { error } = await supabase.auth.setSession({
-            access_token: params.access_token,
-            refresh_token: params.refresh_token,
-          });
-          if (error) throw error;
-        } else if (params.code) {
-          console.log('[AuthCallback] Exchanging code for session');
-          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-          if (error) throw error;
-        } else {
-          // No hay tokens ni code — puede que Supabase ya los procesó.
-          // Esperar un momento y verificar si hay sesión activa.
-          console.log('[AuthCallback] No tokens in URL — checking if Supabase already processed them');
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        // Verificar si hay sesión (ya sea procesada por nosotros o por Supabase)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('[AuthCallback] Session confirmed, redirecting to /');
+        // Segundo intento — Supabase puede estar procesando aún
+        console.log('[AuthCallback] No session yet, waiting 1s more...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: { session: session2 } } = await supabase.auth.getSession();
+        if (session2) {
+          console.log('[AuthCallback] Session confirmed on second attempt, navigating to /');
           router.replace('/');
         } else {
-          // Esperar un poco más — Supabase puede estar procesando aún
-          console.log('[AuthCallback] No session yet, waiting...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const { data: { session: session2 } } = await supabase.auth.getSession();
-          if (session2) {
-            console.log('[AuthCallback] Session confirmed after wait, redirecting to /');
-            router.replace('/');
-          } else {
-            console.warn('[AuthCallback] No session after wait, redirecting to login');
-            router.replace('/login?error=oauth_error');
-          }
+          console.warn('[AuthCallback] No session after retries — redirecting to login');
+          router.replace('/login?error=oauth_error' as any);
         }
       } catch (err: any) {
         console.error('[AuthCallback] Unexpected error:', err);
         setErrorMsg('Error al completar el inicio de sesión');
-        setTimeout(() => router.replace('/login?error=oauth_error'), 2000);
+        setTimeout(() => router.replace('/login?error=oauth_error' as any), 2000);
       }
     };
 
     handleCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
