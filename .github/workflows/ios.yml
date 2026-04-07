@@ -95,17 +95,12 @@ jobs:
 
       - name: Upload to TestFlight
         env:
-          AUTHKEY_P8: ${{ secrets.IOS_AUTHKEY_P8 }}
-          AUTHKEY_ID: ${{ secrets.IOS_AUTHKEY_ID }}
-          ISSUER_ID: ${{ secrets.IOS_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.IOS_APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.IOS_APP_PASSWORD }}
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$AUTHKEY_P8" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${AUTHKEY_ID}.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${AUTHKEY_ID}.p8
-
           xcrun altool --upload-app \
             --type ios \
             --file "$RUNNER_TEMP/ipa/Nospi.ipa" \
-            --apiKey "${AUTHKEY_ID}" \
-            --apiIssuer "${ISSUER_ID}" \
+            --username "${APPLE_ID}" \
+            --password "${APP_PASSWORD}" \
             --show-progress
