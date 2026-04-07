@@ -54,7 +54,6 @@ export default function LoginScreen() {
 
     setSubmitting(true);
     setError('');
-    console.log(`LoginScreen: ${isSignUp ? 'sign up' : 'sign in'} with email:`, email);
 
     try {
       if (isSignUp) {
@@ -67,7 +66,6 @@ export default function LoginScreen() {
         });
 
         if (error) {
-          console.error('SignUp error:', error);
           if (error.message.includes('already')) {
             setError('Ya existe una cuenta con este email');
           } else {
@@ -77,7 +75,6 @@ export default function LoginScreen() {
         }
 
         if (data.user) {
-          console.log('SignUp successful, user:', data.user.id);
           router.replace('/onboarding/name');
         }
       } else {
@@ -87,7 +84,6 @@ export default function LoginScreen() {
         });
 
         if (error) {
-          console.error('Login error:', error);
           setError('Email o contraseña incorrectos');
           return;
         }
@@ -97,8 +93,6 @@ export default function LoginScreen() {
           return;
         }
 
-        console.log('Login successful, user:', data.user.id);
-
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id')
@@ -106,19 +100,15 @@ export default function LoginScreen() {
           .maybeSingle();
 
         if (profileError) {
-          console.error('Error checking profile:', profileError);
         }
 
         if (!profile) {
-          console.log('No profile found, redirecting to onboarding');
           router.replace('/onboarding/name');
         } else {
-          console.log('Profile found, redirecting to events');
           router.replace('/(tabs)/events');
         }
       }
     } catch (err: any) {
-      console.error('LoginScreen: email auth error:', err);
       setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
@@ -126,17 +116,14 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
-    console.log('LoginScreen: user tapped Sign in with Apple');
     setError('');
     setSubmitting(true);
     try {
       await signInWithApple();
       if (Platform.OS !== 'web') {
-        console.log('LoginScreen: Apple sign-in completed, session confirmed — navigating');
         router.replace('/');
       }
     } catch (err: any) {
-      console.error('LoginScreen: Apple sign-in error:', err);
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
         setError('Inicio de sesión cancelado');
       } else {
@@ -147,17 +134,14 @@ export default function LoginScreen() {
   };
 
   const handleGoogle = async () => {
-    console.log('LoginScreen: user tapped Sign in with Google');
     setError('');
     setSubmitting(true);
     try {
       await signInWithGoogle();
       if (Platform.OS !== 'web') {
-        console.log('LoginScreen: Google sign-in completed, session confirmed — navigating');
         router.replace('/');
       }
     } catch (err: any) {
-      console.error('LoginScreen: Google sign-in error:', err);
       if (err?.message?.includes('cancel')) {
         setError('Inicio de sesión cancelado');
       } else {
@@ -169,11 +153,9 @@ export default function LoginScreen() {
 
   const toggleMode = () => {
     if (!isSignUp) {
-      console.log('LoginScreen: user wants to register, redirecting to welcome');
       router.replace('/welcome');
       return;
     }
-    console.log('LoginScreen: toggling mode to sign in');
     setIsSignUp(false);
     setError('');
     setName('');
@@ -182,7 +164,6 @@ export default function LoginScreen() {
   };
 
   const togglePasswordVisibility = () => {
-    console.log('LoginScreen: toggling password visibility');
     setShowPassword(!showPassword);
   };
 
@@ -333,7 +314,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={styles.backButton}
-                onPress={() => { console.log('LoginScreen: user tapped back'); router.back(); }}
+                onPress={() => { router.back(); }}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >

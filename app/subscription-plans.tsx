@@ -158,15 +158,12 @@ export default function SubscriptionPlansScreen() {
   // para evitar el error "Cannot access before initialization".
   const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
     try {
-      console.log('Confirming appointment for transaction:', transactionId, 'method:', paymentMethod, 'eventIdParam:', eventIdParam);
       
       // Use passed eventId first, fallback to AsyncStorage
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
-        console.error('confirmAppointment: No pending event ID found — neither param nor AsyncStorage');
         return false;
       }
-      console.log('confirmAppointment: Using eventId:', pendingEventId);
       
       // Refresh session to ensure we have a valid one
       try { await supabase.auth.refreshSession(); } catch {}
@@ -193,12 +190,9 @@ export default function SubscriptionPlansScreen() {
       }
 
       if (!userId) {
-        console.error('confirmAppointment: no userId after all fallbacks');
         return false;
       }
-      console.log('confirmAppointment: userId:', userId);
-      
-      console.log('Upserting appointment for event:', pendingEventId);
+
 
       // Intento 1: upsert con campos extendidos
       const { error: upsertError } = await supabase
@@ -217,7 +211,6 @@ export default function SubscriptionPlansScreen() {
         );
 
       if (upsertError) {
-        console.warn('confirmAppointment: upsert extendido falló, intentando solo campos base:', upsertError.message);
         // Intento 2: upsert solo con campos base (por si faltan columnas en el schema)
         const { error: upsertBaseError } = await supabase
           .from('appointments')
@@ -226,10 +219,8 @@ export default function SubscriptionPlansScreen() {
             { onConflict: 'user_id,event_id', ignoreDuplicates: false }
           );
         if (upsertBaseError) {
-          console.error('confirmAppointment: upsert base también falló:', upsertBaseError.message);
         }
       } else {
-        console.log('confirmAppointment: upsert exitoso');
       }
 
       // Verificar que la fila realmente existe en DB con status='confirmada'
@@ -242,16 +233,12 @@ export default function SubscriptionPlansScreen() {
         .maybeSingle();
 
       if (!verification) {
-        console.error('confirmAppointment: verificación post-write falló — cita no encontrada en DB');
         return false;
       }
-
-      console.log('confirmAppointment: cita verificada en DB id:', verification.id);
       await AsyncStorage.removeItem('pending_event_confirmation');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       return true;
-    } catch (e) { 
-      console.error('Error confirmando cita:', e);
+    } catch (e) {
       return false;
     }
   }, [user?.id]);
@@ -272,19 +259,15 @@ export default function SubscriptionPlansScreen() {
           if (age > 10 * 60 * 1000) return;
         }
 
-        console.log('App became active, checking pending payment:', storedTxId, 'method:', storedMethod);
-
         try {
           const res = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
           const data = await res.json();
           const status = data.data?.status;
-          console.log('AppState check - payment status:', status);
 
           if (status === 'APPROVED') {
             // Si payment-callback ya está manejando este pago, no duplicar la confirmación.
             const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
             if (alreadyHandled === 'true') {
-              console.log('AppState: payment-callback ya está procesando este pago, omitiendo');
               return;
             }
             await AsyncStorage.removeItem('nospi_transaction_id');
@@ -318,10 +301,8 @@ export default function SubscriptionPlansScreen() {
             // The app was backgrounded during 3DS — the polling interval may have been killed.
             // Restart a short-interval poll (3s, max 10 attempts) to catch the APPROVED status.
             if (threeDsPollRef.current) {
-              console.log('AppState: card PENDING — poll already running, skipping restart');
               return;
             }
-            console.log('AppState: card PENDING after returning from 3DS — restarting poll for tx:', storedTxId);
             let resumeAttempts = 0;
             const maxResumeAttempts = 10;
             threeDsPollRef.current = setInterval(async () => {
@@ -330,7 +311,6 @@ export default function SubscriptionPlansScreen() {
                 const pollRes = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
                 const pollData = await pollRes.json();
                 const pollStatus = pollData.data?.status;
-                console.log(`[CardPayment] Resume poll attempt ${resumeAttempts}/${maxResumeAttempts}: ${pollStatus}`);
 
                 if (pollStatus === 'APPROVED') {
                   clearInterval(threeDsPollRef.current!);
@@ -371,10 +351,8 @@ export default function SubscriptionPlansScreen() {
                 } else if (resumeAttempts >= maxResumeAttempts) {
                   clearInterval(threeDsPollRef.current!);
                   threeDsPollRef.current = null;
-                  console.log('[CardPayment] Resume poll exhausted — leaving background poll to handle it');
                 }
               } catch (e) {
-                console.error('[CardPayment] Resume poll error:', e);
                 if (resumeAttempts >= maxResumeAttempts) {
                   clearInterval(threeDsPollRef.current!);
                   threeDsPollRef.current = null;
@@ -384,7 +362,6 @@ export default function SubscriptionPlansScreen() {
           }
           // For non-card PENDING: payment-callback handles it on browser return
         } catch (e) {
-          console.error('AppState payment check error:', e);
         }
       }
     };
@@ -398,7 +375,6 @@ export default function SubscriptionPlansScreen() {
 
   const handleSuccess = async () => {
     await confirmAppointment('', 'virtual_balance');
-    console.log('Appointment confirmed, showing success modal');
     await AsyncStorage.setItem('should_check_notification_prompt', 'true');
     setShowSuccessModal(true);
   };
@@ -418,21 +394,17 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handlePayWithVirtualBalance = async () => {
-    console.log('[VirtualBalance] Starting payment, amount:', priceCOP);
     setProcessingMethod('virtual');
     try {
       await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
-      console.log('[VirtualBalance] Balance deducted — reading pendingEventId before confirmAppointment');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       await confirmAppointment('', 'virtual_balance');
       if (pendingEventId) {
-        console.log('[VirtualBalance] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
         router.replace({
           pathname: '/event-details/[id]',
           params: { id: pendingEventId, paymentSuccess: 'true' },
         });
       } else {
-        console.log('[VirtualBalance] No pendingEventId found, showing success modal');
         setShowSuccessModal(true);
       }
     } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
@@ -479,8 +451,7 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const tokenData = await tokenRes.json();
-      console.log('[CardPayment] Token response status:', tokenRes.status, 'has token:', !!tokenData.data?.id);
-      console.log('[CardPayment] Full token response:', JSON.stringify(tokenData));
+
       if (!tokenRes.ok || !tokenData.data?.id) {
         const msgs = tokenData.error?.messages;
         const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
@@ -510,29 +481,23 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const result = await response.json();
-      console.log('[CardPayment] Full charge response:', JSON.stringify(result));
       if (!response.ok || result.error) throw new Error(result.error || `Error al procesar el pago (HTTP ${response.status})`);
 
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
-        console.log('[CardPayment] APPROVED — reading pendingEventId before confirmAppointment');
         const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-        console.log('[CardPayment] pendingEventId from AsyncStorage:', pendingEventId);
         await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
         if (pendingEventId) {
-          console.log('[CardPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
           router.replace({
             pathname: '/event-details/[id]',
             params: { id: pendingEventId, paymentSuccess: 'true' },
           });
         } else {
-          console.log('[CardPayment] No pendingEventId found, showing success modal');
           setShowSuccessModal(true);
         }
       } else if (result.status === 'PENDING') {
         // Card payment is pending — puede requerir autenticación 3DS en mobile.
-        console.log('[CardPayment] PENDING — transactionId:', result.transactionId);
-        console.log('[CardPayment] Full result:', JSON.stringify(result));
+
         setShowCardForm(false);
 
         // Detectar si Wompi requiere 3DS (redirect de autenticación).
@@ -548,7 +513,6 @@ export default function SubscriptionPlansScreen() {
           // En mobile: abrir la URL de 3DS en el browser nativo.
           // Wompi redirigirá de vuelta a WEB_REDIRECT_URL (HTTPS) after 3DS.
           // The AppState 'active' event fires when the user returns to the app.
-          console.log('[CardPayment] 3DS requerido en mobile, abriendo:', threeDsUrl);
           await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'card');
           await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
@@ -570,14 +534,12 @@ export default function SubscriptionPlansScreen() {
           const bgTxId = result.transactionId || '';
           let bgAttempts = 0;
           const bgMaxAttempts = 36;
-          console.log('[CardPayment] Starting background 3DS poll for tx:', bgTxId);
           threeDsPollRef.current = setInterval(async () => {
             bgAttempts++;
             try {
               const bgRes = await fetch(`${WOMPI_API_URL}/transactions/${bgTxId}`);
               const bgData = await bgRes.json();
               const bgStatus = bgData.data?.status;
-              console.log(`[CardPayment] Background 3DS poll attempt ${bgAttempts}/${bgMaxAttempts}: ${bgStatus}`);
 
               if (bgStatus === 'APPROVED') {
                 clearInterval(threeDsPollRef.current!);
@@ -618,12 +580,10 @@ export default function SubscriptionPlansScreen() {
               } else if (bgAttempts >= bgMaxAttempts) {
                 clearInterval(threeDsPollRef.current!);
                 threeDsPollRef.current = null;
-                console.log('[CardPayment] Background 3DS poll exhausted without resolution');
                 showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
                 router.replace('/(tabs)/appointments');
               }
             } catch (e) {
-              console.error('[CardPayment] Background 3DS poll error:', e);
               if (bgAttempts >= bgMaxAttempts) {
                 clearInterval(threeDsPollRef.current!);
                 threeDsPollRef.current = null;
@@ -647,7 +607,6 @@ export default function SubscriptionPlansScreen() {
             const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
             const data = await res.json();
             const status = data.data?.status;
-            console.log(`[CardPayment] Polling attempt ${cardAttempts}/${maxAttempts}: ${status}`);
             
             // Verificar si apareció URL de 3DS durante el polling (a veces llega tarde)
             const pollingThreeDsUrl =
@@ -658,7 +617,6 @@ export default function SubscriptionPlansScreen() {
             if (pollingThreeDsUrl && Platform.OS !== 'web' && cardAttempts <= 3) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              console.log('[CardPayment] 3DS URL detectada en polling, abriendo:', pollingThreeDsUrl);
               await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
               await AsyncStorage.setItem('nospi_payment_method', 'card');
               await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
@@ -676,7 +634,6 @@ export default function SubscriptionPlansScreen() {
             if (status === 'APPROVED') {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              console.log('[CardPayment] APPROVED after polling');
               const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
               await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
               if (pendingEventId) {
@@ -705,7 +662,6 @@ export default function SubscriptionPlansScreen() {
               router.replace('/(tabs)/appointments');
             }
           } catch (e) {
-            console.error('[CardPayment] Polling error:', e);
             if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
@@ -717,7 +673,6 @@ export default function SubscriptionPlansScreen() {
         throw new Error(`Pago rechazado (${result.status || 'sin estado'}). Detalle: ${JSON.stringify(result.error || result.message || result)}`);
       }
     } catch (error: any) {
-      console.error('[CardPayment] Error:', error.message);
       showAlert('Error en tarjeta', error.message);
     } finally { setProcessingMethod(null); }
   };
@@ -756,18 +711,14 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
-            console.log('[NequiPayment] APPROVED — reading pendingEventId before confirmAppointment');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            console.log('[NequiPayment] pendingEventId from AsyncStorage:', pendingEventId);
             await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
             if (pendingEventId) {
-              console.log('[NequiPayment] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
               router.replace({
                 pathname: '/event-details/[id]',
                 params: { id: pendingEventId, paymentSuccess: 'true' },
               });
             } else {
-              console.log('[NequiPayment] No pendingEventId found, showing success modal');
               setShowSuccessModal(true);
             }
           } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 40) {
@@ -787,7 +738,6 @@ export default function SubscriptionPlansScreen() {
   const handleBancolombiaPayment = async () => {
     setProcessingMethod('bancolombia');
     try {
-      console.log('Starting Bancolombia payment...');
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -797,7 +747,6 @@ export default function SubscriptionPlansScreen() {
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const bancolombiaRedirectUrl = WEB_REDIRECT_URL; // Use HTTPS so Wompi accepts it and payment-callback page loads
-      console.log('Bancolombia redirect URL:', bancolombiaRedirectUrl);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
@@ -814,8 +763,6 @@ export default function SubscriptionPlansScreen() {
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
-
-      console.log('Bancolombia payment created, transaction ID:', result.transactionId);
 
       const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
@@ -838,8 +785,6 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('nospi_payment_method', 'bancolombia');
         window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       }
-
-      console.log('Opening Bancolombia URL...');
       
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
@@ -870,7 +815,6 @@ export default function SubscriptionPlansScreen() {
       
       return;
     } catch (error: any) {
-      console.error('Error in Bancolombia payment:', error);
       showAlert('Error Bancolombia', error.message);
       setProcessingMethod(null);
     }
@@ -885,7 +829,6 @@ export default function SubscriptionPlansScreen() {
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         const data = await res.json();
         const status = data.data?.status;
-        console.log(`Native ${paymentMethod} polling attempt ${attempts}: ${status}`);
 
         if (status === 'APPROVED') {
           clearInterval(interval);
@@ -893,7 +836,6 @@ export default function SubscriptionPlansScreen() {
           // Si payment-callback ya está manejando este pago, no duplicar.
           const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
           if (alreadyHandled === 'true') {
-            console.log('startNativePolling: payment-callback ya procesando, omitiendo confirmación duplicada');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             if (pendingEventId) {
               router.replace({ pathname: '/event-details/[id]', params: { id: pendingEventId, paymentSuccess: 'true' } });
@@ -942,7 +884,6 @@ export default function SubscriptionPlansScreen() {
           router.replace('/(tabs)/appointments');
         }
       } catch (e) {
-        console.error(`Native ${paymentMethod} polling error:`, e);
         if (attempts >= maxAttempts) {
           clearInterval(interval);
           setProcessingMethod(null);
@@ -960,7 +901,6 @@ export default function SubscriptionPlansScreen() {
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         const data = await res.json();
         const status = data.data?.status;
-        console.log(`Web ${paymentMethod} polling attempt ${attempts}: ${status}`);
         if (status === 'APPROVED') {
           clearInterval(interval);
           if (typeof window !== 'undefined') {
@@ -1022,81 +962,10 @@ export default function SubscriptionPlansScreen() {
           showAlert('Tiempo agotado', 'No se pudo confirmar el pago. Si realizaste el pago, contacta soporte.');
         }
       } catch (e) {
-        console.error('Web polling error:', e);
         if (attempts >= maxAttempts) clearInterval(interval);
       }
     }, 5000);
   }, [confirmAppointment, router]);
-
-    // ========== TEST PAYMENT HANDLER - DELETE BEFORE PRODUCTION ==========
-  const handleTestPayment = async () => {
-    console.log('[TEST] handleTestPayment pressed');
-    try {
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        showAlert('Test', 'No hay evento pendiente. Ve a un evento y presiona Confirmar primero.');
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) {
-        showAlert('Test', 'No hay sesión activa.');
-        return;
-      }
-      console.log('[TEST] Checking for existing appointment — event:', pendingEventId, 'user:', userId);
-      // Check if appointment already exists
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .maybeSingle();
-
-      if (existing) {
-        console.log('[TEST] Appointment exists, updating status to confirmada');
-        const { error: updateError } = await supabase
-          .from('appointments')
-          .update({
-            status: 'confirmada',
-            payment_status: 'completed',
-          })
-          .eq('id', existing.id);
-        if (updateError) {
-          console.error('[TEST] Update error:', updateError.message);
-          showAlert('Test Error', updateError.message);
-          return;
-        }
-      } else {
-        console.log('[TEST] No existing appointment, inserting new one');
-        const { error: insertError } = await supabase
-          .from('appointments')
-          .insert({
-            user_id: userId,
-            event_id: pendingEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-          });
-        if (insertError) {
-          console.error('[TEST] Insert error:', insertError.message);
-          showAlert('Test Error', insertError.message);
-          return;
-        }
-      }
-
-      await AsyncStorage.removeItem('pending_event_confirmation');
-      console.log('[TEST] Appointment saved, waiting 500ms before navigating...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('[TEST] Navigating to event detail with paymentSuccess=true, eventId:', pendingEventId);
-      router.replace({
-        pathname: '/event-details/[id]',
-        params: { id: pendingEventId, paymentSuccess: 'true' },
-      });
-    } catch (e: any) {
-      console.error('[TEST] handleTestPayment error:', e.message);
-      showAlert('Test Error', e.message);
-    }
-  };
-  // ========== END TEST PAYMENT HANDLER ==========
 	
 	const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
@@ -1108,7 +977,6 @@ export default function SubscriptionPlansScreen() {
 
     setProcessingMethod('pse');
     try {
-      console.log('Starting PSE payment...');
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -1118,7 +986,6 @@ export default function SubscriptionPlansScreen() {
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const pseRedirectUrl = WEB_REDIRECT_URL; // Wompi PSE requires HTTPS on all platforms
-      console.log('PSE redirect URL:', pseRedirectUrl);
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
@@ -1141,13 +1008,10 @@ export default function SubscriptionPlansScreen() {
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('PSE payment error:', data);
         throw new Error(data.error || 'Error al crear pago PSE');
       }
       
       if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
-
-      console.log('PSE payment created, transaction ID:', data.transactionId);
 
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
@@ -1169,8 +1033,6 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('nospi_payment_method', 'pse');
         window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       }
-
-      console.log('Opening PSE URL...');
       
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
@@ -1204,7 +1066,6 @@ export default function SubscriptionPlansScreen() {
       return;
 
     } catch (error: any) {
-      console.error('Error in PSE payment:', error);
       showAlert('Error PSE', error.message);
       setProcessingMethod(null);
     }
@@ -1441,7 +1302,6 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-              console.log('[SubscriptionPlans] Cancel pressed — going back');
               router.back();
             }}
             style={{ paddingHorizontal: 8 }}
@@ -1545,18 +1405,6 @@ export default function SubscriptionPlansScreen() {
             {isProcessing('pse') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
-
-              {/* ========== TEST BUTTON - controlado desde admin web ========== */}
-        {appConfig.test_payment_enabled === 'true' && (
-          <TouchableOpacity
-            style={testPaymentStyles.btn}
-            onPress={handleTestPayment}
-            activeOpacity={0.7}
-          >
-            <Text style={testPaymentStyles.btnText}>🧪 Pago de Prueba (TEST)</Text>
-          </TouchableOpacity>
-        )}
-        {/* ========== END TEST BUTTON ========== */}
 				
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
       </ScrollView>
@@ -1655,24 +1503,3 @@ const styles = StyleSheet.create({
   bankOptionText: { fontSize: 15, color: '#333' },
   successButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 });
-
-// ========== TEST BUTTON STYLES - DELETE BEFORE PRODUCTION ==========
-const testPaymentStyles = StyleSheet.create({
-  btn: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#ff0',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: 16,
-  },
-  btnText: {
-    color: '#ff0',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-});
-// ========== END TEST BUTTON STYLES ==========

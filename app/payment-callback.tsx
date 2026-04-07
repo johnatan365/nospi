@@ -18,7 +18,6 @@ async function confirmAppointmentInSupabase(
   eventId: string,
   userId: string,
 ): Promise<boolean> {
-  console.log('payment-callback: confirmAppointment', { transactionId, paymentMethod, eventId, userId });
 
   // Intentar upsert con todos los campos extendidos
   const { error: upsertError } = await supabase
@@ -39,7 +38,6 @@ async function confirmAppointmentInSupabase(
   if (upsertError) {
     // Puede fallar si las columnas transaction_id/payment_method no existen en el schema.
     // Fallback: solo los campos base.
-    console.warn('payment-callback: upsert con campos extendidos falló, intentando solo campos base:', upsertError.message);
 
     const { error: upsertBaseError } = await supabase
       .from('appointments')
@@ -54,7 +52,6 @@ async function confirmAppointmentInSupabase(
       );
 
     if (upsertBaseError) {
-      console.error('payment-callback: upsert base también falló:', upsertBaseError.message);
       // Último recurso: update + insert por separado
       const { data: updated, error: updateError } = await supabase
         .from('appointments')
@@ -63,7 +60,7 @@ async function confirmAppointmentInSupabase(
         .eq('event_id', eventId)
         .select('id');
 
-      if (updateError) console.error('payment-callback: update falló:', updateError.message);
+      if (updateError)
 
       if (!updated || updated.length === 0) {
         const { error: insertError } = await supabase.from('appointments').insert({
@@ -73,15 +70,12 @@ async function confirmAppointmentInSupabase(
           payment_status: 'completed',
         });
         if (insertError) {
-          console.error('payment-callback: insert falló:', insertError.message);
           return false;
         }
       }
     } else {
-      console.log('payment-callback: upsert base exitoso');
     }
   } else {
-    console.log('payment-callback: upsert completo exitoso');
   }
 
   // Verificar que la fila existe y tiene status='confirmada' antes de continuar
@@ -94,11 +88,8 @@ async function confirmAppointmentInSupabase(
     .maybeSingle();
 
   if (verifyError || !verification) {
-    console.error('payment-callback: verificación post-write falló — cita no encontrada en DB:', verifyError?.message);
     return false;
   }
-
-  console.log('payment-callback: cita verificada en DB, id:', verification.id);
   await AsyncStorage.setItem('should_check_notification_prompt', 'true');
   return true;
 }
@@ -126,8 +117,7 @@ export default function PaymentCallbackScreen() {
   const [statusMessage, setStatusMessage] = useState('Verificando pago...');
 
   useEffect(() => {
-    console.log('payment-callback: screen mounted, platform:', Platform.OS);
-    console.log('payment-callback: URL params:', localSearchParams);
+
 
     if (isWeb) {
       // On web, Wompi redirects to https://app.nospi.co/payment-callback.
@@ -137,7 +127,6 @@ export default function PaymentCallbackScreen() {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_payment_status', urlStatus);
         window.localStorage.setItem('nospi_payment_time', Date.now().toString());
-        console.log('payment-callback (web): stored status in localStorage:', urlStatus);
       }
       return;
     }
@@ -151,8 +140,6 @@ export default function PaymentCallbackScreen() {
         const urlPaymentStatus = overrideStatus || (localSearchParams.payment_status as string) || '';
         const urlTransactionId = overrideTransactionId || (localSearchParams.transaction_id as string) || '';
 
-        console.log('payment-callback (mobile): urlPaymentStatus:', urlPaymentStatus);
-        console.log('payment-callback (mobile): urlTransactionId:', urlTransactionId);
 
         // Step 1: Read ALL AsyncStorage values BEFORE any cleanup.
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
@@ -160,9 +147,7 @@ export default function PaymentCallbackScreen() {
         const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
-        console.log('payment-callback (mobile): storedTransactionId:', storedTransactionId);
-        console.log('payment-callback (mobile): storedPaymentMethod:', storedPaymentMethod);
-        console.log('payment-callback (mobile): storedEventId:', storedEventId);
+
 
         // Use URL transaction ID first, then fall back to stored one.
         const transactionId = urlTransactionId || storedTransactionId || '';
@@ -171,7 +156,6 @@ export default function PaymentCallbackScreen() {
         const eventId = storedEventId || '';
 
         if (!transactionId) {
-          console.warn('payment-callback (mobile): no transaction ID found anywhere, going to appointments');
           setStatusMessage('No se encontró la transacción.');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
@@ -182,7 +166,6 @@ export default function PaymentCallbackScreen() {
         if (storedTime) {
           const age = Date.now() - parseInt(storedTime, 10);
           if (age > 10 * 60 * 1000) {
-            console.warn('payment-callback (mobile): stored payment too old, ignoring');
             setStatusMessage('El pago expiró.');
             await cleanupAsyncStorage();
             router.replace('/(tabs)/appointments');
@@ -191,19 +174,15 @@ export default function PaymentCallbackScreen() {
         }
 
         // Step 2: Verify with Wompi — always confirm server-side to prevent spoofing.
-        console.log('payment-callback (mobile): verifying transaction with Wompi:', transactionId);
         setStatusMessage('Verificando pago con Wompi...');
 
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         if (!res.ok) {
           const text = await res.text();
-          console.error('payment-callback (mobile): Wompi API error:', res.status, text);
           throw new Error(`Wompi API returned ${res.status}`);
         }
         const data = await res.json();
         const status: WompiStatus = data.data?.status ?? 'unknown';
-
-        console.log('payment-callback (mobile): Wompi status:', status);
 
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
@@ -225,14 +204,12 @@ export default function PaymentCallbackScreen() {
 
           // Fallback 2: getUser (llamada de red, más confiable tras redirects externos)
           if (!userId) {
-            console.log('payment-callback (mobile): getSession sin userId, intentando getUser');
             const { data: { user: authUser } } = await supabase.auth.getUser();
             userId = authUser?.id ?? undefined;
           }
 
           // Fallback 3: restaurar sesión desde tokens guardados antes de abrir el browser
           if (!userId) {
-            console.log('payment-callback (mobile): getUser sin userId, intentando restaurar sesión desde tokens guardados');
             try {
               const storedAccessToken = await AsyncStorage.getItem('nospi_access_token');
               const storedRefreshToken = await AsyncStorage.getItem('nospi_refresh_token');
@@ -243,30 +220,23 @@ export default function PaymentCallbackScreen() {
                 });
                 if (restoredSession?.user?.id) {
                   userId = restoredSession.user.id;
-                  console.log('payment-callback (mobile): sesión restaurada desde tokens guardados, userId:', userId);
                 } else {
-                  console.warn('payment-callback (mobile): setSession no restauró la sesión:', setSessionError?.message);
                 }
               }
             } catch (sessionRestoreErr) {
-              console.warn('payment-callback (mobile): error restaurando sesión:', sessionRestoreErr);
             }
           }
 
           // Fallback 4: leer userId directamente de AsyncStorage (último recurso)
           if (!userId) {
-            console.log('payment-callback (mobile): usando userId de AsyncStorage como último recurso');
             const storedUserId = await AsyncStorage.getItem('nospi_user_id');
             userId = storedUserId ?? undefined;
           }
-
-          console.log('payment-callback (mobile): resolved userId:', userId, 'eventId:', eventId);
 
           // Step 4: Confirm appointment BEFORE cleanup (eventId already captured above).
           if (userId && eventId) {
             const confirmed = await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
             if (!confirmed) {
-              console.error('payment-callback: confirmAppointmentInSupabase retornó false — la cita no se pudo confirmar en DB');
               await cleanupAsyncStorage();
               await AsyncStorage.removeItem('nospi_payment_processing');
               setStatusMessage('Tu pago fue exitoso pero hubo un error confirmando tu cita. Contacta soporte.');
@@ -277,13 +247,11 @@ export default function PaymentCallbackScreen() {
             }
           } else if (eventId && !userId) {
             // Payment was approved but we cannot identify the user — do NOT silently succeed.
-            console.error('payment-callback (mobile): userId still undefined after all fallbacks — cannot confirm appointment');
             await cleanupAsyncStorage();
             setStatusMessage('Tu pago fue exitoso pero no pudimos confirmar tu cita. Contacta soporte.');
             router.replace('/(tabs)/appointments');
             return;
           } else {
-            console.warn('payment-callback (mobile): missing userId or eventId for appointment confirmation', { userId, eventId });
           }
 
           // Step 5: Cleanup AFTER appointment is confirmed.
@@ -291,8 +259,6 @@ export default function PaymentCallbackScreen() {
           await AsyncStorage.removeItem('nospi_payment_processing');
           // Garantizar que el tab de citas invalide su caché al recibir foco.
           await AsyncStorage.setItem('should_check_notification_prompt', 'true');
-
-          console.log('payment-callback (mobile): navigating to event-details with paymentSuccess=true, eventId:', eventId);
 
           if (eventId) {
             router.replace({
@@ -305,13 +271,11 @@ export default function PaymentCallbackScreen() {
           }
 
         } else if (status === 'PENDING') {
-          console.log('payment-callback (mobile): payment PENDING');
           setStatusMessage('Pago en proceso...');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
 
         } else if (status === 'DECLINED') {
-          console.log('payment-callback (mobile): payment DECLINED');
           setStatusMessage('Pago rechazado.');
           await cleanupAsyncStorage();
           // Restore eventId so user can retry from subscription-plans.
@@ -321,7 +285,6 @@ export default function PaymentCallbackScreen() {
           router.replace('/subscription-plans');
 
         } else if (status === 'VOIDED') {
-          console.log('payment-callback (mobile): payment VOIDED (cancelled)');
           setStatusMessage('Pago cancelado.');
           await cleanupAsyncStorage();
           if (eventId) {
@@ -330,14 +293,12 @@ export default function PaymentCallbackScreen() {
           router.replace('/subscription-plans');
 
         } else {
-          console.log('payment-callback (mobile): unknown/error status:', status);
           setStatusMessage('Error en el pago.');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
         }
 
       } catch (err) {
-        console.error('payment-callback (mobile): unexpected error:', err);
         setStatusMessage('Error verificando el pago.');
         await cleanupAsyncStorage();
         router.replace('/(tabs)/appointments');
@@ -354,13 +315,11 @@ export default function PaymentCallbackScreen() {
     if (isWeb) return;
 
     const subscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('payment-callback: Linking url event received:', url);
       if (url.includes('payment-callback')) {
         try {
           const urlObj = new URL(url);
           const status = urlObj.searchParams.get('payment_status') || urlObj.searchParams.get('status') || '';
           const txId = urlObj.searchParams.get('transaction_id') || urlObj.searchParams.get('id') || '';
-          console.log('payment-callback: Linking fallback — status:', status, 'txId:', txId);
           if (txId) {
             // Re-run processPayment with the params from the Linking event.
             // We define a local async wrapper to avoid stale closure issues.
@@ -380,8 +339,6 @@ export default function PaymentCallbackScreen() {
                 const age = Date.now() - parseInt(storedTime, 10);
                 if (age > 10 * 60 * 1000) return;
               }
-
-              console.log('payment-callback: Linking fallback verifying with Wompi:', transactionId);
               setStatusMessage('Verificando pago con Wompi...');
 
               try {
@@ -389,7 +346,6 @@ export default function PaymentCallbackScreen() {
                 if (!res.ok) throw new Error(`Wompi API returned ${res.status}`);
                 const data = await res.json();
                 const wompiStatus: WompiStatus = data.data?.status ?? 'unknown';
-                console.log('payment-callback: Linking fallback Wompi status:', wompiStatus);
 
                 if (wompiStatus === 'APPROVED') {
                   setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
@@ -419,7 +375,6 @@ export default function PaymentCallbackScreen() {
                         });
                         if (restoredSession?.user?.id) {
                           userId = restoredSession.user.id;
-                          console.log('payment-callback (Linking): sesión restaurada, userId:', userId);
                         }
                       }
                     } catch {}
@@ -430,19 +385,15 @@ export default function PaymentCallbackScreen() {
                     userId = storedUserId ?? undefined;
                   }
 
-                  console.log('payment-callback (Linking): resolved userId:', userId, 'eventId:', eventId);
-
                   if (userId && eventId) {
                     const confirmedLinking = await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
                     if (!confirmedLinking) {
-                      console.error('payment-callback (Linking): confirmAppointmentInSupabase retornó false');
                       await cleanupAsyncStorage();
                       await AsyncStorage.removeItem('nospi_payment_processing');
                       router.replace('/(tabs)/appointments');
                       return;
                     }
                   } else if (eventId && !userId) {
-                    console.error('payment-callback (Linking): userId still undefined after all fallbacks — cannot confirm appointment');
                     await cleanupAsyncStorage();
                     setStatusMessage('Tu pago fue exitoso pero no pudimos confirmar tu cita. Contacta soporte.');
                     router.replace('/(tabs)/appointments');
@@ -465,7 +416,6 @@ export default function PaymentCallbackScreen() {
                   router.replace('/(tabs)/appointments');
                 }
               } catch (err) {
-                console.error('payment-callback: Linking fallback error:', err);
                 await cleanupAsyncStorage();
                 router.replace('/(tabs)/appointments');
               }
@@ -473,7 +423,6 @@ export default function PaymentCallbackScreen() {
             runProcess();
           }
         } catch (parseErr) {
-          console.error('payment-callback: failed to parse Linking url:', parseErr);
         }
       }
     });

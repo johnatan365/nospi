@@ -201,7 +201,7 @@ export default function ProfileScreen() {
       // 2. Try AsyncStorage for cross-session persistence
       const persisted = await getCached<UserProfile>(CACHE_KEY);
       if (persisted) {
-        console.log('ProfileScreen (iOS): Showing persisted cache');
+        : Showing persisted cache');
         cacheRef.current = { data: persisted, timestamp: Date.now() };
         setProfile(persisted);
         populateEditFields(persisted);
@@ -213,7 +213,7 @@ export default function ProfileScreen() {
     try {
       if (force) setLoading(true);
       setError(null);
-      console.log('ProfileScreen (iOS): Fetching profile from Supabase for user:', user.id);
+      : Fetching profile from Supabase for user:', user.id);
 
       const { data, error: fetchError } = await supabase
         .from('users')
@@ -222,14 +222,14 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('ProfileScreen (iOS): Error loading profile:', fetchError);
+        
         setError('Error al cargar el perfil: ' + fetchError.message);
         setLoading(false);
         return;
       }
 
       if (!data) {
-        console.log('ProfileScreen (iOS): No profile found, creating default');
+        : No profile found, creating default');
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const metadata = authUser?.user_metadata || {};
         const fullName = metadata.full_name || metadata.name || authUser?.email?.split('@')[0] || 'Usuario';
@@ -257,13 +257,13 @@ export default function ProfileScreen() {
 
         const { error: insertError } = await supabase.from('users').insert(defaultProfile);
         if (insertError) {
-          console.error('ProfileScreen (iOS): Error creating default profile:', insertError);
+          
           setError('Error al crear el perfil: ' + insertError.message);
           setLoading(false);
           return;
         }
 
-        console.log('ProfileScreen (iOS): Default profile created');
+        : Default profile created');
         cacheRef.current = { data: defaultProfile as UserProfile, timestamp: Date.now() };
         setCached(CACHE_KEY, defaultProfile as UserProfile);
         setProfile(defaultProfile as UserProfile);
@@ -272,13 +272,13 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('ProfileScreen (iOS): Profile loaded successfully:', data.name);
+      : Profile loaded successfully:', data.name);
       cacheRef.current = { data: data as UserProfile, timestamp: Date.now() };
       setCached(CACHE_KEY, data as UserProfile);
       setProfile(data as UserProfile);
       populateEditFields(data as UserProfile);
     } catch (err) {
-      console.error('ProfileScreen (iOS): Failed to load profile:', err);
+      
       setError('Error inesperado al cargar el perfil');
     } finally {
       setLoading(false);
@@ -287,7 +287,7 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('ProfileScreen (iOS): Tab focused');
+      : Tab focused');
       if (user) {
         loadProfile();
       }
@@ -295,7 +295,7 @@ export default function ProfileScreen() {
   );
 
   const handleSupportEmail = () => {
-    console.log('User tapped support email button');
+    
     setSupportSenderName(profile?.name || '');
     setSupportUserEmail(profile?.email || '');
     setSupportMessage('');
@@ -303,7 +303,7 @@ export default function ProfileScreen() {
   };
 
   const closeSupportModal = () => {
-    console.log('[SupportEmail iOS] User closed support modal');
+    
     setShowSupportEmailModal(false);
     setSupportSenderName('');
     setSupportUserEmail('');
@@ -312,11 +312,11 @@ export default function ProfileScreen() {
   };
 
   const handleSendSupportEmail = async () => {
-    console.log('[SupportEmail iOS] handleSendSupportEmail called');
-    console.log('[SupportEmail iOS] Fields — email:', supportUserEmail.trim(), '| message length:', supportMessage.trim().length, '| name:', supportSenderName.trim());
+    
+    , '| message length:', supportMessage.trim().length, '| name:', supportSenderName.trim());
 
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
-      console.log('[SupportEmail iOS] Validation failed: missing email or message');
+      
       Alert.alert('Campos requeridos', 'Por favor completa tu correo y el mensaje');
       return;
     }
@@ -324,20 +324,20 @@ export default function ProfileScreen() {
     const nameCopy = supportSenderName.trim();
     const emailCopy = supportUserEmail.trim();
     const messageCopy = supportMessage.trim();
-    console.log('[SupportEmail iOS] User tapped Enviar — from:', emailCopy, '| name:', nameCopy, '| messageLength:', messageCopy.length);
+    
 
     setSendingSupportEmail(true);
-    console.log('[SupportEmail iOS] sendingSupportEmail set to true');
+    
 
     try {
       const EDGE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/support-send-email';
-      console.log('[SupportEmail iOS] Before fetch — POST', EDGE_URL);
+      
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      console.log('[SupportEmail iOS] Auth token present:', !!accessToken);
+      
 
-      console.log('[SupportEmail iOS] Sending fetch request...');
+      
       const response = await fetch(EDGE_URL, {
         method: 'POST',
         headers: {
@@ -347,34 +347,34 @@ export default function ProfileScreen() {
         body: JSON.stringify({ senderEmail: emailCopy, senderName: nameCopy, message: messageCopy }),
       });
 
-      console.log('[SupportEmail iOS] After fetch — response.status:', response.status, '| response.ok:', response.ok);
+      
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('[SupportEmail iOS] API error — status:', response.status, '| body:', errText);
+        
         Alert.alert('Error al enviar', `Código ${response.status}: ${errText || 'Error desconocido'}`);
         return;
       }
 
       const responseText = await response.text();
-      console.log('[SupportEmail iOS] API success — response body:', responseText);
-      console.log('[SupportEmail iOS] Showing inline success state');
+      
+      
 
       setSupportSenderName('');
       setSupportUserEmail('');
       setSupportMessage('');
       setSupportEmailSent(true);
     } catch (err) {
-      console.error('[SupportEmail iOS] Network/unexpected error:', err);
+      
       Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
     } finally {
       setSendingSupportEmail(false);
-      console.log('[SupportEmail iOS] sendingSupportEmail set to false (finally block)');
+      ');
     }
   };
 
   const handleSupportWhatsApp = () => {
-    console.log('User tapped support WhatsApp button, number:', appConfig.support_whatsapp);
+    
     const url = `https://wa.me/${appConfig.support_whatsapp}`;
     Linking.openURL(url).catch(() =>
       Alert.alert('Error', 'No se pudo abrir WhatsApp')
@@ -383,27 +383,27 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     try {
-      console.log('User tapped sign out');
+      
       await signOut();
       router.replace('/welcome');
     } catch (err) {
-      console.error('Sign out failed:', err);
+      
     }
   };
 
   const handleNotificationPress = () => {
-    console.log('User tapped notification preferences');
+    
     setNotificationModalVisible(true);
   };
 
   const handleEditPress = () => {
-    console.log('User tapped edit profile');
+    
     setPhoneStatus('idle');
     setEditModalVisible(true);
   };
 
   const handlePhotoPress = async () => {
-    console.log('User tapped profile photo to edit');
+    
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
       Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
@@ -420,7 +420,7 @@ export default function ProfileScreen() {
 
     if (!result.canceled && result.assets && result.assets[0]) {
       const asset = result.assets[0];
-      console.log('Image selected, URI:', asset.uri, 'has base64:', !!asset.base64);
+      
       await uploadPhoto(asset.uri, asset.base64 || null);
     }
   };
@@ -428,7 +428,7 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string, base64Data: string | null) => {
     setUploadingPhoto(true);
     try {
-      console.log('ProfileScreen (iOS): Uploading profile photo');
+      : Uploading profile photo');
       const MIME_TYPE = 'image/jpeg';
       const FILE_EXT = 'jpg';
       const timestamp = Date.now();
@@ -461,14 +461,14 @@ export default function ProfileScreen() {
         .upload(filePath, uploadPayload, { contentType: MIME_TYPE, cacheControl: '3600', upsert: true });
 
       if (uploadError) {
-        console.error('ProfileScreen (iOS): Upload error:', uploadError);
+        
         Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
         return;
       }
 
       const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
       const basePhotoUrl = urlData.publicUrl;
-      console.log('ProfileScreen (iOS): Photo uploaded, URL:', basePhotoUrl);
+      : Photo uploaded, URL:', basePhotoUrl);
 
       const { error: updateError } = await supabase
         .from('users')
@@ -476,7 +476,7 @@ export default function ProfileScreen() {
         .eq('id', user?.id);
 
       if (updateError) {
-        console.error('ProfileScreen (iOS): Database update error:', updateError);
+        
         Alert.alert('Error', 'No se pudo actualizar el perfil');
         return;
       }
@@ -492,10 +492,10 @@ export default function ProfileScreen() {
         return updated;
       });
 
-      console.log('ProfileScreen (iOS): Photo upload complete');
+      : Photo upload complete');
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (err) {
-      console.error('ProfileScreen (iOS): Failed to upload photo:', err);
+      
       Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
     } finally {
       setUploadingPhoto(false);
@@ -519,7 +519,7 @@ export default function ProfileScreen() {
     }
 
     try {
-      console.log('User saving profile changes');
+      
       const { error } = await supabase
         .from('users')
         .update({
@@ -530,7 +530,7 @@ export default function ProfileScreen() {
         .eq('id', user?.id);
 
       if (error) {
-        console.error('Error updating profile:', error);
+        
         // Detectar duplicado de teléfono (código 23505 = unique constraint violation)
         if (error.code === '23505' && error.message?.includes('users_phone_key')) {
           setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
@@ -540,7 +540,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('ProfileScreen (iOS): Profile updated successfully');
+      : Profile updated successfully');
       setProfile(prev => {
         if (!prev) return null;
         const updated = {
@@ -556,7 +556,7 @@ export default function ProfileScreen() {
       setEditModalVisible(false);
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
     } catch (err) {
-      console.error('Failed to update profile:', err);
+      
       Alert.alert('Error', 'No se pudo actualizar el perfil');
     }
   };
@@ -566,27 +566,27 @@ export default function ProfileScreen() {
     const newPreferences = { ...profile.notification_preferences, [type]: !profile.notification_preferences[type] };
 
     try {
-      console.log('User toggling notification preference:', type);
+      
       const { error } = await supabase
         .from('users')
         .update({ notification_preferences: newPreferences })
         .eq('id', user?.id);
 
-      if (error) { console.error('Error updating preferences:', error); return; }
+      if (error) {  return; }
 
       const updated = { ...profile, notification_preferences: newPreferences };
       cacheRef.current = { data: updated, timestamp: Date.now() };
       setCached(CACHE_KEY, updated);
       setProfile(updated);
     } catch (err) {
-      console.error('Failed to update preferences:', err);
+      
     }
   };
 
   const toggleInterest = (interest: string) => {
     setEditInterests(prev => {
       const isSelected = prev.includes(interest);
-      console.log(`User toggled interest "${interest}": ${isSelected ? 'removed' : 'added'}`);
+      
       return isSelected ? prev.filter(i => i !== interest) : [...prev, interest];
     });
   };
@@ -594,7 +594,7 @@ export default function ProfileScreen() {
   const togglePersonality = (trait: string) => {
     setEditPersonality(prev => {
       const isSelected = prev.includes(trait);
-      console.log(`User toggled personality trait "${trait}": ${isSelected ? 'removed' : 'added'}`);
+      
       return isSelected ? prev.filter(t => t !== trait) : [...prev, trait];
     });
   };
@@ -610,7 +610,7 @@ export default function ProfileScreen() {
   };
 
   const handleChangePassword = async () => {
-    console.log('User attempting to change password');
+    
     setPasswordError('');
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -635,23 +635,23 @@ export default function ProfileScreen() {
 
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) {
-        console.error('Error updating password:', updateError);
+        
         setPasswordError('No se pudo actualizar la contraseña');
         return;
       }
 
-      console.log('ProfileScreen (iOS): Password updated successfully');
+      : Password updated successfully');
       Alert.alert('Éxito', 'Contraseña actualizada correctamente');
       setShowPasswordModal(false);
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
     } catch (err) {
-      console.error('Failed to change password:', err);
+      
       setPasswordError('Error al cambiar la contraseña');
     }
   };
 
   const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
-    console.log('ProfileScreen (iOS): Checking phone duplicate for:', full);
+    : Checking phone duplicate for:', full);
     try {
       const { data, error } = await supabase
         .from('users')
@@ -659,10 +659,10 @@ export default function ProfileScreen() {
         .eq('phone', full)
         .neq('id', user?.id ?? '')
         .maybeSingle();
-      if (error) { console.error('ProfileScreen (iOS): Phone check error:', error); return false; }
+      if (error) {  return false; }
       return !!data;
     } catch (err) {
-      console.error('ProfileScreen (iOS): checkPhoneExists exception:', err);
+      
       return false;
     }
   }, [user?.id]);
@@ -856,7 +856,7 @@ export default function ProfileScreen() {
                     pressed && { opacity: 0.7 },
                   ]}
                   onPress={() => {
-                    console.log('User tapped phone country selector, toggling:', !showPhoneCountryPicker);
+                    
                     setShowPhoneCountryPicker(prev => !prev);
                     setShowCountryPicker(false);
                     setShowCityPicker(false);
@@ -872,7 +872,7 @@ export default function ProfileScreen() {
                   value={editPhoneNumber}
                   onChangeText={(value) => {
                     const cleaned = value.replace(/\D/g, '').slice(0, 10);
-                    console.log('Phone number input changed:', cleaned);
+                    
                     setEditPhoneNumber(cleaned);
                   }}
                   placeholder="Tu teléfono"
@@ -880,7 +880,7 @@ export default function ProfileScreen() {
                   keyboardType="phone-pad"
                   maxLength={10}
                   returnKeyType="done"
-                  onSubmitEditing={() => { console.log('Phone input done pressed'); Keyboard.dismiss(); }}
+                  onSubmitEditing={() => {  Keyboard.dismiss(); }}
                 />
               </View>
               {showPhoneCountryPicker && (
@@ -902,7 +902,7 @@ export default function ProfileScreen() {
                           item.name === editPhoneCountry.name && item.code === editPhoneCountry.code && styles.inlinePickerItemSelected,
                         ]}
                         onPress={() => {
-                          console.log('User selected phone country:', item.name, item.code);
+                          
                           setEditPhoneCountry(item);
                           setEditPhoneNumber('');
                           setShowPhoneCountryPicker(false);
@@ -925,7 +925,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[styles.pickerButton, showCountryPicker && styles.pickerButtonActive]}
                 onPress={() => {
-                  console.log('User tapped country picker, toggling:', !showCountryPicker);
+                  
                   setShowCountryPicker(prev => !prev);
                   setShowCityPicker(false);
                 }}
@@ -942,7 +942,7 @@ export default function ProfileScreen() {
                       key={country}
                       style={[styles.inlinePickerItem, editCountry === country && styles.inlinePickerItemSelected]}
                       onPress={() => {
-                        console.log('User selected country:', country);
+                        
                         setEditCountry(country);
                         const cities = CITIES_BY_COUNTRY[country] || [];
                         if (cities.length > 0) setEditCity(cities[0]);
@@ -961,7 +961,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[styles.pickerButton, showCityPicker && styles.pickerButtonActive]}
                 onPress={() => {
-                  console.log('User tapped city picker, toggling:', !showCityPicker);
+                  
                   setShowCityPicker(prev => !prev);
                   setShowCountryPicker(false);
                 }}
@@ -978,7 +978,7 @@ export default function ProfileScreen() {
                       key={city}
                       style={[styles.inlinePickerItem, editCity === city && styles.inlinePickerItemSelected]}
                       onPress={() => {
-                        console.log('User selected city:', city);
+                        
                         setEditCity(city);
                         setShowCityPicker(false);
                       }}
@@ -1117,21 +1117,21 @@ export default function ProfileScreen() {
             <Text style={styles.inputLabel}>Contraseña Actual *</Text>
             <View style={styles.passwordInputWrapper}>
               <TextInput style={styles.passwordModalInput} placeholder="Contraseña actual" placeholderTextColor="#999" secureTextEntry={!showCurrentPassword} value={currentPassword} onChangeText={(text) => { setCurrentPassword(text); setPasswordError(''); }} autoCapitalize="none" />
-              <TouchableOpacity onPress={() => { console.log('Toggle current password visibility'); setShowCurrentPassword(!showCurrentPassword); }} style={styles.passwordEyeButton}>
+              <TouchableOpacity onPress={() => {  setShowCurrentPassword(!showCurrentPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
             <Text style={styles.inputLabel}>Nueva Contraseña *</Text>
             <View style={styles.passwordInputWrapper}>
               <TextInput style={styles.passwordModalInput} placeholder="Nueva contraseña (mínimo 6 caracteres)" placeholderTextColor="#999" secureTextEntry={!showNewPassword} value={newPassword} onChangeText={(text) => { setNewPassword(text); setPasswordError(''); }} autoCapitalize="none" />
-              <TouchableOpacity onPress={() => { console.log('Toggle new password visibility'); setShowNewPassword(!showNewPassword); }} style={styles.passwordEyeButton}>
+              <TouchableOpacity onPress={() => {  setShowNewPassword(!showNewPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
             <Text style={styles.inputLabel}>Confirmar Nueva Contraseña *</Text>
             <View style={styles.passwordInputWrapper}>
               <TextInput style={styles.passwordModalInput} placeholder="Confirma la nueva contraseña" placeholderTextColor="#999" secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={(text) => { setConfirmPassword(text); setPasswordError(''); }} autoCapitalize="none" />
-              <TouchableOpacity onPress={() => { console.log('Toggle confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }} style={styles.passwordEyeButton}>
+              <TouchableOpacity onPress={() => {  setShowConfirmPassword(!showConfirmPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>

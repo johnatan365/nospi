@@ -189,7 +189,6 @@ export default function InteraccionScreen() {
         }
       }
     } catch (error) {
-      console.error('Error scheduling notifications:', error);
     }
   }, []);
 
@@ -199,7 +198,6 @@ export default function InteraccionScreen() {
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
-        console.error('Error loading participants:', error);
         return;
       }
 
@@ -226,7 +224,6 @@ export default function InteraccionScreen() {
 
       setActiveParticipants(participants);
     } catch (error) {
-      console.error('Failed to load participants:', error);
     }
   }, []);
 
@@ -278,13 +275,6 @@ export default function InteraccionScreen() {
             ? (savedCheckInPhase as CheckInPhase)
             : 'confirmed';
 
-        console.log('[Interaccion] Restored from AsyncStorage:', {
-          restoredReadyForRules,
-          restoredReadyForGame,
-          restoredCheckInPhase,
-          restoredRulesCountdown,
-        });
-
         // Apply all in one synchronous batch so React renders them together
         setUserReadyForRules(restoredReadyForRules);
         setUserReadyForGame(restoredReadyForGame);
@@ -310,7 +300,6 @@ export default function InteraccionScreen() {
       // 2. Try AsyncStorage for cross-session persistence
       const persisted = await getCached<Appointment | null>(CACHE_KEY);
       if (persisted !== null) {
-        console.log('InteraccionScreen: Showing persisted cache');
         cacheRef.current = { data: persisted, timestamp: Date.now() };
         applyAppointmentData(persisted);
         setLoading(false);
@@ -319,7 +308,6 @@ export default function InteraccionScreen() {
 
     // 3. Always fetch fresh in background
     try {
-      console.log('InteraccionScreen: Fetching appointment from Supabase for user:', user.id);
 
       const { data, error } = await supabase
         .from('appointments')
@@ -361,7 +349,6 @@ export default function InteraccionScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('InteraccionScreen: Error loading appointment:', error);
         setLoading(false);
         return;
       }
@@ -416,10 +403,7 @@ export default function InteraccionScreen() {
       if (freshApt.event_id) {
         loadActiveParticipants(freshApt.event_id);
       }
-
-      console.log('InteraccionScreen: Appointment loaded, event_id:', freshApt.event_id);
     } catch (error) {
-      console.error('InteraccionScreen: Failed to load appointment:', error);
     } finally {
       setLoading(false);
     }
@@ -427,7 +411,6 @@ export default function InteraccionScreen() {
 
   const handleCodeConfirmation = useCallback(async () => {
     if (!appointment || !user) return;
-    console.log('User submitting confirmation code');
 
     const enteredCode = confirmationCode.trim();
     const eventCode = appointment.event.confirmation_code;
@@ -474,7 +457,6 @@ export default function InteraccionScreen() {
         });
 
       if (updateError) {
-        console.error('Error updating event_participants:', updateError);
         setCheckInPhase('code_entry');
         setCodeError('No se pudo registrar tu llegada.');
         return;
@@ -494,7 +476,6 @@ export default function InteraccionScreen() {
       clearCached(CACHE_KEY);
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
-      console.error('Error during check-in:', error);
       setCheckInPhase('code_entry');
       setCodeError('Ocurrió un error.');
     }
@@ -508,8 +489,6 @@ export default function InteraccionScreen() {
     }
 
     if (activeParticipants.length < 2) return;
-
-    console.log('User starting experience, participants:', activeParticipants.length);
     setStartingExperience(true);
 
     try {
@@ -533,13 +512,11 @@ export default function InteraccionScreen() {
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('Error starting experience:', error);
         setGamePhase('intro');
         setStartingExperience(false);
         return;
       }
     } catch (error) {
-      console.error('Unexpected error starting experience:', error);
       setGamePhase('intro');
       setStartingExperience(false);
     } finally {
@@ -640,7 +617,6 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('InteraccionScreen: Tab focused, user:', user?.id ?? 'none');
       if (!user?.id) {
         setLoading(false);
         return;
@@ -767,7 +743,6 @@ export default function InteraccionScreen() {
   }, [divertidoScaleAnim, divertidoFadeAnim, appointment?.event_id]);
 
   const handleUserContinue = useCallback(async () => {
-    console.log('User tapped Continuar to proceed to rules');
     setUserReadyForRules(true);
     if (appointment?.event_id) {
       await AsyncStorage.setItem(`nospi_readyForRules_${appointment.event_id}`, 'true');
@@ -782,7 +757,6 @@ export default function InteraccionScreen() {
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
   const handleFinishGame = useCallback(async () => {
-    console.log('User finished game, navigating to appointments');
     if (appointment?.event_id) {
       await Promise.all([
         AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`),

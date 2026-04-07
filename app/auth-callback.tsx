@@ -13,7 +13,6 @@ export default function AuthCallbackScreen() {
 
   const handleCallback = async () => {
     try {
-      console.log('[AuthCallback] Processing OAuth callback');
       const url = window.location.href;
       const hashParams: Record<string, string> = {};
       const queryParams: Record<string, string> = {};
@@ -33,7 +32,6 @@ export default function AuthCallbackScreen() {
       let session = null;
 
       if (hashParams.access_token && hashParams.refresh_token) {
-        console.log('[AuthCallback] Setting session from hash params (implicit flow)');
         const { data, error } = await supabase.auth.setSession({
           access_token: hashParams.access_token,
           refresh_token: hashParams.refresh_token,
@@ -41,18 +39,15 @@ export default function AuthCallbackScreen() {
         if (error) throw error;
         session = data.session;
       } else if (queryParams.code) {
-        console.log('[AuthCallback] Exchanging code for session (PKCE flow)');
         const { data, error } = await supabase.auth.exchangeCodeForSession(queryParams.code);
         if (error) throw error;
         session = data.session;
       } else {
-        console.log('[AuthCallback] Letting Supabase detect session from URL');
         const { data } = await supabase.auth.getSession();
         session = data.session;
       }
 
       if (session) {
-        console.log('[AuthCallback] Session established successfully');
         setMessage('¡Autenticación exitosa!');
         if (window.opener) {
           window.opener.postMessage(
@@ -67,7 +62,6 @@ export default function AuthCallbackScreen() {
         throw new Error('No session established');
       }
     } catch (err: any) {
-      console.error('[AuthCallback] Auth callback error:', err);
       setMessage('Error de autenticación');
       if (window.opener) {
         window.opener.postMessage(

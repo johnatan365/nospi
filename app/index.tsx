@@ -44,7 +44,6 @@ async function clearOnboardingData() {
 async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<string | null> {
   if (!photoUri) return null;
   try {
-    console.log('Index: Uploading onboarding photo for user:', userId);
     const fileExt = Platform.OS === 'web' ? 'jpg' : (photoUri.split('.').pop()?.toLowerCase() || 'jpg');
     const timestamp = Date.now();
     const filePath = `${userId}/${userId}-${timestamp}.${fileExt}`;
@@ -59,15 +58,12 @@ async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<
       .upload(filePath, uploadData, { contentType: `image/${fileExt}`, upsert: true });
 
     if (uploadError) {
-      console.error('Index: Photo upload error:', uploadError);
       return null;
     }
 
     const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
-    console.log('Index: Photo uploaded, URL:', urlData.publicUrl);
     return urlData.publicUrl;
   } catch (err) {
-    console.error('Index: uploadOnboardingPhoto exception:', err);
     return null;
   }
 }
@@ -79,7 +75,6 @@ export default function Index() {
   const [waitingForContext, setWaitingForContext] = useState(false);
 
   useEffect(() => {
-    console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
 
     if (waitingForContext && user) {
       setWaitingForContext(false);
@@ -89,7 +84,6 @@ export default function Index() {
 
     const checkProfileAndNavigate = async () => {
       if (user) {
-        console.log('Index: User authenticated, checking profile existence');
         setIsCheckingProfile(true);
 
         try {
@@ -100,7 +94,6 @@ export default function Index() {
             .maybeSingle();
 
           if (profileError) {
-            console.error('Index: Error fetching profile:', profileError);
             if (Platform.OS === 'web') {
               window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
             } else {
@@ -121,7 +114,6 @@ export default function Index() {
             }
 
             if (isRegisterFlow) {
-              console.log('Index: No profile — register flow, creating profile from onboarding data');
               try {
                 const d = await readOnboardingData();
 
@@ -162,7 +154,6 @@ export default function Index() {
                 });
 
                 if (insertError) {
-                  console.error('Index: Error creating profile:', insertError);
                   if (Platform.OS === 'web') {
                     window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
                   } else {
@@ -174,26 +165,20 @@ export default function Index() {
                 }
 
                 await clearOnboardingData();
-                console.log('Index: Profile created successfully, redirecting to events');
                 router.replace('/(tabs)/events');
               } catch (createErr) {
-                console.error('Index: Unexpected error creating profile:', createErr);
                 await supabase.auth.signOut();
                 router.replace('/welcome');
               }
             } else {
-              console.log('Index: No profile — login flow, signing out and showing error');
               try {
                 await supabase.auth.signOut();
               } catch (signOutError) {
-                console.error('Index: Error signing out:', signOutError);
               }
               router.replace('/login?error=no_profile');
             }
             return;
           }
-
-          console.log('Index: Profile exists, checking for pending payment...');
 
           let hasPendingPayment = false;
           let paymentStatus = '';
@@ -212,7 +197,6 @@ export default function Index() {
           }
 
           if (hasPendingPayment) {
-            console.log('Index: Pending payment detected, redirecting to subscription-plans');
             let target = '/subscription-plans';
             if (paymentStatus) {
               target += '?payment_status=' + paymentStatus;
@@ -220,11 +204,9 @@ export default function Index() {
             }
             router.replace(target as any);
           } else {
-            console.log('Index: No pending payment, redirecting to events');
             router.replace('/(tabs)/events');
           }
         } catch (error) {
-          console.error('Index: Unexpected error during profile check:', error);
           if (Platform.OS === 'web') {
             window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           } else {
@@ -240,31 +222,24 @@ export default function Index() {
           const hash = window.location.hash;
 
           if (search.includes('code=')) {
-            console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
             router.replace(('/auth/callback' + search) as any);
             return;
           }
 
           if (hash.includes('access_token')) {
-            console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
             router.replace(('/auth/callback' + hash) as any);
             return;
           }
 
           if (window.location.pathname.includes('/auth/')) {
-            console.log('Index: Already on auth route — skipping redirect');
             return;
           }
         }
-
-        console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
-          console.log('Index: Direct session found, waiting for context to catch up...');
           setWaitingForContext(true);
           return;
         }
-        console.log('Index: No session found, redirecting to welcome');
         router.replace('/welcome');
       }
     };
@@ -273,7 +248,6 @@ export default function Index() {
   }, [loading, user, router, waitingForContext]);
 
   if (loading || isCheckingProfile || waitingForContext) {
-    console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#AD1457" />
