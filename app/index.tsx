@@ -226,7 +226,26 @@ export default function Index() {
               router.replace('/welcome');
             }
           } else {
-            // Login con cuenta no registrada — hacer signOut y mostrar error
+            // Login con cuenta no registrada:
+            // 1. Borrar el usuario de auth.users via Edge Function
+            //    (evita el loop infinito en futuros intentos de login)
+            // 2. Hacer signOut
+            // 3. Mostrar error
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.access_token) {
+                await fetch(
+                  'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/delete-unregistered-user',
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                  }
+                );
+              }
+            } catch { /* ignorar — el signOut a continuación cierra la sesión de todas formas */ }
             try { await supabase.auth.signOut(); } catch { /* ignorar */ }
             router.replace('/login?error=no_profile');
           }
