@@ -55,6 +55,7 @@ jobs:
             -archivePath $RUNNER_TEMP/nospi.xcarchive \
             archive \
             CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=9VF922X4K7 \
             PROVISIONING_PROFILE_SPECIFIER="Nospi" \
             CODE_SIGN_IDENTITY="iPhone Distribution"
 
