@@ -141,7 +141,7 @@ export default function PhoneScreen() {
               placeholder="Número de celular"
               placeholderTextColor="rgba(136, 14, 79, 0.4)"
               keyboardType="phone-pad"
-              maxLength={selectedCountry.digits + 2}
+              maxLength={selectedCountry.digits}
               selectionColor="#880E4F"
               underlineColorAndroid="transparent"
               onFocus={() => setIsPhoneFocused(true)}
