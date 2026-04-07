@@ -11,6 +11,26 @@ import * as Linking from 'expo-linking';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Guarda todos los datos del onboarding en localStorage para que sobrevivan
+// el redirect de OAuth (AsyncStorage se pierde al recargar la página en web).
+async function saveOnboardingToLocalStorage() {
+  if (Platform.OS !== 'web') return;
+  const keys = [
+    'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
+    'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range',
+    'onboarding_country', 'onboarding_city', 'onboarding_phone',
+    'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
+    'onboarding_compatibility',
+  ];
+  const data: Record<string, string> = {};
+  for (const key of keys) {
+    const val = await AsyncStorage.getItem(key);
+    if (val !== null) data[key] = val;
+  }
+  localStorage.setItem('onboarding_data', JSON.stringify(data));
+  console.log('RegisterScreen: Onboarding data saved to localStorage');
+}
+
 export default function RegisterScreen() {
   const router = useRouter();
   const [showEmailForm, setShowEmailForm] = useState(false);
@@ -109,6 +129,7 @@ export default function RegisterScreen() {
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
+      await saveOnboardingToLocalStorage();
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
@@ -234,6 +255,7 @@ export default function RegisterScreen() {
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
+      await saveOnboardingToLocalStorage();
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
