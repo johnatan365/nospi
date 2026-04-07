@@ -168,8 +168,28 @@ export default function SubscriptionPlansScreen() {
       }
       
       
-      // Refresh session to ensure we have a valid one
-      try { await supabase.auth.refreshSession(); } catch {}
+      // Refrescar sesión — cuando el usuario vuelve del browser externo (Bancolombia/PSE)
+      // el token puede haber expirado. Intentar refresh con hasta 3 reintentos.
+      let sessionRestored = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData?.session?.user) {
+            sessionRestored = true;
+            break;
+          }
+        } catch {}
+        // Esperar antes de reintentar
+        if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+      }
+
+      // Si refresh falló, intentar con getSession directamente
+      if (!sessionRestored) {
+        try {
+          const { data: { session: s } } = await supabase.auth.getSession();
+          if (s?.user) sessionRestored = true;
+        } catch {}
+      }
 
       let userId: string | null = null;
 
@@ -200,51 +220,51 @@ export default function SubscriptionPlansScreen() {
       
       
 
-      // Intento 1: upsert con campos extendidos
-      const { error: upsertError } = await supabase
-        .from('appointments')
-        .upsert(
-          {
-            user_id: userId,
-            event_id: pendingEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-            transaction_id: transactionId,
-            payment_method: paymentMethod,
-            confirmed_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-        );
-
-      if (upsertError) {
-        
-        // Intento 2: upsert solo con campos base (por si faltan columnas en el schema)
-        const { error: upsertBaseError } = await supabase
+      // Upsert con todos los campos — con hasta 3 reintentos por si RLS
+      // tarda en reconocer el token recién refrescado.
+      let upsertSuccess = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error: upsertError } = await supabase
           .from('appointments')
           .upsert(
-            { user_id: userId, event_id: pendingEventId, status: 'confirmada', payment_status: 'completed' },
+            {
+              user_id: userId,
+              event_id: pendingEventId,
+              status: 'confirmada',
+              payment_status: 'completed',
+              transaction_id: transactionId,
+              payment_method: paymentMethod,
+              confirmed_at: new Date().toISOString(),
+            },
             { onConflict: 'user_id,event_id', ignoreDuplicates: false }
           );
-        if (upsertBaseError) {
-          
+
+        if (!upsertError) {
+          // Verificar que la fila realmente existe (RLS puede bloquear silenciosamente)
+          const { data: check } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('event_id', pendingEventId)
+            .eq('status', 'confirmada')
+            .maybeSingle();
+
+          if (check) {
+            upsertSuccess = true;
+            break;
+          }
         }
-      } else {
-        
+
+        // Esperar antes de reintentar — da tiempo al token de propagarse en RLS
+        if (attempt < 2) await new Promise(r => setTimeout(r, 800));
       }
 
-      // Verificar que la fila realmente existe en DB con status='confirmada'
-      const { data: verification } = await supabase
-        .from('appointments')
-        .select('id, status')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .eq('status', 'confirmada')
-        .maybeSingle();
-
-      if (!verification) {
+      if (!upsertSuccess) {
         
         return false;
       }
+
+      // Verificación final confirmada dentro del loop
 
       
       await AsyncStorage.removeItem('pending_event_confirmation');
