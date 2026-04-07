@@ -116,6 +116,20 @@ export default function RegisterScreen() {
         : 'nospi://auth/callback';
       console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
+      // En web: redirect directo (no popup). En nativo: WebBrowser.
+      if (Platform.OS === 'web') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { redirectTo: redirectUrl },
+        });
+        if (error) {
+          console.error('Apple OAuth web error:', error);
+          setError('Error al conectar con Apple. Por favor intenta de nuevo.');
+          setLoading(false);
+        }
+        return; // El browser redirige — no hay más código que ejecutar
+      }
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
@@ -226,6 +240,23 @@ export default function RegisterScreen() {
         ? `${window.location.origin}/auth/callback`
         : 'nospi://auth/callback';
       console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
+
+      // En web: redirect directo (no popup). En nativo: WebBrowser.
+      if (Platform.OS === 'web') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            queryParams: { access_type: 'offline', prompt: 'consent' },
+          },
+        });
+        if (error) {
+          console.error('Google OAuth web error:', error);
+          setError('Error al conectar con Google. Por favor intenta de nuevo.');
+          setLoading(false);
+        }
+        return; // El browser redirige — no hay más código que ejecutar
+      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
