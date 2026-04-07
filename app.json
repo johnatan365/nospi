@@ -1,8 +1,8 @@
 {
   "expo": {
-    "owner": "nospi",
+    "owner": "johnatan365",
     "name": "Nospi",
-    "slug": "nospi",
+    "slug": "nospi-pys0qtxkv8ugfywiet3zh",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
@@ -19,8 +19,8 @@
       "bundleIdentifier": "com.anonymous.nospi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento.",
+        "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -41,7 +41,9 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "FOREGROUND_SERVICE",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "intentFilters": [
         {
@@ -93,7 +95,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicaci\u00f3n para verificar que est\u00e1s en el lugar del evento y permitirte participar en la experiencia."
+          "locationAlwaysAndWhenInUsePermission": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia."
         }
       ],
       [
@@ -114,7 +116,10 @@
       "router": {},
       "supabaseUrl": "https://wjdiraurfbawotlcndmk.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8",
-      "backendUrl": "https://pkmmkvxxec6pq2yagafutursvswbt8aj.app.specular.dev"
+      "backendUrl": "https://pkmmkvxxec6pq2yagafutursvswbt8aj.app.specular.dev",
+      "eas": {
+        "projectId": "eb69c602-6e33-4a44-811a-8c63a62c243f"
+      }
     }
   }
 }
