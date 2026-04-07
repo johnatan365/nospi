@@ -16,7 +16,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -64,7 +63,7 @@ jobs:
 
       - name: Export IPA
         run: |
-          cat > $RUNNER_TEMP/ExportOptions.plist << EOF
+          cat > $RUNNER_TEMP/ExportOptions.plist << EOF2
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -75,7 +74,7 @@ jobs:
             <string>9VF922X4K7</string>
           </dict>
           </plist>
-          EOF
+          EOF2
 
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/nospi.xcarchive \
