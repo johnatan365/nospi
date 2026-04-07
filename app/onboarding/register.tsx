@@ -108,6 +108,7 @@ export default function RegisterScreen() {
 
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
+      if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
@@ -218,6 +219,7 @@ export default function RegisterScreen() {
 
     try {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
+      if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
       console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
