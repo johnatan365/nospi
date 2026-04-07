@@ -5,6 +5,42 @@ import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-nati
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
+// Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
+async function readOnboardingData() {
+  if (Platform.OS === 'web') {
+    const raw = localStorage.getItem('onboarding_data');
+    const data = raw ? JSON.parse(raw) : {};
+    return data;
+  } else {
+    const keys = [
+      'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
+      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range',
+      'onboarding_country', 'onboarding_city', 'onboarding_phone',
+      'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
+      'onboarding_compatibility',
+    ];
+    const pairs = await AsyncStorage.multiGet(keys);
+    const data: Record<string, string> = {};
+    for (const [k, v] of pairs) { if (v !== null) data[k] = v; }
+    return data;
+  }
+}
+
+async function clearOnboardingData() {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem('onboarding_data');
+    localStorage.removeItem('oauth_flow_type');
+  } else {
+    await AsyncStorage.multiRemove([
+      'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
+      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range',
+      'onboarding_country', 'onboarding_city', 'onboarding_phone',
+      'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
+      'onboarding_compatibility', 'oauth_flow_type',
+    ]);
+  }
+}
+
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -48,16 +84,66 @@ export default function Index() {
             let isRegisterFlow = false;
             if (Platform.OS === 'web') {
               isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
-              localStorage.removeItem('oauth_flow_type');
             } else {
               const flowType = await AsyncStorage.getItem('oauth_flow_type');
               isRegisterFlow = flowType === 'register';
-              await AsyncStorage.removeItem('oauth_flow_type');
             }
 
             if (isRegisterFlow) {
-              console.log('Index: No profile — register flow, redirecting to onboarding');
-              router.replace('/onboarding/name');
+              console.log('Index: No profile — register flow, creating profile from onboarding data');
+              try {
+                const d = await readOnboardingData();
+
+                const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
+                const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
+                const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
+                const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
+
+                const { error: insertError } = await supabase.from('users').insert({
+                  id: user.id,
+                  email: user.email,
+                  name: d['onboarding_name'] || '',
+                  birthdate: d['onboarding_birthdate'] || '',
+                  age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
+                  gender: d['onboarding_gender'] || 'hombre',
+                  interested_in: d['onboarding_interested_in'] || 'ambos',
+                  age_range_min: ageRange.min,
+                  age_range_max: ageRange.max,
+                  country: d['onboarding_country'] || 'Colombia',
+                  city: d['onboarding_city'] || 'Medellín',
+                  phone: phoneInfo.phoneNumber || null,
+                  profile_photo_url: d['onboarding_photo'] || null,
+                  interests,
+                  personality_traits: personality,
+                  compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
+                  notification_preferences: {
+                    whatsapp: false,
+                    email: true,
+                    sms: false,
+                    push: true,
+                  },
+                });
+
+                if (insertError) {
+                  console.error('Index: Error creating profile:', insertError);
+                  if (Platform.OS === 'web') {
+                    window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
+                  } else {
+                    Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
+                  }
+                  await supabase.auth.signOut();
+                  router.replace('/welcome');
+                  return;
+                }
+
+                await clearOnboardingData();
+                console.log('Index: Profile created successfully, redirecting to events');
+                router.replace('/(tabs)/events');
+              } catch (createErr) {
+                console.error('Index: Unexpected error creating profile:', createErr);
+                await supabase.auth.signOut();
+                router.replace('/welcome');
+              }
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
               try {
