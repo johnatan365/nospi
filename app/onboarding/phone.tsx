@@ -58,30 +58,12 @@ export default function PhoneScreen() {
 
   const cleanNumber = phoneNumber.replace(/\D/g, '');
 
-  // Realtime duplicate check when number is complete
-  useEffect(() => {
-    if (cleanNumber.length !== selectedCountry.digits) {
-      setPhoneStatus('idle');
-      return;
-    }
-    setPhoneStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const full = selectedCountry.code + cleanNumber;
-      const exists = await checkPhoneExists(full);
-      setPhoneStatus(exists ? 'taken' : 'available');
-    }, 600);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [cleanNumber, selectedCountry]);
+  // Phone check solo al presionar Continuar — no en tiempo real
 
   // Button enabled only when exact digit count is reached
-  const canContinue = cleanNumber.length === selectedCountry.digits && !checking && phoneStatus !== "taken" && phoneStatus !== "checking";
+  const canContinue = cleanNumber.length === selectedCountry.digits && !checking;
 
-  const hintText =
-    phoneStatus === 'taken'    ? '❌ Este número ya está registrado' :
-    phoneStatus === 'available'? '✅ Número disponible' :
-    phoneStatus === 'checking' ? '🔍 Verificando...' :
-    `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
+  const hintText = `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
 
   const checkPhoneExists = async (full: string): Promise<boolean> => {
     try {
@@ -246,7 +228,7 @@ export default function PhoneScreen() {
       >
         <View style={styles.errorOverlay}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>⚠️ Número Inválido</Text>
+            <Text style={styles.errorTitle}>⚠️ Número no disponible</Text>
             <Text style={styles.errorMsg}>{errorMessage}</Text>
             <TouchableOpacity style={styles.errorBtn} onPress={() => setShowErrorModal(false)}>
               <Text style={styles.errorBtnText}>Entendido</Text>
