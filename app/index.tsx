@@ -14,7 +14,6 @@ export default function Index() {
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
 
-    // If we were waiting for context and user has now arrived, clear the flag.
     if (waitingForContext && user) {
       setWaitingForContext(false);
     }
@@ -45,13 +44,29 @@ export default function Index() {
           }
 
           if (!profile) {
-            console.log('Index: No profile found for OAuth user — signing out and redirecting');
-            try {
-              await supabase.auth.signOut();
-            } catch (signOutError) {
-              console.error('Index: Error signing out:', signOutError);
+            // Verificar si viene de un flujo de registro
+            let isRegisterFlow = false;
+            if (Platform.OS === 'web') {
+              isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
+              localStorage.removeItem('oauth_flow_type');
+            } else {
+              const flowType = await AsyncStorage.getItem('oauth_flow_type');
+              isRegisterFlow = flowType === 'register';
+              await AsyncStorage.removeItem('oauth_flow_type');
             }
-            router.replace('/login?error=no_profile');
+
+            if (isRegisterFlow) {
+              console.log('Index: No profile — register flow, redirecting to onboarding');
+              router.replace('/onboarding/name');
+            } else {
+              console.log('Index: No profile — login flow, signing out and showing error');
+              try {
+                await supabase.auth.signOut();
+              } catch (signOutError) {
+                console.error('Index: Error signing out:', signOutError);
+              }
+              router.replace('/login?error=no_profile');
+            }
             return;
           }
 
@@ -101,29 +116,24 @@ export default function Index() {
           const search = window.location.search;
           const hash = window.location.hash;
 
-          // Si hay un code OAuth en la raíz, redirigir a /auth/callback para procesarlo
           if (search.includes('code=')) {
             console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
             router.replace(('/auth/callback' + search) as any);
             return;
           }
 
-          // Si hay tokens en el hash, redirigir a /auth/callback
           if (hash.includes('access_token')) {
             console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
             router.replace(('/auth/callback' + hash) as any);
             return;
           }
 
-          // Si estamos en una ruta /auth/*, dejar que el callback la maneje
           if (window.location.pathname.includes('/auth/')) {
             console.log('Index: Already on auth route — skipping redirect');
             return;
           }
         }
 
-        // Double-check con Supabase directamente — el contexto puede no haber
-        // propagado el SIGNED_IN event aún (race después de OAuth callback).
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
