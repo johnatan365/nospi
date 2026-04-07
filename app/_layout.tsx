@@ -3,7 +3,6 @@ import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import "react-native-reanimated";
-import { useFonts } from "expo-font";
 import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -20,33 +19,13 @@ import { SystemBars } from "react-native-edge-to-edge";
 
 SplashScreen.preventAutoHideAsync();
 
-// Inner component hides the splash screen as soon as fonts are loaded.
-// Auth loading is handled within screens — we do NOT block the splash on auth.
 function RootLayoutInner() {
-  const [loaded] = useFonts({
-    SpaceMonoRegular: require("../assets/fonts/SpaceMono-Regular.ttf"),
-    SpaceMonoBold: require("../assets/fonts/SpaceMono-Bold.ttf"),
-    SpaceMonoItalic: require("../assets/fonts/SpaceMono-Italic.ttf"),
-    SpaceMonoBoldItalic: require("../assets/fonts/SpaceMono-BoldItalic.ttf"),
-  });
-
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-  const appReady = loaded;
 
   useEffect(() => {
-    console.log('Root layout: fonts loaded =', loaded);
-    if (appReady) {
-      console.log('Root layout: fonts ready, hiding splash screen');
-      SplashScreen.hideAsync();
-    }
-  }, [appReady, loaded]);
-
-  // Keep splash visible until fonts are loaded.
-  // index.tsx will show a spinner while auth resolves.
-  if (!appReady) {
-    return null;
-  }
+    SplashScreen.hideAsync();
+  }, []);
 
   return (
     <AppConfigProvider>
