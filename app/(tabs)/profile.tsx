@@ -150,8 +150,6 @@ export default function ProfileScreen() {
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const [phoneInlineError, setPhoneInlineError] = useState('');
-  const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
-  const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -523,10 +521,10 @@ export default function ProfileScreen() {
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
 
     // Verificar si el número ya está registrado por otro usuario
+    setPhoneInlineError('');
     const phoneTaken = await checkPhoneExists(combinedPhone);
     if (phoneTaken) {
-      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
-      setShowPhoneErrorModal(true);
+      setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
       return;
     }
 
@@ -997,19 +995,6 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Phone Error Modal */}
-      <Modal visible={showPhoneErrorModal} transparent animationType="fade" onRequestClose={() => setShowPhoneErrorModal(false)}>
-        <View style={styles.phoneErrorOverlay}>
-          <View style={styles.phoneErrorCard}>
-            <Text style={styles.phoneErrorTitle}>⚠️ Número no disponible</Text>
-            <Text style={styles.phoneErrorMsg}>{phoneErrorMessage}</Text>
-            <TouchableOpacity style={styles.phoneErrorBtn} onPress={() => setShowPhoneErrorModal(false)}>
-              <Text style={styles.phoneErrorBtnText}>Entendido</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </Modal>
 
       {/* Phone Country Picker Modal */}
