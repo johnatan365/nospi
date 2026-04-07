@@ -2,8 +2,8 @@ name: iOS Build & TestFlight
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'build-*'
 
 jobs:
   build-ios:
@@ -33,18 +33,15 @@ jobs:
           CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
         run: |
-          # Crear directorio de keychains
           security create-keychain -p "build123" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "build123" build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
 
-          # Instalar certificado
           echo "$CERT_P12" | base64 --decode > dist-cert.p12
           security import dist-cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "build123" build.keychain
 
-          # Instalar provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
@@ -52,13 +49,13 @@ jobs:
         run: |
           npx expo prebuild --platform ios --clean
           cd ios
-          xcodebuild -workspace nospi.xcworkspace \
-            -scheme nospi \
+          xcodebuild -workspace Nospi.xcworkspace \
+            -scheme Nospi \
             -configuration Release \
             -archivePath $RUNNER_TEMP/nospi.xcarchive \
             archive \
             CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="nospi" \
+            PROVISIONING_PROFILE_SPECIFIER="Nospi" \
             CODE_SIGN_IDENTITY="iPhone Distribution"
 
       - name: Export IPA
