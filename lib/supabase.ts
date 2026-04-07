@@ -1,4 +1,3 @@
-
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +23,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web', // Only enable on web, native uses manual token extraction
-    flowType: 'pkce', // Use PKCE flow for better security
+    flowType: Platform.OS === 'web' ? 'implicit' : 'pkce', // Web uses implicit (no localStorage race), native uses PKCE
   },
 });
 
