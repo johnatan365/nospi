@@ -149,6 +149,8 @@ export default function ProfileScreen() {
   const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
+  const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -516,16 +518,16 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
-    if (phoneStatus === 'taken') {
-      Alert.alert('Error', 'Este número de teléfono ya está registrado por otro usuario.');
-      return;
-    }
-    if (phoneStatus === 'checking') {
-      Alert.alert('Espera', 'Verificando disponibilidad del número...');
-      return;
-    }
 
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
+
+    // Verificar si el número ya está registrado por otro usuario
+    const phoneTaken = await checkPhoneExists(combinedPhone);
+    if (phoneTaken) {
+      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setShowPhoneErrorModal(true);
+      return;
+    }
 
     try {
       console.log('User saving profile changes');
@@ -674,22 +676,7 @@ export default function ProfileScreen() {
     return !!data;
   }, [user?.id]);
 
-  useEffect(() => {
-    const cleanNumber = editPhoneNumber.replace(/\D/g, '');
-    if (cleanNumber.length !== editPhoneCountry.digits) {
-      setPhoneStatus('idle');
-      return;
-    }
-    setPhoneStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const full = editPhoneCountry.code + cleanNumber;
-      console.log('ProfileScreen: Debounced phone check triggered for:', full);
-      const exists = await checkPhoneExists(full);
-      setPhoneStatus(exists ? 'taken' : 'available');
-    }, 600);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [editPhoneNumber, editPhoneCountry, checkPhoneExists]);
+  // Phone check solo al guardar — no en tiempo real
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||
@@ -930,11 +917,7 @@ export default function ProfileScreen() {
                   onSubmitEditing={() => { console.log('Phone input done pressed'); Keyboard.dismiss(); }}
                 />
               </View>
-              {phoneStatus !== 'idle' && (
-                <Text style={{ fontSize: 12, marginTop: 4, color: phoneStatus === 'taken' ? '#e53e3e' : phoneStatus === 'available' ? '#38a169' : '#888' }}>
-                  {phoneStatus === 'taken' ? '❌ Este número ya está registrado' : phoneStatus === 'available' ? '✅ Número disponible' : '🔍 Verificando...'}
-                </Text>
-              )}
+
 
               <Text style={styles.inputLabel}>País</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
@@ -1003,6 +986,19 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Phone Error Modal */}
+      <Modal visible={showPhoneErrorModal} transparent animationType="fade" onRequestClose={() => setShowPhoneErrorModal(false)}>
+        <View style={styles.phoneErrorOverlay}>
+          <View style={styles.phoneErrorCard}>
+            <Text style={styles.phoneErrorTitle}>⚠️ Número no disponible</Text>
+            <Text style={styles.phoneErrorMsg}>{phoneErrorMessage}</Text>
+            <TouchableOpacity style={styles.phoneErrorBtn} onPress={() => setShowPhoneErrorModal(false)}>
+              <Text style={styles.phoneErrorBtnText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Phone Country Picker Modal */}
@@ -1373,4 +1369,16 @@ const styles = StyleSheet.create({
   supportSuccessTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
   supportSuccessSubtext: { fontSize: 15, color: '#666', textAlign: 'center' },
   supportSuccessEmail: { fontSize: 15, color: '#333', fontWeight: '600', textAlign: 'center', marginBottom: 28 },
+  phoneErrorOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  phoneErrorCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 24,
+    width: '100%', maxWidth: 400, alignItems: 'center',
+  },
+  phoneErrorTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
+  phoneErrorMsg: { fontSize: 15, color: '#6B7280', marginBottom: 24, textAlign: 'center', lineHeight: 22 },
+  phoneErrorBtn: { backgroundColor: '#880E4F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%' },
+  phoneErrorBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
 });
