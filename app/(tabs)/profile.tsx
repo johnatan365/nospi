@@ -149,9 +149,9 @@ export default function ProfileScreen() {
   const [showPhoneCountryModal, setShowPhoneCountryModal] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [phoneInlineError, setPhoneInlineError] = useState('');
   const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
   const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
-  const [phoneInlineError, setPhoneInlineError] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -523,10 +523,10 @@ export default function ProfileScreen() {
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
 
     // Verificar si el número ya está registrado por otro usuario
-    setPhoneInlineError('');
     const phoneTaken = await checkPhoneExists(combinedPhone);
     if (phoneTaken) {
-      setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setShowPhoneErrorModal(true);
       return;
     }
 
@@ -664,17 +664,21 @@ export default function ProfileScreen() {
   };
 
   const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
-    const withoutPlus = full.replace('+', '');
-    const digitsOnly = full.replace(/^\+\d{2,3}/, '');
     console.log('ProfileScreen: Checking phone duplicate for:', full);
-    const { data, error } = await supabase
-      .from('users')
-      .select('id')
-      .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
-      .neq('id', user?.id)
-      .maybeSingle();
-    if (error) { console.error('ProfileScreen: Phone check error:', error); return false; }
-    return !!data;
+    try {
+      // Buscar por número exacto excluyendo al usuario actual
+      const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', full)
+        .neq('id', user?.id ?? '')
+        .maybeSingle();
+      if (error) { console.error('ProfileScreen: Phone check error:', error); return false; }
+      return !!data;
+    } catch (err) {
+      console.error('ProfileScreen: checkPhoneExists exception:', err);
+      return false;
+    }
   }, [user?.id]);
 
   // Phone check solo al guardar — no en tiempo real
