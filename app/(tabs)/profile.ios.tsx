@@ -146,9 +146,9 @@ export default function ProfileScreen() {
   const [showPhoneCountryPicker, setShowPhoneCountryPicker] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [phoneInlineError, setPhoneInlineError] = useState('');
   const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
   const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
-  const [phoneInlineError, setPhoneInlineError] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -513,10 +513,10 @@ export default function ProfileScreen() {
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
 
     // Verificar si el número ya está registrado por otro usuario
-    setPhoneInlineError('');
     const phoneTaken = await checkPhoneExists(combinedPhone);
     if (phoneTaken) {
-      setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setShowPhoneErrorModal(true);
       return;
     }
 
@@ -648,35 +648,23 @@ export default function ProfileScreen() {
   };
 
   const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
-    const withoutPlus = full.replace('+', '');
-    const digitsOnly = full.replace(/^\+\d{2,3}/, '');
     console.log('ProfileScreen (iOS): Checking phone duplicate for:', full);
-    const { data, error } = await supabase
-      .from('users')
-      .select('id')
-      .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
-      .neq('id', user?.id)
-      .maybeSingle();
-    if (error) { console.error('ProfileScreen (iOS): Phone check error:', error); return false; }
-    return !!data;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', full)
+        .neq('id', user?.id ?? '')
+        .maybeSingle();
+      if (error) { console.error('ProfileScreen (iOS): Phone check error:', error); return false; }
+      return !!data;
+    } catch (err) {
+      console.error('ProfileScreen (iOS): checkPhoneExists exception:', err);
+      return false;
+    }
   }, [user?.id]);
 
-  useEffect(() => {
-    const cleanNumber = editPhoneNumber.replace(/\D/g, '');
-    if (cleanNumber.length !== editPhoneCountry.digits) {
-      setPhoneStatus('idle');
-      return;
-    }
-    setPhoneStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const full = editPhoneCountry.code + cleanNumber;
-      console.log('ProfileScreen (iOS): Debounced phone check triggered for:', full);
-      const exists = await checkPhoneExists(full);
-      setPhoneStatus(exists ? 'taken' : 'available');
-    }, 600);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [editPhoneNumber, editPhoneCountry, checkPhoneExists]);
+  // Phone check solo al guardar — no en tiempo real
 
   const filteredPhoneCountries = PHONE_COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(phoneCountrySearch.toLowerCase()) ||
@@ -1231,12 +1219,6 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
   saveButton: { backgroundColor: '#880E4F', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
-  phoneInlineErrorBox: {
-    backgroundColor: 'rgba(220, 38, 38, 0.08)',
-    borderWidth: 1, borderColor: 'rgba(220, 38, 38, 0.3)',
-    borderRadius: 12, padding: 12, marginBottom: 12,
-  },
-  phoneInlineErrorText: { color: '#dc2626', fontSize: 14, textAlign: 'center', lineHeight: 20 },
   modalScrollView: { maxHeight: '90%' },
   modalScrollContent: { flexGrow: 1 },
   pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 4 },
@@ -1322,4 +1304,10 @@ const styles = StyleSheet.create({
   phoneErrorMsg: { fontSize: 15, color: '#6B7280', marginBottom: 24, textAlign: 'center', lineHeight: 22 },
   phoneErrorBtn: { backgroundColor: '#880E4F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%' },
   phoneErrorBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  phoneInlineErrorBox: {
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    borderWidth: 1, borderColor: 'rgba(220, 38, 38, 0.3)',
+    borderRadius: 12, padding: 12, marginBottom: 12,
+  },
+  phoneInlineErrorText: { color: '#dc2626', fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
