@@ -39,3 +39,4 @@ credentials.json
 authkey_base64.txt 
 cert_base64.txt 
 profile_base64.txt 
+supabase/.temp 
