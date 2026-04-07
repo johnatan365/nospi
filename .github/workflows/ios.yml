@@ -43,7 +43,13 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "build123" build.keychain
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+          echo "$PROVISIONING_PROFILE" | base64 --decode > /tmp/profile.mobileprovision
+
+          # Obtener UUID del profile
+          PROFILE_UUID=$(security cms -D -i /tmp/profile.mobileprovision | plutil -extract UUID raw -)
+          echo "Profile UUID: $PROFILE_UUID"
+          cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Build iOS app
         run: |
@@ -56,7 +62,7 @@ jobs:
             archive \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=9VF922X4K7 \
-            PROVISIONING_PROFILE_SPECIFIER="Nospi" \
+            PROVISIONING_PROFILE=${{ env.PROFILE_UUID }} \
             CODE_SIGN_IDENTITY="iPhone Distribution"
 
       - name: Export IPA
