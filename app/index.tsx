@@ -103,8 +103,15 @@ export default function Index() {
             }
           }
 
-          // Esperar hasta 4s a que el context tenga el user
-          // (cubre el lag entre signInWithIdToken y SIGNED_IN event)
+          if (Platform.OS === 'web') {
+            // En web, los tokens/code ya fueron manejados arriba.
+            // Si llegamos aquí sin user, no hay sesión activa.
+            router.replace('/welcome');
+            return;
+          }
+
+          // Nativo: esperar hasta 4s a que el context tenga el user.
+          // Cubre el lag entre signInWithIdToken (Apple) y el evento SIGNED_IN.
           const start = Date.now();
           while (Date.now() - start < 4000) {
             const { data: { session } } = await supabase.auth.getSession();
