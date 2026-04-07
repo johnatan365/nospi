@@ -9,8 +9,7 @@ import { supabase } from '@/lib/supabase';
 async function readOnboardingData() {
   if (Platform.OS === 'web') {
     const raw = localStorage.getItem('onboarding_data');
-    const data = raw ? JSON.parse(raw) : {};
-    return data;
+    return raw ? JSON.parse(raw) : {};
   } else {
     const keys = [
       'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
@@ -38,6 +37,38 @@ async function clearOnboardingData() {
       'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
       'onboarding_compatibility', 'oauth_flow_type',
     ]);
+  }
+}
+
+// Sube la foto de perfil a Supabase Storage y retorna la URL pública
+async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<string | null> {
+  if (!photoUri) return null;
+  try {
+    console.log('Index: Uploading onboarding photo for user:', userId);
+    const fileExt = Platform.OS === 'web' ? 'jpg' : (photoUri.split('.').pop()?.toLowerCase() || 'jpg');
+    const timestamp = Date.now();
+    const filePath = `${userId}/${userId}-${timestamp}.${fileExt}`;
+
+    let uploadData: ArrayBuffer;
+    const response = await fetch(photoUri);
+    const blob = await response.blob();
+    uploadData = await new Response(blob).arrayBuffer();
+
+    const { error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(filePath, uploadData, { contentType: `image/${fileExt}`, upsert: true });
+
+    if (uploadError) {
+      console.error('Index: Photo upload error:', uploadError);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+    console.log('Index: Photo uploaded, URL:', urlData.publicUrl);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('Index: uploadOnboardingPhoto exception:', err);
+    return null;
   }
 }
 
@@ -99,6 +130,12 @@ export default function Index() {
                 const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
                 const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
 
+                // Subir foto al storage si existe
+                let photoUrl: string | null = null;
+                if (d['onboarding_photo']) {
+                  photoUrl = await uploadOnboardingPhoto(user.id, d['onboarding_photo']);
+                }
+
                 const { error: insertError } = await supabase.from('users').upsert({
                   id: user.id,
                   email: user.email,
@@ -112,7 +149,7 @@ export default function Index() {
                   country: d['onboarding_country'] || 'Colombia',
                   city: d['onboarding_city'] || 'Medellín',
                   phone: phoneInfo.phoneNumber || null,
-                  profile_photo_url: d['onboarding_photo'] || null,
+                  profile_photo_url: photoUrl,
                   interests,
                   personality_traits: personality,
                   compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
