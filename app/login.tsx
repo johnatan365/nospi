@@ -54,6 +54,7 @@ export default function LoginScreen() {
 
     setSubmitting(true);
     setError('');
+    
 
     try {
       if (isSignUp) {
@@ -66,6 +67,7 @@ export default function LoginScreen() {
         });
 
         if (error) {
+          
           if (error.message.includes('already')) {
             setError('Ya existe una cuenta con este email');
           } else {
@@ -75,6 +77,7 @@ export default function LoginScreen() {
         }
 
         if (data.user) {
+          
           router.replace('/onboarding/name');
         }
       } else {
@@ -84,6 +87,7 @@ export default function LoginScreen() {
         });
 
         if (error) {
+          
           setError('Email o contraseña incorrectos');
           return;
         }
@@ -93,6 +97,8 @@ export default function LoginScreen() {
           return;
         }
 
+        
+
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id')
@@ -100,15 +106,19 @@ export default function LoginScreen() {
           .maybeSingle();
 
         if (profileError) {
+          
         }
 
         if (!profile) {
+          
           router.replace('/onboarding/name');
         } else {
+          
           router.replace('/(tabs)/events');
         }
       }
     } catch (err: any) {
+      
       setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
@@ -116,14 +126,17 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
+    
     setError('');
     setSubmitting(true);
     try {
       await signInWithApple();
       if (Platform.OS !== 'web') {
+        
         router.replace('/');
       }
     } catch (err: any) {
+      
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
         setError('Inicio de sesión cancelado');
       } else {
@@ -134,14 +147,17 @@ export default function LoginScreen() {
   };
 
   const handleGoogle = async () => {
+    
     setError('');
     setSubmitting(true);
     try {
       await signInWithGoogle();
       if (Platform.OS !== 'web') {
+        
         router.replace('/');
       }
     } catch (err: any) {
+      
       if (err?.message?.includes('cancel')) {
         setError('Inicio de sesión cancelado');
       } else {
@@ -153,9 +169,11 @@ export default function LoginScreen() {
 
   const toggleMode = () => {
     if (!isSignUp) {
+      
       router.replace('/welcome');
       return;
     }
+    
     setIsSignUp(false);
     setError('');
     setName('');
@@ -164,6 +182,7 @@ export default function LoginScreen() {
   };
 
   const togglePasswordVisibility = () => {
+    
     setShowPassword(!showPassword);
   };
 
@@ -314,7 +333,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={styles.backButton}
-                onPress={() => { router.back(); }}
+                onPress={() => {  router.back(); }}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >

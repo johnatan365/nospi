@@ -13,6 +13,7 @@ export default function AuthCallbackScreen() {
 
   const handleCallback = async () => {
     try {
+      
       const url = window.location.href;
       const hashParams: Record<string, string> = {};
       const queryParams: Record<string, string> = {};
@@ -32,6 +33,7 @@ export default function AuthCallbackScreen() {
       let session = null;
 
       if (hashParams.access_token && hashParams.refresh_token) {
+        
         const { data, error } = await supabase.auth.setSession({
           access_token: hashParams.access_token,
           refresh_token: hashParams.refresh_token,
@@ -39,15 +41,18 @@ export default function AuthCallbackScreen() {
         if (error) throw error;
         session = data.session;
       } else if (queryParams.code) {
+        
         const { data, error } = await supabase.auth.exchangeCodeForSession(queryParams.code);
         if (error) throw error;
         session = data.session;
       } else {
+        
         const { data } = await supabase.auth.getSession();
         session = data.session;
       }
 
       if (session) {
+        
         setMessage('¡Autenticación exitosa!');
         if (window.opener) {
           window.opener.postMessage(
@@ -62,6 +67,7 @@ export default function AuthCallbackScreen() {
         throw new Error('No session established');
       }
     } catch (err: any) {
+      
       setMessage('Error de autenticación');
       if (window.opener) {
         window.opener.postMessage(

@@ -18,6 +18,7 @@ async function confirmAppointmentInSupabase(
   eventId: string,
   userId: string,
 ): Promise<boolean> {
+  
 
   // Intentar upsert con todos los campos extendidos
   const { error: upsertError } = await supabase
@@ -38,6 +39,7 @@ async function confirmAppointmentInSupabase(
   if (upsertError) {
     // Puede fallar si las columnas transaction_id/payment_method no existen en el schema.
     // Fallback: solo los campos base.
+    
 
     const { error: upsertBaseError } = await supabase
       .from('appointments')
@@ -52,6 +54,7 @@ async function confirmAppointmentInSupabase(
       );
 
     if (upsertBaseError) {
+      
       // Último recurso: update + insert por separado
       const { data: updated, error: updateError } = await supabase
         .from('appointments')
@@ -60,7 +63,7 @@ async function confirmAppointmentInSupabase(
         .eq('event_id', eventId)
         .select('id');
 
-      if (updateError)
+      if (updateError) 
 
       if (!updated || updated.length === 0) {
         const { error: insertError } = await supabase.from('appointments').insert({
@@ -70,12 +73,15 @@ async function confirmAppointmentInSupabase(
           payment_status: 'completed',
         });
         if (insertError) {
+          
           return false;
         }
       }
     } else {
+      
     }
   } else {
+    
   }
 
   // Verificar que la fila existe y tiene status='confirmada' antes de continuar
@@ -88,8 +94,11 @@ async function confirmAppointmentInSupabase(
     .maybeSingle();
 
   if (verifyError || !verification) {
+    
     return false;
   }
+
+  
   await AsyncStorage.setItem('should_check_notification_prompt', 'true');
   return true;
 }
@@ -117,7 +126,8 @@ export default function PaymentCallbackScreen() {
   const [statusMessage, setStatusMessage] = useState('Verificando pago...');
 
   useEffect(() => {
-
+    
+    
 
     if (isWeb) {
       // On web, Wompi redirects to https://app.nospi.co/payment-callback.
@@ -127,6 +137,7 @@ export default function PaymentCallbackScreen() {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_payment_status', urlStatus);
         window.localStorage.setItem('nospi_payment_time', Date.now().toString());
+        
       }
       return;
     }
@@ -140,6 +151,8 @@ export default function PaymentCallbackScreen() {
         const urlPaymentStatus = overrideStatus || (localSearchParams.payment_status as string) || '';
         const urlTransactionId = overrideTransactionId || (localSearchParams.transaction_id as string) || '';
 
+        
+        
 
         // Step 1: Read ALL AsyncStorage values BEFORE any cleanup.
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
@@ -147,7 +160,9 @@ export default function PaymentCallbackScreen() {
         const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
-
+        
+        
+        
 
         // Use URL transaction ID first, then fall back to stored one.
         const transactionId = urlTransactionId || storedTransactionId || '';
@@ -156,6 +171,7 @@ export default function PaymentCallbackScreen() {
         const eventId = storedEventId || '';
 
         if (!transactionId) {
+          
           setStatusMessage('No se encontró la transacción.');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
@@ -166,6 +182,7 @@ export default function PaymentCallbackScreen() {
         if (storedTime) {
           const age = Date.now() - parseInt(storedTime, 10);
           if (age > 10 * 60 * 1000) {
+            
             setStatusMessage('El pago expiró.');
             await cleanupAsyncStorage();
             router.replace('/(tabs)/appointments');
@@ -174,15 +191,19 @@ export default function PaymentCallbackScreen() {
         }
 
         // Step 2: Verify with Wompi — always confirm server-side to prevent spoofing.
+        
         setStatusMessage('Verificando pago con Wompi...');
 
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         if (!res.ok) {
           const text = await res.text();
+          
           throw new Error(`Wompi API returned ${res.status}`);
         }
         const data = await res.json();
         const status: WompiStatus = data.data?.status ?? 'unknown';
+
+        
 
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
@@ -204,12 +225,14 @@ export default function PaymentCallbackScreen() {
 
           // Fallback 2: getUser (llamada de red, más confiable tras redirects externos)
           if (!userId) {
+            
             const { data: { user: authUser } } = await supabase.auth.getUser();
             userId = authUser?.id ?? undefined;
           }
 
           // Fallback 3: restaurar sesión desde tokens guardados antes de abrir el browser
           if (!userId) {
+            
             try {
               const storedAccessToken = await AsyncStorage.getItem('nospi_access_token');
               const storedRefreshToken = await AsyncStorage.getItem('nospi_refresh_token');
@@ -220,23 +243,30 @@ export default function PaymentCallbackScreen() {
                 });
                 if (restoredSession?.user?.id) {
                   userId = restoredSession.user.id;
+                  
                 } else {
+                  
                 }
               }
             } catch (sessionRestoreErr) {
+              
             }
           }
 
           // Fallback 4: leer userId directamente de AsyncStorage (último recurso)
           if (!userId) {
+            
             const storedUserId = await AsyncStorage.getItem('nospi_user_id');
             userId = storedUserId ?? undefined;
           }
+
+          
 
           // Step 4: Confirm appointment BEFORE cleanup (eventId already captured above).
           if (userId && eventId) {
             const confirmed = await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
             if (!confirmed) {
+              
               await cleanupAsyncStorage();
               await AsyncStorage.removeItem('nospi_payment_processing');
               setStatusMessage('Tu pago fue exitoso pero hubo un error confirmando tu cita. Contacta soporte.');
@@ -247,11 +277,13 @@ export default function PaymentCallbackScreen() {
             }
           } else if (eventId && !userId) {
             // Payment was approved but we cannot identify the user — do NOT silently succeed.
+            
             await cleanupAsyncStorage();
             setStatusMessage('Tu pago fue exitoso pero no pudimos confirmar tu cita. Contacta soporte.');
             router.replace('/(tabs)/appointments');
             return;
           } else {
+            
           }
 
           // Step 5: Cleanup AFTER appointment is confirmed.
@@ -259,6 +291,8 @@ export default function PaymentCallbackScreen() {
           await AsyncStorage.removeItem('nospi_payment_processing');
           // Garantizar que el tab de citas invalide su caché al recibir foco.
           await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+
+          
 
           if (eventId) {
             router.replace({
@@ -271,11 +305,13 @@ export default function PaymentCallbackScreen() {
           }
 
         } else if (status === 'PENDING') {
+          
           setStatusMessage('Pago en proceso...');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
 
         } else if (status === 'DECLINED') {
+          
           setStatusMessage('Pago rechazado.');
           await cleanupAsyncStorage();
           // Restore eventId so user can retry from subscription-plans.
@@ -285,6 +321,7 @@ export default function PaymentCallbackScreen() {
           router.replace('/subscription-plans');
 
         } else if (status === 'VOIDED') {
+          
           setStatusMessage('Pago cancelado.');
           await cleanupAsyncStorage();
           if (eventId) {
@@ -293,12 +330,14 @@ export default function PaymentCallbackScreen() {
           router.replace('/subscription-plans');
 
         } else {
+          
           setStatusMessage('Error en el pago.');
           await cleanupAsyncStorage();
           router.replace('/(tabs)/appointments');
         }
 
       } catch (err) {
+        
         setStatusMessage('Error verificando el pago.');
         await cleanupAsyncStorage();
         router.replace('/(tabs)/appointments');
@@ -315,11 +354,13 @@ export default function PaymentCallbackScreen() {
     if (isWeb) return;
 
     const subscription = Linking.addEventListener('url', ({ url }) => {
+      
       if (url.includes('payment-callback')) {
         try {
           const urlObj = new URL(url);
           const status = urlObj.searchParams.get('payment_status') || urlObj.searchParams.get('status') || '';
           const txId = urlObj.searchParams.get('transaction_id') || urlObj.searchParams.get('id') || '';
+          
           if (txId) {
             // Re-run processPayment with the params from the Linking event.
             // We define a local async wrapper to avoid stale closure issues.
@@ -339,6 +380,8 @@ export default function PaymentCallbackScreen() {
                 const age = Date.now() - parseInt(storedTime, 10);
                 if (age > 10 * 60 * 1000) return;
               }
+
+              
               setStatusMessage('Verificando pago con Wompi...');
 
               try {
@@ -346,6 +389,7 @@ export default function PaymentCallbackScreen() {
                 if (!res.ok) throw new Error(`Wompi API returned ${res.status}`);
                 const data = await res.json();
                 const wompiStatus: WompiStatus = data.data?.status ?? 'unknown';
+                
 
                 if (wompiStatus === 'APPROVED') {
                   setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
@@ -375,6 +419,7 @@ export default function PaymentCallbackScreen() {
                         });
                         if (restoredSession?.user?.id) {
                           userId = restoredSession.user.id;
+                          
                         }
                       }
                     } catch {}
@@ -385,15 +430,19 @@ export default function PaymentCallbackScreen() {
                     userId = storedUserId ?? undefined;
                   }
 
+                  
+
                   if (userId && eventId) {
                     const confirmedLinking = await confirmAppointmentInSupabase(transactionId, paymentMethod, eventId, userId);
                     if (!confirmedLinking) {
+                      
                       await cleanupAsyncStorage();
                       await AsyncStorage.removeItem('nospi_payment_processing');
                       router.replace('/(tabs)/appointments');
                       return;
                     }
                   } else if (eventId && !userId) {
+                    
                     await cleanupAsyncStorage();
                     setStatusMessage('Tu pago fue exitoso pero no pudimos confirmar tu cita. Contacta soporte.');
                     router.replace('/(tabs)/appointments');
@@ -416,6 +465,7 @@ export default function PaymentCallbackScreen() {
                   router.replace('/(tabs)/appointments');
                 }
               } catch (err) {
+                
                 await cleanupAsyncStorage();
                 router.replace('/(tabs)/appointments');
               }
@@ -423,6 +473,7 @@ export default function PaymentCallbackScreen() {
             runProcess();
           }
         } catch (parseErr) {
+          
         }
       }
     });

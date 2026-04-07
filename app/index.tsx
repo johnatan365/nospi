@@ -44,6 +44,7 @@ async function clearOnboardingData() {
 async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<string | null> {
   if (!photoUri) return null;
   try {
+    
     const fileExt = Platform.OS === 'web' ? 'jpg' : (photoUri.split('.').pop()?.toLowerCase() || 'jpg');
     const timestamp = Date.now();
     const filePath = `${userId}/${userId}-${timestamp}.${fileExt}`;
@@ -58,12 +59,15 @@ async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<
       .upload(filePath, uploadData, { contentType: `image/${fileExt}`, upsert: true });
 
     if (uploadError) {
+      
       return null;
     }
 
     const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+    
     return urlData.publicUrl;
   } catch (err) {
+    
     return null;
   }
 }
@@ -75,6 +79,7 @@ export default function Index() {
   const [waitingForContext, setWaitingForContext] = useState(false);
 
   useEffect(() => {
+    
 
     if (waitingForContext && user) {
       setWaitingForContext(false);
@@ -84,6 +89,7 @@ export default function Index() {
 
     const checkProfileAndNavigate = async () => {
       if (user) {
+        
         setIsCheckingProfile(true);
 
         try {
@@ -94,6 +100,7 @@ export default function Index() {
             .maybeSingle();
 
           if (profileError) {
+            
             if (Platform.OS === 'web') {
               window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
             } else {
@@ -114,6 +121,7 @@ export default function Index() {
             }
 
             if (isRegisterFlow) {
+              
               try {
                 const d = await readOnboardingData();
 
@@ -154,6 +162,7 @@ export default function Index() {
                 });
 
                 if (insertError) {
+                  
                   if (Platform.OS === 'web') {
                     window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
                   } else {
@@ -165,20 +174,26 @@ export default function Index() {
                 }
 
                 await clearOnboardingData();
+                
                 router.replace('/(tabs)/events');
               } catch (createErr) {
+                
                 await supabase.auth.signOut();
                 router.replace('/welcome');
               }
             } else {
+              
               try {
                 await supabase.auth.signOut();
               } catch (signOutError) {
+                
               }
               router.replace('/login?error=no_profile');
             }
             return;
           }
+
+          
 
           let hasPendingPayment = false;
           let paymentStatus = '';
@@ -197,6 +212,7 @@ export default function Index() {
           }
 
           if (hasPendingPayment) {
+            
             let target = '/subscription-plans';
             if (paymentStatus) {
               target += '?payment_status=' + paymentStatus;
@@ -204,9 +220,11 @@ export default function Index() {
             }
             router.replace(target as any);
           } else {
+            
             router.replace('/(tabs)/events');
           }
         } catch (error) {
+          
           if (Platform.OS === 'web') {
             window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           } else {
@@ -222,24 +240,31 @@ export default function Index() {
           const hash = window.location.hash;
 
           if (search.includes('code=')) {
+            
             router.replace(('/auth/callback' + search) as any);
             return;
           }
 
           if (hash.includes('access_token')) {
+            
             router.replace(('/auth/callback' + hash) as any);
             return;
           }
 
           if (window.location.pathname.includes('/auth/')) {
+            
             return;
           }
         }
+
+        
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
+          
           setWaitingForContext(true);
           return;
         }
+        
         router.replace('/welcome');
       }
     };
@@ -248,6 +273,7 @@ export default function Index() {
   }, [loading, user, router, waitingForContext]);
 
   if (loading || isCheckingProfile || waitingForContext) {
+    
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#AD1457" />

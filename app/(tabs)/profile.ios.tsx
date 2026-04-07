@@ -201,7 +201,7 @@ export default function ProfileScreen() {
       // 2. Try AsyncStorage for cross-session persistence
       const persisted = await getCached<UserProfile>(CACHE_KEY);
       if (persisted) {
-        : Showing persisted cache');
+        
         cacheRef.current = { data: persisted, timestamp: Date.now() };
         setProfile(persisted);
         populateEditFields(persisted);
@@ -213,7 +213,7 @@ export default function ProfileScreen() {
     try {
       if (force) setLoading(true);
       setError(null);
-      : Fetching profile from Supabase for user:', user.id);
+      
 
       const { data, error: fetchError } = await supabase
         .from('users')
@@ -229,7 +229,7 @@ export default function ProfileScreen() {
       }
 
       if (!data) {
-        : No profile found, creating default');
+        
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const metadata = authUser?.user_metadata || {};
         const fullName = metadata.full_name || metadata.name || authUser?.email?.split('@')[0] || 'Usuario';
@@ -263,7 +263,7 @@ export default function ProfileScreen() {
           return;
         }
 
-        : Default profile created');
+        
         cacheRef.current = { data: defaultProfile as UserProfile, timestamp: Date.now() };
         setCached(CACHE_KEY, defaultProfile as UserProfile);
         setProfile(defaultProfile as UserProfile);
@@ -272,7 +272,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      : Profile loaded successfully:', data.name);
+      
       cacheRef.current = { data: data as UserProfile, timestamp: Date.now() };
       setCached(CACHE_KEY, data as UserProfile);
       setProfile(data as UserProfile);
@@ -287,7 +287,7 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      : Tab focused');
+      
       if (user) {
         loadProfile();
       }
@@ -313,7 +313,7 @@ export default function ProfileScreen() {
 
   const handleSendSupportEmail = async () => {
     
-    , '| message length:', supportMessage.trim().length, '| name:', supportSenderName.trim());
+    
 
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
       
@@ -369,7 +369,7 @@ export default function ProfileScreen() {
       Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
     } finally {
       setSendingSupportEmail(false);
-      ');
+      
     }
   };
 
@@ -428,7 +428,7 @@ export default function ProfileScreen() {
   const uploadPhoto = async (uri: string, base64Data: string | null) => {
     setUploadingPhoto(true);
     try {
-      : Uploading profile photo');
+      
       const MIME_TYPE = 'image/jpeg';
       const FILE_EXT = 'jpg';
       const timestamp = Date.now();
@@ -468,7 +468,7 @@ export default function ProfileScreen() {
 
       const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
       const basePhotoUrl = urlData.publicUrl;
-      : Photo uploaded, URL:', basePhotoUrl);
+      
 
       const { error: updateError } = await supabase
         .from('users')
@@ -492,7 +492,7 @@ export default function ProfileScreen() {
         return updated;
       });
 
-      : Photo upload complete');
+      
       Alert.alert('Éxito', 'Foto de perfil actualizada');
     } catch (err) {
       
@@ -540,7 +540,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      : Profile updated successfully');
+      
       setProfile(prev => {
         if (!prev) return null;
         const updated = {
@@ -640,7 +640,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      : Password updated successfully');
+      
       Alert.alert('Éxito', 'Contraseña actualizada correctamente');
       setShowPasswordModal(false);
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
@@ -651,7 +651,7 @@ export default function ProfileScreen() {
   };
 
   const checkPhoneExists = useCallback(async (full: string): Promise<boolean> => {
-    : Checking phone duplicate for:', full);
+    
     try {
       const { data, error } = await supabase
         .from('users')

@@ -319,7 +319,7 @@ export default function ProfileScreen() {
 
   const handleSendSupportEmail = async () => {
     
-    , '| message length:', supportMessage.trim().length, '| name:', supportSenderName.trim());
+    
 
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
       
@@ -375,7 +375,7 @@ export default function ProfileScreen() {
       Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
     } finally {
       setSendingSupportEmail(false);
-      ');
+      
     }
   };
 
