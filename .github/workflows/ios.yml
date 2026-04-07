@@ -45,7 +45,6 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISIONING_PROFILE" | base64 --decode > /tmp/profile.mobileprovision
 
-          # Obtener UUID del profile
           PROFILE_UUID=$(security cms -D -i /tmp/profile.mobileprovision | plutil -extract UUID raw -)
           echo "Profile UUID: $PROFILE_UUID"
           cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
@@ -95,9 +94,18 @@ jobs:
             -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist
 
       - name: Upload to TestFlight
-        uses: apple-actions/upload-testflight-build@v1
-        with:
-          app-path: ${{ runner.temp }}/ipa/Nospi.ipa
-          issuer-id: ${{ secrets.IOS_ISSUER_ID }}
-          api-key-id: ${{ secrets.IOS_AUTHKEY_ID }}
-          api-private-key: ${{ secrets.IOS_AUTHKEY_P8_RAW }}
+        env:
+          AUTHKEY_P8: ${{ secrets.IOS_AUTHKEY_P8 }}
+          AUTHKEY_ID: ${{ secrets.IOS_AUTHKEY_ID }}
+          ISSUER_ID: ${{ secrets.IOS_ISSUER_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$AUTHKEY_P8" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${AUTHKEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${AUTHKEY_ID}.p8
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/ipa/Nospi.ipa" \
+            --apiKey "${AUTHKEY_ID}" \
+            --apiIssuer "${ISSUER_ID}" \
+            --show-progress
