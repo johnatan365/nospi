@@ -77,7 +77,7 @@ jobs:
             <string>9VF922X4K7</string>
             <key>provisioningProfiles</key>
             <dict>
-              <key>com.anonymous.nospi</key>
+              <key>app.nospi.mobile</key>
               <string>$PROFILE_UUID</string>
             </dict>
             <key>signingStyle</key>
