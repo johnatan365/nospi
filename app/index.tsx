@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-// Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
   if (Platform.OS === 'web') {
     const raw = localStorage.getItem('onboarding_data');
@@ -40,34 +39,26 @@ async function clearOnboardingData() {
   }
 }
 
-// Sube la foto de perfil a Supabase Storage y retorna la URL pública
 async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<string | null> {
   if (!photoUri) return null;
   try {
-    
     const fileExt = Platform.OS === 'web' ? 'jpg' : (photoUri.split('.').pop()?.toLowerCase() || 'jpg');
     const timestamp = Date.now();
     const filePath = `${userId}/${userId}-${timestamp}.${fileExt}`;
 
-    let uploadData: ArrayBuffer;
     const response = await fetch(photoUri);
     const blob = await response.blob();
-    uploadData = await new Response(blob).arrayBuffer();
+    const uploadData = await new Response(blob).arrayBuffer();
 
     const { error: uploadError } = await supabase.storage
       .from('profile-photos')
       .upload(filePath, uploadData, { contentType: `image/${fileExt}`, upsert: true });
 
-    if (uploadError) {
-      
-      return null;
-    }
+    if (uploadError) return null;
 
     const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
-    
     return urlData.publicUrl;
-  } catch (err) {
-    
+  } catch {
     return null;
   }
 }
@@ -76,204 +67,209 @@ export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
-  const [waitingForContext, setWaitingForContext] = useState(false);
+
+  // Ref para evitar que checkProfileAndNavigate corra en paralelo
+  const isNavigatingRef = useRef(false);
 
   useEffect(() => {
-    
-
-    if (waitingForContext && user) {
-      setWaitingForContext(false);
-    }
-
+    // Mientras loading está resolviendo, no hacer nada
     if (loading) return;
 
+    // Evitar ejecuciones paralelas
+    if (isNavigatingRef.current) return;
+
     const checkProfileAndNavigate = async () => {
-      if (user) {
-        
-        setIsCheckingProfile(true);
+      isNavigatingRef.current = true;
+      try {
+        // Si no hay user en el context, intentar obtener sesión directamente
+        // (puede pasar cuando el context aún no actualizó tras OAuth)
+        let resolvedUser = user;
 
-        try {
-          const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('id, name, email')
-            .eq('id', user.id)
-            .maybeSingle();
+        if (!resolvedUser) {
+          if (Platform.OS === 'web') {
+            const search = window.location.search;
+            const hash = window.location.hash;
 
-          if (profileError) {
-            
-            if (Platform.OS === 'web') {
-              window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
-            } else {
-              Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+            if (search.includes('code=')) {
+              router.replace(('/auth/callback' + search) as any);
+              return;
             }
+            if (hash.includes('access_token')) {
+              router.replace(('/auth/callback' + hash) as any);
+              return;
+            }
+            if (window.location.pathname.includes('/auth/')) {
+              return;
+            }
+          }
+
+          // Esperar hasta 4s a que el context tenga el user
+          // (cubre el lag entre signInWithIdToken y SIGNED_IN event)
+          const start = Date.now();
+          while (Date.now() - start < 4000) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              resolvedUser = session.user;
+              break;
+            }
+            await new Promise(r => setTimeout(r, 200));
+          }
+
+          if (!resolvedUser) {
             router.replace('/welcome');
             return;
           }
+        }
 
-          if (!profile) {
-            // Verificar si viene de un flujo de registro
-            let isRegisterFlow = false;
-            if (Platform.OS === 'web') {
-              isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
-            } else {
-              const flowType = await AsyncStorage.getItem('oauth_flow_type');
-              isRegisterFlow = flowType === 'register';
-            }
+        setIsCheckingProfile(true);
 
-            if (isRegisterFlow) {
-              
-              try {
-                const d = await readOnboardingData();
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .eq('id', resolvedUser.id)
+          .maybeSingle();
 
-                const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
-                const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
-                const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
-                const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
-
-                // Subir foto al storage si existe
-                let photoUrl: string | null = null;
-                if (d['onboarding_photo']) {
-                  photoUrl = await uploadOnboardingPhoto(user.id, d['onboarding_photo']);
-                }
-
-                const { error: insertError } = await supabase.from('users').upsert({
-                  id: user.id,
-                  email: user.email,
-                  name: d['onboarding_name'] || '',
-                  birthdate: d['onboarding_birthdate'] || '',
-                  age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
-                  gender: d['onboarding_gender'] || 'hombre',
-                  interested_in: d['onboarding_interested_in'] || 'ambos',
-                  age_range_min: ageRange.min,
-                  age_range_max: ageRange.max,
-                  country: d['onboarding_country'] || 'Colombia',
-                  city: d['onboarding_city'] || 'Medellín',
-                  phone: phoneInfo.phoneNumber || null,
-                  profile_photo_url: photoUrl,
-                  interests,
-                  personality_traits: personality,
-                  compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
-                  notification_preferences: {
-                    whatsapp: false,
-                    email: true,
-                    sms: false,
-                    push: true,
-                  },
-                });
-
-                if (insertError) {
-                  
-                  if (Platform.OS === 'web') {
-                    window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
-                  } else {
-                    Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
-                  }
-                  await supabase.auth.signOut();
-                  router.replace('/welcome');
-                  return;
-                }
-
-                await clearOnboardingData();
-                
-                router.replace('/(tabs)/events');
-              } catch (createErr) {
-                
-                await supabase.auth.signOut();
-                router.replace('/welcome');
-              }
-            } else {
-              
-              try {
-                await supabase.auth.signOut();
-              } catch (signOutError) {
-                
-              }
-              router.replace('/login?error=no_profile');
-            }
-            return;
-          }
-
-          
-
-          let hasPendingPayment = false;
-          let paymentStatus = '';
-          let transactionId = '';
-
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search);
-            paymentStatus = urlParams.get('payment_status') || '';
-            transactionId = urlParams.get('transaction_id') || '';
-            if (paymentStatus) hasPendingPayment = true;
-          }
-
-          if (!hasPendingPayment) {
-            const pending = await AsyncStorage.getItem('pse_payment_pending');
-            if (pending === 'true') hasPendingPayment = true;
-          }
-
-          if (hasPendingPayment) {
-            
-            let target = '/subscription-plans';
-            if (paymentStatus) {
-              target += '?payment_status=' + paymentStatus;
-              if (transactionId) target += '&transaction_id=' + transactionId;
-            }
-            router.replace(target as any);
-          } else {
-            
-            router.replace('/(tabs)/events');
-          }
-        } catch (error) {
-          
+        if (profileError) {
           if (Platform.OS === 'web') {
-            window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
           } else {
-            Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
           }
           router.replace('/welcome');
-        } finally {
-          setIsCheckingProfile(false);
-        }
-      } else {
-        if (Platform.OS === 'web') {
-          const search = window.location.search;
-          const hash = window.location.hash;
-
-          if (search.includes('code=')) {
-            
-            router.replace(('/auth/callback' + search) as any);
-            return;
-          }
-
-          if (hash.includes('access_token')) {
-            
-            router.replace(('/auth/callback' + hash) as any);
-            return;
-          }
-
-          if (window.location.pathname.includes('/auth/')) {
-            
-            return;
-          }
-        }
-
-        
-        const { data: { session: directSession } } = await supabase.auth.getSession();
-        if (directSession?.user) {
-          
-          setWaitingForContext(true);
           return;
         }
-        
+
+        if (!profile) {
+          // Sin perfil — verificar si es flujo de registro
+          let isRegisterFlow = false;
+          if (Platform.OS === 'web') {
+            isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
+          } else {
+            const flowType = await AsyncStorage.getItem('oauth_flow_type');
+            isRegisterFlow = flowType === 'register';
+          }
+
+          if (isRegisterFlow) {
+            // Verificar si la cuenta OAuth ya tenía perfil (ya estaba registrada)
+            const { data: existingProfile } = await supabase
+              .from('users')
+              .select('id')
+              .eq('id', resolvedUser.id)
+              .maybeSingle();
+
+            if (existingProfile) {
+              await clearOnboardingData();
+              try { await supabase.auth.signOut(); } catch { /* ignorar */ }
+              router.replace('/login?error=account_exists');
+              return;
+            }
+
+            try {
+              const d = await readOnboardingData();
+              const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
+              const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
+              const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
+              const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
+
+              let photoUrl: string | null = null;
+              if (d['onboarding_photo']) {
+                photoUrl = await uploadOnboardingPhoto(resolvedUser.id, d['onboarding_photo']);
+              }
+
+              const { error: insertError } = await supabase.from('users').upsert({
+                id: resolvedUser.id,
+                email: resolvedUser.email,
+                name: d['onboarding_name'] || '',
+                birthdate: d['onboarding_birthdate'] || '',
+                age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
+                gender: d['onboarding_gender'] || 'hombre',
+                interested_in: d['onboarding_interested_in'] || 'ambos',
+                age_range_min: ageRange.min,
+                age_range_max: ageRange.max,
+                country: d['onboarding_country'] || 'Colombia',
+                city: d['onboarding_city'] || 'Medellín',
+                phone: phoneInfo.phoneNumber || null,
+                profile_photo_url: photoUrl,
+                interests,
+                personality_traits: personality,
+                compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
+                notification_preferences: {
+                  whatsapp: false,
+                  email: true,
+                  sms: false,
+                  push: true,
+                },
+              });
+
+              if (insertError) {
+                if (Platform.OS === 'web') {
+                  window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
+                } else {
+                  Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
+                }
+                await supabase.auth.signOut();
+                router.replace('/welcome');
+                return;
+              }
+
+              await clearOnboardingData();
+              router.replace('/(tabs)/events');
+            } catch {
+              await supabase.auth.signOut();
+              router.replace('/welcome');
+            }
+          } else {
+            // Login con cuenta no registrada — hacer signOut y mostrar error
+            try { await supabase.auth.signOut(); } catch { /* ignorar */ }
+            router.replace('/login?error=no_profile');
+          }
+          return;
+        }
+
+        // Perfil existe → verificar pagos pendientes y navegar
+        let hasPendingPayment = false;
+        let paymentStatus = '';
+        let transactionId = '';
+
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          paymentStatus = urlParams.get('payment_status') || '';
+          transactionId = urlParams.get('transaction_id') || '';
+          if (paymentStatus) hasPendingPayment = true;
+        }
+
+        if (!hasPendingPayment) {
+          const pending = await AsyncStorage.getItem('pse_payment_pending');
+          if (pending === 'true') hasPendingPayment = true;
+        }
+
+        if (hasPendingPayment) {
+          let target = '/subscription-plans';
+          if (paymentStatus) {
+            target += '?payment_status=' + paymentStatus;
+            if (transactionId) target += '&transaction_id=' + transactionId;
+          }
+          router.replace(target as any);
+        } else {
+          router.replace('/(tabs)/events');
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+        } else {
+          Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+        }
         router.replace('/welcome');
+      } finally {
+        setIsCheckingProfile(false);
+        isNavigatingRef.current = false;
       }
     };
 
     checkProfileAndNavigate();
-  }, [loading, user, router, waitingForContext]);
+  }, [loading, user, router]);
 
-  if (loading || isCheckingProfile || waitingForContext) {
-    
+  if (loading || isCheckingProfile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#AD1457" />
