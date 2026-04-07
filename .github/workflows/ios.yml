@@ -73,9 +73,18 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>app-store</string>
+            <string>app-store-connect</string>
             <key>teamID</key>
             <string>9VF922X4K7</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.anonymous.nospi</key>
+              <string>$PROFILE_UUID</string>
+            </dict>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>iPhone Distribution</string>
           </dict>
           </plist>
           EOF2
@@ -96,6 +105,6 @@ jobs:
 
           xcrun altool --upload-app \
             --type ios \
-            --file "$RUNNER_TEMP/ipa/nospi.ipa" \
+            --file "$RUNNER_TEMP/ipa/Nospi.ipa" \
             --apiKey "$AUTHKEY_ID" \
             --apiIssuer "$ISSUER_ID"
