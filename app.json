@@ -33,7 +33,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#1a0010"
       },
       "edgeToEdgeEnabled": true,
       "package": "app.nospi.mobile",
