@@ -547,7 +547,12 @@ export default function ProfileScreen() {
 
       if (error) {
         console.error('Error updating profile:', error);
-        Alert.alert('Error', 'No se pudo actualizar el perfil');
+        // Detectar duplicado de teléfono (código 23505 = unique constraint violation)
+        if (error.code === '23505' && error.message?.includes('users_phone_key')) {
+          setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+        } else {
+          Alert.alert('Error', 'No se pudo actualizar el perfil');
+        }
         return;
       }
 
