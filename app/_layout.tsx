@@ -16,6 +16,7 @@ import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -63,12 +64,14 @@ function RootLayoutInner() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SupabaseProvider>
-        <AuthProvider>
-          <RootLayoutInner />
-        </AuthProvider>
-      </SupabaseProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SupabaseProvider>
+          <AuthProvider>
+            <RootLayoutInner />
+          </AuthProvider>
+        </SupabaseProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
