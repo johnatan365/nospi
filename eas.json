@@ -1,6 +1,6 @@
 {
   "cli": {
-    "appVersionSource": "local"
+    "version": ">= 12.0.0"
   },
   "build": {
     "development": {
@@ -10,11 +10,14 @@
     "preview": {
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release",
+        "credentialsSource": "local"
+      }
+    }
   },
   "submit": {
-    "production": {
-      "ios": {}
-    }
+    "production": {}
   }
 }
