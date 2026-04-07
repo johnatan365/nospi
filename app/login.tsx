@@ -39,6 +39,8 @@ export default function LoginScreen() {
   React.useEffect(() => {
     if (routeError === 'no_profile') {
       setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+    } else if (routeError === 'account_exists') {
+      setError('Esta cuenta ya está registrada. Inicia sesión directamente.');
     }
   }, [routeError]);
 
@@ -126,36 +128,42 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
+    
     setError('');
     setSubmitting(true);
     try {
       await signInWithApple();
-      // No navegar manualmente aquí — index.tsx reacciona al cambio de sesión
-      // en SupabaseContext y decide a dónde ir según si existe perfil o no.
-      // Si el usuario no tiene perfil, index.tsx hace signOut + redirige a
-      // /login?error=no_profile, lo que dispara el useEffect de routeError abajo.
+      if (Platform.OS !== 'web') {
+        
+        router.replace('/');
+      }
     } catch (err: any) {
-      if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED' || err?.code === 'ERR_REQUEST_CANCELED') {
+      
+      if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
         setError('Inicio de sesión cancelado');
       } else {
-        setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+        setError('Error al iniciar sesión con Apple');
       }
       setSubmitting(false);
     }
   };
 
   const handleGoogle = async () => {
+    
     setError('');
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      // No navegar manualmente — dejar que index.tsx maneje la navegación
-      // reactiva según si el perfil existe o no.
+      if (Platform.OS !== 'web') {
+        
+        router.replace('/');
+      }
     } catch (err: any) {
+      
       if (err?.message?.includes('cancel')) {
         setError('Inicio de sesión cancelado');
       } else {
-        setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+        setError('Error al iniciar sesión con Google');
       }
       setSubmitting(false);
     }
