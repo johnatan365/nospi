@@ -5,11 +5,11 @@
     "slug": "nospi-pys0qtxkv8ugfywiet3zh",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/bf4e00c9-f687-4e0a-b462-9c0e59228257.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#A0005A"
     },
@@ -32,7 +32,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
@@ -83,7 +83,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+      "favicon": "./assets/icon.png",
       "bundler": "metro",
       "output": "single"
     },
@@ -101,7 +101,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/fae35df3-623b-4a02-999c-0745e2f6c605.png",
+          "icon": "./assets/icon.png",
           "color": "#E9D5FF",
           "sounds": []
         }
