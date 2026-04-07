@@ -126,42 +126,36 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
-    
     setError('');
     setSubmitting(true);
     try {
       await signInWithApple();
-      if (Platform.OS !== 'web') {
-        
-        router.replace('/');
-      }
+      // No navegar manualmente aquí — index.tsx reacciona al cambio de sesión
+      // en SupabaseContext y decide a dónde ir según si existe perfil o no.
+      // Si el usuario no tiene perfil, index.tsx hace signOut + redirige a
+      // /login?error=no_profile, lo que dispara el useEffect de routeError abajo.
     } catch (err: any) {
-      
-      if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
+      if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED' || err?.code === 'ERR_REQUEST_CANCELED') {
         setError('Inicio de sesión cancelado');
       } else {
-        setError('Error al iniciar sesión con Apple');
+        setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
       }
       setSubmitting(false);
     }
   };
 
   const handleGoogle = async () => {
-    
     setError('');
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      if (Platform.OS !== 'web') {
-        
-        router.replace('/');
-      }
+      // No navegar manualmente — dejar que index.tsx maneje la navegación
+      // reactiva según si el perfil existe o no.
     } catch (err: any) {
-      
       if (err?.message?.includes('cancel')) {
         setError('Inicio de sesión cancelado');
       } else {
-        setError('Error al iniciar sesión con Google');
+        setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
       }
       setSubmitting(false);
     }
