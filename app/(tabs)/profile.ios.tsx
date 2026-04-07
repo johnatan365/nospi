@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -147,6 +146,8 @@ export default function ProfileScreen() {
   const [showPhoneCountryPicker, setShowPhoneCountryPicker] = useState(false);
   const [phoneCountrySearch, setPhoneCountrySearch] = useState('');
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [showPhoneErrorModal, setShowPhoneErrorModal] = useState(false);
+  const [phoneErrorMessage, setPhoneErrorMessage] = useState('');
   const debounceRef = useRef<any>(null);
 
   // Support modal state
@@ -507,16 +508,16 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
-    if (phoneStatus === 'taken') {
-      Alert.alert('Error', 'Este número de teléfono ya está registrado por otro usuario.');
-      return;
-    }
-    if (phoneStatus === 'checking') {
-      Alert.alert('Espera', 'Verificando disponibilidad del número...');
-      return;
-    }
 
     const combinedPhone = editPhoneCountry.code + editPhoneNumber;
+
+    // Verificar si el número ya está registrado por otro usuario
+    const phoneTaken = await checkPhoneExists(combinedPhone);
+    if (phoneTaken) {
+      setPhoneErrorMessage('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setShowPhoneErrorModal(true);
+      return;
+    }
 
     try {
       console.log('User saving profile changes');
@@ -926,11 +927,7 @@ export default function ProfileScreen() {
                   </ScrollView>
                 </View>
               )}
-              {phoneStatus !== 'idle' && (
-                <Text style={{ fontSize: 12, marginTop: 4, color: phoneStatus === 'taken' ? '#e53e3e' : phoneStatus === 'available' ? '#38a169' : '#888' }}>
-                  {phoneStatus === 'taken' ? '❌ Este número ya está registrado' : phoneStatus === 'available' ? '✅ Número disponible' : '🔍 Verificando...'}
-                </Text>
-              )}
+
 
               <Text style={styles.inputLabel}>País</Text>
               <TouchableOpacity
@@ -1300,4 +1297,16 @@ const styles = StyleSheet.create({
   supportSuccessTitle: { fontSize: 22, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
   supportSuccessSubtext: { fontSize: 15, color: '#666', textAlign: 'center' },
   supportSuccessEmail: { fontSize: 15, color: '#333', fontWeight: '600', textAlign: 'center', marginBottom: 28 },
+  phoneErrorOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  phoneErrorCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 24,
+    width: '100%', maxWidth: 400, alignItems: 'center',
+  },
+  phoneErrorTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12, textAlign: 'center' },
+  phoneErrorMsg: { fontSize: 15, color: '#6B7280', marginBottom: 24, textAlign: 'center', lineHeight: 22 },
+  phoneErrorBtn: { backgroundColor: '#880E4F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%' },
+  phoneErrorBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
 });
