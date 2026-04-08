@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '@/lib/supabase';
 
 async function readOnboardingData() {
@@ -63,6 +64,10 @@ async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<
   }
 }
 
+
+async function hideSplash() {
+  try { await SplashScreen.hideAsync(); } catch { /* ignorar */ }
+}
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -110,7 +115,7 @@ export default function Index() {
           if (Platform.OS === 'web') {
             // En web, los tokens/code ya fueron manejados arriba.
             // Si llegamos aquí sin user, no hay sesión activa.
-            router.replace('/welcome');
+            await hideSplash(); router.replace('/welcome');
             return;
           }
 
@@ -127,7 +132,7 @@ export default function Index() {
           }
 
           if (!resolvedUser) {
-            router.replace('/welcome');
+            await hideSplash(); router.replace('/welcome');
             return;
           }
         }
@@ -146,7 +151,7 @@ export default function Index() {
           } else {
             Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
           }
-          router.replace('/welcome');
+          await hideSplash(); router.replace('/welcome');
           return;
         }
 
@@ -171,7 +176,7 @@ export default function Index() {
             if (existingProfile) {
               await clearOnboardingData();
               try { await supabase.auth.signOut(); } catch { /* ignorar */ }
-              router.replace('/login?error=account_exists');
+              await hideSplash(); router.replace('/login?error=account_exists');
               return;
             }
 
@@ -219,15 +224,15 @@ export default function Index() {
                   Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
                 }
                 await supabase.auth.signOut();
-                router.replace('/welcome');
+                await hideSplash(); router.replace('/welcome');
                 return;
               }
 
               await clearOnboardingData();
-              router.replace('/(tabs)/events');
+              await hideSplash(); router.replace('/(tabs)/events');
             } catch {
               await supabase.auth.signOut();
-              router.replace('/welcome');
+              await hideSplash(); router.replace('/welcome');
             }
           } else {
             // Login con cuenta no registrada:
@@ -255,7 +260,7 @@ export default function Index() {
             try { await supabase.auth.signOut(); } catch { /* ignorar */ }
             // Pequeño delay para que el SIGNED_OUT event no interfiera con la navegación
             await new Promise(r => setTimeout(r, 300));
-            router.replace('/login?error=no_profile');
+            await hideSplash(); router.replace('/login?error=no_profile');
             return;
           }
           return;
@@ -284,9 +289,9 @@ export default function Index() {
             target += '?payment_status=' + paymentStatus;
             if (transactionId) target += '&transaction_id=' + transactionId;
           }
-          router.replace(target as any);
+          await hideSplash(); router.replace(target as any);
         } else {
-          router.replace('/(tabs)/events');
+          await hideSplash(); router.replace('/(tabs)/events');
         }
       } catch {
         if (Platform.OS === 'web') {
@@ -294,7 +299,7 @@ export default function Index() {
         } else {
           Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
         }
-        router.replace('/welcome');
+        await hideSplash(); router.replace('/welcome');
       } finally {
         setIsCheckingProfile(false);
         // Solo limpiar si no estamos redirigiendo a login por no_profile
@@ -324,6 +329,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a0010',
+    backgroundColor: '#ffffff',
   },
 });
