@@ -177,8 +177,11 @@ export default function Index() {
             isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
           } else {
             const flowType = await AsyncStorage.getItem('oauth_flow_type');
+            console.log('[index] oauth_flow_type from AsyncStorage:', flowType);
             isRegisterFlow = flowType === 'register';
           }
+
+          console.log('[index] no profile found — isRegisterFlow:', isRegisterFlow);
 
           if (isRegisterFlow) {
             // Verificar si la cuenta OAuth ya tenía perfil (ya estaba registrada)
@@ -262,7 +265,10 @@ export default function Index() {
             }
           } else {
             // Login con cuenta no registrada:
-            // 1. Borrar el usuario de auth.users via Edge Function
+            console.log('[index] no_profile flow — deleting auth user and redirecting to login');
+            if (Platform.OS !== 'web') {
+              Alert.alert('DEBUG', 'no_profile flow — oauth_flow_type no era register. El onboarding data se perdió al volver del browser OAuth.');
+            }
             // 2. Hacer signOut
             // 3. Mostrar error en login
             try {
