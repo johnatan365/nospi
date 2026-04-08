@@ -87,7 +87,7 @@
           ]
         }
       ],
-      "versionCode": 4
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/icon.png",
