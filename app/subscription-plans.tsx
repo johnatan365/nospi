@@ -260,17 +260,24 @@ export default function SubscriptionPlansScreen() {
           
 
           if (status === 'APPROVED') {
-            // Si payment-callback ya está manejando este pago, no duplicar la confirmación.
+            // Si el polling nativo o payment-callback ya están manejando este pago, no duplicar.
             const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
             if (alreadyHandled === 'true') {
-              
               return;
             }
+            // Verificar que el txId sigue en AsyncStorage (si ya fue eliminado, el polling lo procesó)
+            const currentTxId = await AsyncStorage.getItem('nospi_transaction_id');
+            if (!currentTxId) {
+              return;
+            }
+            // Marcar como en proceso para que el polling no duplique
+            await AsyncStorage.setItem('nospi_payment_processing', 'true');
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
+            await AsyncStorage.removeItem('nospi_payment_processing');
             if (success) {
               if (pendingEventId) {
                 router.replace({
@@ -871,10 +878,9 @@ export default function SubscriptionPlansScreen() {
         if (status === 'APPROVED') {
           clearInterval(interval);
           setProcessingMethod(null);
-          // Si payment-callback ya está manejando este pago, no duplicar.
+          // Verificar si ya fue procesado por otro handler (AppState o payment-callback)
           const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
           if (alreadyHandled === 'true') {
-            
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             if (pendingEventId) {
               router.replace({ pathname: '/event-details/[id]', params: { id: pendingEventId, paymentSuccess: 'true' } });
@@ -883,11 +889,14 @@ export default function SubscriptionPlansScreen() {
             }
             return;
           }
+          // Marcar como en proceso para que AppState handler no duplique
+          await AsyncStorage.setItem('nospi_payment_processing', 'true');
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
           const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
+          await AsyncStorage.removeItem('nospi_payment_processing');
           if (success) {
             if (pendingEventId) {
               router.replace({
