@@ -100,6 +100,7 @@ export default function Index() {
           const justRegistered = await AsyncStorage.getItem('registration_just_completed');
           if (justRegistered === 'true') {
             await AsyncStorage.removeItem('registration_just_completed');
+            Alert.alert('DEBUG', 'registration_just_completed flag encontrado — saliendo sin navegar');
             await hideSplash();
             return;
           }
@@ -325,11 +326,11 @@ export default function Index() {
         } else {
           await hideSplash(); router.replace('/(tabs)/events');
         }
-      } catch {
+      } catch (err: any) {
         if (Platform.OS === 'web') {
-          window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+          window.alert('Ocurrió un error inesperado: ' + err?.message);
         } else {
-          Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+          Alert.alert('ERROR CATCH', err?.message || 'Error desconocido sin mensaje');
         }
         await hideSplash(); router.replace('/welcome');
       } finally {
