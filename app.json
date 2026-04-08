@@ -11,10 +11,10 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1a0010"
     },
     "ios": {
-      "buildNumber": "26",
+      "buildNumber": "27",
       "supportsTablet": true,
       "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
@@ -32,7 +32,7 @@
       "splash": {
         "image": "./assets/splash.png",
         "resizeMode": "contain",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#1a0010",
         "tabletImage": "./assets/splash.png"
       }
     },
