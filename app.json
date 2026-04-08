@@ -14,7 +14,7 @@
       "backgroundColor": "#A0005A"
     },
     "ios": {
-      "buildNumber": "20",
+      "buildNumber": "21",
       "supportsTablet": true,
       "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
