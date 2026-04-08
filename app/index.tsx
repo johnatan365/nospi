@@ -77,6 +77,8 @@ export default function Index() {
   const isNavigatingRef = useRef(false);
   // Ref para caso no_profile — evita re-ejecución tras SIGNED_OUT event
   const redirectingToLoginRef = useRef(false);
+  // Ref para registro completado — evita re-ejecución por segundo SIGNED_IN en Android
+  const registrationCompleteRef = useRef(false);
 
   useEffect(() => {
     // Mientras loading está resolviendo, no hacer nada
@@ -86,6 +88,8 @@ export default function Index() {
     if (isNavigatingRef.current) return;
     // Si ya redirigimos a login por no_profile, no volver a ejecutar
     if (redirectingToLoginRef.current) return;
+    // Si ya completamos el registro, no volver a ejecutar
+    if (registrationCompleteRef.current) return;
 
     const checkProfileAndNavigate = async () => {
       isNavigatingRef.current = true;
@@ -229,7 +233,11 @@ export default function Index() {
               }
 
               await clearOnboardingData();
-              await hideSplash(); router.replace('/(tabs)/events');
+              // Marcar registro completo para bloquear re-ejecución
+              // por el segundo SIGNED_IN event que Android puede disparar
+              registrationCompleteRef.current = true;
+              await hideSplash();
+              router.replace('/(tabs)/events');
             } catch {
               await supabase.auth.signOut();
               await hideSplash(); router.replace('/welcome');
