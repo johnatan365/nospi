@@ -158,120 +158,79 @@ export default function SubscriptionPlansScreen() {
   // para evitar el error "Cannot access before initialization".
   const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
     try {
-      
-      
-      // Use passed eventId first, fallback to AsyncStorage
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        
-        return false;
-      }
-      
-      
-      // Refrescar sesión — cuando el usuario vuelve del browser externo (Bancolombia/PSE)
-      // el token puede haber expirado. Intentar refresh con hasta 3 reintentos.
-      let sessionRestored = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const { data: refreshData } = await supabase.auth.refreshSession();
-          if (refreshData?.session?.user) {
-            sessionRestored = true;
-            break;
-          }
-        } catch {}
-        // Esperar antes de reintentar
-        if (attempt < 2) await new Promise(r => setTimeout(r, 500));
-      }
+      if (!pendingEventId) return false;
 
-      // Si refresh falló, intentar con getSession directamente
-      if (!sessionRestored) {
-        try {
-          const { data: { session: s } } = await supabase.auth.getSession();
-          if (s?.user) sessionRestored = true;
-        } catch {}
-      }
+      // Refrescar sesión — puede haber expirado mientras el usuario estaba en browser externo
+      try { await supabase.auth.refreshSession(); } catch {}
 
       let userId: string | null = null;
-
-      // 1. Try getSession
       try {
         const { data: { session } } = await supabase.auth.getSession();
         userId = session?.user?.id || null;
       } catch {}
-
-      // 2. If still null, try getUser (makes a network call, more reliable)
       if (!userId) {
         try {
           const { data: { user: authUser } } = await supabase.auth.getUser();
           userId = authUser?.id || null;
         } catch {}
       }
+      if (!userId) userId = user?.id || null;
+      if (!userId) return false;
 
-      // 3. If still null, use user from component scope
-      if (!userId) {
-        userId = user?.id || null;
-      }
+      const appointmentData = {
+        user_id: userId,
+        event_id: pendingEventId,
+        status: 'confirmada',
+        payment_status: 'completed',
+        transaction_id: transactionId,
+        payment_method: paymentMethod,
+        confirmed_at: new Date().toISOString(),
+      };
 
-      if (!userId) {
-        
-        return false;
-      }
-      
-      
-      
+      // Verificar si ya existe una cita para este usuario y evento
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('event_id', pendingEventId)
+        .maybeSingle();
 
-      // Upsert con todos los campos — con hasta 3 reintentos por si RLS
-      // tarda en reconocer el token recién refrescado.
-      let upsertSuccess = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { error: upsertError } = await supabase
+      let writeError = null;
+
+      if (existing) {
+        // Ya existe — actualizar
+        const { error } = await supabase
           .from('appointments')
-          .upsert(
-            {
-              user_id: userId,
-              event_id: pendingEventId,
-              status: 'confirmada',
-              payment_status: 'completed',
-              transaction_id: transactionId,
-              payment_method: paymentMethod,
-              confirmed_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id,event_id', ignoreDuplicates: false }
-          );
-
-        if (!upsertError) {
-          // Verificar que la fila realmente existe (RLS puede bloquear silenciosamente)
-          const { data: check } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('event_id', pendingEventId)
-            .eq('status', 'confirmada')
-            .maybeSingle();
-
-          if (check) {
-            upsertSuccess = true;
-            break;
-          }
-        }
-
-        // Esperar antes de reintentar — da tiempo al token de propagarse en RLS
-        if (attempt < 2) await new Promise(r => setTimeout(r, 800));
+          .update(appointmentData)
+          .eq('user_id', userId)
+          .eq('event_id', pendingEventId);
+        writeError = error;
+      } else {
+        // No existe — insertar
+        const { error } = await supabase
+          .from('appointments')
+          .insert(appointmentData);
+        writeError = error;
       }
 
-      if (!upsertSuccess) {
-        
-        return false;
-      }
+      if (writeError) return false;
 
-      // Verificación final confirmada dentro del loop
+      // Verificar que quedó confirmada
+      const { data: verification } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('event_id', pendingEventId)
+        .eq('status', 'confirmada')
+        .maybeSingle();
 
-      
+      if (!verification) return false;
+
       await AsyncStorage.removeItem('pending_event_confirmation');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
       return true;
-    } catch (e) { 
-      
+    } catch {
       return false;
     }
   }, [user?.id]);
