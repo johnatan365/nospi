@@ -94,6 +94,17 @@ export default function Index() {
     const checkProfileAndNavigate = async () => {
       isNavigatingRef.current = true;
       try {
+        // En nativo: si el registro acaba de completarse en register.tsx,
+        // no interceptar — el usuario ya está navegando a events.
+        if (Platform.OS !== 'web') {
+          const justRegistered = await AsyncStorage.getItem('registration_just_completed');
+          if (justRegistered === 'true') {
+            await AsyncStorage.removeItem('registration_just_completed');
+            await hideSplash();
+            return;
+          }
+        }
+
         // Si no hay user en el context, intentar obtener sesión directamente
         // (puede pasar cuando el context aún no actualizó tras OAuth)
         let resolvedUser = user;
@@ -234,8 +245,12 @@ export default function Index() {
 
               await clearOnboardingData();
               // Marcar registro completo para bloquear re-ejecución
-              // por el segundo SIGNED_IN event que Android puede disparar
+              // por el segundo SIGNED_IN event que Android puede disparar,
+              // o por remount de index.tsx tras router.replace('/') desde callback.tsx.
               registrationCompleteRef.current = true;
+              if (Platform.OS !== 'web') {
+                await AsyncStorage.setItem('registration_just_completed', 'true');
+              }
               await hideSplash();
               router.replace('/(tabs)/events');
             } catch {
