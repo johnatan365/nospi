@@ -28,6 +28,12 @@
             ]
           }
         ]
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff",
+        "tabletImage": "./assets/splash.png"
       }
     },
     "android": {
