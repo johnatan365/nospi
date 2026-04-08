@@ -70,6 +70,8 @@ export default function Index() {
 
   // Ref para evitar que checkProfileAndNavigate corra en paralelo
   const isNavigatingRef = useRef(false);
+  // Ref para caso no_profile — evita re-ejecución tras SIGNED_OUT event
+  const redirectingToLoginRef = useRef(false);
 
   useEffect(() => {
     // Mientras loading está resolviendo, no hacer nada
@@ -77,6 +79,8 @@ export default function Index() {
 
     // Evitar ejecuciones paralelas
     if (isNavigatingRef.current) return;
+    // Si ya redirigimos a login por no_profile, no volver a ejecutar
+    if (redirectingToLoginRef.current) return;
 
     const checkProfileAndNavigate = async () => {
       isNavigatingRef.current = true;
@@ -228,9 +232,8 @@ export default function Index() {
           } else {
             // Login con cuenta no registrada:
             // 1. Borrar el usuario de auth.users via Edge Function
-            //    (evita el loop infinito en futuros intentos de login)
             // 2. Hacer signOut
-            // 3. Mostrar error
+            // 3. Mostrar error en login
             try {
               const { data: { session } } = await supabase.auth.getSession();
               if (session?.access_token) {
@@ -245,9 +248,12 @@ export default function Index() {
                   }
                 );
               }
-            } catch { /* ignorar — el signOut a continuación cierra la sesión de todas formas */ }
+            } catch { /* ignorar */ }
+            // Marcar ANTES del signOut para bloquear re-ejecución por SIGNED_OUT event
+            redirectingToLoginRef.current = true;
             try { await supabase.auth.signOut(); } catch { /* ignorar */ }
             router.replace('/login?error=no_profile');
+            return;
           }
           return;
         }
