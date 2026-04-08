@@ -253,6 +253,8 @@ export default function Index() {
             redirectingToLoginRef.current = true;
             isNavigatingRef.current = true;
             try { await supabase.auth.signOut(); } catch { /* ignorar */ }
+            // Pequeño delay para que el SIGNED_OUT event no interfiera con la navegación
+            await new Promise(r => setTimeout(r, 300));
             router.replace('/login?error=no_profile');
             return;
           }
