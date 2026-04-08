@@ -249,8 +249,9 @@ export default function Index() {
                 );
               }
             } catch { /* ignorar */ }
-            // Marcar ANTES del signOut para bloquear re-ejecución por SIGNED_OUT event
+            // Marcar inmediatamente para bloquear cualquier re-ejecución
             redirectingToLoginRef.current = true;
+            isNavigatingRef.current = true;
             try { await supabase.auth.signOut(); } catch { /* ignorar */ }
             router.replace('/login?error=no_profile');
             return;
@@ -294,7 +295,11 @@ export default function Index() {
         router.replace('/welcome');
       } finally {
         setIsCheckingProfile(false);
-        isNavigatingRef.current = false;
+        // Solo limpiar si no estamos redirigiendo a login por no_profile
+        // (si lo limpiamos, el SIGNED_OUT event re-dispara el effect)
+        if (!redirectingToLoginRef.current) {
+          isNavigatingRef.current = false;
+        }
       }
     };
 
