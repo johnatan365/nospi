@@ -94,13 +94,13 @@ export default function Index() {
     const checkProfileAndNavigate = async () => {
       isNavigatingRef.current = true;
       try {
-        // En nativo: si el registro acaba de completarse en register.tsx,
-        // no interceptar — el usuario ya está navegando a events.
+        // En nativo: si el registro acaba de completarse,
+        // no interceptar durante los próximos 15 segundos.
         if (Platform.OS !== 'web') {
           const justRegistered = await AsyncStorage.getItem('registration_just_completed');
           if (justRegistered === 'true') {
-            await AsyncStorage.removeItem('registration_just_completed');
-            Alert.alert('DEBUG', 'registration_just_completed flag encontrado — saliendo sin navegar');
+            // Borrar después de 15s — suficiente para que pasen todos los eventos OAuth
+            setTimeout(() => AsyncStorage.removeItem('registration_just_completed'), 15000);
             await hideSplash();
             return;
           }
@@ -200,9 +200,14 @@ export default function Index() {
             }
 
             try {
+              // Marcar ANTES del upsert para bloquear cualquier re-ejecución
+              // que llegue mientras estamos creando el perfil.
+              registrationCompleteRef.current = true;
+              if (Platform.OS !== 'web') {
+                await AsyncStorage.setItem('registration_just_completed', 'true');
+              }
+
               const d = await readOnboardingData();
-              console.log('[index] onboarding keys:', Object.keys(d));
-              console.log('[index] user.id:', resolvedUser.id, 'user.email:', resolvedUser.email);
               const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
               const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
               const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
@@ -217,7 +222,7 @@ export default function Index() {
                 id: resolvedUser.id,
                 email: resolvedUser.email,
                 name: d['onboarding_name'] || '',
-                birthdate: d['onboarding_birthdate'] || '',
+                birthdate: d['onboarding_birthdate'] || null,
                 age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
                 gender: d['onboarding_gender'] || 'hombre',
                 interested_in: d['onboarding_interested_in'] || 'ambos',
@@ -239,11 +244,10 @@ export default function Index() {
               });
 
               if (insertError) {
-                console.error('[index] upsert error:', insertError.message, insertError.code);
                 if (Platform.OS === 'web') {
-                  window.alert('Error al crear tu perfil: ' + insertError.message);
+                  window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
                 } else {
-                  Alert.alert('Error al crear perfil', insertError.message + ' (code: ' + insertError.code + ')');
+                  Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
                 }
                 await supabase.auth.signOut();
                 await hideSplash(); router.replace('/welcome');
@@ -251,13 +255,6 @@ export default function Index() {
               }
 
               await clearOnboardingData();
-              // Marcar registro completo para bloquear re-ejecución
-              // por el segundo SIGNED_IN event que Android puede disparar,
-              // o por remount de index.tsx tras router.replace('/') desde callback.tsx.
-              registrationCompleteRef.current = true;
-              if (Platform.OS !== 'web') {
-                await AsyncStorage.setItem('registration_just_completed', 'true');
-              }
               await hideSplash();
               router.replace('/(tabs)/events');
             } catch {
@@ -266,10 +263,9 @@ export default function Index() {
             }
           } else {
             // Login con cuenta no registrada:
-            console.log('[index] no_profile flow — deleting auth user and redirecting to login');
-            if (Platform.OS !== 'web') {
-              Alert.alert('DEBUG', 'no_profile flow — oauth_flow_type no era register. El onboarding data se perdió al volver del browser OAuth.');
-            }
+            // 1. Borrar el usuario de auth.users via Edge Function
+            // 2. Hacer signOut
+            // 3. Mostrar error en login
             // 2. Hacer signOut
             // 3. Mostrar error en login
             try {
@@ -328,16 +324,16 @@ export default function Index() {
         }
       } catch (err: any) {
         if (Platform.OS === 'web') {
-          window.alert('Ocurrió un error inesperado: ' + err?.message);
+          window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
         } else {
-          Alert.alert('ERROR CATCH', err?.message || 'Error desconocido sin mensaje');
+          Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
         }
         await hideSplash(); router.replace('/welcome');
       } finally {
         setIsCheckingProfile(false);
-        // Solo limpiar si no estamos redirigiendo a login por no_profile
-        // (si lo limpiamos, el SIGNED_OUT event re-dispara el effect)
-        if (!redirectingToLoginRef.current) {
+        // No limpiar si ya redirigimos a login por no_profile
+        // ni si el registro está completo (evita re-ejecución por SIGNED_OUT/SIGNED_IN)
+        if (!redirectingToLoginRef.current && !registrationCompleteRef.current) {
           isNavigatingRef.current = false;
         }
       }
