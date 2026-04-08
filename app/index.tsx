@@ -1,15 +1,16 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '@/lib/supabase';
 
+// Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
   if (Platform.OS === 'web') {
     const raw = localStorage.getItem('onboarding_data');
-    return raw ? JSON.parse(raw) : {};
+    const data = raw ? JSON.parse(raw) : {};
+    return data;
   } else {
     const keys = [
       'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
@@ -40,309 +41,202 @@ async function clearOnboardingData() {
   }
 }
 
-async function uploadOnboardingPhoto(userId: string, photoUri: string): Promise<string | null> {
-  if (!photoUri) return null;
-  try {
-    const fileExt = Platform.OS === 'web' ? 'jpg' : (photoUri.split('.').pop()?.toLowerCase() || 'jpg');
-    const timestamp = Date.now();
-    const filePath = `${userId}/${userId}-${timestamp}.${fileExt}`;
-
-    const response = await fetch(photoUri);
-    const blob = await response.blob();
-    const uploadData = await new Response(blob).arrayBuffer();
-
-    const { error: uploadError } = await supabase.storage
-      .from('profile-photos')
-      .upload(filePath, uploadData, { contentType: `image/${fileExt}`, upsert: true });
-
-    if (uploadError) return null;
-
-    const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
-    return urlData.publicUrl;
-  } catch {
-    return null;
-  }
-}
-
-
-async function hideSplash() {
-  try { await SplashScreen.hideAsync(); } catch { /* ignorar */ }
-}
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
-
-  // Ref para evitar que checkProfileAndNavigate corra en paralelo
-  const isNavigatingRef = useRef(false);
-  // Ref para caso no_profile — evita re-ejecución tras SIGNED_OUT event
-  const redirectingToLoginRef = useRef(false);
-  // Ref para registro completado — evita re-ejecución por segundo SIGNED_IN en Android
-  const registrationCompleteRef = useRef(false);
+  const [waitingForContext, setWaitingForContext] = useState(false);
 
   useEffect(() => {
-    // Mientras loading está resolviendo, no hacer nada
+    console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
+
+    if (waitingForContext && user) {
+      setWaitingForContext(false);
+    }
+
     if (loading) return;
 
-    // Evitar ejecuciones paralelas
-    if (isNavigatingRef.current) return;
-    // Si ya redirigimos a login por no_profile, no volver a ejecutar
-    if (redirectingToLoginRef.current) return;
-    // Si ya completamos el registro, no volver a ejecutar
-    if (registrationCompleteRef.current) return;
-
     const checkProfileAndNavigate = async () => {
-      isNavigatingRef.current = true;
-      try {
-        // En nativo: si el registro acaba de completarse,
-        // no interceptar durante los próximos 15 segundos.
-        if (Platform.OS !== 'web') {
-          const justRegistered = await AsyncStorage.getItem('registration_just_completed');
-          if (justRegistered === 'true') {
-            // Borrar después de 15s — suficiente para que pasen todos los eventos OAuth
-            setTimeout(() => AsyncStorage.removeItem('registration_just_completed'), 15000);
-            await hideSplash();
-            return;
-          }
-        }
-
-        // Si no hay user en el context, intentar obtener sesión directamente
-        // (puede pasar cuando el context aún no actualizó tras OAuth)
-        let resolvedUser = user;
-
-        if (!resolvedUser) {
-          if (Platform.OS === 'web') {
-            const search = window.location.search;
-            const hash = window.location.hash;
-
-            if (search.includes('code=')) {
-              router.replace(('/auth/callback' + search) as any);
-              return;
-            }
-            if (hash.includes('access_token')) {
-              router.replace(('/auth/callback' + hash) as any);
-              return;
-            }
-            if (window.location.pathname.includes('/auth/')) {
-              return;
-            }
-          }
-
-          if (Platform.OS === 'web') {
-            // En web, los tokens/code ya fueron manejados arriba.
-            // Si llegamos aquí sin user, no hay sesión activa.
-            await hideSplash(); router.replace('/welcome');
-            return;
-          }
-
-          // Nativo: esperar hasta 4s a que el context tenga el user.
-          // Cubre el lag entre signInWithIdToken (Apple) y el evento SIGNED_IN.
-          const start = Date.now();
-          while (Date.now() - start < 4000) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              resolvedUser = session.user;
-              break;
-            }
-            await new Promise(r => setTimeout(r, 200));
-          }
-
-          if (!resolvedUser) {
-            await hideSplash(); router.replace('/welcome');
-            return;
-          }
-        }
-
+      if (user) {
+        console.log('Index: User authenticated, checking profile existence');
         setIsCheckingProfile(true);
 
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('id, name, email')
-          .eq('id', resolvedUser.id)
-          .maybeSingle();
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('id, name, email')
+            .eq('id', user.id)
+            .maybeSingle();
 
-        if (profileError) {
-          if (Platform.OS === 'web') {
-            window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
-          } else {
-            Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
-          }
-          await hideSplash(); router.replace('/welcome');
-          return;
-        }
-
-        if (!profile) {
-          // Sin perfil — verificar si es flujo de registro
-          let isRegisterFlow = false;
-          if (Platform.OS === 'web') {
-            isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
-          } else {
-            const flowType = await AsyncStorage.getItem('oauth_flow_type');
-            console.log('[index] oauth_flow_type from AsyncStorage:', flowType);
-            isRegisterFlow = flowType === 'register';
-          }
-
-          console.log('[index] no profile found — isRegisterFlow:', isRegisterFlow);
-
-          if (isRegisterFlow) {
-            // Verificar si la cuenta OAuth ya tenía perfil (ya estaba registrada)
-            const { data: existingProfile } = await supabase
-              .from('users')
-              .select('id')
-              .eq('id', resolvedUser.id)
-              .maybeSingle();
-
-            if (existingProfile) {
-              await clearOnboardingData();
-              try { await supabase.auth.signOut(); } catch { /* ignorar */ }
-              await hideSplash(); router.replace('/login?error=account_exists');
-              return;
+          if (profileError) {
+            console.error('Index: Error fetching profile:', profileError);
+            if (Platform.OS === 'web') {
+              window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
+            } else {
+              Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
             }
-
-            try {
-              // Marcar ANTES del upsert para bloquear cualquier re-ejecución
-              // que llegue mientras estamos creando el perfil.
-              registrationCompleteRef.current = true;
-              if (Platform.OS !== 'web') {
-                await AsyncStorage.setItem('registration_just_completed', 'true');
-              }
-
-              const d = await readOnboardingData();
-              const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
-              const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
-              const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
-              const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
-
-              let photoUrl: string | null = null;
-              if (d['onboarding_photo']) {
-                photoUrl = await uploadOnboardingPhoto(resolvedUser.id, d['onboarding_photo']);
-              }
-
-              const { error: insertError } = await supabase.from('users').upsert({
-                id: resolvedUser.id,
-                email: resolvedUser.email,
-                name: d['onboarding_name'] || '',
-                birthdate: d['onboarding_birthdate'] || null,
-                age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
-                gender: d['onboarding_gender'] || 'hombre',
-                interested_in: d['onboarding_interested_in'] || 'ambos',
-                age_range_min: ageRange.min,
-                age_range_max: ageRange.max,
-                country: d['onboarding_country'] || 'Colombia',
-                city: d['onboarding_city'] || 'Medellín',
-                phone: phoneInfo.phoneNumber || null,
-                profile_photo_url: photoUrl,
-                interests,
-                personality_traits: personality,
-                compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
-                notification_preferences: {
-                  whatsapp: false,
-                  email: true,
-                  sms: false,
-                  push: true,
-                },
-              });
-
-              if (insertError) {
-                if (Platform.OS === 'web') {
-                  window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
-                } else {
-                  Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
-                }
-                await supabase.auth.signOut();
-                await hideSplash(); router.replace('/welcome');
-                return;
-              }
-
-              await clearOnboardingData();
-              await hideSplash();
-              router.replace('/(tabs)/events');
-            } catch {
-              await supabase.auth.signOut();
-              await hideSplash(); router.replace('/welcome');
-            }
-          } else {
-            // Login con cuenta no registrada:
-            // 1. Borrar el usuario de auth.users via Edge Function
-            // 2. Hacer signOut
-            // 3. Mostrar error en login
-            // 2. Hacer signOut
-            // 3. Mostrar error en login
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session?.access_token) {
-                await fetch(
-                  'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/delete-unregistered-user',
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${session.access_token}`,
-                      'Content-Type': 'application/json',
-                    },
-                  }
-                );
-              }
-            } catch { /* ignorar */ }
-            // Marcar inmediatamente para bloquear cualquier re-ejecución
-            redirectingToLoginRef.current = true;
-            isNavigatingRef.current = true;
-            try { await supabase.auth.signOut(); } catch { /* ignorar */ }
-            // Pequeño delay para que el SIGNED_OUT event no interfiera con la navegación
-            await new Promise(r => setTimeout(r, 300));
-            await hideSplash(); router.replace('/login?error=no_profile');
+            router.replace('/welcome');
             return;
           }
+
+          if (!profile) {
+            // Verificar si viene de un flujo de registro
+            let isRegisterFlow = false;
+            if (Platform.OS === 'web') {
+              isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
+            } else {
+              const flowType = await AsyncStorage.getItem('oauth_flow_type');
+              isRegisterFlow = flowType === 'register';
+            }
+
+            if (isRegisterFlow) {
+              console.log('Index: No profile — register flow, creating profile from onboarding data');
+              try {
+                const d = await readOnboardingData();
+
+                const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
+                const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
+                const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
+                const phoneInfo = d['onboarding_phone'] ? JSON.parse(d['onboarding_phone']) : { phoneNumber: '' };
+
+                const { error: insertError } = await supabase.from('users').upsert({
+                  id: user.id,
+                  email: user.email,
+                  name: d['onboarding_name'] || '',
+                  birthdate: d['onboarding_birthdate'] || null,
+                  age: d['onboarding_age'] ? parseInt(d['onboarding_age']) : 18,
+                  gender: d['onboarding_gender'] || 'hombre',
+                  interested_in: d['onboarding_interested_in'] || 'ambos',
+                  age_range_min: ageRange.min,
+                  age_range_max: ageRange.max,
+                  country: d['onboarding_country'] || 'Colombia',
+                  city: d['onboarding_city'] || 'Medellín',
+                  phone: phoneInfo.phoneNumber || null,
+                  profile_photo_url: d['onboarding_photo'] || null,
+                  interests,
+                  personality_traits: personality,
+                  compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
+                  notification_preferences: {
+                    whatsapp: false,
+                    email: true,
+                    sms: false,
+                    push: true,
+                  },
+                });
+
+                if (insertError) {
+                  console.error('Index: Error creating profile:', insertError);
+                  if (Platform.OS === 'web') {
+                    window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
+                  } else {
+                    Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
+                  }
+                  await supabase.auth.signOut();
+                  router.replace('/welcome');
+                  return;
+                }
+
+                await clearOnboardingData();
+                console.log('Index: Profile created successfully, redirecting to events');
+                router.replace('/(tabs)/events');
+              } catch (createErr) {
+                console.error('Index: Unexpected error creating profile:', createErr);
+                await supabase.auth.signOut();
+                router.replace('/welcome');
+              }
+            } else {
+              console.log('Index: No profile — login flow, signing out and showing error');
+              try {
+                await supabase.auth.signOut();
+              } catch (signOutError) {
+                console.error('Index: Error signing out:', signOutError);
+              }
+              router.replace('/login?error=no_profile');
+            }
+            return;
+          }
+
+          console.log('Index: Profile exists, checking for pending payment...');
+
+          let hasPendingPayment = false;
+          let paymentStatus = '';
+          let transactionId = '';
+
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            paymentStatus = urlParams.get('payment_status') || '';
+            transactionId = urlParams.get('transaction_id') || '';
+            if (paymentStatus) hasPendingPayment = true;
+          }
+
+          if (!hasPendingPayment) {
+            const pending = await AsyncStorage.getItem('pse_payment_pending');
+            if (pending === 'true') hasPendingPayment = true;
+          }
+
+          if (hasPendingPayment) {
+            console.log('Index: Pending payment detected, redirecting to subscription-plans');
+            let target = '/subscription-plans';
+            if (paymentStatus) {
+              target += '?payment_status=' + paymentStatus;
+              if (transactionId) target += '&transaction_id=' + transactionId;
+            }
+            router.replace(target as any);
+          } else {
+            console.log('Index: No pending payment, redirecting to events');
+            router.replace('/(tabs)/events');
+          }
+        } catch (error) {
+          console.error('Index: Unexpected error during profile check:', error);
+          if (Platform.OS === 'web') {
+            window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+          } else {
+            Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+          }
+          router.replace('/welcome');
+        } finally {
+          setIsCheckingProfile(false);
+        }
+      } else {
+        if (Platform.OS === 'web') {
+          const search = window.location.search;
+          const hash = window.location.hash;
+
+          if (search.includes('code=')) {
+            console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
+            router.replace(('/auth/callback' + search) as any);
+            return;
+          }
+
+          if (hash.includes('access_token')) {
+            console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
+            router.replace(('/auth/callback' + hash) as any);
+            return;
+          }
+
+          if (window.location.pathname.includes('/auth/')) {
+            console.log('Index: Already on auth route — skipping redirect');
+            return;
+          }
+        }
+
+        console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
+        const { data: { session: directSession } } = await supabase.auth.getSession();
+        if (directSession?.user) {
+          console.log('Index: Direct session found, waiting for context to catch up...');
+          setWaitingForContext(true);
           return;
         }
-
-        // Perfil existe → verificar pagos pendientes y navegar
-        let hasPendingPayment = false;
-        let paymentStatus = '';
-        let transactionId = '';
-
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          const urlParams = new URLSearchParams(window.location.search);
-          paymentStatus = urlParams.get('payment_status') || '';
-          transactionId = urlParams.get('transaction_id') || '';
-          if (paymentStatus) hasPendingPayment = true;
-        }
-
-        if (!hasPendingPayment) {
-          const pending = await AsyncStorage.getItem('pse_payment_pending');
-          if (pending === 'true') hasPendingPayment = true;
-        }
-
-        if (hasPendingPayment) {
-          let target = '/subscription-plans';
-          if (paymentStatus) {
-            target += '?payment_status=' + paymentStatus;
-            if (transactionId) target += '&transaction_id=' + transactionId;
-          }
-          await hideSplash(); router.replace(target as any);
-        } else {
-          await hideSplash(); router.replace('/(tabs)/events');
-        }
-      } catch (err: any) {
-        if (Platform.OS === 'web') {
-          window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
-        } else {
-          Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
-        }
-        await hideSplash(); router.replace('/welcome');
-      } finally {
-        setIsCheckingProfile(false);
-        // No limpiar si ya redirigimos a login por no_profile
-        // ni si el registro está completo (evita re-ejecución por SIGNED_OUT/SIGNED_IN)
-        if (!redirectingToLoginRef.current && !registrationCompleteRef.current) {
-          isNavigatingRef.current = false;
-        }
+        console.log('Index: No session found, redirecting to welcome');
+        router.replace('/welcome');
       }
     };
 
     checkProfileAndNavigate();
-  }, [loading, user, router]);
+  }, [loading, user, router, waitingForContext]);
 
-  if (loading || isCheckingProfile) {
+  if (loading || isCheckingProfile || waitingForContext) {
+    console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#AD1457" />
@@ -358,6 +252,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#1a0010',
   },
 });
