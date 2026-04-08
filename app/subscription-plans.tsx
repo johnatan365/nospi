@@ -245,6 +245,15 @@ export default function SubscriptionPlansScreen() {
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
         if (!storedTxId || !storedMethod) return;
+        
+        // En Android, dar 500ms al polling para que procese primero
+        // (el AppState 'active' y el polling pueden disparar simultáneamente)
+        if (Platform.OS === 'android') {
+          await new Promise(r => setTimeout(r, 500));
+          // Verificar de nuevo después del delay — el polling pudo haber limpiado el txId
+          const txIdAfterDelay = await AsyncStorage.getItem('nospi_transaction_id');
+          if (!txIdAfterDelay) return;
+        }
 
         if (storedTime) {
           const age = Date.now() - parseInt(storedTime, 10);
