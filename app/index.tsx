@@ -197,6 +197,8 @@ export default function Index() {
 
             try {
               const d = await readOnboardingData();
+              console.log('[index] onboarding keys:', Object.keys(d));
+              console.log('[index] user.id:', resolvedUser.id, 'user.email:', resolvedUser.email);
               const interests = d['onboarding_interests'] ? JSON.parse(d['onboarding_interests']) : [];
               const personality = d['onboarding_personality'] ? JSON.parse(d['onboarding_personality']) : [];
               const ageRange = d['onboarding_age_range'] ? JSON.parse(d['onboarding_age_range']) : { min: 18, max: 60 };
@@ -233,10 +235,11 @@ export default function Index() {
               });
 
               if (insertError) {
+                console.error('[index] upsert error:', insertError.message, insertError.code);
                 if (Platform.OS === 'web') {
-                  window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
+                  window.alert('Error al crear tu perfil: ' + insertError.message);
                 } else {
-                  Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
+                  Alert.alert('Error al crear perfil', insertError.message + ' (code: ' + insertError.code + ')');
                 }
                 await supabase.auth.signOut();
                 await hideSplash(); router.replace('/welcome');
