@@ -724,6 +724,7 @@ export default function SubscriptionPlansScreen() {
 
       setNequiStatus('waiting');
       let attempts = 0;
+      const maxNequiAttempts = 80; // 80 × 3s = 4 minutos
       const poll = setInterval(async () => {
         attempts++;
         try {
@@ -735,27 +736,28 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
-            
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            
             await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
             if (pendingEventId) {
-              
               router.replace({
                 pathname: '/event-details/[id]',
                 params: { id: pendingEventId, paymentSuccess: 'true' },
               });
             } else {
-              
               setShowSuccessModal(true);
             }
-          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= 40) {
+          } else if (['DECLINED', 'ERROR', 'VOIDED'].includes(status) || attempts >= maxNequiAttempts) {
             clearInterval(poll);
             setProcessingMethod(null);
             setNequiStatus('idle');
-            showAlert(attempts >= 40 ? 'Tiempo agotado' : 'Pago rechazado', attempts >= 40 ? 'No se recibió confirmación de Nequi. Por favor intenta de nuevo.' : 'El pago fue rechazado.');
+            showAlert(
+              attempts >= maxNequiAttempts ? 'Tiempo agotado' : 'Pago rechazado',
+              attempts >= maxNequiAttempts
+                ? 'No recibimos confirmación de Nequi. Abre la app de Nequi y aprueba la notificación, luego vuelve aquí e intenta de nuevo.'
+                : 'El pago fue rechazado por Nequi.'
+            );
           }
-        } catch (e) { if (attempts >= 40) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
+        } catch (e) { if (attempts >= maxNequiAttempts) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
       }, 3000);
     } catch (error: any) {
       showAlert('Error Nequi', error.message);
@@ -857,7 +859,7 @@ export default function SubscriptionPlansScreen() {
 
   const startNativePolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
-    const maxAttempts = 24; // 24 × 5s = 2 minutes
+    const maxAttempts = 60; // 60 × 2s = 2 minutos — intervalo más frecuente para detectar APPROVED rápido
     const interval = setInterval(async () => {
       attempts++;
       try {
@@ -927,7 +929,7 @@ export default function SubscriptionPlansScreen() {
           setProcessingMethod(null);
         }
       }
-    }, 5000);
+    }, 2000);
   }, [confirmAppointment, router]);
 
   const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
