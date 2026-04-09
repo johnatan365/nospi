@@ -26,41 +26,19 @@ export default function AuthCallback() {
     if (Platform.OS !== 'web') {
       const handleNativeCallback = async () => {
         try {
-          const code = routeParams.code;
-          const accessToken = routeParams.access_token;
-          const refreshToken = routeParams.refresh_token;
-
-          Sentry.addBreadcrumb({
-            message: 'callback.tsx native: params received',
-            data: { hasCode: !!code, hasTokens: !!(accessToken && refreshToken) }
-          });
-
-          // Procesar tokens o code si vienen de register.tsx
-          if (accessToken && refreshToken) {
-            const { error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (error) throw error;
-          } else if (code) {
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
-            if (error) throw error;
-          }
-
-          // Esperar hasta 5s a que la sesión esté disponible
+          // La sesión ya fue establecida en register.tsx antes de navegar aquí.
+          // Solo esperamos a que esté disponible en el context.
           const start = Date.now();
           while (Date.now() - start < 5000) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-              Sentry.addBreadcrumb({ message: 'callback.tsx native: session confirmed', data: { userId: session.user.id } });
+              Sentry.addBreadcrumb({ message: 'callback.tsx: session confirmed', data: { userId: session.user.id } });
               router.replace('/');
               return;
             }
             await new Promise(r => setTimeout(r, 200));
           }
-
-          // Si no hay sesión después de 5s, navegar de todas formas
-          Sentry.captureMessage('callback.tsx native: no session after 5s', { level: 'warning' });
+          Sentry.captureMessage('callback.tsx: no session after 5s', { level: 'warning' });
           router.replace('/');
         } catch (err: any) {
           Sentry.captureException(err);
