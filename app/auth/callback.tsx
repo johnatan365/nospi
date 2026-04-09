@@ -18,7 +18,22 @@ export default function AuthCallback() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      router.replace('/');
+      // Esperar a que Supabase confirme la sesión antes de navegar
+      // Esto evita que index.tsx se monte sin user y mande a welcome
+      const waitAndNavigate = async () => {
+        const start = Date.now();
+        while (Date.now() - start < 5000) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            router.replace('/');
+            return;
+          }
+          await new Promise(r => setTimeout(r, 200));
+        }
+        // Si después de 5s no hay sesión, navegar de todas formas
+        router.replace('/');
+      };
+      waitAndNavigate();
       return;
     }
 
