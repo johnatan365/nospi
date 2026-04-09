@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
@@ -54,7 +53,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             });
           }
         } else if (event === 'SIGNED_IN') {
-          // Cancelar el timeout si estaba esperando
+          // Cancelar el timeout si estaba esperando (cancela un SIGNED_OUT pendiente)
           console.log('SupabaseProvider: SIGNED_IN — updating session');
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -69,9 +68,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
           }
-          setSession(null);
-          setUser(null);
-          setLoading(false);
+          // Esperar 800ms antes de limpiar — si viene un SIGNED_IN inmediatamente
+          // después (token refresh de OAuth), ese evento cancelará este timeout
+          // y el user nunca se pondrá en null, evitando el re-disparo de index.tsx.
+          timeoutRef.current = setTimeout(() => {
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            timeoutRef.current = null;
+          }, 800);
         } else if (event === 'TOKEN_REFRESHED') {
           console.log('SupabaseProvider: TOKEN_REFRESHED — updating session');
           setSession(session);
