@@ -146,6 +146,22 @@ export default function Index() {
               }
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
+              // En nativo: esperar 1.5s y verificar de nuevo — puede ser que el perfil
+              // acaba de ser creado por una ejecución paralela del effect (race condition OAuth)
+              if (Platform.OS !== 'web') {
+                await new Promise(r => setTimeout(r, 1500));
+                const { data: retryProfile } = await supabase
+                  .from('users')
+                  .select('id')
+                  .eq('id', user.id)
+                  .maybeSingle();
+                if (retryProfile) {
+                  // El perfil ya existe — navegar a events
+                  console.log('Index: Profile found on retry — navigating to events');
+                  router.replace('/(tabs)/events');
+                  return;
+                }
+              }
               try {
                 await supabase.auth.signOut();
               } catch (signOutError) {
