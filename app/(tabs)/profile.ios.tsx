@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -406,6 +407,8 @@ export default function ProfileScreen() {
         throw new Error(err.error || 'Error al eliminar la cuenta');
       }
 
+      // Cerrar sesión local y limpiar storage antes de navegar
+      try { await supabase.auth.signOut(); } catch (_) {}
       await AsyncStorage.clear();
       router.replace('/welcome');
     } catch (err: any) {
@@ -865,14 +868,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={() => setShowDeleteAccountModal(true)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.deleteAccountButtonText}>Eliminar Cuenta</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
