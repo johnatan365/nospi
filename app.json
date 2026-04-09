@@ -27,7 +27,8 @@
               "nospi"
             ]
           }
-        ]
+        ],
+        "NSPhotoLibraryUsageDescription": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas."
       },
       "splash": {
         "image": "./assets/splash.png",
@@ -114,7 +115,19 @@
         }
       ],
       "expo-secure-store",
-      ["@sentry/react-native", {"organization": "nospi", "project": "react-native"}]
+      [
+        "@sentry/react-native",
+        {
+          "organization": "nospi",
+          "project": "react-native"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas."
+        }
+      ]
     ],
     "scheme": "nospi",
     "experiments": {
