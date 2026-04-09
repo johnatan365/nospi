@@ -32,6 +32,8 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > /tmp/nospi-release.keystore
       - name: Build Android AAB
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           npx expo prebuild --platform android --clean
           echo "${{ secrets.SENTRY_PROPERTIES }}" > android/sentry.properties
