@@ -3,7 +3,7 @@ import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   DarkTheme,
@@ -29,19 +29,13 @@ Sentry.init({
   ],
 });
 
+// El splash se mantiene visible hasta que index.tsx decida a dónde navegar,
+// eliminando la pantalla blanca entre el splash y la pantalla de bienvenida.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-
-  useEffect(() => {
-    SplashScreen.hideAsync();
-    // Evento de prueba para confirmar que Sentry recibe eventos en Android
-    if (Platform.OS === 'android') {
-      Sentry.captureMessage('App started - Android Sentry test', { level: 'info' });
-    }
-  }, []);
 
   return (
     <AppConfigProvider>
