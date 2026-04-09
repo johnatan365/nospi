@@ -51,8 +51,12 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Build iOS app
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: true
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           npx expo prebuild --platform ios --clean
+          echo "${{ secrets.SENTRY_PROPERTIES }}" > ios/sentry.properties
           cd ios
           xcodebuild -workspace Nospi.xcworkspace \
             -scheme Nospi \
