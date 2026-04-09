@@ -5,6 +5,7 @@ import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-nati
 import { useAuth } from '@/contexts/AuthContext';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
+import * as SplashScreen from 'expo-splash-screen';
 
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
@@ -42,6 +43,17 @@ async function clearOnboardingData() {
   }
 }
 
+// Oculta el splash screen — solo en nativo, web no lo usa
+async function hideSplash() {
+  if (Platform.OS !== 'web') {
+    try {
+      await SplashScreen.hideAsync();
+    } catch (_) {
+      // Ignorar si ya fue ocultado
+    }
+  }
+}
+
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -72,6 +84,7 @@ export default function Index() {
 
           if (profileError) {
             console.error('Index: Error fetching profile:', profileError);
+            await hideSplash();
             if (Platform.OS === 'web') {
               window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
             } else {
@@ -82,7 +95,6 @@ export default function Index() {
           }
 
           if (!profile) {
-            // Verificar si viene de un flujo de registro
             let isRegisterFlow = false;
             if (Platform.OS === 'web') {
               isRegisterFlow = localStorage.getItem('oauth_flow_type') === 'register';
@@ -129,6 +141,7 @@ export default function Index() {
 
                 if (insertError) {
                   console.error('Index: Error creating profile:', insertError);
+                  await hideSplash();
                   if (Platform.OS === 'web') {
                     window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
                   } else {
@@ -141,17 +154,17 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
+                await hideSplash();
                 router.replace('/(tabs)/events');
               } catch (createErr) {
                 console.error('Index: Unexpected error creating profile:', createErr);
+                await hideSplash();
                 await supabase.auth.signOut();
                 router.replace('/welcome');
               }
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
               Sentry.captureMessage('Index: no_profile flow triggered', { level: 'warning', extra: { userId: user.id, platform: Platform.OS } });
-              // En nativo: esperar 1.5s y verificar de nuevo — puede ser que el perfil
-              // acaba de ser creado por una ejecución paralela del effect (race condition OAuth)
               if (Platform.OS !== 'web') {
                 await new Promise(r => setTimeout(r, 1500));
                 const { data: retryProfile } = await supabase
@@ -160,8 +173,8 @@ export default function Index() {
                   .eq('id', user.id)
                   .maybeSingle();
                 if (retryProfile) {
-                  // El perfil ya existe — navegar a events
                   console.log('Index: Profile found on retry — navigating to events');
+                  await hideSplash();
                   router.replace('/(tabs)/events');
                   return;
                 }
@@ -171,6 +184,7 @@ export default function Index() {
               } catch (signOutError) {
                 console.error('Index: Error signing out:', signOutError);
               }
+              await hideSplash();
               router.replace('/login?error=no_profile');
             }
             return;
@@ -201,13 +215,16 @@ export default function Index() {
               target += '?payment_status=' + paymentStatus;
               if (transactionId) target += '&transaction_id=' + transactionId;
             }
+            await hideSplash();
             router.replace(target as any);
           } else {
             console.log('Index: No pending payment, redirecting to events');
+            await hideSplash();
             router.replace('/(tabs)/events');
           }
         } catch (error) {
           console.error('Index: Unexpected error during profile check:', error);
+          await hideSplash();
           if (Platform.OS === 'web') {
             window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           } else {
@@ -248,6 +265,7 @@ export default function Index() {
           return;
         }
         console.log('Index: No session found, redirecting to welcome');
+        await hideSplash();
         router.replace('/welcome');
       }
     };
