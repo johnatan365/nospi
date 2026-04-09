@@ -28,7 +28,6 @@ async function saveOnboardingToLocalStorage() {
     if (val !== null) data[key] = val;
   }
   localStorage.setItem('onboarding_data', JSON.stringify(data));
-  console.log('RegisterScreen: Onboarding data saved to localStorage');
 }
 
 export default function RegisterScreen() {
@@ -48,112 +47,82 @@ export default function RegisterScreen() {
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
   useEffect(() => {
-    // Listen for deep link events (OAuth callback)
     const subscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('RegisterScreen: Received URL callback:', url);
-      
-      // Check if this is an OAuth callback
       if (url.includes('auth/callback')) {
-        console.log('RegisterScreen: OAuth callback detected, navigating to callback screen');
-        // The callback screen will handle the session
+        // La sesión ya fue procesada en handleGoogleSignUp/handleAppleSignUp
       }
     });
-
-    return () => {
-      subscription.remove();
-    };
+    return () => { subscription.remove(); };
   }, []);
 
   const showErrorAlert = (title: string, message: string) => {
-    console.error(`${title}: ${message}`);
     setErrorModalMessage(message);
     setShowErrorModal(true);
   };
 
-  // Parse query params and hash fragment from a deep-link URL without using
-  // `new URL()`, which is not reliably available in Hermes on native.
-  const parseOAuthCallbackUrl = (callbackUrl: string): { code?: string; access_token?: string; refresh_token?: string } => {
+  // Procesa el resultado OAuth de WebBrowser INMEDIATAMENTE — el code PKCE
+  // expira en segundos, no puede pasarse como parámetro de ruta.
+  // Solo se usa en Android (nativo). iOS y web tienen su propio flujo.
+  const processNativeOAuthCallback = async (callbackUrl: string): Promise<boolean> => {
     try {
-      const parsed = Linking.parse(callbackUrl);
-      const queryParams = parsed.queryParams ?? {};
-      const code = typeof queryParams.code === 'string' ? queryParams.code : undefined;
-      let accessToken = typeof queryParams.access_token === 'string' ? queryParams.access_token : undefined;
-      let refreshToken = typeof queryParams.refresh_token === 'string' ? queryParams.refresh_token : undefined;
-      if (!accessToken || !refreshToken) {
-        const hash = callbackUrl.split('#')[1] || '';
-        if (hash) {
-          const hashMap: Record<string, string> = {};
-          for (const pair of hash.split('&')) {
-            const [k, v] = pair.split('=');
-            if (k && v) hashMap[decodeURIComponent(k)] = decodeURIComponent(v);
-          }
-          accessToken = accessToken || hashMap['access_token'];
-          refreshToken = refreshToken || hashMap['refresh_token'];
+      // Parsear query params manualmente (Hermes no tiene URLSearchParams)
+      let code: string | null = null;
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      const queryPart = callbackUrl.split('?')[1] || '';
+      const queryBeforeHash = queryPart.split('#')[0];
+      if (queryBeforeHash) {
+        for (const pair of queryBeforeHash.split('&')) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'code') code = val;
         }
       }
-      return { code, access_token: accessToken, refresh_token: refreshToken };
-    } catch (err) {
-      console.warn('RegisterScreen: parseOAuthCallbackUrl error:', err);
-      return {};
-    }
-  };
 
-  const handleOAuthResult = async (result: WebBrowser.WebBrowserAuthSessionResult) => {
-    if (result.type === 'success' && result.url) {
-      console.log('RegisterScreen: OAuth success, callback URL received');
-      const { code, access_token, refresh_token } = parseOAuthCallbackUrl(result.url);
-      console.log('RegisterScreen: parsed params — code:', !!code, 'access_token:', !!access_token);
-
-      // Procesar el code/tokens INMEDIATAMENTE aquí — no pasarlos a callback.tsx
-      // El code PKCE expira en segundos, cualquier delay lo invalida.
-      try {
-        if (code) {
-          console.log('RegisterScreen: exchanging code for session immediately');
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error('RegisterScreen: exchangeCodeForSession error:', error.message);
-            setError('Error al completar el registro. Por favor intenta de nuevo.');
-            setLoading(false);
-            return;
-          }
-          console.log('RegisterScreen: code exchanged successfully, navigating to /');
-        } else if (access_token && refresh_token) {
-          console.log('RegisterScreen: setting session from tokens immediately');
-          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (error) {
-            console.error('RegisterScreen: setSession error:', error.message);
-            setError('Error al completar el registro. Por favor intenta de nuevo.');
-            setLoading(false);
-            return;
-          }
-          console.log('RegisterScreen: session set successfully, navigating to /');
-        } else {
-          console.warn('RegisterScreen: No code or tokens in callback URL');
-          setError('Error al completar el registro. Por favor intenta de nuevo.');
-          setLoading(false);
-          return;
+      const hashPart = callbackUrl.split('#')[1] || '';
+      if (!code && hashPart) {
+        for (const pair of hashPart.split('&')) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = decodeURIComponent(pair.substring(eqIdx + 1));
+          if (key === 'access_token') accessToken = val;
+          if (key === 'refresh_token') refreshToken = val;
         }
-      } catch (err: any) {
-        console.error('RegisterScreen: error processing OAuth result:', err.message);
-        setError('Error al completar el registro. Por favor intenta de nuevo.');
-        setLoading(false);
-        return;
       }
 
-      // Navegar a callback.tsx sin parámetros — la sesión ya está establecida
-      router.push('/auth/callback');
-    } else if (result.type === 'cancel') {
-      console.log('RegisterScreen: OAuth cancelled by user');
-      setError('Registro cancelado');
-      setLoading(false);
-    } else {
-      console.log('RegisterScreen: OAuth result type:', result.type);
-      setLoading(false);
+      if (code) {
+        console.log('RegisterScreen: exchanging PKCE code for session immediately');
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error('RegisterScreen: exchangeCodeForSession error:', error.message);
+          return false;
+        }
+        console.log('RegisterScreen: PKCE code exchanged successfully');
+        return true;
+      } else if (accessToken && refreshToken) {
+        console.log('RegisterScreen: setting session from implicit tokens immediately');
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (error) {
+          console.error('RegisterScreen: setSession error:', error.message);
+          return false;
+        }
+        console.log('RegisterScreen: session set from tokens successfully');
+        return true;
+      } else {
+        console.warn('RegisterScreen: no code or tokens found in callback URL');
+        return false;
+      }
+    } catch (err: any) {
+      console.error('RegisterScreen: processNativeOAuthCallback exception:', err.message);
+      return false;
     }
   };
 
   const handleAppleSignUp = async () => {
-    console.log('User tapped Sign up with Apple');
     setLoading(true);
     setError('');
 
@@ -161,25 +130,22 @@ export default function RegisterScreen() {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
       await saveOnboardingToLocalStorage();
-      console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
         : 'nospi://auth/callback';
-      console.log('RegisterScreen: Apple OAuth redirect URL:', redirectUrl);
 
-      // En web: redirect directo (no popup). En nativo: WebBrowser.
+      // Web: redirect directo, no WebBrowser
       if (Platform.OS === 'web') {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'apple',
           options: { redirectTo: redirectUrl },
         });
         if (error) {
-          console.error('Apple OAuth web error:', error);
           setError('Error al conectar con Apple. Por favor intenta de nuevo.');
           setLoading(false);
         }
-        return; // El browser redirige — no hay más código que ejecutar
+        return;
       }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -191,7 +157,6 @@ export default function RegisterScreen() {
       });
 
       if (error || !data?.url) {
-        console.error('Apple OAuth error:', error);
         if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
             'Configuración Pendiente',
@@ -204,69 +169,28 @@ export default function RegisterScreen() {
         return;
       }
 
-      console.log('RegisterScreen: Opening Apple OAuth URL in browser');
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       console.log('RegisterScreen: Apple WebBrowser result type:', result.type);
 
       if (result.type !== 'success') {
-        if (result.type === 'cancel') {
-          console.log('RegisterScreen: User cancelled Apple OAuth');
-          setError('Registro cancelado');
-        }
+        if (result.type === 'cancel') setError('Registro cancelado');
         setLoading(false);
         return;
       }
 
-      const callbackUrl = result.url;
-      console.log('RegisterScreen: Apple callback URL received:', callbackUrl);
-
-      // Parse query params manually — no new URLSearchParams() on Hermes
-      let code: string | null = null;
-      let accessToken: string | null = null;
-      let refreshToken: string | null = null;
-
-      const queryPart = callbackUrl.split('?')[1] || '';
-      const queryBeforeHash = queryPart.split('#')[0];
-      if (queryBeforeHash) {
-        const pairs = queryBeforeHash.split('&');
-        for (const pair of pairs) {
-          const eqIdx = pair.indexOf('=');
-          if (eqIdx === -1) continue;
-          const key = pair.substring(0, eqIdx);
-          const val = decodeURIComponent(pair.substring(eqIdx + 1));
-          if (key === 'code') code = val;
-        }
+      // FIX ANDROID: procesar el code PKCE INMEDIATAMENTE antes de cualquier navegación
+      const success = await processNativeOAuthCallback(result.url);
+      if (!success) {
+        setError('Error al completar el registro. Por favor intenta de nuevo.');
+        setLoading(false);
+        return;
       }
 
-      const hashPart = callbackUrl.split('#')[1] || '';
-      if (!code && hashPart) {
-        const pairs = hashPart.split('&');
-        for (const pair of pairs) {
-          const eqIdx = pair.indexOf('=');
-          if (eqIdx === -1) continue;
-          const key = pair.substring(0, eqIdx);
-          const val = decodeURIComponent(pair.substring(eqIdx + 1));
-          if (key === 'access_token') accessToken = val;
-          if (key === 'refresh_token') refreshToken = val;
-        }
-      }
-
-      if (code) {
-        console.log('RegisterScreen: Apple PKCE code found, navigating to callback screen');
-        router.push({ pathname: '/auth/callback', params: { code } });
-      } else if (accessToken && refreshToken) {
-        console.log('RegisterScreen: Apple implicit tokens found, navigating to callback screen');
-        router.push({
-          pathname: '/auth/callback',
-          params: { access_token: accessToken, refresh_token: refreshToken },
-        });
-      } else {
-        console.warn('RegisterScreen: No code or tokens in Apple callback URL:', callbackUrl);
-        router.push('/auth/callback');
-      }
-    } catch (error: any) {
-      console.error('Apple sign-up failed:', error);
-      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
+      // Sesión ya establecida — navegar a callback.tsx sin parámetros
+      router.push('/auth/callback');
+    } catch (err: any) {
+      console.error('Apple sign-up failed:', err);
+      if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
         showErrorAlert(
           'Configuración Pendiente',
           'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
@@ -279,7 +203,6 @@ export default function RegisterScreen() {
   };
 
   const handleGoogleSignUp = async () => {
-    console.log('User tapped Sign up with Google');
     setLoading(true);
     setError('');
 
@@ -287,14 +210,12 @@ export default function RegisterScreen() {
       await AsyncStorage.setItem('oauth_flow_type', 'register');
       if (Platform.OS === 'web') { localStorage.setItem('oauth_flow_type', 'register'); }
       await saveOnboardingToLocalStorage();
-      console.log('RegisterScreen: Stored oauth_flow_type as register');
 
       const redirectUrl = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
         : 'nospi://auth/callback';
-      console.log('RegisterScreen: Google OAuth redirect URL:', redirectUrl);
 
-      // En web: redirect directo (no popup). En nativo: WebBrowser.
+      // Web: redirect directo, no WebBrowser
       if (Platform.OS === 'web') {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -304,11 +225,10 @@ export default function RegisterScreen() {
           },
         });
         if (error) {
-          console.error('Google OAuth web error:', error);
           setError('Error al conectar con Google. Por favor intenta de nuevo.');
           setLoading(false);
         }
-        return; // El browser redirige — no hay más código que ejecutar
+        return;
       }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -316,15 +236,11 @@ export default function RegisterScreen() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: true,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          queryParams: { access_type: 'offline', prompt: 'consent' },
         },
       });
 
       if (error || !data?.url) {
-        console.error('Google OAuth error:', error);
         if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
             'Configuración Pendiente',
@@ -337,69 +253,28 @@ export default function RegisterScreen() {
         return;
       }
 
-      console.log('RegisterScreen: Opening Google OAuth URL in browser');
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       console.log('RegisterScreen: Google WebBrowser result type:', result.type);
 
       if (result.type !== 'success') {
-        if (result.type === 'cancel') {
-          console.log('RegisterScreen: User cancelled Google OAuth');
-          setError('Registro cancelado');
-        }
+        if (result.type === 'cancel') setError('Registro cancelado');
         setLoading(false);
         return;
       }
 
-      const callbackUrl = result.url;
-      console.log('RegisterScreen: Google callback URL received:', callbackUrl);
-
-      // Parse query params manually — no new URLSearchParams() on Hermes
-      let code: string | null = null;
-      let accessToken: string | null = null;
-      let refreshToken: string | null = null;
-
-      const queryPart = callbackUrl.split('?')[1] || '';
-      const queryBeforeHash = queryPart.split('#')[0];
-      if (queryBeforeHash) {
-        const pairs = queryBeforeHash.split('&');
-        for (const pair of pairs) {
-          const eqIdx = pair.indexOf('=');
-          if (eqIdx === -1) continue;
-          const key = pair.substring(0, eqIdx);
-          const val = decodeURIComponent(pair.substring(eqIdx + 1));
-          if (key === 'code') code = val;
-        }
+      // FIX ANDROID: procesar el code PKCE INMEDIATAMENTE antes de cualquier navegación
+      const success = await processNativeOAuthCallback(result.url);
+      if (!success) {
+        setError('Error al completar el registro. Por favor intenta de nuevo.');
+        setLoading(false);
+        return;
       }
 
-      const hashPart = callbackUrl.split('#')[1] || '';
-      if (!code && hashPart) {
-        const pairs = hashPart.split('&');
-        for (const pair of pairs) {
-          const eqIdx = pair.indexOf('=');
-          if (eqIdx === -1) continue;
-          const key = pair.substring(0, eqIdx);
-          const val = decodeURIComponent(pair.substring(eqIdx + 1));
-          if (key === 'access_token') accessToken = val;
-          if (key === 'refresh_token') refreshToken = val;
-        }
-      }
-
-      if (code) {
-        console.log('RegisterScreen: Google PKCE code found, navigating to callback screen');
-        router.push({ pathname: '/auth/callback', params: { code } });
-      } else if (accessToken && refreshToken) {
-        console.log('RegisterScreen: Google implicit tokens found, navigating to callback screen');
-        router.push({
-          pathname: '/auth/callback',
-          params: { access_token: accessToken, refresh_token: refreshToken },
-        });
-      } else {
-        console.warn('RegisterScreen: No code or tokens in Google callback URL:', callbackUrl);
-        router.push('/auth/callback');
-      }
-    } catch (error: any) {
-      console.error('Google sign-up failed:', error);
-      if (error.message && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
+      // Sesión ya establecida — navegar a callback.tsx sin parámetros
+      router.push('/auth/callback');
+    } catch (err: any) {
+      console.error('Google sign-up failed:', err);
+      if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
         showErrorAlert(
           'Configuración Pendiente',
           'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
@@ -412,7 +287,6 @@ export default function RegisterScreen() {
   };
 
   const handleEmailSignUp = () => {
-    console.log('User tapped Sign up with Email');
     setShowEmailForm(true);
   };
 
@@ -434,10 +308,8 @@ export default function RegisterScreen() {
 
     setLoading(true);
     setError('');
-    console.log('User registering with email:', email);
 
     try {
-      // Get all onboarding data from AsyncStorage
       const interestsData = await AsyncStorage.getItem('onboarding_interests');
       const personalityData = await AsyncStorage.getItem('onboarding_personality');
       const nameData = await AsyncStorage.getItem('onboarding_name');
@@ -451,22 +323,6 @@ export default function RegisterScreen() {
       const phoneData = await AsyncStorage.getItem('onboarding_phone');
       const photoData = await AsyncStorage.getItem('onboarding_photo');
       const compatibilityData = await AsyncStorage.getItem('onboarding_compatibility');
-
-      console.log('Retrieved onboarding data:', {
-        interests: interestsData,
-        personality: personalityData,
-        name: nameData,
-        birthdate: birthdateData,
-        age: ageData,
-        gender: genderData,
-        interestedIn: interestedInData,
-        ageRange: ageRangeData,
-        country: countryData,
-        city: cityData,
-        phone: phoneData,
-        photo: photoData,
-        compatibility: compatibilityData,
-      });
 
       const interests = interestsData ? JSON.parse(interestsData) : [];
       const personality = personalityData ? JSON.parse(personalityData) : [];
@@ -482,27 +338,18 @@ export default function RegisterScreen() {
       const photo = photoData || null;
       const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
 
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
 
       if (authError) {
-        console.error('Auth registration error:', authError);
         setError(`Error al crear la cuenta: ${authError.message}`);
         return;
       }
 
       if (!authData.user) {
-        console.error('No user data returned from auth');
         setError('Error al crear la cuenta');
         return;
       }
 
-      console.log('Auth user created:', authData.user.id);
-
-      // Create user profile in users table
       const { error: profileError } = await supabase
         .from('users')
         .insert({
@@ -519,7 +366,7 @@ export default function RegisterScreen() {
           city,
           phone: phoneInfo.phoneNumber,
           profile_photo_url: photo,
-          interests: interests,
+          interests,
           personality_traits: personality,
           compatibility_percentage: compatibility,
           notification_preferences: {
@@ -531,7 +378,6 @@ export default function RegisterScreen() {
         });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
         if (profileError.message.includes('users_phone_key') || profileError.message.includes('duplicate key')) {
           setError('Este número de celular ya está registrado. Por favor usa otro número o inicia sesión con tu cuenta existente.');
         } else if (profileError.message.includes('users_email_key') || profileError.message.includes('email')) {
@@ -542,29 +388,15 @@ export default function RegisterScreen() {
         return;
       }
 
-      console.log('User profile created successfully');
-
-      // Clear onboarding data
       await AsyncStorage.multiRemove([
-        'onboarding_interests',
-        'onboarding_personality',
-        'onboarding_name',
-        'onboarding_birthdate',
-        'onboarding_age',
-        'onboarding_gender',
-        'onboarding_interested_in',
-        'onboarding_age_range',
-        'onboarding_country',
-        'onboarding_city',
-        'onboarding_phone',
-        'onboarding_photo',
-        'onboarding_compatibility',
+        'onboarding_interests', 'onboarding_personality', 'onboarding_name',
+        'onboarding_birthdate', 'onboarding_age', 'onboarding_gender',
+        'onboarding_interested_in', 'onboarding_age_range', 'onboarding_country',
+        'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
       ]);
 
-      // Navigate to events screen
       router.replace('/(tabs)/events');
     } catch (error) {
-      console.error('Registration failed:', error);
       setError('Error al registrarse. Intenta de nuevo.');
     } finally {
       setLoading(false);
@@ -680,7 +512,7 @@ export default function RegisterScreen() {
                 onBlur={() => setPasswordFocused(false)}
               />
               <TouchableOpacity
-                onPress={() => { console.log('Toggle register password visibility'); setShowPassword(!showPassword); }}
+                onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
               >
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
@@ -703,7 +535,7 @@ export default function RegisterScreen() {
                 onBlur={() => setConfirmPasswordFocused(false)}
               />
               <TouchableOpacity
-                onPress={() => { console.log('Toggle register confirm password visibility'); setShowConfirmPassword(!showConfirmPassword); }}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeButton}
               >
                 <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
