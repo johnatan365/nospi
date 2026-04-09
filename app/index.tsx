@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import * as Sentry from '@sentry/react-native';
@@ -59,6 +59,8 @@ export default function Index() {
   const { user, loading } = useAuth();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [waitingForContext, setWaitingForContext] = useState(false);
+  // Evita que index.tsx se re-ejecute cuando la app vuelve del background
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
@@ -68,6 +70,9 @@ export default function Index() {
     }
 
     if (loading) return;
+
+    // Si ya navegamos una vez (ej: app volvió del background), no re-ejecutar
+    if (hasNavigated.current) return;
 
     const checkProfileAndNavigate = async () => {
       if (user) {
@@ -154,6 +159,7 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
+                hasNavigated.current = true;
                 await hideSplash();
                 router.replace('/(tabs)/events');
               } catch (createErr) {
@@ -174,6 +180,7 @@ export default function Index() {
                   .maybeSingle();
                 if (retryProfile) {
                   console.log('Index: Profile found on retry — navigating to events');
+                  hasNavigated.current = true;
                   await hideSplash();
                   router.replace('/(tabs)/events');
                   return;
@@ -184,6 +191,7 @@ export default function Index() {
               } catch (signOutError) {
                 console.error('Index: Error signing out:', signOutError);
               }
+              hasNavigated.current = true;
               await hideSplash();
               router.replace('/login?error=no_profile');
             }
@@ -215,10 +223,12 @@ export default function Index() {
               target += '?payment_status=' + paymentStatus;
               if (transactionId) target += '&transaction_id=' + transactionId;
             }
+            hasNavigated.current = true;
             await hideSplash();
             router.replace(target as any);
           } else {
             console.log('Index: No pending payment, redirecting to events');
+            hasNavigated.current = true;
             await hideSplash();
             router.replace('/(tabs)/events');
           }
@@ -265,6 +275,7 @@ export default function Index() {
           return;
         }
         console.log('Index: No session found, redirecting to welcome');
+        hasNavigated.current = true;
         await hideSplash();
         router.replace('/welcome');
       }
