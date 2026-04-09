@@ -1,54 +1,30 @@
 /**
  * app/auth/callback.tsx
  *
- * Web-only route que maneja el OAuth redirect de Google / Apple.
- * Con implicit flow, Supabase procesa los tokens del hash automáticamente
- * via detectSessionInUrl. Este componente solo espera que la sesión
- * se confirme y redirige a / donde index.tsx toma el control.
+ * Web: maneja el OAuth redirect de Google / Apple.
+ * Android: la sesión ya fue establecida en register.tsx — redirige inmediatamente a /.
  */
 
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as Sentry from '@sentry/react-native';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{
-    code?: string;
-    access_token?: string;
-    refresh_token?: string;
-  }>();
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      const handleNativeCallback = async () => {
-        try {
-          // La sesión ya fue establecida en register.tsx antes de navegar aquí.
-          // Solo esperamos a que esté disponible en el context.
-          const start = Date.now();
-          while (Date.now() - start < 5000) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              Sentry.addBreadcrumb({ message: 'callback.tsx: session confirmed', data: { userId: session.user.id } });
-              router.replace('/');
-              return;
-            }
-            await new Promise(r => setTimeout(r, 200));
-          }
-          Sentry.captureMessage('callback.tsx: no session after 5s', { level: 'warning' });
-          router.replace('/');
-        } catch (err: any) {
-          Sentry.captureException(err);
-          router.replace('/');
-        }
-      };
-      handleNativeCallback();
+      // Android: la sesión ya fue establecida en register.tsx antes de navegar aquí.
+      // Redirigir a / inmediatamente sin polling — index.tsx maneja el resto.
+      Sentry.addBreadcrumb({ message: 'callback.tsx: Android — redirecting immediately to /' });
+      router.replace('/');
       return;
     }
 
+    // Web: manejar el OAuth redirect normalmente
     const handleCallback = async () => {
       try {
         const url = window.location.href;
@@ -57,7 +33,6 @@ export default function AuthCallback() {
         const search = window.location.search;
         const hash = window.location.hash;
 
-        // Verificar si hay error explícito en la URL
         const params: Record<string, string> = {};
         const raw = (hash.startsWith('#') ? hash.slice(1) : '') || search.slice(1);
         raw.split('&').forEach((pair) => {
@@ -74,9 +49,6 @@ export default function AuthCallback() {
           return;
         }
 
-        // Con implicit flow, Supabase ya procesó los tokens via detectSessionInUrl.
-        // Solo necesitamos esperar a que la sesión esté disponible.
-        // Si hay tokens o code en la URL, intercambiarlos manualmente como fallback.
         if (params.access_token && params.refresh_token) {
           console.log('[AuthCallback] Setting session from tokens');
           const { error } = await supabase.auth.setSession({
@@ -89,19 +61,15 @@ export default function AuthCallback() {
           const { error } = await supabase.auth.exchangeCodeForSession(params.code);
           if (error) throw error;
         } else {
-          // No hay tokens ni code — puede que Supabase ya los procesó.
-          // Esperar un momento y verificar si hay sesión activa.
           console.log('[AuthCallback] No tokens in URL — checking if Supabase already processed them');
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        // Verificar si hay sesión (ya sea procesada por nosotros o por Supabase)
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           console.log('[AuthCallback] Session confirmed, redirecting to /');
           router.replace('/');
         } else {
-          // Esperar un poco más — Supabase puede estar procesando aún
           console.log('[AuthCallback] No session yet, waiting...');
           await new Promise(resolve => setTimeout(resolve, 1000));
           const { data: { session: session2 } } = await supabase.auth.getSession();
@@ -122,6 +90,11 @@ export default function AuthCallback() {
 
     handleCallback();
   }, []);
+
+  // Android: no renderiza nada visible — redirige inmediatamente
+  if (Platform.OS !== 'web') {
+    return <View style={styles.container} />;
+  }
 
   return (
     <View style={styles.container}>
