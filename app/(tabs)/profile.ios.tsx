@@ -869,6 +869,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => setShowDeleteAccountModal(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.deleteAccountButtonText}>Eliminar Cuenta</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
