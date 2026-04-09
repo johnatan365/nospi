@@ -17,6 +17,17 @@ import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import * as Sentry from "@sentry/react-native";
+
+Sentry.init({
+  dsn: "https://b2517bba95f69144b1b2b63ab48321aa@o4511187847151616.ingest.us.sentry.io/4511187857047552",
+  debug: false,
+  enableNativeNagger: false,
+  tracesSampleRate: 1.0,
+  integrations: [
+    Sentry.breadcrumbsIntegration({ console: true }),
+  ],
+});
 
 SplashScreen.preventAutoHideAsync();
 
@@ -62,7 +73,7 @@ function RootLayoutInner() {
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -74,4 +85,4 @@ export default function RootLayout() {
       </GestureHandlerRootView>
     </ErrorBoundary>
   );
-}
+});
