@@ -37,6 +37,7 @@ jobs:
         run: |
           npx expo prebuild --platform android --clean
           echo "${{ secrets.SENTRY_PROPERTIES }}" > android/sentry.properties
+          echo "${{ secrets.SENTRY_PROPERTIES }}" > android/app/sentry.properties
           cd android
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=/tmp/nospi-release.keystore \
