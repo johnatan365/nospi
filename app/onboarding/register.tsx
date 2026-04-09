@@ -98,19 +98,50 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleOAuthResult = (result: WebBrowser.WebBrowserAuthSessionResult) => {
+  const handleOAuthResult = async (result: WebBrowser.WebBrowserAuthSessionResult) => {
     if (result.type === 'success' && result.url) {
       console.log('RegisterScreen: OAuth success, callback URL received');
       const { code, access_token, refresh_token } = parseOAuthCallbackUrl(result.url);
       console.log('RegisterScreen: parsed params — code:', !!code, 'access_token:', !!access_token);
-      if (code) {
-        router.push({ pathname: '/auth/callback', params: { code } });
-      } else if (access_token && refresh_token) {
-        router.push({ pathname: '/auth/callback', params: { access_token, refresh_token } });
-      } else {
-        console.warn('RegisterScreen: No code or tokens in callback URL, navigating to callback screen anyway');
-        router.push('/auth/callback');
+
+      // Procesar el code/tokens INMEDIATAMENTE aquí — no pasarlos a callback.tsx
+      // El code PKCE expira en segundos, cualquier delay lo invalida.
+      try {
+        if (code) {
+          console.log('RegisterScreen: exchanging code for session immediately');
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('RegisterScreen: exchangeCodeForSession error:', error.message);
+            setError('Error al completar el registro. Por favor intenta de nuevo.');
+            setLoading(false);
+            return;
+          }
+          console.log('RegisterScreen: code exchanged successfully, navigating to /');
+        } else if (access_token && refresh_token) {
+          console.log('RegisterScreen: setting session from tokens immediately');
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (error) {
+            console.error('RegisterScreen: setSession error:', error.message);
+            setError('Error al completar el registro. Por favor intenta de nuevo.');
+            setLoading(false);
+            return;
+          }
+          console.log('RegisterScreen: session set successfully, navigating to /');
+        } else {
+          console.warn('RegisterScreen: No code or tokens in callback URL');
+          setError('Error al completar el registro. Por favor intenta de nuevo.');
+          setLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        console.error('RegisterScreen: error processing OAuth result:', err.message);
+        setError('Error al completar el registro. Por favor intenta de nuevo.');
+        setLoading(false);
+        return;
       }
+
+      // Navegar a callback.tsx sin parámetros — la sesión ya está establecida
+      router.push('/auth/callback');
     } else if (result.type === 'cancel') {
       console.log('RegisterScreen: OAuth cancelled by user');
       setError('Registro cancelado');
