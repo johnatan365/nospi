@@ -117,6 +117,9 @@ export default function Index() {
 
             if (isRegisterFlow) {
               console.log('Index: No profile — register flow, creating profile from onboarding data');
+              // Marcar hasNavigated ANTES del upsert para evitar re-ejecución
+              // cuando la app vuelve del background durante el registro OAuth
+              hasNavigated.current = true;
               try {
                 const d = await readOnboardingData();
 
@@ -165,7 +168,6 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
-                hasNavigated.current = true;
                 await hideSplash();
                 router.replace('/(tabs)/events');
               } catch (createErr) {
