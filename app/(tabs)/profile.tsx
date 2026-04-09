@@ -162,6 +162,8 @@ export default function ProfileScreen() {
 
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -385,6 +387,40 @@ export default function ProfileScreen() {
     Linking.openURL(url).catch(() =>
       Alert.alert('Error', 'No se pudo abrir WhatsApp')
     );
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('No session');
+
+      const response = await fetch(
+        'https://wjdiraurfbawotlcndmk.supabase.co/functions/v1/delete-user-account',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al eliminar la cuenta');
+      }
+
+      // Cuenta eliminada en Supabase — limpiar localmente y navegar
+      await AsyncStorage.clear();
+      router.replace('/welcome');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo eliminar la cuenta. Intenta de nuevo.');
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -883,6 +919,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => setShowDeleteAccountModal(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.deleteAccountButtonText}>Eliminar Cuenta</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.85}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
@@ -1252,6 +1296,38 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      {/* Delete Account Modal */}
+      <Modal visible={showDeleteAccountModal} transparent animationType="fade" onRequestClose={() => setShowDeleteAccountModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderRadius: 24, marginHorizontal: 24 }]}>
+            <Text style={[styles.modalTitle, { color: '#DC2626' }]}>⚠️ Eliminar Cuenta</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 16 }]}>
+              Esta acción es permanente e irreversible. Se eliminarán todos tus datos, fotos y citas registradas.
+            </Text>
+            <Text style={{ fontSize: 15, color: '#333', marginBottom: 24, textAlign: 'center' }}>
+              ¿Estás seguro de que deseas eliminar tu cuenta?
+            </Text>
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: '#DC2626', opacity: deletingAccount ? 0.6 : 1 }]}
+              onPress={handleDeleteAccount}
+              disabled={deletingAccount}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.saveButtonText}>
+                {deletingAccount ? 'Eliminando...' : 'Sí, eliminar mi cuenta'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowDeleteAccountModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </LinearGradient>
   );
 }
@@ -1286,6 +1362,8 @@ const styles = StyleSheet.create({
   chip: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)' },
   chipText: { color: '#880E4F', fontSize: 14, fontWeight: '500' },
   emptyText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
+  deleteAccountButton: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'rgba(220, 38, 38, 0.5)', paddingVertical: 16, paddingHorizontal: 32, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 8 },
+  deleteAccountButtonText: { color: '#DC2626', fontSize: 16, fontWeight: '600' },
   signOutButton: { backgroundColor: '#880E4F', borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 32, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   signOutButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
