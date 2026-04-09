@@ -128,17 +128,15 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
-    
     setError('');
     setSubmitting(true);
     try {
       await signInWithApple();
+      setSubmitting(false);
       if (Platform.OS !== 'web') {
-        
         router.replace('/');
       }
     } catch (err: any) {
-      
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
         setError('Inicio de sesión cancelado');
       } else {
@@ -149,17 +147,15 @@ export default function LoginScreen() {
   };
 
   const handleGoogle = async () => {
-    
     setError('');
     setSubmitting(true);
     try {
       await signInWithGoogle();
+      setSubmitting(false);
       if (Platform.OS !== 'web') {
-        
         router.replace('/');
       }
     } catch (err: any) {
-      
       if (err?.message?.includes('cancel')) {
         setError('Inicio de sesión cancelado');
       } else {
