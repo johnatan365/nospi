@@ -71,6 +71,12 @@ export default function Index() {
 
     if (loading) return;
 
+    // Resetear hasNavigated cuando el usuario cierra sesión (user pasa a null)
+    // para que un nuevo login pueda navegar correctamente
+    if (!user && !loading) {
+      hasNavigated.current = false;
+    }
+
     // Si ya navegamos una vez (ej: app volvió del background), no re-ejecutar
     if (hasNavigated.current) return;
 
