@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
@@ -59,6 +60,7 @@ export default function Index() {
     const checkProfileAndNavigate = async () => {
       if (user) {
         console.log('Index: User authenticated, checking profile existence');
+        Sentry.addBreadcrumb({ message: 'Index: user authenticated', data: { userId: user.id, email: user.email } });
         setIsCheckingProfile(true);
 
         try {
@@ -88,6 +90,7 @@ export default function Index() {
               const flowType = await AsyncStorage.getItem('oauth_flow_type');
               isRegisterFlow = flowType === 'register';
             }
+            Sentry.addBreadcrumb({ message: 'Index: no profile found', data: { isRegisterFlow, platform: Platform.OS } });
 
             if (isRegisterFlow) {
               console.log('Index: No profile — register flow, creating profile from onboarding data');
@@ -146,6 +149,7 @@ export default function Index() {
               }
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
+              Sentry.captureMessage('Index: no_profile flow triggered', { level: 'warning', extra: { userId: user.id, platform: Platform.OS } });
               // En nativo: esperar 1.5s y verificar de nuevo — puede ser que el perfil
               // acaba de ser creado por una ejecución paralela del effect (race condition OAuth)
               if (Platform.OS !== 'web') {
