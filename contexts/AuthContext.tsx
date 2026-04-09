@@ -228,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw error;
           }
           console.log("[AuthContext] Apple sign-in success");
+          await waitForSession();
           return;
         } catch (err: any) {
           // If it's a cancellation, rethrow so the UI can handle it
