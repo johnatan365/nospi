@@ -352,6 +352,35 @@ export default function RegisterScreen() {
         return;
       }
 
+      // Upload photo to Supabase Storage if provided
+      let profilePhotoUrl: string | null = null;
+      if (photo) {
+        try {
+          let fileExt = 'jpg';
+          if (Platform.OS !== 'web') {
+            fileExt = photo.split('.').pop()?.toLowerCase() || 'jpg';
+          }
+          const timestamp = Date.now();
+          const fileName = `${authData.user.id}-${timestamp}.${fileExt}`;
+          const filePath = `${authData.user.id}/${fileName}`;
+
+          const response = await fetch(photo);
+          const blob = await response.blob();
+          const uploadData = await new Response(blob).arrayBuffer();
+
+          const { error: uploadError } = await supabase.storage
+            .from('profile-photos')
+            .upload(filePath, uploadData, { contentType: `image/${fileExt}`, cacheControl: '3600', upsert: true });
+
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+            profilePhotoUrl = urlData.publicUrl;
+          }
+        } catch (e) {
+          // Photo upload failed silently — profile will be created without photo
+        }
+      }
+
       const { error: profileError } = await supabase
         .from('users')
         .insert({
@@ -367,7 +396,7 @@ export default function RegisterScreen() {
           country,
           city,
           phone: phoneInfo.phoneNumber,
-          profile_photo_url: photo,
+          profile_photo_url: profilePhotoUrl,
           interests,
           personality_traits: personality,
           compatibility_percentage: compatibility,
