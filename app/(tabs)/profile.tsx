@@ -1161,6 +1161,8 @@ export default function ProfileScreen() {
 
       {/* Password Change Modal */}
       <Modal visible={showPasswordModal} transparent animationType="slide" onRequestClose={() => setShowPasswordModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
@@ -1200,10 +1202,14 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Support Email Modal */}
       <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={closeSupportModal}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             {supportEmailSent ? (
@@ -1269,6 +1275,8 @@ export default function ProfileScreen() {
             )}
           </View>
         </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Notification Preferences Modal */}
