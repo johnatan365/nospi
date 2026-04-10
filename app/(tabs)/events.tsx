@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,8 +40,7 @@ export default function EventsScreen() {
         .from('appointments')
         .select('event_id')
         .eq('user_id', user.id)
-        .in('status', ['confirmada', 'anterior'])
-        .eq('payment_status', 'completed'),
+        .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
         .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
