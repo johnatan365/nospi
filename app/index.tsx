@@ -164,6 +164,7 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
+                Sentry.captureMessage('Index: register complete — navigating to events', { level: 'info', extra: { userId: user.id } });
                 hasNavigated.current = true;
                 await hideSplash();
                 router.replace('/(tabs)/events');
@@ -233,6 +234,7 @@ export default function Index() {
             router.replace(target as any);
           } else {
             console.log('Index: No pending payment, redirecting to events');
+            Sentry.captureMessage('Index: login complete — navigating to events', { level: 'info', extra: { userId: user.id } });
             hasNavigated.current = true;
             await hideSplash();
             router.replace('/(tabs)/events');
