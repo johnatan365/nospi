@@ -61,6 +61,8 @@ export default function Index() {
   const [waitingForContext, setWaitingForContext] = useState(false);
   // Evita que index.tsx se re-ejecute cuando la app vuelve del background
   const hasNavigated = useRef(false);
+  // Mutex: evita que múltiples ejecuciones simultáneas del effect corran en paralelo
+  const isRunning = useRef(false);
 
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
@@ -69,6 +71,7 @@ export default function Index() {
     if (hasNavigated.current) {
       if (!user && !loading) {
         hasNavigated.current = false;
+        isRunning.current = false;
       }
       return;
     }
@@ -78,6 +81,10 @@ export default function Index() {
     }
 
     if (loading) return;
+
+    // Mutex: si ya hay una ejecución en curso, salir
+    if (isRunning.current) return;
+    isRunning.current = true;
 
     const checkProfileAndNavigate = async () => {
       if (user) {
@@ -247,6 +254,7 @@ export default function Index() {
           } else {
             Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
           }
+          isRunning.current = false;
           router.replace('/welcome');
         } finally {
           setIsCheckingProfile(false);
