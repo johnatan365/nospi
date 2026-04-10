@@ -143,6 +143,7 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
 
@@ -364,6 +365,24 @@ export default function AdminPanelScreen() {
       } else {
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
+      }
+
+      // Load all event_ratings to compute per-user average ratings
+      const { data: allRatings } = await supabase
+        .from('event_ratings')
+        .select('rated_user_id, rating');
+      if (allRatings && allRatings.length > 0) {
+        const map: Record<string, { sum: number; count: number }> = {};
+        for (const r of allRatings) {
+          if (!map[r.rated_user_id]) map[r.rated_user_id] = { sum: 0, count: 0 };
+          map[r.rated_user_id].sum += r.rating;
+          map[r.rated_user_id].count += 1;
+        }
+        const avgs: Record<string, { avg: number; count: number }> = {};
+        for (const [uid, d] of Object.entries(map)) {
+          avgs[uid] = { avg: d.sum / d.count, count: d.count };
+        }
+        setUserRatingAverages(avgs);
       }
 
       // Load appointments using the secure admin function
@@ -2020,6 +2039,7 @@ export default function AdminPanelScreen() {
       'Edad': u.age || '',
       'Rango edad mín': u.age_range_min || 18,
       'Rango edad máx': u.age_range_max || 99,
+      'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -2114,7 +2134,7 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad'];
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   const cellStyle: any = {
@@ -2155,11 +2175,12 @@ export default function AdminPanelScreen() {
             </thead>
             <tbody>
               {users.length === 0 ? (
-                <tr><td colSpan={10} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
+                <tr><td colSpan={11} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
               ) : users.map((user, i) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
                 const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
+                const uRating = userRatingAverages[user.id];
                 const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                 return (
                   <tr key={user.id} style={row}>
@@ -2177,6 +2198,20 @@ export default function AdminPanelScreen() {
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{user.age || '—'}</td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {uRating ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                          <span style={{ fontSize: 15 }}>
+                            {'⭐'.repeat(Math.round(uRating.avg))}{'☆'.repeat(5 - Math.round(uRating.avg))}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#6B7280' }}>
+                            {uRating.avg.toFixed(1)}/5 · {uRating.count} voto{uRating.count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
