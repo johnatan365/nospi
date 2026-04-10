@@ -186,8 +186,9 @@ export default function RegisterScreen() {
         return;
       }
 
-      // Sesión ya establecida — navegar a callback.tsx sin parámetros
-      router.push('/auth/callback');
+      // Sesión ya establecida — navegar a / directamente (sin callback.tsx)
+      // Esto evita que index.tsx se ejecute dos veces simultáneamente
+      router.replace('/');
     } catch (err: any) {
       console.error('Apple sign-up failed:', err);
       if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
@@ -270,8 +271,9 @@ export default function RegisterScreen() {
         return;
       }
 
-      // Sesión ya establecida — navegar a callback.tsx sin parámetros
-      router.push('/auth/callback');
+      // Sesión ya establecida — navegar a / directamente (sin callback.tsx)
+      // Esto evita que index.tsx se ejecute dos veces simultáneamente
+      router.replace('/');
     } catch (err: any) {
       console.error('Google sign-up failed:', err);
       if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
