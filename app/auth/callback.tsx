@@ -20,12 +20,15 @@ export default function AuthCallback() {
       // Android: register.tsx ya maneja la navegación después del OAuth.
       // callback.tsx no debe navegar — evita doble ejecución de index.tsx.
       // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        Sentry.addBreadcrumb({ message: 'callback.tsx: Android — session found, navigating to /' });
-        router.replace('/');
-      }
-      // Si no hay sesión, register.tsx está procesando — no hacer nada
+      const checkSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          Sentry.addBreadcrumb({ message: 'callback.tsx: Android — session found, navigating to /' });
+          router.replace('/');
+        }
+        // Si no hay sesión, register.tsx está procesando — no hacer nada
+      };
+      checkSession();
       return;
     }
 
