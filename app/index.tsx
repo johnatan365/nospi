@@ -65,20 +65,19 @@ export default function Index() {
   useEffect(() => {
     console.log('Index: Checking auth state - loading:', loading, 'user:', user?.id, 'waitingForContext:', waitingForContext);
 
+    // Si ya navegamos, salir inmediatamente — solo resetear si cerró sesión
+    if (hasNavigated.current) {
+      if (!user && !loading) {
+        hasNavigated.current = false;
+      }
+      return;
+    }
+
     if (waitingForContext && user) {
       setWaitingForContext(false);
     }
 
     if (loading) return;
-
-    // Resetear hasNavigated cuando el usuario cierra sesión (user pasa a null)
-    // para que un nuevo login pueda navegar correctamente
-    if (!user && !loading) {
-      hasNavigated.current = false;
-    }
-
-    // Si ya navegamos una vez (ej: app volvió del background), no re-ejecutar
-    if (hasNavigated.current) return;
 
     const checkProfileAndNavigate = async () => {
       if (user) {
@@ -117,9 +116,6 @@ export default function Index() {
 
             if (isRegisterFlow) {
               console.log('Index: No profile — register flow, creating profile from onboarding data');
-              // Marcar hasNavigated ANTES del upsert para evitar re-ejecución
-              // cuando la app vuelve del background durante el registro OAuth
-              hasNavigated.current = true;
               try {
                 const d = await readOnboardingData();
 
@@ -168,6 +164,7 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
+                hasNavigated.current = true;
                 await hideSplash();
                 router.replace('/(tabs)/events');
               } catch (createErr) {
