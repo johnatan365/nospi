@@ -13,6 +13,7 @@ import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
+import appJson from '@/app.json';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
@@ -931,12 +932,12 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.85}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
-        <Text style={styles.versionText}>v{Constants.expoConfig?.version || '1.0.0'} ({Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || '—'})</Text>
+        <Text style={styles.versionText}>v{appJson.expo.version}{Platform.OS !== 'web' ? ` (${appJson.expo.android?.versionCode || '—'})` : ''}</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
@@ -1163,7 +1164,7 @@ export default function ProfileScreen() {
 
       {/* Password Change Modal */}
       <Modal visible={showPasswordModal} transparent animationType="slide" onRequestClose={() => setShowPasswordModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1210,7 +1211,7 @@ export default function ProfileScreen() {
 
       {/* Support Email Modal */}
       <Modal visible={showSupportEmailModal} transparent animationType="slide" onRequestClose={closeSupportModal}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
