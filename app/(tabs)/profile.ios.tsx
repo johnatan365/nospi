@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import Constants from 'expo-constants';
+import appJson from '@/app.json';
 
 const CACHE_KEY = 'cache_profile';
 
@@ -881,7 +882,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
-        <Text style={styles.versionText}>v{Constants.expoConfig?.version || '1.0.0'} ({Constants.expoConfig?.ios?.buildNumber || '—'})</Text>
+        <Text style={styles.versionText}>v{appJson.expo.version} ({appJson.expo.ios?.buildNumber || '—'})</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
