@@ -464,6 +464,8 @@ export default function InteraccionScreen() {
           user_id: user.id,
           confirmed: true,
           check_in_time: confirmedAt,
+          is_presented: true,
+          presented_at: confirmedAt,
         }, {
           onConflict: 'event_id,user_id',
         });
