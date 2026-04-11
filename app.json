@@ -14,7 +14,7 @@
       "backgroundColor": "#1a0010"
     },
     "ios": {
-      "buildNumber": "34",
+      "buildNumber": "35",
       "supportsTablet": true,
       "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
@@ -38,6 +38,7 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -88,7 +89,7 @@
           ]
         }
       ],
-      "versionCode": 25
+      "versionCode": 26
     },
     "web": {
       "favicon": "./assets/icon.png",
