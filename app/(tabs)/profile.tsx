@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import Constants from 'expo-constants';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
@@ -930,6 +931,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.85}>
           <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
+        <Text style={styles.versionText}>v{Constants.expoConfig?.version || '1.0.0'} ({Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || '—'})</Text>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -1374,6 +1376,7 @@ const styles = StyleSheet.create({
   deleteAccountButtonText: { color: '#DC2626', fontSize: 16, fontWeight: '600' },
   signOutButton: { backgroundColor: '#880E4F', borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)', paddingVertical: 18, paddingHorizontal: 32, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 32, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   signOutButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
+  versionText: { textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 24 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalScrollView: { maxHeight: '90%' },
   modalScrollContent: { flexGrow: 1 },
