@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -236,7 +236,7 @@ export default function AdminPanelScreen() {
       loadDashboardData();
       loadAppConfig();
     }
-  }, [isAuthenticated, currentView]);
+  }, [isAuthenticated]);
 
   // Realtime subscription for events table
   useEffect(() => {
@@ -2643,15 +2643,19 @@ export default function AdminPanelScreen() {
     <View style={styles.fullScreenContainer}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Inject CSS for sidebar layout — StyleSheet.create can't do position:fixed or 100vh */}
+      {/* Inject real CSS — StyleSheet can't do position:fixed, 100vh, or media queries */}
       <style dangerouslySetInnerHTML={{ __html: `
-        .nospi-layout {
+        html, body, #root { height: 100%; margin: 0; padding: 0; }
+        .nospi-wrap {
           display: flex;
           flex-direction: row;
           height: 100vh;
           width: 100%;
-          overflow: hidden;
+          position: fixed;
+          top: 0; left: 0;
+          background: #F3E8FF;
         }
+        /* ── SIDEBAR ── */
         .nospi-sidebar {
           width: 240px;
           min-width: 240px;
@@ -2659,193 +2663,121 @@ export default function AdminPanelScreen() {
           background: #6B0F3A;
           display: flex;
           flex-direction: column;
-          position: fixed;
-          top: 0;
-          left: 0;
-          z-index: 100;
-          box-shadow: 4px 0 20px rgba(0,0,0,0.3);
-          transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+          flex-shrink: 0;
+          transition: transform 0.26s cubic-bezier(.4,0,.2,1);
+          z-index: 200;
+          box-shadow: 4px 0 24px rgba(0,0,0,0.28);
         }
-        .nospi-sidebar.mobile-hidden {
-          transform: translateX(-240px);
-        }
-        .nospi-sidebar-header {
+        .nospi-sidebar-hdr {
           display: flex;
-          flex-direction: row;
           align-items: center;
           gap: 12px;
           padding: 28px 20px 22px;
           border-bottom: 1px solid rgba(255,255,255,0.12);
-        }
-        .nospi-logo-circle {
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
-          background: rgba(255,255,255,0.18);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 22px;
-          font-weight: bold;
-          color: white;
           flex-shrink: 0;
         }
-        .nospi-brand-name {
-          font-size: 15px;
-          font-weight: 700;
-          color: white;
-          letter-spacing: 3px;
-          line-height: 1.2;
+        .nospi-logo {
+          width: 42px; height: 42px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.18);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 22px; font-weight: 700; color: #fff;
+          flex-shrink: 0;
         }
-        .nospi-brand-sub {
-          font-size: 10px;
-          color: rgba(255,255,255,0.5);
-          letter-spacing: 1.5px;
-          margin-top: 2px;
-        }
-        .nospi-nav {
-          flex: 1;
-          padding: 12px 10px;
-          overflow-y: auto;
-        }
-        .nospi-nav-item {
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 14px;
-          border-radius: 10px;
-          margin-bottom: 4px;
-          cursor: pointer;
-          position: relative;
-          border: none;
-          background: transparent;
-          width: 100%;
-          text-align: left;
+        .nospi-brand { display: flex; flex-direction: column; }
+        .nospi-brand-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 3px; }
+        .nospi-brand-sub  { font-size: 10px; color: rgba(255,255,255,0.5); letter-spacing: 1.5px; margin-top: 2px; }
+        .nospi-nav { flex: 1; padding: 12px 10px; overflow-y: auto; }
+        .nospi-nav-btn {
+          display: flex; flex-direction: row; align-items: center;
+          gap: 12px; width: 100%; padding: 12px 14px;
+          border-radius: 10px; margin-bottom: 4px;
+          background: transparent; border: none; cursor: pointer;
+          position: relative; text-align: left;
           transition: background 0.15s;
         }
-        .nospi-nav-item:hover {
-          background: rgba(255,255,255,0.10);
+        .nospi-nav-btn:hover { background: rgba(255,255,255,0.10); }
+        .nospi-nav-btn.active { background: rgba(255,255,255,0.18); }
+        .nospi-nav-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+        .nospi-nav-label { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65); flex: 1; }
+        .nospi-nav-btn.active .nospi-nav-label { color: #fff; }
+        .nospi-nav-dot {
+          position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+          width: 3px; height: 22px; border-radius: 2px; background: #FF6B9D;
         }
-        .nospi-nav-item.active {
-          background: rgba(255,255,255,0.16);
-        }
-        .nospi-nav-icon {
-          font-size: 17px;
-          width: 22px;
-          text-align: center;
-        }
-        .nospi-nav-label {
-          font-size: 14px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.65);
-          flex: 1;
-        }
-        .nospi-nav-item.active .nospi-nav-label {
-          color: white;
-        }
-        .nospi-nav-indicator {
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 3px;
-          height: 22px;
-          border-radius: 2px;
-          background: #FF6B9D;
-        }
-        .nospi-sidebar-footer {
-          padding: 16px 20px;
+        .nospi-sidebar-ftr {
+          padding: 14px 20px;
           border-top: 1px solid rgba(255,255,255,0.10);
-          font-size: 11px;
-          color: rgba(255,255,255,0.3);
-          text-align: center;
+          font-size: 11px; color: rgba(255,255,255,0.3); text-align: center;
+          flex-shrink: 0;
         }
+        /* ── MAIN ── */
         .nospi-main {
           flex: 1;
-          margin-left: 240px;
-          height: 100vh;
           display: flex;
           flex-direction: column;
+          min-width: 0;
+          height: 100vh;
           overflow: hidden;
-          background: #F3E8FF;
         }
-        .nospi-mobile-header {
+        .nospi-mobile-hdr {
           display: none;
-          flex-direction: row;
-          align-items: center;
-          justify-content: space-between;
-          background: #6B0F3A;
-          padding: 13px 16px;
+          flex-direction: row; align-items: center; justify-content: space-between;
+          background: #6B0F3A; padding: 13px 16px; flex-shrink: 0;
           box-shadow: 0 2px 10px rgba(0,0,0,0.25);
         }
-        .nospi-hamburger {
-          width: 40px;
-          height: 40px;
-          border-radius: 8px;
-          background: rgba(255,255,255,0.15);
-          border: none;
-          font-size: 19px;
-          color: white;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        .nospi-burger {
+          width: 40px; height: 40px; border-radius: 8px;
+          background: rgba(255,255,255,0.15); border: none;
+          font-size: 20px; color: #fff; cursor: pointer;
         }
-        .nospi-mobile-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: white;
-          letter-spacing: 2.5px;
+        .nospi-mobile-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 2.5px; }
+        /* THE SCROLL FIX: this div must fill remaining height and scroll */
+        .nospi-content {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
         }
+        .nospi-content-inner {
+          padding: 24px;
+          max-width: 1400px;
+          margin: 0 auto;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        /* ── OVERLAY ── */
         .nospi-overlay {
-          display: none;
-          position: fixed;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.55);
-          z-index: 99;
+          display: none; position: fixed;
+          inset: 0; background: rgba(0,0,0,0.55); z-index: 199;
         }
+        /* ── MOBILE ── */
         @media (max-width: 767px) {
-          .nospi-sidebar {
-            transform: translateX(-240px);
-          }
-          .nospi-sidebar.mobile-open {
-            transform: translateX(0);
-          }
-          .nospi-main {
-            margin-left: 0;
-          }
-          .nospi-mobile-header {
-            display: flex;
-          }
-          .nospi-overlay.visible {
-            display: block;
-          }
+          .nospi-sidebar { position: fixed; transform: translateX(-240px); }
+          .nospi-sidebar.open { transform: translateX(0); }
+          .nospi-mobile-hdr { display: flex; }
+          .nospi-overlay.show { display: block; }
         }
       ` }} />
 
-      {/* Overlay for mobile */}
-      <div
-        className={`nospi-overlay${sidebarOpen ? ' visible' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
+      {/* Overlay */}
+      <div className={`nospi-overlay${sidebarOpen ? ' show' : ''}`} onClick={() => setSidebarOpen(false)} />
 
-      <div className="nospi-layout">
+      <div className="nospi-wrap">
         {/* SIDEBAR */}
-        <div className={`nospi-sidebar${isMobile && !sidebarOpen ? '' : isMobile && sidebarOpen ? ' mobile-open' : ''}`}>
-          <div className="nospi-sidebar-header">
-            <div className="nospi-logo-circle">N</div>
-            <div>
-              <div className="nospi-brand-name">NOSPI</div>
-              <div className="nospi-brand-sub">Admin Panel</div>
+        <div className={`nospi-sidebar${sidebarOpen ? ' open' : ''}`}>
+          <div className="nospi-sidebar-hdr">
+            <div className="nospi-logo">N</div>
+            <div className="nospi-brand">
+              <span className="nospi-brand-name">NOSPI</span>
+              <span className="nospi-brand-sub">Admin Panel</span>
             </div>
           </div>
-
           <div className="nospi-nav">
             {NAV_ITEMS.map(item => (
               <button
                 key={item.key}
-                className={`nospi-nav-item${currentView === item.key ? ' active' : ''}`}
+                className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
                 onClick={() => {
                   if (item.key === 'questions') loadQuestions();
                   setCurrentView(item.key);
@@ -2854,35 +2786,33 @@ export default function AdminPanelScreen() {
               >
                 <span className="nospi-nav-icon">{item.icon}</span>
                 <span className="nospi-nav-label">{item.label}</span>
-                {currentView === item.key && <div className="nospi-nav-indicator" />}
+                {currentView === item.key && <div className="nospi-nav-dot" />}
               </button>
             ))}
           </div>
-
-          <div className="nospi-sidebar-footer">Nospi © 2025</div>
+          <div className="nospi-sidebar-ftr">Nospi © 2025</div>
         </div>
 
-        {/* MAIN CONTENT */}
+        {/* MAIN */}
         <div className="nospi-main">
-          {/* Mobile header */}
-          <div className="nospi-mobile-header">
-            <button className="nospi-hamburger" onClick={() => setSidebarOpen(p => !p)}>
+          <div className="nospi-mobile-hdr">
+            <button className="nospi-burger" onClick={() => setSidebarOpen(p => !p)}>
               {sidebarOpen ? '✕' : '☰'}
             </button>
             <span className="nospi-mobile-title">NOSPI Admin</span>
             <div style={{ width: 40 }} />
           </div>
-
-          {/* Scrollable content */}
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-            {currentView === 'dashboard'    && renderDashboard()}
-            {currentView === 'events'       && renderEvents()}
-            {currentView === 'users'        && renderUsers()}
-            {currentView === 'participants' && renderParticipants()}
-            {currentView === 'questions'    && renderQuestions()}
-            {currentView === 'realtime'     && renderRealtime()}
-            {currentView === 'config'       && renderConfig()}
-          </ScrollView>
+          <div className="nospi-content">
+            <div className="nospi-content-inner">
+              {currentView === 'dashboard'    && renderDashboard()}
+              {currentView === 'events'       && renderEvents()}
+              {currentView === 'users'        && renderUsers()}
+              {currentView === 'participants' && renderParticipants()}
+              {currentView === 'questions'    && renderQuestions()}
+              {currentView === 'realtime'     && renderRealtime()}
+              {currentView === 'config'       && renderConfig()}
+            </div>
+          </div>
         </div>
       </div>
 
