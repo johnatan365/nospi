@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -120,6 +120,9 @@ const DEFAULT_QUESTIONS_DATA = {
 
 export default function AdminPanelScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -2626,85 +2629,262 @@ export default function AdminPanelScreen() {
     );
   }
 
+  const NAV_ITEMS: { key: AdminView; icon: string; label: string }[] = [
+    { key: 'dashboard',    icon: '📊', label: 'Dashboard' },
+    { key: 'events',       icon: '🎉', label: 'Eventos' },
+    { key: 'users',        icon: '👤', label: 'Usuarios' },
+    { key: 'participants', icon: '👥', label: 'Participantes' },
+    { key: 'questions',    icon: '❓', label: 'Preguntas' },
+    { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
+    { key: 'config',       icon: '⚙️', label: 'Config' },
+  ];
+
   return (
     <View style={styles.fullScreenContainer}>
-      <Stack.Screen options={{ title: 'Panel de Administración - Nospi' }} />
-      <View style={styles.container}>
-        {/* Navigation Tabs */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'dashboard' && styles.tabActive]}
-            onPress={() => setCurrentView('dashboard')}
-          >
-            <Text style={[styles.tabText, currentView === 'dashboard' && styles.tabTextActive]}>
-              📊 Dashboard
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'events' && styles.tabActive]}
-            onPress={() => setCurrentView('events')}
-          >
-            <Text style={[styles.tabText, currentView === 'events' && styles.tabTextActive]}>
-              🎉 Eventos
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'users' && styles.tabActive]}
-            onPress={() => setCurrentView('users')}
-          >
-            <Text style={[styles.tabText, currentView === 'users' && styles.tabTextActive]}>
-              👥 Usuarios
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'participants' && styles.tabActive]}
-            onPress={() => setCurrentView('participants')}
-          >
-            <Text style={[styles.tabText, currentView === 'participants' && styles.tabTextActive]}>
-              👥 Participantes
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'questions' && styles.tabActive]}
-            onPress={() => {
-              setCurrentView('questions');
-              loadQuestions();
-            }}
-          >
-            <Text style={[styles.tabText, currentView === 'questions' && styles.tabTextActive]}>
-              ❓ Preguntas
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'realtime' && styles.tabActive]}
-            onPress={() => setCurrentView('realtime')}
-          >
-            <Text style={[styles.tabText, currentView === 'realtime' && styles.tabTextActive]}>
-              🔴 En Vivo
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, currentView === 'config' && styles.tabActive]}
-            onPress={() => setCurrentView('config')}
-          >
-            <Text style={[styles.tabText, currentView === 'config' && styles.tabTextActive]}>
-              ⚙️ Config
-            </Text>
-          </TouchableOpacity>
+      <Stack.Screen options={{ headerShown: false }} />
 
-        </View>
+      {/* Inject CSS for sidebar layout — StyleSheet.create can't do position:fixed or 100vh */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .nospi-layout {
+          display: flex;
+          flex-direction: row;
+          height: 100vh;
+          width: 100%;
+          overflow: hidden;
+        }
+        .nospi-sidebar {
+          width: 240px;
+          min-width: 240px;
+          height: 100vh;
+          background: #6B0F3A;
+          display: flex;
+          flex-direction: column;
+          position: fixed;
+          top: 0;
+          left: 0;
+          z-index: 100;
+          box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+          transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+        }
+        .nospi-sidebar.mobile-hidden {
+          transform: translateX(-240px);
+        }
+        .nospi-sidebar-header {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 12px;
+          padding: 28px 20px 22px;
+          border-bottom: 1px solid rgba(255,255,255,0.12);
+        }
+        .nospi-logo-circle {
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.18);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          font-weight: bold;
+          color: white;
+          flex-shrink: 0;
+        }
+        .nospi-brand-name {
+          font-size: 15px;
+          font-weight: 700;
+          color: white;
+          letter-spacing: 3px;
+          line-height: 1.2;
+        }
+        .nospi-brand-sub {
+          font-size: 10px;
+          color: rgba(255,255,255,0.5);
+          letter-spacing: 1.5px;
+          margin-top: 2px;
+        }
+        .nospi-nav {
+          flex: 1;
+          padding: 12px 10px;
+          overflow-y: auto;
+        }
+        .nospi-nav-item {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 10px;
+          margin-bottom: 4px;
+          cursor: pointer;
+          position: relative;
+          border: none;
+          background: transparent;
+          width: 100%;
+          text-align: left;
+          transition: background 0.15s;
+        }
+        .nospi-nav-item:hover {
+          background: rgba(255,255,255,0.10);
+        }
+        .nospi-nav-item.active {
+          background: rgba(255,255,255,0.16);
+        }
+        .nospi-nav-icon {
+          font-size: 17px;
+          width: 22px;
+          text-align: center;
+        }
+        .nospi-nav-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: rgba(255,255,255,0.65);
+          flex: 1;
+        }
+        .nospi-nav-item.active .nospi-nav-label {
+          color: white;
+        }
+        .nospi-nav-indicator {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 3px;
+          height: 22px;
+          border-radius: 2px;
+          background: #FF6B9D;
+        }
+        .nospi-sidebar-footer {
+          padding: 16px 20px;
+          border-top: 1px solid rgba(255,255,255,0.10);
+          font-size: 11px;
+          color: rgba(255,255,255,0.3);
+          text-align: center;
+        }
+        .nospi-main {
+          flex: 1;
+          margin-left: 240px;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          background: #F3E8FF;
+        }
+        .nospi-mobile-header {
+          display: none;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          background: #6B0F3A;
+          padding: 13px 16px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        .nospi-hamburger {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          background: rgba(255,255,255,0.15);
+          border: none;
+          font-size: 19px;
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .nospi-mobile-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: white;
+          letter-spacing: 2.5px;
+        }
+        .nospi-overlay {
+          display: none;
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.55);
+          z-index: 99;
+        }
+        @media (max-width: 767px) {
+          .nospi-sidebar {
+            transform: translateX(-240px);
+          }
+          .nospi-sidebar.mobile-open {
+            transform: translateX(0);
+          }
+          .nospi-main {
+            margin-left: 0;
+          }
+          .nospi-mobile-header {
+            display: flex;
+          }
+          .nospi-overlay.visible {
+            display: block;
+          }
+        }
+      ` }} />
 
-        {/* Content */}
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {currentView === 'dashboard' && renderDashboard()}
-          {currentView === 'events' && renderEvents()}
-          {currentView === 'users' && renderUsers()}
-          {currentView === 'participants' && renderParticipants()}
-          {currentView === 'questions' && renderQuestions()}
-          {currentView === 'realtime' && renderRealtime()}
-          {currentView === 'config' && renderConfig()}
-        </ScrollView>
-      </View>
+      {/* Overlay for mobile */}
+      <div
+        className={`nospi-overlay${sidebarOpen ? ' visible' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      <div className="nospi-layout">
+        {/* SIDEBAR */}
+        <div className={`nospi-sidebar${isMobile && !sidebarOpen ? '' : isMobile && sidebarOpen ? ' mobile-open' : ''}`}>
+          <div className="nospi-sidebar-header">
+            <div className="nospi-logo-circle">N</div>
+            <div>
+              <div className="nospi-brand-name">NOSPI</div>
+              <div className="nospi-brand-sub">Admin Panel</div>
+            </div>
+          </div>
+
+          <div className="nospi-nav">
+            {NAV_ITEMS.map(item => (
+              <button
+                key={item.key}
+                className={`nospi-nav-item${currentView === item.key ? ' active' : ''}`}
+                onClick={() => {
+                  if (item.key === 'questions') loadQuestions();
+                  setCurrentView(item.key);
+                  setSidebarOpen(false);
+                }}
+              >
+                <span className="nospi-nav-icon">{item.icon}</span>
+                <span className="nospi-nav-label">{item.label}</span>
+                {currentView === item.key && <div className="nospi-nav-indicator" />}
+              </button>
+            ))}
+          </div>
+
+          <div className="nospi-sidebar-footer">Nospi © 2025</div>
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div className="nospi-main">
+          {/* Mobile header */}
+          <div className="nospi-mobile-header">
+            <button className="nospi-hamburger" onClick={() => setSidebarOpen(p => !p)}>
+              {sidebarOpen ? '✕' : '☰'}
+            </button>
+            <span className="nospi-mobile-title">NOSPI Admin</span>
+            <div style={{ width: 40 }} />
+          </div>
+
+          {/* Scrollable content */}
+          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+            {currentView === 'dashboard'    && renderDashboard()}
+            {currentView === 'events'       && renderEvents()}
+            {currentView === 'users'        && renderUsers()}
+            {currentView === 'participants' && renderParticipants()}
+            {currentView === 'questions'    && renderQuestions()}
+            {currentView === 'realtime'     && renderRealtime()}
+            {currentView === 'config'       && renderConfig()}
+          </ScrollView>
+        </div>
+      </div>
 
       {/* NEW: Configuration Modal */}
       <Modal
