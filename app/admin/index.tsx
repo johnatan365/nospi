@@ -120,6 +120,12 @@ const DEFAULT_QUESTIONS_DATA = {
 
 export default function AdminPanelScreen() {
   const router = useRouter();
+
+  // ── RESPONSIVE LAYOUT (must be at top — Rules of Hooks) ──
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const SIDEBAR_W = 240;
+
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -2626,11 +2632,6 @@ export default function AdminPanelScreen() {
       </View>
     );
   }
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const SIDEBAR_W = 240;
 
   const NAV_ITEMS: { key: AdminView; icon: string; label: string }[] = [
     { key: 'dashboard',    icon: '📊', label: 'Dashboard' },
