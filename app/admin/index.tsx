@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useWindowDimensions } from 'react-native';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -126,6 +125,7 @@ export default function AdminPanelScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // App config state
   const [configEventPrice, setConfigEventPrice] = useState('');
@@ -144,6 +144,7 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
 
@@ -214,8 +215,6 @@ export default function AdminPanelScreen() {
   const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
   const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
   const [participantTab, setParticipantTab] = useState<'confirmada' | 'cancelada' | 'anterior'>('confirmada');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { width: windowWidth } = useWindowDimensions();
 
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -367,6 +366,24 @@ export default function AdminPanelScreen() {
       } else {
         setUsers(usersData || []);
         setTotalUsers(usersData?.length || 0);
+      }
+
+      // Load all event_ratings to compute per-user average ratings
+      const { data: allRatings } = await supabase
+        .from('event_ratings')
+        .select('rated_user_id, rating');
+      if (allRatings && allRatings.length > 0) {
+        const map: Record<string, { sum: number; count: number }> = {};
+        for (const r of allRatings) {
+          if (!map[r.rated_user_id]) map[r.rated_user_id] = { sum: 0, count: 0 };
+          map[r.rated_user_id].sum += r.rating;
+          map[r.rated_user_id].count += 1;
+        }
+        const avgs: Record<string, { avg: number; count: number }> = {};
+        for (const [uid, d] of Object.entries(map)) {
+          avgs[uid] = { avg: d.sum / d.count, count: d.count };
+        }
+        setUserRatingAverages(avgs);
       }
 
       // Load appointments using the secure admin function
@@ -2023,6 +2040,7 @@ export default function AdminPanelScreen() {
       'Edad': u.age || '',
       'Rango edad mín': u.age_range_min || 18,
       'Rango edad máx': u.age_range_max || 99,
+      'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -2117,7 +2135,7 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad'];
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   const cellStyle: any = {
@@ -2158,11 +2176,12 @@ export default function AdminPanelScreen() {
             </thead>
             <tbody>
               {users.length === 0 ? (
-                <tr><td colSpan={10} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
+                <tr><td colSpan={11} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
               ) : users.map((user, i) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
                 const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
+                const uRating = userRatingAverages[user.id];
                 const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                 return (
                   <tr key={user.id} style={row}>
@@ -2180,6 +2199,20 @@ export default function AdminPanelScreen() {
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{user.age || '—'}</td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {uRating ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                          <span style={{ fontSize: 15 }}>
+                            {'⭐'.repeat(Math.round(uRating.avg))}{'☆'.repeat(5 - Math.round(uRating.avg))}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#6B7280' }}>
+                            {uRating.avg.toFixed(1)}/5 · {uRating.count} voto{uRating.count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -2594,96 +2627,112 @@ export default function AdminPanelScreen() {
     );
   }
 
-  const navItems: { key: AdminView; label: string; icon: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { key: 'events', label: 'Eventos', icon: '🎉' },
-    { key: 'users', label: 'Usuarios', icon: '👤' },
-    { key: 'participants', label: 'Participantes', icon: '👥' },
-    { key: 'questions', label: 'Preguntas', icon: '❓' },
-    { key: 'realtime', label: 'En Vivo', icon: '🔴' },
-    { key: 'config', label: 'Config', icon: '⚙️' },
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const SIDEBAR_W = 240;
+
+  const NAV_ITEMS: { key: AdminView; icon: string; label: string }[] = [
+    { key: 'dashboard',    icon: '📊', label: 'Dashboard' },
+    { key: 'events',       icon: '🎉', label: 'Eventos' },
+    { key: 'users',        icon: '👤', label: 'Usuarios' },
+    { key: 'participants', icon: '👥', label: 'Participantes' },
+    { key: 'questions',    icon: '❓', label: 'Preguntas' },
+    { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
+    { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
   return (
     <View style={styles.fullScreenContainer}>
-      <Stack.Screen options={{ title: 'Panel de Administración - Nospi' }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Mobile header - only on small screens */}
-      {windowWidth < 768 && (
-      <View style={styles.mobileHeader}>
-        <TouchableOpacity style={styles.hamburger} onPress={() => setSidebarOpen(!sidebarOpen)}>
-          <View style={styles.hamburgerLine} />
-          <View style={styles.hamburgerLine} />
-          <View style={styles.hamburgerLine} />
-        </TouchableOpacity>
-        <Text style={styles.mobileHeaderTitle}>
-          {navItems.find(n => n.key === currentView)?.icon}{' '}
-          {navItems.find(n => n.key === currentView)?.label}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-      )}
-
-      {/* Overlay for mobile */}
-      {sidebarOpen && (
+      {/* ── MOBILE OVERLAY ── */}
+      {isMobile && sidebarOpen && (
         <TouchableOpacity
-          style={styles.overlay}
-          onPress={() => setSidebarOpen(false)}
           activeOpacity={1}
+          onPress={() => setSidebarOpen(false)}
+          style={styles.sidebarOverlay}
         />
       )}
 
-      <View style={styles.adminLayout}>
-        {/* Sidebar */}
-        <View style={[styles.sidebar, windowWidth < 768 && styles.sidebarHidden, (windowWidth < 768 && sidebarOpen) && styles.sidebarOpen]}>
-          {/* Logo */}
-          <View style={styles.sidebarLogo}>
-            <Text style={styles.sidebarLogoText}>🌸 Nospi</Text>
-            <Text style={styles.sidebarLogoSub}>Admin Panel</Text>
+      {/* ── SIDEBAR ── */}
+      <View style={[
+        styles.sidebar,
+        { width: SIDEBAR_W } as any,
+        isMobile
+          ? { position: 'absolute', transform: [{ translateX: sidebarOpen ? 0 : -SIDEBAR_W }] } as any
+          : { position: 'fixed' } as any,
+      ]}>
+        {/* Logo / Brand */}
+        <View style={styles.sidebarHeader}>
+          <View style={styles.sidebarLogoCircle}>
+            <Text style={styles.sidebarLogoLetter}>N</Text>
           </View>
-
-          {/* Nav items */}
-          <View style={styles.sidebarNav}>
-            {navItems.map((item) => {
-              const active = currentView === item.key;
-              return (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[styles.sidebarItem, active && styles.sidebarItemActive]}
-                  onPress={() => {
-                    setCurrentView(item.key);
-                    if (item.key === 'questions') loadQuestions();
-                    setSidebarOpen(false);
-                  }}
-                >
-                  <Text style={styles.sidebarItemIcon}>{item.icon}</Text>
-                  <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
-                    {item.label}
-                  </Text>
-                  {active && <View style={styles.sidebarActiveIndicator} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Footer */}
-          <View style={styles.sidebarFooter}>
-            <Text style={styles.sidebarFooterText}>Nospi © 2025</Text>
+          <View>
+            <Text style={styles.sidebarBrandName}>NOSPI</Text>
+            <Text style={styles.sidebarBrandSub}>Admin Panel</Text>
           </View>
         </View>
 
-        {/* Main content */}
-        <View style={styles.mainContent}>
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-            {currentView === 'dashboard' && renderDashboard()}
-            {currentView === 'events' && renderEvents()}
-            {currentView === 'users' && renderUsers()}
-            {currentView === 'participants' && renderParticipants()}
-            {currentView === 'questions' && renderQuestions()}
-            {currentView === 'realtime' && renderRealtime()}
-            {currentView === 'config' && renderConfig()}
-          </ScrollView>
+        {/* Nav items */}
+        <View style={{ flex: 1, paddingTop: 12 }}>
+          {NAV_ITEMS.map(item => {
+            const isActive = currentView === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[styles.sidebarNavItem, isActive && styles.sidebarNavItemActive]}
+                onPress={() => {
+                  if (item.key === 'questions') loadQuestions();
+                  setCurrentView(item.key);
+                  if (isMobile) setSidebarOpen(false);
+                }}
+              >
+                <Text style={styles.sidebarNavIcon}>{item.icon}</Text>
+                <Text style={[styles.sidebarNavText, isActive && styles.sidebarNavTextActive]}>
+                  {item.label}
+                </Text>
+                {isActive && <View style={styles.sidebarNavIndicator} />}
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        {/* Footer */}
+        <View style={styles.sidebarFooter}>
+          <Text style={styles.sidebarFooterText}>Nospi © 2025</Text>
+        </View>
+      </View>
+
+      {/* ── MAIN CONTENT ── */}
+      <View style={[
+        styles.mainContent,
+        !isMobile && { marginLeft: SIDEBAR_W } as any,
+      ]}>
+        {/* Mobile top header */}
+        {isMobile && (
+          <View style={styles.mobileHeader}>
+            <TouchableOpacity
+              style={styles.hamburgerButton}
+              onPress={() => setSidebarOpen(prev => !prev)}
+            >
+              <Text style={styles.hamburgerIcon}>{sidebarOpen ? '✕' : '☰'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.mobileHeaderTitle}>NOSPI Admin</Text>
+            <View style={{ width: 44 }} />
+          </View>
+        )}
+
+        {/* Scrollable content */}
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          {currentView === 'dashboard'    && renderDashboard()}
+          {currentView === 'events'       && renderEvents()}
+          {currentView === 'users'        && renderUsers()}
+          {currentView === 'participants' && renderParticipants()}
+          {currentView === 'questions'    && renderQuestions()}
+          {currentView === 'realtime'     && renderRealtime()}
+          {currentView === 'config'       && renderConfig()}
+        </ScrollView>
       </View>
 
       {/* NEW: Configuration Modal */}
@@ -3485,137 +3534,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3E8FF',
   },
-  // Mobile header
-  mobileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#6B0F3A',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  hamburger: {
-    padding: 4,
-    gap: 5,
-  },
-  hamburgerLine: {
-    width: 22,
-    height: 2,
-    backgroundColor: 'white',
-    borderRadius: 2,
-    marginBottom: 4,
-  },
-  mobileHeaderTitle: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  overlay: {
-    position: 'absolute' as any,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 10,
-  },
-  adminLayout: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  sidebar: {
-    width: 220,
-    backgroundColor: '#6B0F3A',
-    flexDirection: 'column',
-  },
-  sidebarHidden: {
-    display: 'none' as any,
-  },
-  sidebarOpen: {
-    display: 'flex' as any,
-    position: 'absolute' as any,
-    top: 0,
-    left: 0,
-    bottom: 0,
-    zIndex: 20,
-    width: 240,
-  },
-  sidebarLogo: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  sidebarLogoText: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  sidebarLogoSub: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-    textTransform: 'uppercase' as any,
-    letterSpacing: 1,
-  },
-  sidebarNav: {
-    flex: 1,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  sidebarItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    marginHorizontal: 8,
-    marginVertical: 2,
-    borderRadius: 10,
-    position: 'relative' as any,
-  },
-  sidebarItemActive: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  sidebarItemIcon: {
-    fontSize: 18,
-    width: 28,
-  },
-  sidebarItemText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
-  },
-  sidebarItemTextActive: {
-    color: 'white',
-    fontWeight: '700',
-  },
-  sidebarActiveIndicator: {
-    width: 4,
-    height: 20,
-    backgroundColor: '#F472B6',
-    borderRadius: 2,
-    position: 'absolute' as any,
-    right: 0,
-  },
-  sidebarFooter: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
-  sidebarFooterText: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 11,
-    textAlign: 'center' as any,
-  },
-  mainContent: {
-    flex: 1,
-    overflow: 'hidden' as any,
-  },
   container: {
     flex: 1,
   },
@@ -3690,11 +3608,175 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textAlign: 'center',
   },
-  tabBar: { display: 'none' as any },
-  tab: { display: 'none' as any },
-  tabActive: {},
-  tabText: {},
-  tabTextActive: {},
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: nospiColors.purpleDark,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  tabTextActive: {
+    color: nospiColors.purpleDark,
+  },
+
+  // ── SIDEBAR STYLES ──
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    zIndex: 99,
+  } as any,
+  sidebar: {
+    top: 0,
+    left: 0,
+    height: '100vh' as any,
+    backgroundColor: '#6B0F3A',
+    flexDirection: 'column',
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 30,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+    gap: 12,
+  },
+  sidebarLogoCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sidebarLogoLetter: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  sidebarBrandName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 3,
+  },
+  sidebarBrandSub: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.55)',
+    letterSpacing: 1.5,
+    marginTop: 1,
+  },
+  sidebarNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginHorizontal: 10,
+    marginVertical: 2,
+    borderRadius: 10,
+    gap: 12,
+    position: 'relative',
+  } as any,
+  sidebarNavItemActive: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  sidebarNavIcon: {
+    fontSize: 17,
+    width: 22,
+    textAlign: 'center',
+  },
+  sidebarNavText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.65)',
+    flex: 1,
+  },
+  sidebarNavTextActive: {
+    color: '#FFFFFF',
+  },
+  sidebarNavIndicator: {
+    width: 3,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: '#FF6B9D',
+    position: 'absolute',
+    right: 0,
+    top: '50%' as any,
+    marginTop: -11,
+  } as any,
+  sidebarFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  sidebarFooterText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center',
+  },
+  mainContent: {
+    flex: 1,
+    height: '100vh' as any,
+    flexDirection: 'column',
+    overflow: 'hidden' as any,
+  },
+  mobileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#6B0F3A',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  hamburgerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  hamburgerIcon: {
+    fontSize: 19,
+    color: '#FFFFFF',
+  },
+  mobileHeaderTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 2.5,
+  },
   content: {
     flex: 1,
   },
