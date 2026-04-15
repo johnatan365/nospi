@@ -2754,9 +2754,10 @@ export default function AdminPanelScreen() {
         }
         /* ── MOBILE ── */
         @media (max-width: 767px) {
-          .nospi-sidebar { position: fixed; transform: translateX(-240px); }
+          .nospi-sidebar { position: fixed; transform: translateX(-240px); z-index: 300; }
           .nospi-sidebar.open { transform: translateX(0); }
           .nospi-mobile-hdr { display: flex; }
+          .nospi-overlay { z-index: 250; }
           .nospi-overlay.show { display: block; }
         }
       ` }} />
