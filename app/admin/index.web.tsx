@@ -2640,7 +2640,7 @@ export default function AdminPanelScreen() {
   ];
 
   return (
-    <View style={styles.fullScreenContainer}>
+    <>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Inject real CSS — StyleSheet can't do position:fixed, 100vh, or media queries */}
@@ -2654,6 +2654,7 @@ export default function AdminPanelScreen() {
           position: fixed;
           top: 0; left: 0;
           background: #F3E8FF;
+          z-index: 1;
         }
         /* ── SIDEBAR ── */
         .nospi-sidebar {
@@ -3606,7 +3607,7 @@ export default function AdminPanelScreen() {
         </View>
       </Modal>
 
-    </View>
+    </>
   );
 }
 
