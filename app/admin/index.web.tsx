@@ -123,6 +123,17 @@ export default function AdminPanelScreen() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Password visibility
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Change admin password (Config section)
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [savingAdminPassword, setSavingAdminPassword] = useState(false);
+  const [adminPasswordSaved, setAdminPasswordSaved] = useState<'success' | 'error' | 'mismatch' | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -328,8 +339,47 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const handlePasswordSubmit = () => {
-    if (adminPassword === 'nospi2024') {
+  const handleChangeAdminPassword = async () => {
+    if (!newAdminPassword.trim()) {
+      setAdminPasswordSaved('error');
+      setTimeout(() => setAdminPasswordSaved(null), 3000);
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setAdminPasswordSaved('mismatch');
+      setTimeout(() => setAdminPasswordSaved(null), 3000);
+      return;
+    }
+    setSavingAdminPassword(true);
+    setAdminPasswordSaved(null);
+    try {
+      const { error } = await supabase
+        .from('app_config')
+        .upsert({ key: 'admin_password', value: newAdminPassword.trim() }, { onConflict: 'key' });
+      if (error) {
+        setAdminPasswordSaved('error');
+      } else {
+        setAdminPasswordSaved('success');
+        setNewAdminPassword('');
+        setConfirmAdminPassword('');
+        setTimeout(() => setAdminPasswordSaved(null), 3000);
+      }
+    } catch {
+      setAdminPasswordSaved('error');
+    } finally {
+      setSavingAdminPassword(false);
+    }
+  };
+
+  const handlePasswordSubmit = async () => {
+    // Check app_config first, fallback to hardcoded
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'admin_password')
+      .single();
+    const correctPassword = data?.value || 'nospi2024';
+    if (adminPassword === correctPassword) {
       setIsAuthenticated(true);
       setShowPasswordModal(false);
       loadDashboardData();
@@ -1809,6 +1859,107 @@ export default function AdminPanelScreen() {
         >
           {savingConfig ? '⏳ Guardando...' : '💾 Guardar Configuración'}
         </button>
+
+        {/* ── CAMBIAR CONTRASEÑA DE ADMINISTRADOR ── */}
+        <div style={{ marginTop: 40, borderTop: '2px dashed #E9D5FF', paddingTop: 32 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#6B0F3A', marginBottom: 6 }}>
+            🔑 Contraseña del Administrador
+          </div>
+          <div style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 24 }}>
+            Cambia la contraseña que se usa para acceder a este panel. La nueva contraseña se guarda en app_config.
+          </div>
+
+          {adminPasswordSaved && (
+            <div style={{
+              backgroundColor: adminPasswordSaved === 'success' ? '#10B981' : '#EF4444',
+              color: 'white', borderRadius: 12, padding: '12px 18px',
+              marginBottom: 20, fontSize: 14, fontWeight: 700,
+            }}>
+              {adminPasswordSaved === 'success' && '✅ Contraseña actualizada correctamente'}
+              {adminPasswordSaved === 'mismatch' && '❌ Las contraseñas no coinciden'}
+              {adminPasswordSaved === 'error' && '❌ Error al guardar, intenta de nuevo'}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 20 }}>
+            {/* Nueva contraseña */}
+            <div style={{ backgroundColor: 'white', borderRadius: 14, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #6B0F3A' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                Nueva contraseña
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  placeholder="Escribe la nueva contraseña"
+                  style={{
+                    width: '100%', backgroundColor: '#FDF2F8', border: '2px solid #FBCFE8',
+                    borderRadius: 10, padding: '11px 44px 11px 14px', fontSize: 15,
+                    color: '#6B0F3A', outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <button
+                  onClick={() => setShowNewPassword(p => !p)}
+                  style={{
+                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 17, color: '#9CA3AF', padding: 2, lineHeight: 1,
+                  }}
+                  type="button"
+                >
+                  {showNewPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirmar contraseña */}
+            <div style={{ backgroundColor: 'white', borderRadius: 14, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #6B0F3A' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                Confirmar contraseña
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  placeholder="Repite la nueva contraseña"
+                  style={{
+                    width: '100%', backgroundColor: '#FDF2F8', border: '2px solid #FBCFE8',
+                    borderRadius: 10, padding: '11px 44px 11px 14px', fontSize: 15,
+                    color: '#6B0F3A', outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <button
+                  onClick={() => setShowConfirmPassword(p => !p)}
+                  style={{
+                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 17, color: '#9CA3AF', padding: 2, lineHeight: 1,
+                  }}
+                  type="button"
+                >
+                  {showConfirmPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleChangeAdminPassword}
+            disabled={savingAdminPassword || !newAdminPassword}
+            style={{
+              backgroundColor: (savingAdminPassword || !newAdminPassword) ? '#9CA3AF' : '#6B0F3A',
+              color: 'white', border: 'none', borderRadius: 14,
+              padding: '14px 36px', fontSize: 16, fontWeight: 700,
+              cursor: (savingAdminPassword || !newAdminPassword) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 10,
+              transition: 'background 0.2s',
+            }}
+          >
+            {savingAdminPassword ? '⏳ Guardando...' : '🔑 Actualizar Contraseña'}
+          </button>
+        </div>
       </View>
     );
   };
@@ -2593,15 +2744,28 @@ export default function AdminPanelScreen() {
         <View style={styles.passwordContainer}>
           <Text style={styles.passwordTitle}>🔐 Panel de Administración</Text>
           <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Contraseña"
-            secureTextEntry
-            value={adminPassword}
-            onChangeText={setAdminPassword}
-            autoCapitalize="none"
-            onSubmitEditing={handlePasswordSubmit}
-          />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400 }}>
+            <TextInput
+              style={[styles.passwordInput, { paddingRight: 48, width: '100%' }]}
+              placeholder="Contraseña"
+              secureTextEntry={!showLoginPassword}
+              value={adminPassword}
+              onChangeText={setAdminPassword}
+              autoCapitalize="none"
+              onSubmitEditing={handlePasswordSubmit}
+            />
+            <button
+              onClick={() => setShowLoginPassword(p => !p)}
+              style={{
+                position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 18, color: '#9CA3AF', padding: 4, lineHeight: 1,
+              }}
+              type="button"
+            >
+              {showLoginPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
           <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
             <Text style={styles.passwordButtonText}>Acceder</Text>
           </TouchableOpacity>
