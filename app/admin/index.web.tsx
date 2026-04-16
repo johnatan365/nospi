@@ -1016,7 +1016,7 @@ export default function AdminPanelScreen() {
         city: event.city,
         description: event.description,
         type: event.type,
-        date: '',
+        date: null,
         time: event.time,
         location_name: event.location_name,
         location_address: event.location_address,
