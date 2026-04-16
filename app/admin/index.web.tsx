@@ -41,6 +41,7 @@ interface User {
   age?: number;
   age_range_min?: number;
   age_range_max?: number;
+  created_at?: string;
 }
 
 interface Appointment {
@@ -126,6 +127,21 @@ export default function AdminPanelScreen() {
 
   // Password visibility
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Users table: sort + filter
+  const [userSortCol, setUserSortCol] = useState<string>('');
+  const [userSortAsc, setUserSortAsc] = useState(true);
+  const [userFilter, setUserFilter] = useState('');
+
+  // Participants table: sort + filter
+  const [partSortCol, setPartSortCol] = useState<string>('');
+  const [partSortAsc, setPartSortAsc] = useState(true);
+  const [partFilter, setPartFilter] = useState('');
+
+  // All-participants table: sort + filter
+  const [allPartSortCol, setAllPartSortCol] = useState<string>('');
+  const [allPartSortAsc, setAllPartSortAsc] = useState(true);
+  const [allPartFilter, setAllPartFilter] = useState('');
 
   // Change admin password (Config section)
   const [newAdminPassword, setNewAdminPassword] = useState('');
@@ -2275,6 +2291,7 @@ export default function AdminPanelScreen() {
       'Rango edad mín': u.age_range_min || 18,
       'Rango edad máx': u.age_range_max || 99,
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
+      'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -2369,8 +2386,49 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio'];
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Registro'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
+
+  // Sortable column header
+  const SortableTh = ({ label, colKey, sortCol, sortAsc, onSort }: { label: string; colKey: string; sortCol: string; sortAsc: boolean; onSort: (k: string) => void }) => (
+    <th
+      onClick={() => onSort(colKey)}
+      style={{ ...headerCellStyle, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    >
+      {label}
+      <span style={{ marginLeft: 4, fontSize: 11, opacity: sortCol === colKey ? 1 : 0.35 }}>
+        {sortCol === colKey ? (sortAsc ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  );
+
+  const makeSort = (
+    setSortCol: (c: string) => void,
+    setSortAsc: (a: boolean) => void,
+    currentCol: string,
+    currentAsc: boolean
+  ) => (col: string) => {
+    if (col === currentCol) setSortAsc(!currentAsc);
+    else { setSortCol(col); setSortAsc(true); }
+  };
+
+  const applySort = (arr: any[], col: string, asc: boolean) => {
+    if (!col) return arr;
+    return [...arr].sort((a, b) => {
+      const va = (a[col] ?? '').toString().toLowerCase();
+      const vb = (b[col] ?? '').toString().toLowerCase();
+      const n = va.localeCompare(vb, undefined, { numeric: true });
+      return asc ? n : -n;
+    });
+  };
+
+  const applyFilter = (arr: any[], q: string) => {
+    if (!q.trim()) return arr;
+    const lower = q.toLowerCase();
+    return arr.filter(item =>
+      Object.values(item).some(v => v != null && v.toString().toLowerCase().includes(lower))
+    );
+  };
 
   const cellStyle: any = {
     padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
@@ -2385,37 +2443,55 @@ export default function AdminPanelScreen() {
   const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
 
   const renderUsers = () => {
+    const sortedUsers = applySort(applyFilter(users, userFilter), userSortCol, userSortAsc);
+    const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
+    const cols: { label: string; key: string }[] = [
+      { label: 'Nombre', key: 'name' }, { label: 'Email', key: 'email' },
+      { label: 'Teléfono', key: 'phone' }, { label: 'Ciudad', key: 'city' },
+      { label: 'País', key: 'country' }, { label: 'Género', key: 'gender' },
+      { label: 'Interesado en', key: 'interested_in' }, { label: 'Edad', key: 'age' },
+      { label: 'Rango edad', key: 'age_range_min' }, { label: 'Calificación', key: '_rating' },
+      { label: 'Registro', key: 'created_at' },
+    ];
     return (
       <View style={styles.listContainer}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <Text style={styles.sectionTitle}>Usuarios Registrados ({users.length})</Text>
-          <button
-            onClick={exportUsersToExcel}
-            style={{
-              backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10,
-              padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}
-          >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+          <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{userFilter ? ` de ${users.length}` : ''})</Text>
+          <button onClick={exportUsersToExcel} style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             📥 Descargar Excel
           </button>
         </div>
 
+        {/* Filter */}
+        <div style={{ marginBottom: 16 }}>
+          <input
+            type="text"
+            placeholder="🔍 Filtrar por nombre, email, ciudad, género..."
+            value={userFilter}
+            onChange={e => setUserFilter(e.target.value)}
+            style={{ width: '100%', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 14, outline: 'none', boxSizing: 'border-box', backgroundColor: '#F5F3FF' }}
+          />
+        </div>
+
         <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050 }}>
             <thead>
               <tr>
-                {TABLE_HEADERS_USERS.map(h => <th key={h} style={headerCellStyle}>{h}</th>)}
+                <th style={headerCellStyle}>#</th>
+                {cols.map(c => (
+                  <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} />
+                ))}
               </tr>
             </thead>
             <tbody>
-              {users.length === 0 ? (
-                <tr><td colSpan={11} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay usuarios registrados</td></tr>
-              ) : users.map((user, i) => {
+              {sortedUsers.length === 0 ? (
+                <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay resultados</td></tr>
+              ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
                 const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
                 const uRating = userRatingAverages[user.id];
+                const createdAt = user.created_at ? new Date(user.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
                 const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                 return (
                   <tr key={user.id} style={row}>
@@ -2426,9 +2502,7 @@ export default function AdminPanelScreen() {
                     <td style={cellStyle}>{user.city}</td>
                     <td style={cellStyle}>{user.country}</td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: user.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: user.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>
-                        {gender}
-                      </span>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: user.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: user.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>{gender}</span>
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{user.age || '—'}</td>
@@ -2436,17 +2510,12 @@ export default function AdminPanelScreen() {
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
                       {uRating ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                          <span style={{ fontSize: 15 }}>
-                            {'⭐'.repeat(Math.round(uRating.avg))}{'☆'.repeat(5 - Math.round(uRating.avg))}
-                          </span>
-                          <span style={{ fontSize: 11, color: '#6B7280' }}>
-                            {uRating.avg.toFixed(1)}/5 · {uRating.count} voto{uRating.count !== 1 ? 's' : ''}
-                          </span>
+                          <span style={{ fontSize: 14 }}>{'⭐'.repeat(Math.round(uRating.avg))}{'☆'.repeat(5 - Math.round(uRating.avg))}</span>
+                          <span style={{ fontSize: 11, color: '#6B7280' }}>{uRating.avg.toFixed(1)}/5 · {uRating.count}v</span>
                         </div>
-                      ) : (
-                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>
-                      )}
+                      ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
                     </td>
+                    <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                   </tr>
                 );
               })}
@@ -2567,64 +2636,86 @@ export default function AdminPanelScreen() {
               })}
             </div>
 
-            {/* Tabla */}
-            <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
-                <thead>
-                  <tr>
-                    {TABLE_HEADERS_PARTICIPANTS.map(h => <th key={h} style={headerCellStyle}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
-                        No hay participantes {participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento
-                      </td>
-                    </tr>
-                  ) : filtered.map((att, i) => {
-                    const u = att.users as any;
-                    const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
-                    const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
-                    const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
-                    const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
-                    return (
-                      <tr key={att.id} style={row}>
-                        <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
-                        <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{u.name}</td>
-                        <td style={cellStyle}>{u.email}</td>
-                        <td style={cellStyle}>{u.phone}</td>
-                        <td style={cellStyle}>{u.city}</td>
-                        <td style={cellStyle}>{u.country}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>
-                          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: u.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: u.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>
-                            {gender}
-                          </span>
-                        </td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center' }}>
-                          {(att as any).avgRating != null ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                              <span style={{ fontSize: 15 }}>
-                                {'⭐'.repeat(Math.round((att as any).avgRating))}{'☆'.repeat(5 - Math.round((att as any).avgRating))}
-                              </span>
-                              <span style={{ fontSize: 11, color: '#6B7280' }}>
-                                {((att as any).avgRating).toFixed(1)}/5 · {(att as any).ratingCount} voto{(att as any).ratingCount !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Filter */}
+            <div style={{ marginBottom: 14 }}>
+              <input
+                type="text"
+                placeholder="🔍 Filtrar participantes..."
+                value={partFilter}
+                onChange={e => setPartFilter(e.target.value)}
+                style={{ width: '100%', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 14, outline: 'none', boxSizing: 'border-box', backgroundColor: '#F5F3FF' }}
+              />
             </div>
+
+            {/* Tabla */}
+            {(() => {
+              const partCols = [
+                { label: 'Nombre', key: 'name' }, { label: 'Email', key: 'email' },
+                { label: 'Teléfono', key: 'phone' }, { label: 'Ciudad', key: 'city' },
+                { label: 'País', key: 'country' }, { label: 'Género', key: 'gender' },
+                { label: 'Interesado en', key: 'interested_in' }, { label: 'Edad', key: 'age' },
+                { label: 'Rango edad', key: 'age_range_min' }, { label: 'Estado', key: 'status' },
+                { label: 'Calificación', key: '_rating' },
+              ];
+              const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
+              const flatFiltered = applyFilter(
+                filtered.map(att => ({ ...att, ...(att.users as any) })),
+                partFilter
+              );
+              const sortedPart = applySort(flatFiltered, partSortCol, partSortAsc);
+              return (
+                <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
+                    <thead>
+                      <tr>
+                        <th style={headerCellStyle}>#</th>
+                        {partCols.map(c => (
+                          <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} />
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedPart.length === 0 ? (
+                        <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
+                          {partFilter ? 'Sin resultados para ese filtro' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
+                        </td></tr>
+                      ) : sortedPart.map((att: any, i: number) => {
+                        const u = att.users as any || att;
+                        const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
+                        const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
+                        const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
+                        const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
+                        return (
+                          <tr key={att.id} style={row}>
+                            <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
+                            <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{u.name}</td>
+                            <td style={cellStyle}>{u.email}</td>
+                            <td style={cellStyle}>{u.phone}</td>
+                            <td style={cellStyle}>{u.city}</td>
+                            <td style={cellStyle}>{u.country}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>
+                              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: u.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: u.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>{gender}</span>
+                            </td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>
+                              {att.avgRating != null ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                  <span style={{ fontSize: 14 }}>{'⭐'.repeat(Math.round(att.avgRating))}{'☆'.repeat(5 - Math.round(att.avgRating))}</span>
+                                  <span style={{ fontSize: 11, color: '#6B7280' }}>{att.avgRating.toFixed(1)}/5 · {att.ratingCount}v</span>
+                                </div>
+                              ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </>
         )}
       </View>
