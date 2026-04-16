@@ -129,6 +129,8 @@ export default function AdminPanelScreen() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Users table: sort + per-column filters
+  const [userOpenCol, setUserOpenCol] = useState<string>('');
+  const [partOpenCol, setPartOpenCol] = useState<string>('');
   const [userSortCol, setUserSortCol] = useState<string>('');
   const [userSortAsc, setUserSortAsc] = useState(true);
   const [userColFilters, setUserColFilters] = useState<Record<string, Set<string>>>({});
@@ -2546,9 +2548,6 @@ export default function AdminPanelScreen() {
   };
   const rowEvenStyle: any = { backgroundColor: '#FAFAFA' };
   const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
-
-  const [userOpenCol, setUserOpenCol] = React.useState('');
-  const [partOpenCol, setPartOpenCol] = React.useState('');
 
   const renderUsers = () => {
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
