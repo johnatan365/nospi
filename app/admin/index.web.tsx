@@ -1011,7 +1011,7 @@ export default function AdminPanelScreen() {
     );
     if (!confirmed) return;
     try {
-      const { error } = await supabase.from('events').insert({
+      const { data: newEvent, error } = await supabase.from('events').insert({
         name: (event.name ? event.name + ' (copia)' : null),
         city: event.city,
         description: event.description,
@@ -1027,12 +1027,38 @@ export default function AdminPanelScreen() {
         current_participants: 0,
         event_status: 'draft',
         confirmation_code: event.confirmation_code,
-      });
-      if (error) {
-        window.alert('Error al duplicar: ' + error.message);
+      }).select('id').single();
+
+      if (error || !newEvent) {
+        window.alert('Error al duplicar: ' + (error?.message || 'sin respuesta'));
         return;
       }
-      window.alert('✅ Evento duplicado como borrador. Recuerda cambiarle la fecha.');
+
+      // Copy questions from original event
+      const { data: originalQuestions, error: qError } = await supabase
+        .from('event_questions')
+        .select('level, question_text, question_order, is_default')
+        .eq('event_id', event.id)
+        .order('level', { ascending: true })
+        .order('question_order', { ascending: true });
+
+      if (!qError && originalQuestions && originalQuestions.length > 0) {
+        const questionsToInsert = originalQuestions.map((q) => ({
+          event_id: newEvent.id,
+          level: q.level,
+          question_text: q.question_text,
+          question_order: q.question_order,
+          is_default: q.is_default,
+        }));
+        const { error: insertError } = await supabase
+          .from('event_questions')
+          .insert(questionsToInsert);
+        if (insertError) {
+          console.error('Error copiando preguntas:', insertError);
+        }
+      }
+
+      window.alert('✅ Evento duplicado como borrador con sus preguntas. Recuerda cambiarle la fecha.');
       loadDashboardData();
     } catch (err) {
       window.alert('Error inesperado al duplicar');
