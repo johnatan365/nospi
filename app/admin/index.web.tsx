@@ -1016,7 +1016,7 @@ export default function AdminPanelScreen() {
         city: event.city,
         description: event.description,
         type: event.type,
-        date: null,
+        date: event.date,
         time: event.time,
         location_name: event.location_name,
         location_address: event.location_address,
@@ -1054,11 +1054,15 @@ export default function AdminPanelScreen() {
         return;
       }
 
+      // Build full location string for the app's `location` column
+      const fullLocation = [eventData.location_name, eventData.location_address]
+        .filter(Boolean).join(' — ') || 'Ubicación revelada';
+
       const { error } = await supabase
         .from('events')
         .update({ 
           is_location_revealed: true,
-          location: eventData.location_name || 'Ubicación revelada'
+          location: fullLocation,
         })
         .eq('id', eventId);
 
@@ -2090,11 +2094,12 @@ export default function AdminPanelScreen() {
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
 
-              {/* Location — visible once revealed */}
-              {event.is_location_revealed && (event.location_name || event.location_address) && (
-                <View style={[styles.compactInfoRow, { backgroundColor: '#ECFDF5', borderRadius: 8, padding: 8, marginTop: 4 }]}>
-                  <Text style={[styles.compactInfoText, { color: '#065F46', fontWeight: '700' }]}>
+              {/* Location — always visible in admin */}
+              {(event.location_name || event.location_address) && (
+                <View style={[styles.compactInfoRow, { backgroundColor: event.is_location_revealed ? '#ECFDF5' : '#FFF7ED', borderRadius: 8, padding: 8, marginTop: 4 }]}>
+                  <Text style={[styles.compactInfoText, { color: event.is_location_revealed ? '#065F46' : '#92400E', fontWeight: '700', flex: 1 }]}>
                     📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
+                    {!event.is_location_revealed ? '  🔒' : '  ✅'}
                   </Text>
                   {event.maps_link ? (
                     <Text
