@@ -1007,7 +1007,7 @@ export default function AdminPanelScreen() {
 
   const handleDuplicateEvent = async (event: Event) => {
     const confirmed = window.confirm(
-      `¿Duplicar el evento "${event.name || event.type + ' - ' + event.city}"? Se copiará toda la info pero sin asistentes ni fecha, como borrador.`
+      `¿Duplicar el evento "${event.name || event.type + ' - ' + event.city}"? Se copiará toda la info como borrador. Recuerda cambiarle la fecha.`
     );
     if (!confirmed) return;
     try {
@@ -1017,6 +1017,7 @@ export default function AdminPanelScreen() {
         description: event.description,
         type: event.type,
         date: event.date,
+        start_time: event.start_time,
         time: event.time,
         location_name: event.location_name,
         location_address: event.location_address,
@@ -1031,7 +1032,7 @@ export default function AdminPanelScreen() {
         window.alert('Error al duplicar: ' + error.message);
         return;
       }
-      window.alert('✅ Evento duplicado como borrador. Edítalo para ponerle fecha.');
+      window.alert('✅ Evento duplicado como borrador. Recuerda cambiarle la fecha.');
       loadDashboardData();
     } catch (err) {
       window.alert('Error inesperado al duplicar');
