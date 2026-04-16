@@ -128,20 +128,15 @@ export default function AdminPanelScreen() {
   // Password visibility
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Users table: sort + filter
+  // Users table: sort + per-column filters
   const [userSortCol, setUserSortCol] = useState<string>('');
   const [userSortAsc, setUserSortAsc] = useState(true);
-  const [userFilter, setUserFilter] = useState('');
+  const [userColFilters, setUserColFilters] = useState<Record<string, string>>({});
 
-  // Participants table: sort + filter
+  // Participants table: sort + per-column filters
   const [partSortCol, setPartSortCol] = useState<string>('');
   const [partSortAsc, setPartSortAsc] = useState(true);
-  const [partFilter, setPartFilter] = useState('');
-
-  // All-participants table: sort + filter
-  const [allPartSortCol, setAllPartSortCol] = useState<string>('');
-  const [allPartSortAsc, setAllPartSortAsc] = useState(true);
-  const [allPartFilter, setAllPartFilter] = useState('');
+  const [partColFilters, setPartColFilters] = useState<Record<string, string>>({});
 
   // Change admin password (Config section)
   const [newAdminPassword, setNewAdminPassword] = useState('');
@@ -432,8 +427,18 @@ export default function AdminPanelScreen() {
         console.error('Error loading users:', usersError);
         window.alert('No se pudieron cargar los usuarios: ' + usersError.message);
       } else {
-        setUsers(usersData || []);
-        setTotalUsers(usersData?.length || 0);
+        // Also fetch created_at which the RPC may not return
+        const { data: usersDates } = await supabase
+          .from('users')
+          .select('id, created_at');
+        const datesMap: Record<string, string> = {};
+        (usersDates || []).forEach((u: any) => { datesMap[u.id] = u.created_at; });
+        const merged = (usersData || []).map((u: any) => ({
+          ...u,
+          created_at: u.created_at || datesMap[u.id] || null,
+        }));
+        setUsers(merged);
+        setTotalUsers(merged.length);
       }
 
       // Load all event_ratings to compute per-user average ratings
@@ -2389,19 +2394,7 @@ export default function AdminPanelScreen() {
   const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Registro'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
-  // Sortable column header
-  const SortableTh = ({ label, colKey, sortCol, sortAsc, onSort }: { label: string; colKey: string; sortCol: string; sortAsc: boolean; onSort: (k: string) => void }) => (
-    <th
-      onClick={() => onSort(colKey)}
-      style={{ ...headerCellStyle, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-    >
-      {label}
-      <span style={{ marginLeft: 4, fontSize: 11, opacity: sortCol === colKey ? 1 : 0.35 }}>
-        {sortCol === colKey ? (sortAsc ? '▲' : '▼') : '⇅'}
-      </span>
-    </th>
-  );
-
+  // Sort helper
   const makeSort = (
     setSortCol: (c: string) => void,
     setSortAsc: (a: boolean) => void,
@@ -2422,13 +2415,54 @@ export default function AdminPanelScreen() {
     });
   };
 
-  const applyFilter = (arr: any[], q: string) => {
-    if (!q.trim()) return arr;
-    const lower = q.toLowerCase();
+  // Per-column filter
+  const applyColFilters = (arr: any[], filters: Record<string, string>) => {
     return arr.filter(item =>
-      Object.values(item).some(v => v != null && v.toString().toLowerCase().includes(lower))
+      Object.entries(filters).every(([col, val]) => {
+        if (!val.trim()) return true;
+        const v = (item[col] ?? '').toString().toLowerCase();
+        return v.includes(val.toLowerCase());
+      })
     );
   };
+
+  // Sortable + filterable column header
+  const SortableTh = ({
+    label, colKey, sortCol, sortAsc, onSort, filters, setFilters, width,
+  }: {
+    label: string; colKey: string; sortCol: string; sortAsc: boolean;
+    onSort: (k: string) => void;
+    filters: Record<string, string>;
+    setFilters: (f: Record<string, string>) => void;
+    width?: number;
+  }) => (
+    <th style={{ ...headerCellStyle, padding: '8px 8px 0', verticalAlign: 'top', minWidth: width || 100 }}>
+      {/* Sort row */}
+      <div
+        onClick={() => onSort(colKey)}
+        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', paddingBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}
+      >
+        {label}
+        <span style={{ fontSize: 10, opacity: sortCol === colKey ? 1 : 0.3 }}>
+          {sortCol === colKey ? (sortAsc ? '▲' : '▼') : '⇅'}
+        </span>
+      </div>
+      {/* Filter input */}
+      <input
+        type="text"
+        value={filters[colKey] || ''}
+        onChange={e => setFilters({ ...filters, [colKey]: e.target.value })}
+        onClick={e => e.stopPropagation()}
+        placeholder="🔍"
+        style={{
+          width: '100%', border: '1px solid #DDD6FE', borderRadius: 6,
+          padding: '4px 6px', fontSize: 11, outline: 'none',
+          backgroundColor: filters[colKey] ? '#EDE9FE' : '#F5F3FF',
+          color: '#374151', marginBottom: 6, boxSizing: 'border-box',
+        }}
+      />
+    </th>
+  );
 
   const cellStyle: any = {
     padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
@@ -2443,49 +2477,46 @@ export default function AdminPanelScreen() {
   const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
 
   const renderUsers = () => {
-    const sortedUsers = applySort(applyFilter(users, userFilter), userSortCol, userSortAsc);
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
-    const cols: { label: string; key: string }[] = [
-      { label: 'Nombre', key: 'name' }, { label: 'Email', key: 'email' },
-      { label: 'Teléfono', key: 'phone' }, { label: 'Ciudad', key: 'city' },
-      { label: 'País', key: 'country' }, { label: 'Género', key: 'gender' },
-      { label: 'Interesado en', key: 'interested_in' }, { label: 'Edad', key: 'age' },
-      { label: 'Rango edad', key: 'age_range_min' }, { label: 'Calificación', key: '_rating' },
-      { label: 'Registro', key: 'created_at' },
+    const sortedUsers = applySort(applyColFilters(users, userColFilters), userSortCol, userSortAsc);
+    const activeFilters = Object.values(userColFilters).filter(v => v.trim()).length;
+    const cols: { label: string; key: string; w?: number }[] = [
+      { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 170 },
+      { label: 'Teléfono', key: 'phone', w: 130 }, { label: 'Ciudad', key: 'city', w: 100 },
+      { label: 'País', key: 'country', w: 90 }, { label: 'Género', key: 'gender', w: 80 },
+      { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
+      { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
+      { label: 'Registro', key: 'created_at', w: 100 },
     ];
     return (
       <View style={styles.listContainer}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-          <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{userFilter ? ` de ${users.length}` : ''})</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{activeFilters > 0 ? ` de ${users.length}` : ''})</Text>
+            {activeFilters > 0 && (
+              <button onClick={() => setUserColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                ✕ Limpiar filtros ({activeFilters})
+              </button>
+            )}
+          </div>
           <button onClick={exportUsersToExcel} style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             📥 Descargar Excel
           </button>
         </div>
 
-        {/* Filter */}
-        <div style={{ marginBottom: 16 }}>
-          <input
-            type="text"
-            placeholder="🔍 Filtrar por nombre, email, ciudad, género..."
-            value={userFilter}
-            onChange={e => setUserFilter(e.target.value)}
-            style={{ width: '100%', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 14, outline: 'none', boxSizing: 'border-box', backgroundColor: '#F5F3FF' }}
-          />
-        </div>
-
         <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
             <thead>
               <tr>
-                <th style={headerCellStyle}>#</th>
+                <th style={{ ...headerCellStyle, width: 40 }}>#</th>
                 {cols.map(c => (
-                  <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} />
+                  <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} filters={userColFilters} setFilters={setUserColFilters} width={c.w} />
                 ))}
               </tr>
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>No hay resultados</td></tr>
+                <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -2612,6 +2643,14 @@ export default function AdminPanelScreen() {
               </div>
             )}
 
+            {/* Clear filters */}
+            {Object.values(partColFilters).some(v => v.trim()) && (
+              <div style={{ marginBottom: 8 }}>
+                <button onClick={() => setPartColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  ✕ Limpiar filtros ({Object.values(partColFilters).filter(v => v.trim()).length})
+                </button>
+              </div>
+            )}
             {/* Sub-pestañas */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid #EDE9FE', paddingBottom: 0 }}>
               {tabConfig.map(({ key, label, emoji }) => {
@@ -2636,31 +2675,21 @@ export default function AdminPanelScreen() {
               })}
             </div>
 
-            {/* Filter */}
-            <div style={{ marginBottom: 14 }}>
-              <input
-                type="text"
-                placeholder="🔍 Filtrar participantes..."
-                value={partFilter}
-                onChange={e => setPartFilter(e.target.value)}
-                style={{ width: '100%', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 14, outline: 'none', boxSizing: 'border-box', backgroundColor: '#F5F3FF' }}
-              />
-            </div>
-
             {/* Tabla */}
             {(() => {
-              const partCols = [
-                { label: 'Nombre', key: 'name' }, { label: 'Email', key: 'email' },
-                { label: 'Teléfono', key: 'phone' }, { label: 'Ciudad', key: 'city' },
-                { label: 'País', key: 'country' }, { label: 'Género', key: 'gender' },
-                { label: 'Interesado en', key: 'interested_in' }, { label: 'Edad', key: 'age' },
-                { label: 'Rango edad', key: 'age_range_min' }, { label: 'Estado', key: 'status' },
-                { label: 'Calificación', key: '_rating' },
+              const partCols: { label: string; key: string; w?: number }[] = [
+                { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 160 },
+                { label: 'Teléfono', key: 'phone', w: 120 }, { label: 'Ciudad', key: 'city', w: 90 },
+                { label: 'País', key: 'country', w: 80 }, { label: 'Género', key: 'gender', w: 80 },
+                { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
+                { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Estado', key: 'status', w: 100 },
+                { label: 'Calificación', key: '_rating', w: 110 },
               ];
               const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
-              const flatFiltered = applyFilter(
+              const activePartFilters = Object.values(partColFilters).filter(v => v.trim()).length;
+              const flatFiltered = applyColFilters(
                 filtered.map(att => ({ ...att, ...(att.users as any) })),
-                partFilter
+                partColFilters
               );
               const sortedPart = applySort(flatFiltered, partSortCol, partSortAsc);
               return (
@@ -2668,9 +2697,9 @@ export default function AdminPanelScreen() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
                     <thead>
                       <tr>
-                        <th style={headerCellStyle}>#</th>
+                        <th style={{ ...headerCellStyle, width: 40 }}>#</th>
                         {partCols.map(c => (
-                          <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} />
+                          <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} width={c.w} />
                         ))}
                       </tr>
                     </thead>
