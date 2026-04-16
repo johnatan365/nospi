@@ -133,6 +133,9 @@ function ExcelFilterTh({
   width?: number;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [dropPos, setDropPos] = React.useState({ top: 0, left: 0 });
+  const thRef = React.useRef<any>(null);
+
   const isFiltered = !!(filters[colKey] && filters[colKey].size > 0);
   const selected: Set<string> = filters[colKey] || new Set<string>();
   const allSelected = selected.size === 0;
@@ -151,6 +154,15 @@ function ExcelFilterTh({
   };
   const selectAll = () => setFilters({ ...filters, [colKey]: new Set() });
 
+  const handleOpen = (e: any) => {
+    e.stopPropagation();
+    if (!open && thRef.current) {
+      const rect = thRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+    }
+    setOpen(o => !o);
+  };
+
   const H: any = 'th';
   const D: any = 'div';
   const Sp: any = 'span';
@@ -159,7 +171,7 @@ function ExcelFilterTh({
   const Btn: any = 'button';
 
   return (
-    <H style={{ padding: '8px 10px', verticalAlign: 'middle', minWidth: width || 100, position: 'relative', fontSize: 12, fontWeight: 700, color: '#6B21A8', backgroundColor: '#F5F3FF', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', borderBottom: '2px solid #DDD6FE' }}>
+    <H ref={thRef} style={{ padding: '8px 10px', verticalAlign: 'middle', minWidth: width || 100, position: 'relative', fontSize: 12, fontWeight: 700, color: '#6B21A8', backgroundColor: '#F5F3FF', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', borderBottom: '2px solid #DDD6FE' }}>
       <D style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between' }}>
         <D onClick={() => onSort(colKey)} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
           {label}
@@ -168,7 +180,7 @@ function ExcelFilterTh({
           </Sp>
         </D>
         <D
-          onClick={(e: any) => { e.stopPropagation(); setOpen(o => !o); }}
+          onClick={handleOpen}
           style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1, color: isFiltered ? '#6B21A8' : '#9CA3AF', background: isFiltered ? '#EDE9FE' : 'transparent', borderRadius: 4, padding: '2px 5px', border: isFiltered ? '1px solid #DDD6FE' : '1px solid transparent' }}
           title="Filtrar"
         >
@@ -178,7 +190,7 @@ function ExcelFilterTh({
 
       {open && (
         <D
-          style={{ position: 'fixed', zIndex: 99999, backgroundColor: 'white', border: '1px solid #DDD6FE', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', minWidth: 200, maxHeight: 320, display: 'flex', flexDirection: 'column' }}
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 99999, backgroundColor: 'white', border: '1px solid #DDD6FE', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', minWidth: 200, maxHeight: 320, display: 'flex', flexDirection: 'column' }}
           onMouseDown={(e: any) => e.stopPropagation()}
           onClick={(e: any) => e.stopPropagation()}
         >
