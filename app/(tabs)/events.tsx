@@ -22,6 +22,11 @@ interface Event {
   max_participants: number;
   event_status: 'draft' | 'published' | 'closed';
   is_full: boolean;
+  is_location_revealed: boolean;
+  location: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  maps_link: string | null;
 }
 
 export default function EventsScreen() {
@@ -43,7 +48,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, location, location_name, location_address, maps_link')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
     ]);
@@ -178,7 +183,13 @@ export default function EventsScreen() {
                   <Text style={styles.eventDescription}>{event.description}</Text>
                 )}
                 <Text style={styles.eventParticipants}>{participantsText}</Text>
-                <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
+                {event.is_location_revealed && (event.location_name || event.location) ? (
+                  <Text style={styles.locationRevealed}>
+                    📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
+                  </Text>
+                ) : (
+                  <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -291,6 +302,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     fontStyle: 'italic',
+  },
+  locationRevealed: {
+    fontSize: 13,
+    color: '#10B981',
+    fontWeight: '600',
+    marginTop: 4,
   },
   emptyContainer: {
     padding: 40,
