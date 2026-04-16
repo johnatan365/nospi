@@ -2552,9 +2552,7 @@ export default function AdminPanelScreen() {
             <thead>
               <tr>
                 <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                {cols.map(c => (
-                  {renderColDropdown(c.key, c.label, userSortCol, userSortAsc, onSortUsers, userColFilters, setUserColFilters, users, userOpenCol, setUserOpenCol, c.w)}
-                ))}
+                  {cols.map(c => renderColDropdown(c.key, c.label, userSortCol, userSortAsc, onSortUsers, userColFilters, setUserColFilters, users, userOpenCol, setUserOpenCol, c.w))}
               </tr>
             </thead>
             <tbody>
@@ -2747,9 +2745,7 @@ export default function AdminPanelScreen() {
                     <thead>
                       <tr>
                         <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                        {partCols.map(c => (
-                          {renderColDropdown(c.key, c.label, partSortCol, partSortAsc, onSortPart, partColFilters, setPartColFilters, allPartRows, partOpenCol, setPartOpenCol, c.w)}
-                        ))}
+                        {partCols.map(c => renderColDropdown(c.key, c.label, partSortCol, partSortAsc, onSortPart, partColFilters, setPartColFilters, allPartRows, partOpenCol, setPartOpenCol, c.w))}
                       </tr>
                     </thead>
                     <tbody>
