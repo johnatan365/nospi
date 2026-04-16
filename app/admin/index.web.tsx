@@ -2430,6 +2430,7 @@ export default function AdminPanelScreen() {
   // Excel-style checkbox filter dropdown per column
   const SortableTh = ({
     label, colKey, sortCol, sortAsc, onSort, filters, setFilters, allRows, width,
+    openCol, setOpenCol,
   }: {
     label: string; colKey: string; sortCol: string; sortAsc: boolean;
     onSort: (k: string) => void;
@@ -2437,8 +2438,11 @@ export default function AdminPanelScreen() {
     setFilters: (f: Record<string, Set<string>>) => void;
     allRows: any[];
     width?: number;
+    openCol: string;
+    setOpenCol: (k: string) => void;
   }) => {
-    const [open, setOpen] = React.useState(false);
+    const open = openCol === colKey;
+    const setOpen = (v: boolean) => setOpenCol(v ? colKey : '');
     const isFiltered = filters[colKey] && filters[colKey].size > 0;
 
     // Get unique values for this column
@@ -2543,10 +2547,13 @@ export default function AdminPanelScreen() {
   const rowEvenStyle: any = { backgroundColor: '#FAFAFA' };
   const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
 
+  const [userOpenCol, setUserOpenCol] = React.useState('');
+  const [partOpenCol, setPartOpenCol] = React.useState('');
+
   const renderUsers = () => {
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
     const sortedUsers = applySort(applyColFilters(users, userColFilters), userSortCol, userSortAsc);
-    const activeFilters = Object.values(userColFilters).filter(v => v && v.size > 0).length;
+    const activeFilters = Object.values(userColFilters).filter((v: any) => v && v.size > 0).length;
     const cols: { label: string; key: string; w?: number }[] = [
       { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 170 },
       { label: 'Teléfono', key: 'phone', w: 130 }, { label: 'Ciudad', key: 'city', w: 100 },
@@ -2577,7 +2584,7 @@ export default function AdminPanelScreen() {
               <tr>
                 <th style={{ ...headerCellStyle, width: 40 }}>#</th>
                 {cols.map(c => (
-                  <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} filters={userColFilters} setFilters={setUserColFilters} allRows={users} width={c.w} />
+                  <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} filters={userColFilters} setFilters={setUserColFilters} allRows={users} width={c.w} openCol={userOpenCol} setOpenCol={setUserOpenCol} />
                 ))}
               </tr>
             </thead>
@@ -2719,7 +2726,7 @@ export default function AdminPanelScreen() {
             )}
 
             {/* Clear filters */}
-            {Object.values(partColFilters).some(v => v.trim()) && (
+            {Object.values(partColFilters).some((v: any) => v && v.size > 0) && (
               <div style={{ marginBottom: 8 }}>
                 <button onClick={() => setPartColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                   ✕ Limpiar filtros ({Object.values(partColFilters).filter(v => v && v.size > 0).length})
@@ -2761,7 +2768,7 @@ export default function AdminPanelScreen() {
                 { label: 'Calificación', key: '_rating', w: 110 },
               ];
               const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
-              const activePartFilters = Object.values(partColFilters).filter(v => v.trim()).length;
+              const activePartFilters = Object.values(partColFilters).filter((v: any) => v && v.size > 0).length;
               const allPartRows = filtered.map(att => ({ ...att, ...(att.users as any) }));
               const flatFiltered = applyColFilters(allPartRows, partColFilters);
               const sortedPart = applySort(flatFiltered, partSortCol, partSortAsc);
@@ -2772,14 +2779,14 @@ export default function AdminPanelScreen() {
                       <tr>
                         <th style={{ ...headerCellStyle, width: 40 }}>#</th>
                         {partCols.map(c => (
-                          <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} allRows={allPartRows} width={c.w} />
+                          <SortableTh key={c.key} label={c.label} colKey={c.key} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} allRows={allPartRows} width={c.w} openCol={partOpenCol} setOpenCol={setPartOpenCol} />
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {sortedPart.length === 0 ? (
                         <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
-                          {partFilter ? 'Sin resultados para ese filtro' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
+                          {Object.values(partColFilters).some((v: any) => v && v.size > 0) ? 'Sin resultados para los filtros aplicados' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
                         </td></tr>
                       ) : sortedPart.map((att: any, i: number) => {
                         const u = att.users as any || att;
