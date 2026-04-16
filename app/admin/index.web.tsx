@@ -142,8 +142,17 @@ function ExcelFilterTh({
 
   const valSet = new Set<string>();
   allRows.forEach(row => {
-    const v = row[colKey] ?? '';
-    valSet.add(v === '' || v === null || v === undefined ? '(Vacío)' : String(v));
+    let v = row[colKey] ?? '';
+    if (v === '' || v === null || v === undefined) {
+      valSet.add('(Vacío)');
+      return;
+    }
+    // For timestamp columns, show only the date part
+    const str = String(v);
+    if (str.includes('T') && str.includes(':')) {
+      v = new Date(str).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    valSet.add(String(v));
   });
   const uniqueVals = Array.from(valSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -2520,8 +2529,15 @@ export default function AdminPanelScreen() {
     return arr.filter(item =>
       Object.entries(filters).every(([col, selected]) => {
         if (!selected || selected.size === 0) return true;
-        const v = (item[col] ?? '');
-        const display = v === '' || v === null || v === undefined ? '(Vacío)' : String(v);
+        let v = item[col] ?? '';
+        if (v === '' || v === null || v === undefined) {
+          return selected.has('(Vacío)');
+        }
+        const str = String(v);
+        // Normalize timestamps to date-only for comparison
+        const display = str.includes('T') && str.includes(':')
+          ? new Date(str).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+          : str;
         return selected.has(display);
       })
     );
