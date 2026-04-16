@@ -119,6 +119,95 @@ const DEFAULT_QUESTIONS_DATA = {
   ]
 };
 
+
+// ── Real React component so useState persists across parent re-renders ──
+function ExcelFilterTh({
+  colKey, label, sortCol, sortAsc, onSort,
+  filters, setFilters, allRows, width,
+}: {
+  colKey: string; label: string; sortCol: string; sortAsc: boolean;
+  onSort: (k: string) => void;
+  filters: Record<string, Set<string>>;
+  setFilters: (f: Record<string, Set<string>>) => void;
+  allRows: any[];
+  width?: number;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const isFiltered = !!(filters[colKey] && filters[colKey].size > 0);
+  const selected: Set<string> = filters[colKey] || new Set<string>();
+  const allSelected = selected.size === 0;
+
+  const valSet = new Set<string>();
+  allRows.forEach(row => {
+    const v = row[colKey] ?? '';
+    valSet.add(v === '' || v === null || v === undefined ? '(Vacío)' : String(v));
+  });
+  const uniqueVals = Array.from(valSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const toggle = (val: string) => {
+    const next = new Set(selected);
+    if (next.has(val)) next.delete(val); else next.add(val);
+    setFilters({ ...filters, [colKey]: next.size === uniqueVals.length ? new Set() : next });
+  };
+  const selectAll = () => setFilters({ ...filters, [colKey]: new Set() });
+
+  const H: any = 'th';
+  const D: any = 'div';
+  const Sp: any = 'span';
+  const Lbl: any = 'label';
+  const Inp: any = 'input';
+  const Btn: any = 'button';
+
+  return (
+    <H style={{ padding: '8px 10px', verticalAlign: 'middle', minWidth: width || 100, position: 'relative', fontSize: 12, fontWeight: 700, color: '#6B21A8', backgroundColor: '#F5F3FF', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', borderBottom: '2px solid #DDD6FE' }}>
+      <D style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between' }}>
+        <D onClick={() => onSort(colKey)} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
+          {label}
+          <Sp style={{ fontSize: 10, opacity: sortCol === colKey ? 1 : 0.3 }}>
+            {sortCol === colKey ? (sortAsc ? '▲' : '▼') : '⇅'}
+          </Sp>
+        </D>
+        <D
+          onClick={(e: any) => { e.stopPropagation(); setOpen(o => !o); }}
+          style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1, color: isFiltered ? '#6B21A8' : '#9CA3AF', background: isFiltered ? '#EDE9FE' : 'transparent', borderRadius: 4, padding: '2px 5px', border: isFiltered ? '1px solid #DDD6FE' : '1px solid transparent' }}
+          title="Filtrar"
+        >
+          {isFiltered ? '🔽' : '▾'}
+        </D>
+      </D>
+
+      {open && (
+        <D
+          style={{ position: 'fixed', zIndex: 99999, backgroundColor: 'white', border: '1px solid #DDD6FE', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', minWidth: 200, maxHeight: 320, display: 'flex', flexDirection: 'column' }}
+          onMouseDown={(e: any) => e.stopPropagation()}
+          onClick={(e: any) => e.stopPropagation()}
+        >
+          <D style={{ padding: '10px 12px 8px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Lbl style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B21A8' }}>
+              <Inp type="checkbox" checked={allSelected} onChange={selectAll} style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#6B21A8' }} />
+              Seleccionar todo
+            </Lbl>
+            <Btn onClick={(e: any) => { e.stopPropagation(); setOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF' }}>✕</Btn>
+          </D>
+          <D style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+            {uniqueVals.map((val: string) => (
+              <Lbl key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+                <Inp
+                  type="checkbox"
+                  checked={allSelected || selected.has(val)}
+                  onChange={() => toggle(val)}
+                  style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#6B21A8', flexShrink: 0 }}
+                />
+                <Sp style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</Sp>
+              </Lbl>
+            ))}
+          </D>
+        </D>
+      )}
+    </H>
+  );
+}
+
 export default function AdminPanelScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -129,8 +218,6 @@ export default function AdminPanelScreen() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Users table: sort + per-column filters
-  const [userOpenCol, setUserOpenCol] = useState<string>('');
-  const [partOpenCol, setPartOpenCol] = useState<string>('');
   const [userSortCol, setUserSortCol] = useState<string>('');
   const [userSortAsc, setUserSortAsc] = useState(true);
   const [userColFilters, setUserColFilters] = useState<Record<string, Set<string>>>({});
@@ -2428,84 +2515,7 @@ export default function AdminPanelScreen() {
     );
   };
 
-  // Excel-style checkbox filter — renders as plain JSX, no hooks
-  const renderColDropdown = (
-    colKey: string, label: string, sortCol: string, sortAsc: boolean,
-    onSort: (k: string) => void,
-    filters: Record<string, Set<string>>,
-    setFilters: (f: Record<string, Set<string>>) => void,
-    allRows: any[],
-    openCol: string, setOpenCol: (k: string) => void,
-    width?: number,
-  ) => {
-    const open = openCol === colKey;
-    const isFiltered = !!(filters[colKey] && filters[colKey].size > 0);
-    const selected: Set<string> = filters[colKey] || new Set<string>();
-    const allSelected = selected.size === 0;
 
-    // Compute unique values inline (no useMemo)
-    const valSet = new Set<string>();
-    allRows.forEach(row => {
-      const v = row[colKey] ?? '';
-      valSet.add(v === '' || v === null || v === undefined ? '(Vacío)' : String(v));
-    });
-    const uniqueVals = Array.from(valSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-    const toggle = (val: string) => {
-      const next = new Set(selected);
-      if (next.has(val)) next.delete(val); else next.add(val);
-      setFilters({ ...filters, [colKey]: next.size === uniqueVals.length ? new Set() : next });
-    };
-    const selectAll = () => setFilters({ ...filters, [colKey]: new Set() });
-
-    return (
-      <th key={colKey} style={{ ...headerCellStyle, padding: '8px 10px', verticalAlign: 'middle', minWidth: width || 100, position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between' }}>
-          <div onClick={() => onSort(colKey)} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
-            {label}
-            <span style={{ fontSize: 10, opacity: sortCol === colKey ? 1 : 0.3 }}>
-              {sortCol === colKey ? (sortAsc ? '▲' : '▼') : '⇅'}
-            </span>
-          </div>
-          <div
-            onClick={e => { e.stopPropagation(); setOpenCol(open ? '' : colKey); }}
-            style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1, color: isFiltered ? '#6B21A8' : '#9CA3AF', background: isFiltered ? '#EDE9FE' : 'transparent', borderRadius: 4, padding: '2px 5px', border: isFiltered ? '1px solid #DDD6FE' : '1px solid transparent' }}
-            title="Filtrar"
-          >
-            {isFiltered ? '🔽' : '▾'}
-          </div>
-        </div>
-
-        {open && (
-          <div
-            style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #DDD6FE', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', minWidth: 190, maxHeight: 300, display: 'flex', flexDirection: 'column' }}
-            onMouseDown={e => e.stopPropagation()}
-          >
-            <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B21A8' }}>
-                <input type="checkbox" checked={allSelected} onChange={selectAll} />
-                Seleccionar todo
-              </label>
-              <button onMouseDown={e => { e.stopPropagation(); setOpenCol(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF' }}>✕</button>
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
-              {uniqueVals.map(val => (
-                <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
-                  <input
-                    type="checkbox"
-                    checked={allSelected || selected.has(val)}
-                    onChange={() => toggle(val)}
-                    style={{ cursor: 'pointer', accentColor: '#6B21A8', width: 15, height: 15 }}
-                  />
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </th>
-    );
-  };
 
   const cellStyle: any = {
     padding: '10px 14px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6',
@@ -2552,7 +2562,7 @@ export default function AdminPanelScreen() {
             <thead>
               <tr>
                 <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                  {cols.map(c => renderColDropdown(c.key, c.label, userSortCol, userSortAsc, onSortUsers, userColFilters, setUserColFilters, users, userOpenCol, setUserOpenCol, c.w))}
+                  {cols.map(c => <ExcelFilterTh key={c.key} colKey={c.key} label={c.label} sortCol={userSortCol} sortAsc={userSortAsc} onSort={onSortUsers} filters={userColFilters} setFilters={setUserColFilters} allRows={users} width={c.w} />)}
               </tr>
             </thead>
             <tbody>
@@ -2745,7 +2755,7 @@ export default function AdminPanelScreen() {
                     <thead>
                       <tr>
                         <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                        {partCols.map(c => renderColDropdown(c.key, c.label, partSortCol, partSortAsc, onSortPart, partColFilters, setPartColFilters, allPartRows, partOpenCol, setPartOpenCol, c.w))}
+                        {partCols.map(c => <ExcelFilterTh key={c.key} colKey={c.key} label={c.label} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} allRows={allPartRows} width={c.w} />)}
                       </tr>
                     </thead>
                     <tbody>
