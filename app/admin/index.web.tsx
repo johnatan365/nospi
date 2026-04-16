@@ -1005,6 +1005,39 @@ export default function AdminPanelScreen() {
     }
   };
 
+  const handleDuplicateEvent = async (event: Event) => {
+    const confirmed = window.confirm(
+      `¿Duplicar el evento "${event.name || event.type + ' - ' + event.city}"? Se copiará toda la info pero sin asistentes ni fecha, como borrador.`
+    );
+    if (!confirmed) return;
+    try {
+      const { error } = await supabase.from('events').insert({
+        name: (event.name ? event.name + ' (copia)' : null),
+        city: event.city,
+        description: event.description,
+        type: event.type,
+        date: '',
+        time: event.time,
+        location_name: event.location_name,
+        location_address: event.location_address,
+        maps_link: event.maps_link,
+        is_location_revealed: false,
+        max_participants: event.max_participants,
+        current_participants: 0,
+        event_status: 'draft',
+        confirmation_code: event.confirmation_code,
+      });
+      if (error) {
+        window.alert('Error al duplicar: ' + error.message);
+        return;
+      }
+      window.alert('✅ Evento duplicado como borrador. Edítalo para ponerle fecha.');
+      loadDashboardData();
+    } catch (err) {
+      window.alert('Error inesperado al duplicar');
+    }
+  };
+
   const handleRevealLocation = async (eventId: string) => {
     const confirmed = window.confirm('¿Revelar la ubicación de este evento?');
     if (!confirmed) return;
@@ -2056,8 +2089,24 @@ export default function AdminPanelScreen() {
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
-              
-              {/* NEW: Single "Configurar" button */}
+
+              {/* Location — visible once revealed */}
+              {event.is_location_revealed && (event.location_name || event.location_address) && (
+                <View style={[styles.compactInfoRow, { backgroundColor: '#ECFDF5', borderRadius: 8, padding: 8, marginTop: 4 }]}>
+                  <Text style={[styles.compactInfoText, { color: '#065F46', fontWeight: '700' }]}>
+                    📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
+                  </Text>
+                  {event.maps_link ? (
+                    <Text
+                      style={[styles.compactInfoText, { color: '#3B82F6', textDecorationLine: 'underline' }]}
+                      onPress={() => window.open(event.maps_link, '_blank')}
+                    >
+                      🗺️ Ver mapa
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+
               <TouchableOpacity
                 style={styles.configButton}
                 onPress={() => handleOpenConfigModal(event)}
@@ -3074,6 +3123,16 @@ export default function AdminPanelScreen() {
                     }}
                   >
                     <Text style={styles.configActionButtonText}>✏️ Editar Evento</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#0EA5E9' }]}
+                    onPress={() => {
+                      setShowConfigModal(false);
+                      handleDuplicateEvent(selectedEventForConfig);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>📋 Duplicar Evento</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
