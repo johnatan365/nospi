@@ -18,6 +18,7 @@ export default function NameScreen() {
     }
 
     console.log('User entered name:', name);
+    await AsyncStorage.setItem('onboarding_step', 'name');
     await AsyncStorage.setItem('onboarding_name', name);
     router.push('/onboarding/birthdate');
   };

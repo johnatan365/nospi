@@ -62,6 +62,7 @@ export default function LocationScreen() {
     console.log('User location confirmed:', country, city);
     
     // Save location to AsyncStorage
+    await AsyncStorage.setItem('onboarding_step', 'location');
     await AsyncStorage.setItem('onboarding_country', country);
     await AsyncStorage.setItem('onboarding_city', city);
     

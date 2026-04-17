@@ -14,6 +14,7 @@ export default function AgeRangeScreen() {
   const handleContinue = async () => {
     console.log('User selected age range:', ageRange.min, '-', ageRange.max);
     
+    await AsyncStorage.setItem('onboarding_step', 'age_range');
     await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: ageRange.min, max: ageRange.max }));
     
     router.push('/onboarding/location');

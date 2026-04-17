@@ -59,6 +59,7 @@ export default function InterestsScreen() {
     console.log('User continuing with interests:', selectedInterests, 'and traits:', selectedTraits);
     
     // Save to AsyncStorage
+    await AsyncStorage.setItem('onboarding_step', 'interests');
     await AsyncStorage.setItem('onboarding_interests', JSON.stringify(selectedInterests));
     await AsyncStorage.setItem('onboarding_personality', JSON.stringify(selectedTraits));
     

@@ -16,6 +16,7 @@ export default function CompatibilityScreen() {
   const navigateToNext = useCallback(async () => {
     console.log('User compatibility:', percentage);
     
+    await AsyncStorage.setItem('onboarding_step', 'compatibility');
     await AsyncStorage.setItem('onboarding_compatibility', percentage.toString());
     
     router.push('/onboarding/phone');

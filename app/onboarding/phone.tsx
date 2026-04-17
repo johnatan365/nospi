@@ -99,6 +99,7 @@ export default function PhoneScreen() {
       return;
     }
 
+    await AsyncStorage.setItem('onboarding_step', 'phone');
     await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
       countryCode: selectedCountry.code,
       phoneNumber: full,

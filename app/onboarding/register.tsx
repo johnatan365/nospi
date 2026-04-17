@@ -407,6 +407,7 @@ export default function RegisterScreen() {
             push: true,
           },
           registered_from: Platform.OS,
+          onboarding_completed: true,
         });
 
       if (profileError) {

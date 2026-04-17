@@ -41,6 +41,7 @@ export default function BirthdateScreen() {
 
     console.log('User entered birthdate:', date, 'Age:', age);
     
+    await AsyncStorage.setItem('onboarding_step', 'birthdate');
     await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
     await AsyncStorage.setItem('onboarding_age', age.toString());
     

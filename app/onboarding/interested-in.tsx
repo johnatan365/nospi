@@ -18,6 +18,7 @@ export default function InterestedInScreen() {
   const handleSelect = async (interest: string) => {
     console.log('User interested in:', interest);
     
+    await AsyncStorage.setItem('onboarding_step', 'interested_in');
     await AsyncStorage.setItem('onboarding_interested_in', interest);
     
     router.push('/onboarding/age-range');

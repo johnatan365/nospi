@@ -40,6 +40,7 @@ export default function PhotoScreen() {
 
     console.log('User continuing with photo:', photoUri);
     
+    await AsyncStorage.setItem('onboarding_step', 'photo');
     await AsyncStorage.setItem('onboarding_photo', photoUri);
     
     router.push('/onboarding/register');
@@ -48,6 +49,7 @@ export default function PhotoScreen() {
   const handleSkip = async () => {
     console.log('User skipped photo upload');
     
+    await AsyncStorage.setItem('onboarding_step', 'photo_skipped');
     await AsyncStorage.setItem('onboarding_photo', '');
     
     router.push('/onboarding/register');

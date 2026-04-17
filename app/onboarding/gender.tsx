@@ -18,6 +18,7 @@ export default function GenderScreen() {
   const handleSelect = async (gender: string) => {
     console.log('User selected gender:', gender);
     
+    await AsyncStorage.setItem('onboarding_step', 'gender');
     await AsyncStorage.setItem('onboarding_gender', gender);
     
     router.push('/onboarding/interested-in');
