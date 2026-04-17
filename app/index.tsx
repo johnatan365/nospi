@@ -211,7 +211,7 @@ export default function Index() {
                   router.replace('/(tabs)/events');
                   return;
                 }
-              }
+              } else {
                 await new Promise(r => setTimeout(r, 1500));
                 const { data: retryProfile } = await supabase
                   .from('users')
