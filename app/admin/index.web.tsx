@@ -2189,10 +2189,11 @@ export default function AdminPanelScreen() {
 
       if (allSessions && allSessions.length > 0) {
         const stepOrder = [
-          { key: 'interests',     label: '1. Llegaron a Intereses' },
-          { key: 'name',          label: '2. Ingresaron nombre' },
+          { key: 'start',         label: '0. Presionaron Empezar' },
+          { key: 'interests',     label: '1. Intereses' },
+          { key: 'name',          label: '2. Nombre' },
           { key: 'birthdate',     label: '3. Fecha de nacimiento' },
-          { key: 'gender',        label: '4. Seleccionaron género' },
+          { key: 'gender',        label: '4. Género' },
           { key: 'interested_in', label: '5. A quién quieren conocer' },
           { key: 'age_range',     label: '6. Rango de edad' },
           { key: 'location',      label: '7. Ubicación' },
@@ -2220,7 +2221,7 @@ export default function AdminPanelScreen() {
       if (dateTo) query = query.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
       const { data: sessions } = await query;
       if (sessions) {
-        const stepOrder = ['interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
+        const stepOrder = ['start','interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
         const counts: Record<string, number> = {};
         sessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
         setSessionData(stepOrder.filter(s => counts[s]).map(s => ({ step: s, count: counts[s] })));
@@ -2344,6 +2345,7 @@ export default function AdminPanelScreen() {
               <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
               {sessionData.map((s, i) => {
                 const stepNames: Record<string, string> = {
+                  'start': 'Presionaron Empezar',
                   'interests': 'Intereses',
                   'name': 'Nombre',
                   'birthdate': 'Fecha de nacimiento',
