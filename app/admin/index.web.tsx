@@ -2185,20 +2185,20 @@ export default function AdminPanelScreen() {
             setFunnelLoading(false);
             return;
           }
-          // Carga inicial sin filtro - mostrar todos sin filtrar por fecha
+          // Sin fechas: mostrar todos sin ningún filtro
+          filtered = funnelUsers;
         } else {
           filtered = funnelUsers.filter((u: any) => {
-          if (!u.created_at) return false;
-          const userDate = new Date(u.created_at);
-          // Convertir a hora Colombia para comparar
-          const bogotaStr = userDate.toLocaleString('en-CA', { timeZone: 'America/Bogota', hour12: false });
-          const [datePart, timePart] = bogotaStr.split(', ');
-          const userDateStr = datePart; // YYYY-MM-DD
-          const userTimeStr = timePart ? timePart.slice(0,5) : '00:00'; // HH:MM
+            if (!u.created_at) return false;
+            // Convertir a hora Colombia (UTC-5) manualmente
+            const userDate = new Date(u.created_at);
+            const bogotaDate = new Date(userDate.getTime() - 5 * 60 * 60 * 1000);
+            const userDateStr = bogotaDate.toISOString().slice(0, 10); // YYYY-MM-DD
+            const userTimeStr = bogotaDate.toISOString().slice(11, 16); // HH:MM
 
-          if (userDateStr < dateFrom || userDateStr > dateTo) return false;
-          if (userDateStr === dateFrom && userTimeStr < timeFrom) return false;
-          if (userDateStr === dateTo && userTimeStr > timeTo) return false;
+            if (userDateStr < dateFrom || userDateStr > dateTo) return false;
+            if (userDateStr === dateFrom && userTimeStr < timeFrom) return false;
+            if (userDateStr === dateTo && userTimeStr > timeTo) return false;
 
             return true;
           });
@@ -2348,12 +2348,29 @@ export default function AdminPanelScreen() {
           {sessionData.length > 0 && (
             <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: 'rgba(240,98,146,0.2)', paddingTop: 16 }}>
               <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
-              {sessionData.map((s, i) => (
-                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{s.step === 'completed' ? '✅ Completaron registro' : `⏸ Se quedaron en: ${s.step}`}</Text>
-                  <Text style={{ color: s.step === 'completed' ? '#10B981' : '#F59E0B', fontWeight: '700', fontSize: 13 }}>{s.count}</Text>
-                </View>
-              ))}
+              {sessionData.map((s, i) => {
+                const stepNames: Record<string, string> = {
+                  'interests': 'Intereses',
+                  'name': 'Nombre',
+                  'birthdate': 'Fecha de nacimiento',
+                  'gender': 'Género',
+                  'interested_in': 'A quién quiere conocer',
+                  'age_range': 'Rango de edad',
+                  'location': 'Ubicación',
+                  'compatibility': 'Compatibilidad',
+                  'phone': 'Teléfono',
+                  'photo': 'Foto de perfil',
+                  'photo_skipped': 'Saltó la foto',
+                  'completed': 'Completaron registro',
+                };
+                const label = stepNames[s.step] || s.step;
+                return (
+                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{s.step === 'completed' ? `✅ ${label}` : `⏸ Se quedaron en: ${label}`}</Text>
+                    <Text style={{ color: s.step === 'completed' ? '#10B981' : '#F59E0B', fontWeight: '700', fontSize: 13 }}>{s.count}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
         </>
