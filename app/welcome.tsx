@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { nospiColors } from '@/constants/Colors';
 import { Asset } from 'expo-asset';
 
@@ -32,7 +33,8 @@ export default function WelcomeScreen() {
     preloadLogo();
   }, []);
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    await trackOnboardingStep('start');
     router.push('/onboarding/interests');
   };
 
