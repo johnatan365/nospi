@@ -261,6 +261,7 @@ export default function ProfileScreen() {
           personality_traits: [],
           compatibility_percentage: 95,
           notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+          registered_from: Platform.OS,
         };
 
         const { error: insertError } = await supabase.from('users').upsert(defaultProfile);
