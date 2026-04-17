@@ -406,6 +406,7 @@ export default function RegisterScreen() {
             sms: false,
             push: true,
           },
+          registered_from: Platform.OS,
         });
 
       if (profileError) {
