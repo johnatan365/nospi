@@ -2171,21 +2171,23 @@ export default function AdminPanelScreen() {
     );
   };
 
-  const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string) => {
+  const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string, showAlert = false) => {
     setFunnelLoading(true);
     try {
       const { data: funnelUsers } = await supabase.rpc('get_all_users_for_admin');
       if (funnelUsers && funnelUsers.length > 0) {
         let filtered = funnelUsers;
 
-        // Filtrar por rango de fecha y hora
+        // Si no hay fecha y es filtro manual, mostrar alerta
         if (!dateFrom || !dateTo) {
-          alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
-          setFunnelLoading(false);
-          return;
-        }
-
-        filtered = funnelUsers.filter((u: any) => {
+          if (showAlert) {
+            alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
+            setFunnelLoading(false);
+            return;
+          }
+          // Carga inicial sin filtro - mostrar todos sin filtrar por fecha
+        } else {
+          filtered = funnelUsers.filter((u: any) => {
           if (!u.created_at) return false;
           const userDate = new Date(u.created_at);
           // Convertir a hora Colombia para comparar
@@ -2198,8 +2200,9 @@ export default function AdminPanelScreen() {
           if (userDateStr === dateFrom && userTimeStr < timeFrom) return false;
           if (userDateStr === dateTo && userTimeStr > timeTo) return false;
 
-          return true;
-        });
+            return true;
+          });
+        }
 
         const total = filtered.length;
         const steps = [
@@ -2310,7 +2313,7 @@ export default function AdminPanelScreen() {
         <div className="funnel-btn-row">
           <button
             className="funnel-btn-primary"
-            onClick={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo)}
+            onClick={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo, true)}
           >
             {funnelLoading ? 'Cargando...' : '🔍 Filtrar'}
           </button>
