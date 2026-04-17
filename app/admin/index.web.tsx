@@ -42,6 +42,7 @@ interface User {
   age_range_min?: number;
   age_range_max?: number;
   created_at?: string;
+  registered_from?: string;
 }
 
 interface Appointment {
@@ -2405,6 +2406,7 @@ export default function AdminPanelScreen() {
       'Rango edad mín': u.age_range_min || 18,
       'Rango edad máx': u.age_range_max || 99,
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
+      'Plataforma': u.registered_from === 'ios' ? 'iOS' : u.registered_from === 'android' ? 'Android' : u.registered_from === 'web' ? 'Web' : 'Desconocido',
       'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
@@ -2500,7 +2502,7 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Registro'];
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Plataforma', 'Registro'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   // Sort helper
@@ -2567,6 +2569,7 @@ export default function AdminPanelScreen() {
       { label: 'País', key: 'country', w: 90 }, { label: 'Género', key: 'gender', w: 80 },
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
+      { label: 'Plataforma', key: 'registered_from', w: 100 },
       { label: 'Registro', key: 'created_at', w: 100 },
     ];
     return (
@@ -2632,6 +2635,17 @@ export default function AdminPanelScreen() {
                           <span style={{ fontSize: 11, color: '#6B7280' }}>{uRating.avg.toFixed(1)}/5 · {uRating.count}v</span>
                         </div>
                       ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {user.registered_from === 'ios' ? (
+                        <span title="iOS" style={{ fontSize: 18 }}>🍎</span>
+                      ) : user.registered_from === 'android' ? (
+                        <span title="Android" style={{ fontSize: 18 }}>🤖</span>
+                      ) : user.registered_from === 'web' ? (
+                        <span title="Web" style={{ fontSize: 18 }}>🌐</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>
+                      )}
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                   </tr>
