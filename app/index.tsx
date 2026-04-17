@@ -185,7 +185,33 @@ export default function Index() {
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
               Sentry.captureMessage('Index: no_profile flow triggered', { level: 'warning', extra: { userId: user.id, platform: Platform.OS } });
-              if (Platform.OS !== 'web') {
+              if (Platform.OS === 'web') {
+                // On web, oauth_flow_type may be lost after redirect — treat missing profile as new registration
+                const { error: fallbackInsertError } = await supabase.from('users').upsert({
+                  id: user.id,
+                  email: user.email || '',
+                  name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario',
+                  age: 24,
+                  gender: 'hombre',
+                  interested_in: 'ambos',
+                  age_range_min: 18,
+                  age_range_max: 60,
+                  country: 'Colombia',
+                  city: 'Medellín',
+                  profile_photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+                  interests: [],
+                  personality_traits: [],
+                  compatibility_percentage: 95,
+                  notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+                  registered_from: 'web',
+                });
+                if (!fallbackInsertError) {
+                  hasNavigated.current = true;
+                  await hideSplash();
+                  router.replace('/(tabs)/events');
+                  return;
+                }
+              }
                 await new Promise(r => setTimeout(r, 1500));
                 const { data: retryProfile } = await supabase
                   .from('users')
