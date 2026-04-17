@@ -275,6 +275,7 @@ export default function AdminPanelScreen() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [activeEvents, setActiveEvents] = useState(0);
+  const [funnelData, setFunnelData] = useState<{step: string; count: number; pct: number}[]>([]);
 
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
@@ -622,6 +623,27 @@ export default function AdminPanelScreen() {
         setAppointments(transformedAppointments);
         setTotalAppointments(transformedAppointments.length);
       }
+
+      // Load funnel de registro
+      try {
+        const { data: funnelUsers } = await supabase
+          .rpc('get_all_users_for_admin');
+        if (funnelUsers && funnelUsers.length > 0) {
+          const total = funnelUsers.length;
+          const steps = [
+            { step: '1. Crearon cuenta (email)', count: funnelUsers.filter((u: any) => u.email).length },
+            { step: '2. Ingresaron nombre', count: funnelUsers.filter((u: any) => u.name).length },
+            { step: '3. Ingresaron fecha de nacimiento', count: funnelUsers.filter((u: any) => u.birthdate).length },
+            { step: '4. Seleccionaron género', count: funnelUsers.filter((u: any) => u.gender).length },
+            { step: '5. Intereses definidos', count: funnelUsers.filter((u: any) => u.interested_in).length },
+            { step: '6. Rango de edad', count: funnelUsers.filter((u: any) => u.age_range_min).length },
+            { step: '7. Agregaron teléfono', count: funnelUsers.filter((u: any) => u.phone).length },
+            { step: '8. Subieron foto', count: funnelUsers.filter((u: any) => u.profile_photo_url).length },
+            { step: '9. Onboarding completo', count: funnelUsers.filter((u: any) => u.onboarding_completed).length },
+          ];
+          setFunnelData(steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })));
+        }
+      } catch (e) { console.warn('Funnel error', e); }
 
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -2159,6 +2181,25 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const renderFunnel = () => (
+    <View style={{ marginTop: 24, backgroundColor: '#1a0010', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#880E4F' }}>
+      <Text style={{ color: '#F06292', fontSize: 18, fontWeight: '700', marginBottom: 4 }}>🔍 Funnel de Registro</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Muestra hasta qué paso del onboarding llegó cada usuario</Text>
+      {funnelData.map((item, i) => (
+        <View key={i} style={{ marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, flex: 1 }}>{item.step}</Text>
+            <Text style={{ color: '#F06292', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>{item.count} ({item.pct}%)</Text>
+          </View>
+          <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+            <View style={{ height: 8, width: `${item.pct}%` as any, backgroundColor: item.pct > 60 ? '#10B981' : item.pct > 30 ? '#F59E0B' : '#EF4444', borderRadius: 4 }} />
+          </View>
+        </View>
+      ))}
+      {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Cargando datos...</Text>}
+    </View>
+  );
+
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -2179,6 +2220,7 @@ export default function AdminPanelScreen() {
           ))}
         </View>
 
+        {renderFunnel()}
         <View style={styles.quickActions}>
           <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
           <TouchableOpacity
