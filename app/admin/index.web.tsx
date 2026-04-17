@@ -276,6 +276,11 @@ export default function AdminPanelScreen() {
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [activeEvents, setActiveEvents] = useState(0);
   const [funnelData, setFunnelData] = useState<{step: string; count: number; pct: number}[]>([]);
+  const [funnelDateFrom, setFunnelDateFrom] = useState<string>('');
+  const [funnelDateTo, setFunnelDateTo] = useState<string>('');
+  const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
+  const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
+  const [funnelLoading, setFunnelLoading] = useState<boolean>(false);
 
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
@@ -624,25 +629,9 @@ export default function AdminPanelScreen() {
         setTotalAppointments(transformedAppointments.length);
       }
 
-      // Load funnel de registro
+      // Load funnel inicial sin filtros
       try {
-        const { data: funnelUsers } = await supabase
-          .rpc('get_all_users_for_admin');
-        if (funnelUsers && funnelUsers.length > 0) {
-          const total = funnelUsers.length;
-          const steps = [
-            { step: '1. Crearon cuenta (email)', count: funnelUsers.filter((u: any) => u.email).length },
-            { step: '2. Ingresaron nombre', count: funnelUsers.filter((u: any) => u.name).length },
-            { step: '3. Ingresaron fecha de nacimiento', count: funnelUsers.filter((u: any) => u.birthdate).length },
-            { step: '4. Seleccionaron género', count: funnelUsers.filter((u: any) => u.gender).length },
-            { step: '5. Intereses definidos', count: funnelUsers.filter((u: any) => u.interested_in).length },
-            { step: '6. Rango de edad', count: funnelUsers.filter((u: any) => u.age_range_min).length },
-            { step: '7. Agregaron teléfono', count: funnelUsers.filter((u: any) => u.phone).length },
-            { step: '8. Subieron foto', count: funnelUsers.filter((u: any) => u.profile_photo_url).length },
-            { step: '9. Onboarding completo', count: funnelUsers.filter((u: any) => u.onboarding_completed).length },
-          ];
-          setFunnelData(steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })));
-        }
+        await loadFunnelData('', '', '00:00', '23:59');
       } catch (e) { console.warn('Funnel error', e); }
 
     } catch (error) {
@@ -2181,22 +2170,141 @@ export default function AdminPanelScreen() {
     );
   };
 
+  const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string) => {
+    setFunnelLoading(true);
+    try {
+      const { data: funnelUsers } = await supabase.rpc('get_all_users_for_admin');
+      if (funnelUsers && funnelUsers.length > 0) {
+        let filtered = funnelUsers;
+
+        // Filtrar por rango de fecha y hora
+        if (dateFrom || dateTo) {
+          filtered = funnelUsers.filter((u: any) => {
+            if (!u.created_at) return false;
+            const userDate = new Date(u.created_at);
+            const userDateStr = userDate.toISOString().split('T')[0];
+            const userTimeStr = userDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+
+            const fromDate = dateFrom || '0000-01-01';
+            const toDate = dateTo || '9999-12-31';
+            if (userDateStr < fromDate || userDateStr > toDate) return false;
+
+            // Si es el mismo día de inicio y fin, aplicar filtro de hora
+            if (dateFrom && dateTo && dateFrom === dateTo) {
+              if (userTimeStr < timeFrom || userTimeStr > timeTo) return false;
+            } else if (dateFrom && userDateStr === dateFrom) {
+              if (userTimeStr < timeFrom) return false;
+            } else if (dateTo && userDateStr === dateTo) {
+              if (userTimeStr > timeTo) return false;
+            }
+            return true;
+          });
+        }
+
+        const total = filtered.length;
+        const steps = [
+          { step: '1. Crearon cuenta (email)', count: filtered.filter((u: any) => u.email).length },
+          { step: '2. Ingresaron nombre', count: filtered.filter((u: any) => u.name).length },
+          { step: '3. Fecha de nacimiento', count: filtered.filter((u: any) => u.birthdate).length },
+          { step: '4. Seleccionaron género', count: filtered.filter((u: any) => u.gender).length },
+          { step: '5. Intereses definidos', count: filtered.filter((u: any) => u.interested_in).length },
+          { step: '6. Rango de edad', count: filtered.filter((u: any) => u.age_range_min).length },
+          { step: '7. Agregaron teléfono', count: filtered.filter((u: any) => u.phone).length },
+          { step: '8. Subieron foto', count: filtered.filter((u: any) => u.profile_photo_url).length },
+          { step: '9. Onboarding completo', count: filtered.filter((u: any) => u.onboarding_completed).length },
+        ];
+        setFunnelData(steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })));
+      }
+    } catch (e) { console.warn('Funnel error', e); }
+    setFunnelLoading(false);
+  };
+
   const renderFunnel = () => (
     <View style={{ marginTop: 24, backgroundColor: '#1a0010', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#880E4F' }}>
       <Text style={{ color: '#F06292', fontSize: 18, fontWeight: '700', marginBottom: 4 }}>🔍 Funnel de Registro</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Muestra hasta qué paso del onboarding llegó cada usuario</Text>
-      {funnelData.map((item, i) => (
-        <View key={i} style={{ marginBottom: 14 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, flex: 1 }}>{item.step}</Text>
-            <Text style={{ color: '#F06292', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>{item.count} ({item.pct}%)</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Filtra por rango de fecha y hora (hora Colombia)</Text>
+
+      {/* Filtros */}
+      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20, gap: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+          <View style={{ flex: 1, minWidth: 140 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Fecha desde</Text>
+            <TextInput
+              value={funnelDateFrom}
+              onChangeText={setFunnelDateFrom}
+              placeholder="2026-04-17"
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+            />
           </View>
-          <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-            <View style={{ height: 8, width: `${item.pct}%` as any, backgroundColor: item.pct > 60 ? '#10B981' : item.pct > 30 ? '#F59E0B' : '#EF4444', borderRadius: 4 }} />
+          <View style={{ flex: 1, minWidth: 140 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Fecha hasta</Text>
+            <TextInput
+              value={funnelDateTo}
+              onChangeText={setFunnelDateTo}
+              placeholder="2026-04-17"
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+            />
           </View>
         </View>
-      ))}
-      {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Cargando datos...</Text>}
+        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+          <View style={{ flex: 1, minWidth: 140 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Hora desde</Text>
+            <TextInput
+              value={funnelTimeFrom}
+              onChangeText={setFunnelTimeFrom}
+              placeholder="00:00"
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 140 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Hora hasta</Text>
+            <TextInput
+              value={funnelTimeTo}
+              onChangeText={setFunnelTimeTo}
+              placeholder="23:59"
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+            />
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo)}
+            style={{ flex: 1, backgroundColor: '#880E4F', borderRadius: 8, padding: 12, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{funnelLoading ? 'Cargando...' : '🔍 Filtrar'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); loadFunnelData('', '', '00:00', '23:59'); }}
+            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+          >
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '700', fontSize: 14 }}>↺ Ver todo</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Resultados */}
+      {funnelLoading ? (
+        <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>Cargando...</Text>
+      ) : (
+        <>
+          {funnelData.map((item, i) => (
+            <View key={i} style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, flex: 1 }}>{item.step}</Text>
+                <Text style={{ color: '#F06292', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>{item.count} ({item.pct}%)</Text>
+              </View>
+              <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+                <View style={{ height: 8, width: `${item.pct}%` as any, backgroundColor: item.pct > 60 ? '#10B981' : item.pct > 30 ? '#F59E0B' : '#EF4444', borderRadius: 4 }} />
+              </View>
+            </View>
+          ))}
+          {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Sin datos para el rango seleccionado</Text>}
+        </>
+      )}
     </View>
   );
 
