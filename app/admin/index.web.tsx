@@ -281,6 +281,7 @@ export default function AdminPanelScreen() {
   const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
   const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
   const [funnelLoading, setFunnelLoading] = useState<boolean>(false);
+  const [sessionData, setSessionData] = useState<{step: string; count: number}[]>([]);
 
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
@@ -2216,6 +2217,20 @@ export default function AdminPanelScreen() {
         setFunnelData(steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })));
       }
     } catch (e) { console.warn('Funnel error', e); }
+    // Cargar sesiones de onboarding
+    try {
+      let query = supabase.from('onboarding_sessions').select('last_step, created_at');
+      if (dateFrom) query = query.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
+      if (dateTo) query = query.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
+      const { data: sessions } = await query;
+      if (sessions) {
+        const stepOrder = ['interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
+        const counts: Record<string, number> = {};
+        sessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
+        setSessionData(stepOrder.filter(s => counts[s]).map(s => ({ step: s, count: counts[s] })));
+      }
+    } catch(e) { console.warn('Sessions error', e); }
+
     setFunnelLoading(false);
   };
 
@@ -2325,7 +2340,20 @@ export default function AdminPanelScreen() {
               </View>
             </View>
           ))}
-          {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Sin datos para el rango seleccionado</Text>}
+              {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Sin datos para el rango seleccionado</Text>}
+
+          {/* Sesiones anónimas */}
+          {sessionData.length > 0 && (
+            <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: 'rgba(240,98,146,0.2)', paddingTop: 16 }}>
+              <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
+              {sessionData.map((s, i) => (
+                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{s.step === 'completed' ? '✅ Completaron registro' : `⏸ Se quedaron en: ${s.step}`}</Text>
+                  <Text style={{ color: s.step === 'completed' ? '#10B981' : '#F59E0B', fontWeight: '700', fontSize: 13 }}>{s.count}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </>
       )}
     </View>
