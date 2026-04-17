@@ -2224,66 +2224,89 @@ export default function AdminPanelScreen() {
       <Text style={{ color: '#F06292', fontSize: 18, fontWeight: '700', marginBottom: 4 }}>🔍 Funnel de Registro</Text>
       <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Filtra por rango de fecha y hora (hora Colombia)</Text>
 
-      {/* Filtros */}
-      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20, gap: 12 }}>
-        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Fecha desde</Text>
-            <TextInput
+      {/* Filtros con date/time pickers nativos */}
+      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+        <style>{`
+          .funnel-picker {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(240,98,146,0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 14px;
+            width: 100%;
+            cursor: pointer;
+            outline: none;
+            font-family: inherit;
+          }
+          .funnel-picker::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(0.7);
+            cursor: pointer;
+          }
+          .funnel-picker:focus { border-color: #F06292; }
+          .funnel-label { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 4px; display: block; }
+          .funnel-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+          .funnel-col { flex: 1; min-width: 140px; }
+          .funnel-btn-row { display: flex; gap: 10px; margin-top: 4px; }
+          .funnel-btn-primary { flex: 1; background: #880E4F; border: none; border-radius: 8px; padding: 12px; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+          .funnel-btn-primary:hover { background: #a01060; }
+          .funnel-btn-secondary { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(240,98,146,0.3); border-radius: 8px; padding: 12px; color: rgba(255,255,255,0.7); font-weight: 700; font-size: 14px; cursor: pointer; }
+          .funnel-btn-secondary:hover { background: rgba(255,255,255,0.12); }
+        `}</style>
+        <div className="funnel-row">
+          <div className="funnel-col">
+            <span className="funnel-label">📅 Fecha desde</span>
+            <input
+              type="date"
+              className="funnel-picker"
               value={funnelDateFrom}
-              onChangeText={setFunnelDateFrom}
-              placeholder="2026-04-17"
-              placeholderTextColor="rgba(255,255,255,0.2)"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+              onChange={(e: any) => setFunnelDateFrom(e.target.value)}
             />
-          </View>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Fecha hasta</Text>
-            <TextInput
+          </div>
+          <div className="funnel-col">
+            <span className="funnel-label">📅 Fecha hasta</span>
+            <input
+              type="date"
+              className="funnel-picker"
               value={funnelDateTo}
-              onChangeText={setFunnelDateTo}
-              placeholder="2026-04-17"
-              placeholderTextColor="rgba(255,255,255,0.2)"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+              onChange={(e: any) => setFunnelDateTo(e.target.value)}
             />
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Hora desde</Text>
-            <TextInput
+          </div>
+        </div>
+        <div className="funnel-row">
+          <div className="funnel-col">
+            <span className="funnel-label">🕐 Hora desde</span>
+            <input
+              type="time"
+              className="funnel-picker"
               value={funnelTimeFrom}
-              onChangeText={setFunnelTimeFrom}
-              placeholder="00:00"
-              placeholderTextColor="rgba(255,255,255,0.2)"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+              onChange={(e: any) => setFunnelTimeFrom(e.target.value)}
             />
-          </View>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 }}>Hora hasta</Text>
-            <TextInput
+          </div>
+          <div className="funnel-col">
+            <span className="funnel-label">🕐 Hora hasta</span>
+            <input
+              type="time"
+              className="funnel-picker"
               value={funnelTimeTo}
-              onChangeText={setFunnelTimeTo}
-              placeholder="23:59"
-              placeholderTextColor="rgba(255,255,255,0.2)"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 10, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+              onChange={(e: any) => setFunnelTimeTo(e.target.value)}
             />
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo)}
-            style={{ flex: 1, backgroundColor: '#880E4F', borderRadius: 8, padding: 12, alignItems: 'center' }}
+          </div>
+        </div>
+        <div className="funnel-btn-row">
+          <button
+            className="funnel-btn-primary"
+            onClick={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo)}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{funnelLoading ? 'Cargando...' : '🔍 Filtrar'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); loadFunnelData('', '', '00:00', '23:59'); }}
-            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(240,98,146,0.3)' }}
+            {funnelLoading ? 'Cargando...' : '🔍 Filtrar'}
+          </button>
+          <button
+            className="funnel-btn-secondary"
+            onClick={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); loadFunnelData('', '', '00:00', '23:59'); }}
           >
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '700', fontSize: 14 }}>↺ Ver todo</Text>
-          </TouchableOpacity>
-        </View>
+            ↺ Ver todo
+          </button>
+        </div>
       </View>
 
       {/* Resultados */}
