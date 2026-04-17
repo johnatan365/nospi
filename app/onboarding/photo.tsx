@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 export default function PhotoScreen() {
   const router = useRouter();
@@ -40,7 +42,7 @@ export default function PhotoScreen() {
 
     console.log('User continuing with photo:', photoUri);
     
-    await AsyncStorage.setItem('onboarding_step', 'photo');
+    await trackOnboardingStep('photo');
     await AsyncStorage.setItem('onboarding_photo', photoUri);
     
     router.push('/onboarding/register');
@@ -49,7 +51,7 @@ export default function PhotoScreen() {
   const handleSkip = async () => {
     console.log('User skipped photo upload');
     
-    await AsyncStorage.setItem('onboarding_step', 'photo_skipped');
+    await trackOnboardingStep('photo_skipped');
     await AsyncStorage.setItem('onboarding_photo', '');
     
     router.push('/onboarding/register');

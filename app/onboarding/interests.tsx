@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 // Common interests similar to Tinder
 const INTERESTS = [
@@ -59,7 +61,7 @@ export default function InterestsScreen() {
     console.log('User continuing with interests:', selectedInterests, 'and traits:', selectedTraits);
     
     // Save to AsyncStorage
-    await AsyncStorage.setItem('onboarding_step', 'interests');
+    await trackOnboardingStep('interests');
     await AsyncStorage.setItem('onboarding_interests', JSON.stringify(selectedInterests));
     await AsyncStorage.setItem('onboarding_personality', JSON.stringify(selectedTraits));
     

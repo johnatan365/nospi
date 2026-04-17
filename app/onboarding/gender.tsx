@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 const GENDERS = [
   { value: 'hombre', label: 'Hombre', emoji: '👨' },
@@ -18,7 +20,7 @@ export default function GenderScreen() {
   const handleSelect = async (gender: string) => {
     console.log('User selected gender:', gender);
     
-    await AsyncStorage.setItem('onboarding_step', 'gender');
+    await trackOnboardingStep('gender');
     await AsyncStorage.setItem('onboarding_gender', gender);
     
     router.push('/onboarding/interested-in');

@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { completeOnboardingSession } from '@/utils/onboardingTracker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
@@ -428,6 +429,7 @@ export default function RegisterScreen() {
         'onboarding_city', 'onboarding_phone', 'onboarding_photo', 'onboarding_compatibility',
       ]);
 
+      await completeOnboardingSession();
       router.replace('/(tabs)/events');
     } catch (error) {
       setError('Error al registrarse. Intenta de nuevo.');

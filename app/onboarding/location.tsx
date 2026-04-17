@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 const COUNTRIES = [
   'Colombia',
@@ -62,7 +64,7 @@ export default function LocationScreen() {
     console.log('User location confirmed:', country, city);
     
     // Save location to AsyncStorage
-    await AsyncStorage.setItem('onboarding_step', 'location');
+    await trackOnboardingStep('location');
     await AsyncStorage.setItem('onboarding_country', country);
     await AsyncStorage.setItem('onboarding_city', city);
     

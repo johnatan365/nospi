@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 export default function CompatibilityScreen() {
   const router = useRouter();
@@ -16,7 +18,7 @@ export default function CompatibilityScreen() {
   const navigateToNext = useCallback(async () => {
     console.log('User compatibility:', percentage);
     
-    await AsyncStorage.setItem('onboarding_step', 'compatibility');
+    await trackOnboardingStep('compatibility');
     await AsyncStorage.setItem('onboarding_compatibility', percentage.toString());
     
     router.push('/onboarding/phone');

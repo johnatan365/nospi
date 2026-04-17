@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 import { supabase } from '@/lib/supabase';
 
 // ── Country data ──────────────────────────────────────────────────────────────
@@ -99,7 +101,7 @@ export default function PhoneScreen() {
       return;
     }
 
-    await AsyncStorage.setItem('onboarding_step', 'phone');
+    await trackOnboardingStep('phone');
     await AsyncStorage.setItem('onboarding_phone', JSON.stringify({
       countryCode: selectedCountry.code,
       phoneNumber: full,

@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function BirthdateScreen() {
@@ -41,7 +43,7 @@ export default function BirthdateScreen() {
 
     console.log('User entered birthdate:', date, 'Age:', age);
     
-    await AsyncStorage.setItem('onboarding_step', 'birthdate');
+    await trackOnboardingStep('birthdate');
     await AsyncStorage.setItem('onboarding_birthdate', date.toISOString().split('T')[0]);
     await AsyncStorage.setItem('onboarding_age', age.toString());
     

@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 export default function NameScreen() {
   const router = useRouter();
@@ -18,7 +20,7 @@ export default function NameScreen() {
     }
 
     console.log('User entered name:', name);
-    await AsyncStorage.setItem('onboarding_step', 'name');
+    await trackOnboardingStep('name');
     await AsyncStorage.setItem('onboarding_name', name);
     router.push('/onboarding/birthdate');
   };

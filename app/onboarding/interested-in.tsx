@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackOnboardingStep } from '@/utils/onboardingTracker';
+
 
 const INTERESTS = [
   { value: 'hombres', label: 'Hombres', emoji: '👨' },
@@ -18,7 +20,7 @@ export default function InterestedInScreen() {
   const handleSelect = async (interest: string) => {
     console.log('User interested in:', interest);
     
-    await AsyncStorage.setItem('onboarding_step', 'interested_in');
+    await trackOnboardingStep('interested_in');
     await AsyncStorage.setItem('onboarding_interested_in', interest);
     
     router.push('/onboarding/age-range');
