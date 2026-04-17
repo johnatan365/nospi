@@ -2174,49 +2174,43 @@ export default function AdminPanelScreen() {
   const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string, showAlert = false) => {
     setFunnelLoading(true);
     try {
-      const { data: funnelUsers } = await supabase.rpc('get_all_users_for_admin');
-      if (funnelUsers && funnelUsers.length > 0) {
-        let filtered = funnelUsers;
+      // Validar fechas si es filtro manual
+      if (showAlert && (!dateFrom || !dateTo)) {
+        alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
+        setFunnelLoading(false);
+        return;
+      }
 
-        // Si no hay fecha y es filtro manual, mostrar alerta
-        if (!dateFrom || !dateTo) {
-          if (showAlert) {
-            alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
-            setFunnelLoading(false);
-            return;
-          }
-          // Sin fechas: mostrar todos sin ningún filtro
-          filtered = funnelUsers;
-        } else {
-          filtered = funnelUsers.filter((u: any) => {
-            if (!u.created_at) return false;
-            // Convertir a hora Colombia (UTC-5) manualmente
-            const userDate = new Date(u.created_at);
-            const bogotaDate = new Date(userDate.getTime() - 5 * 60 * 60 * 1000);
-            const userDateStr = bogotaDate.toISOString().slice(0, 10); // YYYY-MM-DD
-            const userTimeStr = bogotaDate.toISOString().slice(11, 16); // HH:MM
+      // Usar onboarding_sessions para el funnel — muestra hasta dónde llegó cada dispositivo
+      let sessionsQuery = supabase.from('onboarding_sessions').select('last_step, created_at');
+      if (dateFrom) sessionsQuery = sessionsQuery.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
+      if (dateTo) sessionsQuery = sessionsQuery.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
+      const { data: allSessions } = await sessionsQuery;
 
-            if (userDateStr < dateFrom || userDateStr > dateTo) return false;
-            if (userDateStr === dateFrom && userTimeStr < timeFrom) return false;
-            if (userDateStr === dateTo && userTimeStr > timeTo) return false;
-
-            return true;
-          });
-        }
-
-        const total = filtered.length;
-        const steps = [
-          { step: '1. Crearon cuenta (email)', count: filtered.filter((u: any) => u.email).length },
-          { step: '2. Ingresaron nombre', count: filtered.filter((u: any) => u.name).length },
-          { step: '3. Fecha de nacimiento', count: filtered.filter((u: any) => u.birthdate).length },
-          { step: '4. Seleccionaron género', count: filtered.filter((u: any) => u.gender).length },
-          { step: '5. Intereses definidos', count: filtered.filter((u: any) => u.interested_in).length },
-          { step: '6. Rango de edad', count: filtered.filter((u: any) => u.age_range_min).length },
-          { step: '7. Agregaron teléfono', count: filtered.filter((u: any) => u.phone).length },
-          { step: '8. Subieron foto', count: filtered.filter((u: any) => u.profile_photo_url).length },
-          { step: '9. Onboarding completo', count: filtered.filter((u: any) => u.onboarding_completed).length },
+      if (allSessions && allSessions.length > 0) {
+        const stepOrder = [
+          { key: 'interests',     label: '1. Llegaron a Intereses' },
+          { key: 'name',          label: '2. Ingresaron nombre' },
+          { key: 'birthdate',     label: '3. Fecha de nacimiento' },
+          { key: 'gender',        label: '4. Seleccionaron género' },
+          { key: 'interested_in', label: '5. A quién quieren conocer' },
+          { key: 'age_range',     label: '6. Rango de edad' },
+          { key: 'location',      label: '7. Ubicación' },
+          { key: 'compatibility', label: '8. Compatibilidad' },
+          { key: 'phone',         label: '9. Teléfono' },
+          { key: 'photo',         label: '10. Foto de perfil' },
+          { key: 'photo_skipped', label: '10. Saltaron la foto' },
+          { key: 'completed',     label: '11. Completaron registro ✅' },
         ];
-        setFunnelData(steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })));
+        const total = allSessions.length;
+        const counts: Record<string, number> = {};
+        allSessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
+        const steps = stepOrder
+          .filter(s => counts[s.key])
+          .map(s => ({ step: s.label, count: counts[s.key], pct: Math.round((counts[s.key] / total) * 100) }));
+        setFunnelData(steps);
+      } else {
+        setFunnelData([]);
       }
     } catch (e) { console.warn('Funnel error', e); }
     // Cargar sesiones de onboarding
