@@ -2179,28 +2179,27 @@ export default function AdminPanelScreen() {
         let filtered = funnelUsers;
 
         // Filtrar por rango de fecha y hora
-        if (dateFrom || dateTo) {
-          filtered = funnelUsers.filter((u: any) => {
-            if (!u.created_at) return false;
-            const userDate = new Date(u.created_at);
-            const userDateStr = userDate.toISOString().split('T')[0];
-            const userTimeStr = userDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-
-            const fromDate = dateFrom || '0000-01-01';
-            const toDate = dateTo || '9999-12-31';
-            if (userDateStr < fromDate || userDateStr > toDate) return false;
-
-            // Si es el mismo día de inicio y fin, aplicar filtro de hora
-            if (dateFrom && dateTo && dateFrom === dateTo) {
-              if (userTimeStr < timeFrom || userTimeStr > timeTo) return false;
-            } else if (dateFrom && userDateStr === dateFrom) {
-              if (userTimeStr < timeFrom) return false;
-            } else if (dateTo && userDateStr === dateTo) {
-              if (userTimeStr > timeTo) return false;
-            }
-            return true;
-          });
+        if (!dateFrom || !dateTo) {
+          alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
+          setFunnelLoading(false);
+          return;
         }
+
+        filtered = funnelUsers.filter((u: any) => {
+          if (!u.created_at) return false;
+          const userDate = new Date(u.created_at);
+          // Convertir a hora Colombia para comparar
+          const bogotaStr = userDate.toLocaleString('en-CA', { timeZone: 'America/Bogota', hour12: false });
+          const [datePart, timePart] = bogotaStr.split(', ');
+          const userDateStr = datePart; // YYYY-MM-DD
+          const userTimeStr = timePart ? timePart.slice(0,5) : '00:00'; // HH:MM
+
+          if (userDateStr < dateFrom || userDateStr > dateTo) return false;
+          if (userDateStr === dateFrom && userTimeStr < timeFrom) return false;
+          if (userDateStr === dateTo && userTimeStr > timeTo) return false;
+
+          return true;
+        });
 
         const total = filtered.length;
         const steps = [
