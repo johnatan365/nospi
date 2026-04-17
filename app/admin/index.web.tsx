@@ -2189,19 +2189,20 @@ export default function AdminPanelScreen() {
 
       if (allSessions && allSessions.length > 0) {
         const stepOrder = [
-          { key: 'start',         label: '0. Presionaron Empezar' },
-          { key: 'interests',     label: '1. Intereses' },
-          { key: 'name',          label: '2. Nombre' },
-          { key: 'birthdate',     label: '3. Fecha de nacimiento' },
-          { key: 'gender',        label: '4. Género' },
-          { key: 'interested_in', label: '5. A quién quieren conocer' },
-          { key: 'age_range',     label: '6. Rango de edad' },
-          { key: 'location',      label: '7. Ubicación' },
-          { key: 'compatibility', label: '8. Compatibilidad' },
-          { key: 'phone',         label: '9. Teléfono' },
-          { key: 'photo',         label: '10. Foto de perfil' },
-          { key: 'photo_skipped', label: '10. Saltaron la foto' },
-          { key: 'completed',     label: '11. Completaron registro ✅' },
+          { key: 'landing_click', label: '0. Clic en landing (nospi.co)' },
+          { key: 'start',         label: '1. Presionaron Empezar en la app' },
+          { key: 'interests',     label: '2. Intereses' },
+          { key: 'name',          label: '3. Nombre' },
+          { key: 'birthdate',     label: '4. Fecha de nacimiento' },
+          { key: 'gender',        label: '5. Género' },
+          { key: 'interested_in', label: '6. A quién quieren conocer' },
+          { key: 'age_range',     label: '7. Rango de edad' },
+          { key: 'location',      label: '8. Ubicación' },
+          { key: 'compatibility', label: '9. Compatibilidad' },
+          { key: 'phone',         label: '10. Teléfono' },
+          { key: 'photo',         label: '11. Foto de perfil' },
+          { key: 'photo_skipped', label: '11. Saltaron la foto' },
+          { key: 'completed',     label: '12. Completaron registro ✅' },
         ];
         const total = allSessions.length;
         const counts: Record<string, number> = {};
@@ -2221,7 +2222,7 @@ export default function AdminPanelScreen() {
       if (dateTo) query = query.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
       const { data: sessions } = await query;
       if (sessions) {
-        const stepOrder = ['start','interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
+        const stepOrder = ['landing_click','start','interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
         const counts: Record<string, number> = {};
         sessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
         setSessionData(stepOrder.filter(s => counts[s]).map(s => ({ step: s, count: counts[s] })));
@@ -2345,7 +2346,8 @@ export default function AdminPanelScreen() {
               <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
               {sessionData.map((s, i) => {
                 const stepNames: Record<string, string> = {
-                  'start': 'Presionaron Empezar',
+                  'landing_click': 'Clic en landing (nospi.co)',
+                  'start': 'Presionaron Empezar en la app',
                   'interests': 'Intereses',
                   'name': 'Nombre',
                   'birthdate': 'Fecha de nacimiento',
