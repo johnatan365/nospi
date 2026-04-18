@@ -2273,7 +2273,7 @@ export default function AdminPanelScreen() {
               type="date"
               className="funnel-picker"
               value={funnelDateFrom}
-              onChange={(e: any) => setFunnelDateFrom(e.target.value)}
+              onChange={(e: any) => { setFunnelDateFrom(e.target.value); setFunnelTimeFrom('00:00'); }}
             />
           </div>
           <div className="funnel-col">
@@ -2282,7 +2282,7 @@ export default function AdminPanelScreen() {
               type="date"
               className="funnel-picker"
               value={funnelDateTo}
-              onChange={(e: any) => setFunnelDateTo(e.target.value)}
+              onChange={(e: any) => { setFunnelDateTo(e.target.value); setFunnelTimeTo('23:59'); }}
             />
           </div>
         </div>
