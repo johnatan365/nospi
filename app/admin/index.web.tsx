@@ -2175,9 +2175,9 @@ export default function AdminPanelScreen() {
   const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string, showAlert = false) => {
     setFunnelLoading(true);
     try {
-      // Validar fechas si es filtro manual
-      if (showAlert && (!dateFrom || !dateTo)) {
-        alert('Por favor selecciona fecha desde y fecha hasta antes de filtrar.');
+      // Validar fechas solo si se especificaron parcialmente
+      if (showAlert && ((dateFrom && !dateTo) || (!dateFrom && dateTo))) {
+        alert('Por favor selecciona tanto fecha desde como fecha hasta.');
         setFunnelLoading(false);
         return;
       }
