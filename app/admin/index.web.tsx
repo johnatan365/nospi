@@ -280,6 +280,7 @@ export default function AdminPanelScreen() {
   const [funnelDateTo, setFunnelDateTo] = useState<string>('');
   const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
   const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
+  const [funnelUtmSource, setFunnelUtmSource] = useState<string>('');
   const [funnelLoading, setFunnelLoading] = useState<boolean>(false);
   const [sessionData, setSessionData] = useState<{step: string; count: number}[]>([]);
 
@@ -2182,9 +2183,10 @@ export default function AdminPanelScreen() {
       }
 
       // Usar onboarding_sessions para el funnel — cuenta device_ids únicos por paso
-      let sessionsQuery = supabase.from('onboarding_sessions').select('device_id, last_step, created_at');
+      let sessionsQuery = supabase.from('onboarding_sessions').select('device_id, last_step, utm_source, created_at');
       if (dateFrom) sessionsQuery = sessionsQuery.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
       if (dateTo) sessionsQuery = sessionsQuery.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
+      if (funnelUtmSource) sessionsQuery = sessionsQuery.eq('utm_source', funnelUtmSource);
       const { data: allSessions } = await sessionsQuery;
 
       if (allSessions && allSessions.length > 0) {
@@ -2312,6 +2314,23 @@ export default function AdminPanelScreen() {
             />
           </div>
         </div>
+        <div className="funnel-row">
+          <div className="funnel-col">
+            <span className="funnel-label">🔗 Landing (utm_source)</span>
+            <select
+              className="funnel-picker"
+              value={funnelUtmSource}
+              onChange={(e: any) => setFunnelUtmSource(e.target.value)}
+              style={{ background: '#1a0010', color: 'white', border: '1px solid rgba(240,98,146,0.3)', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
+            >
+              <option value="">Todas las landings</option>
+              <option value="lp1">LP1 — Landing actual (nospi.co)</option>
+              <option value="lp2">LP2 — Corta y directa</option>
+              <option value="lp3">LP3 — Evento específico</option>
+              <option value="lp4">LP4 — Recién llegadas</option>
+            </select>
+          </div>
+        </div>
         <div className="funnel-btn-row">
           <button
             className="funnel-btn-primary"
@@ -2321,7 +2340,7 @@ export default function AdminPanelScreen() {
           </button>
           <button
             className="funnel-btn-secondary"
-            onClick={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); loadFunnelData('', '', '00:00', '23:59'); }}
+            onClick={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); setFunnelUtmSource(''); loadFunnelData('', '', '00:00', '23:59'); }}
           >
             ↺ Ver todo
           </button>
