@@ -2181,8 +2181,8 @@ export default function AdminPanelScreen() {
         return;
       }
 
-      // Usar onboarding_sessions para el funnel — muestra hasta dónde llegó cada dispositivo
-      let sessionsQuery = supabase.from('onboarding_sessions').select('last_step, created_at');
+      // Usar onboarding_sessions para el funnel — cuenta device_ids únicos por paso
+      let sessionsQuery = supabase.from('onboarding_sessions').select('device_id, last_step, created_at');
       if (dateFrom) sessionsQuery = sessionsQuery.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
       if (dateTo) sessionsQuery = sessionsQuery.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
       const { data: allSessions } = await sessionsQuery;
@@ -2204,9 +2204,15 @@ export default function AdminPanelScreen() {
           { key: 'photo_skipped', label: '11. Saltaron la foto' },
           { key: 'completed',     label: '12. Completaron registro ✅' },
         ];
-        const total = allSessions.length;
+        // Deduplicar por device_id — contar dispositivos únicos por paso
+        const uniqueByStep: Record<string, Set<string>> = {};
+        allSessions.forEach((s: any) => {
+          if (!uniqueByStep[s.last_step]) uniqueByStep[s.last_step] = new Set();
+          uniqueByStep[s.last_step].add(s.device_id);
+        });
+        const total = Object.values(uniqueByStep).reduce((acc: number, set: Set<string>) => Math.max(acc, set.size), 0);
         const counts: Record<string, number> = {};
-        allSessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
+        Object.entries(uniqueByStep).forEach(([step, set]) => { counts[step] = (set as Set<string>).size; });
         const steps = stepOrder
           .filter(s => counts[s.key])
           .map(s => ({ step: s.label, count: counts[s.key], pct: Math.round((counts[s.key] / total) * 100) }));
