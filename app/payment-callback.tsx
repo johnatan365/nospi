@@ -8,6 +8,54 @@ import { supabase } from '@/lib/supabase';
 
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 
+const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
+
+// Dispara el evento Purchase — píxel en web, API de Conversiones en mobile
+async function trackMetaPurchase(
+  transactionId: string,
+  eventId: string = '',
+  userEmail: string = '',
+  userPhone: string = '',
+  amount: number = 9900
+) {
+  // Web: disparar píxel directamente
+  if (Platform.OS === 'web') {
+    try {
+      const win = window as any;
+      if (typeof win.fbq === 'function') {
+        win.fbq('track', 'Purchase', {
+          value: amount,
+          currency: 'COP',
+          content_type: 'product',
+          content_ids: [eventId || 'nospi_event'],
+        }, { eventID: 'purchase_' + transactionId });
+      }
+    } catch (e) { /* silencioso */ }
+    return;
+  }
+
+  // Mobile: llamar Edge Function de API de Conversiones
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/meta-purchase`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        transactionId,
+        amount,
+        currency: 'COP',
+        eventId,
+        userEmail,
+        userPhone,
+      }),
+    });
+  } catch (e) { /* silencioso */ }
+}
+
 type WompiStatus = 'APPROVED' | 'PENDING' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'unknown';
 
 // Confirm the appointment in Supabase once payment is verified as APPROVED.
@@ -208,6 +256,11 @@ export default function PaymentCallbackScreen() {
         if (status === 'APPROVED') {
           setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
 
+          // Disparar evento Purchase — web: píxel, mobile: API de Conversiones
+          const { data: { session: purchaseSession } } = await supabase.auth.getSession();
+          const purchaseEmail = purchaseSession?.user?.email || '';
+          trackMetaPurchase(transactionId, eventId, purchaseEmail, '', 9900);
+
           // Marcar que payment-callback está manejando este pago
           // para evitar que subscription-plans lo procese en paralelo.
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
@@ -393,6 +446,9 @@ export default function PaymentCallbackScreen() {
 
                 if (wompiStatus === 'APPROVED') {
                   setStatusMessage('¡Pago aprobado! Confirmando asistencia...');
+
+                  // Disparar evento Purchase — web: píxel, mobile: API de Conversiones
+                  trackMetaPurchase(transactionId, eventId, '', '', 9900);
 
                   // Resolución de userId con fallbacks (igual que processPayment principal)
                   await supabase.auth.refreshSession().catch(() => {});
