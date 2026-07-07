@@ -107,7 +107,7 @@ export default function PhoneScreen() {
       phoneNumber: full,
     }));
 
-    router.push('/onboarding/photo');
+    router.push('/onboarding/register');
   };
 
   return (
