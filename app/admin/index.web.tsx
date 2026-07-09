@@ -754,6 +754,7 @@ export default function AdminPanelScreen() {
           status: apt.status,
           payment_status: apt.payment_status,
           created_at: apt.created_at,
+          purchase_whatsapp_sent_at: apt.purchase_whatsapp_sent_at,
           users: {
             id: apt.user_id,
             name: apt.user_name,
@@ -851,8 +852,9 @@ export default function AdminPanelScreen() {
 
   // Para el botón de WhatsApp en la tabla general de Usuarios, donde no hay un
   // evento único de contexto: usa la próxima cita confirmada de la persona
-  // (o la más reciente, si ya no tiene ninguna futura).
-  const getNextConfirmedEventForUser = (userId: string) => {
+  // (o la más reciente, si ya no tiene ninguna futura). Devuelve la cita
+  // completa (no solo el evento) para poder marcarla como "WhatsApp enviado".
+  const getNextConfirmedAppointmentForUser = (userId: string) => {
     const userApts = appointments.filter(a => a.user_id === userId && a.status === 'confirmada' && a.events?.date);
     if (userApts.length === 0) return null;
     const now = new Date();
@@ -860,7 +862,18 @@ export default function AdminPanelScreen() {
     const sorted = (future.length > 0 ? future : userApts).sort(
       (a, b) => new Date(a.events.date).getTime() - new Date(b.events.date).getTime()
     );
-    return sorted[0]?.events || null;
+    return sorted[0] || null;
+  };
+
+  // Marca en la base de datos (y en el estado local, para no tener que
+  // recargar todo) que ya se le mandó el WhatsApp de confirmación de compra
+  // a esta cita puntual — así el botón masivo no se lo vuelve a mandar.
+  const markPurchaseWhatsAppSent = async (appointmentId: string) => {
+    const sentAt = new Date().toISOString();
+    setAppointments(prev => prev.map(a => a.id === appointmentId ? { ...a, purchase_whatsapp_sent_at: sentAt } : a));
+    try {
+      await supabase.from('appointments').update({ purchase_whatsapp_sent_at: sentAt }).eq('id', appointmentId);
+    } catch (e) { console.error('Error marcando WhatsApp enviado:', e); }
   };
 
   const loadEventParticipants = async (eventId: string) => {
@@ -926,6 +939,7 @@ export default function AdminPanelScreen() {
           status: att.status,
           payment_status: att.payment_status,
           created_at: att.created_at,
+          purchase_whatsapp_sent_at: att.purchase_whatsapp_sent_at,
           users: {
             id: att.user_id,
             name: att.user_name,
@@ -2582,12 +2596,36 @@ export default function AdminPanelScreen() {
       <View style={styles.listContainer}>
         <View style={styles.listHeader}>
           <Text style={styles.sectionTitle}>Gestión de Eventos</Text>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={openCreateEventModal}
-          >
-            <Text style={styles.createButtonText}>+ Crear Evento</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.createButton, { backgroundColor: '#25D366' }]}
+              onPress={() => {
+                const pending = appointments.filter(
+                  a => a.status === 'confirmada' && a.users?.phone && !a.purchase_whatsapp_sent_at
+                );
+                if (pending.length === 0) {
+                  window.alert('No hay nadie pendiente por recibir el WhatsApp de confirmación — ya se le mandó a todos.');
+                  return;
+                }
+                if (!window.confirm(`Se van a abrir ${pending.length} pestañas de WhatsApp (una por persona pendiente, de todos los eventos). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
+                pending.forEach(a => {
+                  window.open(
+                    buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time),
+                    '_blank'
+                  );
+                  markPurchaseWhatsAppSent(a.id);
+                });
+              }}
+            >
+              <Text style={styles.createButtonText}>💬 Enviar Confirmación a Todos (pendientes)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={openCreateEventModal}
+            >
+              <Text style={styles.createButtonText}>+ Crear Evento</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {events.map((event) => {
@@ -2817,7 +2855,7 @@ export default function AdminPanelScreen() {
         supabase
           .from('appointments')
           .select(`
-            id, user_id, event_id, status, payment_status, created_at,
+            id, user_id, event_id, status, payment_status, created_at, purchase_whatsapp_sent_at,
             users!inner (
               id, name, email, phone, city, country,
               interested_in, gender, age, age_range_min, age_range_max
@@ -2847,6 +2885,7 @@ export default function AdminPanelScreen() {
         return {
           id: att.id, user_id: att.user_id, event_id: att.event_id,
           status: att.status, payment_status: att.payment_status, created_at: att.created_at,
+          purchase_whatsapp_sent_at: att.purchase_whatsapp_sent_at,
           avgRating,
           ratingCount: rData?.count || 0,
           users: {
@@ -3034,19 +3073,21 @@ export default function AdminPanelScreen() {
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
                       {user.phone && (() => {
-                        const nextEvent = getNextConfirmedEventForUser(user.id);
+                        const nextAppt = getNextConfirmedAppointmentForUser(user.id);
+                        const alreadySent = !!nextAppt?.purchase_whatsapp_sent_at;
                         return (
                           <a
-                            href={buildWhatsAppLink(user.phone, user.name, nextEvent?.name, nextEvent?.date, nextEvent?.time)}
+                            href={buildWhatsAppLink(user.phone, user.name, nextAppt?.events?.name, nextAppt?.events?.date, nextAppt?.events?.time)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => { if (nextAppt) markPurchaseWhatsAppSent(nextAppt.id); }}
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
-                              backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                              backgroundColor: alreadySent ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
                               padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
                             }}
                           >
-                            💬 Enviar
+                            {alreadySent ? '✅ Enviado' : '💬 Enviar'}
                           </a>
                         );
                       })()}
@@ -3261,13 +3302,14 @@ export default function AdminPanelScreen() {
                                   href={buildWhatsAppLink(u.phone, u.name, selectedEvent?.name, selectedEvent?.date, selectedEvent?.time)}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={() => markPurchaseWhatsAppSent(att.id)}
                                   style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                                    backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                                    backgroundColor: att.purchase_whatsapp_sent_at ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
                                     padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
                                   }}
                                 >
-                                  💬 Enviar
+                                  {att.purchase_whatsapp_sent_at ? '✅ Enviado' : '💬 Enviar'}
                                 </a>
                               )}
                             </td>
@@ -3997,14 +4039,15 @@ export default function AdminPanelScreen() {
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => markPurchaseWhatsAppSent(attendee.id)}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                            backgroundColor: attendee.purchase_whatsapp_sent_at ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
                             padding: '10px 16px', borderRadius: 10, fontSize: 14, fontWeight: 700,
                             marginTop: 8,
                           }}
                         >
-                          💬 Enviar WhatsApp
+                          {attendee.purchase_whatsapp_sent_at ? '✅ WhatsApp Enviado' : '💬 Enviar WhatsApp'}
                         </a>
                       )}
                       <TouchableOpacity
