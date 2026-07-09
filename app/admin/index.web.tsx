@@ -467,6 +467,13 @@ export default function AdminPanelScreen() {
   const [userEditError, setUserEditError] = useState<string | null>(null);
   const [movingAttendee, setMovingAttendee] = useState(false);
 
+  // Add existing user to event modal
+  const [showAddExistingUserModal, setShowAddExistingUserModal] = useState(false);
+  const [addUserSearchQuery, setAddUserSearchQuery] = useState('');
+  const [addingUserId, setAddingUserId] = useState<string | null>(null);
+  const [addUserError, setAddUserError] = useState<string | null>(null);
+  const [addUserSuccess, setAddUserSuccess] = useState<string | null>(null);
+
   // Manual confirmation
 
 
@@ -847,6 +854,29 @@ export default function AdminPanelScreen() {
       setUserEditError(e.message || 'Error inesperado al guardar');
     } finally {
       setSavingUserEdit(false);
+    }
+  };
+
+  const handleAddExistingUserToEvent = async (userId: string) => {
+    if (!selectedEventForConfig) return;
+    setAddingUserId(userId);
+    setAddUserError(null);
+    setAddUserSuccess(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-add-user-to-event', {
+        body: { userId, eventId: selectedEventForConfig.id },
+      });
+      if (error || data?.error) {
+        setAddUserError(data?.error || error?.message || 'Error al agregar el usuario');
+        return;
+      }
+      setAddUserSuccess(`${data.userName} fue agregado al evento correctamente.`);
+      setAddUserSearchQuery('');
+      await loadDashboardData();
+    } catch (e: any) {
+      setAddUserError(e.message || 'Error inesperado al agregar el usuario');
+    } finally {
+      setAddingUserId(null);
     }
   };
 
@@ -3831,7 +3861,20 @@ export default function AdminPanelScreen() {
                       });
                     }}
                   >
-                    <Text style={styles.configActionButtonText}>💬 Recordar por WhatsApp a Todos</Text>
+                    <Text style={styles.configActionButtonText}>📍 Enviar Ubicación Revelada por WhatsApp</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
+                    onPress={() => {
+                      setAddUserSearchQuery('');
+                      setAddUserError(null);
+                      setAddUserSuccess(null);
+                      setShowConfigModal(false);
+                      setShowAddExistingUserModal(true);
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>➕ Agregar Usuario Existente</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -4592,6 +4635,105 @@ export default function AdminPanelScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Existing User To Event Modal */}
+      <Modal
+        visible={showAddExistingUserModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddExistingUserModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.moveAttendeeModalContent}>
+            <View style={styles.moveAttendeeModalHeader}>
+              <Text style={styles.moveAttendeeModalTitle}>
+                ➕ Agregar Usuario a {selectedEventForConfig?.name || 'Evento'}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAddExistingUserModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16, paddingBottom: 0 }}>
+              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 10 }}>
+                Busca por nombre o email. Se agregará con la cita ya confirmada, sin necesidad de pago.
+              </Text>
+              <input
+                autoFocus
+                placeholder="Buscar por nombre o email..."
+                value={addUserSearchQuery}
+                onChange={(e: any) => { setAddUserSearchQuery(e.target.value); setAddUserError(null); setAddUserSuccess(null); }}
+                style={{
+                  width: '100%', border: '1.5px solid #E5E7EB', borderRadius: 10,
+                  padding: '10px 12px', fontSize: 14, backgroundColor: '#FAFAFA', color: '#111',
+                  boxSizing: 'border-box', marginBottom: 10,
+                }}
+              />
+              {addUserError && (
+                <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                  <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '600' }}>{addUserError}</Text>
+                </View>
+              )}
+              {addUserSuccess && (
+                <View style={{ backgroundColor: '#D1FAE5', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                  <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '600' }}>✅ {addUserSuccess}</Text>
+                </View>
+              )}
+            </View>
+
+            <ScrollView style={[styles.moveAttendeeModalBody, { maxHeight: 320 }]}>
+              {addUserSearchQuery.trim().length < 2 ? (
+                <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: 20 }}>
+                  Escribe al menos 2 letras para buscar
+                </Text>
+              ) : (() => {
+                const q = addUserSearchQuery.trim().toLowerCase();
+                const results = users
+                  .filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+                  .slice(0, 10);
+                if (results.length === 0) {
+                  return (
+                    <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: 20 }}>
+                      No se encontraron usuarios
+                    </Text>
+                  );
+                }
+                return results.map(u => (
+                  <View
+                    key={u.id}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#6B21A8' }}>{u.name}</Text>
+                      <Text style={{ fontSize: 12, color: '#6B7280' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleAddExistingUserToEvent(u.id)}
+                      disabled={addingUserId === u.id}
+                      style={{
+                        backgroundColor: nospiColors.purpleDark, borderRadius: 20,
+                        paddingVertical: 6, paddingHorizontal: 14,
+                        opacity: addingUserId === u.id ? 0.6 : 1,
+                      }}
+                    >
+                      {addingUserId === u.id
+                        ? <ActivityIndicator size="small" color="white" />
+                        : <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>Agregar</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                ));
+              })()}
+            </ScrollView>
           </View>
         </View>
       </Modal>
