@@ -129,7 +129,7 @@ const DEFAULT_QUESTIONS_DATA = {
 function buildWhatsAppLink(phone: string, name?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
-  const message = `¡Hola ${firstName}! Te escribimos desde Nospi ✨ confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes, prepárate para la sorpresa 🎉`;
+  const message = `¡Hola ${firstName}! Te escribimos desde Nospi confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes, prepárate para la sorpresa.`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -736,8 +736,15 @@ export default function AdminPanelScreen() {
     setSavingUserEdit(true);
     setUserEditError(null);
     try {
+      // No enviar campos vacíos: algunos vienen sin cargar (ej. birthdate no
+      // viene en la vista de asistentes por evento) y columnas obligatorias
+      // como birthdate rechazan '' como fecha inválida, tumbando todo el guardado.
+      const cleanUpdates: Record<string, any> = {};
+      Object.entries(editUserForm).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) cleanUpdates[k] = v;
+      });
       const { data, error } = await supabase.functions.invoke('admin-update-user', {
-        body: { userId: editingUserId, updates: editUserForm },
+        body: { userId: editingUserId, updates: cleanUpdates },
       });
       if (error || data?.error) {
         setUserEditError(error?.message || data?.error || 'Error al guardar los cambios');
@@ -746,6 +753,10 @@ export default function AdminPanelScreen() {
       setShowEditUserModal(false);
       setEditingUserId(null);
       await loadDashboardData();
+      // Refrescar también las vistas que muestran datos de usuarios en otro
+      // formato (no se actualizan solas con loadDashboardData).
+      if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
+      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
     } catch (e: any) {
       setUserEditError(e.message || 'Error inesperado al guardar');
     } finally {
