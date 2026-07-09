@@ -2639,6 +2639,7 @@ export default function AdminPanelScreen() {
     const data = users.map((u, i) => ({
       '#': i + 1,
       'Nombre': u.name || '',
+      'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
       'Email': u.email || '',
       'Teléfono': u.phone || '',
       'Ciudad': u.city || '',
@@ -2650,7 +2651,6 @@ export default function AdminPanelScreen() {
       'Rango edad máx': u.age_range_max || 99,
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
       'Plataforma': u.registered_from === 'ios' ? 'iOS' : u.registered_from === 'android' ? 'Android' : u.registered_from === 'web' ? 'Web' : 'Desconocido',
-      'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -2745,7 +2745,7 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Plataforma', 'Registro'];
+  const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Registro', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Plataforma'];
   const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   // Sort helper
@@ -2807,13 +2807,13 @@ export default function AdminPanelScreen() {
     const sortedUsers = applySort(applyColFilters(users, userColFilters), userSortCol, userSortAsc);
     const activeFilters = Object.values(userColFilters).filter((v: any) => v && v.size > 0).length;
     const cols: { label: string; key: string; w?: number }[] = [
-      { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 170 },
+      { label: 'Nombre', key: 'name', w: 130 }, { label: 'Registro', key: 'created_at', w: 150 },
+      { label: 'Email', key: 'email', w: 170 },
       { label: 'Teléfono', key: 'phone', w: 130 }, { label: 'Ciudad', key: 'city', w: 100 },
       { label: 'País', key: 'country', w: 90 }, { label: 'Género', key: 'gender', w: 80 },
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
-      { label: 'Registro', key: 'created_at', w: 150 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -2861,6 +2861,7 @@ export default function AdminPanelScreen() {
                   <tr key={user.id} style={row}>
                     <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
                     <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{user.name}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                     <td style={cellStyle}>{user.email}</td>
                     <td style={cellStyle}>{user.phone}</td>
                     <td style={cellStyle}>{user.city}</td>
@@ -2890,7 +2891,6 @@ export default function AdminPanelScreen() {
                         <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>
                       )}
                     </td>
-                    <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                   </tr>
                 );
               })}
