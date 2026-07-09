@@ -151,7 +151,9 @@ function buildEventReminderWhatsAppLink(
   eventDate?: string,
   eventTime?: string,
   isLocationRevealed?: boolean,
-  locationName?: string
+  locationName?: string,
+  locationAddress?: string,
+  mapsLink?: string
 ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -161,9 +163,14 @@ function buildEventReminderWhatsAppLink(
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName && eventDate ? ` tu ${eventName} programada para el ${formattedDate}${timePart}` : ' tu evento';
 
-  const locationPart = isLocationRevealed && locationName
-    ? `, en ${locationName}.`
-    : `. El lugar se revelará 48 horas antes del evento — ¡prepárate para la sorpresa!`;
+  let locationPart: string;
+  if (isLocationRevealed && locationName) {
+    const addressPart = locationAddress ? ` (${locationAddress})` : '';
+    const mapsPart = mapsLink ? ` Ubicación en Maps: ${mapsLink}` : '';
+    locationPart = `, en ${locationName}${addressPart}.${mapsPart}`;
+  } else {
+    locationPart = `. El lugar se revelará 48 horas antes del evento — ¡prepárate para la sorpresa!`;
+  }
 
   const message = `¡Hola ${firstName}! Te escribimos desde Nospi para recordarte${eventPart}${locationPart} Si no puedes asistir, avísanos respondiendo este mensaje.`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
@@ -3862,7 +3869,9 @@ export default function AdminPanelScreen() {
                             selectedEventForConfig.date,
                             selectedEventForConfig.time,
                             selectedEventForConfig.is_location_revealed,
-                            selectedEventForConfig.location_name
+                            selectedEventForConfig.location_name,
+                            selectedEventForConfig.location_address,
+                            selectedEventForConfig.maps_link
                           ),
                           '_blank'
                         );
