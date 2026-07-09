@@ -41,6 +41,30 @@ async function trackMetaPurchase(
         console.warn('[Nospi Meta Debug] window.fbq NO es una funcion, Purchase no se disparo');
       }
     } catch (e) { console.error('[Nospi Meta Debug] Error disparando Purchase:', e); }
+
+    // Además del píxel del navegador, mandamos el mismo evento por la API de
+    // Conversiones (servidor) — mismo eventID ('purchase_' + transactionId)
+    // para que Meta los deduplique como un solo evento. Sin esto, Meta solo
+    // veía el evento del navegador (que puede perderse por bloqueadores de
+    // anuncios, Safari ITP, etc.) y penalizaba la "cobertura" del píxel.
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/meta-purchase`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          transactionId,
+          amount,
+          currency: 'COP',
+          eventId,
+          userEmail,
+          userPhone,
+        }),
+      });
+    } catch (e) { /* silencioso */ }
     return;
   }
 
