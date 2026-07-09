@@ -2650,7 +2650,7 @@ export default function AdminPanelScreen() {
       'Rango edad máx': u.age_range_max || 99,
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
       'Plataforma': u.registered_from === 'ios' ? 'iOS' : u.registered_from === 'android' ? 'Android' : u.registered_from === 'web' ? 'Web' : 'Desconocido',
-      'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+      'Fecha registro': (u as any).created_at ? new Date((u as any).created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -2813,7 +2813,7 @@ export default function AdminPanelScreen() {
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
-      { label: 'Registro', key: 'created_at', w: 100 },
+      { label: 'Registro', key: 'created_at', w: 150 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -2848,13 +2848,13 @@ export default function AdminPanelScreen() {
                 const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
                 const uRating = userRatingAverages[user.id];
                 const createdAt = user.created_at
-                  ? new Date(user.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                  ? new Date(user.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                   : (() => {
                       // Fallback: earliest appointment date for this user
                       const userApts = appointments.filter(a => a.user_id === user.id);
                       if (userApts.length === 0) return '—';
                       const earliest = userApts.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
-                      return new Date(earliest.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) + ' *';
+                      return new Date(earliest.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' *';
                     })();
                 const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                 return (
