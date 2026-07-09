@@ -3096,7 +3096,7 @@ export default function AdminPanelScreen() {
                 { label: 'País', key: 'country', w: 80 }, { label: 'Género', key: 'gender', w: 80 },
                 { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
                 { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Estado', key: 'status', w: 100 },
-                { label: 'Calificación', key: '_rating', w: 110 },
+                { label: 'Calificación', key: '_rating', w: 110 }, { label: 'WhatsApp', key: '_whatsapp', w: 110 },
               ];
               const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
               const activePartFilters = Object.values(partColFilters).filter((v: any) => v && v.size > 0).length;
@@ -3114,7 +3114,7 @@ export default function AdminPanelScreen() {
                     </thead>
                     <tbody>
                       {sortedPart.length === 0 ? (
-                        <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
+                        <tr><td colSpan={13} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
                           {Object.values(partColFilters).some((v: any) => v && v.size > 0) ? 'Sin resultados para los filtros aplicados' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
                         </td></tr>
                       ) : sortedPart.map((att: any, i: number) => {
@@ -3145,6 +3145,22 @@ export default function AdminPanelScreen() {
                                   <span style={{ fontSize: 11, color: '#6B7280' }}>{att.avgRating.toFixed(1)}/5 · {att.ratingCount}v</span>
                                 </div>
                               ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
+                            </td>
+                            <td style={{ ...cellStyle, textAlign: 'center' }}>
+                              {u.phone && (
+                                <a
+                                  href={buildWhatsAppLink(u.phone, u.name)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                                    padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                                  }}
+                                >
+                                  💬 Enviar
+                                </a>
+                              )}
                             </td>
                           </tr>
                         );
@@ -3810,6 +3826,21 @@ export default function AdminPanelScreen() {
                           </Text>
                         </View>
                       </View>
+                      {attendee.users.phone && (
+                        <a
+                          href={buildWhatsAppLink(attendee.users.phone, attendee.users.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                            padding: '10px 16px', borderRadius: 10, fontSize: 14, fontWeight: 700,
+                            marginTop: 8,
+                          }}
+                        >
+                          💬 Enviar WhatsApp
+                        </a>
+                      )}
                       <TouchableOpacity
                         style={styles.moveAttendeeButton}
                         onPress={() => handleOpenMoveAttendeeModal(attendee)}
