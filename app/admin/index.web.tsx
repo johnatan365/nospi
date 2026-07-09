@@ -128,6 +128,20 @@ function HorizontalScrollSync({ children, minWidth }: { children: React.ReactNod
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const syncingFrom = useRef<'top' | 'bottom' | null>(null);
+  const [spacerWidth, setSpacerWidth] = useState(minWidth);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const update = () => setSpacerWidth(Math.max(el.scrollWidth, minWidth));
+    update();
+    // ResizeObserver detecta cuando la tabla cambia de tamaño (ej: cargan los datos)
+    // y actualiza el ancho del espaciador de arriba automáticamente.
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild as Element);
+    return () => ro.disconnect();
+  }, [minWidth]);
 
   const handleTopScroll = () => {
     if (syncingFrom.current === 'bottom') { syncingFrom.current = null; return; }
@@ -147,7 +161,7 @@ function HorizontalScrollSync({ children, minWidth }: { children: React.ReactNod
   return (
     <div>
       <div ref={topRef} onScroll={handleTopScroll} style={{ overflowX: 'auto', overflowY: 'hidden', height: 14, marginBottom: 4 }}>
-        <div style={{ width: minWidth, height: 1 }} />
+        <div style={{ width: spacerWidth, height: 1 }} />
       </div>
       <div ref={bottomRef} onScroll={handleBottomScroll} style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
         {children}
