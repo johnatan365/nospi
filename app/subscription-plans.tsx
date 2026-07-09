@@ -458,6 +458,80 @@ export default function SubscriptionPlansScreen() {
     return () => subscription.remove();
   }, [confirmAppointment, router]);
 
+  // ── Recuperación de pagos PSE/Bancolombia en web ──
+  // PSE/Bancolombia abren el banco en una pestaña nueva; el polling que detecta
+  // la aprobación corre en la pestaña original. Si el usuario cierra esa pestaña
+  // antes de que el polling termine (muy común — la gente cree que ya terminó
+  // al salir del banco), el pago queda aprobado en Wompi pero la cita nunca se
+  // confirma. Este efecto revisa el pago pendiente cada vez que la pestaña
+  // recupera el foco o se vuelve visible de nuevo, sin depender de que el
+  // temporizador original siga vivo.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const checkPendingWebPayment = async () => {
+      try {
+        const storedTxId = window.localStorage.getItem('nospi_transaction_id');
+        const storedMethod = window.localStorage.getItem('nospi_payment_method');
+        const storedTime = window.localStorage.getItem('nospi_payment_opened_time');
+        if (!storedTxId || !storedMethod) return;
+
+        if (storedTime) {
+          const age = Date.now() - parseInt(storedTime, 10);
+          // No revisar pagos con más de 60 minutos — probablemente abandonados.
+          if (age > 60 * 60 * 1000) return;
+        }
+
+        const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
+        if (alreadyHandled === 'true') return;
+
+        const res = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
+        const data = await res.json();
+        const status = data.data?.status;
+
+        if (status === 'APPROVED') {
+          window.localStorage.removeItem('nospi_transaction_id');
+          window.localStorage.removeItem('nospi_payment_method');
+          window.localStorage.removeItem('nospi_payment_opened_time');
+          await AsyncStorage.setItem('nospi_payment_processing', 'true');
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
+          await AsyncStorage.removeItem('nospi_payment_processing');
+          if (success) {
+            if (pendingEventId) {
+              router.replace({
+                pathname: '/event-details/[id]',
+                params: { id: pendingEventId, paymentSuccess: 'true' },
+              });
+            } else {
+              setShowSuccessModal(true);
+            }
+          }
+        } else if (status === 'DECLINED' || status === 'VOIDED' || status === 'ERROR') {
+          window.localStorage.removeItem('nospi_transaction_id');
+          window.localStorage.removeItem('nospi_payment_method');
+          window.localStorage.removeItem('nospi_payment_opened_time');
+        }
+        // Si sigue PENDING, no hacemos nada — se revisará la próxima vez
+        // que la pestaña recupere el foco.
+      } catch (e) { /* silencioso */ }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkPendingWebPayment();
+    };
+
+    // Revisar también al montar, por si el usuario cerró la app y volvió más tarde.
+    checkPendingWebPayment();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkPendingWebPayment);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkPendingWebPayment);
+    };
+  }, [confirmAppointment, router]);
+
   // subscription-plans.tsx only initiates payments.
   // All callback processing is handled exclusively in payment-callback.tsx.
 
@@ -1022,7 +1096,11 @@ export default function SubscriptionPlansScreen() {
 
   const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
-    const maxAttempts = 24;
+    // 180 intentos × 5s = 15 minutos. La autenticación real con el banco (login,
+    // OTP, etc.) puede tardar más de los 2 minutos que había antes — con eso el
+    // polling se rendía justo antes de que Wompi confirmara el pago, dejando al
+    // cliente pagado pero sin la cita confirmada.
+    const maxAttempts = 180;
     const interval = setInterval(async () => {
       attempts++;
       try {
