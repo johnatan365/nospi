@@ -141,6 +141,34 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+// Arma el link de WhatsApp para el recordatorio general del evento (distinto
+// al de confirmación de compra) — incluye el lugar si ya fue revelado, o
+// avisa que se revela 48h antes si aún no.
+function buildEventReminderWhatsAppLink(
+  phone: string,
+  name?: string,
+  eventName?: string,
+  eventDate?: string,
+  eventTime?: string,
+  isLocationRevealed?: boolean,
+  locationName?: string
+): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const firstName = (name || '').trim().split(' ')[0] || 'ahí';
+  const formattedDate = eventDate
+    ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
+  const eventPart = eventName && eventDate ? ` tu ${eventName} programada para el ${formattedDate}${timePart}` : ' tu evento';
+
+  const locationPart = isLocationRevealed && locationName
+    ? `, en ${locationName}.`
+    : `. El lugar se revelará 48 horas antes del evento — ¡prepárate para la sorpresa!`;
+
+  const message = `¡Hola ${firstName}! Te escribimos desde Nospi para recordarte${eventPart}${locationPart} Si no puedes asistir, avísanos respondiendo este mensaje.`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
 // Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
 function formatTimeAmPm(time24: string): string {
   const [hStr, mStr] = time24.split(':');
@@ -3121,6 +3149,24 @@ export default function AdminPanelScreen() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {filtered.length > 0 && selectedEvent && (
               <button
+                onClick={() => {
+                  const withPhone = filtered.filter((a: any) => a.users?.phone);
+                  if (withPhone.length === 0) { window.alert('Nadie en esta lista tiene teléfono registrado'); return; }
+                  if (!window.confirm(`Se van a abrir ${withPhone.length} pestañas de WhatsApp (una por persona). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
+                  withPhone.forEach((a: any) => {
+                    window.open(
+                      buildWhatsAppLink(a.users.phone, a.users.name, selectedEvent.name, selectedEvent.date, selectedEvent.time),
+                      '_blank'
+                    );
+                  });
+                }}
+                style={{ backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                💬 Enviar WhatsApp a todos ({filtered.filter((a: any) => a.users?.phone).length})
+              </button>
+            )}
+            {filtered.length > 0 && selectedEvent && (
+              <button
                 onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
                 style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
@@ -3794,6 +3840,36 @@ export default function AdminPanelScreen() {
                     }}
                   >
                     <Text style={styles.configActionButtonText}>🔔 Enviar Recordatorio Ahora</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#25D366' }]}
+                    onPress={() => {
+                      const confirmedForEvent = appointments.filter(
+                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone
+                      );
+                      if (confirmedForEvent.length === 0) {
+                        window.alert('No hay participantes confirmados con teléfono para este evento');
+                        return;
+                      }
+                      if (!window.confirm(`Se van a abrir ${confirmedForEvent.length} pestañas de WhatsApp (una por persona) con el recordatorio del evento. Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
+                      confirmedForEvent.forEach(a => {
+                        window.open(
+                          buildEventReminderWhatsAppLink(
+                            a.users.phone,
+                            a.users.name,
+                            selectedEventForConfig.name,
+                            selectedEventForConfig.date,
+                            selectedEventForConfig.time,
+                            selectedEventForConfig.is_location_revealed,
+                            selectedEventForConfig.location_name
+                          ),
+                          '_blank'
+                        );
+                      });
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>💬 Recordar por WhatsApp a Todos</Text>
                   </TouchableOpacity>
 
 
