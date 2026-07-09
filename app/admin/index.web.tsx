@@ -129,7 +129,7 @@ const DEFAULT_QUESTIONS_DATA = {
 function buildWhatsAppLink(phone: string, name?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
-  const message = `¡Hola ${firstName}! 👋 Desde Nospi, confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes — prepárate para la sorpresa 🍽️`;
+  const message = `¡Hola ${firstName}! Te escribimos desde Nospi ✨ confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes, prepárate para la sorpresa 🎉`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
