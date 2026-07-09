@@ -124,6 +124,15 @@ const DEFAULT_QUESTIONS_DATA = {
 // ── Tabla ancha con barra de scroll horizontal duplicada arriba, sincronizada
 // con la de abajo — evita tener que bajar hasta el final de la tabla para
 // poder desplazarse lateralmente.
+// Arma el link de WhatsApp con el saludo predeterminado de Nospi, personalizado
+// con el primer nombre de la persona.
+function buildWhatsAppLink(phone: string, name?: string): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const firstName = (name || '').trim().split(' ')[0] || 'ahí';
+  const message = `¡Hola ${firstName}! 👋 Desde Nospi, confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes — prepárate para la sorpresa 🍽️`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
 // ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
 // del viewport, visible en todo momento mientras la tabla está en pantalla —
 // no solo arriba ni solo abajo del todo.
@@ -3216,6 +3225,21 @@ export default function AdminPanelScreen() {
                       <Text style={styles.participantDetail}>📧 {participant.users.email}</Text>
                       <Text style={styles.participantDetail}>📱 {participant.users.phone}</Text>
                       <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
+                      {participant.users.phone && (
+                        <a
+                          href={buildWhatsAppLink(participant.users.phone, participant.users.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                            padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+                            marginTop: 8,
+                          }}
+                        >
+                          💬 Enviar WhatsApp
+                        </a>
+                      )}
                     </>
                   )}
                   {participant.check_in_time && (
