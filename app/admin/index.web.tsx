@@ -176,6 +176,40 @@ function buildEventReminderWhatsAppLink(
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+// Arma el link de WhatsApp para el recordatorio del MISMO DÍA del evento —
+// en bloques separados para que no se vea como un bloque de texto pesado.
+function buildSameDayWhatsAppLink(
+  phone: string,
+  name?: string,
+  eventName?: string,
+  eventTime?: string,
+  locationName?: string,
+  locationAddress?: string,
+  mapsLink?: string
+): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const firstName = (name || '').trim().split(' ')[0] || 'ahí';
+  const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
+  const addressPart = locationAddress ? ` (${locationAddress})` : '';
+  const mapsLine = mapsLink ? `\n📍 Ubicación en Maps: ${mapsLink}` : '';
+
+  const message = [
+    `¡Hola ${firstName}! 🎉`,
+    ``,
+    `Hoy es tu ${eventName || 'evento'}${timePart}, en ${locationName || 'el lugar acordado'}${addressPart}.${mapsLine}`,
+    ``,
+    `Al llegar, diles que vienes de Nospi — te darán un código para confirmar tu asistencia en la app.`,
+    ``,
+    `⏰ Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
+    ``,
+    `📲 Abre la app apenas llegues para confirmar e iniciar la experiencia con los demás.`,
+    ``,
+    `¡Nos vemos hoy!`,
+  ].join('\n');
+
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
 // Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
 function formatTimeAmPm(time24: string): string {
   const [hStr, mStr] = time24.split(':');
@@ -3881,6 +3915,36 @@ export default function AdminPanelScreen() {
                     <Text style={styles.configActionButtonText}>💬 Recordar por WhatsApp a Todos</Text>
                   </TouchableOpacity>
 
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#128C7E' }]}
+                    onPress={() => {
+                      const confirmedForEvent = appointments.filter(
+                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone
+                      );
+                      if (confirmedForEvent.length === 0) {
+                        window.alert('No hay participantes confirmados con teléfono para este evento');
+                        return;
+                      }
+                      if (!window.confirm(`Se van a abrir ${confirmedForEvent.length} pestañas de WhatsApp (una por persona) con el mensaje del día del evento. Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
+                      confirmedForEvent.forEach(a => {
+                        window.open(
+                          buildSameDayWhatsAppLink(
+                            a.users.phone,
+                            a.users.name,
+                            selectedEventForConfig.name,
+                            selectedEventForConfig.time,
+                            selectedEventForConfig.location_name,
+                            selectedEventForConfig.location_address,
+                            selectedEventForConfig.maps_link
+                          ),
+                          '_blank'
+                        );
+                      });
+                    }}
+                  >
+                    <Text style={styles.configActionButtonText}>🎉 Confirmar el Mismo Día</Text>
+                  </TouchableOpacity>
+
 
 
 
@@ -4021,6 +4085,11 @@ export default function AdminPanelScreen() {
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
+                      <Text style={styles.attendeeDetail}>
+                        📝 Se inscribió: {attendee.created_at
+                          ? new Date(attendee.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          : '—'}
+                      </Text>
                       <Text style={styles.attendeeDetail}>📱 {attendee.users.phone}</Text>
                       <Text style={styles.attendeeDetail}>📍 {attendee.users.city}, {attendee.users.country}</Text>
                       <Text style={styles.attendeeDetail}>👤 Género: {genderText}</Text>
