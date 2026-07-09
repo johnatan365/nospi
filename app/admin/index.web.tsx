@@ -191,18 +191,18 @@ function buildSameDayWhatsAppLink(
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const addressPart = locationAddress ? ` (${locationAddress})` : '';
-  const mapsLine = mapsLink ? `\n📍 Ubicación en Maps: ${mapsLink}` : '';
+  const mapsLine = mapsLink ? `\nUbicación en Maps: ${mapsLink}` : '';
 
   const message = [
-    `¡Hola ${firstName}! 🎉`,
+    `¡Hola ${firstName}!`,
     ``,
     `Hoy es tu ${eventName || 'evento'}${timePart}, en ${locationName || 'el lugar acordado'}${addressPart}.${mapsLine}`,
     ``,
     `Al llegar, diles que vienes de Nospi — te darán un código para confirmar tu asistencia en la app.`,
     ``,
-    `⏰ Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
+    `Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
     ``,
-    `📲 Abre la app apenas llegues para confirmar e iniciar la experiencia con los demás.`,
+    `Abre la app apenas llegues para confirmar e iniciar la experiencia con los demás.`,
     ``,
     `¡Nos vemos hoy!`,
   ].join('\n');
@@ -468,10 +468,7 @@ export default function AdminPanelScreen() {
   const [movingAttendee, setMovingAttendee] = useState(false);
 
   // Manual confirmation
-  const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
-  const [manualConfirmEventId, setManualConfirmEventId] = useState<string>('');
-  const [manualConfirmEmail, setManualConfirmEmail] = useState('');
-  const [manualConfirming, setManualConfirming] = useState(false);
+
 
   // Event creation/edit modal
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1293,62 +1290,6 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const handleManualConfirm = async () => {
-    if (!manualConfirmEmail.trim() || !manualConfirmEventId) {
-      window.alert('Ingresa el email del usuario');
-      return;
-    }
-    setManualConfirming(true);
-    try {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, name, email')
-        .ilike('email', manualConfirmEmail.trim())
-        .maybeSingle();
-
-      if (userError || !userData) {
-        window.alert('No se encontró ningún usuario con ese email');
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id, status')
-        .eq('user_id', userData.id)
-        .eq('event_id', manualConfirmEventId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from('appointments')
-          .update({ status: 'confirmada', payment_status: 'completed' })
-          .eq('id', existing.id);
-        if (updateError) throw updateError;
-        window.alert(`${userData.name} ya tenía cita. Se actualizó a confirmada.`);
-      } else {
-        const { error: insertError } = await supabase
-          .from('appointments')
-          .insert({
-            user_id: userData.id,
-            event_id: manualConfirmEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-          });
-        if (insertError) throw insertError;
-        window.alert(`✅ ${userData.name} fue confirmado manualmente en el evento.`);
-      }
-
-      setShowManualConfirmModal(false);
-      setManualConfirmEmail('');
-      setManualConfirmEventId('');
-      loadDashboardData();
-    } catch (err: any) {
-      window.alert(err.message || 'Error inesperado');
-    } finally {
-      setManualConfirming(false);
-    }
-  };
-
   const handleDeleteEvent = async (eventId: string) => {
     const confirmed = window.confirm('¿Estás seguro de que quieres eliminar este evento?');
     if (!confirmed) return;
@@ -1852,48 +1793,6 @@ export default function AdminPanelScreen() {
     } catch (error) {
       console.error('Failed to delete attendee:', error);
       window.alert('Error inesperado al eliminar asistente');
-    }
-  };
-
-  const handleSendEventReminder = async (eventId: string) => {
-    const confirmed = window.confirm('¿Enviar recordatorio a todos los participantes de este evento según sus preferencias de notificación?');
-    if (!confirmed) return;
-
-    try {
-      
-      // FIX: Get all appointments for this event with status 'confirmada'
-      const { data: appointmentsData, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select('user_id')
-        .eq('event_id', eventId)
-        .eq('status', 'confirmada');
-
-      if (appointmentsError) {
-        console.error('Error fetching appointments:', appointmentsError);
-        window.alert('Error al obtener participantes: ' + appointmentsError.message);
-        return;
-      }
-
-      if (!appointmentsData || appointmentsData.length === 0) {
-        window.alert('No hay participantes confirmados para este evento');
-        return;
-      }
-
-      // Call the RPC function to send notifications
-      const { error: notificationError } = await supabase.rpc('send_event_reminder_now', {
-        p_event_id: eventId
-      });
-
-      if (notificationError) {
-        console.error('Error sending notifications:', notificationError);
-        window.alert('Error al enviar notificaciones: ' + notificationError.message);
-        return;
-      }
-
-      window.alert(`✅ Recordatorio enviado a ${appointmentsData.length} participantes según sus preferencias de notificación`);
-    } catch (error) {
-      console.error('Failed to send event reminder:', error);
-      window.alert('Error inesperado al enviar recordatorio');
     }
   };
 
@@ -3862,28 +3761,6 @@ export default function AdminPanelScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: '#059669' }]}
-                    onPress={() => {
-                      setManualConfirmEventId(selectedEventForConfig.id);
-                      setManualConfirmEmail('');
-                      setShowConfigModal(false);
-                      setShowManualConfirmModal(true);
-                    }}
-                  >
-                    <Text style={styles.configActionButtonText}>✅ Confirmar usuario manualmente</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
-                    onPress={() => {
-                      setShowConfigModal(false);
-                      handleSendEventReminder(selectedEventForConfig.id);
-                    }}
-                  >
-                    <Text style={styles.configActionButtonText}>🔔 Enviar Recordatorio Ahora</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#25D366' }]}
                     onPress={() => {
                       const confirmedForEvent = appointments.filter(
@@ -4812,59 +4689,6 @@ export default function AdminPanelScreen() {
         </View>
       </Modal>
       {/* Manual Confirmation Modal */}
-      <Modal
-        visible={showManualConfirmModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowManualConfirmModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.moveAttendeeModalContent, { maxHeight: 360 }]}>
-            <View style={styles.moveAttendeeModalHeader}>
-              <Text style={styles.moveAttendeeModalTitle}>✅ Confirmar manualmente</Text>
-              <TouchableOpacity
-                style={styles.closeModalButton}
-                onPress={() => setShowManualConfirmModal(false)}
-              >
-                <Text style={styles.closeModalButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.moveAttendeeModalBody, { gap: 16 }]}>
-              <Text style={{ fontSize: 14, color: '#6B7280' }}>
-                Ingresa el email del usuario para confirmarlo sin pago. Solo el admin puede hacer esto.
-              </Text>
-              <Text style={styles.inputLabel}>Email del usuario</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="ejemplo@correo.com"
-                value={manualConfirmEmail}
-                onChangeText={setManualConfirmEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-              />
-              <View style={styles.moveAttendeeModalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => setShowManualConfirmModal(false)}
-                >
-                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: '#059669' }, manualConfirming && styles.modalButtonDisabled]}
-                  onPress={handleManualConfirm}
-                  disabled={manualConfirming}
-                >
-                  {manualConfirming
-                    ? <ActivityIndicator size="small" color="white" />
-                    : <Text style={styles.modalButtonTextConfirm}>Confirmar</Text>
-                  }
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
     </>
   );
