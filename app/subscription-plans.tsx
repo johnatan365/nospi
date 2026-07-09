@@ -14,10 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
 
-const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
-
 // Dispara el evento Purchase — píxel en web, API de Conversiones en mobile.
+// Usa las constantes SUPABASE_URL / SUPABASE_ANON_KEY ya declaradas más abajo en este archivo.
 // Duplicado de la misma función en payment-callback.tsx (ese archivo es una screen
 // distinta y no exporta la función para reuso).
 async function trackMetaPurchase(
