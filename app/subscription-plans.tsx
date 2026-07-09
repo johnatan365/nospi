@@ -28,6 +28,7 @@ async function trackMetaPurchase(
   if (Platform.OS === 'web') {
     try {
       const win = window as any;
+      console.log('[Nospi Meta Debug] trackMetaPurchase llamado. fbq disponible:', typeof win.fbq === 'function', '| transactionId:', transactionId);
       if (typeof win.fbq === 'function') {
         win.fbq('track', 'Purchase', {
           value: amount,
@@ -35,8 +36,11 @@ async function trackMetaPurchase(
           content_type: 'product',
           content_ids: [eventId || 'nospi_event'],
         }, { eventID: 'purchase_' + transactionId });
+        console.log('[Nospi Meta Debug] fbq Purchase disparado con eventID:', 'purchase_' + transactionId);
+      } else {
+        console.warn('[Nospi Meta Debug] window.fbq NO es una funcion, Purchase no se disparo');
       }
-    } catch (e) { /* silencioso */ }
+    } catch (e) { console.error('[Nospi Meta Debug] Error disparando Purchase:', e); }
     return;
   }
 
@@ -279,6 +283,7 @@ export default function SubscriptionPlansScreen() {
       // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia
       // ya que todos pasan por este mismo punto de confirmación.
       try {
+        console.log('[Nospi Meta Debug] Iniciando tracking de Purchase para transactionId:', transactionId);
         const { data: { session: purchaseSession } } = await supabase.auth.getSession();
         const purchaseEmail = purchaseSession?.user?.email || '';
         let purchasePhone = '';
@@ -290,8 +295,9 @@ export default function SubscriptionPlansScreen() {
             .maybeSingle();
           purchasePhone = purchaseUserRow?.phone || '';
         }
+        console.log('[Nospi Meta Debug] Datos listos, llamando trackMetaPurchase. email:', purchaseEmail, '| phone:', purchasePhone);
         trackMetaPurchase(transactionId, pendingEventId, purchaseEmail, purchasePhone, 9900);
-      } catch (e) { /* silencioso, no debe bloquear la confirmación de la cita */ }
+      } catch (e) { console.error('[Nospi Meta Debug] Error ANTES de llamar trackMetaPurchase:', e); }
 
       return true;
     } catch {
