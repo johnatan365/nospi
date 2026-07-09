@@ -14,6 +14,54 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
 
+const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
+
+// Dispara el evento Purchase — píxel en web, API de Conversiones en mobile.
+// Duplicado de la misma función en payment-callback.tsx (ese archivo es una screen
+// distinta y no exporta la función para reuso).
+async function trackMetaPurchase(
+  transactionId: string,
+  eventId: string = '',
+  userEmail: string = '',
+  userPhone: string = '',
+  amount: number = 9900
+) {
+  if (Platform.OS === 'web') {
+    try {
+      const win = window as any;
+      if (typeof win.fbq === 'function') {
+        win.fbq('track', 'Purchase', {
+          value: amount,
+          currency: 'COP',
+          content_type: 'product',
+          content_ids: [eventId || 'nospi_event'],
+        }, { eventID: 'purchase_' + transactionId });
+      }
+    } catch (e) { /* silencioso */ }
+    return;
+  }
+
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/meta-purchase`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        transactionId,
+        amount,
+        currency: 'COP',
+        eventId,
+        userEmail,
+        userPhone,
+      }),
+    });
+  } catch (e) { /* silencioso */ }
+}
+
 // Card brand detection
 function getCardBrand(rawNumber: string): 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover' | null {
   const n = rawNumber.replace(/\D/g, '');
@@ -229,6 +277,24 @@ export default function SubscriptionPlansScreen() {
 
       await AsyncStorage.removeItem('pending_event_confirmation');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
+
+      // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia
+      // ya que todos pasan por este mismo punto de confirmación.
+      try {
+        const { data: { session: purchaseSession } } = await supabase.auth.getSession();
+        const purchaseEmail = purchaseSession?.user?.email || '';
+        let purchasePhone = '';
+        if (userId) {
+          const { data: purchaseUserRow } = await supabase
+            .from('users')
+            .select('phone')
+            .eq('id', userId)
+            .maybeSingle();
+          purchasePhone = purchaseUserRow?.phone || '';
+        }
+        trackMetaPurchase(transactionId, pendingEventId, purchaseEmail, purchasePhone, 9900);
+      } catch (e) { /* silencioso, no debe bloquear la confirmación de la cita */ }
+
       return true;
     } catch {
       return false;
