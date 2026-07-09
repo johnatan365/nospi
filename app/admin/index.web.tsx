@@ -370,6 +370,13 @@ export default function AdminPanelScreen() {
   const [showMoveAttendeeModal, setShowMoveAttendeeModal] = useState(false);
   const [selectedAttendeeToMove, setSelectedAttendeeToMove] = useState<EventAttendee | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>('');
+
+  // Edit user modal
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserForm, setEditUserForm] = useState<Record<string, any>>({});
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [userEditError, setUserEditError] = useState<string | null>(null);
   const [movingAttendee, setMovingAttendee] = useState(false);
 
   // Manual confirmation
@@ -710,6 +717,39 @@ export default function AdminPanelScreen() {
       window.alert('Error inesperado al cargar datos: ' + String(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const EDITABLE_USER_FIELDS = ['name', 'email', 'phone', 'city', 'country', 'gender', 'interested_in', 'age', 'age_range_min', 'age_range_max', 'birthdate'];
+
+  const handleOpenEditUser = (user: any) => {
+    setEditingUserId(user.id);
+    const form: Record<string, any> = {};
+    EDITABLE_USER_FIELDS.forEach((f) => { form[f] = user[f] ?? ''; });
+    setEditUserForm(form);
+    setUserEditError(null);
+    setShowEditUserModal(true);
+  };
+
+  const handleSaveUserEdit = async () => {
+    if (!editingUserId) return;
+    setSavingUserEdit(true);
+    setUserEditError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-user', {
+        body: { userId: editingUserId, updates: editUserForm },
+      });
+      if (error || data?.error) {
+        setUserEditError(error?.message || data?.error || 'Error al guardar los cambios');
+        return;
+      }
+      setShowEditUserModal(false);
+      setEditingUserId(null);
+      await loadDashboardData();
+    } catch (e: any) {
+      setUserEditError(e.message || 'Error inesperado al guardar');
+    } finally {
+      setSavingUserEdit(false);
     }
   };
 
@@ -2871,6 +2911,12 @@ export default function AdminPanelScreen() {
   const rowEvenStyle: any = { backgroundColor: '#FAFAFA' };
   const rowOddStyle: any = { backgroundColor: '#FFFFFF' };
 
+  const editInputStyle: any = {
+    width: '100%', border: '1.5px solid #E5E7EB', borderRadius: 10,
+    padding: '10px 12px', fontSize: 14, backgroundColor: '#FAFAFA', color: '#111',
+    marginBottom: 4, boxSizing: 'border-box',
+  };
+
   const renderUsers = () => {
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
     const sortedUsers = applySort(applyColFilters(users, userColFilters), userSortCol, userSortAsc);
@@ -2883,6 +2929,7 @@ export default function AdminPanelScreen() {
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
+      { label: 'Editar', key: '_edit', w: 90 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -2910,7 +2957,7 @@ export default function AdminPanelScreen() {
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={12} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
+                <tr><td colSpan={14} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -2959,6 +3006,18 @@ export default function AdminPanelScreen() {
                       ) : (
                         <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>
                       )}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleOpenEditUser(user)}
+                        style={{
+                          backgroundColor: '#EDE9FE', color: '#6B21A8', border: 'none',
+                          borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✏️ Editar
+                      </button>
                     </td>
                   </tr>
                 );
@@ -3842,6 +3901,12 @@ export default function AdminPanelScreen() {
                         </a>
                       )}
                       <TouchableOpacity
+                        style={[styles.moveAttendeeButton, { backgroundColor: '#EDE9FE', marginTop: 8 }]}
+                        onPress={() => handleOpenEditUser(attendee.users)}
+                      >
+                        <Text style={[styles.moveAttendeeButtonText, { color: '#6B21A8' }]}>✏️ Editar Usuario</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         style={styles.moveAttendeeButton}
                         onPress={() => handleOpenMoveAttendeeModal(attendee)}
                       >
@@ -4223,6 +4288,160 @@ export default function AdminPanelScreen() {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        visible={showEditUserModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditUserModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.moveAttendeeModalContent}>
+            <View style={styles.moveAttendeeModalHeader}>
+              <Text style={styles.moveAttendeeModalTitle}>Editar Usuario</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowEditUserModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.moveAttendeeModalBody}>
+              {userEditError && (
+                <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                  <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '600' }}>{userEditError}</Text>
+                </View>
+              )}
+
+              <Text style={styles.inputLabel}>Nombre</Text>
+              <input
+                style={editInputStyle}
+                value={editUserForm.name || ''}
+                onChange={(e: any) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Email</Text>
+              <input
+                style={editInputStyle}
+                value={editUserForm.email || ''}
+                onChange={(e: any) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+              />
+
+              <Text style={styles.inputLabel}>Teléfono</Text>
+              <input
+                style={editInputStyle}
+                value={editUserForm.phone || ''}
+                onChange={(e: any) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Ciudad</Text>
+                  <input
+                    style={editInputStyle}
+                    value={editUserForm.city || ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, city: e.target.value })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>País</Text>
+                  <input
+                    style={editInputStyle}
+                    value={editUserForm.country || ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, country: e.target.value })}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Género</Text>
+                  <select
+                    style={editInputStyle}
+                    value={editUserForm.gender || ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, gender: e.target.value })}
+                  >
+                    <option value="hombre">Hombre</option>
+                    <option value="mujer">Mujer</option>
+                  </select>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Interesado en</Text>
+                  <select
+                    style={editInputStyle}
+                    value={editUserForm.interested_in || ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, interested_in: e.target.value })}
+                  >
+                    <option value="hombres">Hombres</option>
+                    <option value="mujeres">Mujeres</option>
+                    <option value="ambos">Ambos</option>
+                  </select>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Edad</Text>
+                  <input
+                    type="number"
+                    style={editInputStyle}
+                    value={editUserForm.age ?? ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, age: parseInt(e.target.value, 10) || 0 })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Rango edad mín</Text>
+                  <input
+                    type="number"
+                    style={editInputStyle}
+                    value={editUserForm.age_range_min ?? ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, age_range_min: parseInt(e.target.value, 10) || 18 })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Rango edad máx</Text>
+                  <input
+                    type="number"
+                    style={editInputStyle}
+                    value={editUserForm.age_range_max ?? ''}
+                    onChange={(e: any) => setEditUserForm({ ...editUserForm, age_range_max: parseInt(e.target.value, 10) || 99 })}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Fecha de nacimiento</Text>
+              <input
+                type="date"
+                style={editInputStyle}
+                value={editUserForm.birthdate || ''}
+                onChange={(e: any) => setEditUserForm({ ...editUserForm, birthdate: e.target.value })}
+              />
+            </ScrollView>
+
+            <View style={styles.moveAttendeeModalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowEditUserModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm, savingUserEdit && styles.modalButtonDisabled]}
+                onPress={handleSaveUserEdit}
+                disabled={savingUserEdit}
+              >
+                {savingUserEdit ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.modalButtonTextConfirm}>Guardar Cambios</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
