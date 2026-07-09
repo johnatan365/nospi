@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -120,6 +120,41 @@ const DEFAULT_QUESTIONS_DATA = {
   ]
 };
 
+
+// ── Tabla ancha con barra de scroll horizontal duplicada arriba, sincronizada
+// con la de abajo — evita tener que bajar hasta el final de la tabla para
+// poder desplazarse lateralmente.
+function HorizontalScrollSync({ children, minWidth }: { children: React.ReactNode; minWidth: number }) {
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const syncingFrom = useRef<'top' | 'bottom' | null>(null);
+
+  const handleTopScroll = () => {
+    if (syncingFrom.current === 'bottom') { syncingFrom.current = null; return; }
+    if (topRef.current && bottomRef.current) {
+      syncingFrom.current = 'top';
+      bottomRef.current.scrollLeft = topRef.current.scrollLeft;
+    }
+  };
+  const handleBottomScroll = () => {
+    if (syncingFrom.current === 'top') { syncingFrom.current = null; return; }
+    if (topRef.current && bottomRef.current) {
+      syncingFrom.current = 'bottom';
+      topRef.current.scrollLeft = bottomRef.current.scrollLeft;
+    }
+  };
+
+  return (
+    <div>
+      <div ref={topRef} onScroll={handleTopScroll} style={{ overflowX: 'auto', overflowY: 'hidden', height: 14, marginBottom: 4 }}>
+        <div style={{ width: minWidth, height: 1 }} />
+      </div>
+      <div ref={bottomRef} onScroll={handleBottomScroll} style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 // ── Real React component so useState persists across parent re-renders ──
 function ExcelFilterTh({
@@ -2831,7 +2866,7 @@ export default function AdminPanelScreen() {
           </button>
         </div>
 
-        <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+        <HorizontalScrollSync minWidth={1100}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
             <thead>
               <tr>
@@ -2896,7 +2931,7 @@ export default function AdminPanelScreen() {
               })}
             </tbody>
           </table>
-        </div>
+        </HorizontalScrollSync>
       </View>
     );
   };
