@@ -125,12 +125,31 @@ const DEFAULT_QUESTIONS_DATA = {
 // con la de abajo — evita tener que bajar hasta el final de la tabla para
 // poder desplazarse lateralmente.
 // Arma el link de WhatsApp con el saludo predeterminado de Nospi, personalizado
-// con el primer nombre de la persona.
-function buildWhatsAppLink(phone: string, name?: string): string {
+// con el primer nombre de la persona y, si se conoce, la fecha/hora del evento.
+function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
-  const message = `¡Hola ${firstName}! Te escribimos desde Nospi confirmando que ya estás dentro. Recuerda: el lugar se revela horas antes, prepárate para la sorpresa.`;
+
+  let eventPart = '';
+  if (eventName && eventDate) {
+    const formattedDate = new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
+    eventPart = ` de la ${eventName} del ${formattedDate}${timePart}`;
+  }
+
+  const message = `¡Hola ${firstName}! Te escribimos desde Nospi confirmando que ya estás dentro${eventPart}. Recuerda: el lugar se revelará 48 horas antes del evento, prepárate para la sorpresa.`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+// Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
+function formatTimeAmPm(time24: string): string {
+  const [hStr, mStr] = time24.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${suffix}`;
 }
 
 // ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
@@ -762,6 +781,20 @@ export default function AdminPanelScreen() {
     } finally {
       setSavingUserEdit(false);
     }
+  };
+
+  // Para el botón de WhatsApp en la tabla general de Usuarios, donde no hay un
+  // evento único de contexto: usa la próxima cita confirmada de la persona
+  // (o la más reciente, si ya no tiene ninguna futura).
+  const getNextConfirmedEventForUser = (userId: string) => {
+    const userApts = appointments.filter(a => a.user_id === userId && a.status === 'confirmada' && a.events?.date);
+    if (userApts.length === 0) return null;
+    const now = new Date();
+    const future = userApts.filter(a => new Date(a.events.date) >= now);
+    const sorted = (future.length > 0 ? future : userApts).sort(
+      (a, b) => new Date(a.events.date).getTime() - new Date(b.events.date).getTime()
+    );
+    return sorted[0]?.events || null;
   };
 
   const loadEventParticipants = async (eventId: string) => {
@@ -2941,6 +2974,7 @@ export default function AdminPanelScreen() {
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
       { label: 'Editar', key: '_edit', w: 90 },
+      { label: 'WhatsApp', key: '_whatsapp', w: 100 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -2968,7 +3002,7 @@ export default function AdminPanelScreen() {
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={14} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
+                <tr><td colSpan={15} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -3029,6 +3063,25 @@ export default function AdminPanelScreen() {
                       >
                         ✏️ Editar
                       </button>
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {user.phone && (() => {
+                        const nextEvent = getNextConfirmedEventForUser(user.id);
+                        return (
+                          <a
+                            href={buildWhatsAppLink(user.phone, user.name, nextEvent?.name, nextEvent?.date, nextEvent?.time)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                              padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                            }}
+                          >
+                            💬 Enviar
+                          </a>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
@@ -3219,7 +3272,7 @@ export default function AdminPanelScreen() {
                             <td style={{ ...cellStyle, textAlign: 'center' }}>
                               {u.phone && (
                                 <a
-                                  href={buildWhatsAppLink(u.phone, u.name)}
+                                  href={buildWhatsAppLink(u.phone, u.name, selectedEvent?.name, selectedEvent?.date, selectedEvent?.time)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   style={{
@@ -3313,7 +3366,13 @@ export default function AdminPanelScreen() {
                       <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
                       {participant.users.phone && (
                         <a
-                          href={buildWhatsAppLink(participant.users.phone, participant.users.name)}
+                          href={buildWhatsAppLink(
+                            participant.users.phone,
+                            participant.users.name,
+                            events.find(e => e.id === selectedEventForMonitoring)?.name,
+                            events.find(e => e.id === selectedEventForMonitoring)?.date,
+                            events.find(e => e.id === selectedEventForMonitoring)?.time
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -3898,7 +3957,13 @@ export default function AdminPanelScreen() {
                       </View>
                       {attendee.users.phone && (
                         <a
-                          href={buildWhatsAppLink(attendee.users.phone, attendee.users.name)}
+                          href={buildWhatsAppLink(
+                            attendee.users.phone,
+                            attendee.users.name,
+                            selectedEventForAttendees?.name,
+                            selectedEventForAttendees?.date,
+                            selectedEventForAttendees?.time
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
