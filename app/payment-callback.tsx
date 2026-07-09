@@ -32,6 +32,28 @@ async function trackMetaPurchase(
         }, { eventID: 'purchase_' + transactionId });
       }
     } catch (e) { /* silencioso */ }
+
+    // Además del píxel, mandamos el mismo evento por la API de Conversiones
+    // (servidor) con el mismo eventID para que Meta los deduplique — mejora
+    // la "cobertura" del píxel que Meta usa para calidad de coincidencias.
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/meta-purchase`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          transactionId,
+          amount,
+          currency: 'COP',
+          eventId,
+          userEmail,
+          userPhone,
+        }),
+      });
+    } catch (e) { /* silencioso */ }
     return;
   }
 
