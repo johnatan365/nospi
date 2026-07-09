@@ -124,47 +124,58 @@ const DEFAULT_QUESTIONS_DATA = {
 // ── Tabla ancha con barra de scroll horizontal duplicada arriba, sincronizada
 // con la de abajo — evita tener que bajar hasta el final de la tabla para
 // poder desplazarse lateralmente.
+// ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
+// del viewport, visible en todo momento mientras la tabla está en pantalla —
+// no solo arriba ni solo abajo del todo.
 function HorizontalScrollSync({ children, minWidth }: { children: React.ReactNode; minWidth: number }) {
-  const topRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const syncingFrom = useRef<'top' | 'bottom' | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const syncingFrom = useRef<'table' | 'sticky' | null>(null);
   const [spacerWidth, setSpacerWidth] = useState(minWidth);
 
   useEffect(() => {
-    const el = bottomRef.current;
+    const el = tableRef.current;
     if (!el) return;
     const update = () => setSpacerWidth(Math.max(el.scrollWidth, minWidth));
     update();
     // ResizeObserver detecta cuando la tabla cambia de tamaño (ej: cargan los datos)
-    // y actualiza el ancho del espaciador de arriba automáticamente.
+    // y actualiza el ancho del espaciador de la barra sticky automáticamente.
     const ro = new ResizeObserver(update);
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild as Element);
     return () => ro.disconnect();
   }, [minWidth]);
 
-  const handleTopScroll = () => {
-    if (syncingFrom.current === 'bottom') { syncingFrom.current = null; return; }
-    if (topRef.current && bottomRef.current) {
-      syncingFrom.current = 'top';
-      bottomRef.current.scrollLeft = topRef.current.scrollLeft;
+  const handleTableScroll = () => {
+    if (syncingFrom.current === 'sticky') { syncingFrom.current = null; return; }
+    if (tableRef.current && stickyRef.current) {
+      syncingFrom.current = 'table';
+      stickyRef.current.scrollLeft = tableRef.current.scrollLeft;
     }
   };
-  const handleBottomScroll = () => {
-    if (syncingFrom.current === 'top') { syncingFrom.current = null; return; }
-    if (topRef.current && bottomRef.current) {
-      syncingFrom.current = 'bottom';
-      topRef.current.scrollLeft = bottomRef.current.scrollLeft;
+  const handleStickyScroll = () => {
+    if (syncingFrom.current === 'table') { syncingFrom.current = null; return; }
+    if (tableRef.current && stickyRef.current) {
+      syncingFrom.current = 'sticky';
+      tableRef.current.scrollLeft = stickyRef.current.scrollLeft;
     }
   };
 
   return (
-    <div>
-      <div ref={topRef} onScroll={handleTopScroll} style={{ overflowX: 'auto', overflowY: 'hidden', height: 14, marginBottom: 4 }}>
-        <div style={{ width: spacerWidth, height: 1 }} />
-      </div>
-      <div ref={bottomRef} onScroll={handleBottomScroll} style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
+    <div style={{ position: 'relative' }}>
+      <div ref={tableRef} onScroll={handleTableScroll} style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
         {children}
+      </div>
+      <div
+        ref={stickyRef}
+        onScroll={handleStickyScroll}
+        style={{
+          position: 'sticky', bottom: 0, overflowX: 'auto', overflowY: 'hidden',
+          height: 16, marginTop: 2, background: '#F3E8FF', borderRadius: 8,
+          border: '1px solid #DDD6FE', zIndex: 5,
+        }}
+      >
+        <div style={{ width: spacerWidth, height: 1 }} />
       </div>
     </div>
   );
