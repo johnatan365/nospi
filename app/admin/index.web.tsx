@@ -431,6 +431,15 @@ export default function AdminPanelScreen() {
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
 
+    // Recordar sesión: si ya se inició sesión antes en este navegador, saltar la pantalla de contraseña
+    useEffect(() => {
+      if (localStorage.getItem('nospi_admin_session') === 'true') {
+        setIsAuthenticated(true);
+        setShowPasswordModal(false);
+        loadDashboardData();
+      }
+    }, []);
+
   // App config state
   const [configEventPrice, setConfigEventPrice] = useState('');
   const [configSupportEmail, setConfigSupportEmail] = useState('');
@@ -692,6 +701,7 @@ export default function AdminPanelScreen() {
     if (adminPassword === correctPassword) {
       setIsAuthenticated(true);
       setShowPasswordModal(false);
+      localStorage.setItem('nospi_admin_session', 'true');
       loadDashboardData();
     } else {
       window.alert('Contraseña incorrecta');
