@@ -137,7 +137,13 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     eventPart = ` de la ${eventName} del ${formattedDate}${timePart}`;
   }
 
-  const message = `¡Hola ${firstName}! Te escribimos desde Nospi confirmando que ya estás dentro${eventPart}. Recuerda: el lugar se revelará 48 horas antes del evento, prepárate para la sorpresa.`;
+    const message = [
+      `¡Hola ${firstName}!`,
+      ``,
+      `Te escribimos desde Nospi confirmando que ya estás dentro${eventPart}.`,
+      ``,
+      `Recuerda: el lugar se revelará 48 horas antes del evento, prepárate para la sorpresa.`,
+    ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -172,7 +178,13 @@ function buildEventReminderWhatsAppLink(
     locationPart = `. El lugar se revelará 48 horas antes del evento — ¡prepárate para la sorpresa!`;
   }
 
-  const message = `¡Hola ${firstName}! Te escribimos desde Nospi para recordarte${eventPart}${locationPart} Si no puedes asistir, avísanos respondiendo este mensaje.`;
+    const message = [
+      `¡Hola ${firstName}!`,
+      ``,
+      `Te escribimos desde Nospi para recordarte${eventPart}${locationPart}`,
+      ``,
+      `Si no puedes asistir, avísanos respondiendo este mensaje.`,
+  ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -3861,20 +3873,7 @@ export default function AdminPanelScreen() {
                       });
                     }}
                   >
-                    <Text style={styles.configActionButtonText}>📍 Enviar Ubicación Revelada por WhatsApp</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
-                    onPress={() => {
-                      setAddUserSearchQuery('');
-                      setAddUserError(null);
-                      setAddUserSuccess(null);
-                      setShowConfigModal(false);
-                      setShowAddExistingUserModal(true);
-                    }}
-                  >
-                    <Text style={styles.configActionButtonText}>➕ Agregar Usuario Existente</Text>
+                    <Text style={styles.configActionButtonText}>📍 Confirmar 48 horas antes</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -3907,9 +3906,18 @@ export default function AdminPanelScreen() {
                     <Text style={styles.configActionButtonText}>🎉 Confirmar el Mismo Día</Text>
                   </TouchableOpacity>
 
-
-
-
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: nospiColors.purpleDark }]}
+                    onPress={() => {
+                      setAddUserSearchQuery('');
+                      setAddUserError(null);
+                      setAddUserSuccess(null);
+                      setShowConfigModal(false);
+                      setShowAddExistingUserModal(true);
+                    }}
+                    >
+                      <Text style={styles.configActionButtonText}>➕ Agregar Usuario Existente</Text>
+                  </TouchableOpacity>
 
                   {selectedEventForConfig.event_status === 'draft' && (
                     <TouchableOpacity
