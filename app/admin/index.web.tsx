@@ -223,6 +223,31 @@ function buildSameDayWhatsAppLink(
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+// Arma el link de WhatsApp para las personas cuyo último intento de pago
+// quedó declinado/con error, ofreciendo mandarles el link directo de pago.
+function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const firstName = (name || '').trim().split(' ')[0] || 'ahí';
+  const formattedDate = eventDate
+    ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const eventPart = eventName
+    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}`
+    : 'el evento';
+
+  const message = [
+    `¡Hola ${firstName}! Te escribimos desde Nospi, la app que organiza cenas y planes para conocer gente nueva.`,
+    ``,
+    `Vimos que intentaste pagar tu cupo para ${eventPart}, pero el pago no se pudo completar.`,
+    ``,
+    `A veces pasa por un tema técnico del banco o de la app — nada grave.`,
+    ``,
+    `Si quieres, te mandamos el link directo para que sea más fácil completar el pago. Solo cuéntanos y te lo enviamos.`,
+  ].join('\n');
+
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
 // Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
 function formatTimeAmPm(time24: string): string {
   const [hStr, mStr] = time24.split(':');
@@ -548,6 +573,8 @@ export default function AdminPanelScreen() {
   const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
   const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
   const [participantTab, setParticipantTab] = useState<'confirmada' | 'cancelada' | 'anterior'>('confirmada');
+  const [declinedPayments, setDeclinedPayments] = useState<any[]>([]);
+  const [loadingDeclinedPayments, setLoadingDeclinedPayments] = useState(false);
 
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -835,6 +862,11 @@ export default function AdminPanelScreen() {
         setAppointments(transformedAppointments);
         setTotalAppointments(transformedAppointments.length);
       }
+
+      // Cargar pagos declinados (último intento de pago por usuario, sin importar el evento)
+      try {
+        await loadDeclinedPayments();
+      } catch (e) { console.warn('Error cargando pagos declinados', e); }
 
       // Load funnel inicial sin filtros
       try {
@@ -2927,6 +2959,44 @@ setBulkWhatsAppPending(pending);
     XLSX.writeFile(wb, `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const loadDeclinedPayments = async () => {
+    setLoadingDeclinedPayments(true);
+    try {
+      const { data, error } = await supabase.rpc('get_declined_payments_global');
+      if (error) {
+        console.error('Error cargando pagos declinados:', error);
+        setDeclinedPayments([]);
+        return;
+      }
+      setDeclinedPayments(data || []);
+    } catch (e) {
+      console.error('Error cargando pagos declinados:', e);
+      setDeclinedPayments([]);
+    } finally {
+      setLoadingDeclinedPayments(false);
+    }
+  };
+
+  const markDeclinedWhatsAppSent = async (userId: string, eventId: string) => {
+    const sentAt = new Date().toISOString();
+    setDeclinedPayments(prev => prev.map(p =>
+      p.user_id === userId && p.event_id === eventId ? { ...p, declined_whatsapp_sent_at: sentAt } : p
+    ));
+    try {
+      const { data: latest } = await supabase
+        .from('payment_attempts')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest?.id) {
+        await supabase.from('payment_attempts').update({ declined_whatsapp_sent_at: sentAt }).eq('id', latest.id);
+      }
+    } catch (e) { console.error('Error marcando WhatsApp declinado enviado:', e); }
+  };
+
   const loadParticipantAttendees = async (eventId: string) => {
     setLoadingParticipantAttendees(true);
     try {
@@ -3062,6 +3132,7 @@ setBulkWhatsAppPending(pending);
       { label: 'Plataforma', key: 'registered_from', w: 100 },
       { label: 'Editar', key: '_edit', w: 90 },
       { label: 'WhatsApp', key: '_whatsapp', w: 100 },
+      { label: 'Declinados', key: '_declinado', w: 110 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -3074,9 +3145,26 @@ setBulkWhatsAppPending(pending);
               </button>
             )}
           </div>
-          <button onClick={exportUsersToExcel} style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            📥 Descargar Excel
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {declinedPayments.filter((p: any) => p.user_phone && !p.declined_whatsapp_sent_at).length > 0 && (
+              <button
+                onClick={() => {
+                  const pending = declinedPayments.filter((p: any) => p.user_phone && !p.declined_whatsapp_sent_at);
+                  if (!window.confirm(`Se van a abrir ${pending.length} pestañas de WhatsApp (una por persona pendiente). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
+                  pending.forEach((p: any) => {
+                    window.open(buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date), '_blank');
+                    markDeclinedWhatsAppSent(p.user_id, p.event_id);
+                  });
+                }}
+                style={{ backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                💬 Enviar a Declinados ({declinedPayments.filter((p: any) => p.user_phone && !p.declined_whatsapp_sent_at).length})
+              </button>
+            )}
+            <button onClick={exportUsersToExcel} style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              📥 Descargar Excel
+            </button>
+          </div>
         </div>
 
         <HorizontalScrollSync minWidth={1100}>
@@ -3089,7 +3177,7 @@ setBulkWhatsAppPending(pending);
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={15} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
+                <tr><td colSpan={16} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -3164,6 +3252,28 @@ setBulkWhatsAppPending(pending);
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
                               backgroundColor: alreadySent ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
+                              padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                            }}
+                          >
+                            {alreadySent ? '✅ Enviado' : '💬 Enviar'}
+                          </a>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {(() => {
+                        const declined = declinedPayments.find((p: any) => p.user_id === user.id);
+                        if (!declined || !declined.user_phone) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>;
+                        const alreadySent = !!declined.declined_whatsapp_sent_at;
+                        return (
+                          <a
+                            href={buildDeclinedPaymentWhatsAppLink(declined.user_phone, declined.user_name, declined.event_name, declined.event_date)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => markDeclinedWhatsAppSent(declined.user_id, declined.event_id)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              backgroundColor: alreadySent ? '#9CA3AF' : '#DC2626', color: 'white', textDecoration: 'none',
                               padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
                             }}
                           >
