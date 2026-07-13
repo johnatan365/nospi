@@ -27,6 +27,7 @@ interface Event {
   status: string;
   event_status: 'draft' | 'published' | 'closed';
   confirmation_code: string | null;
+  is_full: boolean;
 }
 
 interface User {
@@ -1510,6 +1511,26 @@ export default function AdminPanelScreen() {
       loadDashboardData();
     } catch (error) {
       console.error('Failed to close event:', error);
+    }
+  };
+
+  const handleToggleRegistration = async (eventId: string, closeIt: boolean) => {
+    const confirmed = window.confirm(closeIt ? 'Cerrar inscripciones de este evento' : 'Reabrir inscripciones de este evento'); 
+    if (!confirmed) return;
+    try {
+      const { error } = await supabase
+      .from('events')
+      .update({ is_full: closeIt })
+      .eq('id', eventId);
+      if (error) {
+        window.alert('Error al actualizar inscripciones: ' + error.message);
+        return;
+      }
+
+      window.alert(closeIt ? 'Inscripciones cerradas' : 'Inscripciones reabiertas');
+      loadDashboardData();
+    } catch (error) {
+      console.error('Failed to toggle registration:', error);
     }
   };
 
@@ -3928,7 +3949,28 @@ setBulkWhatsAppPending(pending);
                     >
                       <Text style={styles.configActionButtonText}>📍 Revelar Ubicación</Text>
                     </TouchableOpacity>
-                  )}
+                {selectedEventForConfig.event_status === 'published' && !selectedEventForConfig.is_full && (
+                <TouchableOpacity
+                  style={[styles.configActionButton, { backgroundColor: '#EF4444' }]}
+                  onPress={() => {
+                    setShowConfigModal(false);
+                    handleToggleRegistration(selectedEventForConfig.id, true);
+                  }}
+                  >
+                <Text style={styles.configActionButtonText}>🚫 Cerrar Inscripciones</Text>
+                </TouchableOpacity>
+                )}
+                  {selectedEventForConfig.event_status === 'published' && selectedEventForConfig.is_full && (
+                <TouchableOpacity
+                  style={[styles.configActionButton, { backgroundColor: '#22C55E' }]}
+                  onPress={() => {
+                    setShowConfigModal(false);
+                    handleToggleRegistration(selectedEventForConfig.id, false);
+                  }}
+                  >
+                <Text style={styles.configActionButtonText}>🔓 Abrir Inscripciones</Text>
+                </TouchableOpacity>
+                )}
 
                   {selectedEventForConfig.event_status === 'published' && (
                     <TouchableOpacity
