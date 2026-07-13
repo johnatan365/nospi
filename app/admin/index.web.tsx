@@ -3949,6 +3949,7 @@ setBulkWhatsAppPending(pending);
                     >
                       <Text style={styles.configActionButtonText}>📍 Revelar Ubicación</Text>
                     </TouchableOpacity>
+                )}
                 {selectedEventForConfig.event_status === 'published' && !selectedEventForConfig.is_full && (
                 <TouchableOpacity
                   style={[styles.configActionButton, { backgroundColor: '#EF4444' }]}
