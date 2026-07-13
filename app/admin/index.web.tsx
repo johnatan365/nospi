@@ -426,7 +426,7 @@ export default function AdminPanelScreen() {
   const [savingAdminPassword, setSavingAdminPassword] = useState(false);
   const [adminPasswordSaved, setAdminPasswordSaved] = useState<'success' | 'error' | 'mismatch' | null>(null);
   const [loading, setLoading] = useState(false);
-  const [currentView, setCurrentView] = useState<AdminView>('dashboard');
+  const [currentView, setCurrentView] = useState<AdminView>('events');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(true);
@@ -454,8 +454,8 @@ export default function AdminPanelScreen() {
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [activeEvents, setActiveEvents] = useState(0);
   const [funnelData, setFunnelData] = useState<{step: string; count: number; pct: number}[]>([]);
-  const [funnelDateFrom, setFunnelDateFrom] = useState<string>('');
-  const [funnelDateTo, setFunnelDateTo] = useState<string>('');
+  const [funnelDateFrom, setFunnelDateFrom] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [funnelDateTo, setFunnelDateTo] = useState<string>(new Date().toLocaleDateString('en-CA'));
   const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
   const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
   const [funnelUtmSource, setFunnelUtmSource] = useState<string>('');
@@ -837,7 +837,7 @@ export default function AdminPanelScreen() {
 
       // Load funnel inicial sin filtros
       try {
-        await loadFunnelData('', '', '00:00', '23:59');
+        await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
       } catch (e) { console.warn('Funnel error', e); }
 
     } catch (error) {
