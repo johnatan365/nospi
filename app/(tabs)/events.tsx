@@ -29,6 +29,34 @@ interface Event {
   maps_link: string | null;
 }
 
+const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const WEEK_SECTION_ORDER = ['Esta semana', 'La próxima semana', 'En 2 semanas', 'Más adelante'];
+
+const getMonday = (input: Date): Date => {
+  const date = new Date(input);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getWeekSection = (dateString: string): string => {
+  const eventMonday = getMonday(new Date(dateString));
+  const todayMonday = getMonday(new Date());
+  const diffWeeks = Math.round((eventMonday.getTime() - todayMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  if (diffWeeks <= 0) return 'Esta semana';
+  if (diffWeeks === 1) return 'La próxima semana';
+  if (diffWeeks === 2) return 'En 2 semanas';
+  return 'Más adelante';
+};
+
+const formatCompactDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return `${WEEKDAY_ABBR[date.getDay()]} ${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
+};
+
 export default function EventsScreen() {
   const router = useRouter();
   const { user } = useSupabase();
@@ -104,17 +132,6 @@ export default function EventsScreen() {
     }, [user?.id, loadEvents])
   );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    };
-    return date.toLocaleDateString('es-ES', options);
-  };
-
   const handleEventPress = (event: Event) => {
     console.log('User tapped event:', event.id, event.name);
     router.push(`/event-details/${event.id}`);
@@ -141,6 +158,13 @@ export default function EventsScreen() {
     </ScrollView>
   );
 
+  const groupedEvents: Record<string, Event[]> = {};
+  events.forEach(event => {
+    const section = getWeekSection(event.date);
+    if (!groupedEvents[section]) groupedEvents[section] = [];
+    groupedEvents[section].push(event);
+  });
+
   return (
     <LinearGradient
       colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -155,42 +179,45 @@ export default function EventsScreen() {
           <Text style={styles.title}>Eventos Disponibles</Text>
           <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
 
-          {events.map((event) => {
-            const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
-            const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
-            const dateText = formatDate(event.date);
-            const participantsText = `${event.max_participants} participantes`;
+          {WEEK_SECTION_ORDER.map((section) => {
+            const sectionEvents = groupedEvents[section];
+            if (!sectionEvents || sectionEvents.length === 0) return null;
 
             return (
-              <TouchableOpacity
-                key={event.id}
-                style={styles.eventCard}
-                onPress={() => handleEventPress(event)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.eventHeader}>
-                  <Text style={styles.eventIcon}>{eventIcon}</Text>
-                  <View style={styles.eventHeaderText}>
-                    <Text style={styles.eventName}>{event.name}</Text>
-                    <Text style={styles.eventType}>{eventTypeText}</Text>
-                  </View>
-                </View>
+              <View key={section} style={styles.sectionWrapper}>
+                <Text style={styles.sectionHeader}>{section}</Text>
 
-                <Text style={styles.eventDate}>{dateText}</Text>
-                <Text style={styles.eventTime}>{event.time}</Text>
-                <Text style={styles.eventCity}>📍 {event.city}</Text>
-                {event.description && (
-                  <Text style={styles.eventDescription}>{event.description}</Text>
-                )}
-                <Text style={styles.eventParticipants}>{participantsText}</Text>
-                {event.is_location_revealed && (event.location_name || event.location) ? (
-                  <Text style={styles.locationRevealed}>
-                    📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
-                  </Text>
-                ) : (
-                  <Text style={styles.locationPlaceholder}>Ubicación se revelará 48 horas antes del evento</Text>
-                )}
-              </TouchableOpacity>
+                {sectionEvents.map((event) => {
+                  const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
+                  const compactDate = formatCompactDate(event.date);
+                  const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
+
+                  return (
+                    <TouchableOpacity
+                      key={event.id}
+                      style={styles.eventCard}
+                      onPress={() => handleEventPress(event)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.eventIconCompact}>{eventIcon}</Text>
+                      <View style={styles.eventCardBody}>
+                        <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
+                        <Text style={styles.eventMetaCompact} numberOfLines={1}>
+                          {compactDate} • {event.time} • 📍 {event.city}
+                        </Text>
+                        {hasRevealedLocation ? (
+                          <Text style={styles.locationRevealedCompact} numberOfLines={1}>
+                            📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
+                          </Text>
+                        ) : (
+                          <Text style={styles.locationPlaceholderCompact}>Ubicación se revela 48h antes</Text>
+                        )}
+                      </View>
+                      <Text style={styles.chevron}>›</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             );
           })}
 
@@ -233,81 +260,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     opacity: 0.8,
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  sectionWrapper: {
+    marginBottom: 10,
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   eventCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: nospiColors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  eventHeader: {
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  eventIcon: {
-    fontSize: 40,
-    marginRight: 16,
-  },
-  eventHeaderText: {
-    flex: 1,
-  },
-  eventName: {
+  eventIconCompact: {
     fontSize: 24,
+    marginRight: 12,
+  },
+  eventCardBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  eventNameCompact: {
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#880E4F',
   },
-  eventType: {
-    fontSize: 16,
-    color: '#AD1457',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  eventDate: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  eventTime: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  eventCity: {
-    fontSize: 15,
+  eventMetaCompact: {
+    fontSize: 12,
     color: '#666',
-    marginBottom: 8,
+    marginTop: 2,
   },
-  eventDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  eventParticipants: {
-    fontSize: 14,
-    color: '#AD1457',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  locationPlaceholder: {
-    fontSize: 13,
+  locationPlaceholderCompact: {
+    fontSize: 11,
     color: '#999',
     fontStyle: 'italic',
+    marginTop: 2,
   },
-  locationRevealed: {
-    fontSize: 13,
+  locationRevealedCompact: {
+    fontSize: 11,
     color: '#10B981',
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 2,
+  },
+  chevron: {
+    fontSize: 20,
+    color: '#AD1457',
+    marginLeft: 8,
   },
   emptyContainer: {
     padding: 40,
