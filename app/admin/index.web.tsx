@@ -555,6 +555,15 @@ export default function AdminPanelScreen() {
   // bloquea varias pestañas si se abren todas de una), por eso mostramos un
   // modal con un botón individual por persona pendiente.
   const [bulkWhatsAppPending, setBulkWhatsAppPending] = useState<Appointment[] | null>(null);
+  // Recordatorios de evento (48h / mismo día): mismo motivo que arriba — uno
+  // por uno en vez de abrir todas las pestañas de golpe.
+  const [reminderWhatsAppModal, setReminderWhatsAppModal] = useState<{ list: Appointment[]; kind: '48h' | 'sameday' } | null>(null);
+  const buildReminderLinkForModal = (a: Appointment) => {
+    if (!reminderWhatsAppModal || !selectedEventForConfig) return '';
+    return reminderWhatsAppModal.kind === '48h'
+    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link)
+      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link);
+  };
 
   // Matches and ratings state
   const [loadingMatches, setLoadingMatches] = useState(false);
@@ -3862,23 +3871,7 @@ setBulkWhatsAppPending(pending);
                         window.alert('No hay participantes confirmados con teléfono para este evento');
                         return;
                       }
-                      if (!window.confirm(`Se van a abrir ${confirmedForEvent.length} pestañas de WhatsApp (una por persona) con el recordatorio del evento. Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                      confirmedForEvent.forEach(a => {
-                        window.open(
-                          buildEventReminderWhatsAppLink(
-                            a.users.phone,
-                            a.users.name,
-                            selectedEventForConfig.name,
-                            selectedEventForConfig.date,
-                            selectedEventForConfig.time,
-                            selectedEventForConfig.is_location_revealed,
-                            selectedEventForConfig.location_name,
-                            selectedEventForConfig.location_address,
-                            selectedEventForConfig.maps_link
-                          ),
-                          '_blank'
-                        );
-                      });
+                      setReminderWhatsAppModal({ list: confirmedForEvent, kind: '48h' });
                     }}
                   >
                     <Text style={styles.configActionButtonText}>📍 Confirmar 48 horas antes</Text>
@@ -3894,21 +3887,7 @@ setBulkWhatsAppPending(pending);
                         window.alert('No hay participantes confirmados con teléfono para este evento');
                         return;
                       }
-                      if (!window.confirm(`Se van a abrir ${confirmedForEvent.length} pestañas de WhatsApp (una por persona) con el mensaje del día del evento. Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                      confirmedForEvent.forEach(a => {
-                        window.open(
-                          buildSameDayWhatsAppLink(
-                            a.users.phone,
-                            a.users.name,
-                            selectedEventForConfig.name,
-                            selectedEventForConfig.time,
-                            selectedEventForConfig.location_name,
-                            selectedEventForConfig.location_address,
-                            selectedEventForConfig.maps_link
-                          ),
-                          '_blank'
-                        );
-                      });
+                      setReminderWhatsAppModal({ list: confirmedForEvent, kind: 'sameday' });
                     }}
                   >
                     <Text style={styles.configActionButtonText}>🎉 Confirmar el Mismo Día</Text>
@@ -4026,7 +4005,34 @@ setBulkWhatsAppPending(pending);
       </View>
       </View>
       </Modal>
-
+      {/* Event Reminder WhatsApp Modal — envío uno por uno, mismo motivo que el anterior */}
+      <Modal
+        visible={reminderWhatsAppModal !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReminderWhatsAppModal(null)}
+        >
+      
+      <View style={styles.modalOverlay}>
+      <View style={styles.configModalContent}>
+      <View style={styles.configModalHeader}>
+      <Text style={styles.configModalTitle}>{reminderWhatsAppModal?.kind === '48h' ? 'Recordatorio 48 Horas Antes' : 'Mensaje del Día del Evento'}</Text>
+      <TouchableOpacity style={styles.closeModalButton} onPress={() => setReminderWhatsAppModal(null)}>
+      <Text style={styles.closeModalButtonText}>✕</Text>
+      </TouchableOpacity>
+      </View>
+      <Text style={{ paddingHorizontal: 20, paddingTop: 10, color: '#6B7280', fontSize: 13 }}>Toca "Enviar" en cada persona — el navegador móvil solo permite abrir una pestaña de WhatsApp a la vez.</Text>
+      <ScrollView style={styles.configActionsContainer}>
+        {(reminderWhatsAppModal?.list || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
+        {(reminderWhatsAppModal?.list || []).map(a => (
+          <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
+          <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
+          <a href={buildReminderLinkForModal(a)} target="_blank" rel="noopener noreferrer" onClick={() => setReminderWhatsAppModal(prev => prev ? { ...prev, list: prev.list.filter(x => x.id !== a.id) } : prev)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+          </View>))}
+      </ScrollView>
+      </View>
+      </View>
+      </Modal>
       {/* Attendees Modal */}
       <Modal
         visible={showAttendeesModal}
