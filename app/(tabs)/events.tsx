@@ -203,11 +203,11 @@ export default function EventsScreen() {
                       <View style={styles.eventCardBody}>
                         <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                          {compactDate} • {event.time} • 📍 {event.city}
+                          {compactDate} • {event.time} • {event.city}
                         </Text>
                         {hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
-                            📍 {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
+                            {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
                           </Text>
                         ) : (
                           <Text style={styles.locationPlaceholderCompact}>Ubicación se revela 48h antes</Text>
