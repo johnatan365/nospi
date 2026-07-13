@@ -551,6 +551,10 @@ export default function AdminPanelScreen() {
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
+  // Envío masivo de WhatsApp de confirmación: uno por uno (el navegador móvil
+  // bloquea varias pestañas si se abren todas de una), por eso mostramos un
+  // modal con un botón individual por persona pendiente.
+  const [bulkWhatsAppPending, setBulkWhatsAppPending] = useState<Appointment[] | null>(null);
 
   // Matches and ratings state
   const [loadingMatches, setLoadingMatches] = useState(false);
@@ -2660,13 +2664,7 @@ export default function AdminPanelScreen() {
                   return;
                 }
                 if (!window.confirm(`Se van a abrir ${pending.length} pestañas de WhatsApp (una por persona pendiente, de todos los eventos). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                pending.forEach(a => {
-                  window.open(
-                    buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time),
-                    '_blank'
-                  );
-                  markPurchaseWhatsAppSent(a.id);
-                });
+setBulkWhatsAppPending(pending);
               }}
             >
               <Text style={styles.createButtonText}>💬 Enviar Confirmación a Todos (pendientes)</Text>
@@ -3999,6 +3997,34 @@ export default function AdminPanelScreen() {
             )}
           </View>
         </View>
+      </Modal>
+      {/* Bulk WhatsApp Pending Modal — envío uno por uno, evita que el navegador móvil bloquee varias pestañas a la vez */}
+      <Modal
+        visible={bulkWhatsAppPending !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBulkWhatsAppPending(null)}
+        >
+      
+      <View style={styles.modalOverlay}>
+      <View style={styles.configModalContent}>
+      <View style={styles.configModalHeader}>
+      <Text style={styles.configModalTitle}>Enviar Confirmación por WhatsApp</Text>
+        <TouchableOpacity style={styles.closeModalButton} onPress={() => setBulkWhatsAppPending(null)}>
+          <Text style={styles.closeModalButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+        <Text style={{ paddingHorizontal: 20, paddingTop: 10, color: '#6B7280', fontSize: 13 }}>Toca "Enviar" en cada persona — el navegador móvil solo permite abrir una pestaña de WhatsApp a la vez.</Text>
+        <ScrollView style={styles.configActionsContainer}>
+          {(bulkWhatsAppPending || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
+          {(bulkWhatsAppPending || []).map(a => (
+          <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
+            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
+            <a href={buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+          </View>))}
+        </ScrollView>
+      </View>
+      </View>
       </Modal>
 
       {/* Attendees Modal */}
