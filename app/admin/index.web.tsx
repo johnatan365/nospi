@@ -4263,7 +4263,7 @@ setBulkWhatsAppPending(pending);
                     style={[styles.configActionButton, { backgroundColor: '#25D366' }]}
                     onPress={() => {
                       const confirmedForEvent = appointments.filter(
-                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone && !a.reminder_48h_sent_at
+                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone
                       );
                       if (confirmedForEvent.length === 0) {
                         window.alert('No hay participantes confirmados con teléfono para este evento');
@@ -4279,7 +4279,7 @@ setBulkWhatsAppPending(pending);
                     style={[styles.configActionButton, { backgroundColor: '#128C7E' }]}
                     onPress={() => {
                       const confirmedForEvent = appointments.filter(
-                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone && !a.sameday_reminder_sent_at
+                        a => a.event_id === selectedEventForConfig.id && a.status === 'confirmada' && a.users?.phone
                       );
                       if (confirmedForEvent.length === 0) {
                         window.alert('No hay participantes confirmados con teléfono para este evento');
@@ -4469,22 +4469,25 @@ setBulkWhatsAppPending(pending);
       <Text style={styles.closeModalButtonText}>✕</Text>
       </TouchableOpacity>
       </View>
-      <Text style={{ paddingHorizontal: 20, paddingTop: 10, color: '#6B7280', fontSize: 13 }}>Toca "Enviar" en cada persona — el navegador móvil solo permite abrir una pestaña de WhatsApp a la vez.</Text>
+      <Text style={{ paddingHorizontal: 20, paddingTop: 10, color: '#6B7280', fontSize: 13 }}>Toca "Enviar" en cada persona — el navegador móvil solo permite abrir una pestaña de WhatsApp a la vez. Puedes volver a enviar cuando quieras, aunque ya aparezca como enviado.</Text>
       <ScrollView style={styles.configActionsContainer}>
-        {(reminderWhatsAppModal?.list || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
-        {(reminderWhatsAppModal?.list || []).map(a => (
+        {(reminderWhatsAppModal?.list || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>No hay participantes confirmados con teléfono para este evento.</Text>}
+        {(reminderWhatsAppModal?.list || []).map(a => {
+          const field = reminderWhatsAppModal?.kind === '48h' ? 'reminder_48h_sent_at' : 'sameday_reminder_sent_at';
+          const liveAppointment = appointments.find(x => x.id === a.id) || a;
+          const sentAtValue = field === 'reminder_48h_sent_at' ? liveAppointment.reminder_48h_sent_at : liveAppointment.sameday_reminder_sent_at;
+          const alreadySent = !!sentAtValue;
+          return (
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
           <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
           <a href={buildReminderLinkForModal(a)} target="_blank" rel="noopener noreferrer" onClick={() => {
-            const field = reminderWhatsAppModal?.kind === '48h' ? 'reminder_48h_sent_at' : 'sameday_reminder_sent_at';
             const sentAt = new Date().toISOString();
             setAppointments(prev => prev.map(x => x.id === a.id ? { ...x, [field]: sentAt } : x));
-            setReminderWhatsAppModal(prev => prev ? { ...prev, list: prev.list.filter(x => x.id !== a.id) } : prev);
             supabase.from('appointments').update({ [field]: sentAt }).eq('id', a.id).then(({ error }) => {
               if (error) console.error('Error marcando recordatorio como enviado:', error);
             });
-          }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
-          </View>))}
+          }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: alreadySent ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{alreadySent ? '✅ Enviado' : '💬 Enviar'}</a>
+          </View>);})}
       </ScrollView>
       </View>
       </View>
