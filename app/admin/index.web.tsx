@@ -1257,13 +1257,24 @@ export default function AdminPanelScreen() {
     let timeValue = '';
     
     if (event.start_time) {
+      // FIX: usar componentes de fecha en hora LOCAL (no toISOString, que da
+      // la fecha en UTC) — si no, un evento a las 7pm en Bogotá (UTC-5) se
+      // guarda como medianoche UTC del día siguiente, y al editar se mostraba
+      // un día adelantado aunque la hora sí salía correcta.
       const startDate = new Date(event.start_time);
-      dateValue = startDate.toISOString().split('T')[0];
+      const yyyy = startDate.getFullYear();
+      const mm = (startDate.getMonth() + 1).toString().padStart(2, '0');
+      const dd = startDate.getDate().toString().padStart(2, '0');
+      dateValue = `${yyyy}-${mm}-${dd}`;
       const hours = startDate.getHours().toString().padStart(2, '0');
       const minutes = startDate.getMinutes().toString().padStart(2, '0');
       timeValue = `${hours}:${minutes}`;
     } else if (event.date && event.time) {
-      dateValue = event.date;
+      const startDate = new Date(event.date);
+      const yyyy = startDate.getFullYear();
+      const mm = (startDate.getMonth() + 1).toString().padStart(2, '0');
+      const dd = startDate.getDate().toString().padStart(2, '0');
+      dateValue = `${yyyy}-${mm}-${dd}`;
       timeValue = event.time;
     }
     
@@ -1271,7 +1282,10 @@ export default function AdminPanelScreen() {
       name: event.name || '',
       city: event.city || '',
       description: event.description || '',
-      type: event.type || 'bar',
+      // FIX: la BD guarda 'restaurante' (español) pero el <select> usa
+      // 'restaurant' (inglés) como value — sin este mapeo, el dropdown no
+      // encontraba coincidencia y mostraba "Bar" aunque el evento fuera restaurante.
+      type: event.type === 'restaurante' ? 'restaurant' : (event.type || 'bar'),
       date: dateValue,
       time: timeValue,
       location_name: event.location_name || '',
