@@ -438,6 +438,7 @@ export default function AdminPanelScreen() {
   const [userSortCol, setUserSortCol] = useState<string>('');
   const [userSortAsc, setUserSortAsc] = useState(true);
   const [userColFilters, setUserColFilters] = useState<Record<string, Set<string>>>({});
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   // Participants table: sort + per-column filters
   const [partSortCol, setPartSortCol] = useState<string>('');
@@ -3340,7 +3341,17 @@ setBulkWhatsAppPending(pending);
 
   const renderUsers = () => {
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
-    const sortedUsers = applySort(applyColFilters(users, userColFilters), userSortCol, userSortAsc);
+    const searchedUsers = userSearchQuery.trim()
+      ? users.filter((u: any) => {
+          const q = userSearchQuery.trim().toLowerCase();
+          return (
+            (u.name || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.phone || '').toLowerCase().includes(q)
+          );
+        })
+      : users;
+    const sortedUsers = applySort(applyColFilters(searchedUsers, userColFilters), userSortCol, userSortAsc);
     const activeFilters = Object.values(userColFilters).filter((v: any) => v && v.size > 0).length;
     const cols: { label: string; key: string; w?: number }[] = [
       { label: 'Nombre', key: 'name', w: 130 }, { label: 'Registro', key: 'created_at', w: 150 },
@@ -3357,8 +3368,27 @@ setBulkWhatsAppPending(pending);
     return (
       <View style={styles.listContainer}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{activeFilters > 0 ? ` de ${users.length}` : ''})</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{(activeFilters > 0 || userSearchQuery.trim()) ? ` de ${users.length}` : ''})</Text>
+            <input
+              type="text"
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              placeholder="🔍 Buscar por nombre, correo o celular..."
+              style={{
+                border: '2px solid #E5E7EB', borderRadius: 10, padding: '10px 14px',
+                fontSize: 14, color: '#1F2937', outline: 'none', minWidth: 260,
+                boxSizing: 'border-box',
+              }}
+            />
+            {userSearchQuery.trim() !== '' && (
+              <button
+                onClick={() => setUserSearchQuery('')}
+                style={{ background: '#F3F4F6', color: '#6B7280', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                ✕ Limpiar búsqueda
+              </button>
+            )}
             {activeFilters > 0 && (
               <button onClick={() => setUserColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 ✕ Limpiar filtros ({activeFilters})
@@ -3393,7 +3423,7 @@ setBulkWhatsAppPending(pending);
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={16} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
+                <tr><td colSpan={16} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{userSearchQuery.trim() ? `Sin resultados para "${userSearchQuery.trim()}"` : activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
