@@ -51,3 +51,11 @@ jobs:
           name: nospi-release.aab
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 7
+      - name: Upload to Play Store (internal track)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: app.nospi.mobile
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
