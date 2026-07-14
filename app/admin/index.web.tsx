@@ -78,7 +78,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'config';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'config';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -493,6 +493,10 @@ export default function AdminPanelScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileMessage, setReconcileMessage] = useState<string | null>(null);
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
 
   // Event attendees modal
@@ -863,6 +867,17 @@ export default function AdminPanelScreen() {
         setTotalAppointments(transformedAppointments.length);
       }
 
+      // Load payment_attempts para el reporte de reconciliación (pagos de Wompi vs. citas)
+      const { data: paymentAttemptsData, error: paymentAttemptsError } = await supabase
+        .from('payment_attempts')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (paymentAttemptsError) {
+        console.error('Error loading payment_attempts:', paymentAttemptsError);
+      } else {
+        setPaymentAttempts(paymentAttemptsData || []);
+      }
+
       // Cargar pagos declinados (último intento de pago por usuario, sin importar el evento)
       try {
         await loadDeclinedPayments();
@@ -945,6 +960,87 @@ export default function AdminPanelScreen() {
       setAddUserError(e.message || 'Error inesperado al agregar el usuario');
     } finally {
       setAddingUserId(null);
+    }
+  };
+
+  const handleRunReconcile = async () => {
+    setReconciling(true);
+    setReconcileMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-reconcile-payments', { body: {} });
+      if (error || data?.error) {
+        setReconcileMessage('Error al verificar pagos: ' + (data?.error || error?.message));
+        return;
+      }
+      const fixed = (data.results || []).filter((r: any) => r.appointmentConfirmed).length;
+      setReconcileMessage(`Se revisaron ${data.checked} pago(s) pendientes. ${fixed} cita(s) confirmada(s) automáticamente.`);
+      await loadDashboardData();
+    } catch (e: any) {
+      setReconcileMessage('Error inesperado: ' + e.message);
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const handleAddMissingAppointment = async (userId: string, eventId: string) => {
+    const key = `pay_${userId}_${eventId}`;
+    setResolvingKey(key);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-add-user-to-event', {
+        body: { userId, eventId },
+      });
+      if (error || data?.error) {
+        window.alert(data?.error || error?.message || 'Error al agregar la cita');
+        return;
+      }
+      window.alert(`${data.userName} fue agregado al evento correctamente.`);
+      await loadDashboardData();
+    } catch (e: any) {
+      window.alert('Error inesperado: ' + e.message);
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+
+  const handleMarkPaymentCompleted = async (appointmentId: string) => {
+    const confirmed = window.confirm('¿Confirmas que este usuario sí pagó y quieres marcar el pago como completado?');
+    if (!confirmed) return;
+    setResolvingKey(`apt_${appointmentId}`);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ payment_status: 'completed' })
+        .eq('id', appointmentId);
+      if (error) {
+        window.alert('Error al actualizar: ' + error.message);
+        return;
+      }
+      await loadDashboardData();
+    } catch (e: any) {
+      window.alert('Error inesperado: ' + e.message);
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+
+  const handleCancelUnpaidAppointment = async (appointmentId: string) => {
+    const confirmed = window.confirm('¿Cancelar esta cita porque el pago nunca se completó?');
+    if (!confirmed) return;
+    setResolvingKey(`apt_${appointmentId}`);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelada' })
+        .eq('id', appointmentId);
+      if (error) {
+        window.alert('Error al cancelar: ' + error.message);
+        return;
+      }
+      await loadDashboardData();
+    } catch (e: any) {
+      window.alert('Error inesperado: ' + e.message);
+    } finally {
+      setResolvingKey(null);
     }
   };
 
@@ -2172,6 +2268,127 @@ export default function AdminPanelScreen() {
             ))}
           </View>
         )}
+      </View>
+    );
+  };
+
+  const renderReconciliation = () => {
+    const orphanPayments = paymentAttempts.filter((pa: any) => {
+      if (pa.status !== 'APPROVED' || !pa.user_id || !pa.event_id) return false;
+      return !appointments.some(
+        (a) => a.user_id === pa.user_id && a.event_id === pa.event_id && a.payment_status === 'completed'
+      );
+    });
+
+    const orphanAppointments = appointments.filter(
+      (a) => a.status === 'confirmada' && a.payment_status !== 'completed'
+    );
+
+    const pendingCount = paymentAttempts.filter(
+      (pa: any) => !['APPROVED', 'DECLINED', 'VOIDED', 'ERROR'].includes(pa.status)
+    ).length;
+
+    return (
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>🔄 Reconciliación de Pagos</Text>
+        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 20 }}>
+          Compara los pagos aprobados en Wompi contra las citas confirmadas en la app, para detectar usuarios que pagaron sin quedar inscritos, o inscripciones sin pago aprobado detrás.
+        </Text>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleRunReconcile}
+            disabled={reconciling}
+            style={{
+              backgroundColor: nospiColors.purpleDark, color: 'white', border: 'none',
+              borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700,
+              cursor: reconciling ? 'default' : 'pointer', opacity: reconciling ? 0.6 : 1,
+            }}
+          >
+            {reconciling ? 'Verificando...' : '🔄 Verificar pagos pendientes en Wompi'}
+          </button>
+          {pendingCount > 0 && (
+            <span style={{ fontSize: 13, color: '#9CA3AF' }}>{pendingCount} pago(s) todavía sin confirmar por Wompi (pendientes)</span>
+          )}
+          {reconcileMessage && (
+            <span style={{ fontSize: 13, color: '#6B21A8', fontWeight: 600 }}>{reconcileMessage}</span>
+          )}
+        </div>
+
+        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: 24, borderLeft: '4px solid #EF4444' }}>
+          <Text style={styles.subsectionTitle}>💳 Pagos aprobados sin cita confirmada ({orphanPayments.length})</Text>
+          <Text style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
+            Wompi aprobó el pago pero no hay una cita con payment_status = completed para ese usuario y evento.
+          </Text>
+          {orphanPayments.length === 0 ? (
+            <Text style={{ fontSize: 14, color: '#10B981', fontWeight: 600 }}>✅ No hay pagos huérfanos por ahora.</Text>
+          ) : (
+            orphanPayments.map((pa: any) => {
+              const u = users.find((x) => x.id === pa.user_id);
+              const ev = events.find((x) => x.id === pa.event_id);
+              const key = `pay_${pa.user_id}_${pa.event_id}`;
+              return (
+                <div key={pa.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid #F3F4F6', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{u?.name || pa.user_id}</div>
+                    <div style={{ fontSize: 12, color: '#6B7280' }}>{u?.phone || ''} · {ev?.name || pa.event_id} · {ev?.date || ''}</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>Transacción {pa.transaction_id} · {pa.payment_method} · ${Number(pa.amount || 0).toLocaleString('es-CO')} COP</div>
+                  </div>
+                  <button
+                    onClick={() => handleAddMissingAppointment(pa.user_id, pa.event_id)}
+                    disabled={resolvingKey === key}
+                    style={{
+                      backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: 8,
+                      padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      opacity: resolvingKey === key ? 0.6 : 1,
+                    }}
+                  >
+                    {resolvingKey === key ? 'Agregando...' : '✅ Agregar cita'}
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #F59E0B' }}>
+          <Text style={styles.subsectionTitle}>📝 Citas confirmadas sin pago aprobado ({orphanAppointments.length})</Text>
+          <Text style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
+            El usuario quedó inscrito al evento, pero no hay un pago con payment_status = completed detrás.
+          </Text>
+          {orphanAppointments.length === 0 ? (
+            <Text style={{ fontSize: 14, color: '#10B981', fontWeight: 600 }}>✅ No hay inscripciones sin pago por ahora.</Text>
+          ) : (
+            orphanAppointments.map((a) => {
+              const key = `apt_${a.id}`;
+              return (
+                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid #F3F4F6', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{a.users?.name}</div>
+                    <div style={{ fontSize: 12, color: '#6B7280' }}>{a.users?.phone} · {a.events?.name} · {a.events?.date}</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>Estado de pago: {a.payment_status} · Inscrito: {new Date(a.created_at).toLocaleDateString('es-CO')}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleMarkPaymentCompleted(a.id)}
+                      disabled={resolvingKey === key}
+                      style={{ backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: resolvingKey === key ? 0.6 : 1 }}
+                    >
+                      Marcar pago completado
+                    </button>
+                    <button
+                      onClick={() => handleCancelUnpaidAppointment(a.id)}
+                      disabled={resolvingKey === key}
+                      style={{ backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: resolvingKey === key ? 0.6 : 1 }}
+                    >
+                      Cancelar cita
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </View>
     );
   };
@@ -3788,6 +4005,7 @@ setBulkWhatsAppPending(pending);
     { key: 'participants', icon: '👥', label: 'Participantes' },
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
+    { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -3944,6 +4162,7 @@ setBulkWhatsAppPending(pending);
             {currentView === 'participants' && renderParticipants()}
             {currentView === 'questions'    && renderQuestions()}
             {currentView === 'realtime'     && renderRealtime()}
+            {currentView === 'reconciliation' && renderReconciliation()}
             {currentView === 'config'       && renderConfig()}
           </div>
         </div>
