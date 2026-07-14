@@ -587,6 +587,9 @@ export default function AdminPanelScreen() {
   // bloquea varias pestañas si se abren todas de una), por eso mostramos un
   // modal con un botón individual por persona pendiente.
   const [bulkWhatsAppPending, setBulkWhatsAppPending] = useState<Appointment[] | null>(null);
+  // Envío masivo de WhatsApp a pagos declinados: mismo motivo — uno por uno
+  // en vez de abrir todas las pestañas de golpe (se bloquean en móvil).
+  const [bulkDeclinedPending, setBulkDeclinedPending] = useState<any[] | null>(null);
   // Recordatorios de evento (48h / mismo día): mismo motivo que arriba — uno
   // por uno en vez de abrir todas las pestañas de golpe.
   const [reminderWhatsAppModal, setReminderWhatsAppModal] = useState<{ list: Appointment[]; kind: '48h' | 'sameday' } | null>(null);
@@ -3367,11 +3370,7 @@ setBulkWhatsAppPending(pending);
               <button
                 onClick={() => {
                   const pending = declinedPayments.filter((p: any) => p.user_phone && !p.declined_whatsapp_sent_at);
-                  if (!window.confirm(`Se van a abrir ${pending.length} pestañas de WhatsApp (una por persona pendiente). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                  pending.forEach((p: any) => {
-                    window.open(buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date), '_blank');
-                    markDeclinedWhatsAppSent(p.user_id, p.event_id);
-                  });
+                  setBulkDeclinedPending(pending);
                 }}
                 style={{ backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
               >
@@ -4372,6 +4371,34 @@ setBulkWhatsAppPending(pending);
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
             <a href={buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+          </View>))}
+        </ScrollView>
+      </View>
+      </View>
+      </Modal>
+      {/* Bulk Declined Payments WhatsApp Modal — envío uno por uno, mismo motivo que el anterior */}
+      <Modal
+        visible={bulkDeclinedPending !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBulkDeclinedPending(null)}
+        >
+      
+      <View style={styles.modalOverlay}>
+      <View style={styles.configModalContent}>
+      <View style={styles.configModalHeader}>
+      <Text style={styles.configModalTitle}>Enviar WhatsApp a Pagos Declinados</Text>
+        <TouchableOpacity style={styles.closeModalButton} onPress={() => setBulkDeclinedPending(null)}>
+          <Text style={styles.closeModalButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+        <Text style={{ paddingHorizontal: 20, paddingTop: 10, color: '#6B7280', fontSize: 13 }}>Toca "Enviar" en cada persona — el navegador móvil solo permite abrir una pestaña de WhatsApp a la vez.</Text>
+        <ScrollView style={styles.configActionsContainer}>
+          {(bulkDeclinedPending || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
+          {(bulkDeclinedPending || []).map((p: any) => (
+          <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
+            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
+            <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
       </View>
