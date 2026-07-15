@@ -189,7 +189,7 @@ export default function InteraccionScreen() {
         }
       }
     } catch (error) {
-      
+
     }
   }, []);
 
@@ -199,7 +199,7 @@ export default function InteraccionScreen() {
         .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
 
       if (error) {
-        
+
         return;
       }
 
@@ -226,7 +226,7 @@ export default function InteraccionScreen() {
 
       setActiveParticipants(participants);
     } catch (error) {
-      
+
     }
   }, []);
 
@@ -278,7 +278,7 @@ export default function InteraccionScreen() {
             ? (savedCheckInPhase as CheckInPhase)
             : 'confirmed';
 
-        
+
 
         // Apply all in one synchronous batch so React renders them together
         setUserReadyForRules(restoredReadyForRules);
@@ -305,7 +305,7 @@ export default function InteraccionScreen() {
       // 2. Try AsyncStorage for cross-session persistence
       const persisted = await getCached<Appointment | null>(CACHE_KEY);
       if (persisted !== null) {
-        
+
         cacheRef.current = { data: persisted, timestamp: Date.now() };
         applyAppointmentData(persisted);
         setLoading(false);
@@ -314,7 +314,7 @@ export default function InteraccionScreen() {
 
     // 3. Always fetch fresh in background
     try {
-      
+
 
       const { data, error } = await supabase
         .from('appointments')
@@ -356,7 +356,7 @@ export default function InteraccionScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        
+
         setLoading(false);
         return;
       }
@@ -412,9 +412,9 @@ export default function InteraccionScreen() {
         loadActiveParticipants(freshApt.event_id);
       }
 
-      
+
     } catch (error) {
-      
+
     } finally {
       setLoading(false);
     }
@@ -422,7 +422,7 @@ export default function InteraccionScreen() {
 
   const handleCodeConfirmation = useCallback(async () => {
     if (!appointment || !user) return;
-    
+
 
     const enteredCode = confirmationCode.trim();
     const eventCode = appointment.event.confirmation_code;
@@ -471,7 +471,7 @@ export default function InteraccionScreen() {
         });
 
       if (updateError) {
-        
+
         setCheckInPhase('code_entry');
         setCodeError('No se pudo registrar tu llegada.');
         return;
@@ -491,7 +491,7 @@ export default function InteraccionScreen() {
       clearCached(CACHE_KEY);
       loadActiveParticipants(appointment.event_id);
     } catch (error) {
-      
+
       setCheckInPhase('code_entry');
       setCodeError('Ocurrió un error.');
     }
@@ -506,13 +506,41 @@ export default function InteraccionScreen() {
 
     if (activeParticipants.length < 2) return;
 
-    
+
     setStartingExperience(true);
 
     try {
       const randomIndex = Math.floor(Math.random() * activeParticipants.length);
       const starterUserId = activeParticipants[randomIndex].user_id;
-      const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
+
+      let firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
+      try {
+        const { data: eventFirstQuestion } = await supabase
+          .from('event_questions')
+          .select('question_text')
+          .eq('event_id', appointment.event_id)
+          .eq('level', 'divertido')
+          .order('question_order', { ascending: true })
+          .limit(1);
+
+        if (eventFirstQuestion && eventFirstQuestion.length > 0) {
+          firstQuestion = eventFirstQuestion[0].question_text;
+        } else {
+          const { data: defaultFirstQuestion } = await supabase
+            .from('event_questions')
+            .select('question_text')
+            .is('event_id', null)
+            .eq('level', 'divertido')
+            .order('question_order', { ascending: true })
+            .limit(1);
+
+          if (defaultFirstQuestion && defaultFirstQuestion.length > 0) {
+            firstQuestion = defaultFirstQuestion[0].question_text;
+          }
+        }
+      } catch (questionLoadError) {
+
+      }
 
       setGamePhase('questions');
 
@@ -530,13 +558,13 @@ export default function InteraccionScreen() {
         .eq('id', appointment.event_id);
 
       if (error) {
-        
+
         setGamePhase('intro');
         setStartingExperience(false);
         return;
       }
     } catch (error) {
-      
+
       setGamePhase('intro');
       setStartingExperience(false);
     } finally {
@@ -637,7 +665,7 @@ export default function InteraccionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      
+
       if (!user?.id) {
         setLoading(false);
         return;
@@ -764,7 +792,7 @@ export default function InteraccionScreen() {
   }, [divertidoScaleAnim, divertidoFadeAnim, appointment?.event_id]);
 
   const handleUserContinue = useCallback(async () => {
-    
+
     setUserReadyForRules(true);
     if (appointment?.event_id) {
       await AsyncStorage.setItem(`nospi_readyForRules_${appointment.event_id}`, 'true');
@@ -779,7 +807,7 @@ export default function InteraccionScreen() {
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
   const handleFinishGame = useCallback(async () => {
-    
+
     if (appointment?.event_id) {
       await Promise.all([
         AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`),
