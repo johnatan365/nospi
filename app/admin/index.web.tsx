@@ -214,7 +214,7 @@ function buildSameDayWhatsAppLink(
     ``,
     `Hoy es tu ${eventName || 'evento'}${timePart}, en ${locationName || 'el lugar acordado'}${addressPart}.${mapsLine}`,
     ``,
-    `Al llegar, diles que vienes de Nospi — te darán un código para confirmar tu asistencia en la app.`,
+    `Al llegar, dile al personal del lugar que vienes de Nospi y ellos te indican la mesa correspondiente.`,
     ``,
     `Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
     ``,
