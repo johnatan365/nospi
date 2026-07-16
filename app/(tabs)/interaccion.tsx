@@ -134,7 +134,7 @@ export default function InteraccionScreen() {
     const diffToEventTime = eventDate.getTime() - now.getTime();
 
     const eventDatePlus10 = new Date(startTime);
-    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 10);
+    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 5);
     const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
 
     setCountdown(diffToPlus10);
