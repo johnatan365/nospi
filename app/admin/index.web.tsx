@@ -1053,6 +1053,48 @@ export default function AdminPanelScreen() {
     }
   };
 
+  const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
+    const confirmed = window.confirm('¿Eliminar este registro de pago? Esta acción no se puede deshacer.');
+    if (!confirmed) return;
+    setResolvingKey(`delpay_${paymentAttemptId}`);
+    try {
+      const { error } = await supabase
+        .from('payment_attempts')
+        .delete()
+        .eq('id', paymentAttemptId);
+      if (error) {
+        window.alert('Error al eliminar: ' + error.message);
+        return;
+      }
+      await loadDashboardData();
+    } catch (e: any) {
+      window.alert('Error inesperado: ' + e.message);
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+
+  const handleDeleteOrphanAppointment = async (appointmentId: string) => {
+    const confirmed = window.confirm('¿Eliminar esta cita por completo? Esta acción no se puede deshacer.');
+    if (!confirmed) return;
+    setResolvingKey(`delapt_${appointmentId}`);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', appointmentId);
+      if (error) {
+        window.alert('Error al eliminar: ' + error.message);
+        return;
+      }
+      await loadDashboardData();
+    } catch (e: any) {
+      window.alert('Error inesperado: ' + e.message);
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+
   // Para el botón de WhatsApp en la tabla general de Usuarios, donde no hay un
   // evento único de contexto: usa la próxima cita confirmada de la persona
   // (o la más reciente, si ya no tiene ninguna futura). Devuelve la cita
@@ -2357,17 +2399,30 @@ export default function AdminPanelScreen() {
                     <div style={{ fontSize: 12, color: '#6B7280' }}>{u?.phone || ''} · {ev?.name || pa.event_id} · {ev?.date || ''}</div>
                     <div style={{ fontSize: 11, color: '#9CA3AF' }}>Transacción {pa.transaction_id} · {pa.payment_method} · ${Number(pa.amount || 0).toLocaleString('es-CO')} COP</div>
                   </div>
-                  <button
-                    onClick={() => handleAddMissingAppointment(pa.user_id, pa.event_id)}
-                    disabled={resolvingKey === key}
-                    style={{
-                      backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: 8,
-                      padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                      opacity: resolvingKey === key ? 0.6 : 1,
-                    }}
-                  >
-                    {resolvingKey === key ? 'Agregando...' : '✅ Agregar cita'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleAddMissingAppointment(pa.user_id, pa.event_id)}
+                      disabled={resolvingKey === key}
+                      style={{
+                        backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: 8,
+                        padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        opacity: resolvingKey === key ? 0.6 : 1,
+                      }}
+                    >
+                      {resolvingKey === key ? 'Agregando...' : '✅ Agregar cita'}
+                    </button>
+                    <button
+                      onClick={() => handleDeletePaymentAttempt(pa.id)}
+                      disabled={resolvingKey === `delpay_${pa.id}`}
+                      style={{
+                        backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: 8,
+                        padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        opacity: resolvingKey === `delpay_${pa.id}` ? 0.6 : 1,
+                      }}
+                    >
+                      {resolvingKey === `delpay_${pa.id}` ? 'Eliminando...' : '🗑️ Eliminar'}
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -2405,6 +2460,13 @@ export default function AdminPanelScreen() {
                       style={{ backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: resolvingKey === key ? 0.6 : 1 }}
                     >
                       Cancelar cita
+                    </button>
+                    <button
+                      onClick={() => handleDeleteOrphanAppointment(a.id)}
+                      disabled={resolvingKey === `delapt_${a.id}`}
+                      style={{ backgroundColor: '#7C2D12', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: resolvingKey === `delapt_${a.id}` ? 0.6 : 1 }}
+                    >
+                      {resolvingKey === `delapt_${a.id}` ? 'Eliminando...' : '🗑️ Eliminar'}
                     </button>
                   </div>
                 </div>
@@ -2984,7 +3046,7 @@ setBulkWhatsAppPending(pending);
           const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
-          const confirmationCode = event.confirmation_code || '1986';
+         const confirmationCode = event.confirmation_code || '1986';
           
           const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
