@@ -420,28 +420,16 @@ export default function InteraccionScreen() {
     }
   }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
 
-  const handleCodeConfirmation = useCallback(async () => {
+  // Confirma la llegada con un solo tap — ya no se pide ningún código.
+  const confirmArrival = useCallback(async () => {
     if (!appointment || !user) return;
-
-
-    const enteredCode = confirmationCode.trim();
-    const eventCode = appointment.event.confirmation_code;
-    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '')
-      ? '1986'
-      : eventCode.trim();
-
-    if (enteredCode !== expectedCode) {
-      setCodeError('Código incorrecto.');
-      return;
-    }
-
-    setCodeError('');
 
     try {
       const confirmedAt = new Date().toISOString();
 
       setCheckInPhase('confirmed');
       setConfirmationCode('');
+      setCodeError('');
       if (appointment.event_id) {
         AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
       }
@@ -495,7 +483,11 @@ export default function InteraccionScreen() {
       setCheckInPhase('code_entry');
       setCodeError('Ocurrió un error.');
     }
-  }, [appointment, user, confirmationCode, loadActiveParticipants]);
+  }, [appointment, user, loadActiveParticipants]);
+
+  const handleCodeConfirmation = useCallback(async () => {
+    await confirmArrival();
+  }, [confirmArrival]);
 
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
@@ -1071,35 +1063,14 @@ export default function InteraccionScreen() {
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
-
-            <TextInput
-              style={[styles.codeInput, codeInputFocused && styles.codeInputFocused]}
-              value={confirmationCode}
-              onChangeText={(text) => {
-                setConfirmationCode(text);
-                setCodeError('');
-              }}
-              onFocus={() => setCodeInputFocused(true)}
-              onBlur={() => setCodeInputFocused(false)}
-              placeholder="Código"
-              placeholderTextColor="#999"
-              keyboardType="default"
-              maxLength={10}
-              autoFocus
-            />
-
-            {codeError ? (
-              <Text style={styles.codeErrorText}>{codeError}</Text>
-            ) : null}
+            <Text style={styles.codeEntrySubtitle}>Presiona el botón cuando estés en el lugar</Text>
 
             <TouchableOpacity
-              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
+              style={styles.confirmCodeButton}
               onPress={handleCodeConfirmation}
-              disabled={!confirmationCode.trim()}
               activeOpacity={0.8}
             >
-              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
+              <Text style={styles.confirmCodeButtonText}>Confirmar asistencia</Text>
             </TouchableOpacity>
           </View>
         )}
