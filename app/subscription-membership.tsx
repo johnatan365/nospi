@@ -222,17 +222,8 @@ export default function SubscriptionMembershipScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.introTitle}>Tus eventos, tu plan</Text>
-            <Text style={styles.introSubtitle}>Elige cómo quieres vivir Nospi</Text>
-
-            <View style={styles.planCard}>
-              <View style={styles.planHeaderRow}>
-                <Ionicons name="ticket-outline" size={20} color={nospiColors.gray600} />
-                <Text style={styles.planName}>Por evento</Text>
-              </View>
-              <Text style={styles.planPrice}>${eventPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / evento</Text></Text>
-              <Text style={styles.planDesc}>Ideal si vas de vez en cuando.</Text>
-            </View>
+            <Text style={styles.introTitle}>Acceso ilimitado</Text>
+            <Text style={styles.introSubtitle}>Ve a todos los eventos del mes sin volver a pagar por separado</Text>
 
             <View style={styles.planCardFeatured}>
               <View style={styles.badge}><Text style={styles.badgeText}>Recomendado</Text></View>
