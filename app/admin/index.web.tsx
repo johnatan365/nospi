@@ -3482,6 +3482,7 @@ setBulkWhatsAppPending(pending);
         )}
         </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{(activeFilters > 0 || userSearchQuery.trim()) ? ` de ${users.length}` : ''})</Text>
             <input
               type="text"
