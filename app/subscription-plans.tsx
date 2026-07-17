@@ -154,6 +154,7 @@ export default function SubscriptionPlansScreen() {
   const isProcessing = (m: string) => processingMethod === m;
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showEventMethods, setShowEventMethods] = useState(false);
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -221,6 +222,8 @@ export default function SubscriptionPlansScreen() {
   }, [pseBanks]);
 
   const priceCOP = parseInt(appConfig.event_price, 10) || 30000;
+  const subscriptionPriceCOP = parseInt(appConfig.subscription_price, 10) || 29900;
+  const breakEvenEventsCOP = Math.ceil(subscriptionPriceCOP / priceCOP);
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -1661,7 +1664,7 @@ export default function SubscriptionPlansScreen() {
     <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{
         headerShown: true,
-        title: 'Pago del Evento',
+        title: showEventMethods ? 'Pagar este evento' : 'Confirma tu asistencia',
         headerBackTitle: 'Atrás',
         headerLeft: () => (
           <TouchableOpacity
@@ -1679,8 +1682,47 @@ export default function SubscriptionPlansScreen() {
       
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
-        <Text style={styles.title}>Pago del Evento</Text>
-        <Text style={styles.subtitle}>{`Confirma tu asistencia pagando $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+        {!showEventMethods ? (
+          <>
+            <Text style={styles.title}>¿Cómo quieres ir?</Text>
+            <Text style={styles.subtitle}>Confirma tu asistencia</Text>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 }}
+              onPress={() => setShowEventMethods(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 }}>🎫 Por evento</Text>
+              <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
+                {`$${priceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / evento</Text>
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>Pagas cada vez que vengas a un evento.</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 20, marginBottom: 14, position: 'relative' }}
+              onPress={() => router.push('/subscription-membership')}
+              activeOpacity={0.85}
+            >
+              <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>Recomendado</Text>
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark, marginBottom: 8, marginTop: 4 }}>👑 Suscripción Nospi</Text>
+              <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
+                {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>
+                {`Ve a este y a todos los eventos del mes por menos de lo que cuestan ${breakEvenEventsCOP} eventos diferentes. Conoce gente nueva cada semana, sin volver a pagar por separado.`}
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+        <TouchableOpacity onPress={() => setShowEventMethods(false)} style={{ marginBottom: 12 }}>
+          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>‹ Volver</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Pagar este evento</Text>
+        <Text style={styles.subtitle}>{`$${priceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Total a pagar</Text>
@@ -1713,18 +1755,6 @@ export default function SubscriptionPlansScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
-
-        <TouchableOpacity
-          style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          onPress={() => router.push('/subscription-membership')}
-          activeOpacity={0.85}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>👑 Suscríbete en vez de pagar esta cena</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Acceso ilimitado a todas las cenas del mes</Text>
-          </View>
-          <Text style={{ fontSize: 20, color: nospiColors.purpleMid }}>›</Text>
-        </TouchableOpacity>
 
         {!loadingBalance && virtualBalance >= priceCOP && (
           <TouchableOpacity style={styles.paymentBtn} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
@@ -1796,6 +1826,9 @@ export default function SubscriptionPlansScreen() {
         {/* ========== END TEST BUTTON ========== */}
 				
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
+          </>
+        )}
+
       </ScrollView>
 
       <Modal visible={showSuccessModal} transparent animationType="fade">

@@ -31,7 +31,7 @@ export default function SubscriptionMembershipScreen() {
   const router = useRouter();
   const { user } = useSupabase();
   const { appConfig } = useAppConfig();
-  const subscriptionPrice = parseInt(appConfig.subscription_price, 10) || 39900;
+  const subscriptionPrice = parseInt(appConfig.subscription_price, 10) || 29900;
   const eventPrice = parseInt(appConfig.event_price, 10) || 15000;
 
   const [loading, setLoading] = useState(true);
@@ -143,7 +143,7 @@ export default function SubscriptionMembershipScreen() {
           { text: 'Continuar', onPress: () => router.replace('/subscription-plans') },
         ]);
       } else {
-        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todas las cenas del mes.');
+        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todos los eventos del mes.');
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'No se pudo procesar la suscripción');
@@ -222,7 +222,7 @@ export default function SubscriptionMembershipScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.introTitle}>Tus cenas, tu plan</Text>
+            <Text style={styles.introTitle}>Tus eventos, tu plan</Text>
             <Text style={styles.introSubtitle}>Elige cómo quieres vivir Nospi</Text>
 
             <View style={styles.planCard}>
@@ -230,7 +230,7 @@ export default function SubscriptionMembershipScreen() {
                 <Ionicons name="ticket-outline" size={20} color={nospiColors.gray600} />
                 <Text style={styles.planName}>Por evento</Text>
               </View>
-              <Text style={styles.planPrice}>${eventPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / cena</Text></Text>
+              <Text style={styles.planPrice}>${eventPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / evento</Text></Text>
               <Text style={styles.planDesc}>Ideal si vas de vez en cuando.</Text>
             </View>
 
@@ -241,13 +241,13 @@ export default function SubscriptionMembershipScreen() {
                 <Text style={styles.planName}>Suscripción Nospi</Text>
               </View>
               <Text style={styles.planPrice}>${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text></Text>
-              <Text style={styles.planDesc}>Cenas ilimitadas, todas las que hagamos este mes.</Text>
+              <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos este mes.</Text>
 
               <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Acceso sin límite a todos los eventos del mes</Text></View>
-              <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada cena por separado</Text></View>
+              <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada evento por separado</Text></View>
               <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Cancela cuando quieras</Text></View>
 
-              <Text style={styles.breakEvenText}>Te conviene si vas a {breakEvenEvents}+ cenas al mes</Text>
+              <Text style={styles.breakEvenText}>Te conviene si vas a {breakEvenEvents}+ eventos al mes</Text>
 
               {!showCardForm ? (
                 <TouchableOpacity style={styles.subscribeButton} onPress={() => setShowCardForm(true)} activeOpacity={0.85}>
