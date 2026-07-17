@@ -2470,7 +2470,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                     {resolvingKey === `delapt_${a.id}` ? 'Eliminando...' : '🗑️ Eliminar'}
                                   </button>
                   </div>
-                <</div>
+                </div>
               );
             })
           )}
