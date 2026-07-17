@@ -495,6 +495,9 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [recurringCustomers, setRecurringCustomers] = useState<any[]>([]);
+  const [loadingRecurring, setLoadingRecurring] = useState(false);
+  const [showRecurringPanel, setShowRecurringPanel] = useState(false);
   const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
@@ -3359,6 +3362,42 @@ setBulkWhatsAppPending(pending);
   };
 
   const renderUsers = () => {
+    const loadRecurringCustomers = async () => {
+      setLoadingRecurring(true);
+      try {
+        const { data, error } = await supabase
+        .from('appointments')
+        .select('user_id, event_id, payment_status, status, users(name, email, phone), events(name, date)')
+        .eq('payment_status', 'completed');
+        if (error) { console.error('Error loading recurring customers:', error); return; }
+        const byUser: Record<string, any> = {};
+        (data || []).forEach((apt: any) => {
+          if (!apt.user_id || !apt.users) return;
+          if (!byUser[apt.user_id]) byUser[apt.user_id] = { user: apt.users, eventsMap: new Map() };
+          byUser[apt.user_id].eventsMap.set(apt.event_id, apt);
+        });
+        const result = Object.values(byUser)
+        .map((u: any) => ({
+          name: u.user.name,
+          email: u.user.email,
+          phone: u.user.phone,
+          totalEventos: u.eventsMap.size,
+          eventos: Array.from(u.eventsMap.values()).map((a: any) => ({
+            nombre: a.events?.name || 'Evento',
+            fecha: a.events?.date,
+            asistio: a.status === 'anterior',
+          })),
+        }))
+        .filter((u: any) => u.totalEventos > 1)
+        .sort((a: any, b: any) => b.totalEventos - a.totalEventos);
+        setRecurringCustomers(result);
+      } catch (e) {
+        console.error('Failed to load recurring customers:', e);
+      } finally {
+        setLoadingRecurring(false);
+      }
+    };
+    
     const onSortUsers = makeSort(setUserSortCol, setUserSortAsc, userSortCol, userSortAsc);
     const searchedUsers = userSearchQuery.trim()
       ? users.filter((u: any) => {
@@ -3386,6 +3425,63 @@ setBulkWhatsAppPending(pending);
     ];
     return (
       <View style={styles.listContainer}>
+        <div style={{ backgroundColor: '#F5F3FF', borderRadius: 16, padding: 20, marginBottom: 24, border: '1px solid #DDD6FE' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#6B21A8' }}>Clientes recurrentes</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+            Personas con mas de una compra completada en eventos distintos (excluye canceladas o reembolsadas).
+            </Text>
+            </div>
+          <TouchableOpacity
+            style={{ backgroundColor: '#6B21A8', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 }}
+            onPress={() => { setShowRecurringPanel(!showRecurringPanel); if (!showRecurringPanel) loadRecurringCustomers(); }}
+            >
+          <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>
+            {showRecurringPanel ? 'Ocultar' : 'Ver clientes recurrentes'}
+          </Text>
+          </TouchableOpacity>
+          </div>
+          {showRecurringPanel && (
+        <div style={{ marginTop: 16 }}>
+          {loadingRecurring ? (
+          <Text style={{ color: '#6B7280' }}>Cargando...</Text>
+          ) : recurringCustomers.length === 0 ? (
+          <Text style={{ color: '#6B7280' }}>No hay clientes recurrentes todavia.</Text>
+          ) : (
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+          <tr style={{ borderBottom: '2px solid #DDD6FE' }}>
+          <th style={{ textAlign: 'left', padding: '8px 10px', color: '#6B21A8' }}>Cliente</th>
+          <th style={{ textAlign: 'left', padding: '8px 10px', color: '#6B21A8' }}>Contacto</th>
+          <th style={{ textAlign: 'center', padding: '8px 10px', color: '#6B21A8' }}>Compras</th>
+          <th style={{ textAlign: 'left', padding: '8px 10px', color: '#6B21A8' }}>Eventos</th>
+          </tr>
+          </thead>
+          <tbody>
+            {recurringCustomers.map((c: any, idx: number) => (
+            <tr key={idx} style={{ borderBottom: '1px solid #EDE9FE' }}>
+            <td style={{ padding: '8px 10px', fontWeight: '600' }}>{c.name}</td>
+            <td style={{ padding: '8px 10px', color: '#6B7280' }}>{c.email}<br />{c.phone}</td>
+            <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700' }}>{c.totalEventos}</td>
+            <td style={{ padding: '8px 10px' }}>
+              {c.eventos.map((e: any, i: number) => (
+              <div key={i} style={{ color: e.asistio ? '#059669' : '#9CA3AF' }}>
+                {e.nombre}{e.fecha ? ` - ${new Date(e.fecha).toLocaleDateString('es-CO')}` : ''}{e.asistio ? ' (asistio)' : ' (pendiente)'}
+              </div>
+              ))}
+            </td>
+            </tr>
+            ))}
+          </tbody>
+          </table>
+          </div>
+        )}
+        </div>
+        )}
+        </div>
+      </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{(activeFilters > 0 || userSearchQuery.trim()) ? ` de ${users.length}` : ''})</Text>
