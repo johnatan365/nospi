@@ -184,10 +184,23 @@ export default function SubscriptionMembershipScreen() {
           userId: currentUser.id,
           userEmail: currentUser.email || '',
           planType: '1_month',
+          redirectUrl: 'https://app.nospi.co/payment-callback',
         }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'No se pudo procesar la suscripción');
+
+      if (result.status !== 'APPROVED') {
+        // Estado intermedio: el banco pidió una verificación adicional (3DS) y
+        // todavía no se activó la suscripción. No mostramos éxito falso.
+        if (result.status === 'PENDING' && result.threeDsUrl && typeof window !== 'undefined') {
+          showAlert('Verificación requerida', 'Tu banco pidió una verificación adicional. Te vamos a redirigir para completarla.');
+          window.location.href = result.threeDsUrl;
+          return;
+        }
+        showAlert('Pago en verificación', 'Tu pago está siendo verificado por el banco. Si no se activa en unos minutos, intenta de nuevo o usa otra tarjeta.');
+        return;
+      }
 
       setShowCardForm(false);
       setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder('');
