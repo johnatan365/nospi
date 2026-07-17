@@ -87,15 +87,20 @@ export default function SubscriptionMembershipScreen() {
       const currentUser = session?.user ?? user;
       if (!currentUser) throw new Error('Sesión no encontrada');
 
-      const [expMonth, expYear] = cardExpiry.split('/');
-      const expYearFull = expYear?.trim().length === 4 ? expYear.trim().slice(2) : expYear?.trim();
+      const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
+      const expMonth = (expMonthRaw || '').trim();
+      const expYearTrimmed = (expYearRaw || '').trim();
+      if (!expMonth || !expYearTrimmed) {
+        throw new Error('Fecha de vencimiento inválida. Usa el formato MM/AA.');
+      }
+      const expYearFull = expYearTrimmed.length === 4 ? expYearTrimmed.slice(2) : expYearTrimmed;
 
       const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
         body: JSON.stringify({
           number: cardNumber.replace(/\s/g, ''),
-          exp_month: expMonth?.trim(),
+          exp_month: expMonth,
           exp_year: expYearFull,
           cvc: cardCvc,
           card_holder: cardHolder,
@@ -241,12 +246,12 @@ export default function SubscriptionMembershipScreen() {
                 </TouchableOpacity>
               ) : (
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                  <TextInput style={styles.input} placeholder="Número de tarjeta" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" value={cardNumber} onChangeText={setCardNumber} />
+                  <TextInput style={styles.input} placeholder="Número de tarjeta" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" value={cardNumber} onChangeText={setCardNumber} autoComplete="cc-number" textContentType="creditCardNumber" importantForAutofill="yes" />
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/AA" placeholderTextColor={nospiColors.gray400} value={cardExpiry} onChangeText={setCardExpiry} />
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" secureTextEntry value={cardCvc} onChangeText={setCardCvc} />
+                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/AA" placeholderTextColor={nospiColors.gray400} value={cardExpiry} onChangeText={setCardExpiry} autoComplete="cc-exp" importantForAutofill="yes" />
+                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
                   </View>
-                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} />
+                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <TouchableOpacity
                     style={styles.subscribeButton}
                     onPress={() => { Keyboard.dismiss(); handleSubscribe(); }}
