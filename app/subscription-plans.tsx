@@ -1724,36 +1724,6 @@ export default function SubscriptionPlansScreen() {
         <Text style={styles.title}>Pagar este evento</Text>
         <Text style={styles.subtitle}>{`$${priceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Total a pagar</Text>
-          <Text style={styles.priceAmount}>{`$${priceCOP.toLocaleString('es-CO')}`}</Text>
-          <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
-        </View>
-
-        <View style={styles.benefitsCard}>
-          <View style={styles.benefitRow}>
-            <Text style={styles.benefitIcon}>🌟</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Acceso al evento</Text>
-              <Text style={styles.benefitDesc}>Confirma tu lugar en el evento seleccionado</Text>
-            </View>
-          </View>
-          <View style={styles.benefitRow}>
-            <Text style={styles.benefitIcon}>🎉</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Conoce gente nueva</Text>
-              <Text style={styles.benefitDesc}>Conecta con personas afines en un ambiente relajado.</Text>
-            </View>
-          </View>
-          <View style={[styles.benefitRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.benefitIcon, { color: '#E53935' }]}>♥</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Experiencia única</Text>
-              <Text style={styles.benefitDesc}>Disfruta de una experiencia social inolvidable.</Text>
-            </View>
-          </View>
-        </View>
-
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
 
         {!loadingBalance && virtualBalance >= priceCOP && (
