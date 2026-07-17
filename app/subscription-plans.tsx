@@ -234,34 +234,6 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  useEffect(() => {
-    const checkSubscriptionAndAutoConfirm = async () => {
-      if (!user?.id) { setCheckingSubscription(false); return; }
-      try {
-        const { data, error } = await supabase.rpc('has_active_subscription', { p_user_id: user.id });
-        const active = !error && data === true;
-        setHasActiveSubscription(active);
-
-        if (active) {
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          if (pendingEventId) {
-            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
-            if (ok) {
-              setShowSuccessModal(true);
-            } else {
-              setAutoConfirmError(true);
-            }
-          }
-        }
-      } catch {
-        setHasActiveSubscription(false);
-      } finally {
-        setCheckingSubscription(false);
-      }
-    };
-    checkSubscriptionAndAutoConfirm();
-  }, [user?.id, confirmAppointment]);
-
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
   const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
@@ -362,6 +334,34 @@ export default function SubscriptionPlansScreen() {
       return false;
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    const checkSubscriptionAndAutoConfirm = async () => {
+      if (!user?.id) { setCheckingSubscription(false); return; }
+      try {
+        const { data, error } = await supabase.rpc('has_active_subscription', { p_user_id: user.id });
+        const active = !error && data === true;
+        setHasActiveSubscription(active);
+
+        if (active) {
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          if (pendingEventId) {
+            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
+            if (ok) {
+              setShowSuccessModal(true);
+            } else {
+              setAutoConfirmError(true);
+            }
+          }
+        }
+      } catch {
+        setHasActiveSubscription(false);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    };
+    checkSubscriptionAndAutoConfirm();
+  }, [user?.id, confirmAppointment]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
