@@ -3105,20 +3105,13 @@ setBulkWhatsAppPending(pending);
   const exportAllParticipantsToExcel = async () => {
     setExportingAll(true);
     try {
-      // Traer todas las citas con info de usuario y evento
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id, user_id, event_id, status, payment_status, created_at,
-          users!inner (
-            id, name, email, phone, city, country,
-            interested_in, gender, age, age_range_min, age_range_max
-          ),
-          events!inner (
-            id, name, type, city, date, start_time, event_status
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Traer todas las citas con info de usuario y evento usando el RPC
+      // get_all_participants_export_for_admin (SECURITY DEFINER). No se puede
+      // usar un select directo con join a "users" porque las políticas RLS de
+      // esa tabla solo dejan a cada usuario ver su propia fila: un join normal
+      // (users!inner) descartaría silenciosamente las filas de todos los demás
+      // usuarios y el admin terminaría exportando solo su propio registro.
+      const { data, error } = await supabase.rpc('get_all_participants_export_for_admin');
 
       if (error) { window.alert('Error al cargar datos: ' + error.message); return; }
       if (!data || data.length === 0) { window.alert('No hay participantes registrados.'); return; }
@@ -3144,35 +3137,33 @@ setBulkWhatsAppPending(pending);
         s === 'published' ? 'Publicado' : s === 'closed' ? 'Cerrado' : 'Borrador';
 
       const rows = data.map((apt: any, i: number) => {
-        const u = apt.users;
-        const ev = apt.events;
         const rKey = `${apt.user_id}_${apt.event_id}`;
         const rData = ratingsMap[rKey];
         const avgRating = rData ? (rData.sum / rData.count).toFixed(1) : '';
         const ratingStr = rData ? `${avgRating}/5 (${rData.count} votos)` : 'Sin calificación';
 
-        const eventDate = ev.start_time
-          ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
-          : ev.date || '';
+        const eventDate = apt.event_start_time
+          ? new Date(apt.event_start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+          : apt.event_date || '';
 
-        const eventName = ev.name || `${ev.type} - ${ev.city}`;
+        const eventName = apt.event_name || `${apt.event_type} - ${apt.event_city}`;
 
         return {
           '#': i + 1,
           'Evento': eventName,
           'Fecha evento': eventDate,
-          'Estado evento': eventStatusLabel(ev.event_status),
+          'Estado evento': eventStatusLabel(apt.event_status),
           'Estado participante': statusLabel(apt.status),
-          'Nombre': u.name || '',
-          'Email': u.email || '',
-          'Teléfono': u.phone || '',
-          'Ciudad': u.city || '',
-          'País': u.country || '',
-          'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
-          'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
-          'Edad': u.age || '',
-          'Rango edad mín': u.age_range_min || 18,
-          'Rango edad máx': u.age_range_max || 99,
+          'Nombre': apt.user_name || '',
+          'Email': apt.user_email || '',
+          'Teléfono': apt.user_phone || '',
+          'Ciudad': apt.user_city || '',
+          'País': apt.user_country || '',
+          'Género': apt.user_gender === 'hombre' ? 'Hombre' : apt.user_gender === 'mujer' ? 'Mujer' : 'No especificado',
+          'Interesado en': apt.user_interested_in === 'hombres' ? 'Hombres' : apt.user_interested_in === 'mujeres' ? 'Mujeres' : apt.user_interested_in === 'ambos' ? 'Ambos' : 'No especificado',
+          'Edad': apt.user_age || '',
+          'Rango edad mín': apt.user_age_range_min || 18,
+          'Rango edad máx': apt.user_age_range_max || 99,
           'Calificación recibida': ratingStr,
         };
       });
@@ -3303,19 +3294,14 @@ setBulkWhatsAppPending(pending);
   const loadParticipantAttendees = async (eventId: string) => {
     setLoadingParticipantAttendees(true);
     try {
-      // Traer TODOS los estados (confirmada, cancelada, anterior)
+      // Traer TODOS los estados (confirmada, cancelada, anterior).
+      // Usamos el RPC get_event_attendees_for_admin (SECURITY DEFINER) en vez de
+      // un select directo con join a "users", porque las políticas RLS de la
+      // tabla users solo permiten a cada usuario ver su propia fila: un join
+      // normal (users!inner) descarta silenciosamente todas las filas de otros
+      // usuarios y el admin termina viendo solo su propio registro.
       const [aptsResult, ratingsResult] = await Promise.all([
-        supabase
-          .from('appointments')
-          .select(`
-            id, user_id, event_id, status, payment_status, created_at, purchase_whatsapp_sent_at,
-            users!inner (
-              id, name, email, phone, city, country,
-              interested_in, gender, age, age_range_min, age_range_max
-            )
-          `)
-          .eq('event_id', eventId)
-          .order('created_at', { ascending: false }),
+        supabase.rpc('get_event_attendees_for_admin', { p_event_id: eventId }),
         supabase
           .from('event_ratings')
           .select('rated_user_id, rating')
@@ -3342,10 +3328,10 @@ setBulkWhatsAppPending(pending);
           avgRating,
           ratingCount: rData?.count || 0,
           users: {
-            id: att.users.id, name: att.users.name, email: att.users.email,
-            phone: att.users.phone, city: att.users.city, country: att.users.country,
-            interested_in: att.users.interested_in, gender: att.users.gender,
-            age: att.users.age, age_range_min: att.users.age_range_min, age_range_max: att.users.age_range_max,
+            id: att.user_id, name: att.user_name, email: att.user_email,
+            phone: att.user_phone, city: att.user_city, country: att.user_country,
+            interested_in: att.user_interested_in, gender: att.user_gender,
+            age: att.user_age, age_range_min: att.user_age_range_min, age_range_max: att.user_age_range_max,
           },
         };
       });
@@ -3425,15 +3411,23 @@ setBulkWhatsAppPending(pending);
     const loadRecurringCustomers = async () => {
       setLoadingRecurring(true);
       try {
-        const { data, error } = await supabase
-        .from('appointments')
-        .select('user_id, event_id, payment_status, status, users(name, email, phone), events(name, date)')
-        .eq('payment_status', 'completed');
+        // Usamos el RPC get_all_appointments_for_admin (SECURITY DEFINER) en vez
+        // de un select directo con join a "users"/"events": las políticas RLS de
+        // "users" solo dejan a cada usuario ver su propia fila, así que un join
+        // normal (users(...)) devolvía "users: null" para todos los demás y el
+        // filtro `if (!apt.users) return;` descartaba casi todas las citas.
+        const { data, error } = await supabase.rpc('get_all_appointments_for_admin');
         if (error) { console.error('Error loading recurring customers:', error); return; }
+        const completed = (data || []).filter((apt: any) => apt.payment_status === 'completed');
         const byUser: Record<string, any> = {};
-        (data || []).forEach((apt: any) => {
-          if (!apt.user_id || !apt.users || apt.status === 'cancelada') return;
-          if (!byUser[apt.user_id]) byUser[apt.user_id] = { user: apt.users, eventsMap: new Map() };
+        completed.forEach((apt: any) => {
+          if (!apt.user_id || apt.status === 'cancelada') return;
+          if (!byUser[apt.user_id]) {
+            byUser[apt.user_id] = {
+              user: { name: apt.user_name, email: apt.user_email, phone: apt.user_phone },
+              eventsMap: new Map(),
+            };
+          }
           byUser[apt.user_id].eventsMap.set(apt.event_id, apt);
         });
         const result = Object.values(byUser)
@@ -3443,8 +3437,8 @@ setBulkWhatsAppPending(pending);
           phone: u.user.phone,
           totalEventos: u.eventsMap.size,
           eventos: Array.from(u.eventsMap.values()).map((a: any) => ({
-            nombre: a.events?.name || 'Evento',
-            fecha: a.events?.date,
+            nombre: a.event_name || 'Evento',
+            fecha: a.event_date,
             asistio: a.status === 'anterior',
           })),
         }))
