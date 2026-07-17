@@ -294,12 +294,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   eventNameCompact: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#880E4F',
   },
   eventMetaCompact: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     marginTop: 2,
   },
