@@ -333,7 +333,17 @@ export default function SubscriptionMembershipScreen() {
                     })()}
                   </View>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/AA" placeholderTextColor={nospiColors.gray400} value={cardExpiry} onChangeText={setCardExpiry} autoComplete="cc-exp" importantForAutofill="yes" />
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="MM/AA"
+                      placeholderTextColor={nospiColors.gray400}
+                      value={cardExpiry}
+                      onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(digits.length >= 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits); }}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      autoComplete="cc-exp"
+                      importantForAutofill="yes"
+                    />
                     <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
                   </View>
                   <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
