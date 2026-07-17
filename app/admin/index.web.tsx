@@ -554,6 +554,25 @@ export default function AdminPanelScreen() {
     confirmation_code: '1986',
   });
 
+  const [mapsLinkCheck, setMapsLinkCheck] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; lat?: number; lng?: number; error?: string }>({ status: 'idle' });
+
+  const checkMapsLink = async (link: string) => {
+    if (!link || !link.trim()) return;
+    setMapsLinkCheck({ status: 'checking' });
+    try {
+      const { data, error } = await supabase.functions.invoke('preview-event-location', {
+        body: { maps_link: link },
+      });
+      if (error || !data || data.success === false) {
+        setMapsLinkCheck({ status: 'fail', error: (data && data.error) || error?.message });
+        return;
+      }
+      setMapsLinkCheck({ status: 'ok', lat: data.lat, lng: data.lng });
+    } catch (e) {
+      setMapsLinkCheck({ status: 'fail', error: e?.message });
+    }
+  };
+
   // Event questions management (for specific event)
   const [eventQuestions, setEventQuestions] = useState<{
     divertido: string[];
@@ -1292,6 +1311,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       event_status: 'draft',
       confirmation_code: '1986',
     });
+    setMapsLinkCheck({ status: 'idle' });
     // Load default questions for new event
     // No precargar preguntas hardcodeadas — saveEventQuestions copiará
     // automáticamente las preguntas globales de la DB al crear el evento.
@@ -1346,6 +1366,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       event_status: event.event_status || 'draft',
       confirmation_code: event.confirmation_code || '1986',
     });
+    setMapsLinkCheck({ status: 'idle' });
 
     // Load existing questions for this event
     try {
@@ -1554,6 +1575,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         event_status: 'draft',
         confirmation_code: '1986',
       });
+      setMapsLinkCheck({ status: 'idle' });
       setEventQuestions({
         divertido: [],
         sensual: [],
@@ -4902,8 +4924,18 @@ setBulkWhatsAppPending(pending);
                 style={styles.input}
                 placeholder="https://maps.google.com/..."
                 value={eventForm.maps_link}
-                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+                onChangeText={(text) => { setEventForm({ ...eventForm, maps_link: text }); if (mapsLinkCheck.status !== 'idle') setMapsLinkCheck({ status: 'idle' }); }}
+                onBlur={() => checkMapsLink(eventForm.maps_link)}
               />
+              {mapsLinkCheck.status === 'checking' && (
+                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>Verificando ubicación...</Text>
+              )}
+              {mapsLinkCheck.status === 'ok' && (
+                <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Ubicación detectada (lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)})</Text>
+              )}
+              {mapsLinkCheck.status === 'fail' && (
+                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ No se pudo detectar la ubicación automáticamente. Usa un link de "Compartir ubicación" desde el pin en Google Maps (no uno de "Cómo llegar").</Text>
+              )}
 
               <Text style={styles.inputLabel}>Máximo de Participantes</Text>
               <TextInput
