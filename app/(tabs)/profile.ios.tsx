@@ -852,7 +852,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.section} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
-          <Text style={styles.sectionTitle}>Suscripción Nospi</Text>
+          <Text style={styles.sectionTitle}>Suscripción mensual Nospi</Text>
           <Text style={styles.sectionSubtitle}>Acceso ilimitado a todos los eventos del mes</Text>
         </TouchableOpacity>
 

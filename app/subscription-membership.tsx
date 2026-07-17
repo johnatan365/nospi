@@ -199,7 +199,7 @@ export default function SubscriptionMembershipScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Suscripción Nospi</Text>
+        <Text style={styles.headerTitle}>Suscripción mensual Nospi</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -238,7 +238,7 @@ export default function SubscriptionMembershipScreen() {
               <View style={styles.badge}><Text style={styles.badgeText}>Recomendado</Text></View>
               <View style={styles.planHeaderRow}>
                 <Ionicons name="ribbon-outline" size={20} color={nospiColors.purpleMid} />
-                <Text style={styles.planName}>Suscripción Nospi</Text>
+                <Text style={styles.planName}>Suscripción mensual Nospi</Text>
               </View>
               <Text style={styles.planPrice}>${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text></Text>
               <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos este mes.</Text>
