@@ -45,7 +45,10 @@ export default function SubscriptionMembershipScreen() {
   const [cardHolder, setCardHolder] = useState('');
 
   const loadSubscription = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data } = await supabase
       .from('subscriptions')
