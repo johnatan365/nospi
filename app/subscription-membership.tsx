@@ -7,7 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -31,12 +31,13 @@ export default function SubscriptionMembershipScreen() {
   const router = useRouter();
   const { user } = useSupabase();
   const { appConfig } = useAppConfig();
+  const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
   const subscriptionPrice = parseInt(appConfig.subscription_price, 10) || 29900;
   const eventPrice = parseInt(appConfig.event_price, 10) || 15000;
 
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
-  const [showCardForm, setShowCardForm] = useState(false);
+  const [showCardForm, setShowCardForm] = useState(startCardForm === '1');
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 

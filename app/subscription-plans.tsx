@@ -1701,18 +1701,33 @@ export default function SubscriptionPlansScreen() {
 
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 20, marginBottom: 14, position: 'relative' }}
-              onPress={() => router.push('/subscription-membership')}
+              onPress={() => router.push('/subscription-membership?startCardForm=1')}
               activeOpacity={0.85}
             >
               <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>Recomendado</Text>
               </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark, marginBottom: 8, marginTop: 4 }}>👑 Suscripción mensual Nospi</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark, marginBottom: 8, marginTop: 4 }}>🏅 Suscripción mensual Nospi</Text>
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
                 {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
               </Text>
-              <Text style={{ fontSize: 13, color: '#6B7280' }}>
-                {`Ve a este y a todos los eventos del mes por menos de lo que cuestan ${breakEvenEventsCOP} eventos diferentes. Conoce gente nueva cada semana, sin volver a pagar por separado.`}
+              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Acceso sin límite a todos los eventos del mes</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Sin pagar cada evento por separado</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Cancela cuando quieras</Text>
+              </View>
+
+              <Text style={{ fontSize: 12, color: nospiColors.purpleMid, fontWeight: '700', marginBottom: 4 }}>
+                {`Te conviene si vas a ${breakEvenEventsCOP}+ eventos al mes`}
               </Text>
             </TouchableOpacity>
           </>
