@@ -159,6 +159,12 @@ export default function SubscriptionPlansScreen() {
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
 
+  // Suscripción: si el usuario tiene una suscripción activa, se confirma la
+  // asistencia gratis sin pasar por ningún método de pago.
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [autoConfirmError, setAutoConfirmError] = useState(false);
+
   // Card form
   const [showCardForm, setShowCardForm] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
@@ -228,9 +234,37 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
+  useEffect(() => {
+    const checkSubscriptionAndAutoConfirm = async () => {
+      if (!user?.id) { setCheckingSubscription(false); return; }
+      try {
+        const { data, error } = await supabase.rpc('has_active_subscription', { p_user_id: user.id });
+        const active = !error && data === true;
+        setHasActiveSubscription(active);
+
+        if (active) {
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          if (pendingEventId) {
+            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
+            if (ok) {
+              setShowSuccessModal(true);
+            } else {
+              setAutoConfirmError(true);
+            }
+          }
+        }
+      } catch {
+        setHasActiveSubscription(false);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    };
+    checkSubscriptionAndAutoConfirm();
+  }, [user?.id, confirmAppointment]);
+
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
-  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
+  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
     try {
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return false;
@@ -1381,6 +1415,26 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
+  if (checkingSubscription) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15 }}>Verificando tu cuenta…</Text>
+      </LinearGradient>
+    );
+  }
+
+  if (hasActiveSubscription && !autoConfirmError) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15, textAlign: 'center' }}>
+          Tienes suscripción activa — confirmando tu asistencia sin costo…
+        </Text>
+      </LinearGradient>
+    );
+  }
+
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -1659,6 +1713,18 @@ export default function SubscriptionPlansScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
+
+        <TouchableOpacity
+          style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          onPress={() => router.push('/subscription-membership')}
+          activeOpacity={0.85}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>👑 Suscríbete en vez de pagar esta cena</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Acceso ilimitado a todas las cenas del mes</Text>
+          </View>
+          <Text style={{ fontSize: 20, color: nospiColors.purpleMid }}>›</Text>
+        </TouchableOpacity>
 
         {!loadingBalance && virtualBalance >= priceCOP && (
           <TouchableOpacity style={styles.paymentBtn} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>

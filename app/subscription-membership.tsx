@@ -9,6 +9,7 @@ import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -135,7 +136,15 @@ export default function SubscriptionMembershipScreen() {
       setShowCardForm(false);
       setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder('');
       await loadSubscription();
-      Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todas las cenas del mes.');
+
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      if (pendingEventId) {
+        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Vamos a confirmar tu asistencia sin costo.', [
+          { text: 'Continuar', onPress: () => router.replace('/subscription-plans') },
+        ]);
+      } else {
+        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todas las cenas del mes.');
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'No se pudo procesar la suscripción');
     } finally {
