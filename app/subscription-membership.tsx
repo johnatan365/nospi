@@ -188,7 +188,19 @@ export default function SubscriptionMembershipScreen() {
         }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'No se pudo procesar la suscripción');
+      if (!response.ok) {
+        const extra = result.bankResponse?.data?.payment_method?.extra;
+        const extraDetail = extra
+          ? [extra.external_error_message, extra.processor_response_code, extra.response_code]
+              .filter(Boolean)
+              .join(' | ')
+          : '';
+        const sourceMsg = result.bankResponse?.error?.messages
+          ? Object.values(result.bankResponse.error.messages).flat().join(', ')
+          : '';
+        const fullMsg = [result.error, extraDetail, sourceMsg].filter(Boolean).join(' — ');
+        throw new Error(fullMsg || 'No se pudo procesar la suscripción');
+      }
 
       if (result.status !== 'APPROVED') {
         // Estado intermedio: el banco pidió una verificación adicional (3DS) y
