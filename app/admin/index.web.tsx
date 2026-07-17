@@ -472,6 +472,7 @@ export default function AdminPanelScreen() {
 
   // App config state
   const [configEventPrice, setConfigEventPrice] = useState('');
+  const [configSubscriptionPrice, setConfigSubscriptionPrice] = useState('');
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
   const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
@@ -681,6 +682,7 @@ export default function AdminPanelScreen() {
     if (error || !data) return;
     for (const row of data) {
       if (row.key === 'event_price') setConfigEventPrice(row.value);
+      if (row.key === 'subscription_price') setConfigSubscriptionPrice(row.value);
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
       if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
@@ -693,6 +695,7 @@ export default function AdminPanelScreen() {
     try {
       const rows = [
         { key: 'event_price', value: configEventPrice.trim() },
+        { key: 'subscription_price', value: configSubscriptionPrice.trim() },
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
         { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
@@ -2520,6 +2523,30 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             />
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
               Actualmente: <strong>$ {Number(configEventPrice || 0).toLocaleString('es-CO')} COP</strong>
+            </div>
+          </div>
+
+          {/* Suscripción */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #059669' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              👑 Precio de Suscripción Mensual
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
+              Valor mensual en COP para acceso ilimitado a todos los eventos
+            </div>
+            <input
+              type="number"
+              value={configSubscriptionPrice}
+              onChange={(e) => setConfigSubscriptionPrice(e.target.value)}
+              placeholder="39900"
+              style={{
+                width: '100%', backgroundColor: '#ECFDF5', border: '2px solid #A7F3D0',
+                borderRadius: 10, padding: '12px 14px', fontSize: 18, fontWeight: 700,
+                color: '#059669', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
+              Actualmente: <strong>$ {Number(configSubscriptionPrice || 0).toLocaleString('es-CO')} COP/mes</strong>
             </div>
           </div>
 

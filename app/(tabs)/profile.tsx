@@ -901,6 +901,11 @@ export default function ProfileScreen() {
           <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.section} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
+          <Text style={styles.sectionTitle}>Suscripción Nospi</Text>
+          <Text style={styles.sectionSubtitle}>Acceso ilimitado a todos los eventos del mes</Text>
+        </TouchableOpacity>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Soporte</Text>
           <Text style={styles.sectionSubtitle}>¿Necesitas ayuda? Contáctanos</Text>

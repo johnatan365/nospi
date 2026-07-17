@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 
 export interface AppConfig {
   event_price: string;
+  subscription_price: string;
   support_email: string;
   support_whatsapp: string;
   test_payment_enabled: string; // 'true' | 'false'
@@ -9,6 +10,7 @@ export interface AppConfig {
 
 const DEFAULTS: AppConfig = {
   event_price: '30000',
+  subscription_price: '39900',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',
@@ -41,6 +43,7 @@ export async function getAppConfig(): Promise<AppConfig> {
     const config: AppConfig = { ...DEFAULTS };
     for (const row of data) {
       if (row.key === 'event_price') config.event_price = row.value;
+      if (row.key === 'subscription_price') config.subscription_price = row.value;
       if (row.key === 'support_email') config.support_email = row.value;
       if (row.key === 'support_whatsapp') config.support_whatsapp = row.value;
       if (row.key === 'test_payment_enabled') config.test_payment_enabled = row.value;
