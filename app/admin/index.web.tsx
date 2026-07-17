@@ -1056,7 +1056,49 @@ export default function AdminPanelScreen() {
     }
   };
 
-  // Para el botón de WhatsApp en la tabla general de Usuarios, donde no hay un
+const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
+      const confirmed = window.confirm('¿Eliminar este registro de pago? Esta acción no se puede deshacer.');
+      if (!confirmed) return;
+      setResolvingKey(`delpay_${paymentAttemptId}`);
+      try {
+              const { error } = await supabase
+                .from('payment_attempts')
+                .delete()
+                .eq('id', paymentAttemptId);
+              if (error) {
+                        window.alert('Error al eliminar: ' + error.message);
+                        return;
+              }
+              await loadDashboardData();
+      } catch (e: any) {
+              window.alert('Error inesperado: ' + e.message);
+      } finally {
+              setResolvingKey(null);
+      }
+};
+  
+    const handleDeleteOrphanAppointment = async (appointmentId: string) => {
+          const confirmed = window.confirm('¿Eliminar esta cita por completo? Esta acción no se puede deshacer.');
+          if (!confirmed) return;
+          setResolvingKey(`delapt_${appointmentId}`);
+          try {
+                  const { error } = await supabase
+                    .from('appointments')
+                    .delete()
+                    .eq('id', appointmentId);
+                  if (error) {
+                            window.alert('Error al eliminar: ' + error.message);
+                            return;
+                  }
+                  await loadDashboardData();
+          } catch (e: any) {
+                  window.alert('Error inesperado: ' + e.message);
+          } finally {
+                  setResolvingKey(null);
+          }
+    };
+  
+    // Para el botón de WhatsApp en la tabla general de Usuarios, donde no hay un
   // evento único de contexto: usa la próxima cita confirmada de la persona
   // (o la más reciente, si ya no tiene ninguna futura). Devuelve la cita
   // completa (no solo el evento) para poder marcarla como "WhatsApp enviado".
@@ -2371,6 +2413,17 @@ export default function AdminPanelScreen() {
                   >
                     {resolvingKey === key ? 'Agregando...' : '✅ Agregar cita'}
                   </button>
+                                <button
+                                                  onClick={() => handleDeletePaymentAttempt(pa.id)}
+                                                  disabled={resolvingKey === `delpay_${pa.id}`}
+                                                  style={{
+                                                                      backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: 8,
+                                                                      padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                                                                      opacity: resolvingKey === `delpay_${pa.id}` ? 0.6 : 1,
+                                                  }}
+                                                >
+                                  {resolvingKey === `delpay_${pa.id}` ? 'Eliminando...' : '🗑️ Eliminar'}
+                                </button>
                 </div>
               );
             })
@@ -2409,6 +2462,13 @@ export default function AdminPanelScreen() {
                     >
                       Cancelar cita
                     </button>
+                                  <button
+                                                    onClick={() => handleDeleteOrphanAppointment(a.id)}
+                                                    disabled={resolvingKey === `delapt_${a.id}`}
+                                                    style={{ backgroundColor: '#7C2D12', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: resolvingKey === `delapt_${a.id}` ? 0.6 : 1 }}
+                                                  >
+                                    {resolvingKey === `delapt_${a.id}` ? 'Eliminando...' : '🗑️ Eliminar'}
+                                  </button>
                   </div>
                 </div>
               );
