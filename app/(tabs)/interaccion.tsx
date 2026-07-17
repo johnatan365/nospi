@@ -37,6 +37,9 @@ interface Event {
   current_question: string | null;
   current_question_starter_id: string | null;
   event_status?: 'draft' | 'published' | 'closed';
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number | null;
 }
 
 interface Appointment {
@@ -72,6 +75,21 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
+const DEFAULT_GPS_RADIUS_METERS = 150;
+
+// Distancia en metros entre dos coordenadas (fórmula de Haversine)
+function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // radio de la Tierra en metros
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -96,6 +114,8 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [startingExperience, setStartingExperience] = useState(false);
+  const [checkingGps, setCheckingGps] = useState(false);
+  const [gpsError, setGpsError] = useState('');
 
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -347,7 +367,10 @@ export default function InteraccionScreen() {
             answered_users,
             current_question,
             current_question_starter_id,
-            event_status
+            event_status,
+            latitude,
+            longitude,
+            radius_meters
           )
         `)
         .eq('user_id', user.id)
@@ -420,9 +443,77 @@ export default function InteraccionScreen() {
     }
   }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
 
-  // Confirma la llegada con un solo tap — ya no se pide ningún código.
+  // Obtiene la posición GPS actual del dispositivo, funcionando tanto en web
+  // (navigator.geolocation) como en nativo (expo-location).
+  const getCurrentGpsPosition = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
+    if (Platform.OS === 'web') {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        setGpsError('Tu navegador no soporta ubicación GPS.');
+        return null;
+      }
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          (err) => {
+            if (err.code === 1) {
+              setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
+            } else {
+              setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
+            }
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      });
+    }
+
+    try {
+      const Location = require('expo-location');
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
+        return null;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    } catch (error) {
+      setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
+      return null;
+    }
+  }, []);
+
+  // Confirma la llegada solo si el GPS del dispositivo coincide con el del
+  // evento dentro del radio permitido (por defecto 150 metros).
   const confirmArrival = useCallback(async () => {
-    if (!appointment || !user) return;
+    if (!appointment || !user || checkingGps) return;
+
+    setGpsError('');
+
+    const eventLat = appointment.event.latitude;
+    const eventLng = appointment.event.longitude;
+
+    if (eventLat === null || eventLat === undefined || eventLng === null || eventLng === undefined) {
+      setGpsError('La ubicación del evento aún no está configurada. Contacta a soporte por WhatsApp.');
+      return;
+    }
+
+    setCheckingGps(true);
+    const currentPosition = await getCurrentGpsPosition();
+    setCheckingGps(false);
+
+    if (!currentPosition) {
+      // getCurrentGpsPosition ya dejó el mensaje de error correspondiente
+      return;
+    }
+
+    const allowedRadius = appointment.event.radius_meters ?? DEFAULT_GPS_RADIUS_METERS;
+    const distance = distanceInMeters(currentPosition.latitude, currentPosition.longitude, eventLat, eventLng);
+
+    if (distance > allowedRadius) {
+      const distanceRounded = Math.round(distance);
+      setGpsError(`Debes estar en el lugar del evento para confirmar tu llegada. Estás a ${distanceRounded} m.`);
+      return;
+    }
 
     try {
       const confirmedAt = new Date().toISOString();
@@ -430,6 +521,7 @@ export default function InteraccionScreen() {
       setCheckInPhase('confirmed');
       setConfirmationCode('');
       setCodeError('');
+      setGpsError('');
       if (appointment.event_id) {
         AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
       }
@@ -461,7 +553,7 @@ export default function InteraccionScreen() {
       if (updateError) {
 
         setCheckInPhase('code_entry');
-        setCodeError('No se pudo registrar tu llegada.');
+        setGpsError('No se pudo registrar tu llegada.');
         return;
       }
 
@@ -481,9 +573,9 @@ export default function InteraccionScreen() {
     } catch (error) {
 
       setCheckInPhase('code_entry');
-      setCodeError('Ocurrió un error.');
+      setGpsError('Ocurrió un error.');
     }
-  }, [appointment, user, loadActiveParticipants]);
+  }, [appointment, user, checkingGps, getCurrentGpsPosition, loadActiveParticipants]);
 
   const handleCodeConfirmation = useCallback(async () => {
     await confirmArrival();
@@ -1063,14 +1155,21 @@ export default function InteraccionScreen() {
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Presiona el botón cuando estés en el lugar</Text>
+            <Text style={styles.codeEntrySubtitle}>Presiona el botón cuando estés en el lugar del evento</Text>
+
+            {gpsError ? (
+              <Text style={styles.codeErrorText}>{gpsError}</Text>
+            ) : null}
 
             <TouchableOpacity
-              style={styles.confirmCodeButton}
+              style={[styles.confirmCodeButton, checkingGps && styles.buttonDisabled]}
               onPress={handleCodeConfirmation}
+              disabled={checkingGps}
               activeOpacity={0.8}
             >
-              <Text style={styles.confirmCodeButtonText}>Confirmar asistencia</Text>
+              <Text style={styles.confirmCodeButtonText}>
+                {checkingGps ? 'Verificando ubicación...' : 'Confirmar asistencia'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
