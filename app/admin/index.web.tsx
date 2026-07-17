@@ -3372,7 +3372,7 @@ setBulkWhatsAppPending(pending);
         if (error) { console.error('Error loading recurring customers:', error); return; }
         const byUser: Record<string, any> = {};
         (data || []).forEach((apt: any) => {
-          if (!apt.user_id || !apt.users) return;
+          if (!apt.user_id || !apt.users || apt.status === 'cancelada') return;
           if (!byUser[apt.user_id]) byUser[apt.user_id] = { user: apt.users, eventsMap: new Map() };
           byUser[apt.user_id].eventsMap.set(apt.event_id, apt);
         });
