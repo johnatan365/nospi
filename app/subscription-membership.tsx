@@ -202,6 +202,20 @@ export default function SubscriptionMembershipScreen() {
         // Estado intermedio: el banco pidió una verificación adicional (3DS) y
         // todavía no se activó la suscripción. No mostramos éxito falso.
         if (result.status === 'PENDING' && result.threeDsUrl && typeof window !== 'undefined') {
+          // Guardar todo lo necesario para que payment-callback pueda finalizar
+          // la suscripción cuando el usuario vuelva de la verificación.
+          await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
+          await AsyncStorage.setItem('nospi_payment_method', 'subscription');
+          await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
+          await AsyncStorage.setItem('nospi_subscription_payment_source_id', result.paymentSourceId || '');
+          await AsyncStorage.setItem('nospi_subscription_user_email', currentUser.email || '');
+          try {
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (currentSession?.access_token) {
+              await AsyncStorage.setItem('nospi_access_token', currentSession.access_token);
+              await AsyncStorage.setItem('nospi_refresh_token', currentSession.refresh_token || '');
+            }
+          } catch {}
           showAlert('Verificación requerida', 'Tu banco pidió una verificación adicional. Te vamos a redirigir para completarla.');
           window.location.href = result.threeDsUrl;
           return;

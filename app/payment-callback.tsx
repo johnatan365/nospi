@@ -200,6 +200,98 @@ export default function PaymentCallbackScreen() {
     
 
     if (isWeb) {
+      // Caso suscripción: el usuario vuelve de completar una verificación 3DS
+      // para activar su suscripción mensual. Esto es distinto del flujo de
+      // pago de un evento (que solo guarda el status y espera que la pestaña
+      // original haga polling) — aquí SÍ hay que finalizar activamente,
+      // porque no hay ninguna otra pantalla haciendo esa verificación.
+      const finalizeSubscriptionIfNeeded = async () => {
+        const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
+        if (storedPaymentMethod !== 'subscription') return false;
+
+        setStatusMessage('Verificando tu suscripción...');
+        try {
+          const storedTxId = await AsyncStorage.getItem('nospi_transaction_id');
+          const storedPaymentSourceId = await AsyncStorage.getItem('nospi_subscription_payment_source_id');
+          const storedUserEmail = await AsyncStorage.getItem('nospi_subscription_user_email');
+
+          await supabase.auth.refreshSession().catch(() => {});
+          let userId: string | undefined;
+          const { data: { session } } = await supabase.auth.getSession();
+          userId = session?.user?.id;
+          if (!userId) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            userId = authUser?.id ?? undefined;
+          }
+          if (!userId) {
+            const storedAccessToken = await AsyncStorage.getItem('nospi_access_token');
+            const storedRefreshToken = await AsyncStorage.getItem('nospi_refresh_token');
+            if (storedAccessToken && storedRefreshToken) {
+              const { data: { session: restoredSession } } = await supabase.auth.setSession({
+                access_token: storedAccessToken,
+                refresh_token: storedRefreshToken,
+              });
+              userId = restoredSession?.user?.id;
+            }
+          }
+
+          if (!storedTxId || !userId) {
+            setStatusMessage('No se pudo verificar tu suscripción. Si el cobro se realizó, contacta soporte.');
+            await AsyncStorage.multiRemove([
+              'nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time',
+              'nospi_access_token', 'nospi_refresh_token',
+              'nospi_subscription_payment_source_id', 'nospi_subscription_user_email',
+            ]);
+            router.replace('/subscription-membership');
+            return true;
+          }
+
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/wompi-finalize-subscription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+            body: JSON.stringify({
+              transactionId: storedTxId,
+              userId,
+              userEmail: storedUserEmail || session?.user?.email || '',
+              paymentSourceId: storedPaymentSourceId || '',
+              planType: '1_month',
+            }),
+          });
+          const result = await res.json();
+
+          await AsyncStorage.multiRemove([
+            'nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time',
+            'nospi_access_token', 'nospi_refresh_token',
+            'nospi_subscription_payment_source_id', 'nospi_subscription_user_email',
+          ]);
+
+          if (result.status === 'APPROVED') {
+            setStatusMessage('¡Suscripción activada!');
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            if (pendingEventId) {
+              router.replace('/subscription-plans');
+            } else {
+              router.replace('/subscription-membership');
+            }
+          } else if (result.status === 'PENDING') {
+            setStatusMessage('Tu pago sigue en verificación. Te confirmaremos apenas se complete.');
+            router.replace('/subscription-membership');
+          } else {
+            setStatusMessage('El pago no se pudo completar.');
+            router.replace('/subscription-membership');
+          }
+        } catch (e) {
+          setStatusMessage('Error verificando tu suscripción.');
+          await AsyncStorage.multiRemove([
+            'nospi_transaction_id', 'nospi_payment_method', 'nospi_payment_opened_time',
+            'nospi_access_token', 'nospi_refresh_token',
+            'nospi_subscription_payment_source_id', 'nospi_subscription_user_email',
+          ]);
+          router.replace('/subscription-membership');
+        }
+        return true;
+      };
+
       // On web, Wompi redirects to https://app.nospi.co/payment-callback.
       // Store the status so the web polling in subscription-plans can pick it up,
       // then show the "return to app" instructions card.
@@ -207,8 +299,9 @@ export default function PaymentCallbackScreen() {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('nospi_payment_status', urlStatus);
         window.localStorage.setItem('nospi_payment_time', Date.now().toString());
-        
       }
+
+      finalizeSubscriptionIfNeeded();
       return;
     }
 
