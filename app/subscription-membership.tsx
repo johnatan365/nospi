@@ -18,6 +18,61 @@ const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
 
+// Funciona en web Y en nativo (Alert.alert no funciona en web)
+const showAlert = (title: string, message?: string) => {
+  if (typeof window !== 'undefined' && !(window as any).ReactNativeWebView) {
+    window.alert(title + (message ? '\n\n' + message : ''));
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
+const showConfirm = (title: string, message: string, confirmText: string, onConfirm: () => void) => {
+  if (typeof window !== 'undefined' && !(window as any).ReactNativeWebView) {
+    if (window.confirm(title + '\n\n' + message)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Volver', style: 'cancel' },
+      { text: confirmText, style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+};
+
+function getCardBrand(rawNumber: string): 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover' | null {
+  const n = rawNumber.replace(/\D/g, '');
+  if (!n) return null;
+  if (n.startsWith('4')) return 'visa';
+  if (/^3[47]/.test(n)) return 'amex';
+  if (/^30[0-5]/.test(n) || /^36/.test(n) || /^38/.test(n)) return 'diners';
+  if (/^6011/.test(n) || /^65/.test(n) || /^64[4-9]/.test(n)) return 'discover';
+  const num6 = parseInt(n.slice(0, 6), 10);
+  if (/^5[1-5]/.test(n)) return 'mastercard';
+  if (n.length >= 4) {
+    const num4 = parseInt(n.slice(0, 4), 10);
+    if (num4 >= 2221 && num4 <= 2720) return 'mastercard';
+  }
+  if (n.length >= 6 && num6 >= 622126 && num6 <= 622925) return 'discover';
+  return null;
+}
+
+const CARD_BRAND_COLORS: Record<string, string> = {
+  visa: '#1A1F71',
+  mastercard: '#EB001B',
+  amex: '#007BC1',
+  diners: '#004A97',
+  discover: '#FF6600',
+};
+
+const CARD_BRAND_LABELS: Record<string, string> = {
+  visa: 'VISA',
+  mastercard: 'MASTERCARD',
+  amex: 'AMEX',
+  diners: 'DINERS',
+  discover: 'DISCOVER',
+};
+
 interface SubscriptionRow {
   id: string;
   status: string;
@@ -76,11 +131,11 @@ export default function SubscriptionMembershipScreen() {
 
   const handleSubscribe = async () => {
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      Alert.alert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
       return;
     }
     if (cardHolder.trim().length < 5) {
-      Alert.alert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
       return;
     }
     setProcessing(true);
@@ -140,14 +195,13 @@ export default function SubscriptionMembershipScreen() {
 
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (pendingEventId) {
-        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Vamos a confirmar tu asistencia sin costo.', [
-          { text: 'Continuar', onPress: () => router.replace('/subscription-plans') },
-        ]);
+        showAlert('¡Listo!', 'Tu suscripción quedó activa. Vamos a confirmar tu asistencia sin costo.');
+        router.replace('/subscription-plans');
       } else {
-        Alert.alert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todos los eventos del mes.');
+        showAlert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todos los eventos del mes.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'No se pudo procesar la suscripción');
+      showAlert('Error', e.message || 'No se pudo procesar la suscripción');
     } finally {
       setProcessing(false);
     }
@@ -155,29 +209,23 @@ export default function SubscriptionMembershipScreen() {
 
   const handleCancel = async () => {
     if (!subscription) return;
-    Alert.alert(
+    showConfirm(
       'Cancelar suscripción',
       'Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.',
-      [
-        { text: 'Volver', style: 'cancel' },
-        {
-          text: 'Cancelar suscripción',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelling(true);
-            const { error } = await supabase
-              .from('subscriptions')
-              .update({ auto_renew: false })
-              .eq('id', subscription.id);
-            setCancelling(false);
-            if (error) {
-              Alert.alert('Error', 'No se pudo cancelar. Intenta de nuevo.');
-            } else {
-              await loadSubscription();
-            }
-          },
-        },
-      ],
+      'Cancelar suscripción',
+      async () => {
+        setCancelling(true);
+        const { error } = await supabase
+          .from('subscriptions')
+          .update({ auto_renew: false })
+          .eq('id', subscription.id);
+        setCancelling(false);
+        if (error) {
+          showAlert('Error', 'No se pudo cancelar. Intenta de nuevo.');
+        } else {
+          await loadSubscription();
+        }
+      },
     );
   };
 
@@ -261,7 +309,29 @@ export default function SubscriptionMembershipScreen() {
                 </TouchableOpacity>
               ) : (
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                  <TextInput style={styles.input} placeholder="Número de tarjeta" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" value={cardNumber} onChangeText={setCardNumber} autoComplete="cc-number" textContentType="creditCardNumber" importantForAutofill="yes" />
+                  <View style={styles.cardNumberRow}>
+                    <TextInput
+                      style={[styles.input, styles.cardNumberInput]}
+                      placeholder="Número de tarjeta"
+                      placeholderTextColor={nospiColors.gray400}
+                      keyboardType="number-pad"
+                      value={cardNumber}
+                      onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 16); setCardNumber(digits.replace(/(.{4})/g, '$1 ').trim()); }}
+                      maxLength={19}
+                      autoComplete="cc-number"
+                      textContentType="creditCardNumber"
+                      importantForAutofill="yes"
+                    />
+                    {(() => {
+                      const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
+                      if (!brand) return null;
+                      return (
+                        <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
+                          <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/AA" placeholderTextColor={nospiColors.gray400} value={cardExpiry} onChangeText={setCardExpiry} autoComplete="cc-exp" importantForAutofill="yes" />
                     <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
@@ -313,6 +383,10 @@ const styles = StyleSheet.create({
   subscribeButton: { backgroundColor: nospiColors.purpleMid, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   subscribeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   input: { backgroundColor: nospiColors.gray50, borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, marginBottom: 10, color: nospiColors.gray900 },
+  cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingHorizontal: 14, marginBottom: 10, backgroundColor: nospiColors.gray50 },
+  cardNumberInput: { flex: 1, borderWidth: 0, marginBottom: 0, paddingHorizontal: 0, backgroundColor: 'transparent' },
+  cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   footnote: { fontSize: 12, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 18 },
   activeCard: { backgroundColor: '#fff', borderRadius: 20, padding: 28, alignItems: 'center', marginTop: 40 },
   activeTitle: { fontSize: 18, fontWeight: '800', color: nospiColors.gray900, marginBottom: 8, textAlign: 'center' },
