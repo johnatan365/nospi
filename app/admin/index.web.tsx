@@ -3734,6 +3734,23 @@ setBulkWhatsAppPending(pending);
 
     return (
       <View style={styles.listContainer}>
+        {/* Botón principal: descargar TODOS los participantes de TODOS los eventos */}
+        <button
+          onClick={exportAllParticipantsToExcel}
+          disabled={exportingAll}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', backgroundColor: '#6B21A8', color: 'white', border: 'none',
+            borderRadius: 12, padding: '16px 20px', fontSize: 16, fontWeight: 800,
+            cursor: exportingAll ? 'default' : 'pointer', opacity: exportingAll ? 0.7 : 1,
+            marginBottom: 20, boxShadow: '0 2px 6px rgba(107, 33, 168, 0.3)',
+          }}
+        >
+          {exportingAll
+            ? '⏳ Generando Excel con todos los participantes...'
+            : '📥 Descargar TODOS los participantes de TODOS los eventos (Excel)'}
+        </button>
+
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <Text style={styles.sectionTitle}>Participantes por Evento</Text>
@@ -3761,16 +3778,9 @@ setBulkWhatsAppPending(pending);
                 onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
                 style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
-                📥 Este evento ({participantTab})
+                📥 Solo este evento ({participantTab})
               </button>
             )}
-            <button
-              onClick={exportAllParticipantsToExcel}
-              disabled={exportingAll}
-              style={{ backgroundColor: '#6B21A8', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: exportingAll ? 0.7 : 1 }}
-            >
-              {exportingAll ? '⏳ Generando...' : '📥 Todos los eventos'}
-            </button>
           </div>
         </div>
 
