@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   eventNameCompact: {
-    fontSize: 16
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#880E4F',
   },
