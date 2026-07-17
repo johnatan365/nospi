@@ -13,6 +13,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
 
 // Dispara el evento Purchase — píxel en web, API de Conversiones en mobile.
 // Usa las constantes SUPABASE_URL / SUPABASE_ANON_KEY ya declaradas más abajo en este archivo.
@@ -1707,7 +1708,10 @@ export default function SubscriptionPlansScreen() {
               <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>Recomendado</Text>
               </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark, marginBottom: 8, marginTop: 4 }}>🏅 Suscripción mensual Nospi</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 4 }}>
+                <Ionicons name="ribbon-outline" size={18} color={nospiColors.purpleDark} />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>Suscripción mensual Nospi</Text>
+              </View>
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
                 {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
               </Text>

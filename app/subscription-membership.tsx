@@ -223,23 +223,37 @@ export default function SubscriptionMembershipScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.introTitle}>Acceso ilimitado</Text>
-            <Text style={styles.introSubtitle}>Ve a todos los eventos del mes sin volver a pagar por separado</Text>
+            {startCardForm !== '1' && (
+              <>
+                <Text style={styles.introTitle}>Acceso ilimitado</Text>
+                <Text style={styles.introSubtitle}>Ve a todos los eventos del mes sin volver a pagar por separado</Text>
+              </>
+            )}
 
             <View style={styles.planCardFeatured}>
-              <View style={styles.badge}><Text style={styles.badgeText}>Recomendado</Text></View>
-              <View style={styles.planHeaderRow}>
-                <Ionicons name="ribbon-outline" size={20} color={nospiColors.purpleMid} />
-                <Text style={styles.planName}>Suscripción mensual Nospi</Text>
-              </View>
-              <Text style={styles.planPrice}>${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text></Text>
-              <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+              {startCardForm !== '1' && (
+                <>
+                  <View style={styles.badge}><Text style={styles.badgeText}>Recomendado</Text></View>
+                  <View style={styles.planHeaderRow}>
+                    <Ionicons name="ribbon-outline" size={20} color={nospiColors.purpleMid} />
+                    <Text style={styles.planName}>Suscripción mensual Nospi</Text>
+                  </View>
+                  <Text style={styles.planPrice}>${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text></Text>
+                  <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos este mes.</Text>
 
-              <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Acceso sin límite a todos los eventos del mes</Text></View>
-              <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada evento por separado</Text></View>
-              <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Cancela cuando quieras</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Acceso sin límite a todos los eventos del mes</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada evento por separado</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Cancela cuando quieras</Text></View>
 
-              <Text style={styles.breakEvenText}>Te conviene si vas a {breakEvenEvents}+ eventos al mes</Text>
+                  <Text style={styles.breakEvenText}>Te conviene si vas a {breakEvenEvents}+ eventos al mes</Text>
+                </>
+              )}
+
+              {startCardForm === '1' && (
+                <Text style={[styles.planPrice, { marginBottom: 14 }]}>
+                  ${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text>
+                </Text>
+              )}
 
               {!showCardForm ? (
                 <TouchableOpacity style={styles.subscribeButton} onPress={() => setShowCardForm(true)} activeOpacity={0.85}>
