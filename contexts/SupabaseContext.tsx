@@ -1,7 +1,25 @@
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
+
+// El cliente de Supabase (lib/supabase.ts) detecta y consume el hash de la
+// URL (#access_token=...&type=recovery) de forma ASINCRONA justo después de
+// crearse — hay una ventana muy corta pero real donde el hash todavía está
+// intacto en window.location. La aprovechamos leyendo esto UNA sola vez, de
+// forma sincrónica, como valor inicial de useState: así isPasswordRecovery
+// arranca en `true` desde el primer render posible, en vez de depender de
+// esperar a que llegue el evento PASSWORD_RECOVERY (que en la práctica llega
+// DESPUÉS de que INITIAL_SESSION ya puso `user` y disparó la navegación de
+// index.tsx — ver commit anterior, ese intento sí sufría la carrera).
+function detectRecoveryFromInitialUrl(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  try {
+    return window.location.hash.includes('type=recovery');
+  } catch {
+    return false;
+  }
+}
 
 interface SupabaseContextType {
   session: Session | null;
@@ -24,7 +42,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(detectRecoveryFromInitialUrl);
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
