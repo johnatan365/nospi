@@ -21,22 +21,35 @@ const AppConfigContext = createContext<AppConfigContextValue>({
   refreshConfig: async () => {},
 });
 
+// Guard a nivel de módulo: en algunas cargas en frío se observó que el árbol
+// raíz de la app se monta dos veces, lo que duplicaba la petición inicial a
+// app_config (dos SELECT idénticos a Supabase en cada carga). Este guard
+// hace que, sin importar cuántas veces se monte el provider, la carga
+// inicial real solo se dispare una vez — todas las instancias comparten la
+// misma promesa en vuelo y actualizan su propio estado cuando resuelve.
+let inFlightInitialLoad: Promise<AppConfig> | null = null;
+
 export function AppConfigProvider({ children }: { children: React.ReactNode }) {
   const [appConfig, setAppConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
 
   const loadConfig = useCallback(async (force = false) => {
-    if (force) {
-      invalidateAppConfigCache();
-    }
     console.log('[AppConfigContext] Loading app config, force:', force);
     setLoading(true);
     try {
-      const config = await getAppConfig();
+      if (force) {
+        invalidateAppConfigCache();
+        inFlightInitialLoad = null;
+      }
+      if (!inFlightInitialLoad) {
+        inFlightInitialLoad = getAppConfig();
+      }
+      const config = await inFlightInitialLoad;
       setAppConfig(config);
       console.log('[AppConfigContext] Config set:', config);
     } catch (err) {
       console.error('[AppConfigContext] Failed to load config:', err);
+      inFlightInitialLoad = null;
     } finally {
       setLoading(false);
     }
