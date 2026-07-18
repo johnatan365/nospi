@@ -466,8 +466,7 @@ export default function AdminPanelScreen() {
       if (localStorage.getItem('nospi_admin_session') === 'true') {
         setIsAuthenticated(true);
         setShowPasswordModal(false);
-        loadDashboardData();
-      }
+    }
     }, []);
 
   // App config state
@@ -788,8 +787,7 @@ export default function AdminPanelScreen() {
       setIsAuthenticated(true);
       setShowPasswordModal(false);
       localStorage.setItem('nospi_admin_session', 'true');
-      loadDashboardData();
-    } else {
+      } else {
       window.alert('Contraseña incorrecta');
     }
   };
