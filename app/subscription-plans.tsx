@@ -1693,7 +1693,10 @@ export default function SubscriptionPlansScreen() {
               onPress={() => setShowEventMethods(true)}
               activeOpacity={0.85}
             >
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 }}>🎫 Por evento</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Ionicons name="ticket-outline" size={18} color="#1a1a1a" />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a' }}>Por evento</Text>
+              </View>
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
                 {`$${priceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / evento</Text>
               </Text>
