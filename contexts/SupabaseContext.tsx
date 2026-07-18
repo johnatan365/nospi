@@ -15,10 +15,16 @@ import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 function detectRecoveryFromInitialUrl(): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
   try {
+    // TEMP DEBUG
+    console.log('[RecoveryDebug] href at module/state-init time:', window.location.href);
     return window.location.hash.includes('type=recovery');
   } catch {
     return false;
   }
+}
+// TEMP DEBUG: log tan pronto como se evalua este modulo (import time)
+if (typeof window !== 'undefined') {
+  console.log('[RecoveryDebug] SupabaseContext module evaluated, href:', window.location.href);
 }
 
 interface SupabaseContextType {

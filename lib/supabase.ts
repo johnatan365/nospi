@@ -5,6 +5,10 @@ import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  console.log('[RecoveryDebug] lib/supabase.ts module evaluated, href:', window.location.href);
+}
+
 // Get Supabase credentials from app.json extra config
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || '';
