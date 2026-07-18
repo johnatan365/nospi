@@ -514,11 +514,19 @@ export default function AppointmentsScreen() {
 
                   {isConfirmed && (
                     <>
-                      <View style={styles.refundInfoCard}>
-                        <Text style={styles.refundInfoText}>
-                          💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
-                        </Text>
-                      </View>
+                      {appointment.payment_method === 'subscription' ? (
+                        <View style={styles.refundInfoCard}>
+                          <Text style={styles.refundInfoText}>
+                            👑 Esta asistencia está incluida en tu suscripción. Si cancelas, solo liberas tu cupo, no se genera ningún cobro ni reembolso.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.refundInfoCard}>
+                          <Text style={styles.refundInfoText}>
+                            💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
+                          </Text>
+                        </View>
+                      )}
                       <TouchableOpacity
                         style={styles.cancelButton}
                         onPress={() => handleCancelPress(appointment)}
