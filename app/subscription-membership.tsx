@@ -199,15 +199,26 @@ export default function SubscriptionMembershipScreen() {
       }
 
       if (result.status !== 'APPROVED') {
-        // Estado intermedio: el banco pidió una verificación adicional (3DS) y
-        // todavía no se activó la suscripción. No mostramos éxito falso.
-        if (result.status === 'PENDING' && result.threeDsUrl && typeof window !== 'undefined') {
-          // Guardar todo lo necesario para que payment-callback pueda finalizar
-          // la suscripción cuando el usuario vuelva de la verificación.
-          await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
+        if (result.status === 'DECLINED' || result.status === 'ERROR' || result.status === 'VOIDED') {
+          throw new Error('El banco rechazó el pago. Intenta con otra tarjeta.');
+        }
+
+        // Estado intermedio (normalmente PENDING): la mayoria de las veces esto
+        // es solo liquidacion asincrona del banco, no una verificacion real que
+        // requiera salir de la app. Antes nos quedabamos colgados mostrando un
+        // aviso y sin hacer nada mas. Ahora, si Wompi de verdad entrego una URL
+        // de verificacion (raro para tarjeta), redirigimos; si no, reintentamos
+        // en segundo plano igual que el pago por evento, y si se aprueba
+        // seguimos exactamente el mismo flujo de exito (incluye confirmar la
+        // cita pendiente con su modal, igual que en el pago unico).
+        const transactionId = result.transactionId;
+        const paymentSourceId = result.paymentSourceId;
+
+        if (result.threeDsUrl && typeof window !== 'undefined') {
+          await AsyncStorage.setItem('nospi_transaction_id', transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'subscription');
           await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
-          await AsyncStorage.setItem('nospi_subscription_payment_source_id', result.paymentSourceId || '');
+          await AsyncStorage.setItem('nospi_subscription_payment_source_id', paymentSourceId || '');
           await AsyncStorage.setItem('nospi_subscription_user_email', currentUser.email || '');
           try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -220,8 +231,44 @@ export default function SubscriptionMembershipScreen() {
           window.location.href = result.threeDsUrl;
           return;
         }
-        showAlert('Pago en verificación', 'Tu pago está siendo verificado por el banco. Si no se activa en unos minutos, intenta de nuevo o usa otra tarjeta.');
-        return;
+
+        const checkStatus = async (): Promise<'APPROVED' | 'DECLINED' | 'PENDING'> => {
+          try {
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/wompi-finalize-subscription`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+              body: JSON.stringify({
+                transactionId,
+                userId: currentUser.id,
+                userEmail: currentUser.email || '',
+                paymentSourceId: paymentSourceId || '',
+                planType: '1_month',
+              }),
+            });
+            const data = await res.json();
+            if (data.status === 'APPROVED') return 'APPROVED';
+            if (data.status === 'DECLINED' || data.status === 'ERROR' || data.status === 'VOIDED') return 'DECLINED';
+            return 'PENDING';
+          } catch {
+            return 'PENDING';
+          }
+        };
+
+        let finalStatus: 'APPROVED' | 'DECLINED' | 'PENDING' = 'PENDING';
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          finalStatus = await checkStatus();
+          if (finalStatus !== 'PENDING') break;
+        }
+
+        if (finalStatus === 'DECLINED') {
+          throw new Error('El banco rechazó el pago. Intenta con otra tarjeta.');
+        }
+        if (finalStatus === 'PENDING') {
+          showAlert('Pago en verificación', 'Tu pago sigue siendo verificado por el banco. Se activará automáticamente apenas se confirme; revisa en unos minutos.');
+          return;
+        }
+        // finalStatus === 'APPROVED': continúa al flujo de éxito normal.
       }
 
       setShowCardForm(false);
