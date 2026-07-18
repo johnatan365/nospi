@@ -9,8 +9,10 @@ interface AppConfigContextValue {
 
 const DEFAULT_CONFIG: AppConfig = {
   event_price: '30000',
+  subscription_price: '29900',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
+  test_payment_enabled: 'false',
 };
 
 const AppConfigContext = createContext<AppConfigContextValue>({

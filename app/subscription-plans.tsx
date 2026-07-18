@@ -13,6 +13,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
 
 // Dispara el evento Purchase — píxel en web, API de Conversiones en mobile.
 // Usa las constantes SUPABASE_URL / SUPABASE_ANON_KEY ya declaradas más abajo en este archivo.
@@ -122,6 +123,36 @@ const CARD_BRAND_LABELS: Record<string, string> = {
   discover: 'DISCOVER',
 };
 
+function renderCardBrandMark(brand: 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover') {
+  if (brand === 'visa') {
+    return (
+      <View style={styles.cardBrandMark}>
+        <Text style={{ fontStyle: 'italic', fontWeight: '800', fontSize: 15, color: '#1A1F71', letterSpacing: 0.5 }}>VISA</Text>
+      </View>
+    );
+  }
+  if (brand === 'mastercard') {
+    return (
+      <View style={[styles.cardBrandMark, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#EB001B' }} />
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F79E1B', marginLeft: -8, opacity: 0.85 }} />
+      </View>
+    );
+  }
+  if (brand === 'amex') {
+    return (
+      <View style={[styles.cardBrandMark, { backgroundColor: '#2E77BC' }]}>
+        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>AMEX</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
+      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
+    </View>
+  );
+}
+
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
   if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
@@ -154,10 +185,17 @@ export default function SubscriptionPlansScreen() {
   const isProcessing = (m: string) => processingMethod === m;
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showEventMethods, setShowEventMethods] = useState(false);
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
+
+  // Suscripción: si el usuario tiene una suscripción activa, se confirma la
+  // asistencia gratis sin pasar por ningún método de pago.
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [autoConfirmError, setAutoConfirmError] = useState(false);
 
   // Card form
   const [showCardForm, setShowCardForm] = useState(false);
@@ -215,6 +253,8 @@ export default function SubscriptionPlansScreen() {
   }, [pseBanks]);
 
   const priceCOP = parseInt(appConfig.event_price, 10) || 30000;
+  const subscriptionPriceCOP = parseInt(appConfig.subscription_price, 10) || 29900;
+  const breakEvenEventsCOP = Math.ceil(subscriptionPriceCOP / priceCOP);
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -230,7 +270,7 @@ export default function SubscriptionPlansScreen() {
 
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
-  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance', eventIdParam?: string): Promise<boolean> => {
+  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
     try {
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return false;
@@ -328,6 +368,34 @@ export default function SubscriptionPlansScreen() {
       return false;
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    const checkSubscriptionAndAutoConfirm = async () => {
+      if (!user?.id) { setCheckingSubscription(false); return; }
+      try {
+        const { data, error } = await supabase.rpc('has_active_subscription', { p_user_id: user.id });
+        const active = !error && data === true;
+        setHasActiveSubscription(active);
+
+        if (active) {
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          if (pendingEventId) {
+            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
+            if (ok) {
+              setShowSuccessModal(true);
+            } else {
+              setAutoConfirmError(true);
+            }
+          }
+        }
+      } catch {
+        setHasActiveSubscription(false);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    };
+    checkSubscriptionAndAutoConfirm();
+  }, [user?.id, confirmAppointment]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -1381,6 +1449,26 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
+  if (checkingSubscription) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15 }}>Verificando tu cuenta…</Text>
+      </LinearGradient>
+    );
+  }
+
+  if (hasActiveSubscription && !autoConfirmError && !showSuccessModal) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15, textAlign: 'center' }}>
+          Tienes suscripción activa — confirmando tu asistencia sin costo…
+        </Text>
+      </LinearGradient>
+    );
+  }
+
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -1404,11 +1492,7 @@ export default function SubscriptionPlansScreen() {
                 {(() => {
                   const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
                   if (!brand) return null;
-                  return (
-                    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
-                      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
-                    </View>
-                  );
+                  return renderCardBrandMark(brand);
                 })()}
               </View>
               <View style={styles.row}>
@@ -1607,7 +1691,7 @@ export default function SubscriptionPlansScreen() {
     <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{
         headerShown: true,
-        title: 'Pago del Evento',
+        title: showEventMethods ? 'Pagar este evento' : 'Confirma tu asistencia',
         headerBackTitle: 'Atrás',
         headerLeft: () => (
           <TouchableOpacity
@@ -1625,38 +1709,68 @@ export default function SubscriptionPlansScreen() {
       
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
-        <Text style={styles.title}>Pago del Evento</Text>
-        <Text style={styles.subtitle}>{`Confirma tu asistencia pagando $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+        {!showEventMethods ? (
+          <>
+            <Text style={styles.title}>¿Cómo quieres ir?</Text>
+            <Text style={styles.subtitle}>Confirma tu asistencia</Text>
 
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Total a pagar</Text>
-          <Text style={styles.priceAmount}>{`$${priceCOP.toLocaleString('es-CO')}`}</Text>
-          <Text style={styles.priceAmountCOP}>Pesos colombianos</Text>
-        </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 }}
+              onPress={() => setShowEventMethods(true)}
+              activeOpacity={0.85}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Ionicons name="ticket-outline" size={18} color="#1a1a1a" />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a' }}>Por evento</Text>
+              </View>
+              <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
+                {`$${priceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / evento</Text>
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>Pagas cada vez que vengas a un evento.</Text>
+            </TouchableOpacity>
 
-        <View style={styles.benefitsCard}>
-          <View style={styles.benefitRow}>
-            <Text style={styles.benefitIcon}>🌟</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Acceso al evento</Text>
-              <Text style={styles.benefitDesc}>Confirma tu lugar en el evento seleccionado</Text>
-            </View>
-          </View>
-          <View style={styles.benefitRow}>
-            <Text style={styles.benefitIcon}>🎉</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Conoce gente nueva</Text>
-              <Text style={styles.benefitDesc}>Conecta con personas afines en un ambiente relajado.</Text>
-            </View>
-          </View>
-          <View style={[styles.benefitRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.benefitIcon, { color: '#E53935' }]}>♥</Text>
-            <View style={styles.benefitTextWrap}>
-              <Text style={styles.benefitTitle}>Experiencia única</Text>
-              <Text style={styles.benefitDesc}>Disfruta de una experiencia social inolvidable.</Text>
-            </View>
-          </View>
-        </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 20, marginBottom: 14, position: 'relative' }}
+              onPress={() => router.push('/subscription-membership?startCardForm=1')}
+              activeOpacity={0.85}
+            >
+              <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>Recomendado</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 4 }}>
+                <Ionicons name="ribbon-outline" size={18} color={nospiColors.purpleDark} />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>Suscripción mensual Nospi</Text>
+              </View>
+              <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
+                {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Acceso sin límite a todos los eventos del mes</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Sin pagar cada evento por separado</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>Cancela cuando quieras</Text>
+              </View>
+
+              <Text style={{ fontSize: 12, color: nospiColors.purpleMid, fontWeight: '700', marginBottom: 4 }}>
+                {`Te conviene si vas a ${breakEvenEventsCOP}+ eventos al mes`}
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+        <TouchableOpacity onPress={() => setShowEventMethods(false)} style={{ marginBottom: 12 }}>
+          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>‹ Volver</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Pagar este evento</Text>
+        <Text style={styles.subtitle}>{`$${priceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
 
@@ -1730,6 +1844,9 @@ export default function SubscriptionPlansScreen() {
         {/* ========== END TEST BUTTON ========== */}
 				
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
+          </>
+        )}
+
       </ScrollView>
 
       <Modal visible={showSuccessModal} transparent animationType="fade">
@@ -1776,6 +1893,7 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA', color: '#111' },
   cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 2, backgroundColor: '#FAFAFA' },
   cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  cardBrandMark: { width: 44, height: 30, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   row: { flexDirection: 'row' },
   installmentsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },

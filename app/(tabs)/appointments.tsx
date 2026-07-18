@@ -16,6 +16,7 @@ interface Appointment {
   id: string;
   status: string;
   payment_status: string;
+  payment_method?: string;
   created_at: string;
   event: {
     id: string;
@@ -87,6 +88,7 @@ export default function AppointmentsScreen() {
         id,
         status,
         payment_status,
+        payment_method,
         created_at,
         events!inner (
           id,
@@ -242,6 +244,8 @@ export default function AppointmentsScreen() {
     console.log('User confirmed cancel appointment:', appointmentToCancel.id);
 
     try {
+      const isSubscriptionAppointment = appointmentToCancel.payment_method === 'subscription';
+
       const eventStartTime = appointmentToCancel.event.start_time
         ? new Date(appointmentToCancel.event.start_time)
         : new Date(appointmentToCancel.event.date);
@@ -249,13 +253,15 @@ export default function AppointmentsScreen() {
       const now = new Date();
       const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
       const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-      const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
+      // Las citas por suscripcion nunca generan saldo virtual: no hubo un
+      // cobro individual de ese evento que reembolsar, solo se libera el cupo.
+      const isWithinRefundWindow = !isSubscriptionAppointment && timeDifferenceMs > twentyFourHoursMs;
 
       const { error: appointmentError } = await supabase
         .from('appointments')
         .update({
           status: 'cancelada',
-          payment_status: isWithinRefundWindow ? 'refunded' : 'completed',
+          payment_status: isSubscriptionAppointment ? appointmentToCancel.payment_status : (isWithinRefundWindow ? 'refunded' : 'completed'),
         })
         .eq('id', appointmentToCancel.id);
 
@@ -514,11 +520,19 @@ export default function AppointmentsScreen() {
 
                   {isConfirmed && (
                     <>
-                      <View style={styles.refundInfoCard}>
-                        <Text style={styles.refundInfoText}>
-                          💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
-                        </Text>
-                      </View>
+                      {appointment.payment_method === 'subscription' ? (
+                        <View style={styles.refundInfoCard}>
+                          <Text style={styles.refundInfoText}>
+                            👑 Esta asistencia está incluida en tu suscripción. Si cancelas, solo liberas tu cupo, no se genera ningún cobro ni reembolso.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.refundInfoCard}>
+                          <Text style={styles.refundInfoText}>
+                            💰 Si cancela este evento 24 horas antes se le reembolsará el saldo que podrá utilizar para la asistencia a otro evento.
+                          </Text>
+                        </View>
+                      )}
                       <TouchableOpacity
                         style={styles.cancelButton}
                         onPress={() => handleCancelPress(appointment)}
@@ -616,6 +630,14 @@ export default function AppointmentsScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
               {appointmentToCancel && appointmentToCancel.event && (() => {
+                if (appointmentToCancel.payment_method === 'subscription') {
+                  return (
+                    <Text style={styles.modalSubtitle}>
+                      👑 Esta asistencia está incluida en tu suscripción. Al cancelar solo liberas tu cupo, no se genera ningún cobro ni saldo virtual.
+                    </Text>
+                  );
+                }
+
                 const eventStartTime = appointmentToCancel.event.start_time
                   ? new Date(appointmentToCancel.event.start_time)
                   : new Date(appointmentToCancel.event.date);
