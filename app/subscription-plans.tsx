@@ -123,6 +123,36 @@ const CARD_BRAND_LABELS: Record<string, string> = {
   discover: 'DISCOVER',
 };
 
+function renderCardBrandMark(brand: 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover') {
+  if (brand === 'visa') {
+    return (
+      <View style={styles.cardBrandMark}>
+        <Text style={{ fontStyle: 'italic', fontWeight: '800', fontSize: 15, color: '#1A1F71', letterSpacing: 0.5 }}>VISA</Text>
+      </View>
+    );
+  }
+  if (brand === 'mastercard') {
+    return (
+      <View style={[styles.cardBrandMark, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#EB001B' }} />
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F79E1B', marginLeft: -8, opacity: 0.85 }} />
+      </View>
+    );
+  }
+  if (brand === 'amex') {
+    return (
+      <View style={[styles.cardBrandMark, { backgroundColor: '#2E77BC' }]}>
+        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>AMEX</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
+      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
+    </View>
+  );
+}
+
 // Funciona en web Y en nativo
 const showAlert = (title: string, message?: string) => {
   if (typeof window !== 'undefined' && !window.ReactNativeWebView) {
@@ -1462,11 +1492,7 @@ export default function SubscriptionPlansScreen() {
                 {(() => {
                   const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
                   if (!brand) return null;
-                  return (
-                    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
-                      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
-                    </View>
-                  );
+                  return renderCardBrandMark(brand);
                 })()}
               </View>
               <View style={styles.row}>
@@ -1867,6 +1893,7 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA', color: '#111' },
   cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 2, backgroundColor: '#FAFAFA' },
   cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  cardBrandMark: { width: 44, height: 30, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   row: { flexDirection: 'row' },
   installmentsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },

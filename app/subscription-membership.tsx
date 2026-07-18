@@ -73,6 +73,36 @@ const CARD_BRAND_LABELS: Record<string, string> = {
   discover: 'DISCOVER',
 };
 
+function renderCardBrandMark(brand: 'visa' | 'mastercard' | 'amex' | 'diners' | 'discover') {
+  if (brand === 'visa') {
+    return (
+      <View style={styles.cardBrandMark}>
+        <Text style={{ fontStyle: 'italic', fontWeight: '800', fontSize: 15, color: '#1A1F71', letterSpacing: 0.5 }}>VISA</Text>
+      </View>
+    );
+  }
+  if (brand === 'mastercard') {
+    return (
+      <View style={[styles.cardBrandMark, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#EB001B' }} />
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F79E1B', marginLeft: -8, opacity: 0.85 }} />
+      </View>
+    );
+  }
+  if (brand === 'amex') {
+    return (
+      <View style={[styles.cardBrandMark, { backgroundColor: '#2E77BC' }]}>
+        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>AMEX</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
+      <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
+    </View>
+  );
+}
+
 interface SubscriptionRow {
   id: string;
   status: string;
@@ -391,6 +421,7 @@ export default function SubscriptionMembershipScreen() {
                 </TouchableOpacity>
               ) : (
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <View style={styles.cardNumberRow}>
                     <TextInput
                       style={[styles.input, styles.cardNumberInput]}
@@ -407,11 +438,7 @@ export default function SubscriptionMembershipScreen() {
                     {(() => {
                       const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
                       if (!brand) return null;
-                      return (
-                        <View style={[styles.cardBrandBadge, { backgroundColor: CARD_BRAND_COLORS[brand] }]}>
-                          <Text style={styles.cardBrandBadgeText}>{CARD_BRAND_LABELS[brand]}</Text>
-                        </View>
-                      );
+                      return renderCardBrandMark(brand);
                     })()}
                   </View>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -428,7 +455,6 @@ export default function SubscriptionMembershipScreen() {
                     />
                     <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
                   </View>
-                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <TouchableOpacity
                     style={styles.subscribeButton}
                     onPress={() => { Keyboard.dismiss(); handleSubscribe(); }}
@@ -478,6 +504,7 @@ const styles = StyleSheet.create({
   cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingHorizontal: 14, marginBottom: 10, backgroundColor: nospiColors.gray50 },
   cardNumberInput: { flex: 1, borderWidth: 0, marginBottom: 0, paddingHorizontal: 0, backgroundColor: 'transparent' },
   cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  cardBrandMark: { width: 44, height: 30, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: nospiColors.gray200, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   footnote: { fontSize: 12, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 18 },
   activeCard: { backgroundColor: '#fff', borderRadius: 20, padding: 28, alignItems: 'center', marginTop: 40 },
