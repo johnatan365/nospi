@@ -137,6 +137,8 @@ export default function SubscriptionMembershipScreen() {
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [selectedCancelReason, setSelectedCancelReason] = useState('');
   const [otherCancelReason, setOtherCancelReason] = useState('');
+  const [showSubscribeSuccessModal, setShowSubscribeSuccessModal] = useState(false);
+  const [showCancelSuccessModal, setShowCancelSuccessModal] = useState(false);
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -333,10 +335,11 @@ export default function SubscriptionMembershipScreen() {
 
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (pendingEventId) {
-        showAlert('¡Listo!', 'Tu suscripción quedó activa. Vamos a confirmar tu asistencia sin costo.');
+        // Ya hay un modal de exito propio en subscription-plans para
+        // confirmar la cita puntual; no duplicamos con otro modal aca.
         router.replace('/subscription-plans');
       } else {
-        showAlert('¡Listo!', 'Tu suscripción quedó activa. Ya puedes ir a todos los eventos del mes.');
+        setShowSubscribeSuccessModal(true);
       }
     } catch (e: any) {
       showAlert('Error', e.message || 'No se pudo procesar la suscripción');
@@ -395,7 +398,7 @@ export default function SubscriptionMembershipScreen() {
       }
     } catch {}
 
-    showAlert('Suscripción cancelada', 'Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.');
+    setShowCancelSuccessModal(true);
   };
 
   const breakEvenEvents = Math.ceil(subscriptionPrice / eventPrice);
@@ -580,6 +583,40 @@ export default function SubscriptionMembershipScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showSubscribeSuccessModal} transparent animationType="fade">
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <Text style={styles.successModalEmoji}>👑</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>¡Suscripción activada!</Text>
+            <Text style={styles.successModalSubtitle}>Ya puedes ir a todos los eventos del mes sin pagar cada uno por separado.</Text>
+            <TouchableOpacity
+              style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
+              onPress={() => setShowSubscribeSuccessModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.successModalButtonText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showCancelSuccessModal} transparent animationType="fade">
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <Text style={styles.successModalEmoji}>👋</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.gray700 }]}>Suscripción cancelada</Text>
+            <Text style={styles.successModalSubtitle}>Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.</Text>
+            <TouchableOpacity
+              style={[styles.successModalButton, { backgroundColor: nospiColors.gray700 }]}
+              onPress={() => setShowCancelSuccessModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.successModalButtonText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -633,4 +670,11 @@ const styles = StyleSheet.create({
   cancelModalButtonSecondaryText: { color: nospiColors.gray700, fontWeight: '700', fontSize: 14 },
   cancelModalButtonPrimary: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: nospiColors.error, alignItems: 'center' },
   cancelModalButtonPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  successModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  successModalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 32, alignItems: 'center', width: '100%', maxWidth: 320 },
+  successModalEmoji: { fontSize: 56, marginBottom: 12 },
+  successModalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
+  successModalSubtitle: { fontSize: 14, color: nospiColors.gray500, lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+  successModalButton: { width: '100%', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
+  successModalButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
