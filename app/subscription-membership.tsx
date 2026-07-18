@@ -501,9 +501,9 @@ export default function SubscriptionMembershipScreen() {
                       return renderCardBrandMark(brand);
                     })()}
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flexDirection: 'row' }}>
                     <TextInput
-                      style={[styles.input, { flex: 1 }]}
+                      style={[styles.input, { flex: 1, minWidth: 0, marginRight: 10 }]}
                       placeholder="MM/AA"
                       placeholderTextColor={nospiColors.gray400}
                       value={cardExpiry}
@@ -513,7 +513,7 @@ export default function SubscriptionMembershipScreen() {
                       autoComplete="cc-exp"
                       importantForAutofill="yes"
                     />
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
+                    <TextInput style={[styles.input, { flex: 1, minWidth: 0 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
                   </View>
                   <TouchableOpacity
                     style={styles.subscribeButton}
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   subscribeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   input: { backgroundColor: nospiColors.gray50, borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, marginBottom: 10, color: nospiColors.gray900 },
   cardNumberRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingHorizontal: 14, marginBottom: 10, backgroundColor: nospiColors.gray50 },
-  cardNumberInput: { flex: 1, borderWidth: 0, marginBottom: 0, paddingHorizontal: 0, backgroundColor: 'transparent' },
+  cardNumberInput: { flex: 1, minWidth: 0, borderWidth: 0, marginBottom: 0, paddingHorizontal: 0, backgroundColor: 'transparent' },
   cardBrandBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
   cardBrandMark: { width: 44, height: 30, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: nospiColors.gray200, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   cardBrandBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
