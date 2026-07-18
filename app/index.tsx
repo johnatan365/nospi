@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
@@ -57,6 +58,7 @@ async function hideSplash() {
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isPasswordRecovery } = useSupabase();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [waitingForContext, setWaitingForContext] = useState(false);
   // Evita que index.tsx se re-ejecute cuando la app vuelve del background
@@ -87,6 +89,39 @@ export default function Index() {
     isRunning.current = true;
 
     const checkProfileAndNavigate = async () => {
+      // Reenviar un ?code= de OAuth (PKCE) que haya caído en la raíz a
+      // /auth/callback para que se procese ahí.
+      if (Platform.OS === 'web') {
+        const rootSearch = window.location.search;
+
+        if (rootSearch.includes('code=')) {
+          console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
+          hasNavigated.current = true;
+          await hideSplash();
+          router.replace(('/auth/callback' + rootSearch) as any);
+          return;
+        }
+
+        if (window.location.pathname.includes('/auth/')) {
+          console.log('Index: Already on auth route — skipping redirect');
+          return;
+        }
+      }
+
+      // El link de "olvidé mi contraseña" deja una sesión real (Supabase la
+      // detecta y consume automáticamente desde la URL, incluso antes de que
+      // este efecto llegue a correr — por eso NO confiamos en leer el hash
+      // acá, ya se lo comió). Nos guiamos por el evento PASSWORD_RECOVERY que
+      // SupabaseContext ya capturó: si está activo, siempre vamos a
+      // /reset-password sin importar que `user` esté seteado.
+      if (isPasswordRecovery) {
+        console.log('Index: PASSWORD_RECOVERY activo — enviando a /reset-password');
+        hasNavigated.current = true;
+        await hideSplash();
+        router.replace('/reset-password');
+        return;
+      }
+
       if (user) {
         console.log('Index: User authenticated, checking profile existence');
         Sentry.addBreadcrumb({ message: 'Index: user authenticated', data: { userId: user.id, email: user.email } });
@@ -287,28 +322,6 @@ export default function Index() {
           setIsCheckingProfile(false);
         }
       } else {
-        if (Platform.OS === 'web') {
-          const search = window.location.search;
-          const hash = window.location.hash;
-
-          if (search.includes('code=')) {
-            console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
-            router.replace(('/auth/callback' + search) as any);
-            return;
-          }
-
-          if (hash.includes('access_token')) {
-            console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
-            router.replace(('/auth/callback' + hash) as any);
-            return;
-          }
-
-          if (window.location.pathname.includes('/auth/')) {
-            console.log('Index: Already on auth route — skipping redirect');
-            return;
-          }
-        }
-
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
@@ -324,7 +337,7 @@ export default function Index() {
     };
 
     checkProfileAndNavigate();
-  }, [loading, user, router, waitingForContext]);
+  }, [loading, user, router, waitingForContext, isPasswordRecovery]);
 
   if (loading || isCheckingProfile || waitingForContext) {
     console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);
