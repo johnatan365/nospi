@@ -20,6 +20,23 @@ interface SupabaseContextType {
 
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
 
+// Guard a nivel de módulo: en algunas cargas en frío se observó que el árbol
+// raíz (SupabaseProvider) se monta dos veces, y cada montaje disparaba su
+// propia llamada a supabase.auth.getSession() cuando INITIAL_SESSION llega
+// sin sesión — dos peticiones de red idénticas por cada carga de página.
+// Esto comparte esa llamada entre montajes simultáneos sin tocar la
+// suscripción a onAuthStateChange (esa sigue siendo por instancia, que es
+// lo seguro: cada instancia debe seguir recibiendo los eventos de sesión).
+let inFlightGetSession: ReturnType<typeof supabase.auth.getSession> | null = null;
+function getSessionShared() {
+  if (!inFlightGetSession) {
+    inFlightGetSession = supabase.auth.getSession().finally(() => {
+      inFlightGetSession = null;
+    });
+  }
+  return inFlightGetSession;
+}
+
 export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -47,7 +64,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             // We do NOT set a timeout here; instead we resolve loading=false
             // only after we've confirmed there is truly no session via getSession().
             console.log('SupabaseProvider: INITIAL_SESSION null — confirming with getSession()');
-            supabase.auth.getSession().then(({ data: { session: s } }) => {
+            getSessionShared().then(({ data: { session: s } }) => {
               if (s) {
                 console.log('SupabaseProvider: getSession found session, updating state');
                 setSession(s);
