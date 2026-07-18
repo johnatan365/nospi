@@ -3,10 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
-import { isRecoveryInProgress } from '@/lib/recoveryFlow';
 
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
@@ -58,6 +58,7 @@ async function hideSplash() {
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isPasswordRecovery } = useSupabase();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [waitingForContext, setWaitingForContext] = useState(false);
   // Evita que index.tsx se re-ejecute cuando la app vuelve del background
@@ -88,16 +89,10 @@ export default function Index() {
     isRunning.current = true;
 
     const checkProfileAndNavigate = async () => {
-      // Reenviar tokens de OAuth/recuperación de contraseña a /auth/callback
-      // ANTES de mirar `user` — si Supabase ya detectó la sesión del link de
-      // recovery más rápido de lo que tardó este efecto en correr, `user` acá
-      // ya estaría "truthy" y el bloque de abajo nos mandaría directo a
-      // /(tabs)/events, saltándose por completo la pantalla de nueva
-      // contraseña. Este chequeo tiene que ganar siempre, sin importar el
-      // estado de sesión.
+      // Reenviar un ?code= de OAuth (PKCE) que haya caído en la raíz a
+      // /auth/callback para que se procese ahí.
       if (Platform.OS === 'web') {
         const rootSearch = window.location.search;
-        const rootHash = window.location.hash;
 
         if (rootSearch.includes('code=')) {
           console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
@@ -107,26 +102,23 @@ export default function Index() {
           return;
         }
 
-        if (rootHash.includes('access_token')) {
-          console.log('Index: OAuth/recovery tokens detected at root — forwarding to /auth/callback');
-          hasNavigated.current = true;
-          await hideSplash();
-          router.replace(('/auth/callback' + rootHash) as any);
-          return;
-        }
-
         if (window.location.pathname.includes('/auth/')) {
           console.log('Index: Already on auth route — skipping redirect');
           return;
         }
       }
 
-      // Si hay un flujo de "olvidé mi contraseña" en curso (marcado por
-      // auth/callback.tsx), no navegar a ningún lado aunque haya sesión —
-      // dejar que /reset-password se quede en pantalla hasta que el usuario
-      // termine o abandone (la bandera expira sola a los 10 minutos).
-      if (await isRecoveryInProgress()) {
-        console.log('Index: recovery flow en curso — no se navega automáticamente');
+      // El link de "olvidé mi contraseña" deja una sesión real (Supabase la
+      // detecta y consume automáticamente desde la URL, incluso antes de que
+      // este efecto llegue a correr — por eso NO confiamos en leer el hash
+      // acá, ya se lo comió). Nos guiamos por el evento PASSWORD_RECOVERY que
+      // SupabaseContext ya capturó: si está activo, siempre vamos a
+      // /reset-password sin importar que `user` esté seteado.
+      if (isPasswordRecovery) {
+        console.log('Index: PASSWORD_RECOVERY activo — enviando a /reset-password');
+        hasNavigated.current = true;
+        await hideSplash();
+        router.replace('/reset-password');
         return;
       }
 
@@ -345,7 +337,7 @@ export default function Index() {
     };
 
     checkProfileAndNavigate();
-  }, [loading, user, router, waitingForContext]);
+  }, [loading, user, router, waitingForContext, isPasswordRecovery]);
 
   if (loading || isCheckingProfile || waitingForContext) {
     console.log('Index: Showing loading indicator — loading:', loading, 'checkingProfile:', isCheckingProfile);

@@ -8,6 +8,14 @@ interface SupabaseContextType {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  /** true cuando la sesión activa viene de un link de "olvidé mi contraseña"
+   * (evento PASSWORD_RECOVERY de Supabase). index.tsx usa esto para no
+   * redirigir a /(tabs)/events aunque haya sesión — hay que dejar al usuario
+   * en /reset-password hasta que efectivamente cambie la contraseña. */
+  isPasswordRecovery: boolean;
+  /** Limpiar la bandera una vez que el usuario terminó (o abandonó) el flujo
+   * de restablecer contraseña, para que la navegación normal se reanude. */
+  clearPasswordRecovery: () => void;
 }
 
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
@@ -16,6 +24,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,6 +71,22 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           setSession(session);
           setUser(session?.user ?? null);
           setLoading(false);
+        } else if (event === 'PASSWORD_RECOVERY') {
+          // Supabase ya detectó y consumió el link de "olvidé mi contraseña"
+          // (a veces incluso antes de que corra nuestro propio código de
+          // /auth/callback, por eso confiamos en este evento y no en parsear
+          // la URL a mano). La sesión es real y válida, pero NO debe tratarse
+          // como un login normal — index.tsx usa isPasswordRecovery para
+          // mandar siempre a /reset-password mientras esté en true.
+          console.log('SupabaseProvider: PASSWORD_RECOVERY — marcando recovery en curso');
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setIsPasswordRecovery(true);
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           console.log('SupabaseProvider: SIGNED_OUT — clearing session');
           if (timeoutRef.current) {
@@ -75,6 +100,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             setSession(null);
             setUser(null);
             setLoading(false);
+            setIsPasswordRecovery(false);
             timeoutRef.current = null;
           }, 800);
         } else if (event === 'TOKEN_REFRESHED') {
@@ -133,11 +159,18 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearPasswordRecovery = () => {
+    console.log('SupabaseProvider: clearPasswordRecovery');
+    setIsPasswordRecovery(false);
+  };
+
   const value = {
     session,
     user,
     loading,
     signOut,
+    isPasswordRecovery,
+    clearPasswordRecovery,
   };
 
   return (

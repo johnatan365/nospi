@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
-import { clearRecoveryInProgress } from '@/lib/recoveryFlow';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 // Pantalla a la que auth/callback.tsx redirige cuando el link que el usuario
 // clickeó en su correo es de tipo "recovery" (olvidé mi contraseña). Para
@@ -26,6 +26,7 @@ import { clearRecoveryInProgress } from '@/lib/recoveryFlow';
 // supabase.auth.updateUser().
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const { clearPasswordRecovery } = useSupabase();
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -73,7 +74,7 @@ export default function ResetPasswordScreen() {
       }
 
       setDone(true);
-      await clearRecoveryInProgress();
+      clearPasswordRecovery();
       setTimeout(() => {
         router.replace('/(tabs)/events');
       }, 1800);

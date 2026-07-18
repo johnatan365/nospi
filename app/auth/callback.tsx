@@ -12,7 +12,6 @@ import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-nativ
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
-import { markRecoveryInProgress } from '@/lib/recoveryFlow';
 import * as Sentry from '@sentry/react-native';
 
 export default function AuthCallback() {
@@ -34,7 +33,6 @@ export default function AuthCallback() {
             const [k, v] = pair.split('=');
             if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
           });
-          await markRecoveryInProgress();
           if (params.access_token && params.refresh_token) {
             await supabase.auth.setSession({
               access_token: params.access_token,
@@ -63,9 +61,6 @@ export default function AuthCallback() {
         const url = window.location.href;
         console.log('[AuthCallback] Processing OAuth callback:', url);
         const isRecovery = url.includes('type=recovery');
-        if (isRecovery) {
-          await markRecoveryInProgress();
-        }
 
         const search = window.location.search;
         const hash = window.location.hash;
