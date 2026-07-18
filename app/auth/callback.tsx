@@ -1,14 +1,18 @@
 /**
  * app/auth/callback.tsx
  *
- * Web: maneja el OAuth redirect de Google / Apple.
+ * Web: maneja el OAuth redirect de Google / Apple, y el link de "olvidé mi
+ * contraseña" (type=recovery) cuando cae directo en /auth/callback.
  * Android: la sesión ya fue establecida en register.tsx — redirige inmediatamente a /.
+ *   Excepción: un link de recovery sí debe pasar por acá (no hay registro en curso).
  */
 
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import { markRecoveryInProgress } from '@/lib/recoveryFlow';
 import * as Sentry from '@sentry/react-native';
 
 export default function AuthCallback() {
@@ -17,21 +21,20 @@ export default function AuthCallback() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      // Android: register.tsx ya maneja la navegación después del OAuth.
-      // callback.tsx no debe navegar — evita doble ejecución de index.tsx.
-      // Excepcion: un link de "olvidé mi contraseña" siempre trae type=recovery
-      // en el fragmento, y ese flujo SI debe pasar por callback.tsx (no hay
-      // registro en curso en ese caso).
-      const isRecovery = url.includes('type=recovery');
+      (async () => {
+        // El deep link completo (nospi://auth/callback#...) llega vía
+        // Linking, no vía window.location (eso solo existe en web).
+        const incomingUrl = (await Linking.getInitialURL()) || '';
+        const isRecovery = incomingUrl.includes('type=recovery');
 
-      if (isRecovery) {
-        const params: Record<string, string> = {};
-        const hash = url.includes('#') ? url.split('#')[1] : '';
-        hash.split('&').forEach((pair) => {
-          const [k, v] = pair.split('=');
-          if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
-        });
-        (async () => {
+        if (isRecovery) {
+          const params: Record<string, string> = {};
+          const hash = incomingUrl.includes('#') ? incomingUrl.split('#')[1] : '';
+          hash.split('&').forEach((pair) => {
+            const [k, v] = pair.split('=');
+            if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+          });
+          await markRecoveryInProgress();
           if (params.access_token && params.refresh_token) {
             await supabase.auth.setSession({
               access_token: params.access_token,
@@ -40,20 +43,17 @@ export default function AuthCallback() {
           }
           Sentry.addBreadcrumb({ message: 'callback.tsx: Android — recovery link, navigating to /reset-password' });
           router.replace('/reset-password');
-        })();
-        return;
-      }
+          return;
+        }
 
-      // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
-      const checkSession = async () => {
+        // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           Sentry.addBreadcrumb({ message: 'callback.tsx: Android — session found, navigating to /' });
           router.replace('/');
         }
         // Si no hay sesión, register.tsx está procesando — no hacer nada
-      };
-      checkSession();
+      })();
       return;
     }
 
@@ -63,6 +63,9 @@ export default function AuthCallback() {
         const url = window.location.href;
         console.log('[AuthCallback] Processing OAuth callback:', url);
         const isRecovery = url.includes('type=recovery');
+        if (isRecovery) {
+          await markRecoveryInProgress();
+        }
 
         const search = window.location.search;
         const hash = window.location.hash;

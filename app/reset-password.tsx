@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { clearRecoveryInProgress } from '@/lib/recoveryFlow';
 
 // Pantalla a la que auth/callback.tsx redirige cuando el link que el usuario
 // clickeó en su correo es de tipo "recovery" (olvidé mi contraseña). Para
@@ -32,6 +33,22 @@ export default function ResetPasswordScreen() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [checkingLink, setCheckingLink] = useState(true);
+  const [linkValid, setLinkValid] = useState(true);
+
+  // El link de recovery ya debería haber dejado una sesión temporal activa
+  // (auth/callback.tsx la establece antes de mandarnos acá). Si no hay
+  // sesión, el link venció o ya se usó — mejor avisar claro que mostrar un
+  // formulario que va a fallar al guardar.
+  React.useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      setLinkValid(!!session);
+      setCheckingLink(false);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const handleSubmit = async () => {
     if (!password || password.length < 6) {
@@ -56,6 +73,7 @@ export default function ResetPasswordScreen() {
       }
 
       setDone(true);
+      await clearRecoveryInProgress();
       setTimeout(() => {
         router.replace('/(tabs)/events');
       }, 1800);
@@ -91,7 +109,24 @@ export default function ResetPasswordScreen() {
                 resizeMode="contain"
               />
 
-              {done ? (
+              {checkingLink ? (
+                <ActivityIndicator size="large" color={nospiColors.white} />
+              ) : !linkValid ? (
+                <>
+                  <View style={styles.successIconWrap}>
+                    <Ionicons name="alert-circle-outline" size={40} color={nospiColors.white} />
+                  </View>
+                  <Text style={styles.title}>Este link ya no es válido</Text>
+                  <Text style={styles.subtitle}>Puede haber expirado o ya haberse usado. Solicita uno nuevo desde la pantalla de inicio de sesión.</Text>
+                  <TouchableOpacity
+                    style={styles.submitButton}
+                    onPress={() => router.replace('/forgot-password')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.submitButtonText}>Solicitar nuevo link</Text>
+                  </TouchableOpacity>
+                </>
+              ) : done ? (
                 <>
                   <View style={styles.successIconWrap}>
                     <Ionicons name="checkmark-circle-outline" size={40} color={nospiColors.white} />

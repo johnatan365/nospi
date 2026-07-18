@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
+import { isRecoveryInProgress } from '@/lib/recoveryFlow';
 
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
@@ -87,6 +88,48 @@ export default function Index() {
     isRunning.current = true;
 
     const checkProfileAndNavigate = async () => {
+      // Reenviar tokens de OAuth/recuperación de contraseña a /auth/callback
+      // ANTES de mirar `user` — si Supabase ya detectó la sesión del link de
+      // recovery más rápido de lo que tardó este efecto en correr, `user` acá
+      // ya estaría "truthy" y el bloque de abajo nos mandaría directo a
+      // /(tabs)/events, saltándose por completo la pantalla de nueva
+      // contraseña. Este chequeo tiene que ganar siempre, sin importar el
+      // estado de sesión.
+      if (Platform.OS === 'web') {
+        const rootSearch = window.location.search;
+        const rootHash = window.location.hash;
+
+        if (rootSearch.includes('code=')) {
+          console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
+          hasNavigated.current = true;
+          await hideSplash();
+          router.replace(('/auth/callback' + rootSearch) as any);
+          return;
+        }
+
+        if (rootHash.includes('access_token')) {
+          console.log('Index: OAuth/recovery tokens detected at root — forwarding to /auth/callback');
+          hasNavigated.current = true;
+          await hideSplash();
+          router.replace(('/auth/callback' + rootHash) as any);
+          return;
+        }
+
+        if (window.location.pathname.includes('/auth/')) {
+          console.log('Index: Already on auth route — skipping redirect');
+          return;
+        }
+      }
+
+      // Si hay un flujo de "olvidé mi contraseña" en curso (marcado por
+      // auth/callback.tsx), no navegar a ningún lado aunque haya sesión —
+      // dejar que /reset-password se quede en pantalla hasta que el usuario
+      // termine o abandone (la bandera expira sola a los 10 minutos).
+      if (await isRecoveryInProgress()) {
+        console.log('Index: recovery flow en curso — no se navega automáticamente');
+        return;
+      }
+
       if (user) {
         console.log('Index: User authenticated, checking profile existence');
         Sentry.addBreadcrumb({ message: 'Index: user authenticated', data: { userId: user.id, email: user.email } });
@@ -287,28 +330,6 @@ export default function Index() {
           setIsCheckingProfile(false);
         }
       } else {
-        if (Platform.OS === 'web') {
-          const search = window.location.search;
-          const hash = window.location.hash;
-
-          if (search.includes('code=')) {
-            console.log('Index: OAuth code detected at root — forwarding to /auth/callback');
-            router.replace(('/auth/callback' + search) as any);
-            return;
-          }
-
-          if (hash.includes('access_token')) {
-            console.log('Index: OAuth tokens detected at root — forwarding to /auth/callback');
-            router.replace(('/auth/callback' + hash) as any);
-            return;
-          }
-
-          if (window.location.pathname.includes('/auth/')) {
-            console.log('Index: Already on auth route — skipping redirect');
-            return;
-          }
-        }
-
         console.log('Index: user=null in context, verifying with supabase.auth.getSession()');
         const { data: { session: directSession } } = await supabase.auth.getSession();
         if (directSession?.user) {
