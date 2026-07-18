@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, SafeAreaView, TextInput,
-  KeyboardAvoidingView, Platform, Keyboard,
+  KeyboardAvoidingView, Platform, Keyboard, Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -103,6 +103,15 @@ function renderCardBrandMark(brand: 'visa' | 'mastercard' | 'amex' | 'diners' | 
   );
 }
 
+const CANCEL_REASONS = [
+  'Es muy costoso',
+  'No lo uso lo suficiente',
+  'Encontré otra alternativa',
+  'Problemas técnicos con la app',
+  'No cumplió mis expectativas',
+  'Otro',
+];
+
 interface SubscriptionRow {
   id: string;
   status: string;
@@ -125,6 +134,9 @@ export default function SubscriptionMembershipScreen() {
   const [showCardForm, setShowCardForm] = useState(startCardForm === '1');
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState('');
+  const [otherCancelReason, setOtherCancelReason] = useState('');
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -305,6 +317,20 @@ export default function SubscriptionMembershipScreen() {
       setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder('');
       await loadSubscription();
 
+      try {
+        fetch(`${SUPABASE_URL}/functions/v1/notify-subscription-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            type: 'subscribed',
+            userEmail: currentUser.email,
+            userName: currentUser.user_metadata?.name || '',
+            price: subscriptionPrice,
+            nextChargeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          }),
+        }).catch(() => {});
+      } catch {}
+
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (pendingEventId) {
         showAlert('¡Listo!', 'Tu suscripción quedó activa. Vamos a confirmar tu asistencia sin costo.');
@@ -319,26 +345,57 @@ export default function SubscriptionMembershipScreen() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     if (!subscription) return;
-    showConfirm(
-      'Cancelar suscripción',
-      'Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.',
-      'Cancelar suscripción',
-      async () => {
-        setCancelling(true);
-        const { error } = await supabase
-          .from('subscriptions')
-          .update({ auto_renew: false })
-          .eq('id', subscription.id);
-        setCancelling(false);
-        if (error) {
-          showAlert('Error', 'No se pudo cancelar. Intenta de nuevo.');
-        } else {
-          await loadSubscription();
-        }
-      },
-    );
+    setSelectedCancelReason('');
+    setOtherCancelReason('');
+    setShowCancelReasonModal(true);
+  };
+
+  const confirmCancelWithReason = async () => {
+    if (!subscription) return;
+    const reason = selectedCancelReason === 'Otro'
+      ? (otherCancelReason.trim() || 'Otro')
+      : selectedCancelReason;
+
+    if (!reason) {
+      showAlert('Selecciona un motivo', 'Cuéntanos por qué cancelas para poder seguir mejorando.');
+      return;
+    }
+
+    setCancelling(true);
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({ auto_renew: false, cancellation_reason: reason })
+      .eq('id', subscription.id);
+    setCancelling(false);
+
+    if (error) {
+      showAlert('Error', 'No se pudo cancelar. Intenta de nuevo.');
+      return;
+    }
+
+    setShowCancelReasonModal(false);
+    await loadSubscription();
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      if (currentUser?.email) {
+        fetch(`${SUPABASE_URL}/functions/v1/notify-subscription-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            type: 'cancelled',
+            userEmail: currentUser.email,
+            userName: currentUser.user_metadata?.name || '',
+            cancellationReason: reason,
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+
+    showAlert('Suscripción cancelada', 'Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.');
   };
 
   const breakEvenEvents = Math.ceil(subscriptionPrice / eventPrice);
@@ -473,6 +530,56 @@ export default function SubscriptionMembershipScreen() {
           </>
         )}
       </ScrollView>
+
+      <Modal visible={showCancelReasonModal} transparent animationType="fade" onRequestClose={() => setShowCancelReasonModal(false)}>
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalContent}>
+            <Text style={styles.cancelModalTitle}>¿Por qué cancelas?</Text>
+            <Text style={styles.cancelModalSubtitle}>Nos ayuda a mejorar Nospi.</Text>
+
+            {CANCEL_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={[styles.cancelReasonRow, selectedCancelReason === reason && styles.cancelReasonRowSelected]}
+                onPress={() => setSelectedCancelReason(reason)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.cancelReasonDot, selectedCancelReason === reason && styles.cancelReasonDotSelected]} />
+                <Text style={styles.cancelReasonText}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {selectedCancelReason === 'Otro' && (
+              <TextInput
+                style={[styles.input, { marginTop: 8 }]}
+                placeholder="Cuéntanos brevemente"
+                placeholderTextColor={nospiColors.gray400}
+                value={otherCancelReason}
+                onChangeText={setOtherCancelReason}
+              />
+            )}
+
+            <View style={styles.cancelModalButtons}>
+              <TouchableOpacity
+                style={styles.cancelModalButtonSecondary}
+                onPress={() => setShowCancelReasonModal(false)}
+                disabled={cancelling}
+              >
+                <Text style={styles.cancelModalButtonSecondaryText}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelModalButtonPrimary}
+                onPress={confirmCancelWithReason}
+                disabled={cancelling || !selectedCancelReason}
+              >
+                {cancelling
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.cancelModalButtonPrimaryText}>Cancelar suscripción</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -512,4 +619,18 @@ const styles = StyleSheet.create({
   activeSubtitle: { fontSize: 13, color: nospiColors.gray500, textAlign: 'center', marginBottom: 4 },
   cancelLink: { marginTop: 20 },
   cancelLinkText: { color: nospiColors.error, fontSize: 13, fontWeight: '600' },
+  cancelModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  cancelModalContent: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 380 },
+  cancelModalTitle: { fontSize: 18, fontWeight: '800', color: nospiColors.gray900, marginBottom: 4 },
+  cancelModalSubtitle: { fontSize: 13, color: nospiColors.gray500, marginBottom: 16 },
+  cancelReasonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: nospiColors.gray200, marginBottom: 8 },
+  cancelReasonRowSelected: { borderColor: nospiColors.purpleMid, backgroundColor: nospiColors.purplePale },
+  cancelReasonDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: nospiColors.gray300, marginRight: 10 },
+  cancelReasonDotSelected: { borderColor: nospiColors.purpleMid, backgroundColor: nospiColors.purpleMid },
+  cancelReasonText: { fontSize: 14, color: nospiColors.gray900, flex: 1 },
+  cancelModalButtons: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  cancelModalButtonSecondary: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: nospiColors.gray200, alignItems: 'center' },
+  cancelModalButtonSecondaryText: { color: nospiColors.gray700, fontWeight: '700', fontSize: 14 },
+  cancelModalButtonPrimary: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: nospiColors.error, alignItems: 'center' },
+  cancelModalButtonPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
