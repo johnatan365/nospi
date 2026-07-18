@@ -5,9 +5,23 @@ import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  console.log('[RecoveryDebug] lib/supabase.ts module evaluated, href:', window.location.href);
-}
+// El componente SupabaseProvider se monta dos veces al arrancar en web (parte
+// de como Expo Router resuelve la ruta inicial) y para el segundo montaje
+// Supabase ya proceso y limpio el hash de la URL (#access_token=...) de forma
+// asincrona. Por eso el flag de "vengo de un link de recuperar contraseña" no
+// puede depender de leer window.location.hash dentro de un useState/efecto de
+// React (se reevalua en cada montaje). Este modulo SI se evalua una sola vez
+// por carga de pagina real (confirmado: no vuelve a importarse), asi que acá
+// es donde toca leerlo, apenas se importa este archivo -- antes de que
+// createClient() dispare el procesamiento interno del hash.
+export const RECOVERY_FLOW_DETECTED_ON_LOAD: boolean = (() => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  try {
+    return window.location.hash.includes('type=recovery');
+  } catch {
+    return false;
+  }
+})();
 
 // Get Supabase credentials from app.json extra config
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
