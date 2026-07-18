@@ -81,7 +81,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'config';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'config';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -506,6 +506,15 @@ export default function AdminPanelScreen() {
   const [reconcileMessage, setReconcileMessage] = useState<string | null>(null);
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
+
+  // Suscripciones mensuales (para la pestaña "Suscripciones" del admin)
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [subscriptionEvents, setSubscriptionEvents] = useState<any[]>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false);
+  const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
+  const [subscriptionStatusFilter, setSubscriptionStatusFilter] = useState<string>('all');
+  const [subscriptionSearchQuery, setSubscriptionSearchQuery] = useState('');
 
   // Event attendees modal
   const [showAttendeesModal, setShowAttendeesModal] = useState(false);
@@ -1777,6 +1786,33 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  const loadSubscriptions = async (force?: boolean) => {
+    if (subscriptionsLoaded && !force) return;
+    setSubscriptionsLoading(true);
+    try {
+      const [subsRes, eventsRes] = await Promise.all([
+        supabase.rpc('get_all_subscriptions_for_admin'),
+        supabase.rpc('get_subscription_events_for_admin'),
+      ]);
+      if (subsRes.error) {
+        console.error('Error loading subscriptions:', subsRes.error);
+        window.alert('Error al cargar suscripciones: ' + subsRes.error.message);
+      } else {
+        setSubscriptions(subsRes.data || []);
+      }
+      if (eventsRes.error) {
+        console.error('Error loading subscription events:', eventsRes.error);
+      } else {
+        setSubscriptionEvents(eventsRes.data || []);
+      }
+      setSubscriptionsLoaded(true);
+    } catch (error) {
+      console.error('Failed to load subscriptions:', error);
+    } finally {
+      setSubscriptionsLoading(false);
+    }
+  };
+
   const loadQuestions = async () => {
     setLoadingQuestions(true);
     try {
@@ -2500,6 +2536,210 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             })
           )}
         </div>
+      </View>
+    );
+  };
+
+  const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
+    active: 'Activa',
+    cancelled: 'Cancelada',
+    expired: 'Vencida',
+    canceled: 'Cancelada',
+  };
+  const SUBSCRIPTION_STATUS_COLOR: Record<string, string> = {
+    active: '#059669',
+    cancelled: '#EF4444',
+    canceled: '#EF4444',
+    expired: '#9CA3AF',
+  };
+
+  const renderSubscriptions = () => {
+    const now = Date.now();
+    const soonThreshold = now + 7 * 24 * 60 * 60 * 1000;
+
+    const activeSubs = subscriptions.filter((s) => s.status === 'active');
+    const cancelledSubs = subscriptions.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
+    const expiredSubs = subscriptions.filter((s) => s.status === 'expired');
+    const mrr = activeSubs.reduce((sum, s) => sum + Number(s.price || 0), 0);
+    const renewingSoon = activeSubs.filter((s) => s.auto_renew && s.next_charge_date && new Date(s.next_charge_date).getTime() <= soonThreshold);
+    const withFailedCharges = subscriptions.filter((s) => Number(s.failed_charge_count || 0) > 0);
+
+    const q = subscriptionSearchQuery.trim().toLowerCase();
+    const filtered = subscriptions.filter((s) => {
+      if (subscriptionStatusFilter !== 'all' && s.status !== subscriptionStatusFilter) return false;
+      if (!q) return true;
+      return (
+        (s.user_name || '').toLowerCase().includes(q) ||
+        (s.user_email || '').toLowerCase().includes(q) ||
+        (s.user_phone || '').toLowerCase().includes(q)
+      );
+    });
+
+    const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+    const summaryCards: { label: string; value: string; color: string; sub?: string }[] = [
+      { label: 'Suscriptores activos', value: String(activeSubs.length), color: '#059669' },
+      { label: 'Cancelados / vencidos', value: String(cancelledSubs.length + expiredSubs.length), color: '#EF4444' },
+      { label: 'Ingreso mensual estimado (MRR)', value: `$ ${mrr.toLocaleString('es-CO')} COP`, color: '#6B21A8' },
+      { label: 'Renuevan en 7 días', value: String(renewingSoon.length), color: '#D97706' },
+      { label: 'Con fallos de cobro', value: String(withFailedCharges.length), color: '#DC2626' },
+    ];
+
+    return (
+      <View style={styles.listContainer}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+          <Text style={styles.sectionTitle}>👑 Suscripciones mensuales</Text>
+          <button
+            onClick={() => loadSubscriptions(true)}
+            disabled={subscriptionsLoading}
+            style={{
+              backgroundColor: nospiColors.purpleDark, color: 'white', border: 'none',
+              borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700,
+              cursor: subscriptionsLoading ? 'default' : 'pointer', opacity: subscriptionsLoading ? 0.6 : 1,
+            }}
+          >
+            {subscriptionsLoading ? 'Actualizando...' : '🔄 Actualizar'}
+          </button>
+        </div>
+        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 20 }}>
+          Quién está suscrito, quién canceló (y por qué), y a cuántos eventos ha ido cada suscriptor usando su membresía.
+        </Text>
+
+        {subscriptionsLoading && subscriptions.length === 0 ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+          </View>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+              {summaryCards.map((c) => (
+                <div key={c.label} style={{ backgroundColor: 'white', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${c.color}` }}>
+                  <div style={{ fontSize: 12, color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>{c.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Buscar por nombre, email o teléfono..."
+                value={subscriptionSearchQuery}
+                onChange={(e) => setSubscriptionSearchQuery(e.target.value)}
+                style={{
+                  flex: '1 1 260px', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #E5E7EB',
+                  fontSize: 14, outline: 'none',
+                }}
+              />
+              {[
+                { key: 'all', label: `Todas (${subscriptions.length})` },
+                { key: 'active', label: `Activas (${activeSubs.length})` },
+                { key: 'cancelled', label: `Canceladas (${cancelledSubs.length})` },
+                { key: 'expired', label: `Vencidas (${expiredSubs.length})` },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setSubscriptionStatusFilter(f.key)}
+                  style={{
+                    padding: '9px 14px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    backgroundColor: subscriptionStatusFilter === f.key ? nospiColors.purpleDark : '#F3F4F6',
+                    color: subscriptionStatusFilter === f.key ? 'white' : '#4B5563',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {filtered.length === 0 ? (
+              <Text style={{ fontSize: 14, color: '#9CA3AF' }}>No hay suscripciones que coincidan con el filtro.</Text>
+            ) : (
+              <div style={{ backgroundColor: 'white', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #F3E8FF', backgroundColor: '#FAF5FF' }}>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Suscriptor</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Estado</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Inicio</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Próx. cobro / Fin</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Auto-renovación</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Último cobro</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Eventos</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((s) => {
+                        const isOpen = expandedSubscriptionId === s.id;
+                        const events = subscriptionEvents.filter((e) => e.user_id === s.user_id);
+                        const statusColor = SUBSCRIPTION_STATUS_COLOR[s.status] || '#9CA3AF';
+                        return (
+                          <React.Fragment key={s.id}>
+                            <tr
+                              style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                              onClick={() => setExpandedSubscriptionId(isOpen ? null : s.id)}
+                            >
+                              <td style={{ padding: '12px 14px' }}>
+                                <div style={{ fontWeight: 700, color: '#1F2937' }}>{s.user_name || '—'}</div>
+                                <div style={{ fontSize: 12, color: '#9CA3AF' }}>{s.user_email}{s.user_phone ? ` · ${s.user_phone}` : ''}</div>
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <span style={{ backgroundColor: `${statusColor}1A`, color: statusColor, padding: '4px 10px', borderRadius: 8, fontWeight: 700, fontSize: 12 }}>
+                                  {SUBSCRIPTION_STATUS_LABEL[s.status] || s.status}
+                                </span>
+                                {Number(s.failed_charge_count || 0) > 0 && (
+                                  <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>⚠️ {s.failed_charge_count} cobro(s) fallido(s)</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{fmtDate(s.start_date)}</td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>
+                                {s.status === 'active' ? fmtDate(s.next_charge_date) : fmtDate(s.end_date)}
+                              </td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.auto_renew ? '✅ Sí' : '❌ No'}</td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.last_charge_status || '—'}</td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>
+                                {s.events_attended} asistidos{Number(s.events_cancelled) > 0 ? ` · ${s.events_cancelled} cancelados` : ''}
+                              </td>
+                              <td style={{ padding: '12px 14px', color: '#9CA3AF', textAlign: 'right' }}>{isOpen ? '▲' : '▼'}</td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={8} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
+                                  {s.cancellation_reason && (
+                                    <div style={{ margin: '10px 0', padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: 10, fontSize: 13, color: '#991B1B' }}>
+                                      <strong>Motivo de cancelación:</strong> {s.cancellation_reason}
+                                    </div>
+                                  )}
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', margin: '10px 0 6px' }}>
+                                    Eventos usando la suscripción ({events.length})
+                                  </div>
+                                  {events.length === 0 ? (
+                                    <Text style={{ fontSize: 13, color: '#9CA3AF' }}>Todavía no ha usado la suscripción para ningún evento.</Text>
+                                  ) : (
+                                    events.map((e) => (
+                                      <div key={e.appointment_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #F3F4F6', fontSize: 13 }}>
+                                        <span style={{ color: '#1F2937', fontWeight: 600 }}>{e.event_name}</span>
+                                        <span style={{ color: '#6B7280' }}>{fmtDate(e.event_date)}</span>
+                                        <span style={{ color: e.status === 'cancelada' ? '#EF4444' : '#059669', fontWeight: 700 }}>
+                                          {e.status === 'cancelada' ? 'Cancelada' : e.status === 'anterior' ? 'Asistió' : 'Confirmada'}
+                                        </span>
+                                      </div>
+                                    ))
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </View>
     );
   };
@@ -4262,6 +4502,7 @@ setBulkWhatsAppPending(pending);
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
+    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -4388,6 +4629,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
+                if (item.key === 'subscriptions') loadSubscriptions();
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}
@@ -4419,6 +4661,7 @@ setBulkWhatsAppPending(pending);
             {currentView === 'questions'    && renderQuestions()}
             {currentView === 'realtime'     && renderRealtime()}
             {currentView === 'reconciliation' && renderReconciliation()}
+            {currentView === 'subscriptions' && renderSubscriptions()}
             {currentView === 'config'       && renderConfig()}
           </div>
         </div>
