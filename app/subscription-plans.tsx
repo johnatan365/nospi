@@ -185,6 +185,10 @@ export default function SubscriptionPlansScreen() {
   const isProcessing = (m: string) => processingMethod === m;
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // Modal aparte para cuando el usuario YA tiene suscripcion activa y solo
+  // confirma su cupo a un evento pendiente -- no hubo ningun pago en este
+  // momento, asi que NO debe mostrar el modal de "Pago Exitoso".
+  const [showSubscriptionConfirmModal, setShowSubscriptionConfirmModal] = useState(false);
   const [showEventMethods, setShowEventMethods] = useState(false);
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
@@ -382,7 +386,7 @@ export default function SubscriptionPlansScreen() {
           if (pendingEventId) {
             const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
             if (ok) {
-              setShowSuccessModal(true);
+              setShowSubscriptionConfirmModal(true);
             } else {
               setAutoConfirmError(true);
             }
@@ -1458,7 +1462,7 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  if (hasActiveSubscription && !autoConfirmError && !showSuccessModal) {
+  if (hasActiveSubscription && !autoConfirmError && !showSuccessModal && !showSubscriptionConfirmModal) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
         <ActivityIndicator size="large" color="#fff" />
@@ -1856,6 +1860,19 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
             <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
+              <Text style={styles.successButtonText}>Ver mis citas</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showSubscriptionConfirmModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.successIcon}>🎟️</Text>
+            <Text style={styles.successTitle}>¡Cupo confirmado!</Text>
+            <Text style={styles.successMessage}>Tu suscripción cubre este evento — ya tienes tu lugar asegurado</Text>
+            <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
           </View>
