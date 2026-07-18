@@ -19,6 +19,31 @@ export default function AuthCallback() {
     if (Platform.OS !== 'web') {
       // Android: register.tsx ya maneja la navegación después del OAuth.
       // callback.tsx no debe navegar — evita doble ejecución de index.tsx.
+      // Excepcion: un link de "olvidé mi contraseña" siempre trae type=recovery
+      // en el fragmento, y ese flujo SI debe pasar por callback.tsx (no hay
+      // registro en curso en ese caso).
+      const isRecovery = url.includes('type=recovery');
+
+      if (isRecovery) {
+        const params: Record<string, string> = {};
+        const hash = url.includes('#') ? url.split('#')[1] : '';
+        hash.split('&').forEach((pair) => {
+          const [k, v] = pair.split('=');
+          if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+        });
+        (async () => {
+          if (params.access_token && params.refresh_token) {
+            await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token,
+            });
+          }
+          Sentry.addBreadcrumb({ message: 'callback.tsx: Android — recovery link, navigating to /reset-password' });
+          router.replace('/reset-password');
+        })();
+        return;
+      }
+
       // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
       const checkSession = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -37,6 +62,7 @@ export default function AuthCallback() {
       try {
         const url = window.location.href;
         console.log('[AuthCallback] Processing OAuth callback:', url);
+        const isRecovery = url.includes('type=recovery');
 
         const search = window.location.search;
         const hash = window.location.hash;
@@ -73,17 +99,19 @@ export default function AuthCallback() {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
+        const destination = isRecovery ? '/reset-password' : '/';
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          console.log('[AuthCallback] Session confirmed, redirecting to /');
-          router.replace('/');
+          console.log('[AuthCallback] Session confirmed, redirecting to', destination);
+          router.replace(destination as any);
         } else {
           console.log('[AuthCallback] No session yet, waiting...');
           await new Promise(resolve => setTimeout(resolve, 1000));
           const { data: { session: session2 } } = await supabase.auth.getSession();
           if (session2) {
-            console.log('[AuthCallback] Session confirmed after wait, redirecting to /');
-            router.replace('/');
+            console.log('[AuthCallback] Session confirmed after wait, redirecting to', destination);
+            router.replace(destination as any);
           } else {
             console.warn('[AuthCallback] No session after wait, redirecting to login');
             router.replace('/login?error=oauth_error');
