@@ -798,12 +798,30 @@ export default function AdminPanelScreen() {
     try {
       setLoading(true);
 
-      // Load events
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: false });
+      // Todas estas consultas son independientes entre sí, así que se disparan
+      // en paralelo en vez de una tras otra (antes esto era ~9 round-trips
+      // secuenciales a Supabase: si uno tardaba — cold start, tabla grande —
+      // todo el resto quedaba esperando en fila detrás, y el panel podía
+      // tardar mucho o sentirse colgado al iniciar sesión o refrescar).
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      // loadDeclinedPayments y loadFunnelData manejan su propio estado de
+      // "loading" y su propio try/catch, así que se disparan aparte sin
+      // bloquear el resto del dashboard.
+      loadDeclinedPayments().catch((e) => console.warn('Error cargando pagos declinados', e));
+      loadFunnelData(todayStr, todayStr, '00:00', '23:59').catch((e) => console.warn('Funnel error', e));
 
+      const [eventsRes, usersRes, usersDatesRes, ratingsRes, appointmentsRes, paymentAttemptsRes] = await Promise.all([
+        supabase.from('events').select('*').order('date', { ascending: false }),
+        supabase.rpc('get_all_users_for_admin'),
+        supabase.rpc('get_user_created_dates'),
+        supabase.from('event_ratings').select('rated_user_id, rating'),
+        supabase.rpc('get_all_appointments_for_admin'),
+        supabase.from('payment_attempts').select('*').order('created_at', { ascending: false }),
+      ]);
+
+      // Events
+      const eventsData = eventsRes.data;
+      const eventsError = eventsRes.error;
       if (eventsError) {
         console.error('Error loading events:', eventsError);
         window.alert('Error al cargar eventos: ' + eventsError.message);
@@ -814,17 +832,14 @@ export default function AdminPanelScreen() {
         setActiveEvents(activeCount);
       }
 
-      // Load users using the secure admin function
-      const { data: usersData, error: usersError } = await supabase
-        .rpc('get_all_users_for_admin');
-
+      // Users (usando la función segura de admin) + created_at (que el RPC puede no traer)
+      const usersData = usersRes.data;
+      const usersError = usersRes.error;
       if (usersError) {
         console.error('Error loading users:', usersError);
         window.alert('No se pudieron cargar los usuarios: ' + usersError.message);
       } else {
-        // Also fetch created_at which the RPC may not return
-        const { data: usersDates } = await supabase
-          .rpc('get_user_created_dates');
+        const usersDates = usersDatesRes.data;
         const datesMap: Record<string, string> = {};
         (usersDates || []).forEach((u: any) => { datesMap[u.id] = u.created_at; });
         const merged = (usersData || []).map((u: any) => ({
@@ -836,9 +851,7 @@ export default function AdminPanelScreen() {
       }
 
       // Load all event_ratings to compute per-user average ratings
-      const { data: allRatings } = await supabase
-        .from('event_ratings')
-        .select('rated_user_id, rating');
+      const allRatings = ratingsRes.data;
       if (allRatings && allRatings.length > 0) {
         const map: Record<string, { sum: number; count: number }> = {};
         for (const r of allRatings) {
@@ -854,8 +867,8 @@ export default function AdminPanelScreen() {
       }
 
       // Load appointments using the secure admin function
-      const { data: appointmentsRawData, error: appointmentsError } = await supabase
-        .rpc('get_all_appointments_for_admin');
+      const appointmentsRawData = appointmentsRes.data;
+      const appointmentsError = appointmentsRes.error;
 
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
@@ -911,25 +924,13 @@ export default function AdminPanelScreen() {
       }
 
       // Load payment_attempts para el reporte de reconciliación (pagos de Wompi vs. citas)
-      const { data: paymentAttemptsData, error: paymentAttemptsError } = await supabase
-        .from('payment_attempts')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const paymentAttemptsData = paymentAttemptsRes.data;
+      const paymentAttemptsError = paymentAttemptsRes.error;
       if (paymentAttemptsError) {
         console.error('Error loading payment_attempts:', paymentAttemptsError);
       } else {
         setPaymentAttempts(paymentAttemptsData || []);
       }
-
-      // Cargar pagos declinados (último intento de pago por usuario, sin importar el evento)
-      try {
-        await loadDeclinedPayments();
-      } catch (e) { console.warn('Error cargando pagos declinados', e); }
-
-      // Load funnel inicial sin filtros
-      try {
-        await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
-      } catch (e) { console.warn('Funnel error', e); }
 
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
