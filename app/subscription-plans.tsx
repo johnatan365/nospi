@@ -1428,7 +1428,7 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  if (hasActiveSubscription && !autoConfirmError) {
+  if (hasActiveSubscription && !autoConfirmError && !showSuccessModal) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
         <ActivityIndicator size="large" color="#fff" />
