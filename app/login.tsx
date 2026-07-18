@@ -305,6 +305,17 @@ export default function LoginScreen() {
                     <Ionicons name={eyeIcon} size={22} color="#999" />
                   </TouchableOpacity>
                 </View>
+
+                {!isSignUp ? (
+                  <TouchableOpacity
+                    style={styles.forgotPasswordButton}
+                    onPress={() => router.push('/forgot-password')}
+                    disabled={isLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               <TouchableOpacity
@@ -467,6 +478,15 @@ const styles = StyleSheet.create({
   form: {
     gap: 14,
     marginBottom: 20,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+  },
+  forgotPasswordText: {
+    fontSize: 13.5,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '500',
   },
   inputWrapper: {
     flexDirection: 'row',
