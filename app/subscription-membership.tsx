@@ -119,6 +119,7 @@ interface SubscriptionRow {
   end_date: string;
   next_charge_date: string | null;
   auto_renew: boolean;
+  wompi_payment_source_id: string | null;
 }
 
 export default function SubscriptionMembershipScreen() {
@@ -134,11 +135,13 @@ export default function SubscriptionMembershipScreen() {
   const [showCardForm, setShowCardForm] = useState(startCardForm === '1');
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [selectedCancelReason, setSelectedCancelReason] = useState('');
   const [otherCancelReason, setOtherCancelReason] = useState('');
   const [showSubscribeSuccessModal, setShowSubscribeSuccessModal] = useState(false);
   const [showCancelSuccessModal, setShowCancelSuccessModal] = useState(false);
+  const [showReactivateSuccessModal, setShowReactivateSuccessModal] = useState(false);
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -153,7 +156,7 @@ export default function SubscriptionMembershipScreen() {
     setLoading(true);
     const { data } = await supabase
       .from('subscriptions')
-      .select('id, status, price, end_date, next_charge_date, auto_renew')
+      .select('id, status, price, end_date, next_charge_date, auto_renew, wompi_payment_source_id')
       .eq('user_id', user.id)
       .maybeSingle();
     setSubscription(data as SubscriptionRow | null);
@@ -401,6 +404,48 @@ export default function SubscriptionMembershipScreen() {
     setShowCancelSuccessModal(true);
   };
 
+  // Reactiva la renovación automática de una suscripción que sigue vigente
+  // (auto_renew=false, status='active', end_date todavía no pasa) pero fue
+  // cancelada antes. No pide tarjeta de nuevo: reusa el wompi_payment_source_id
+  // que ya está guardado, así que el cron de cobro recurrente la vuelve a
+  // tomar en cuenta apenas se cumpla next_charge_date.
+  const handleReactivate = async () => {
+    if (!subscription) return;
+    setReactivating(true);
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({ auto_renew: true, cancellation_reason: null })
+      .eq('id', subscription.id);
+    setReactivating(false);
+
+    if (error) {
+      showAlert('Error', 'No se pudo reactivar la renovación. Intenta de nuevo.');
+      return;
+    }
+
+    await loadSubscription();
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      if (currentUser?.email) {
+        fetch(`${SUPABASE_URL}/functions/v1/notify-subscription-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            type: 'reactivated',
+            userEmail: currentUser.email,
+            userName: currentUser.user_metadata?.name || '',
+            price: subscriptionPrice,
+            nextChargeDate: subscription.next_charge_date || subscription.end_date,
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+
+    setShowReactivateSuccessModal(true);
+  };
+
   const breakEvenEvents = Math.ceil(subscriptionPrice / eventPrice);
 
   if (loading) {
@@ -435,9 +480,20 @@ export default function SubscriptionMembershipScreen() {
             <Text style={styles.activeSubtitle}>
               {subscription.auto_renew ? 'Se renueva automáticamente cada mes' : 'No se renovará — termina en la fecha indicada'}
             </Text>
-            {subscription.auto_renew && (
+            {subscription.auto_renew ? (
               <TouchableOpacity style={styles.cancelLink} onPress={handleCancel} disabled={cancelling}>
                 {cancelling ? <ActivityIndicator color={nospiColors.error} /> : <Text style={styles.cancelLinkText}>Cancelar renovación automática</Text>}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.subscribeButton, { marginTop: 20, paddingHorizontal: 24 }]}
+                onPress={handleReactivate}
+                disabled={reactivating}
+                activeOpacity={0.85}
+              >
+                {reactivating
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.subscribeButtonText}>Reactivar renovación automática</Text>}
               </TouchableOpacity>
             )}
           </View>
@@ -610,6 +666,23 @@ export default function SubscriptionMembershipScreen() {
             <TouchableOpacity
               style={[styles.successModalButton, { backgroundColor: nospiColors.gray700 }]}
               onPress={() => setShowCancelSuccessModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.successModalButtonText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showReactivateSuccessModal} transparent animationType="fade">
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <Text style={styles.successModalEmoji}>🎉</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>¡Renovación reactivada!</Text>
+            <Text style={styles.successModalSubtitle}>Tu suscripción volverá a renovarse automáticamente cada mes con la tarjeta que ya tenías registrada.</Text>
+            <TouchableOpacity
+              style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
+              onPress={() => setShowReactivateSuccessModal(false)}
               activeOpacity={0.85}
             >
               <Text style={styles.successModalButtonText}>Entendido</Text>
