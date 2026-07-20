@@ -3336,7 +3336,7 @@ setBulkWhatsAppPending(pending);
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const confirmationCode = event.confirmation_code || '1986';
           
-          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
+          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada').length;
 
           return (
             <View key={event.id} style={styles.listItemCompact}>
