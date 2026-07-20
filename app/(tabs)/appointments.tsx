@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -483,7 +483,11 @@ export default function AppointmentsScreen() {
               return (
                 <View key={appointment.id} style={styles.appointmentCard}>
                   <View style={styles.appointmentHeader}>
-                    <Text style={styles.appointmentIcon}>{eventIcon}</Text>
+                    {eventType === 'caminata' ? (
+                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 47, height: 40, marginRight: 12 }} resizeMode="contain" />
+                    ) : (
+                      <Text style={styles.appointmentIcon}>{eventIcon}</Text>
+                    )}
                     <View style={styles.appointmentHeaderText}>
                       <Text style={styles.appointmentName}>{eventName}</Text>
                       <Text style={styles.appointmentCity}>{eventCity}</Text>

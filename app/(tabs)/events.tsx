@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
@@ -199,7 +199,11 @@ export default function EventsScreen() {
                       onPress={() => handleEventPress(event)}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.eventIconCompact}>{eventIcon}</Text>
+                      {event.type === 'caminata' ? (
+                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                      ) : (
+                        <Text style={styles.eventIconCompact}>{eventIcon}</Text>
+                      )}
                       <View style={styles.eventCardBody}>
                         <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
