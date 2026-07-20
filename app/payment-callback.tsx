@@ -177,6 +177,7 @@ async function cleanupAsyncStorage(): Promise<void> {
   await AsyncStorage.multiRemove([
     'nospi_transaction_id',
     'nospi_payment_method',
+    'nospi_payment_event_id',
     'nospi_payment_opened_time',
     'nospi_payment_status',
     'nospi_user_id',
@@ -320,7 +321,11 @@ export default function PaymentCallbackScreen() {
         // Step 1: Read ALL AsyncStorage values BEFORE any cleanup.
         const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
         const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
-        const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
+        // Preferir la llave dedicada a ESTE pago (capturada en subscription-plans.tsx
+        // al crear la transacción) por encima de 'pending_event_confirmation', que es
+        // una bandera global que puede haberse sobreescrito si el usuario miró/confirmó
+        // otro evento mientras este pago asíncrono seguía pendiente con el banco.
+        const storedEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
         
@@ -535,7 +540,7 @@ export default function PaymentCallbackScreen() {
             const runProcess = async () => {
               const storedTransactionId = await AsyncStorage.getItem('nospi_transaction_id');
               const storedPaymentMethod = await AsyncStorage.getItem('nospi_payment_method');
-              const storedEventId = await AsyncStorage.getItem('pending_event_confirmation');
+              const storedEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
               const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
               const transactionId = txId || storedTransactionId || '';
