@@ -188,7 +188,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{section}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
+                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
 
