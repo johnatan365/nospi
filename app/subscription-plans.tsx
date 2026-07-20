@@ -1722,8 +1722,16 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-
-              router.back();
+              // router.back() no hacia nada cuando esta pantalla se abre sin
+              // historial previo (por ejemplo, al volver de un pago pendiente,
+              // o si se entra directo por deep link) — Cancelar se sentia roto.
+              // canGoBack() evita eso: si no hay a donde volver, navega a un
+              // destino seguro en vez de no hacer nada.
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)/events');
+              }
             }}
             style={{ paddingHorizontal: 8 }}
           >
