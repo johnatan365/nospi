@@ -190,6 +190,14 @@ export default function SubscriptionPlansScreen() {
   // momento, asi que NO debe mostrar el modal de "Pago Exitoso".
   const [showSubscriptionConfirmModal, setShowSubscriptionConfirmModal] = useState(false);
   const [showEventMethods, setShowEventMethods] = useState(false);
+  // Presupuesto para la cena — solo se pregunta en eventos type='restaurante',
+  // una vez por evento, antes de mostrar los métodos de pago. Se guarda en
+  // AsyncStorage (mismo patrón que pending_event_confirmation) para que
+  // confirmAppointment lo pueda leer sin tener que pasarlo por cada handler
+  // de pago (card/nequi/pse/bancolombia/saldo virtual) uno por uno.
+  const [eventType, setEventType] = useState<string | null>(null);
+  const [showBudgetQuestion, setShowBudgetQuestion] = useState(false);
+  const [budgetAnswered, setBudgetAnswered] = useState(false);
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -272,6 +280,19 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
+  // Cargar el tipo del evento pendiente (bar / restaurante / caminata) para
+  // saber si corresponde preguntar el presupuesto antes de pagar.
+  useEffect(() => {
+    (async () => {
+      try {
+        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+        if (!pendingEventId) return;
+        const { data } = await supabase.from('events').select('type').eq('id', pendingEventId).maybeSingle();
+        setEventType(data?.type || null);
+      } catch {}
+    })();
+  }, []);
+
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
   const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
@@ -296,7 +317,12 @@ export default function SubscriptionPlansScreen() {
       if (!userId) userId = user?.id || null;
       if (!userId) return false;
 
-      const appointmentData = {
+      // budget_range: presupuesto para la cena que el usuario indicó antes de
+      // pagar (solo aplica a eventos type='restaurante'; queda sin enviar para
+      // bar/caminata o si por algún motivo no se preguntó).
+      const budgetRange = await AsyncStorage.getItem('pending_event_budget_range');
+
+      const appointmentData: Record<string, any> = {
         user_id: userId,
         event_id: pendingEventId,
         status: 'confirmada',
@@ -305,6 +331,7 @@ export default function SubscriptionPlansScreen() {
         payment_method: paymentMethod,
         confirmed_at: new Date().toISOString(),
       };
+      if (budgetRange) appointmentData.budget_range = budgetRange;
 
       // Verificar si ya existe una cita para este usuario y evento
       const { data: existing } = await supabase
@@ -346,6 +373,7 @@ export default function SubscriptionPlansScreen() {
       if (!verification) return false;
 
       await AsyncStorage.removeItem('pending_event_confirmation');
+      await AsyncStorage.removeItem('pending_event_budget_range');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
 
       // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia
@@ -411,7 +439,7 @@ export default function SubscriptionPlansScreen() {
         const storedTime = await AsyncStorage.getItem('nospi_payment_opened_time');
 
         if (!storedTxId || !storedMethod) return;
-        
+
         // En Android, dar 500ms al polling para que procese primero
         // (el AppState 'active' y el polling pueden disparar simultáneamente)
         if (Platform.OS === 'android') {
@@ -426,13 +454,13 @@ export default function SubscriptionPlansScreen() {
           if (age > 10 * 60 * 1000) return;
         }
 
-        
+
 
         try {
           const res = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
           const data = await res.json();
           const status = data.data?.status;
-          
+
 
           if (status === 'APPROVED') {
             // Si el polling nativo o payment-callback ya están manejando este pago, no duplicar.
@@ -479,10 +507,10 @@ export default function SubscriptionPlansScreen() {
             // The app was backgrounded during 3DS — the polling interval may have been killed.
             // Restart a short-interval poll (3s, max 10 attempts) to catch the APPROVED status.
             if (threeDsPollRef.current) {
-              
+
               return;
             }
-            
+
             let resumeAttempts = 0;
             const maxResumeAttempts = 10;
             threeDsPollRef.current = setInterval(async () => {
@@ -491,7 +519,7 @@ export default function SubscriptionPlansScreen() {
                 const pollRes = await fetch(`${WOMPI_API_URL}/transactions/${storedTxId}`);
                 const pollData = await pollRes.json();
                 const pollStatus = pollData.data?.status;
-                
+
 
                 if (pollStatus === 'APPROVED') {
                   clearInterval(threeDsPollRef.current!);
@@ -532,10 +560,10 @@ export default function SubscriptionPlansScreen() {
                 } else if (resumeAttempts >= maxResumeAttempts) {
                   clearInterval(threeDsPollRef.current!);
                   threeDsPollRef.current = null;
-                  
+
                 }
               } catch (e) {
-                
+
                 if (resumeAttempts >= maxResumeAttempts) {
                   clearInterval(threeDsPollRef.current!);
                   threeDsPollRef.current = null;
@@ -545,7 +573,7 @@ export default function SubscriptionPlansScreen() {
           }
           // For non-card PENDING: payment-callback handles it on browser return
         } catch (e) {
-          
+
         }
       }
     };
@@ -633,7 +661,7 @@ export default function SubscriptionPlansScreen() {
 
   const handleSuccess = async () => {
     await confirmAppointment('', 'virtual_balance');
-    
+
     await AsyncStorage.setItem('should_check_notification_prompt', 'true');
     setShowSuccessModal(true);
   };
@@ -653,21 +681,21 @@ export default function SubscriptionPlansScreen() {
   };
 
   const handlePayWithVirtualBalance = async () => {
-    
+
     setProcessingMethod('virtual');
     try {
       await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
-      
+
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       await confirmAppointment('', 'virtual_balance');
       if (pendingEventId) {
-        
+
         router.replace({
           pathname: '/event-details/[id]',
           params: { id: pendingEventId, paymentSuccess: 'true' },
         });
       } else {
-        
+
         setShowSuccessModal(true);
       }
     } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
@@ -714,8 +742,8 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const tokenData = await tokenRes.json();
-      
-      
+
+
       if (!tokenRes.ok || !tokenData.data?.id) {
         const msgs = tokenData.error?.messages;
         const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
@@ -745,29 +773,29 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const result = await response.json();
-      
+
       if (!response.ok || result.error) throw new Error(result.error || `Error al procesar el pago (HTTP ${response.status})`);
 
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
-        
+
         const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-        
+
         await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
         if (pendingEventId) {
-          
+
           router.replace({
             pathname: '/event-details/[id]',
             params: { id: pendingEventId, paymentSuccess: 'true' },
           });
         } else {
-          
+
           setShowSuccessModal(true);
         }
       } else if (result.status === 'PENDING') {
         // Card payment is pending — puede requerir autenticación 3DS en mobile.
-        
-        
+
+
         setShowCardForm(false);
 
         // Detectar si Wompi requiere 3DS (redirect de autenticación).
@@ -783,7 +811,7 @@ export default function SubscriptionPlansScreen() {
           // En mobile: abrir la URL de 3DS en el browser nativo.
           // Wompi redirigirá de vuelta a WEB_REDIRECT_URL (HTTPS) after 3DS.
           // The AppState 'active' event fires when the user returns to the app.
-          
+
           await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'card');
           await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
@@ -805,14 +833,14 @@ export default function SubscriptionPlansScreen() {
           const bgTxId = result.transactionId || '';
           let bgAttempts = 0;
           const bgMaxAttempts = 36;
-          
+
           threeDsPollRef.current = setInterval(async () => {
             bgAttempts++;
             try {
               const bgRes = await fetch(`${WOMPI_API_URL}/transactions/${bgTxId}`);
               const bgData = await bgRes.json();
               const bgStatus = bgData.data?.status;
-              
+
 
               if (bgStatus === 'APPROVED') {
                 clearInterval(threeDsPollRef.current!);
@@ -853,12 +881,12 @@ export default function SubscriptionPlansScreen() {
               } else if (bgAttempts >= bgMaxAttempts) {
                 clearInterval(threeDsPollRef.current!);
                 threeDsPollRef.current = null;
-                
+
                 showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
                 router.replace('/(tabs)/appointments');
               }
             } catch (e) {
-              
+
               if (bgAttempts >= bgMaxAttempts) {
                 clearInterval(threeDsPollRef.current!);
                 threeDsPollRef.current = null;
@@ -871,7 +899,7 @@ export default function SubscriptionPlansScreen() {
         }
 
         showAlert('Procesando pago', 'Tu pago con tarjeta está siendo verificado. Por favor espera...');
-        
+
         let cardAttempts = 0;
         // En mobile sin 3DS url: aumentar el intervalo y los intentos para dar más tiempo.
         const pollInterval = Platform.OS === 'web' ? 3000 : 5000;
@@ -882,8 +910,8 @@ export default function SubscriptionPlansScreen() {
             const res = await fetch(`${WOMPI_API_URL}/transactions/${result.transactionId}`);
             const data = await res.json();
             const status = data.data?.status;
-            
-            
+
+
             // Verificar si apareció URL de 3DS durante el polling (a veces llega tarde)
             const pollingThreeDsUrl =
               data.data?.payment_method?.extra?.async_payment_url ||
@@ -893,7 +921,7 @@ export default function SubscriptionPlansScreen() {
             if (pollingThreeDsUrl && Platform.OS !== 'web' && cardAttempts <= 3) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              
+
               await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
               await AsyncStorage.setItem('nospi_payment_method', 'card');
               await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
@@ -911,7 +939,7 @@ export default function SubscriptionPlansScreen() {
             if (status === 'APPROVED') {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              
+
               const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
               await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
               if (pendingEventId) {
@@ -940,7 +968,7 @@ export default function SubscriptionPlansScreen() {
               router.replace('/(tabs)/appointments');
             }
           } catch (e) {
-            
+
             if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
@@ -952,7 +980,7 @@ export default function SubscriptionPlansScreen() {
         throw new Error(`Pago rechazado (${result.status || 'sin estado'}). Detalle: ${JSON.stringify(result.error || result.message || result)}`);
       }
     } catch (error: any) {
-      
+
       showAlert('Error en tarjeta', error.message);
     } finally { setProcessingMethod(null); }
   };
@@ -1024,7 +1052,7 @@ export default function SubscriptionPlansScreen() {
   const handleBancolombiaPayment = async () => {
     setProcessingMethod('bancolombia');
     try {
-      
+
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -1034,17 +1062,17 @@ export default function SubscriptionPlansScreen() {
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const bancolombiaRedirectUrl = WEB_REDIRECT_URL; // Use HTTPS so Wompi accepts it and payment-callback page loads
-      
+
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-bancolombia-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ 
-          acceptanceToken, 
-          personalDataToken, 
-          amountCOP: priceCOP, 
-          userEmail: userProfile?.email || currentUser.email || '', 
-          userId: currentUser.id, 
+        body: JSON.stringify({
+          acceptanceToken,
+          personalDataToken,
+          amountCOP: priceCOP,
+          userEmail: userProfile?.email || currentUser.email || '',
+          userId: currentUser.id,
           eventId: pendingEventId,
           redirectUrl: bancolombiaRedirectUrl
         }),
@@ -1052,7 +1080,7 @@ export default function SubscriptionPlansScreen() {
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Bancolombia');
 
-      
+
 
       const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
@@ -1076,8 +1104,8 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       }
 
-      
-      
+
+
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
@@ -1089,11 +1117,11 @@ export default function SubscriptionPlansScreen() {
         startWebPolling(bancolombiaTransactionId, 'bancolombia');
         return;
       }
-      
+
       await Linking.openURL(result.redirectUrl);
-      
+
       setProcessingMethod(null);
-      
+
       Toast.show({
         type: 'info',
         text1: 'Completa tu pago en Bancolombia',
@@ -1104,10 +1132,10 @@ export default function SubscriptionPlansScreen() {
       });
 
       startNativePolling(bancolombiaTransactionId, 'bancolombia');
-      
+
       return;
     } catch (error: any) {
-      
+
       showAlert('Error Bancolombia', error.message);
       setProcessingMethod(null);
     }
@@ -1122,7 +1150,7 @@ export default function SubscriptionPlansScreen() {
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         const data = await res.json();
         const status = data.data?.status;
-        
+
 
         if (status === 'APPROVED') {
           clearInterval(interval);
@@ -1181,7 +1209,7 @@ export default function SubscriptionPlansScreen() {
           router.replace('/(tabs)/appointments');
         }
       } catch (e) {
-        
+
         if (attempts >= maxAttempts) {
           clearInterval(interval);
           setProcessingMethod(null);
@@ -1203,7 +1231,7 @@ export default function SubscriptionPlansScreen() {
         const res = await fetch(`${WOMPI_API_URL}/transactions/${transactionId}`);
         const data = await res.json();
         const status = data.data?.status;
-        
+
         if (status === 'APPROVED') {
           clearInterval(interval);
           if (typeof window !== 'undefined') {
@@ -1252,7 +1280,7 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
-          
+
           if (status === 'VOIDED') {
             showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
           } else if (status === 'DECLINED') {
@@ -1265,7 +1293,7 @@ export default function SubscriptionPlansScreen() {
           showAlert('Tiempo agotado', 'No se pudo confirmar el pago. Si realizaste el pago, contacta soporte.');
         }
       } catch (e) {
-        
+
         if (attempts >= maxAttempts) clearInterval(interval);
       }
     }, 5000);
@@ -1273,7 +1301,7 @@ export default function SubscriptionPlansScreen() {
 
     // ========== TEST PAYMENT HANDLER - DELETE BEFORE PRODUCTION ==========
   const handleTestPayment = async () => {
-    
+
     try {
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) {
@@ -1286,7 +1314,7 @@ export default function SubscriptionPlansScreen() {
         showAlert('Test', 'No hay sesión activa.');
         return;
       }
-      
+
       // Check if appointment already exists
       const { data: existing } = await supabase
         .from('appointments')
@@ -1296,7 +1324,7 @@ export default function SubscriptionPlansScreen() {
         .maybeSingle();
 
       if (existing) {
-        
+
         const { error: updateError } = await supabase
           .from('appointments')
           .update({
@@ -1305,12 +1333,12 @@ export default function SubscriptionPlansScreen() {
           })
           .eq('id', existing.id);
         if (updateError) {
-          
+
           showAlert('Test Error', updateError.message);
           return;
         }
       } else {
-        
+
         const { error: insertError } = await supabase
           .from('appointments')
           .insert({
@@ -1320,27 +1348,27 @@ export default function SubscriptionPlansScreen() {
             payment_status: 'completed',
           });
         if (insertError) {
-          
+
           showAlert('Test Error', insertError.message);
           return;
         }
       }
 
       await AsyncStorage.removeItem('pending_event_confirmation');
-      
+
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       router.replace({
         pathname: '/event-details/[id]',
         params: { id: pendingEventId, paymentSuccess: 'true' },
       });
     } catch (e: any) {
-      
+
       showAlert('Test Error', e.message);
     }
   };
   // ========== END TEST PAYMENT HANDLER ==========
-	
+
 	const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
     const cleanLegalId = pseLegalId.replace(/\D/g, '');
@@ -1351,7 +1379,7 @@ export default function SubscriptionPlansScreen() {
 
     setProcessingMethod('pse');
     try {
-      
+
       const currentUser = await getSession();
       if (!currentUser) throw new Error('Sesión no encontrada');
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
@@ -1361,7 +1389,7 @@ export default function SubscriptionPlansScreen() {
       if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación');
 
       const pseRedirectUrl = WEB_REDIRECT_URL; // Wompi PSE requires HTTPS on all platforms
-      
+
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-pse-payment`, {
         method: 'POST',
@@ -1382,15 +1410,15 @@ export default function SubscriptionPlansScreen() {
         }),
       });
       const data = await response.json();
-      
+
       if (!response.ok) {
-        
+
         throw new Error(data.error || 'Error al crear pago PSE');
       }
-      
+
       if (!data.redirectUrl) throw new Error('No se obtuvo URL de pago PSE');
 
-      
+
 
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
@@ -1413,8 +1441,8 @@ export default function SubscriptionPlansScreen() {
         window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       }
 
-      
-      
+
+
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('nospi_transaction_id', data.transactionId);
@@ -1427,12 +1455,12 @@ export default function SubscriptionPlansScreen() {
         startWebPolling(data.transactionId, 'pse');
         return;
       }
-      
+
       await Linking.openURL(data.redirectUrl);
-      
+
       setProcessingMethod(null);
       setShowPSEForm(false);
-      
+
       Toast.show({
         type: 'info',
         text1: 'Completa tu pago en tu banco',
@@ -1443,11 +1471,11 @@ export default function SubscriptionPlansScreen() {
       });
 
       startNativePolling(data.transactionId, 'pse');
-      
+
       return;
 
     } catch (error: any) {
-      
+
       showAlert('Error PSE', error.message);
       setProcessingMethod(null);
     }
@@ -1470,6 +1498,48 @@ export default function SubscriptionPlansScreen() {
           Tienes suscripción activa — confirmando tu asistencia sin costo…
         </Text>
       </LinearGradient>
+    );
+  }
+
+  if (showBudgetQuestion) {
+    const budgetOptions: { value: string; label: string; desc: string }[] = [
+      { value: 'bajo', label: 'Económico', desc: 'Hasta $40.000 COP por persona' },
+      { value: 'medio', label: 'Medio', desc: '$40.000 - $80.000 COP por persona' },
+      { value: 'alto', label: 'Alto', desc: 'Más de $80.000 COP por persona' },
+    ];
+    const chooseBudget = async (value: string) => {
+      await AsyncStorage.setItem('pending_event_budget_range', value);
+      setBudgetAnswered(true);
+      setShowBudgetQuestion(false);
+      setShowEventMethods(true);
+    };
+    return (
+      <SafeAreaView style={styles.formContainer}>
+        <Stack.Screen options={{ headerShown: true, title: 'Presupuesto para la cena', headerLeft: () => (
+          <TouchableOpacity onPress={() => setShowBudgetQuestion(false)} style={{ paddingHorizontal: 16 }}>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+          </TouchableOpacity>
+        )}} />
+        <ScrollView contentContainerStyle={styles.formContent}>
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>¿Cuál es tu presupuesto para la cena?</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 }}>
+              Es aparte del valor de la entrada — nos ayuda a ubicarte en el restaurante correcto.
+            </Text>
+            {budgetOptions.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={{ borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 16, marginBottom: 12 }}
+                onPress={() => chooseBudget(opt.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 }}>{opt.label}</Text>
+                <Text style={{ fontSize: 13, color: '#666' }}>{opt.desc}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -1700,7 +1770,7 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-              
+
               router.back();
             }}
             style={{ paddingHorizontal: 8 }}
@@ -1709,8 +1779,8 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         ),
       }} />
-      
-      
+
+
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
 
         {!showEventMethods ? (
@@ -1720,7 +1790,13 @@ export default function SubscriptionPlansScreen() {
 
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 }}
-              onPress={() => setShowEventMethods(true)}
+              onPress={() => {
+                if (eventType === 'restaurante' && !budgetAnswered) {
+                  setShowBudgetQuestion(true);
+                } else {
+                  setShowEventMethods(true);
+                }
+              }}
               activeOpacity={0.85}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1846,7 +1922,7 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         )}
         {/* ========== END TEST BUTTON ========== */}
-				
+
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
           </>
         )}
@@ -1878,7 +1954,7 @@ export default function SubscriptionPlansScreen() {
           </View>
         </View>
       </Modal>
-      
+
       <Toast />
     </LinearGradient>
   );
