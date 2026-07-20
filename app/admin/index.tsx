@@ -804,7 +804,7 @@ export default function AdminPanelScreen() {
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
         start_time: isoDate,
-        max_participants: eventForm.max_participants,
+        max_participants: eventForm.max_participants || 6,
         current_participants: 0,
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
@@ -3093,8 +3093,14 @@ export default function AdminPanelScreen() {
                 style={styles.input}
                 placeholder="6"
                 keyboardType="numeric"
-                value={String(eventForm.max_participants)}
-                onChangeText={(text) => setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })}
+                value={eventForm.max_participants === 0 ? '' : String(eventForm.max_participants)}
+                onChangeText={(text) => {
+                  const cleaned = text.replace(/[^0-9]/g, '');
+                  setEventForm({ ...eventForm, max_participants: cleaned === '' ? 0 : parseInt(cleaned) });
+                }}
+                onBlur={() => {
+                  if (!eventForm.max_participants) setEventForm({ ...eventForm, max_participants: 6 });
+                }}
               />
 
               <Text style={styles.inputLabel}>Código de Confirmación</Text>
