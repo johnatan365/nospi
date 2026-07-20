@@ -1107,7 +1107,7 @@ export default function InteraccionScreen() {
     );
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
+  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : 'Restaurante';
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
