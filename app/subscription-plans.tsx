@@ -190,14 +190,6 @@ export default function SubscriptionPlansScreen() {
   // momento, asi que NO debe mostrar el modal de "Pago Exitoso".
   const [showSubscriptionConfirmModal, setShowSubscriptionConfirmModal] = useState(false);
   const [showEventMethods, setShowEventMethods] = useState(false);
-  // Presupuesto para la cena — solo se pregunta en eventos type='restaurante',
-  // una vez por evento, antes de mostrar los métodos de pago. Se guarda en
-  // AsyncStorage (mismo patrón que pending_event_confirmation) para que
-  // confirmAppointment lo pueda leer sin tener que pasarlo por cada handler
-  // de pago (card/nequi/pse/bancolombia/saldo virtual) uno por uno.
-  const [eventType, setEventType] = useState<string | null>(null);
-  const [showBudgetQuestion, setShowBudgetQuestion] = useState(false);
-  const [budgetAnswered, setBudgetAnswered] = useState(false);
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -280,19 +272,6 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => { fetchVirtualBalance(); }, [fetchVirtualBalance]);
 
-  // Cargar el tipo del evento pendiente (bar / restaurante / caminata) para
-  // saber si corresponde preguntar el presupuesto antes de pagar.
-  useEffect(() => {
-    (async () => {
-      try {
-        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-        if (!pendingEventId) return;
-        const { data } = await supabase.from('events').select('type').eq('id', pendingEventId).maybeSingle();
-        setEventType(data?.type || null);
-      } catch {}
-    })();
-  }, []);
-
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
   const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
@@ -317,11 +296,6 @@ export default function SubscriptionPlansScreen() {
       if (!userId) userId = user?.id || null;
       if (!userId) return false;
 
-      // budget_range: presupuesto para la cena que el usuario indicó antes de
-      // pagar (solo aplica a eventos type='restaurante'; queda sin enviar para
-      // bar/caminata o si por algún motivo no se preguntó).
-      const budgetRange = await AsyncStorage.getItem('pending_event_budget_range');
-
       const appointmentData: Record<string, any> = {
         user_id: userId,
         event_id: pendingEventId,
@@ -331,7 +305,6 @@ export default function SubscriptionPlansScreen() {
         payment_method: paymentMethod,
         confirmed_at: new Date().toISOString(),
       };
-      if (budgetRange) appointmentData.budget_range = budgetRange;
 
       // Verificar si ya existe una cita para este usuario y evento
       const { data: existing } = await supabase
@@ -373,7 +346,6 @@ export default function SubscriptionPlansScreen() {
       if (!verification) return false;
 
       await AsyncStorage.removeItem('pending_event_confirmation');
-      await AsyncStorage.removeItem('pending_event_budget_range');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
 
       // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia
@@ -1523,48 +1495,6 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  if (showBudgetQuestion) {
-    const budgetOptions: { value: string; label: string; desc: string }[] = [
-      { value: 'bajo', label: 'Económico', desc: 'Hasta $40.000 COP por persona' },
-      { value: 'medio', label: 'Medio', desc: '$40.000 - $80.000 COP por persona' },
-      { value: 'alto', label: 'Alto', desc: 'Más de $80.000 COP por persona' },
-    ];
-    const chooseBudget = async (value: string) => {
-      await AsyncStorage.setItem('pending_event_budget_range', value);
-      setBudgetAnswered(true);
-      setShowBudgetQuestion(false);
-      setShowEventMethods(true);
-    };
-    return (
-      <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Presupuesto para la cena', headerLeft: () => (
-          <TouchableOpacity onPress={() => setShowBudgetQuestion(false)} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
-          </TouchableOpacity>
-        )}} />
-        <ScrollView contentContainerStyle={styles.formContent}>
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>¿Cuál es tu presupuesto para la cena?</Text>
-            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 }}>
-              Es aparte del valor de la entrada — nos ayuda a ubicarte en el restaurante correcto.
-            </Text>
-            {budgetOptions.map((opt) => (
-              <TouchableOpacity
-                key={opt.value}
-                style={{ borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 16, marginBottom: 12 }}
-                onPress={() => chooseBudget(opt.value)}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 }}>{opt.label}</Text>
-                <Text style={{ fontSize: 13, color: '#666' }}>{opt.desc}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
@@ -1812,13 +1742,7 @@ export default function SubscriptionPlansScreen() {
 
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 }}
-              onPress={() => {
-                if (eventType === 'restaurante' && !budgetAnswered) {
-                  setShowBudgetQuestion(true);
-                } else {
-                  setShowEventMethods(true);
-                }
-              }}
+              onPress={() => setShowEventMethods(true)}
               activeOpacity={0.85}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
