@@ -455,7 +455,7 @@ export default function AppointmentsScreen() {
 
               const eventType = appointment.event.type || 'restaurant';
               const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : 'Restaurante';
-              const eventIcon = eventType === 'bar' ? '🍸' : '🍽️';
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : '🍽️';
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
