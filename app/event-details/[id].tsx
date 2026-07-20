@@ -201,7 +201,7 @@ export default function EventDetailsScreen() {
   }
 
   const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : '🍽️';
   const dateText = formatDate(event.date);
   const participantsText = `${event.max_participants} participantes`;
   const showLocation = isEnrolled && event.is_location_revealed;
