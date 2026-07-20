@@ -200,7 +200,7 @@ export default function EventDetailsScreen() {
     );
   }
 
-  const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
+  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
   const eventIcon = event.type === 'bar' ? '🍸' : '🍽️';
   const dateText = formatDate(event.date);
   const participantsText = `${event.max_participants} participantes`;
