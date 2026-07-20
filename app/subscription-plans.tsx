@@ -477,8 +477,9 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.setItem('nospi_payment_processing', 'true');
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
+            await AsyncStorage.removeItem('nospi_payment_event_id');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
-            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
             const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
             await AsyncStorage.removeItem('nospi_payment_processing');
             if (success) {
@@ -501,6 +502,7 @@ export default function SubscriptionPlansScreen() {
               'nospi_payment_opened_time',
               'nospi_access_token',
               'nospi_refresh_token',
+              'nospi_payment_event_id',
             ]);
             showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
           } else if (status === 'PENDING' && storedMethod === 'card') {
@@ -530,8 +532,9 @@ export default function SubscriptionPlansScreen() {
                     'nospi_payment_opened_time',
                     'nospi_access_token',
                     'nospi_refresh_token',
+                    'nospi_payment_event_id',
                   ]);
-                  const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+                  const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
                   const success = await confirmAppointment(storedTxId, 'card', pendingEventId || undefined);
                   if (success) {
                     if (pendingEventId) {
@@ -618,9 +621,10 @@ export default function SubscriptionPlansScreen() {
           window.localStorage.removeItem('nospi_payment_method');
           window.localStorage.removeItem('nospi_payment_opened_time');
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
           const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
           await AsyncStorage.removeItem('nospi_payment_processing');
+          await AsyncStorage.removeItem('nospi_payment_event_id');
           if (success) {
             if (pendingEventId) {
               router.replace({
@@ -719,6 +723,7 @@ export default function SubscriptionPlansScreen() {
       'nospi_payment_opened_time',
       'nospi_access_token',
       'nospi_refresh_token',
+      'nospi_payment_event_id',
     ]);
     setProcessingMethod('card');
     try {
@@ -779,8 +784,9 @@ export default function SubscriptionPlansScreen() {
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
 
-        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-
+        // Reutiliza el eventId capturado al iniciar este pago (arriba en esta
+        // misma función), no relee 'pending_event_confirmation' — esa llave es
+        // global y puede haber cambiado si el usuario miró otro evento.
         await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
         if (pendingEventId) {
 
@@ -814,6 +820,7 @@ export default function SubscriptionPlansScreen() {
 
           await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'card');
+          await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
           await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
           try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -851,8 +858,8 @@ export default function SubscriptionPlansScreen() {
                   'nospi_payment_opened_time',
                   'nospi_access_token',
                   'nospi_refresh_token',
+                  'nospi_payment_event_id',
                 ]);
-                const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
                 const success = await confirmAppointment(bgTxId, 'card', pendingEventId || undefined);
                 if (success) {
                   if (pendingEventId) {
@@ -876,6 +883,7 @@ export default function SubscriptionPlansScreen() {
                   'nospi_payment_opened_time',
                   'nospi_access_token',
                   'nospi_refresh_token',
+                  'nospi_payment_event_id',
                 ]);
                 showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
               } else if (bgAttempts >= bgMaxAttempts) {
@@ -924,6 +932,7 @@ export default function SubscriptionPlansScreen() {
 
               await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
               await AsyncStorage.setItem('nospi_payment_method', 'card');
+              await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
               await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
               try {
                 const { data: { session: cs } } = await supabase.auth.getSession();
@@ -940,7 +949,6 @@ export default function SubscriptionPlansScreen() {
               clearInterval(cardPoll);
               setProcessingMethod(null);
 
-              const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
               await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
               if (pendingEventId) {
                 router.replace({
@@ -960,6 +968,7 @@ export default function SubscriptionPlansScreen() {
               await AsyncStorage.removeItem('nospi_payment_opened_time');
               await AsyncStorage.removeItem('nospi_access_token');
               await AsyncStorage.removeItem('nospi_refresh_token');
+              await AsyncStorage.removeItem('nospi_payment_event_id');
               showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
             } else if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
@@ -1020,7 +1029,6 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
-            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
             if (pendingEventId) {
               router.replace({
@@ -1085,6 +1093,7 @@ export default function SubscriptionPlansScreen() {
       const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'bancolombia');
+      await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
@@ -1114,7 +1123,7 @@ export default function SubscriptionPlansScreen() {
         }
         window.open(result.redirectUrl, '_blank');
         setProcessingMethod(null);
-        startWebPolling(bancolombiaTransactionId, 'bancolombia');
+        startWebPolling(bancolombiaTransactionId, 'bancolombia', pendingEventId);
         return;
       }
 
@@ -1131,7 +1140,7 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
 
-      startNativePolling(bancolombiaTransactionId, 'bancolombia');
+      startNativePolling(bancolombiaTransactionId, 'bancolombia', pendingEventId);
 
       return;
     } catch (error: any) {
@@ -1141,7 +1150,7 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  const startNativePolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
+  const startNativePolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse', paymentEventId?: string) => {
     let attempts = 0;
     const maxAttempts = 60; // 60 × 2s = 2 minutos — intervalo más frecuente para detectar APPROVED rápido
     const interval = setInterval(async () => {
@@ -1158,7 +1167,7 @@ export default function SubscriptionPlansScreen() {
           // Verificar si ya fue procesado por otro handler (AppState o payment-callback)
           const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
           if (alreadyHandled === 'true') {
-            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+            const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
             if (pendingEventId) {
               router.replace({ pathname: '/event-details/[id]', params: { id: pendingEventId, paymentSuccess: 'true' } });
             } else {
@@ -1170,8 +1179,13 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
+          await AsyncStorage.removeItem('nospi_payment_event_id');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+          // Usar el eventId capturado al iniciar ESTE pago (parámetro o AsyncStorage
+          // dedicado), nunca 'pending_event_confirmation': esa llave es global y puede
+          // haber sido sobreescrita si el usuario miró/confirmó otro evento mientras
+          // este pago (async) seguía pendiente.
+          const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
           const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
           await AsyncStorage.removeItem('nospi_payment_processing');
           if (success) {
@@ -1218,7 +1232,7 @@ export default function SubscriptionPlansScreen() {
     }, 2000);
   }, [confirmAppointment, router]);
 
-  const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
+  const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse', paymentEventId?: string) => {
     let attempts = 0;
     // 180 intentos × 5s = 15 minutos. La autenticación real con el banco (login,
     // OTP, etc.) puede tardar más de los 2 minutos que había antes — con eso el
@@ -1241,9 +1255,15 @@ export default function SubscriptionPlansScreen() {
           }
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
+          await AsyncStorage.removeItem('nospi_payment_event_id');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           try { await supabase.auth.refreshSession(); } catch {}
-          const success = await confirmAppointment(transactionId, paymentMethod);
+          // Usar el eventId capturado al iniciar ESTE pago, nunca
+          // 'pending_event_confirmation' (llave global que puede haberse
+          // sobreescrito si el usuario miró/confirmó otro evento mientras
+          // este pago seguía pendiente en el banco).
+          const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+          const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
           if (success) {
             setShowSuccessModal(true);
           } else {
@@ -1280,6 +1300,7 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
+          await AsyncStorage.removeItem('nospi_payment_event_id');
 
           if (status === 'VOIDED') {
             showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
@@ -1422,6 +1443,7 @@ export default function SubscriptionPlansScreen() {
 
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
+      await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
@@ -1452,7 +1474,7 @@ export default function SubscriptionPlansScreen() {
         window.open(data.redirectUrl, '_blank');
         setProcessingMethod(null);
         setShowPSEForm(false);
-        startWebPolling(data.transactionId, 'pse');
+        startWebPolling(data.transactionId, 'pse', pendingEventId);
         return;
       }
 
@@ -1470,7 +1492,7 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
 
-      startNativePolling(data.transactionId, 'pse');
+      startNativePolling(data.transactionId, 'pse', pendingEventId);
 
       return;
 

@@ -2403,7 +2403,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const orphanPayments = paymentAttempts.filter((pa: any) => {
       if (pa.status !== 'APPROVED' || !pa.user_id || !pa.event_id) return false;
       return !appointments.some(
-        (a) => a.user_id === pa.user_id && a.event_id === pa.event_id && a.payment_status === 'completed'
+        (a) =>
+          a.user_id === pa.user_id &&
+          a.event_id === pa.event_id &&
+          // Cuenta como resuelta tanto una cita completada como una cancelada
+          // y reembolsada: si el usuario canceló su asistencia (y recibió su
+          // saldo virtual de vuelta), ya no falta nada por hacer con ese pago,
+          // aunque nunca haya quedado con payment_status = 'completed'.
+          (a.payment_status === 'completed' || (a.status === 'cancelada' && a.payment_status === 'refunded'))
       );
     });
 
