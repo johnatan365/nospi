@@ -3331,7 +3331,7 @@ setBulkWhatsAppPending(pending);
         </View>
 
         {events.map((event) => {
-          const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
+          const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const confirmationCode = event.confirmation_code || '1986';
@@ -5136,7 +5136,7 @@ setBulkWhatsAppPending(pending);
                 onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
               >
                 <option value="bar">Bar</option>
-                <option value="restaurant">Restaurante</option>
+                <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option>
               </select>
 
               <Text style={styles.inputLabel}>Fecha *</Text>
