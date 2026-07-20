@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -1138,7 +1138,11 @@ export default function InteraccionScreen() {
 
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
-            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
+            {appointment.event.type === 'caminata' ? (
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+            ) : (
+              <Text style={styles.eventIconLarge}>{eventIcon}</Text>
+            )}
             <View style={styles.eventHeaderText}>
               <Text style={styles.eventType}>{eventTypeText}</Text>
               <Text style={styles.eventTime}>{appointment.event.time}</Text>

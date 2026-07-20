@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -226,7 +226,11 @@ export default function EventDetailsScreen() {
         <View style={styles.eventCard}>
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
-            <Text style={styles.eventIcon}>{eventIcon}</Text>
+            {event.type === 'caminata' ? (
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+            ) : (
+              <Text style={styles.eventIcon}>{eventIcon}</Text>
+            )}
             <Text style={styles.eventName}>{event.name}</Text>
             <Text style={styles.eventType}>{eventTypeText}</Text>
           </View>
