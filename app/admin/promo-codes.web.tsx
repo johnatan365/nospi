@@ -138,7 +138,7 @@ export default function PromoCodesScreen() {
       {showForm && (
         <View style={styles.formCard}>
           <Text style={styles.formLabel}>Código</Text>
-          <TextInput style={styles.input} placeholder="Ej: BETA" value={formCode} onChangeText={setFormCode} autoCapitalize="characters" />
+          <TextInput style={styles.input} placeholder="Nombre del código" value={formCode} onChangeText={setFormCode} autoCapitalize="characters" />
 
           <Text style={styles.formLabel}>Porcentaje de descuento (1-100)</Text>
           <TextInput style={styles.input} placeholder="Ej: 100" value={formDiscount} onChangeText={(t) => setFormDiscount(t.replace(/\D/g, ''))} keyboardType="numeric" />
