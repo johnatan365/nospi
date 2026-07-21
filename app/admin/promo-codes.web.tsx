@@ -20,6 +20,34 @@ interface PromoCode {
   redemption_count: number;
 }
 
+interface RedemptionUser {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  country: string | null;
+  gender: string | null;
+  interested_in: string | null;
+  age: number | null;
+  age_range_min: number | null;
+  age_range_max: number | null;
+}
+
+interface RedemptionEvent {
+  id: string;
+  name: string;
+  date: string;
+}
+
+interface Redemption {
+  id: string;
+  created_at: string;
+  discount_percent_applied: number;
+  users: RedemptionUser | null;
+  events: RedemptionEvent | null;
+}
+
 async function callAdminPromoCodes(body: Record<string, any>) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token || SUPABASE_ANON_KEY;
@@ -38,6 +66,24 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatDateTime(iso: string | null) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function genderLabel(g: string | null) {
+  if (g === 'hombre' || g === 'male' || g === 'Hombre') return 'Hombre';
+  if (g === 'mujer' || g === 'female' || g === 'Mujer') return 'Mujer';
+  return 'No especificado';
+}
+
+function interestedInLabel(v: string | null) {
+  if (v === 'hombres' || v === 'male') return 'Hombres';
+  if (v === 'mujeres' || v === 'female') return 'Mujeres';
+  if (v === 'ambos' || v === 'both') return 'Ambos';
+  return 'No especificado';
+}
+
 export default function PromoCodesScreen() {
   const router = useRouter();
   const [codes, setCodes] = useState<PromoCode[]>([]);
@@ -54,6 +100,11 @@ export default function PromoCodesScreen() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [redemptionsByCode, setRedemptionsByCode] = useState<Record<string, Redemption[]>>({});
+  const [loadingRedemptions, setLoadingRedemptions] = useState<string | null>(null);
 
   const loadCodes = useCallback(async () => {
     setLoading(true);
@@ -119,6 +170,39 @@ export default function PromoCodesScreen() {
     }
   };
 
+  const handleDelete = async (item: PromoCode) => {
+    if (typeof window !== 'undefined' && !window.confirm(`¿Eliminar el código "${item.code}"? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(item.id);
+    try {
+      await callAdminPromoCodes({ action: 'delete', id: item.id });
+      if (expandedId === item.id) setExpandedId(null);
+      await loadCodes();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleToggleRedemptions = async (item: PromoCode) => {
+    if (expandedId === item.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(item.id);
+    if (!redemptionsByCode[item.id]) {
+      setLoadingRedemptions(item.id);
+      try {
+        const json = await callAdminPromoCodes({ action: 'redemptions', id: item.id });
+        setRedemptionsByCode((prev) => ({ ...prev, [item.id]: json.redemptions || [] }));
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoadingRedemptions(null);
+      }
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Códigos promocionales' }} />
@@ -169,32 +253,77 @@ export default function PromoCodesScreen() {
       ) : (
         <View style={styles.table}>
           <View style={[styles.tableRow, styles.tableHeaderRow]}>
-            <Text style={[styles.th, { flex: 1.2 }]}>Código</Text>
-            <Text style={[styles.th, { flex: 0.8 }]}>Descuento</Text>
+            <Text style={[styles.th, { flex: 1.1 }]}>Código</Text>
+            <Text style={[styles.th, { flex: 0.7 }]}>Descuento</Text>
             <Text style={[styles.th, { flex: 1 }]}>Usos</Text>
-            <Text style={[styles.th, { flex: 1.1 }]}>Expira</Text>
-            <Text style={[styles.th, { flex: 1.3 }]}>Etiqueta</Text>
-            <Text style={[styles.th, { flex: 0.9 }]}>Estado</Text>
+            <Text style={[styles.th, { flex: 1 }]}>Expira</Text>
+            <Text style={[styles.th, { flex: 1.1 }]}>Etiqueta</Text>
+            <Text style={[styles.th, { flex: 0.8 }]}>Estado</Text>
+            <Text style={[styles.th, { flex: 1.3 }]}>Acciones</Text>
           </View>
           {codes.map((item) => (
-            <View key={item.id} style={styles.tableRow}>
-              <Text style={[styles.td, { flex: 1.2, fontWeight: '700', color: nospiColors.purpleDark }]}>{item.code}</Text>
-              <Text style={[styles.td, { flex: 0.8 }]}>{item.discount_percent}%</Text>
-              <Text style={[styles.td, { flex: 1 }]}>{`${item.current_uses}${item.max_uses ? ` / ${item.max_uses}` : ''} (${item.redemption_count} redimidos)`}</Text>
-              <Text style={[styles.td, { flex: 1.1 }]}>{formatDate(item.expires_at)}</Text>
-              <Text style={[styles.td, { flex: 1.3, color: '#666' }]}>{item.label || '—'}</Text>
-              <TouchableOpacity
-                style={[styles.statusPill, item.active ? styles.statusActive : styles.statusInactive, { flex: 0.9 }]}
-                onPress={() => handleToggleActive(item)}
-                disabled={togglingId === item.id}
-              >
-                {togglingId === item.id ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.statusPillText}>{item.active ? 'Activo' : 'Inactivo'}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <React.Fragment key={item.id}>
+              <View style={styles.tableRow}>
+                <Text style={[styles.td, { flex: 1.1, fontWeight: '700', color: nospiColors.purpleDark }]}>{item.code}</Text>
+                <Text style={[styles.td, { flex: 0.7 }]}>{item.discount_percent}%</Text>
+                <Text style={[styles.td, { flex: 1 }]}>{`${item.current_uses}${item.max_uses ? ` / ${item.max_uses}` : ''}`}</Text>
+                <Text style={[styles.td, { flex: 1 }]}>{formatDate(item.expires_at)}</Text>
+                <Text style={[styles.td, { flex: 1.1, color: '#666' }]}>{item.label || '—'}</Text>
+                <TouchableOpacity
+                  style={[styles.statusPill, item.active ? styles.statusActive : styles.statusInactive, { flex: 0.8 }]}
+                  onPress={() => handleToggleActive(item)}
+                  disabled={togglingId === item.id}
+                >
+                  {togglingId === item.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.statusPillText}>{item.active ? 'Activo' : 'Inactivo'}</Text>
+                  )}
+                </TouchableOpacity>
+                <View style={[styles.actionsCell, { flex: 1.3 }]}>
+                  <TouchableOpacity style={styles.viewButton} onPress={() => handleToggleRedemptions(item)}>
+                    <Text style={styles.viewButtonText}>{expandedId === item.id ? 'Ocultar' : `👥 Ver (${item.redemption_count})`}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item)} disabled={deletingId === item.id}>
+                    {deletingId === item.id ? <ActivityIndicator size="small" color="#A32D2D" /> : <Text style={styles.deleteButtonText}>🗑️</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {expandedId === item.id && (
+                <View style={styles.redemptionsPanel}>
+                  {loadingRedemptions === item.id ? (
+                    <ActivityIndicator size="small" color={nospiColors.purpleDark} style={{ marginVertical: 16 }} />
+                  ) : (redemptionsByCode[item.id] || []).length === 0 ? (
+                    <Text style={styles.emptyRedemptionsText}>Nadie ha usado este código todavía.</Text>
+                  ) : (
+                    <View style={styles.redemptionsList}>
+                      {(redemptionsByCode[item.id] || []).map((r) => (
+                        <View key={r.id} style={styles.redemptionCard}>
+                          <View style={styles.redemptionHeaderRow}>
+                            <Text style={styles.redemptionName}>{r.users?.name || 'Sin nombre'}</Text>
+                            <Text style={styles.redemptionDate}>{formatDateTime(r.created_at)}</Text>
+                          </View>
+                          <View style={styles.redemptionGrid}>
+                            <Text style={styles.redemptionField}>📧 {r.users?.email || '—'}</Text>
+                            <Text style={styles.redemptionField}>📱 {r.users?.phone || '—'}</Text>
+                            <Text style={styles.redemptionField}>📍 {[r.users?.city, r.users?.country].filter(Boolean).join(', ') || '—'}</Text>
+                            <Text style={styles.redemptionField}>🎂 Edad: {r.users?.age ?? '—'}</Text>
+                            <Text style={styles.redemptionField}>⚧ {genderLabel(r.users?.gender ?? null)}</Text>
+                            <Text style={styles.redemptionField}>💘 Interesado en: {interestedInLabel(r.users?.interested_in ?? null)}</Text>
+                            <Text style={styles.redemptionField}>
+                              📊 Rango edad: {r.users?.age_range_min ?? '—'} - {r.users?.age_range_max ?? '—'}
+                            </Text>
+                            <Text style={styles.redemptionField}>🎟️ Evento: {r.events?.name || '—'}</Text>
+                            <Text style={styles.redemptionField}>💸 Descuento aplicado: {r.discount_percent_applied}%</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </React.Fragment>
           ))}
         </View>
       )}
@@ -229,4 +358,18 @@ const styles = StyleSheet.create({
   statusActive: { backgroundColor: '#10B981' },
   statusInactive: { backgroundColor: '#9CA3AF' },
   statusPillText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  actionsCell: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  viewButton: { backgroundColor: '#EEF2FF', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8 },
+  viewButtonText: { color: nospiColors.purpleDark, fontSize: 12, fontWeight: '700' },
+  deleteButton: { backgroundColor: '#FEF2F2', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  deleteButtonText: { fontSize: 13 },
+  redemptionsPanel: { backgroundColor: '#FAFAFB', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  emptyRedemptionsText: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
+  redemptionsList: { gap: 10 },
+  redemptionCard: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', padding: 12 },
+  redemptionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  redemptionName: { fontSize: 14, fontWeight: '700', color: '#111' },
+  redemptionDate: { fontSize: 11, color: '#9CA3AF' },
+  redemptionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  redemptionField: { fontSize: 12, color: '#4B5563', minWidth: '45%' },
 });
