@@ -198,6 +198,7 @@ export default function SubscriptionPlansScreen() {
   const [promoApplied, setPromoApplied] = useState<{ discountPercent: number; label?: string } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [showPromoConfirmModal, setShowPromoConfirmModal] = useState(false);
+  const [showPromoPartialModal, setShowPromoPartialModal] = useState(false);
 
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
@@ -423,6 +424,8 @@ export default function SubscriptionPlansScreen() {
         } else {
           setPromoError('El código se aplicó pero no pudimos confirmar tu cupo. Escríbenos por soporte.');
         }
+      } else {
+        setShowPromoPartialModal(true);
       }
     } catch {
       setPromoError('No pudimos validar el código. Intenta de nuevo.');
@@ -2001,6 +2004,19 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successMessage}>Tu código promocional cubrió este evento — ya tienes tu lugar asegurado</Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showPromoPartialModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.successIcon}>🎟️</Text>
+            <Text style={styles.successTitle}>¡Código aplicado!</Text>
+            <Text style={styles.successMessage}>{`Tienes ${promoApplied?.discountPercent ?? 0}% de descuento en este evento`}</Text>
+            <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoPartialModal(false); setShowEventMethods(true); }}>
+              <Text style={styles.successButtonText}>Ir a pagar</Text>
             </TouchableOpacity>
           </View>
         </View>
