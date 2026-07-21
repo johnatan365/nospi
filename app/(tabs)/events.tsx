@@ -200,7 +200,7 @@ export default function EventsScreen() {
                       activeOpacity={0.8}
                     >
                       {event.type === 'caminata' ? (
-                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 78, height: 66, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'bar' ? (
                         <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'restaurante' ? (
