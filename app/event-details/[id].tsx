@@ -201,7 +201,7 @@ export default function EventDetailsScreen() {
   }
 
   const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : '🍽️';
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
   const dateText = formatDate(event.date);
   const participantsText = `${event.max_participants} participantes`;
   const showLocation = isEnrolled && event.is_location_revealed;
@@ -228,6 +228,12 @@ export default function EventDetailsScreen() {
           <View style={styles.headerSection}>
             {event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+            ) : event.type === 'bar' ? (
+              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+            ) : event.type === 'restaurante' ? (
+              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+            ) : event.type === 'cafe' ? (
+              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}

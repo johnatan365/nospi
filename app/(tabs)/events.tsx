@@ -188,7 +188,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{section}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : '🍽️';
+                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
 
@@ -201,6 +201,12 @@ export default function EventsScreen() {
                     >
                       {event.type === 'caminata' ? (
                         <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                      ) : event.type === 'bar' ? (
+                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                      ) : event.type === 'restaurante' ? (
+                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                      ) : event.type === 'cafe' ? (
+                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
                       )}
