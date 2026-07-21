@@ -1842,7 +1842,7 @@ export default function SubscriptionPlansScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     style={{ flex: 1, height: 42, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', paddingHorizontal: 12, fontSize: 14, textTransform: 'uppercase' }}
-                    placeholder="Ej: BETA"
+                    placeholder="Ingresa tu código"
                     value={promoCode}
                     onChangeText={(t) => { setPromoCode(t); setPromoError(null); }}
                     autoCapitalize="characters"
