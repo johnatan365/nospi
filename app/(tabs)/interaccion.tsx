@@ -1139,13 +1139,13 @@ export default function InteraccionScreen() {
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
             {appointment.event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12 }} resizeMode="contain" />
             ) : appointment.event.type === 'bar' ? (
-              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 84, height: 70, marginRight: 12 }} resizeMode="contain" />
             ) : appointment.event.type === 'restaurante' ? (
-              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 84, height: 70, marginRight: 12 }} resizeMode="contain" />
             ) : appointment.event.type === 'cafe' ? (
-              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 84, height: 70, marginRight: 12 }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
             )}

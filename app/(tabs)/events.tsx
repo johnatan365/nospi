@@ -200,13 +200,13 @@ export default function EventsScreen() {
                       activeOpacity={0.8}
                     >
                       {event.type === 'caminata' ? (
-                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 62, height: 53, marginRight: 12 }} resizeMode="contain" />
                       ) : event.type === 'bar' ? (
-                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 62, height: 53, marginRight: 12 }} resizeMode="contain" />
                       ) : event.type === 'restaurante' ? (
-                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 62, height: 53, marginRight: 12 }} resizeMode="contain" />
                       ) : event.type === 'cafe' ? (
-                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 28, height: 24, marginRight: 12 }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 62, height: 53, marginRight: 12 }} resizeMode="contain" />
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
                       )}
