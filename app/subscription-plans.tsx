@@ -289,7 +289,7 @@ export default function SubscriptionPlansScreen() {
 
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
-  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription', eventIdParam?: string): Promise<boolean> => {
+  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription' | 'promo_code', eventIdParam?: string, amountPaidCOP?: number): Promise<boolean> => {
     try {
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return false;
@@ -317,7 +317,7 @@ export default function SubscriptionPlansScreen() {
         status: 'confirmada',
         payment_status: 'completed',
         transaction_id: transactionId,
-        payment_method: paymentMethod,
+        payment_method: paymentMethod, amount_paid_cop: amountPaidCOP ?? 0,
         confirmed_at: new Date().toISOString(),
       };
 
@@ -417,7 +417,7 @@ export default function SubscriptionPlansScreen() {
       setPromoApplied({ discountPercent: data.discount_percent, label: data.label });
 
       if (data.discount_percent >= 100) {
-        const ok = await confirmAppointment(`PROMO-${promoCode.trim().toUpperCase()}`, 'promo_code', pendingEventId || undefined);
+        const ok = await confirmAppointment(`PROMO-${promoCode.trim().toUpperCase()}`, 'promo_code', pendingEventId || undefined, effectivePriceCOP);
         if (ok) {
           setShowPromoConfirmModal(true);
         } else {
@@ -442,7 +442,7 @@ export default function SubscriptionPlansScreen() {
         if (active) {
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
           if (pendingEventId) {
-            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId);
+            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId, 0);
             if (ok) {
               setShowSubscriptionConfirmModal(true);
             } else {
@@ -509,7 +509,7 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('nospi_payment_method');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
+            const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined, effectivePriceCOP);
             await AsyncStorage.removeItem('nospi_payment_processing');
             if (success) {
               if (pendingEventId) {
@@ -562,7 +562,7 @@ export default function SubscriptionPlansScreen() {
                     'nospi_refresh_token',
                   ]);
                   const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-                  const success = await confirmAppointment(storedTxId, 'card', pendingEventId || undefined);
+                  const success = await confirmAppointment(storedTxId, 'card', pendingEventId || undefined, effectivePriceCOP);
                   if (success) {
                     if (pendingEventId) {
                       router.replace({
@@ -649,7 +649,7 @@ export default function SubscriptionPlansScreen() {
           window.localStorage.removeItem('nospi_payment_opened_time');
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
+          const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined, effectivePriceCOP);
           await AsyncStorage.removeItem('nospi_payment_processing');
           if (success) {
             if (pendingEventId) {
@@ -690,7 +690,7 @@ export default function SubscriptionPlansScreen() {
   // All callback processing is handled exclusively in payment-callback.tsx.
 
   const handleSuccess = async () => {
-    await confirmAppointment('', 'virtual_balance');
+    await confirmAppointment('', 'virtual_balance', undefined, effectivePriceCOP);
 
     await AsyncStorage.setItem('should_check_notification_prompt', 'true');
     setShowSuccessModal(true);
@@ -717,7 +717,7 @@ export default function SubscriptionPlansScreen() {
       await supabase.from('users').update({ virtual_balance: virtualBalance - effectivePriceCOP }).eq('id', user?.id);
 
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      await confirmAppointment('', 'virtual_balance');
+      await confirmAppointment('', 'virtual_balance', undefined, effectivePriceCOP);
       if (pendingEventId) {
 
         router.replace({
@@ -811,7 +811,7 @@ export default function SubscriptionPlansScreen() {
 
         const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
 
-        await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
+        await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined, effectivePriceCOP);
         if (pendingEventId) {
 
           router.replace({
@@ -883,7 +883,7 @@ export default function SubscriptionPlansScreen() {
                   'nospi_refresh_token',
                 ]);
                 const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-                const success = await confirmAppointment(bgTxId, 'card', pendingEventId || undefined);
+                const success = await confirmAppointment(bgTxId, 'card', pendingEventId || undefined, effectivePriceCOP);
                 if (success) {
                   if (pendingEventId) {
                     router.replace({
@@ -971,7 +971,7 @@ export default function SubscriptionPlansScreen() {
               setProcessingMethod(null);
 
               const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-              await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
+              await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined, effectivePriceCOP);
               if (pendingEventId) {
                 router.replace({
                   pathname: '/event-details/[id]',
@@ -1051,7 +1051,7 @@ export default function SubscriptionPlansScreen() {
             setShowNequiForm(false);
             setNequiStatus('idle');
             const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-            await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
+            await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined, effectivePriceCOP);
             if (pendingEventId) {
               router.replace({
                 pathname: '/event-details/[id]',
@@ -1202,7 +1202,7 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
+          const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined, effectivePriceCOP);
           await AsyncStorage.removeItem('nospi_payment_processing');
           if (success) {
             if (pendingEventId) {
@@ -1273,7 +1273,7 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           try { await supabase.auth.refreshSession(); } catch {}
-          const success = await confirmAppointment(transactionId, paymentMethod);
+          const success = await confirmAppointment(transactionId, paymentMethod, undefined, effectivePriceCOP);
           if (success) {
             setShowSuccessModal(true);
           } else {
