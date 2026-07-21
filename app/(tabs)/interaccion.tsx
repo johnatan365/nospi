@@ -1139,7 +1139,7 @@ export default function InteraccionScreen() {
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
             {appointment.event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 109, height: 91, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'bar' ? (
               <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'restaurante' ? (
