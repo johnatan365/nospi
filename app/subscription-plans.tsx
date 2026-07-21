@@ -190,6 +190,15 @@ export default function SubscriptionPlansScreen() {
   // momento, asi que NO debe mostrar el modal de "Pago Exitoso".
   const [showSubscriptionConfirmModal, setShowSubscriptionConfirmModal] = useState(false);
   const [showEventMethods, setShowEventMethods] = useState(false);
+
+  // Código promocional — link "¿Tienes un código promocional?" en la pantalla de plan
+  const [showPromoInput, setShowPromoInput] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [promoApplied, setPromoApplied] = useState<{ discountPercent: number; label?: string } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [showPromoConfirmModal, setShowPromoConfirmModal] = useState(false);
+
   const threeDsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -260,6 +269,12 @@ export default function SubscriptionPlansScreen() {
   const subscriptionPriceCOP = parseInt(appConfig.subscription_price, 10) || 29900;
   const breakEvenEventsCOP = Math.ceil(subscriptionPriceCOP / priceCOP);
 
+  // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
+  // Sin código aplicado, es igual a priceCOP — no cambia ningún comportamiento existente.
+  const effectivePriceCOP = promoApplied
+    ? Math.max(0, Math.round(priceCOP * (1 - promoApplied.discountPercent / 100)))
+    : priceCOP;
+
   const fetchVirtualBalance = useCallback(async () => {
     try {
       setLoadingBalance(true);
@@ -296,7 +311,7 @@ export default function SubscriptionPlansScreen() {
       if (!userId) userId = user?.id || null;
       if (!userId) return false;
 
-      const appointmentData: Record<string, any> = {
+      const appointmentData = {
         user_id: userId,
         event_id: pendingEventId,
         status: 'confirmada',
@@ -372,6 +387,49 @@ export default function SubscriptionPlansScreen() {
       return false;
     }
   }, [user?.id]);
+
+  // Valida y redime un código promocional. Si el descuento es del 100%, confirma
+  // el cupo directo sin pasar por Wompi (mismo patrón que la suscripción activa).
+  const handleApplyPromoCode = async () => {
+    if (!promoCode.trim() || applyingPromo) return;
+    setApplyingPromo(true);
+    setPromoError(null);
+    try {
+      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+      const { data, error } = await supabase.rpc('redeem_promo_code', {
+        p_code: promoCode.trim(),
+        p_user_id: user?.id,
+        p_event_id: pendingEventId || null,
+      });
+
+      if (error || !data?.success) {
+        const errorMessages: Record<string, string> = {
+          not_found: 'Código no válido o expirado.',
+          inactive: 'Código no válido o expirado.',
+          expired: 'Código no válido o expirado.',
+          max_uses_reached: 'Este código ya alcanzó su límite de usos.',
+          already_used: 'Ya usaste este código antes.',
+        };
+        setPromoError(errorMessages[data?.error] || 'No pudimos validar el código. Intenta de nuevo.');
+        return;
+      }
+
+      setPromoApplied({ discountPercent: data.discount_percent, label: data.label });
+
+      if (data.discount_percent >= 100) {
+        const ok = await confirmAppointment(`PROMO-${promoCode.trim().toUpperCase()}`, 'promo_code', pendingEventId || undefined);
+        if (ok) {
+          setShowPromoConfirmModal(true);
+        } else {
+          setPromoError('El código se aplicó pero no pudimos confirmar tu cupo. Escríbenos por soporte.');
+        }
+      }
+    } catch {
+      setPromoError('No pudimos validar el código. Intenta de nuevo.');
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
 
   useEffect(() => {
     const checkSubscriptionAndAutoConfirm = async () => {
@@ -449,9 +507,8 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.setItem('nospi_payment_processing', 'true');
             await AsyncStorage.removeItem('nospi_transaction_id');
             await AsyncStorage.removeItem('nospi_payment_method');
-            await AsyncStorage.removeItem('nospi_payment_event_id');
             await AsyncStorage.removeItem('nospi_payment_opened_time');
-            const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
             await AsyncStorage.removeItem('nospi_payment_processing');
             if (success) {
@@ -474,7 +531,6 @@ export default function SubscriptionPlansScreen() {
               'nospi_payment_opened_time',
               'nospi_access_token',
               'nospi_refresh_token',
-              'nospi_payment_event_id',
             ]);
             showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
           } else if (status === 'PENDING' && storedMethod === 'card') {
@@ -504,9 +560,8 @@ export default function SubscriptionPlansScreen() {
                     'nospi_payment_opened_time',
                     'nospi_access_token',
                     'nospi_refresh_token',
-                    'nospi_payment_event_id',
                   ]);
-                  const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+                  const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
                   const success = await confirmAppointment(storedTxId, 'card', pendingEventId || undefined);
                   if (success) {
                     if (pendingEventId) {
@@ -593,10 +648,9 @@ export default function SubscriptionPlansScreen() {
           window.localStorage.removeItem('nospi_payment_method');
           window.localStorage.removeItem('nospi_payment_opened_time');
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
-          const pendingEventId = (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
           const success = await confirmAppointment(storedTxId, storedMethod as any, pendingEventId || undefined);
           await AsyncStorage.removeItem('nospi_payment_processing');
-          await AsyncStorage.removeItem('nospi_payment_event_id');
           if (success) {
             if (pendingEventId) {
               router.replace({
@@ -660,7 +714,7 @@ export default function SubscriptionPlansScreen() {
 
     setProcessingMethod('virtual');
     try {
-      await supabase.from('users').update({ virtual_balance: virtualBalance - priceCOP }).eq('id', user?.id);
+      await supabase.from('users').update({ virtual_balance: virtualBalance - effectivePriceCOP }).eq('id', user?.id);
 
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       await confirmAppointment('', 'virtual_balance');
@@ -695,7 +749,6 @@ export default function SubscriptionPlansScreen() {
       'nospi_payment_opened_time',
       'nospi_access_token',
       'nospi_refresh_token',
-      'nospi_payment_event_id',
     ]);
     setProcessingMethod('card');
     try {
@@ -739,7 +792,7 @@ export default function SubscriptionPlansScreen() {
           acceptanceToken,
           personalDataToken,
           installments: parseInt(cardInstallments),
-          amountCOP: priceCOP,
+          amountCOP: effectivePriceCOP,
           userEmail: userProfile?.email || currentUser.email || '',
           userId: currentUser.id,
           eventId: pendingEventId,
@@ -756,9 +809,8 @@ export default function SubscriptionPlansScreen() {
       if (result.status === 'APPROVED') {
         setShowCardForm(false);
 
-        // Reutiliza el eventId capturado al iniciar este pago (arriba en esta
-        // misma función), no relee 'pending_event_confirmation' — esa llave es
-        // global y puede haber cambiado si el usuario miró otro evento.
+        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+
         await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
         if (pendingEventId) {
 
@@ -792,7 +844,6 @@ export default function SubscriptionPlansScreen() {
 
           await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
           await AsyncStorage.setItem('nospi_payment_method', 'card');
-          await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
           await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
           try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -830,8 +881,8 @@ export default function SubscriptionPlansScreen() {
                   'nospi_payment_opened_time',
                   'nospi_access_token',
                   'nospi_refresh_token',
-                  'nospi_payment_event_id',
                 ]);
+                const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
                 const success = await confirmAppointment(bgTxId, 'card', pendingEventId || undefined);
                 if (success) {
                   if (pendingEventId) {
@@ -855,7 +906,6 @@ export default function SubscriptionPlansScreen() {
                   'nospi_payment_opened_time',
                   'nospi_access_token',
                   'nospi_refresh_token',
-                  'nospi_payment_event_id',
                 ]);
                 showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
               } else if (bgAttempts >= bgMaxAttempts) {
@@ -904,7 +954,6 @@ export default function SubscriptionPlansScreen() {
 
               await AsyncStorage.setItem('nospi_transaction_id', result.transactionId || '');
               await AsyncStorage.setItem('nospi_payment_method', 'card');
-              await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
               await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
               try {
                 const { data: { session: cs } } = await supabase.auth.getSession();
@@ -921,6 +970,7 @@ export default function SubscriptionPlansScreen() {
               clearInterval(cardPoll);
               setProcessingMethod(null);
 
+              const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
               await confirmAppointment(result.transactionId || '', 'card', pendingEventId || undefined);
               if (pendingEventId) {
                 router.replace({
@@ -940,7 +990,6 @@ export default function SubscriptionPlansScreen() {
               await AsyncStorage.removeItem('nospi_payment_opened_time');
               await AsyncStorage.removeItem('nospi_access_token');
               await AsyncStorage.removeItem('nospi_refresh_token');
-              await AsyncStorage.removeItem('nospi_payment_event_id');
               showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
             } else if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
@@ -982,7 +1031,7 @@ export default function SubscriptionPlansScreen() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-nequi-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, personalDataToken, amountCOP: priceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
+        body: JSON.stringify({ phoneNumber: cleanPhone, acceptanceToken, personalDataToken, amountCOP: effectivePriceCOP, userEmail: userProfile?.email || currentUser.email || '', userId: currentUser.id, eventId: pendingEventId }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Error al procesar Nequi');
@@ -1001,6 +1050,7 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setShowNequiForm(false);
             setNequiStatus('idle');
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             await confirmAppointment(result.transactionId || '', 'nequi', pendingEventId || undefined);
             if (pendingEventId) {
               router.replace({
@@ -1050,7 +1100,7 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({
           acceptanceToken,
           personalDataToken,
-          amountCOP: priceCOP,
+          amountCOP: effectivePriceCOP,
           userEmail: userProfile?.email || currentUser.email || '',
           userId: currentUser.id,
           eventId: pendingEventId,
@@ -1065,7 +1115,6 @@ export default function SubscriptionPlansScreen() {
       const bancolombiaTransactionId = result.transactionId;
       await AsyncStorage.setItem('nospi_transaction_id', bancolombiaTransactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'bancolombia');
-      await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
@@ -1095,7 +1144,7 @@ export default function SubscriptionPlansScreen() {
         }
         window.open(result.redirectUrl, '_blank');
         setProcessingMethod(null);
-        startWebPolling(bancolombiaTransactionId, 'bancolombia', pendingEventId);
+        startWebPolling(bancolombiaTransactionId, 'bancolombia');
         return;
       }
 
@@ -1112,7 +1161,7 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
 
-      startNativePolling(bancolombiaTransactionId, 'bancolombia', pendingEventId);
+      startNativePolling(bancolombiaTransactionId, 'bancolombia');
 
       return;
     } catch (error: any) {
@@ -1122,7 +1171,7 @@ export default function SubscriptionPlansScreen() {
     }
   };
 
-  const startNativePolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse', paymentEventId?: string) => {
+  const startNativePolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
     const maxAttempts = 60; // 60 × 2s = 2 minutos — intervalo más frecuente para detectar APPROVED rápido
     const interval = setInterval(async () => {
@@ -1139,7 +1188,7 @@ export default function SubscriptionPlansScreen() {
           // Verificar si ya fue procesado por otro handler (AppState o payment-callback)
           const alreadyHandled = await AsyncStorage.getItem('nospi_payment_processing');
           if (alreadyHandled === 'true') {
-            const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+            const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
             if (pendingEventId) {
               router.replace({ pathname: '/event-details/[id]', params: { id: pendingEventId, paymentSuccess: 'true' } });
             } else {
@@ -1151,13 +1200,8 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.setItem('nospi_payment_processing', 'true');
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
-          await AsyncStorage.removeItem('nospi_payment_event_id');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
-          // Usar el eventId capturado al iniciar ESTE pago (parámetro o AsyncStorage
-          // dedicado), nunca 'pending_event_confirmation': esa llave es global y puede
-          // haber sido sobreescrita si el usuario miró/confirmó otro evento mientras
-          // este pago (async) seguía pendiente.
-          const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
+          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
           const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
           await AsyncStorage.removeItem('nospi_payment_processing');
           if (success) {
@@ -1204,7 +1248,7 @@ export default function SubscriptionPlansScreen() {
     }, 2000);
   }, [confirmAppointment, router]);
 
-  const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse', paymentEventId?: string) => {
+  const startWebPolling = useCallback((transactionId: string, paymentMethod: 'bancolombia' | 'pse') => {
     let attempts = 0;
     // 180 intentos × 5s = 15 minutos. La autenticación real con el banco (login,
     // OTP, etc.) puede tardar más de los 2 minutos que había antes — con eso el
@@ -1227,15 +1271,9 @@ export default function SubscriptionPlansScreen() {
           }
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
-          await AsyncStorage.removeItem('nospi_payment_event_id');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
           try { await supabase.auth.refreshSession(); } catch {}
-          // Usar el eventId capturado al iniciar ESTE pago, nunca
-          // 'pending_event_confirmation' (llave global que puede haberse
-          // sobreescrito si el usuario miró/confirmó otro evento mientras
-          // este pago seguía pendiente en el banco).
-          const pendingEventId = paymentEventId || (await AsyncStorage.getItem('nospi_payment_event_id')) || (await AsyncStorage.getItem('pending_event_confirmation'));
-          const success = await confirmAppointment(transactionId, paymentMethod, pendingEventId || undefined);
+          const success = await confirmAppointment(transactionId, paymentMethod);
           if (success) {
             setShowSuccessModal(true);
           } else {
@@ -1272,7 +1310,6 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_transaction_id');
           await AsyncStorage.removeItem('nospi_payment_method');
           await AsyncStorage.removeItem('nospi_payment_opened_time');
-          await AsyncStorage.removeItem('nospi_payment_event_id');
 
           if (status === 'VOIDED') {
             showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
@@ -1390,7 +1427,7 @@ export default function SubscriptionPlansScreen() {
         body: JSON.stringify({
           acceptanceToken,
           personalDataToken,
-          amountCOP: priceCOP,
+          amountCOP: effectivePriceCOP,
           userEmail: pseEmail,
           userId: currentUser.id,
           eventId: pendingEventId,
@@ -1415,7 +1452,6 @@ export default function SubscriptionPlansScreen() {
 
       await AsyncStorage.setItem('nospi_transaction_id', data.transactionId);
       await AsyncStorage.setItem('nospi_payment_method', 'pse');
-      await AsyncStorage.setItem('nospi_payment_event_id', pendingEventId);
       await AsyncStorage.setItem('nospi_payment_opened_time', Date.now().toString());
       if (currentUser?.id) {
         await AsyncStorage.setItem('nospi_user_id', currentUser.id);
@@ -1446,7 +1482,7 @@ export default function SubscriptionPlansScreen() {
         window.open(data.redirectUrl, '_blank');
         setProcessingMethod(null);
         setShowPSEForm(false);
-        startWebPolling(data.transactionId, 'pse', pendingEventId);
+        startWebPolling(data.transactionId, 'pse');
         return;
       }
 
@@ -1464,7 +1500,7 @@ export default function SubscriptionPlansScreen() {
         topOffset: 60,
       });
 
-      startNativePolling(data.transactionId, 'pse', pendingEventId);
+      startNativePolling(data.transactionId, 'pse');
 
       return;
 
@@ -1507,7 +1543,7 @@ export default function SubscriptionPlansScreen() {
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
-              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+              <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
               <Text style={styles.inputLabel}>Nombre del titular</Text>
               <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
               <Text style={styles.inputLabel}>Número de tarjeta</Text>
@@ -1549,7 +1585,7 @@ export default function SubscriptionPlansScreen() {
                 disabled={isProcessing('card')}
                 activeOpacity={0.7}
               >
-                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{`Pagar $${priceCOP.toLocaleString('es-CO')} COP`}</Text>}
+                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{`Pagar $${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>}
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
             </View>
@@ -1572,7 +1608,7 @@ export default function SubscriptionPlansScreen() {
             {nequiStatus === 'idle' ? (
               <>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+                <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
                 <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago.</Text>
                 <Text style={styles.inputLabel}>Número de celular Nequi</Text>
                 <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
@@ -1592,7 +1628,7 @@ export default function SubscriptionPlansScreen() {
               <View style={styles.waitingContainer}>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
                 <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
-                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text> desde tu app Nequi.</Text>
+                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text> desde tu app Nequi.</Text>
                 <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
                 <Text style={styles.waitingHint}>Esperando confirmación...</Text>
               </View>
@@ -1615,7 +1651,7 @@ export default function SubscriptionPlansScreen() {
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Image source={require('@/assets/images/logo_380.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-              <Text style={styles.formAmount}>{`$${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+              <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
 
               <Text style={styles.inputLabel}>Banco</Text>
               <TouchableOpacity
@@ -1702,7 +1738,7 @@ export default function SubscriptionPlansScreen() {
               >
                 {isProcessing('pse')
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.payBtnText}>{`Pagar $${priceCOP.toLocaleString('es-CO')} COP`}</Text>
+                  : <Text style={styles.payBtnText}>{`Pagar $${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
                 }
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
@@ -1722,16 +1758,8 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-              // router.back() no hacia nada cuando esta pantalla se abre sin
-              // historial previo (por ejemplo, al volver de un pago pendiente,
-              // o si se entra directo por deep link) — Cancelar se sentia roto.
-              // canGoBack() evita eso: si no hay a donde volver, navega a un
-              // destino seguro en vez de no hacer nada.
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)/events');
-              }
+
+              router.back();
             }}
             style={{ paddingHorizontal: 8 }}
           >
@@ -1797,6 +1825,62 @@ export default function SubscriptionPlansScreen() {
                 {`Te conviene si vas a ${breakEvenEventsCOP}+ eventos al mes`}
               </Text>
             </TouchableOpacity>
+
+            {!promoApplied && !showPromoInput && (
+              <TouchableOpacity
+                onPress={() => setShowPromoInput(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#fff', textDecorationLine: 'underline' }}>¿Tienes un código promocional?</Text>
+              </TouchableOpacity>
+            )}
+
+            {showPromoInput && !promoApplied && (
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: '#666', fontWeight: '500', marginBottom: 8 }}>Código promocional</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={{ flex: 1, height: 42, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', paddingHorizontal: 12, fontSize: 14, textTransform: 'uppercase' }}
+                    placeholder="Ej: BETA"
+                    value={promoCode}
+                    onChangeText={(t) => { setPromoCode(t); setPromoError(null); }}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={handleApplyPromoCode}
+                    editable={!applyingPromo}
+                  />
+                  <TouchableOpacity
+                    onPress={handleApplyPromoCode}
+                    disabled={applyingPromo || !promoCode.trim()}
+                    style={{ width: 78, height: 42, borderRadius: 10, backgroundColor: nospiColors.purpleDark, alignItems: 'center', justifyContent: 'center', opacity: applyingPromo || !promoCode.trim() ? 0.6 : 1 }}
+                    activeOpacity={0.8}
+                  >
+                    {applyingPromo ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Aplicar</Text>}
+                  </TouchableOpacity>
+                </View>
+                {!!promoError && (
+                  <Text style={{ fontSize: 12, color: '#A32D2D', marginTop: 8 }}>{promoError}</Text>
+                )}
+              </View>
+            )}
+
+            {promoApplied && promoApplied.discountPercent >= 100 && (
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4, alignItems: 'center' }}>
+                <Text style={{ fontSize: 22, color: nospiColors.purpleMid }}>✓</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark, marginTop: 4 }}>Código aplicado</Text>
+                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>Tu inscripción a este evento queda gratis.</Text>
+              </View>
+            )}
+
+            {promoApplied && promoApplied.discountPercent < 100 && (
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4, alignItems: 'center' }}>
+                <Text style={{ fontSize: 22, color: nospiColors.purpleMid }}>✓</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark, marginTop: 4 }}>{`Código aplicado — ${promoApplied.discountPercent}% de descuento`}</Text>
+                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>Se descontará del total al elegir tu método de pago.</Text>
+              </View>
+            )}
           </>
         ) : (
           <>
@@ -1804,11 +1888,11 @@ export default function SubscriptionPlansScreen() {
           <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>‹ Volver</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Pagar este evento</Text>
-        <Text style={styles.subtitle}>{`$${priceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
+        <Text style={styles.subtitle}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
         <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
 
-        {!loadingBalance && virtualBalance >= priceCOP && (
+        {!loadingBalance && virtualBalance >= effectivePriceCOP && (
           <TouchableOpacity style={styles.paymentBtn} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
             <View style={styles.btnInner}>
               <Text style={styles.btnIcon}>💰</Text>
@@ -1903,6 +1987,19 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successTitle}>¡Cupo confirmado!</Text>
             <Text style={styles.successMessage}>Tu suscripción cubre este evento — ya tienes tu lugar asegurado</Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
+              <Text style={styles.successButtonText}>Ver mis citas</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showPromoConfirmModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.successIcon}>🎟️</Text>
+            <Text style={styles.successTitle}>¡Cupo confirmado gratis!</Text>
+            <Text style={styles.successMessage}>Tu código promocional cubrió este evento — ya tienes tu lugar asegurado</Text>
+            <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
           </View>
