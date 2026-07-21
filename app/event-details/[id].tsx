@@ -227,13 +227,13 @@ export default function EventDetailsScreen() {
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
             {event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'bar' ? (
-              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 156, height: 132, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'restaurante' ? (
-              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 156, height: 132, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'cafe' ? (
-              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 156, height: 132, marginBottom: 12 }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}
