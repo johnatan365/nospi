@@ -1108,7 +1108,7 @@ export default function InteraccionScreen() {
   }
 
   const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : '🍽️';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -1140,6 +1140,12 @@ export default function InteraccionScreen() {
           <View style={styles.eventHeader}>
             {appointment.event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+            ) : appointment.event.type === 'bar' ? (
+              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+            ) : appointment.event.type === 'restaurante' ? (
+              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
+            ) : appointment.event.type === 'cafe' ? (
+              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 38, height: 32, marginRight: 12 }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
             )}

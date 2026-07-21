@@ -455,7 +455,7 @@ export default function AppointmentsScreen() {
 
               const eventType = appointment.event.type || 'restaurant';
               const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : 'Restaurante';
-              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : '🍽️';
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
@@ -485,6 +485,12 @@ export default function AppointmentsScreen() {
                   <View style={styles.appointmentHeader}>
                     {eventType === 'caminata' ? (
                       <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 47, height: 40, marginRight: 12 }} resizeMode="contain" />
+                    ) : eventType === 'bar' ? (
+                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 47, height: 40, marginRight: 12 }} resizeMode="contain" />
+                    ) : eventType === 'restaurante' ? (
+                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 47, height: 40, marginRight: 12 }} resizeMode="contain" />
+                    ) : eventType === 'cafe' ? (
+                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 47, height: 40, marginRight: 12 }} resizeMode="contain" />
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
                     )}
