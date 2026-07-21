@@ -16,7 +16,7 @@ interface Appointment {
   id: string;
   status: string;
   payment_status: string;
-  payment_method?: string;
+  payment_method?: string; amount_paid_cop?: number | null;
   created_at: string;
   event: {
     id: string;
@@ -88,7 +88,7 @@ export default function AppointmentsScreen() {
         id,
         status,
         payment_status,
-        payment_method,
+        payment_method, amount_paid_cop,
         created_at,
         events!inner (
           id,
@@ -271,7 +271,7 @@ export default function AppointmentsScreen() {
       }
 
       if (isWithinRefundWindow) {
-        const refundAmount = parseInt(appConfig.event_price, 10) || 30000;
+        const refundAmount = appointmentToCancel.amount_paid_cop != null ? appointmentToCancel.amount_paid_cop : (parseInt(appConfig.event_price, 10) || 30000);
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
           user_id_param: user?.id,
           amount_param: refundAmount,
