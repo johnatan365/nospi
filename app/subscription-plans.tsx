@@ -1761,8 +1761,11 @@ export default function SubscriptionPlansScreen() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => {
-
-              router.back();
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)/events');
+              }
             }}
             style={{ paddingHorizontal: 8 }}
           >
