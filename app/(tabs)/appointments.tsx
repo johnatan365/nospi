@@ -484,7 +484,7 @@ export default function AppointmentsScreen() {
                 <View key={appointment.id} style={styles.appointmentCard}>
                   <View style={styles.appointmentHeader}>
                     {eventType === 'caminata' ? (
-                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 129, height: 110, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'bar' ? (
                       <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'restaurante' ? (
