@@ -227,7 +227,7 @@ export default function EventDetailsScreen() {
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
             {event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 203, height: 172, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'bar' ? (
               <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'restaurante' ? (
