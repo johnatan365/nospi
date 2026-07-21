@@ -484,13 +484,13 @@ export default function AppointmentsScreen() {
                 <View key={appointment.id} style={styles.appointmentCard}>
                   <View style={styles.appointmentHeader}>
                     {eventType === 'caminata' ? (
-                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 103, height: 88, marginRight: 12 }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'bar' ? (
-                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 103, height: 88, marginRight: 12 }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'restaurante' ? (
-                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 103, height: 88, marginRight: 12 }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'cafe' ? (
-                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 103, height: 88, marginRight: 12 }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
                     )}
