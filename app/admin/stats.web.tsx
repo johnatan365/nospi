@@ -64,6 +64,17 @@ function formatCOP(n: number) {
   return `$${Math.round(n).toLocaleString('es-CO')}`;
 }
 
+function revenueFor(a: AppointmentRow, eventPrice: number) {
+  if (a.amount_paid_cop != null) return a.amount_paid_cop;
+  if (a.payment_status !== 'completed') return 0;
+  if (a.payment_method === 'subscription' || a.payment_method === 'virtual_balance') return 0;
+  return eventPrice;
+}
+
+function isEstimated(a: AppointmentRow) {
+  return a.amount_paid_cop == null && a.payment_status === 'completed' && a.payment_method !== 'subscription' && a.payment_method !== 'virtual_balance';
+}
+
 function planLabel(plan: string) {
   if (plan === '1_month') return '1 mes';
   if (plan === '3_months') return '3 meses';
