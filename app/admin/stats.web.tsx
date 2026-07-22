@@ -48,7 +48,7 @@ async function callAdminStats(body: Record<string, any>) {
 }
 
 function dayKey(iso: string) {
-  return iso.slice(0, 10);
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 function formatDayLabel(day: string) {
@@ -95,6 +95,7 @@ export default function StatsScreen() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
+  const [eventPrice, setEventPrice] = useState(15000);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,6 +106,7 @@ export default function StatsScreen() {
       const json = await callAdminStats({ action: 'report' });
       setAppointments(json.appointments || []);
       setSubscriptions(json.subscriptions || []);
+      setEventPrice(json.eventPrice || 15000);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -120,23 +122,24 @@ export default function StatsScreen() {
       const day = dayKey(a.created_at);
       if (!map[day]) map[day] = { day, count: 0, revenue: 0 };
       map[day].count += 1;
-      map[day].revenue += a.amount_paid_cop || 0;
+      map[day].revenue += revenueFor(a, eventPrice);
     }
     return Object.values(map).sort((x, y) => x.day.localeCompare(y.day));
-  }, [appointments]);
+  }, [appointments, eventPrice]);
 
   const apptsByDayEvent = useMemo(() => {
-    const map: Record<string, { day: string; eventName: string; count: number; revenue: number }> = {};
+    const map: Record<string, { day: string; eventName: string; count: number; revenue: number; estimated: boolean }> = {};
     for (const a of appointments) {
       const day = dayKey(a.created_at);
       const eventName = a.event?.name || 'Sin evento';
       const key = `${day}|${eventName}`;
-      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0 };
+      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0, estimated: false };
       map[key].count += 1;
-      map[key].revenue += a.amount_paid_cop || 0;
+      map[key].revenue += revenueFor(a, eventPrice);
+      if (isEstimated(a)) map[key].estimated = true;
     }
     return Object.values(map).sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : x.eventName.localeCompare(y.eventName)));
-  }, [appointments]);
+  }, [appointments, eventPrice]);
 
   const subsByDay = useMemo(() => {
     const map: Record<string, { day: string; count: number; revenue: number }> = {};
@@ -162,7 +165,7 @@ export default function StatsScreen() {
   }, [subscriptions]);
 
   const totalAppts = appointments.length;
-  const totalApptsRevenue = appointments.reduce((s, a) => s + (a.amount_paid_cop || 0), 0);
+  const totalApptsRevenue = appointments.reduce((s, a) => s + revenueFor(a, eventPrice), 0);
   const totalSubs = subscriptions.length;
   const totalSubsRevenue = subscriptions.reduce((s, su) => s + (Number(su.price) || 0), 0);
 
@@ -225,11 +228,12 @@ export default function StatsScreen() {
                   <Text style={[styles.td, { flex: 1 }]}>{formatDayFull(row.day)}</Text>
                   <Text style={[styles.td, { flex: 1.6, fontWeight: '600' }]}>{row.eventName}</Text>
                   <Text style={[styles.td, { flex: 0.8 }]}>{row.count}</Text>
-                  <Text style={[styles.td, { flex: 1 }]}>{formatCOP(row.revenue)}</Text>
+                  <Text style={[styles.td, { flex: 1 }]}>{row.estimated ? '~' : ''}{formatCOP(row.revenue)}</Text>
                 </View>
               ))}
             </View>
           )}
+          <Text style={styles.noteText}>~ Monto estimado (precio estándar del evento): el monto exacto no se registraba antes del 20 de julio de 2026.</Text>
 
           <Text style={styles.sectionTitle}>Suscripciones mensuales por día</Text>
           {subsByDay.length === 0 ? (
@@ -274,6 +278,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 19 },
   errorText: { color: '#A32D2D', fontSize: 13, marginTop: 12 },
   emptyText: { color: '#9CA3AF', fontSize: 14, marginVertical: 16, textAlign: 'center' },
+  noteText: { color: '#9CA3AF', fontSize: 11, marginTop: -20, marginBottom: 24, fontStyle: 'italic' },
   cardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
   card: { flexGrow: 1, minWidth: 180, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 16 },
   cardValue: { fontSize: 22, fontWeight: 'bold', color: nospiColors.purpleDark },
