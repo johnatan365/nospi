@@ -3384,7 +3384,7 @@ setBulkWhatsAppPending(pending);
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
-                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
+                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
                 <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
               </View>
               <View style={styles.compactInfoRow}>
