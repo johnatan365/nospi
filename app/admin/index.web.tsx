@@ -641,6 +641,7 @@ export default function AdminPanelScreen() {
   const [eventMatches, setEventMatches] = useState<any[]>([]);
   const [eventRatings, setEventRatings] = useState<any[]>([]);
   const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
+  const eventsReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
   }, []);
@@ -667,7 +668,10 @@ export default function AdminPanelScreen() {
           table: 'events',
         },
         (payload) => {
-          loadDashboardData();
+          if (eventsReloadTimer.current) clearTimeout(eventsReloadTimer.current);
+                      eventsReloadTimer.current = setTimeout(() => {
+                                      loadDashboardData();
+                      }, 4000);
         }
       )
       .subscribe((status) => {
