@@ -6,7 +6,7 @@ export default function AdminLayout() {
           Stack,
       { screenOptions: { headerShown: false } },
           React.createElement(Stack.Screen, { name: 'index', options: { headerShown: false } }),
-          React.createElement(Stack.Screen, { name: 'promo-codes.web', options: { headerShown: true, title: 'Códigos promocionales' } }),
-            React.createElement(Stack.Screen, { name: 'stats.web', options: { headerShown: true, title: 'Estadísticas' } })
-        );
+                      React.createElement(Stack.Screen, { name: 'promo-codes', options: { headerShown: true, title: 'Códigos promocionales' } }),
+                    React.createElement(Stack.Screen, { name: 'stats', options: { headerShown: true, title: 'Estadísticas' } })
+                );
 }
