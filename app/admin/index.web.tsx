@@ -494,6 +494,7 @@ export default function AdminPanelScreen() {
 
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
   const [users, setUsers] = useState<User[]>([]);
   const [recurringCustomers, setRecurringCustomers] = useState<any[]>([]);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
@@ -3337,7 +3338,35 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
 
-        {events.map((event) => {
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+          {([
+            { key: 'published', label: 'Publicado' },
+            { key: 'draft', label: 'Borrador' },
+            { key: 'closed', label: 'Cerrado' },
+            { key: 'all', label: 'Todos' },
+          ] as { key: 'published' | 'draft' | 'closed' | 'all'; label: string }[]).map(tab => (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => setEventStatusFilter(tab.key)}
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                backgroundColor: eventStatusFilter === tab.key ? nospiColors.purpleDark : '#F3F4F6',
+              }}
+            >
+              <Text style={{
+                fontSize: 13,
+                fontWeight: '600',
+                color: eventStatusFilter === tab.key ? 'white' : '#6B7280',
+              }}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {events.filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter).map((event) => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
