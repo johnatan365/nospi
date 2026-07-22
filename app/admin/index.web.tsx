@@ -81,7 +81,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'config';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'config';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -4507,7 +4507,7 @@ setBulkWhatsAppPending(pending);
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
-    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' },
+    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -4634,7 +4634,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; }
+                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}
