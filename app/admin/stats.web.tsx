@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -51,6 +51,10 @@ function dayKey(iso: string) {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
+function todayBogota() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
 function formatDayLabel(day: string) {
   const parts = day.split('-');
   return `${parts[2]}/${parts[1]}`;
@@ -64,15 +68,14 @@ function formatCOP(n: number) {
   return `$${Math.round(n).toLocaleString('es-CO')}`;
 }
 
-function revenueFor(a: AppointmentRow, eventPrice: number) {
+// Devuelve el monto REAL cobrado, o null si no hay forma de saberlo.
+// - amount_paid_cop guardado (dato real: DB o API de Wompi) -> ese valor.
+// - inscripcion gratuita via suscripcion activa o saldo virtual -> 0 (dato real, no una suposicion).
+// - cualquier otro caso sin amount_paid_cop -> null (sin informacion de pago). Nunca se inventa un numero.
+function revenueFor(a: AppointmentRow): number | null {
   if (a.amount_paid_cop != null) return a.amount_paid_cop;
-  if (a.payment_status !== 'completed') return 0;
   if (a.payment_method === 'subscription' || a.payment_method === 'virtual_balance') return 0;
-  return eventPrice;
-}
-
-function isEstimated(a: AppointmentRow) {
-  return a.amount_paid_cop == null && a.payment_status === 'completed' && a.payment_method !== 'subscription' && a.payment_method !== 'virtual_balance';
+  return null;
 }
 
 function planLabel(plan: string) {
@@ -106,9 +109,10 @@ export default function StatsScreen() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
-  const [eventPrice, setEventPrice] = useState(15000);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(todayBogota());
+  const [dateTo, setDateTo] = useState(todayBogota());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,7 +121,6 @@ export default function StatsScreen() {
       const json = await callAdminStats({ action: 'report' });
       setAppointments(json.appointments || []);
       setSubscriptions(json.subscriptions || []);
-      setEventPrice(json.eventPrice || 15000);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -127,45 +130,62 @@ export default function StatsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const apptsByDay = useMemo(() => {
-    const map: Record<string, { day: string; count: number; revenue: number }> = {};
-    for (const a of appointments) {
+  const apptsFiltered = useMemo(() => {
+    return appointments.filter((a) => {
       const day = dayKey(a.created_at);
-      if (!map[day]) map[day] = { day, count: 0, revenue: 0 };
+      return day >= dateFrom && day <= dateTo;
+    });
+  }, [appointments, dateFrom, dateTo]);
+
+  const subsFiltered = useMemo(() => {
+    return subscriptions.filter((s) => {
+      const day = dayKey(s.created_at);
+      return day >= dateFrom && day <= dateTo;
+    });
+  }, [subscriptions, dateFrom, dateTo]);
+
+  const apptsByDay = useMemo(() => {
+    const map: Record<string, { day: string; count: number; revenue: number; unknown: number }> = {};
+    for (const a of apptsFiltered) {
+      const day = dayKey(a.created_at);
+      if (!map[day]) map[day] = { day, count: 0, revenue: 0, unknown: 0 };
       map[day].count += 1;
-      map[day].revenue += revenueFor(a, eventPrice);
+      const r = revenueFor(a);
+      if (r != null) map[day].revenue += r;
+      else map[day].unknown += 1;
     }
     return Object.values(map).sort((x, y) => x.day.localeCompare(y.day));
-  }, [appointments, eventPrice]);
+  }, [apptsFiltered]);
 
   const apptsByDayEvent = useMemo(() => {
-    const map: Record<string, { day: string; eventName: string; count: number; revenue: number; estimated: boolean }> = {};
-    for (const a of appointments) {
+    const map: Record<string, { day: string; eventName: string; count: number; revenue: number; unknown: number }> = {};
+    for (const a of apptsFiltered) {
       const day = dayKey(a.created_at);
       const eventName = a.event?.name || 'Sin evento';
       const key = `${day}|${eventName}`;
-      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0, estimated: false };
+      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0, unknown: 0 };
       map[key].count += 1;
-      map[key].revenue += revenueFor(a, eventPrice);
-      if (isEstimated(a)) map[key].estimated = true;
+      const r = revenueFor(a);
+      if (r != null) map[key].revenue += r;
+      else map[key].unknown += 1;
     }
     return Object.values(map).sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : x.eventName.localeCompare(y.eventName)));
-  }, [appointments, eventPrice]);
+  }, [apptsFiltered]);
 
   const subsByDay = useMemo(() => {
     const map: Record<string, { day: string; count: number; revenue: number }> = {};
-    for (const s of subscriptions) {
+    for (const s of subsFiltered) {
       const day = dayKey(s.created_at);
       if (!map[day]) map[day] = { day, count: 0, revenue: 0 };
       map[day].count += 1;
       map[day].revenue += Number(s.price) || 0;
     }
     return Object.values(map).sort((x, y) => x.day.localeCompare(y.day));
-  }, [subscriptions]);
+  }, [subsFiltered]);
 
   const subsByDayPlan = useMemo(() => {
     const map: Record<string, { day: string; plan: string; count: number; revenue: number }> = {};
-    for (const s of subscriptions) {
+    for (const s of subsFiltered) {
       const day = dayKey(s.created_at);
       const key = `${day}|${s.plan_type}`;
       if (!map[key]) map[key] = { day, plan: s.plan_type, count: 0, revenue: 0 };
@@ -173,12 +193,13 @@ export default function StatsScreen() {
       map[key].revenue += Number(s.price) || 0;
     }
     return Object.values(map).sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : x.plan.localeCompare(y.plan)));
-  }, [subscriptions]);
+  }, [subsFiltered]);
 
-  const totalAppts = appointments.length;
-  const totalApptsRevenue = appointments.reduce((s, a) => s + revenueFor(a, eventPrice), 0);
-  const totalSubs = subscriptions.length;
-  const totalSubsRevenue = subscriptions.reduce((s, su) => s + (Number(su.price) || 0), 0);
+  const totalAppts = apptsFiltered.length;
+  const totalApptsRevenue = apptsFiltered.reduce((s, a) => { const r = revenueFor(a); return r != null ? s + r : s; }, 0);
+  const totalApptsUnknown = apptsFiltered.filter((a) => revenueFor(a) == null).length;
+  const totalSubs = subsFiltered.length;
+  const totalSubsRevenue = subsFiltered.reduce((s, su) => s + (Number(su.price) || 0), 0);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -190,6 +211,23 @@ export default function StatsScreen() {
 
       <Text style={styles.title}>Estadísticas</Text>
       <Text style={styles.subtitle}>Inscripciones a eventos y suscripciones mensuales, día por día.</Text>
+
+      <View style={styles.filterBar}>
+        <View style={styles.filterField}>
+          <Text style={styles.filterLabel}>Desde</Text>
+          <TextInput style={styles.filterInput} value={dateFrom} onChangeText={setDateFrom} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+        </View>
+        <View style={styles.filterField}>
+          <Text style={styles.filterLabel}>Hasta</Text>
+          <TextInput style={styles.filterInput} value={dateTo} onChangeText={setDateTo} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+        </View>
+        <TouchableOpacity style={styles.filterBtn} onPress={() => { const t = todayBogota(); setDateFrom(t); setDateTo(t); }}>
+          <Text style={styles.filterBtnText}>Hoy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.filterBtn} onPress={() => { setDateFrom('2000-01-01'); setDateTo(todayBogota()); }}>
+          <Text style={styles.filterBtnText}>Todo el histórico</Text>
+        </TouchableOpacity>
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color={nospiColors.purpleDark} style={{ marginTop: 40 }} />
@@ -204,7 +242,11 @@ export default function StatsScreen() {
             </View>
             <View style={styles.card}>
               <Text style={styles.cardValue}>{formatCOP(totalApptsRevenue)}</Text>
-              <Text style={styles.cardLabel}>Recaudado en eventos</Text>
+              <Text style={styles.cardLabel}>Recaudado en eventos (real)</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardValue}>{totalApptsUnknown}</Text>
+              <Text style={styles.cardLabel}>Sin información de pago</Text>
             </View>
             <View style={styles.card}>
               <Text style={styles.cardValue}>{totalSubs}</Text>
@@ -218,44 +260,47 @@ export default function StatsScreen() {
 
           <Text style={styles.sectionTitle}>Inscripciones a eventos por día</Text>
           {apptsByDay.length === 0 ? (
-            <Text style={styles.emptyText}>Todavía no hay inscripciones registradas.</Text>
+            <Text style={styles.emptyText}>No hay inscripciones en el rango seleccionado.</Text>
           ) : (
             <BarChart data={apptsByDay.map((d) => ({ day: d.day, value: d.count }))} color={nospiColors.purpleDark} />
           )}
 
           <Text style={styles.sectionTitle}>Inscripciones por día y evento</Text>
           {apptsByDayEvent.length === 0 ? (
-            <Text style={styles.emptyText}>Todavía no hay inscripciones registradas.</Text>
+            <Text style={styles.emptyText}>No hay inscripciones en el rango seleccionado.</Text>
           ) : (
             <View style={styles.table}>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
                 <Text style={[styles.th, { flex: 1 }]}>Fecha</Text>
                 <Text style={[styles.th, { flex: 1.6 }]}>Evento</Text>
                 <Text style={[styles.th, { flex: 0.8 }]}>Inscripciones</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Recaudo</Text>
+                <Text style={[styles.th, { flex: 1.2 }]}>Recaudo</Text>
               </View>
               {apptsByDayEvent.map((row) => (
                 <View key={`${row.day}|${row.eventName}`} style={styles.tableRow}>
                   <Text style={[styles.td, { flex: 1 }]}>{formatDayFull(row.day)}</Text>
                   <Text style={[styles.td, { flex: 1.6, fontWeight: '600' }]}>{row.eventName}</Text>
                   <Text style={[styles.td, { flex: 0.8 }]}>{row.count}</Text>
-                  <Text style={[styles.td, { flex: 1 }]}>{row.estimated ? '~' : ''}{formatCOP(row.revenue)}</Text>
+                  <View style={{ flex: 1.2 }}>
+                    <Text style={styles.td}>{formatCOP(row.revenue)}</Text>
+                    {row.unknown > 0 ? <Text style={styles.tdMuted}>+{row.unknown} sin información</Text> : null}
+                  </View>
                 </View>
               ))}
             </View>
           )}
-          <Text style={styles.noteText}>~ Monto estimado (precio estándar del evento): el monto exacto no se registraba antes del 20 de julio de 2026.</Text>
+          <Text style={styles.noteText}>El recaudo mostrado es el monto real registrado (base de datos o API de Wompi). Las inscripciones marcadas "sin información" no tienen un pago rastreable y no se les asigna ningún valor estimado.</Text>
 
           <Text style={styles.sectionTitle}>Suscripciones mensuales por día</Text>
           {subsByDay.length === 0 ? (
-            <Text style={styles.emptyText}>Todavía no hay suscripciones registradas.</Text>
+            <Text style={styles.emptyText}>No hay suscripciones en el rango seleccionado.</Text>
           ) : (
             <BarChart data={subsByDay.map((d) => ({ day: d.day, value: d.count }))} color="#10B981" />
           )}
 
           <Text style={styles.sectionTitle}>Suscripciones por día y plan</Text>
           {subsByDayPlan.length === 0 ? (
-            <Text style={styles.emptyText}>Todavía no hay suscripciones registradas.</Text>
+            <Text style={styles.emptyText}>No hay suscripciones en el rango seleccionado.</Text>
           ) : (
             <View style={styles.table}>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
@@ -286,12 +331,18 @@ const styles = StyleSheet.create({
   backLink: { marginBottom: 12 },
   backLinkText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
   title: { fontSize: 26, fontWeight: 'bold', color: nospiColors.purpleDark },
-  subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 19 },
+  subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 16, lineHeight: 19 },
+  filterBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10, marginBottom: 24 },
+  filterField: { minWidth: 130 },
+  filterLabel: { fontSize: 11, fontWeight: '700', color: '#6B7280', marginBottom: 4, textTransform: 'uppercase' },
+  filterInput: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, backgroundColor: '#fff', color: '#111' },
+  filterBtn: { borderWidth: 1, borderColor: nospiColors.purpleDark, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
+  filterBtnText: { color: nospiColors.purpleDark, fontSize: 12, fontWeight: '600' },
   errorText: { color: '#A32D2D', fontSize: 13, marginTop: 12 },
   emptyText: { color: '#9CA3AF', fontSize: 14, marginVertical: 16, textAlign: 'center' },
   noteText: { color: '#9CA3AF', fontSize: 11, marginTop: -20, marginBottom: 24, fontStyle: 'italic' },
   cardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
-  card: { flexGrow: 1, minWidth: 180, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 16 },
+  card: { flexGrow: 1, minWidth: 160, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 16 },
   cardValue: { fontSize: 22, fontWeight: 'bold', color: nospiColors.purpleDark },
   cardLabel: { fontSize: 12, color: '#6B7280', marginTop: 4 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111', marginTop: 12, marginBottom: 12 },
@@ -306,4 +357,5 @@ const styles = StyleSheet.create({
   tableHeaderRow: { backgroundColor: '#F9FAFB' },
   th: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase' },
   td: { fontSize: 13, color: '#111' },
+  tdMuted: { fontSize: 10, color: '#9CA3AF', marginTop: 2, fontStyle: 'italic' },
 });
