@@ -801,7 +801,7 @@ export default function AdminPanelScreen() {
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
-        .order('date', { ascending: false });
+        .order('date', { ascending: true });
 
       if (eventsError) {
         console.error('Error loading events:', eventsError);
