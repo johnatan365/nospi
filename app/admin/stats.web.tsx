@@ -1,11 +1,23 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZGlyYXVyZmJhd290bGNuZG1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDMxMTUsImV4cCI6MjA4NTk3OTExNX0.FxMBafEjIliTDzRBRlnY59i1wEcbIx6u8ZdVf1uxuj8';
+
+const dateInputStyle: any = {
+    border: '1px solid #E5E7EB',
+    borderRadius: 8,
+    padding: '8px 10px',
+    fontSize: 13,
+    backgroundColor: '#fff',
+    color: '#111',
+    fontFamily: 'inherit',
+    outline: 'none',
+    colorScheme: 'light',
+};
 
 interface EventRef {
   id: string;
@@ -215,11 +227,11 @@ export default function StatsScreen() {
       <View style={styles.filterBar}>
         <View style={styles.filterField}>
           <Text style={styles.filterLabel}>Desde</Text>
-          <TextInput style={styles.filterInput} value={dateFrom} onChangeText={setDateFrom} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+          <input type="date" value={dateFrom} max={dateTo} onChange={(e: any) => setDateFrom(e.target.value)} style={dateInputStyle} />
         </View>
         <View style={styles.filterField}>
           <Text style={styles.filterLabel}>Hasta</Text>
-          <TextInput style={styles.filterInput} value={dateTo} onChangeText={setDateTo} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+          <input type="date" value={dateTo} min={dateFrom} onChange={(e: any) => setDateTo(e.target.value)} style={dateInputStyle} />
         </View>
         <TouchableOpacity style={styles.filterBtn} onPress={() => { const t = todayBogota(); setDateFrom(t); setDateTo(t); }}>
           <Text style={styles.filterBtnText}>Hoy</Text>
