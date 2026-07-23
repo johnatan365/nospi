@@ -218,7 +218,9 @@ function buildSameDayWhatsAppLink(
     ``,
     `Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
     ``,
-    `Abre este link apenas estes en la mesa para confirmar e iniciar la experiencia con los demás: https://app.nospi.co/(tabs)/interaccion`,
+    `Cuando estén en la mesa, abran este link para confirmar e iniciar la experiencia: https://app.nospi.co/(tabs)/interaccion`,
+    ``,
+    `Antes de arrancar la dinámica para romper el hielo, elijan a alguien que se encargue de iniciarla y leer las preguntas en voz alta.`,
     ``,
     `¡Nos vemos hoy!`,
   ].join('\n');
