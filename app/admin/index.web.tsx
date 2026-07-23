@@ -1721,6 +1721,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert('Ubicación revelada exitosamente');
+
+      // Enviar de inmediato el recordatorio de 48h a los asistentes confirmados de este evento
+      supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } })
+        .catch((err) => console.error('Error enviando recordatorio 48h inmediato:', err));
+      
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);
