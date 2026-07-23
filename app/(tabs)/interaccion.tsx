@@ -35,7 +35,6 @@ interface Event {
   current_question_index: number | null;
   answered_users: string[] | null;
   current_question: string | null;
-  current_question_starter_id: string | null;
   event_status?: 'draft' | 'published' | 'closed';
   latitude: number | null;
   longitude: number | null;
@@ -366,7 +365,6 @@ export default function InteraccionScreen() {
             current_question_index,
             answered_users,
             current_question,
-            current_question_starter_id,
             event_status,
             latitude,
             longitude,
@@ -594,9 +592,6 @@ export default function InteraccionScreen() {
     setStartingExperience(true);
 
     try {
-      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-      const starterUserId = activeParticipants[randomIndex].user_id;
-
       let firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
       try {
         const { data: eventFirstQuestion } = await supabase
@@ -636,7 +631,6 @@ export default function InteraccionScreen() {
           current_question_index: 0,
           answered_users: [],
           current_question: firstQuestion,
-          current_question_starter_id: starterUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
@@ -704,7 +698,6 @@ export default function InteraccionScreen() {
                 current_question_index: newEvent.current_question_index,
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
-                current_question_starter_id: newEvent.current_question_starter_id,
                 event_status: newEvent.event_status,
               },
             };

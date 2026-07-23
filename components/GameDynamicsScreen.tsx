@@ -27,7 +27,6 @@ interface Appointment {
     current_question_index?: number;
     answered_users?: string[];
     current_question?: string;
-    current_question_starter_id?: string;
     ready_users?: string[];
   };
 }
@@ -164,7 +163,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  const [starterParticipant, setStarterParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
@@ -314,11 +312,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setCurrentQuestionIndex(data.current_question_index || 0);
         setCurrentQuestion(data.current_question || null);
         
-        if (data.current_question_starter_id) {
-          const starter = activeParticipants.find((p) => p.user_id === data.current_question_starter_id);
-          setStarterParticipant(starter || null);
-        }
-
         // Calculate remaining timer from updated_at
         if (data.updated_at) {
           const elapsed = (Date.now() - new Date(data.updated_at).getTime()) / 1000;
@@ -379,11 +372,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
             setCurrentQuestion(newEvent.current_question || null);
-
-            if (newEvent.current_question_starter_id) {
-              const starter = activeParticipantsRef.current.find((p) => p.user_id === newEvent.current_question_starter_id);
-              setStarterParticipant(starter || null);
-            }
 
             // Calculate remaining timer from updated_at
             if (newEvent.updated_at) {
@@ -477,15 +465,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
         // Continue to next question in same level
-        const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-        const newStarterUserId = activeParticipants[randomIndex].user_id;
         const nextQuestion = questionsForLevel[nextQuestionIndex];
 
         // CRITICAL FIX: Immediately update local state BEFORE database call
         setCurrentQuestionIndex(nextQuestionIndex);
         setCurrentQuestion(nextQuestion);
-        const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-        setStarterParticipant(newStarter || null);
         startTimer(); // Start fresh 60s timer immediately
 
         const { error } = await supabase
@@ -494,7 +478,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             current_question_index: nextQuestionIndex,
             answered_users: [],
             current_question: nextQuestion,
-            current_question_starter_id: newStarterUserId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', appointment.event_id);
@@ -522,8 +505,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           // CRITICAL: Show level transition animation BEFORE updating database
           showLevelTransitionAnimation(nextLevel);
           
-          const randomIndex = Math.floor(Math.random() * activeParticipants.length);
-          const newStarterUserId = activeParticipants[randomIndex].user_id;
           const firstQuestion = QUESTIONS[nextLevel][0];
 
           // CRITICAL FIX: Immediately update local state BEFORE database call
@@ -531,8 +512,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           setCurrentLevel(nextLevel);
           setCurrentQuestionIndex(0);
           setCurrentQuestion(firstQuestion);
-          const newStarter = activeParticipants.find(p => p.user_id === newStarterUserId);
-          setStarterParticipant(newStarter || null);
           startTimer(); // Start fresh 60s timer for new level
 
           const { error } = await supabase
@@ -543,7 +522,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               current_question_index: 0,
               answered_users: [],
               current_question: firstQuestion,
-              current_question_starter_id: newStarterUserId,
               updated_at: new Date().toISOString(),
             })
             .eq('id', appointment.event_id);
@@ -681,8 +659,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
 
   if (gamePhase === 'questions' && currentQuestion) {
-    const starterName = starterParticipant?.name || 'Alguien';
-
     return (
       <LinearGradient
         colors={theme.gradient}
@@ -705,6 +681,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               borderColor: theme.questionCardBorder,
             },
           ]}>
+            <View style={[styles.everyoneBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
+              <Text style={[styles.everyoneBadgeText, { color: theme.accentColor }]}>👥 PREGUNTA PARA TODOS</Text>
+            </View>
+
             <Text style={[
               styles.questionText,
               {
@@ -723,22 +703,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </View>
           </View>
 
-          {/* Starter card */}
-          <View style={[styles.starterCard, { backgroundColor: theme.starterCardBg, borderColor: 'rgba(255,255,255,0.10)' }]}>
-            <View style={[styles.starterAvatar, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '60' }]}>
-              <Text style={[styles.starterAvatarText, { color: theme.accentColor }]}>{starterName.charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={styles.starterInfo}>
-              <Text style={[styles.starterLabelWhite, { color: theme.accentColor }]}>EMPIEZA</Text>
-              <Text style={styles.starterNameWhite}>{starterName}</Text>
-              <Text style={styles.starterInstructionWhite}>luego continúan hacia la derecha →</Text>
-            </View>
-          </View>
-
           {/* Instruction card */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
-              Al terminar el conteo aparecerá Continuar. Presiónenlo cuando todos respondan.
+              Todos en la mesa responden esta misma pregunta, por turnos. Cuando todos hayan respondido, presionen Continuar.
             </Text>
           </View>
 
@@ -993,48 +961,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── Starter card ─────────────────────────────────────────────────────────────
-  starterCard: {
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14,
+  // ── Everyone badge (dentro de la tarjeta de la pregunta) ────────────────────
+  everyoneBadge: {
+    borderRadius: 20,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    marginBottom: 14,
   },
-  starterAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  starterAvatarText: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  starterInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  starterLabelWhite: {
+  everyoneBadgeText: {
     fontSize: 12,
-    letterSpacing: 1.2,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  starterNameWhite: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-  starterInstructionWhite: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.45)',
-    marginTop: 2,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
 
   // ── Instruction card ─────────────────────────────────────────────────────────
