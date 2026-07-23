@@ -1720,12 +1720,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
+      // Enviar de inmediato el recordatorio a los asistentes confirmados de este evento.
+      // Se espera (await) ANTES del alert bloqueante: si se dispara despues de
+      // window.alert() y no se espera, el navegador puede cancelar el POST a
+      // mitad de camino (solo llega el preflight OPTIONS) si el usuario cierra
+      // la pestaña o la app pasa a segundo plano justo al cerrar el dialogo.
+      try {
+        await supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } });
+      } catch (err) {
+        console.error('Error enviando recordatorio inmediato:', err);
+      }
+
       window.alert('Ubicación revelada exitosamente');
 
-      // Enviar de inmediato el recordatorio de 48h a los asistentes confirmados de este evento
-      supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } })
-        .catch((err) => console.error('Error enviando recordatorio 48h inmediato:', err));
-      
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);

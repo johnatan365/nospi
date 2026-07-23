@@ -977,7 +977,7 @@ export default function AdminPanelScreen() {
 
       const { error } = await supabase
         .from('events')
-        .update({ 
+        .update({
           is_location_revealed: true,
           location: eventData.location_name || 'Ubicación revelada'
         })
@@ -986,6 +986,13 @@ export default function AdminPanelScreen() {
       if (error) {
         window.alert('Error al revelar ubicación: ' + error.message);
         return;
+      }
+
+      // Enviar de inmediato el recordatorio a los asistentes confirmados de este evento.
+      try {
+        await supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } });
+      } catch (err) {
+        console.error('Error enviando recordatorio inmediato:', err);
       }
 
       window.alert('Ubicación revelada exitosamente');
