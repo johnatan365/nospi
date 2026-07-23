@@ -90,6 +90,19 @@ function revenueFor(a: AppointmentRow): number | null {
   return null;
 }
 
+// Clasifica el origen de la inscripcion para poder comparar el conteo
+// directo contra el dashboard de Wompi:
+// - 'wompi': pago real procesado por Wompi (pse, tarjeta, bancolombia, nequi).
+// - 'subscription' / 'virtual_balance': cupo gratis por suscripcion mensual o saldo virtual.
+// - 'manual': agregada a mano desde el admin (sin metodo de pago, sin transaccion).
+//   Estas NO deben compararse contra Wompi porque nunca pasaron por ahi.
+function paymentSource(a: AppointmentRow): 'wompi' | 'subscription' | 'virtual_balance' | 'manual' {
+  if (a.payment_method === 'subscription') return 'subscription';
+  if (a.payment_method === 'virtual_balance') return 'virtual_balance';
+  if (a.payment_method) return 'wompi';
+  return 'manual';
+}
+
 function planLabel(plan: string) {
   if (plan === '1_month') return '1 mes';
   if (plan === '3_months') return '3 meses';
@@ -157,29 +170,35 @@ export default function StatsScreen() {
   }, [subscriptions, dateFrom, dateTo]);
 
   const apptsByDay = useMemo(() => {
-    const map: Record<string, { day: string; count: number; revenue: number; unknown: number }> = {};
+    const map: Record<string, { day: string; count: number; revenue: number; unknown: number; wompiCount: number; manualCount: number }> = {};
     for (const a of apptsFiltered) {
       const day = dayKey(a.created_at);
-      if (!map[day]) map[day] = { day, count: 0, revenue: 0, unknown: 0 };
+      if (!map[day]) map[day] = { day, count: 0, revenue: 0, unknown: 0, wompiCount: 0, manualCount: 0 };
       map[day].count += 1;
       const r = revenueFor(a);
       if (r != null) map[day].revenue += r;
       else map[day].unknown += 1;
+      const source = paymentSource(a);
+      if (source === 'wompi') map[day].wompiCount += 1;
+      else if (source === 'manual') map[day].manualCount += 1;
     }
     return Object.values(map).sort((x, y) => x.day.localeCompare(y.day));
   }, [apptsFiltered]);
 
   const apptsByDayEvent = useMemo(() => {
-    const map: Record<string, { day: string; eventName: string; count: number; revenue: number; unknown: number }> = {};
+    const map: Record<string, { day: string; eventName: string; count: number; revenue: number; unknown: number; wompiCount: number; manualCount: number }> = {};
     for (const a of apptsFiltered) {
       const day = dayKey(a.created_at);
       const eventName = a.event?.name || 'Sin evento';
       const key = `${day}|${eventName}`;
-      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0, unknown: 0 };
+      if (!map[key]) map[key] = { day, eventName, count: 0, revenue: 0, unknown: 0, wompiCount: 0, manualCount: 0 };
       map[key].count += 1;
       const r = revenueFor(a);
       if (r != null) map[key].revenue += r;
       else map[key].unknown += 1;
+      const source = paymentSource(a);
+      if (source === 'wompi') map[key].wompiCount += 1;
+      else if (source === 'manual') map[key].manualCount += 1;
     }
     return Object.values(map).sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : x.eventName.localeCompare(y.eventName)));
   }, [apptsFiltered]);
@@ -210,6 +229,8 @@ export default function StatsScreen() {
   const totalAppts = apptsFiltered.length;
   const totalApptsRevenue = apptsFiltered.reduce((s, a) => { const r = revenueFor(a); return r != null ? s + r : s; }, 0);
   const totalApptsUnknown = apptsFiltered.filter((a) => revenueFor(a) == null).length;
+  const totalWompi = apptsFiltered.filter((a) => paymentSource(a) === 'wompi').length;
+  const totalManual = apptsFiltered.filter((a) => paymentSource(a) === 'manual').length;
   const totalSubs = subsFiltered.length;
   const totalSubsRevenue = subsFiltered.reduce((s, su) => s + (Number(su.price) || 0), 0);
 
@@ -250,7 +271,15 @@ export default function StatsScreen() {
           <View style={styles.cardsRow}>
             <View style={styles.card}>
               <Text style={styles.cardValue}>{totalAppts}</Text>
-              <Text style={styles.cardLabel}>Inscripciones a eventos</Text>
+              <Text style={styles.cardLabel}>Inscripciones a eventos (total)</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardValue}>{totalWompi}</Text>
+              <Text style={styles.cardLabel}>Pagadas por Wompi</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardValue}>{totalManual}</Text>
+              <Text style={styles.cardLabel}>Agregadas manualmente (sin pago)</Text>
             </View>
             <View style={styles.card}>
               <Text style={styles.cardValue}>{formatCOP(totalApptsRevenue)}</Text>
@@ -285,14 +314,17 @@ export default function StatsScreen() {
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
                 <Text style={[styles.th, { flex: 1 }]}>Fecha</Text>
                 <Text style={[styles.th, { flex: 1.6 }]}>Evento</Text>
-                <Text style={[styles.th, { flex: 0.8 }]}>Inscripciones</Text>
+                <Text style={[styles.th, { flex: 0.9 }]}>Inscripciones</Text>
                 <Text style={[styles.th, { flex: 1.2 }]}>Recaudo</Text>
               </View>
               {apptsByDayEvent.map((row) => (
                 <View key={`${row.day}|${row.eventName}`} style={styles.tableRow}>
                   <Text style={[styles.td, { flex: 1 }]}>{formatDayFull(row.day)}</Text>
                   <Text style={[styles.td, { flex: 1.6, fontWeight: '600' }]}>{row.eventName}</Text>
-                  <Text style={[styles.td, { flex: 0.8 }]}>{row.count}</Text>
+                  <View style={{ flex: 0.9 }}>
+                    <Text style={styles.td}>{row.count}</Text>
+                    <Text style={styles.tdMuted}>{row.wompiCount} por Wompi{row.manualCount > 0 ? ` · ${row.manualCount} manual` : ''}</Text>
+                  </View>
                   <View style={{ flex: 1.2 }}>
                     <Text style={styles.td}>{formatCOP(row.revenue)}</Text>
                     {row.unknown > 0 ? <Text style={styles.tdMuted}>+{row.unknown} sin información</Text> : null}
@@ -301,7 +333,7 @@ export default function StatsScreen() {
               ))}
             </View>
           )}
-          <Text style={styles.noteText}>El recaudo mostrado es el monto real registrado (base de datos o API de Wompi). Las inscripciones marcadas "sin información" no tienen un pago rastreable y no se les asigna ningún valor estimado.</Text>
+          <Text style={styles.noteText}>El recaudo mostrado es el monto real registrado (base de datos o API de Wompi). Las inscripciones marcadas "sin información" no tienen un pago rastreable y no se les asigna ningún valor estimado. "Por Wompi" son las que sí deberían coincidir con el dashboard de Wompi; las "manuales" fueron agregadas a mano desde el admin y nunca pasaron por Wompi.</Text>
 
           <Text style={styles.sectionTitle}>Suscripciones mensuales por día</Text>
           {subsByDay.length === 0 ? (
