@@ -1,0 +1,73 @@
+name: Promote Android to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type YES to promote latest internal release to production'
+        required: true
+        default: 'NO'
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'YES' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-auth google-auth-httplib2 google-api-python-client
+
+      - name: Promote internal release to production
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          cat << 'PYEOF' > promote.py
+          import json, os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+
+          package_name = 'app.nospi.mobile'
+          creds_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
+          credentials = service_account.Credentials.from_service_account_info(
+              creds_info, scopes=['https://www.googleapis.com/auth/androidpublisher'])
+          service = build('androidpublisher', 'v3', credentials=credentials)
+
+          edit_result = service.edits().insert(body={}, packageName=package_name).execute()
+          edit_id = edit_result['id']
+          print('Edit ID:', edit_id)
+
+          internal_track = service.edits().tracks().get(
+              editId=edit_id, track='internal', packageName=package_name).execute()
+          print('Internal track:', json.dumps(internal_track, indent=2))
+
+          releases = internal_track.get('releases', [])
+          if not releases:
+              raise SystemExit('No releases found on internal track to promote')
+
+          release = releases[0]
+          version_codes = release.get('versionCodes')
+          print(f'Promoting versionCodes {version_codes} to production')
+
+          track_body = {
+              'track': 'production',
+              'releases': [{
+                  'versionCodes': version_codes,
+                  'status': 'completed',
+              }]
+          }
+
+          service.edits().tracks().update(
+              editId=edit_id, track='production', packageName=package_name, body=track_body).execute()
+
+          commit_result = service.edits().commit(editId=edit_id, packageName=package_name).execute()
+          print('Committed:', json.dumps(commit_result, indent=2))
+          print('SUCCESS: promoted to production')
+          PYEOF
+          python promote.py
