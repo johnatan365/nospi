@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 const CACHE_KEY = 'cache_interaccion';
 
@@ -987,7 +988,7 @@ export default function InteraccionScreen() {
             <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
             <Text style={[styles.eventInfoTitle, { fontSize: 22, marginBottom: 6 }]}>{countdownText}</Text>
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
-            <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
+            <Text style={styles.eventInfoTime}>{formatTimeAmPm(appointment.event.time)}</Text>
           </View>
 
           <View style={styles.preEventTipCard}>
@@ -1144,7 +1145,7 @@ export default function InteraccionScreen() {
             )}
             <View style={styles.eventHeaderText}>
               <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{appointment.event.time}</Text>
+              <Text style={styles.eventTime}>{formatTimeAmPm(appointment.event.time)}</Text>
             </View>
           </View>
           {shouldShowLocationText && (

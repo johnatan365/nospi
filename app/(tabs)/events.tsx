@@ -8,6 +8,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 const CACHE_KEY = 'cache_events';
 
@@ -213,7 +214,7 @@ export default function EventsScreen() {
                       <View style={styles.eventCardBody}>
                         <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                          {compactDate} • {event.time} • {event.city}
+                          {compactDate} • {formatTimeAmPm(event.time)} • {event.city}
                         </Text>
                         {hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>

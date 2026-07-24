@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 const CACHE_KEY_PREFIX = 'cache_appointments';
 
@@ -459,7 +460,7 @@ export default function AppointmentsScreen() {
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
-              const eventTime = appointment.event.time || '';
+              const eventTime = formatTimeAmPm(appointment.event.time) || '';
 
               const locationRevealed = appointment.event.is_location_revealed || false;
               const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
