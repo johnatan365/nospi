@@ -682,7 +682,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             },
           ]}>
             <View style={[styles.everyoneBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
-              <Text style={[styles.everyoneBadgeText, { color: theme.accentColor }]}>👥 PREGUNTA PARA TODOS</Text>
+              <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>👥 Todos deben responder esta pregunta</Text>
             </View>
 
             <Text style={[
