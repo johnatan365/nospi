@@ -20,6 +20,7 @@ interface Event {
   location_name: string;
   location_address: string;
   maps_link: string;
+  require_gps_verification?: boolean;
   is_location_revealed: boolean;
   address: string | null;
   start_time: string | null;
@@ -551,6 +552,7 @@ export default function AdminPanelScreen() {
     location_name: '',
     location_address: '',
     maps_link: '',
+    require_gps_verification: true,
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
@@ -891,6 +893,7 @@ export default function AdminPanelScreen() {
             location_name: '',
             location_address: '',
             maps_link: '',
+            require_gps_verification: true,
             is_location_revealed: false,
             address: null,
             start_time: null,
@@ -1314,6 +1317,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: '',
       location_address: '',
       maps_link: '',
+      require_gps_verification: true,
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
@@ -1369,6 +1373,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: event.location_name || '',
       location_address: event.location_address || '',
       maps_link: event.maps_link || '',
+      require_gps_verification: event.require_gps_verification ?? true,
       max_participants: event.max_participants || 6,
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
@@ -1517,6 +1522,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: eventForm.location_name,
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
+        require_gps_verification: eventForm.require_gps_verification,
         start_time: isoDate,
         max_participants: eventForm.max_participants || 6,
         current_participants: 0,
@@ -1578,6 +1584,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: '',
         location_address: '',
         maps_link: '',
+        require_gps_verification: true,
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
@@ -1635,6 +1642,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: event.location_name,
         location_address: event.location_address,
         maps_link: event.maps_link,
+        require_gps_verification: event.require_gps_verification,
         is_location_revealed: false,
         max_participants: event.max_participants,
         current_participants: 0,
@@ -5249,6 +5257,17 @@ setBulkWhatsAppPending(pending);
               {mapsLinkCheck.status === 'fail' && (
                 <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ No se pudo detectar la ubicación automáticamente. Usa un link de "Compartir ubicación" desde el pin en Google Maps (no uno de "Cómo llegar").</Text>
               )}
+              
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setEventForm({ ...eventForm, require_gps_verification: !eventForm.require_gps_verification })}
+                >
+                  <Text style={styles.checkboxText}>
+                    {eventForm.require_gps_verification ? '☑' : '☐'} Requerir verificación GPS al confirmar llegada
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               <Text style={styles.inputLabel}>Máximo de Participantes</Text>
               <TextInput
