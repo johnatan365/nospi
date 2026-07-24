@@ -5,6 +5,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 
 interface Event {
@@ -1910,7 +1911,7 @@ export default function AdminPanelScreen() {
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
                 <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
-                <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
+                <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
@@ -2523,7 +2524,7 @@ export default function AdminPanelScreen() {
                   {selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}
                 </Text>
                 <Text style={styles.eventInfoDetail}>
-                  📅 {selectedEvent.date} a las {selectedEvent.time}
+                  📅 {selectedEvent.date} a las {formatTimeAmPm(selectedEvent.time)}
                 </Text>
               </View>
             )}
@@ -2769,7 +2770,7 @@ export default function AdminPanelScreen() {
                     {selectedEventForConfig.name || `${selectedEventForConfig.type} - ${selectedEventForConfig.city}`}
                   </Text>
                   <Text style={styles.eventInfoDetail}>
-                    📅 {selectedEventForConfig.date} a las {selectedEventForConfig.time}
+                    📅 {selectedEventForConfig.date} a las {formatTimeAmPm(selectedEventForConfig.time)}
                   </Text>
                 </View>
 
@@ -2898,7 +2899,7 @@ export default function AdminPanelScreen() {
             {selectedEventForAttendees && (
               <View style={styles.eventInfoSection}>
                 <Text style={styles.eventInfoTitle}>{selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}</Text>
-                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {selectedEventForAttendees.time}</Text>
+                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {formatTimeAmPm(selectedEventForAttendees.time)}</Text>
                 <Text style={styles.eventInfoDetail}>Total registrados: {eventAttendees.length}</Text>
               </View>
             )}
@@ -3295,7 +3296,7 @@ export default function AdminPanelScreen() {
                     .map((event) => {
                       const eventName = event.name || `${event.type} - ${event.city}`;
                       const eventDate = event.date;
-                      const eventTime = event.time;
+                      const eventTime = formatTimeAmPm(event.time);
                       const isSelected = targetEventId === event.id;
                       
                       return (

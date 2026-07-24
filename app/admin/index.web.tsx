@@ -5,6 +5,7 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 
 interface Event {
@@ -230,14 +231,15 @@ function buildSameDayWhatsAppLink(
 
 // Arma el link de WhatsApp para las personas cuyo último intento de pago
 // quedó declinado/con error, ofreciendo mandarles el link directo de pago.
-function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string): string {
+function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
     ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
+  const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
-    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}`
+    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
     : 'el evento';
 
   const message = [
@@ -251,17 +253,6 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
   ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
-}
-
-// Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
-function formatTimeAmPm(time24: string): string {
-  const [hStr, mStr] = time24.split(':');
-  let h = parseInt(hStr, 10);
-  const m = mStr || '00';
-  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${m} ${suffix}`;
 }
 
 // ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
@@ -3403,7 +3394,7 @@ setBulkWhatsAppPending(pending);
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
                 <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
-                <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
+                <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
@@ -4022,7 +4013,7 @@ setBulkWhatsAppPending(pending);
                         const alreadySent = !!declined.declined_whatsapp_sent_at;
                         return (
                           <a
-                            href={buildDeclinedPaymentWhatsAppLink(declined.user_phone, declined.user_name, declined.event_name, declined.event_date)}
+                            href={buildDeclinedPaymentWhatsAppLink(declined.user_phone, declined.user_name, declined.event_name, declined.event_date, declined.event_time)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => markDeclinedWhatsAppSent(declined.user_id, declined.event_id)}
@@ -4416,7 +4407,7 @@ setBulkWhatsAppPending(pending);
                   {selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}
                 </Text>
                 <Text style={styles.eventInfoDetail}>
-                  📅 {selectedEvent.date} a las {selectedEvent.time}
+                  📅 {selectedEvent.date} a las {formatTimeAmPm(selectedEvent.time)}
                 </Text>
               </View>
             )}
@@ -4745,7 +4736,7 @@ setBulkWhatsAppPending(pending);
                     {selectedEventForConfig.name || `${selectedEventForConfig.type} - ${selectedEventForConfig.city}`}
                   </Text>
                   <Text style={styles.eventInfoDetail}>
-                    📅 {selectedEventForConfig.date} a las {selectedEventForConfig.time}
+                    📅 {selectedEventForConfig.date} a las {formatTimeAmPm(selectedEventForConfig.time)}
                   </Text>
                 </View>
 
@@ -4950,7 +4941,7 @@ setBulkWhatsAppPending(pending);
           {(bulkDeclinedPending || []).map((p: any) => (
           <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
-            <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+            <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date, p.event_time)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
       </View>
@@ -5019,7 +5010,7 @@ setBulkWhatsAppPending(pending);
             {selectedEventForAttendees && (
               <View style={styles.eventInfoSection}>
                 <Text style={styles.eventInfoTitle}>{selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}</Text>
-                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {selectedEventForAttendees.time}</Text>
+                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {formatTimeAmPm(selectedEventForAttendees.time)}</Text>
                 <Text style={styles.eventInfoDetail}>Total registrados: {eventAttendees.length}</Text>
               </View>
             )}
@@ -5459,7 +5450,7 @@ setBulkWhatsAppPending(pending);
                     .map((event) => {
                       const eventName = event.name || `${event.type} - ${event.city}`;
                       const eventDate = event.date;
-                      const eventTime = event.time;
+                      const eventTime = formatTimeAmPm(event.time);
                       const isSelected = targetEventId === event.id;
                       
                       return (
