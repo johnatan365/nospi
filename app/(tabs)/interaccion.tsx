@@ -40,6 +40,7 @@ interface Event {
   latitude: number | null;
   longitude: number | null;
   radius_meters: number | null;
+  require_gps_verification: boolean | null;
 }
 
 interface Appointment {
@@ -369,7 +370,8 @@ export default function InteraccionScreen() {
             event_status,
             latitude,
             longitude,
-            radius_meters
+            radius_meters,
+            require_gps_verification
           )
         `)
         .eq('user_id', user.id)
@@ -482,36 +484,42 @@ export default function InteraccionScreen() {
   }, []);
 
   // Confirma la llegada solo si el GPS del dispositivo coincide con el del
-  // evento dentro del radio permitido (por defecto 150 metros).
+  // evento dentro del radio permitido (por defecto 150 metros). Si el admin
+  // desactivó la verificación GPS para este evento (require_gps_verification
+  // === false), se confirma directo sin pedir ni comparar ubicación.
   const confirmArrival = useCallback(async () => {
     if (!appointment || !user || checkingGps) return;
 
     setGpsError('');
 
-    const eventLat = appointment.event.latitude;
-    const eventLng = appointment.event.longitude;
+    const gpsVerificationRequired = appointment.event.require_gps_verification !== false;
 
-    if (eventLat === null || eventLat === undefined || eventLng === null || eventLng === undefined) {
-      setGpsError('La ubicación del evento aún no está configurada. Contacta a soporte por WhatsApp.');
-      return;
-    }
+    if (gpsVerificationRequired) {
+      const eventLat = appointment.event.latitude;
+      const eventLng = appointment.event.longitude;
 
-    setCheckingGps(true);
-    const currentPosition = await getCurrentGpsPosition();
-    setCheckingGps(false);
+      if (eventLat === null || eventLat === undefined || eventLng === null || eventLng === undefined) {
+        setGpsError('La ubicación del evento aún no está configurada. Contacta a soporte por WhatsApp.');
+        return;
+      }
 
-    if (!currentPosition) {
-      // getCurrentGpsPosition ya dejó el mensaje de error correspondiente
-      return;
-    }
+      setCheckingGps(true);
+      const currentPosition = await getCurrentGpsPosition();
+      setCheckingGps(false);
 
-    const allowedRadius = appointment.event.radius_meters ?? DEFAULT_GPS_RADIUS_METERS;
-    const distance = distanceInMeters(currentPosition.latitude, currentPosition.longitude, eventLat, eventLng);
+      if (!currentPosition) {
+        // getCurrentGpsPosition ya dejó el mensaje de error correspondiente
+        return;
+      }
 
-    if (distance > allowedRadius) {
-      const distanceRounded = Math.round(distance);
-      setGpsError(`Debes estar en el lugar del evento para confirmar tu llegada. Estás a ${distanceRounded} m.`);
-      return;
+      const allowedRadius = appointment.event.radius_meters ?? DEFAULT_GPS_RADIUS_METERS;
+      const distance = distanceInMeters(currentPosition.latitude, currentPosition.longitude, eventLat, eventLng);
+
+      if (distance > allowedRadius) {
+        const distanceRounded = Math.round(distance);
+        setGpsError(`Debes estar en el lugar del evento para confirmar tu llegada. Estás a ${distanceRounded} m.`);
+        return;
+      }
     }
 
     try {
