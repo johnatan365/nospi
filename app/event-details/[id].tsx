@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { formatTimeAmPm } from '@/utils/formatTime';
 
 interface Event {
   id: string;
@@ -250,7 +251,7 @@ export default function EventDetailsScreen() {
 
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>🕐 Hora</Text>
-              <Text style={styles.infoValue}>{event.time}</Text>
+              <Text style={styles.infoValue}>{formatTimeAmPm(event.time)}</Text>
             </View>
 
             <View style={styles.infoItem}>
