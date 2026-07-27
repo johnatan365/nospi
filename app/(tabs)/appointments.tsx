@@ -7,6 +7,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
@@ -19,6 +20,7 @@ interface Appointment {
   payment_status: string;
   payment_method?: string; amount_paid_cop?: number | null;
   created_at: string;
+  ratings_submitted_at?: string | null;
   event: {
     id: string;
     name: string;
@@ -39,6 +41,7 @@ interface Appointment {
 type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
 export default function AppointmentsScreen() {
+  const router = useRouter();
   const { user } = useSupabase();
   const { appConfig } = useAppConfig();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -91,6 +94,7 @@ export default function AppointmentsScreen() {
         payment_status,
         payment_method, amount_paid_cop,
         created_at,
+        ratings_submitted_at,
         events!inner (
           id,
           name,
@@ -480,6 +484,8 @@ export default function AppointmentsScreen() {
               const statusColor = getStatusColor(appointment.status);
               const statusText = getStatusText(appointment.status);
               const isConfirmed = appointment.status === 'confirmada';
+              const isAnterior = appointment.status === 'anterior';
+              const needsRating = isAnterior && !appointment.ratings_submitted_at;
 
               return (
                 <View key={appointment.id} style={styles.appointmentCard}>
@@ -551,6 +557,16 @@ export default function AppointmentsScreen() {
                         <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
                       </TouchableOpacity>
                     </>
+                  )}
+
+                  {needsRating && appointment.event?.id && (
+                    <TouchableOpacity
+                      style={styles.rateButton}
+                      onPress={() => router.push(`/catch-up-rating/${appointment.event!.id}`)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.rateButtonText}>⭐ Calificar participantes</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               );
@@ -870,6 +886,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#880E4F',
   },
   cancelButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rateButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: '#AD1457',
+  },
+  rateButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
