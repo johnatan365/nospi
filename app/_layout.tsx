@@ -63,6 +63,7 @@ function RootLayoutInner() {
           <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
           <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
           <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="catch-up-rating/[eventId]" options={{ headerShown: false }} />
           <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
           <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
