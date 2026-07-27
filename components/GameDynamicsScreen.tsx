@@ -614,17 +614,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
     try {
       
-      // CRITICAL FIX: Update ONLY this user's appointment to 'anterior'
-      // Do NOT close the event or affect other users
+      // Update ONLY this user's appointment: marca que ya calificó
+      // (ratings_submitted_at) y, si todavia estaba 'confirmada', la pasa a
+      // 'anterior' de una vez (no hace falta esperar al cierre automatico
+      // del dia siguiente). OJO: ya NO se filtra por .eq('status',
+      // 'confirmada') -- este mismo boton se usa tambien para calificar en
+      // retrospectiva desde la pestaña Anteriores, donde la cita ya esta en
+      // 'anterior' (el evento se cerro automatica o manualmente), y ahi
+      // tambien debe poder guardar sin que el update no afecte ninguna fila.
       const { error: appointmentError } = await supabase
         .from('appointments')
         .update({ 
           status: 'anterior',
+          ratings_submitted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('event_id', appointment.event_id)
-        .eq('user_id', currentUserId)
-        .eq('status', 'confirmada');
+        .eq('user_id', currentUserId);
 
       if (appointmentError) {
         console.error('❌ Error updating user appointment to anterior:', appointmentError);
