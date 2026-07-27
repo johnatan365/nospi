@@ -3389,7 +3389,10 @@ setBulkWhatsAppPending(pending);
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const confirmationCode = event.confirmation_code || '1986';
           
-          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada').length;
+          const eventAppointments = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada');
+          const eventAppointmentsCount = eventAppointments.length;
+          const menCount = eventAppointments.filter(a => (a.users?.gender || '').toLowerCase() === 'hombre').length;
+          const womenCount = eventAppointments.filter(a => (a.users?.gender || '').toLowerCase() === 'mujer').length;
 
           return (
             <View key={event.id} style={styles.listItemCompact}>
@@ -3405,7 +3408,7 @@ setBulkWhatsAppPending(pending);
                 <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>
               <View style={styles.compactInfoRow}>
-                <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
+                <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados (👨 {menCount} · 👩 {womenCount})</Text>
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
 
