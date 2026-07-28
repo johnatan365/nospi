@@ -514,7 +514,7 @@ export default function AppointmentsScreen() {
                   <Text style={styles.appointmentTime}>{eventTime}</Text>
 
                   {shouldShowLocationPlaceholder && (
-                    <Text style={styles.appointmentLocation}>Ubicación se revelará 48 horas antes del evento</Text>
+                    <Text style={styles.appointmentLocation}>Ubicación se anuncia un día antes del evento</Text>
                   )}
 
                   {locationRevealed && (
