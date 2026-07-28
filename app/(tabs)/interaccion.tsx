@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -11,7 +11,6 @@ import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
-import { formatTimeAmPm } from '@/utils/formatTime';
 
 const CACHE_KEY = 'cache_interaccion';
 
@@ -36,11 +35,8 @@ interface Event {
   current_question_index: number | null;
   answered_users: string[] | null;
   current_question: string | null;
+  current_question_starter_id: string | null;
   event_status?: 'draft' | 'published' | 'closed';
-  latitude: number | null;
-  longitude: number | null;
-  radius_meters: number | null;
-  require_gps_verification: boolean | null;
 }
 
 interface Appointment {
@@ -76,21 +72,6 @@ interface Participant {
 
 type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
-const DEFAULT_GPS_RADIUS_METERS = 150;
-
-// Distancia en metros entre dos coordenadas (fórmula de Haversine)
-function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // radio de la Tierra en metros
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 // Only set notification handler on native platforms
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -115,8 +96,6 @@ export default function InteraccionScreen() {
   const [codeError, setCodeError] = useState('');
   const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [startingExperience, setStartingExperience] = useState(false);
-  const [checkingGps, setCheckingGps] = useState(false);
-  const [gpsError, setGpsError] = useState('');
 
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -155,7 +134,7 @@ export default function InteraccionScreen() {
     const diffToEventTime = eventDate.getTime() - now.getTime();
 
     const eventDatePlus10 = new Date(startTime);
-    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 5);
+    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 10);
     const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
 
     setCountdown(diffToPlus10);
@@ -367,11 +346,8 @@ export default function InteraccionScreen() {
             current_question_index,
             answered_users,
             current_question,
-            event_status,
-            latitude,
-            longitude,
-            radius_meters,
-            require_gps_verification
+            current_question_starter_id,
+            event_status
           )
         `)
         .eq('user_id', user.id)
@@ -444,91 +420,28 @@ export default function InteraccionScreen() {
     }
   }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
 
-  // Obtiene la posición GPS actual del dispositivo, funcionando tanto en web
-  // (navigator.geolocation) como en nativo (expo-location).
-  const getCurrentGpsPosition = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
-    if (Platform.OS === 'web') {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        setGpsError('Tu navegador no soporta ubicación GPS.');
-        return null;
-      }
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-          (err) => {
-            if (err.code === 1) {
-              setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
-            } else {
-              setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
-            }
-            resolve(null);
-          },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
-      });
+  const handleCodeConfirmation = useCallback(async () => {
+    if (!appointment || !user) return;
+
+
+    const enteredCode = confirmationCode.trim();
+    const eventCode = appointment.event.confirmation_code;
+    const expectedCode = (eventCode === null || eventCode === undefined || eventCode.trim() === '')
+      ? '1986'
+      : eventCode.trim();
+
+    if (enteredCode !== expectedCode) {
+      setCodeError('Código incorrecto.');
+      return;
     }
 
-    try {
-      const Location = require('expo-location');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
-        return null;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    } catch (error) {
-      setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
-      return null;
-    }
-  }, []);
-
-  // Confirma la llegada solo si el GPS del dispositivo coincide con el del
-  // evento dentro del radio permitido (por defecto 150 metros). Si el admin
-  // desactivó la verificación GPS para este evento (require_gps_verification
-  // === false), se confirma directo sin pedir ni comparar ubicación.
-  const confirmArrival = useCallback(async () => {
-    if (!appointment || !user || checkingGps) return;
-
-    setGpsError('');
-
-    const gpsVerificationRequired = appointment.event.require_gps_verification !== false;
-
-    if (gpsVerificationRequired) {
-      const eventLat = appointment.event.latitude;
-      const eventLng = appointment.event.longitude;
-
-      if (eventLat === null || eventLat === undefined || eventLng === null || eventLng === undefined) {
-        setGpsError('La ubicación del evento aún no está configurada. Contacta a soporte por WhatsApp.');
-        return;
-      }
-
-      setCheckingGps(true);
-      const currentPosition = await getCurrentGpsPosition();
-      setCheckingGps(false);
-
-      if (!currentPosition) {
-        // getCurrentGpsPosition ya dejó el mensaje de error correspondiente
-        return;
-      }
-
-      const allowedRadius = appointment.event.radius_meters ?? DEFAULT_GPS_RADIUS_METERS;
-      const distance = distanceInMeters(currentPosition.latitude, currentPosition.longitude, eventLat, eventLng);
-
-      if (distance > allowedRadius) {
-        const distanceRounded = Math.round(distance);
-        setGpsError(`Debes estar en el lugar del evento para confirmar tu llegada. Estás a ${distanceRounded} m.`);
-        return;
-      }
-    }
+    setCodeError('');
 
     try {
       const confirmedAt = new Date().toISOString();
 
       setCheckInPhase('confirmed');
       setConfirmationCode('');
-      setCodeError('');
-      setGpsError('');
       if (appointment.event_id) {
         AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
       }
@@ -560,7 +473,7 @@ export default function InteraccionScreen() {
       if (updateError) {
 
         setCheckInPhase('code_entry');
-        setGpsError('No se pudo registrar tu llegada.');
+        setCodeError('No se pudo registrar tu llegada.');
         return;
       }
 
@@ -580,13 +493,9 @@ export default function InteraccionScreen() {
     } catch (error) {
 
       setCheckInPhase('code_entry');
-      setGpsError('Ocurrió un error.');
+      setCodeError('Ocurrió un error.');
     }
-  }, [appointment, user, checkingGps, getCurrentGpsPosition, loadActiveParticipants]);
-
-  const handleCodeConfirmation = useCallback(async () => {
-    await confirmArrival();
-  }, [confirmArrival]);
+  }, [appointment, user, confirmationCode, loadActiveParticipants]);
 
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
@@ -601,34 +510,9 @@ export default function InteraccionScreen() {
     setStartingExperience(true);
 
     try {
-      let firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
-      try {
-        const { data: eventFirstQuestion } = await supabase
-          .from('event_questions')
-          .select('question_text')
-          .eq('event_id', appointment.event_id)
-          .eq('level', 'divertido')
-          .order('question_order', { ascending: true })
-          .limit(1);
-
-        if (eventFirstQuestion && eventFirstQuestion.length > 0) {
-          firstQuestion = eventFirstQuestion[0].question_text;
-        } else {
-          const { data: defaultFirstQuestion } = await supabase
-            .from('event_questions')
-            .select('question_text')
-            .is('event_id', null)
-            .eq('level', 'divertido')
-            .order('question_order', { ascending: true })
-            .limit(1);
-
-          if (defaultFirstQuestion && defaultFirstQuestion.length > 0) {
-            firstQuestion = defaultFirstQuestion[0].question_text;
-          }
-        }
-      } catch (questionLoadError) {
-
-      }
+      const randomIndex = Math.floor(Math.random() * activeParticipants.length);
+      const starterUserId = activeParticipants[randomIndex].user_id;
+      const firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
 
       setGamePhase('questions');
 
@@ -640,6 +524,7 @@ export default function InteraccionScreen() {
           current_question_index: 0,
           answered_users: [],
           current_question: firstQuestion,
+          current_question_starter_id: starterUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
@@ -707,6 +592,7 @@ export default function InteraccionScreen() {
                 current_question_index: newEvent.current_question_index,
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
+                current_question_starter_id: newEvent.current_question_starter_id,
                 event_status: newEvent.event_status,
               },
             };
@@ -996,7 +882,7 @@ export default function InteraccionScreen() {
             <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
             <Text style={[styles.eventInfoTitle, { fontSize: 22, marginBottom: 6 }]}>{countdownText}</Text>
             <Text style={styles.eventInfoDate}>{eventDateText}</Text>
-            <Text style={styles.eventInfoTime}>{formatTimeAmPm(appointment.event.time)}</Text>
+            <Text style={styles.eventInfoTime}>{appointment.event.time}</Text>
           </View>
 
           <View style={styles.preEventTipCard}>
@@ -1109,8 +995,8 @@ export default function InteraccionScreen() {
     );
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : '🍽️';
+  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : 'Restaurante';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -1140,24 +1026,14 @@ export default function InteraccionScreen() {
 
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
-            {appointment.event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
-            ) : appointment.event.type === 'bar' ? (
-              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
-            ) : appointment.event.type === 'restaurante' ? (
-              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
-            ) : appointment.event.type === 'cafe' ? (
-              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
-            ) : (
-              <Text style={styles.eventIconLarge}>{eventIcon}</Text>
-            )}
+            <Text style={styles.eventIconLarge}>{eventIcon}</Text>
             <View style={styles.eventHeaderText}>
               <Text style={styles.eventType}>{eventTypeText}</Text>
-              <Text style={styles.eventTime}>{formatTimeAmPm(appointment.event.time)}</Text>
+              <Text style={styles.eventTime}>{appointment.event.time}</Text>
             </View>
           </View>
           {shouldShowLocationText && (
-            <Text style={styles.eventLocation}>Ubicación se revelará 48 horas antes del evento</Text>
+            <Text style={styles.eventLocation}>Ubicación se anuncia un día antes del evento</Text>
           )}
           {locationRevealed && locationText && (
             <Text style={styles.eventLocation}>{locationText}</Text>
@@ -1167,21 +1043,35 @@ export default function InteraccionScreen() {
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Presiona el botón cuando estés en el lugar del evento</Text>
+            <Text style={styles.codeEntrySubtitle}>Ingresa el código del encuentro</Text>
 
-            {gpsError ? (
-              <Text style={styles.codeErrorText}>{gpsError}</Text>
+            <TextInput
+              style={[styles.codeInput, codeInputFocused && styles.codeInputFocused]}
+              value={confirmationCode}
+              onChangeText={(text) => {
+                setConfirmationCode(text);
+                setCodeError('');
+              }}
+              onFocus={() => setCodeInputFocused(true)}
+              onBlur={() => setCodeInputFocused(false)}
+              placeholder="Código"
+              placeholderTextColor="#999"
+              keyboardType="default"
+              maxLength={10}
+              autoFocus
+            />
+
+            {codeError ? (
+              <Text style={styles.codeErrorText}>{codeError}</Text>
             ) : null}
 
             <TouchableOpacity
-              style={[styles.confirmCodeButton, checkingGps && styles.buttonDisabled]}
+              style={[styles.confirmCodeButton, !confirmationCode.trim() && styles.buttonDisabled]}
               onPress={handleCodeConfirmation}
-              disabled={checkingGps}
+              disabled={!confirmationCode.trim()}
               activeOpacity={0.8}
             >
-              <Text style={styles.confirmCodeButtonText}>
-                {checkingGps ? 'Verificando ubicación...' : 'Confirmar asistencia'}
-              </Text>
+              <Text style={styles.confirmCodeButtonText}>Confirmar Código</Text>
             </TouchableOpacity>
           </View>
         )}
