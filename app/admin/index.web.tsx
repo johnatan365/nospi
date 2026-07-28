@@ -21,6 +21,8 @@ interface Event {
   location_address: string;
   maps_link: string;
   require_gps_verification?: boolean;
+  registration_closed_men?: boolean;
+  registration_closed_women?: boolean;
   is_location_revealed: boolean;
   address: string | null;
   start_time: string | null;
@@ -553,6 +555,8 @@ export default function AdminPanelScreen() {
     location_address: '',
     maps_link: '',
     require_gps_verification: true,
+    registration_closed_men: false,
+    registration_closed_women: false,
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
@@ -1318,6 +1322,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_address: '',
       maps_link: '',
       require_gps_verification: true,
+      registration_closed_men: false,
+      registration_closed_women: false,
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
@@ -1374,6 +1380,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_address: event.location_address || '',
       maps_link: event.maps_link || '',
       require_gps_verification: event.require_gps_verification ?? true,
+      registration_closed_men: event.registration_closed_men ?? false,
+      registration_closed_women: event.registration_closed_women ?? false,
       max_participants: event.max_participants || 6,
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
@@ -1523,6 +1531,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
         require_gps_verification: eventForm.require_gps_verification,
+        registration_closed_men: eventForm.registration_closed_men,
+        registration_closed_women: eventForm.registration_closed_women,
         start_time: isoDate,
         max_participants: eventForm.max_participants || 6,
         current_participants: 0,
@@ -1585,6 +1595,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_address: '',
         maps_link: '',
         require_gps_verification: true,
+        registration_closed_men: false,
+        registration_closed_women: false,
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
@@ -3411,6 +3423,16 @@ setBulkWhatsAppPending(pending);
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados (👨 {menCount} · 👩 {womenCount})</Text>
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
+              {(event.registration_closed_men || event.registration_closed_women) && (
+                <View style={styles.compactInfoRow}>
+                  {event.registration_closed_men && (
+                    <Text style={[styles.compactInfoText, { color: '#EF4444', fontWeight: '700' }]}>🚫 Oculto para hombres</Text>
+                  )}
+                  {event.registration_closed_women && (
+                    <Text style={[styles.compactInfoText, { color: '#EF4444', fontWeight: '700' }]}>🚫 Oculto para mujeres</Text>
+                  )}
+                </View>
+              )}
 
               {/* Location — always visible in admin */}
               {(event.location_name || event.location_address) && (
@@ -5268,6 +5290,31 @@ setBulkWhatsAppPending(pending);
                 >
                   <Text style={styles.checkboxText}>
                     {eventForm.require_gps_verification ? '☑' : '☐'} Requerir verificación GPS al confirmar llegada
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Visibilidad por género</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                Apaga un género cuando consideres que ya hay suficientes de ese género inscritos: el evento deja de aparecerle por completo en la app (no ve mensaje ni botón bloqueado, simplemente no lo ve).
+              </Text>
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setEventForm({ ...eventForm, registration_closed_men: !eventForm.registration_closed_men })}
+                >
+                  <Text style={styles.checkboxText}>
+                    {eventForm.registration_closed_men ? '🔴' : '🟢'} Visible para hombres: {eventForm.registration_closed_men ? 'NO' : 'SÍ'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={() => setEventForm({ ...eventForm, registration_closed_women: !eventForm.registration_closed_women })}
+                >
+                  <Text style={styles.checkboxText}>
+                    {eventForm.registration_closed_women ? '🔴' : '🟢'} Visible para mujeres: {eventForm.registration_closed_women ? 'NO' : 'SÍ'}
                   </Text>
                 </TouchableOpacity>
               </View>

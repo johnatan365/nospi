@@ -24,6 +24,8 @@ interface Event {
   event_status: 'draft' | 'published' | 'closed';
   is_full: boolean;
   is_location_revealed: boolean;
+  registration_closed_men?: boolean;
+  registration_closed_women?: boolean;
   location: string | null;
   location_name: string | null;
   location_address: string | null;
@@ -69,7 +71,7 @@ export default function EventsScreen() {
 
     console.log('EventsScreen: Fetching events from Supabase for user:', user.id);
 
-    const [appointmentsResult, eventsResult] = await Promise.all([
+    const [appointmentsResult, eventsResult, userResult] = await Promise.all([
       supabase
         .from('appointments')
         .select('event_id')
@@ -77,9 +79,14 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, location, location_name, location_address, maps_link')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
+      supabase
+        .from('users')
+        .select('gender')
+        .eq('id', user.id)
+        .maybeSingle(),
     ]);
 
     if (appointmentsResult.error) {
@@ -89,11 +96,21 @@ export default function EventsScreen() {
       console.error('EventsScreen: Error loading events:', eventsResult.error);
       return null;
     }
+    if (userResult.error) {
+      console.error('EventsScreen: Error loading user gender:', userResult.error);
+    }
 
+    // Un evento puede apagarse para un género especifico desde el admin (para
+    // balancear hombres/mujeres) — en ese caso ni siquiera aparece en el
+    // listado para ese género, sin mensajes ni botones bloqueados.
+    const userGender = userResult.data?.gender || '';
     const purchasedEventIds = appointmentsResult.data?.map(apt => apt.event_id) || [];
-    const availableEvents = (eventsResult.data || []).filter(
-      event => !purchasedEventIds.includes(event.id) && !event.is_full
-    );
+    const availableEvents = (eventsResult.data || []).filter(event => {
+      if (purchasedEventIds.includes(event.id) || event.is_full) return false;
+      if (userGender === 'hombre' && event.registration_closed_men) return false;
+      if (userGender === 'mujer' && event.registration_closed_women) return false;
+      return true;
+    });
 
     console.log('EventsScreen: Available events fetched:', availableEvents.length);
     return availableEvents;

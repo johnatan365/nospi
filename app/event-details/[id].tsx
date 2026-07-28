@@ -48,13 +48,27 @@ export default function EventDetailsScreen() {
         return;
       }
 
+      // Igual que en el listado de eventos: si el admin apagó este evento
+      // para el género del usuario (para balancear hombres/mujeres), se
+      // trata como si no existiera — sin mensaje especial, mismo estado
+      // que "Evento no encontrado" (cubre el caso de acceso directo por
+      // link a un evento que ya no aparece en el listado).
+      if (user?.id && (data?.registration_closed_men || data?.registration_closed_women)) {
+        const { data: userRow } = await supabase.from('users').select('gender').eq('id', user.id).maybeSingle();
+        const userGender = userRow?.gender || '';
+        if ((userGender === 'hombre' && data.registration_closed_men) || (userGender === 'mujer' && data.registration_closed_women)) {
+          setEvent(null);
+          return;
+        }
+      }
+
       setEvent(data);
     } catch (error) {
       console.error('Failed to load event:', error);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   const checkEnrollment = useCallback(async () => {
     if (!user?.id) return;
