@@ -33,7 +33,7 @@ export default function TabLayout() {
     {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
-      icon: 'chat',
+      icon: 'sports_esports',
       label: 'Dinámica',
     },
     {
