@@ -41,12 +41,30 @@ interface ConversationMeta {
   conv_type: 'event_group' | 'direct';
   event_name: string | null;
   event_type: string | null;
+  event_date: string | null;
   other_user_name: string | null;
   other_user_photo: string | null;
 }
 
 function eventEmoji(eventType: string | null | undefined): string {
   return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+}
+
+// Mismo criterio que en la lista de Chat: el grupo se habilita 30 min antes
+// del evento. Este guard evita que alguien entre directo por link/deeplink
+// antes de esa ventana (la fila ya aparece bloqueada en la lista, pero un
+// link directo se salta esa pantalla).
+const CHAT_UNLOCK_MINUTES_BEFORE = 30;
+const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function formatBogotaTime(date: Date): string {
+  const bogota = new Date(date.getTime() - BOGOTA_OFFSET_MS);
+  let h = bogota.getUTCHours();
+  const m = bogota.getUTCMinutes();
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
 export default function ChatThreadScreen() {
@@ -96,6 +114,7 @@ export default function ChatThreadScreen() {
         conv_type: thisConv.conv_type,
         event_name: thisConv.event_name,
         event_type: thisConv.event_type,
+        event_date: thisConv.event_date,
         other_user_name: thisConv.other_user_name,
         other_user_photo: thisConv.other_user_photo,
       });
@@ -194,12 +213,42 @@ export default function ChatThreadScreen() {
   const headerTitle = isGroup ? meta?.event_name || 'Chat del evento' : meta?.other_user_name || 'Chat';
   const otherUserPhoto = !isGroup ? meta?.other_user_photo : null;
 
+  const unlockAt = isGroup && meta?.event_date
+    ? new Date(new Date(meta.event_date).getTime() - CHAT_UNLOCK_MINUTES_BEFORE * 60 * 1000)
+    : null;
+  const isLocked = !!unlockAt && Date.now() < unlockAt.getTime();
+
   if (loading) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#F06292" />
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+          </View>
+          <View style={styles.headerActionButton} />
+        </View>
+        <View style={styles.lockedContainer}>
+          <Text style={styles.lockedEmoji}>🔒</Text>
+          <Text style={styles.lockedTitle}>Este chat aún no se habilita</Text>
+          <Text style={styles.lockedSubtitle}>
+            Se abre {unlockAt ? `a las ${formatBogotaTime(unlockAt)}` : 'pronto'}, 30 minutos antes del evento, y queda
+            disponible durante todo el evento.
+          </Text>
         </View>
       </LinearGradient>
     );
@@ -352,6 +401,10 @@ export default function ChatThreadScreen() {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  lockedContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  lockedEmoji: { fontSize: 48, marginBottom: 16 },
+  lockedTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' },
+  lockedSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 20 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
