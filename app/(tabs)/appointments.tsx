@@ -7,7 +7,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
@@ -42,12 +42,14 @@ type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
 export default function AppointmentsScreen() {
   const router = useRouter();
+    const params = useLocalSearchParams<{ openFilter?: string }>();
   const { user } = useSupabase();
   const { appConfig } = useAppConfig();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterType>('confirmadas');
+    const [filter, setFilter] = useState<FilterType>(params.openFilter === 'anteriores' ? 'anteriores' : 'confirmadas');
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState({
     whatsapp: false,
     email: true,
@@ -236,6 +238,18 @@ export default function AppointmentsScreen() {
   const handleFilterChange = (newFilter: FilterType) => {
     console.log('User tapped appointments filter:', newFilter);
     setFilter(newFilter);
+  };
+
+  const handleOpenChat = async (eventId: string) => {
+      if (openingChatFor) return;
+      setOpeningChatFor(eventId);
+      const { data, error } = await supabase.rpc('get_event_group_conversation', { p_event_id: eventId });
+      setOpeningChatFor(null);
+      if (error || !data) {
+          Alert.alert('Chat no disponible', 'No encontramos el chat de este evento.');
+          return;
+      }
+      router.push(`/chat/${data}` as any);
   };
 
   const handleCancelPress = (appointment: Appointment) => {
@@ -568,6 +582,18 @@ export default function AppointmentsScreen() {
                       <Text style={styles.rateButtonText}>⭐ Calificar participantes</Text>
                     </TouchableOpacity>
                   )}
+                  {isAnterior && appointment.event?.id && (
+                  <TouchableOpacity
+                    style={styles.chatButton}
+                    onPress={() => handleOpenChat(appointment.event!.id)}
+                    activeOpacity={0.8}
+                    disabled={openingChatFor === appointment.event.id}
+                    >
+                  <Text style={styles.chatButtonText}>
+                    {openingChatFor === appointment.event.id ? 'Abriendo...' : '💬 Ver chat'}
+                  </Text>
+                                  </TouchableOpacity>
+              )}
                 </View>
               );
             })}
@@ -900,6 +926,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#AD1457',
   },
   rateButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  chatButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F06292',
+  },
+  chatButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
