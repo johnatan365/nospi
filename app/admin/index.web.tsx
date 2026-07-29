@@ -32,6 +32,7 @@ interface Event {
   event_status: 'draft' | 'published' | 'closed';
   confirmation_code: string | null;
   is_full: boolean;
+  price: number | null;
 }
 
 interface User {
@@ -561,6 +562,7 @@ export default function AdminPanelScreen() {
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
     confirmation_code: '1986',
+    price: '',
   });
 
   const [mapsLinkCheck, setMapsLinkCheck] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; lat?: number; lng?: number; error?: string }>({ status: 'idle' });
@@ -1328,6 +1330,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       is_location_revealed: false,
       event_status: 'draft',
       confirmation_code: '1986',
+      price: '',
     });
     setMapsLinkCheck({ status: 'idle' });
     // Load default questions for new event
@@ -1386,6 +1389,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
       confirmation_code: event.confirmation_code || '1986',
+      price: (event.price === null || event.price === undefined) ? '' : String(event.price),
     });
     setMapsLinkCheck({ status: 'idle' });
 
@@ -1540,6 +1544,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
         confirmation_code: finalConfirmationCode,
+        price: eventForm.price.trim() === '' ? null : (parseInt(eventForm.price, 10) || 0),
       };
 
 
@@ -1601,6 +1606,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         is_location_revealed: false,
         event_status: 'draft',
         confirmation_code: '1986',
+        price: '',
       });
       setMapsLinkCheck({ status: 'idle' });
       setEventQuestions({
@@ -1660,6 +1666,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         current_participants: 0,
         event_status: 'draft',
         confirmation_code: event.confirmation_code,
+        price: event.price,
       }).select('id').single();
 
       if (error || !newEvent) {
@@ -4392,6 +4399,7 @@ setBulkWhatsAppPending(pending);
                           💬 Enviar WhatsApp
                         </a>
                       )}
+
                     </>
                   )}
                   {participant.check_in_time && (
@@ -4975,7 +4983,7 @@ setBulkWhatsAppPending(pending);
           <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
             <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date, p.event_time)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
-          </View>))}
+          </View))}
         </ScrollView>
       </View>
       </View>
@@ -5333,6 +5341,21 @@ setBulkWhatsAppPending(pending);
                   if (!eventForm.max_participants) setEventForm({ ...eventForm, max_participants: 6 });
                 }}
               />
+
+              <Text style={styles.inputLabel}>Precio de este evento (COP)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={`Precio global: $ ${Number(configEventPrice || 0).toLocaleString('es-CO')}`}
+                keyboardType="numeric"
+                value={eventForm.price}
+                onChangeText={(text) => {
+                  const cleaned = text.replace(/[^0-9]/g, '');
+                  setEventForm({ ...eventForm, price: cleaned });
+                }}
+              />
+              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: -4, marginBottom: 4 }}>
+                {`Déjalo vacío para usar el precio global ($ ${Number(configEventPrice || 0).toLocaleString('es-CO')} COP). Pon 0 para que el evento sea gratis.`}
+              </Text>
 
               <Text style={styles.inputLabel}>Código de Confirmación</Text>
               <TextInput
