@@ -37,14 +37,19 @@ export default function TabLayout() {
       label: 'Interacción',
     },
     {
+      name: 'chats',
+      route: '/(tabs)/chats',
+      icon: 'forum',
+      label: 'Mensajes',
+    },
+    {
       name: 'profile',
       route: '/(tabs)/profile',
       icon: 'person',
       label: 'Perfil',
     },
   ];
-
-  return (
+        return (
     <>
       <Stack
         screenOptions={{
@@ -55,6 +60,7 @@ export default function TabLayout() {
         <Stack.Screen key="events" name="events" />
         <Stack.Screen key="appointments" name="appointments" />
         <Stack.Screen key="interaccion" name="interaccion" />
+          <Stack.Screen key="chats" name="chats" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
       <FloatingTabBar tabs={tabs} />
