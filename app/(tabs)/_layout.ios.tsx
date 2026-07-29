@@ -31,8 +31,8 @@ export default function TabLayout() {
       label: 'Citas',
     },
     {
-      name: 'interaccion',
-      route: '/(tabs)/interaccion',
+      name: 'dinamica',
+      route: '/(tabs)/dinamica',
       icon: 'gamecontroller.fill',
       label: 'Dinámica',
     },
@@ -60,7 +60,7 @@ export default function TabLayout() {
       >
         <Stack.Screen key="events" name="events" />
         <Stack.Screen key="appointments" name="appointments" />
-        <Stack.Screen key="interaccion" name="interaccion" />
+        <Stack.Screen key="dinamica" name="dinamica" />
           <Stack.Screen key="chats" name="chats" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
