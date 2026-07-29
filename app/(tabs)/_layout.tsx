@@ -1,4 +1,4 @@
-import React from 'react';
+óimport React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
@@ -34,13 +34,13 @@ export default function TabLayout() {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
       icon: 'chat',
-      label: 'Interacción',
+      label: 'Dinámica',
     },
     {
       name: 'chats',
       route: '/(tabs)/chats',
       icon: 'forum',
-      label: 'Mensajes',
+      label: 'Chat',
     },
     {
       name: 'profile',
