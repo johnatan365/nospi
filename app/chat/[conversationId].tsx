@@ -408,7 +408,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     color: '#FFFFFF',
-    fontSize: 15,
+    // 16px es el minimo para que Safari en iOS no haga auto-zoom al enfocar
+    // el input (con <16px, el navegador agranda toda la pagina al escribir,
+    // lo que corta los botones de los extremos -- el bug reportado en web).
+    fontSize: 16,
     maxHeight: 100,
     marginRight: 8,
   },
