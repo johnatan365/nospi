@@ -1950,7 +1950,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       try {
         await supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } });
       } catch (err) {
-        console.error('Error enviando recordatorio inmediato:', err);
+        console.error('Error enviando recordatorio inmediato (email):', err);
+      }
+      try {
+        await supabase.functions.invoke('send-push-reminders', { body: { event_id: eventId } });
+      } catch (err) {
+        console.error('Error enviando recordatorio inmediato (push):', err);
       }
 
       window.alert('Ubicación revelada exitosamente');
