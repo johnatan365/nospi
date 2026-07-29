@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Image, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -84,6 +84,24 @@ interface EventAttendee {
   payment_status: string;
   created_at: string;
   users: User;
+}
+
+interface AdminEventConversation {
+  conversation_id: string;
+  conv_type: 'event_group' | 'direct';
+  label: string | null;
+  last_message: string | null;
+  last_message_at: string | null;
+  message_count: number;
+}
+
+interface AdminChatMessage {
+  id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_photo: string | null;
+  content: string;
+  created_at: string;
 }
 
 type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'config';
@@ -650,7 +668,16 @@ export default function AdminPanelScreen() {
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
-  // Envío masivo de WhatsApp de confirmación: uno por uno (el navegador móvil
+    // NEW: Event chat viewer (admin)
+  const [showEventChatModal, setShowEventChatModal] = useState(false);
+  const [eventConversations, setEventConversations] = useState<AdminEventConversation[]>([]);
+  const [eventConversationsLoading, setEventConversationsLoading] = useState(false);
+  const [activeEventConversationId, setActiveEventConversationId] = useState<string | null>(null);
+  const [eventChatMessages, setEventChatMessages] = useState<AdminChatMessage[]>([]);
+  const [eventChatMessagesLoading, setEventChatMessagesLoading] = useState(false);
+  const [eventChatDraft, setEventChatDraft] = useState('');
+  const [eventChatSending, setEventChatSending] = useState(false);
+// Envío masivo de WhatsApp de confirmación: uno por uno (el navegador móvil
   // bloquea varias pestañas si se abren todas de una), por eso mostramos un
   // modal con un botón individual por persona pendiente.
   const [bulkWhatsAppPending, setBulkWhatsAppPending] = useState<Appointment[] | null>(null);
@@ -665,6 +692,87 @@ export default function AdminPanelScreen() {
     return reminderWhatsAppModal.kind === '48h'
     ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link)
       : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link);
+  };
+
+  const loadEventConversations = useCallback(async (eventId: string) => {
+    setEventConversationsLoading(true);
+    const { data, error } = await supabase.rpc('admin_get_event_conversations', { p_event_id: eventId });
+    if (error) {
+      console.error('Admin: error cargando conversaciones del evento', error);
+      setEventConversations([]);
+    } else {
+      const list = (data as AdminEventConversation[]) || [];
+      setEventConversations(list);
+      setActiveEventConversationId((prev) => {
+        if (prev && list.some((c) => c.conversation_id === prev)) return prev;
+        const group = list.find((c) => c.conv_type === 'event_group');
+        return group ? group.conversation_id : (list[0]?.conversation_id || null);
+      });
+    }
+    setEventConversationsLoading(false);
+  }, []);
+
+  const loadEventChatMessages = useCallback(async (conversationId: string) => {
+    setEventChatMessagesLoading(true);
+    const { data, error } = await supabase.rpc('admin_get_conversation_messages', { p_conversation_id: conversationId });
+    if (error) {
+      console.error('Admin: error cargando mensajes', error);
+      setEventChatMessages([]);
+    } else {
+      setEventChatMessages((data as AdminChatMessage[]) || []);
+    }
+    setEventChatMessagesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (showEventChatModal && selectedEventForConfig) {
+      loadEventConversations(selectedEventForConfig.id);
+    }
+    if (!showEventChatModal) {
+      setActiveEventConversationId(null);
+      setEventChatMessages([]);
+    }
+  }, [showEventChatModal, selectedEventForConfig, loadEventConversations]);
+
+  useEffect(() => {
+    if (!activeEventConversationId) return;
+    loadEventChatMessages(activeEventConversationId);
+
+    const channelName = `admin_event_chat_${activeEventConversationId}`;
+    const stale = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`);
+    if (stale) supabase.removeChannel(stale);
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${activeEventConversationId}` },
+        () => loadEventChatMessages(activeEventConversationId)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeEventConversationId, loadEventChatMessages]);
+
+  const handleSendEventChatMessage = async () => {
+    const content = eventChatDraft.trim();
+    if (!content || !activeEventConversationId || eventChatSending) return;
+    setEventChatSending(true);
+    const { error } = await supabase.rpc('admin_send_chat_message', {
+      p_conversation_id: activeEventConversationId,
+      p_content: content,
+    });
+    if (error) {
+      console.error('Admin: error enviando mensaje', error);
+      window.alert('No se pudo enviar el mensaje');
+    } else {
+      setEventChatDraft('');
+      loadEventChatMessages(activeEventConversationId);
+      if (selectedEventForConfig) loadEventConversations(selectedEventForConfig.id);
+    }
+    setEventChatSending(false);
   };
 
   // Matches and ratings state
@@ -5037,6 +5145,16 @@ setBulkWhatsAppPending(pending);
                     </Text>
                   </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
+            onPress={() => {
+              setShowConfigModal(false);
+              setShowEventChatModal(true);
+            }}
+          >
+            <Text style={styles.configActionButtonText}>💬 Chat del Evento</Text>
+          </TouchableOpacity>
+
                   <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#25D366' }]}
                     onPress={() => {
@@ -5175,7 +5293,109 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
       </Modal>
-      {/* Bulk WhatsApp Pending Modal — envío uno por uno, evita que el navegador móvil bloquee varias pestañas a la vez */}
+      <Modal
+        visible={showEventChatModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEventChatModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.eventChatModalContent}>
+            <View style={styles.configModalHeader}>
+              <Text style={styles.configModalTitle} numberOfLines={1}>
+                💬 Chat de {selectedEventForConfig?.name || 'Evento'}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowEventChatModal(false)}
+              >
+                <Text style={styles.closeModalButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.eventChatBody}>
+              <ScrollView style={styles.eventChatConvList}>
+                {eventConversationsLoading ? (
+                  <Text style={styles.eventChatEmptyText}>Cargando conversaciones...</Text>
+                ) : eventConversations.length === 0 ? (
+                  <Text style={styles.eventChatEmptyText}>Sin conversaciones todavía</Text>
+                ) : (
+                  eventConversations.map((conv) => (
+                    <TouchableOpacity
+                      key={conv.conversation_id}
+                      style={[
+                        styles.eventChatConvRow,
+                        activeEventConversationId === conv.conversation_id && styles.eventChatConvRowActive,
+                      ]}
+                      onPress={() => setActiveEventConversationId(conv.conversation_id)}
+                    >
+                      <Text style={styles.eventChatConvIcon}>{conv.conv_type === 'event_group' ? '👥' : '💬'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.eventChatConvLabel} numberOfLines={1}>
+                          {conv.conv_type === 'event_group' ? 'Grupo del evento' : (conv.label || 'Chat 1-1')}
+                        </Text>
+                        <Text style={styles.eventChatConvPreview} numberOfLines={1}>
+                          {conv.last_message || `${conv.message_count} mensajes`}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+
+              <View style={styles.eventChatThread}>
+                <ScrollView style={styles.eventChatMessagesScroll}>
+                  {eventChatMessagesLoading ? (
+                    <Text style={styles.eventChatEmptyText}>Cargando mensajes...</Text>
+                  ) : eventChatMessages.length === 0 ? (
+                    <Text style={styles.eventChatEmptyText}>Sin mensajes en esta conversación</Text>
+                  ) : (
+                    eventChatMessages.map((msg) => {
+                      const isAdmin = msg.sender_id === '00000000-0000-0000-0000-000000000099';
+                      return (
+                        <View key={msg.id} style={styles.eventChatMsgRow}>
+                          {msg.sender_photo ? (
+                            <Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} />
+                          ) : (
+                            <View style={[styles.eventChatMsgAvatar, styles.eventChatMsgAvatarPlaceholder]}>
+                              <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
+                            </View>
+                          )}
+                          <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
+                            <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi (tú)' : msg.sender_name}</Text>
+                            <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+
+                <View style={styles.eventChatInputBar}>
+                  <TextInput
+                    style={styles.eventChatInput}
+                    placeholder="Escribe como Equipo Nospi..."
+                    value={eventChatDraft}
+                    onChangeText={setEventChatDraft}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.eventChatSendButton,
+                      (!eventChatDraft.trim() || !activeEventConversationId || eventChatSending) && styles.eventChatSendButtonDisabled,
+                    ]}
+                    onPress={handleSendEventChatMessage}
+                    disabled={!eventChatDraft.trim() || !activeEventConversationId || eventChatSending}
+                  >
+                    <Text style={styles.eventChatSendButtonText}>{eventChatSending ? '...' : 'Enviar'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+{/* Bulk WhatsApp Pending Modal — envío uno por uno, evita que el navegador móvil bloquee varias pestañas a la vez */}
       <Modal
         visible={bulkWhatsAppPending !== null}
         transparent
@@ -6556,7 +6776,130 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  realtimeInfo: {
+  eventChatModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 800,
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  eventChatBody: {
+    flexDirection: 'row',
+    height: 500,
+  },
+  eventChatConvList: {
+    width: 220,
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  eventChatConvRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventChatConvRowActive: {
+    backgroundColor: '#EDE9FE',
+  },
+  eventChatConvIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  eventChatConvLabel: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: nospiColors.purpleDark,
+  },
+  eventChatConvPreview: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  eventChatThread: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  eventChatMessagesScroll: {
+    flex: 1,
+    padding: 16,
+  },
+  eventChatEmptyText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    padding: 16,
+    textAlign: 'center',
+  },
+  eventChatMsgRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  eventChatMsgAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  eventChatMsgAvatarPlaceholder: {
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventChatMsgBubble: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 10,
+  },
+  eventChatMsgBubbleAdmin: {
+    backgroundColor: '#EDE9FE',
+  },
+  eventChatMsgSender: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: nospiColors.purpleMid,
+    marginBottom: 2,
+  },
+  eventChatMsgContent: {
+    fontSize: 13,
+    color: '#1F2937',
+  },
+  eventChatInputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  eventChatInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    marginRight: 8,
+    maxHeight: 80,
+  },
+  eventChatSendButton: {
+    backgroundColor: nospiColors.purpleMid,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  eventChatSendButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+  },
+  eventChatSendButtonText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+realtimeInfo: {
     backgroundColor: '#E0E7FF',
     borderRadius: 12,
     padding: 20,
