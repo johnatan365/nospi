@@ -262,6 +262,19 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
 // ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
 // del viewport, visible en todo momento mientras la tabla está en pantalla —
 // no solo arriba ni solo abajo del todo.
+function formatPlatformRecency(dateStr: string): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 60) return 'hoy';
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return 'hoy';
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays === 1) return 'ayer';
+  if (diffDays < 30) return `hace ${diffDays}d`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `hace ${diffMonths}m`;
+}
+
 function HorizontalScrollSync({ children, minWidth }: { children: React.ReactNode; minWidth: number }) {
   const tableRef = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
@@ -505,6 +518,7 @@ export default function AdminPanelScreen() {
   const [loadingRecurring, setLoadingRecurring] = useState(false);
   const [showRecurringPanel, setShowRecurringPanel] = useState(false);
   const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
+  const [userPlatformActivity, setUserPlatformActivity] = useState<Record<string, { platform: string; last_seen_at: string }[]>>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
   const [reconciling, setReconciling] = useState(false);
@@ -896,7 +910,20 @@ export default function AdminPanelScreen() {
         setUserRatingAverages(avgs);
       }
 
-      // Load appointments using the secure admin function
+      // Load user_platform_activity para saber que plataformas usa cada usuario actualmente
+      const { data: platformActivityData } = await supabase
+        .from('user_platform_activity')
+        .select('user_id, platform, last_seen_at');
+      if (platformActivityData && platformActivityData.length > 0) {
+        const activityMap: Record<string, { platform: string; last_seen_at: string }[]> = {};
+        for (const row of platformActivityData) {
+          if (!activityMap[row.user_id]) activityMap[row.user_id] = [];
+          activityMap[row.user_id].push({ platform: row.platform, last_seen_at: row.last_seen_at });
+        }
+        setUserPlatformActivity(activityMap);
+      }
+
+// Load appointments using the secure admin function
       const { data: appointmentsRawData, error: appointmentsError } = await supabase
         .rpc('get_all_appointments_for_admin');
 
@@ -4001,6 +4028,7 @@ setBulkWhatsAppPending(pending);
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
+      { label: 'Uso actual', key: '_platform_activity', w: 170 },
       { label: 'Editar', key: '_edit', w: 90 },
       { label: 'WhatsApp', key: '_whatsapp', w: 100 },
       { label: 'Declinados', key: '_declinado', w: 110 },
@@ -4169,6 +4197,22 @@ setBulkWhatsAppPending(pending);
                         <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>
                       )}
                     </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {(userPlatformActivity[user.id] && userPlatformActivity[user.id].length > 0) ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                          {[...userPlatformActivity[user.id]]
+                            .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime())
+                            .map((pa) => (
+                              <span key={pa.platform} style={{ fontSize: 11, color: '#6B7280' }}>
+                                {pa.platform === 'ios' ? '🍎' : pa.platform === 'android' ? '🤖' : '🌐'} {formatPlatformRecency(pa.last_seen_at)}
+                              </span>
+                            ))}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin datos</span>
+                      )}
+                    </td>
+
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
                       <button
                         onClick={() => handleOpenEditUser(user)}
