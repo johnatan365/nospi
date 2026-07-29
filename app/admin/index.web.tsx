@@ -4399,7 +4399,6 @@ setBulkWhatsAppPending(pending);
                           💬 Enviar WhatsApp
                         </a>
                       )}
-
                     </>
                   )}
                   {participant.check_in_time && (
@@ -4983,7 +4982,7 @@ setBulkWhatsAppPending(pending);
           <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
             <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date, p.event_time)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
-          </View))}
+          </View>))}
         </ScrollView>
       </View>
       </View>
