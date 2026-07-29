@@ -503,14 +503,31 @@ export default function AdminPanelScreen() {
     // Login real con Supabase Auth: revisa si ya hay sesion valida y se queda
     // escuchando cambios (login / logout / expiracion de sesion).
     useEffect(() => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setIsAuthenticated(!!session);
-        setCheckingSession(false);
-      });
+      let mounted = true;
+      const init = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+                    // El token restaurado desde el almacenamiento local puede estar
+          // vencido o a punto de vencer; si disparamos las primeras consultas
+                    // con ese token viejo el backend responde "not authorized" hasta
+          // que el usuario cierra sesion y vuelve a entrar. Refrescamos de
+          // forma proactiva antes de marcar la sesion como valida.
+          const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+          if (!mounted) return;
+          setIsAuthenticated(!refreshError && !!(refreshed?.session || session));
+        } else if (mounted) {
+          setIsAuthenticated(false);
+        }
+        if (mounted) setCheckingSession(false);
+      };
+      init();
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         setIsAuthenticated(!!session);
       });
-      return () => listener.subscription.unsubscribe();
+      return () => {
+        mounted = false;
+        listener.subscription.unsubscribe();
+      };
     }, []);
 
   // App config state
