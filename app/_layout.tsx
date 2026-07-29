@@ -13,6 +13,8 @@ import {
 import { SupabaseProvider } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme, Platform } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
@@ -36,6 +38,8 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
+  const { user } = useAuth();
+  usePushNotifications(user?.id);
 
   return (
     <AppConfigProvider>
