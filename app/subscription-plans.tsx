@@ -211,6 +211,11 @@ export default function SubscriptionPlansScreen() {
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [autoConfirmError, setAutoConfirmError] = useState(false);
 
+  // Precio del evento pendiente (columna events.price) — null si el evento usa
+  // el precio global de configuración, 0 si el evento es gratis.
+  const [eventPrice, setEventPrice] = useState<number | null>(null);
+  const [loadingEventPrice, setLoadingEventPrice] = useState(true);
+
   // Card form
   const [showCardForm, setShowCardForm] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
@@ -266,9 +271,9 @@ export default function SubscriptionPlansScreen() {
     }
   }, [pseBanks]);
 
-  const priceCOP = parseInt(appConfig.event_price, 10) || 30000;
+  const priceCOP = (eventPrice !== null && eventPrice !== undefined) ? eventPrice : (parseInt(appConfig.event_price, 10) || 30000);
   const subscriptionPriceCOP = parseInt(appConfig.subscription_price, 10) || 29900;
-  const breakEvenEventsCOP = Math.ceil(subscriptionPriceCOP / priceCOP);
+  const breakEvenEventsCOP = priceCOP > 0 ? Math.ceil(subscriptionPriceCOP / priceCOP) : 0;
 
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
   // Sin código aplicado, es igual a priceCOP — no cambia ningún comportamiento existente.
@@ -290,7 +295,7 @@ export default function SubscriptionPlansScreen() {
 
   // Definida con useCallback y colocada antes de los useEffects que la referencian
   // para evitar el error "Cannot access before initialization".
-  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription' | 'promo_code', eventIdParam?: string, amountPaidCOP?: number): Promise<boolean> => {
+  const confirmAppointment = useCallback(async (transactionId: string, paymentMethod: 'bancolombia' | 'pse' | 'card' | 'nequi' | 'virtual_balance' | 'subscription' | 'promo_code' | 'free', eventIdParam?: string, amountPaidCOP?: number): Promise<boolean> => {
     try {
       const pendingEventId = eventIdParam || await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) return false;
@@ -436,27 +441,42 @@ export default function SubscriptionPlansScreen() {
 
   useEffect(() => {
     const checkSubscriptionAndAutoConfirm = async () => {
-      if (!user?.id) { setCheckingSubscription(false); return; }
+      if (!user?.id) { setCheckingSubscription(false); setLoadingEventPrice(false); return; }
       try {
-        const { data, error } = await supabase.rpc('has_active_subscription', { p_user_id: user.id });
+        const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+
+        // Suscripción activa y precio del evento pendiente se consultan en paralelo
+        // -- ambos determinan si hay que saltarse la pasarela de pago.
+        const [subscriptionResult, eventPriceResult] = await Promise.all([
+          supabase.rpc('has_active_subscription', { p_user_id: user.id }),
+          pendingEventId
+            ? supabase.from('events').select('price').eq('id', pendingEventId).maybeSingle()
+            : Promise.resolve({ data: null, error: null } as { data: { price: number | null } | null; error: any }),
+        ]);
+
+        const { data, error } = subscriptionResult;
         const active = !error && data === true;
         setHasActiveSubscription(active);
 
-        if (active) {
-          const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-          if (pendingEventId) {
-            const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId, 0);
-            if (ok) {
-              setShowSubscriptionConfirmModal(true);
-            } else {
-              setAutoConfirmError(true);
-            }
+        const fetchedEventPrice = eventPriceResult?.data?.price;
+        const isFreeEvent = fetchedEventPrice === 0;
+        setEventPrice(fetchedEventPrice === undefined ? null : fetchedEventPrice);
+
+        if (pendingEventId && (active || isFreeEvent)) {
+          const ok = active
+            ? await confirmAppointment('suscripcion_activa', 'subscription', pendingEventId, 0)
+            : await confirmAppointment('evento_gratis', 'free', pendingEventId, 0);
+          if (ok) {
+            setShowSubscriptionConfirmModal(true);
+          } else {
+            setAutoConfirmError(true);
           }
         }
       } catch {
         setHasActiveSubscription(false);
       } finally {
         setCheckingSubscription(false);
+        setLoadingEventPrice(false);
       }
     };
     checkSubscriptionAndAutoConfirm();
@@ -1523,12 +1543,14 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  if (hasActiveSubscription && !autoConfirmError && !showSuccessModal && !showSubscriptionConfirmModal) {
+  if ((hasActiveSubscription || eventPrice === 0) && !autoConfirmError && !showSuccessModal && !showSubscriptionConfirmModal) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
         <ActivityIndicator size="large" color="#fff" />
         <Text style={{ color: '#fff', marginTop: 16, fontSize: 15, textAlign: 'center' }}>
-          Tienes suscripción activa — confirmando tu asistencia sin costo…
+          {hasActiveSubscription
+            ? 'Tienes suscripción activa — confirmando tu asistencia sin costo…'
+            : 'Este evento es gratis — confirmando tu asistencia…'}
         </Text>
       </LinearGradient>
     );
@@ -1991,7 +2013,11 @@ export default function SubscriptionPlansScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>🎟️</Text>
             <Text style={styles.successTitle}>¡Cupo confirmado!</Text>
-            <Text style={styles.successMessage}>Tu suscripción cubre este evento — ya tienes tu lugar asegurado</Text>
+            <Text style={styles.successMessage}>
+              {hasActiveSubscription
+                ? 'Tu suscripción cubre este evento — ya tienes tu lugar asegurado'
+                : 'Este evento es gratis — ya tienes tu lugar asegurado'}
+            </Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
