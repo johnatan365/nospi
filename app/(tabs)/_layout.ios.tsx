@@ -33,7 +33,7 @@ export default function TabLayout() {
     {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
-      icon: 'message.fill',
+      icon: 'gamecontroller.fill',
       label: 'Dinámica',
     },
     {
