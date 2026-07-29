@@ -23,6 +23,7 @@ interface Event {
   is_location_revealed: boolean;
   max_participants: number;
   event_status: 'draft' | 'published' | 'closed';
+  price: number | null;
 }
 
 export default function EventDetailsScreen() {
@@ -312,6 +313,11 @@ export default function EventDetailsScreen() {
           {/* Action Section */}
           {!isEnrolled && (
             <View style={styles.actionSection}>
+              {event.price === 0 && (
+                <View style={styles.freeBadge}>
+                  <Text style={styles.freeBadgeText}>Gratis</Text>
+                </View>
+              )}
               <Text style={styles.question}>¿Deseas asistir?</Text>
               <TouchableOpacity
                 style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
@@ -529,6 +535,19 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  freeBadge: {
+    alignSelf: 'center',
+    backgroundColor: '#D1FAE5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  freeBadgeText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#059669',
   },
   modalOverlay: {
     flex: 1,
