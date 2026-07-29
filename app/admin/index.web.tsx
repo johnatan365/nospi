@@ -476,15 +476,23 @@ export default function AdminPanelScreen() {
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('events');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
 
-    // Recordar sesión: si ya se inició sesión antes en este navegador, saltar la pantalla de contraseña
+    // Login real con Supabase Auth: revisa si ya hay sesion valida y se queda
+    // escuchando cambios (login / logout / expiracion de sesion).
     useEffect(() => {
-      if (localStorage.getItem('nospi_admin_session') === 'true') {
-        setIsAuthenticated(true);
-        setShowPasswordModal(false);
-    }
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setIsAuthenticated(!!session);
+        setCheckingSession(false);
+      });
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        setIsAuthenticated(!!session);
+      });
+      return () => listener.subscription.unsubscribe();
     }, []);
 
   // App config state
@@ -772,7 +780,7 @@ export default function AdminPanelScreen() {
   };
 
   const handleChangeAdminPassword = async () => {
-    if (!newAdminPassword.trim()) {
+        if (!newAdminPassword.trim() || newAdminPassword.trim().length < 8) {
       setAdminPasswordSaved('error');
       setTimeout(() => setAdminPasswordSaved(null), 3000);
       return;
@@ -785,9 +793,7 @@ export default function AdminPanelScreen() {
     setSavingAdminPassword(true);
     setAdminPasswordSaved(null);
     try {
-      const { error } = await supabase
-        .from('app_config')
-        .upsert({ key: 'admin_password', value: newAdminPassword.trim() }, { onConflict: 'key' });
+          const { error } = await supabase.auth.updateUser({ password: newAdminPassword.trim() });
       if (error) {
         setAdminPasswordSaved('error');
       } else {
@@ -834,21 +840,28 @@ export default function AdminPanelScreen() {
           }
     };
 
-  const handlePasswordSubmit = async () => {
-    // Check app_config first, fallback to hardcoded
-    const { data } = await supabase
-      .from('app_config')
-      .select('value')
-      .eq('key', 'admin_password')
-      .single();
-    const correctPassword = data?.value || 'nospi2024';
-    if (adminPassword === correctPassword) {
-      setIsAuthenticated(true);
-      setShowPasswordModal(false);
-      localStorage.setItem('nospi_admin_session', 'true');
+const handleLogin = async () => {
+    setLoginError(null);
+    setLoggingIn(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword,
+      });
+      if (error) {
+        setLoginError('Correo o contraseña incorrectos.');
       } else {
-      window.alert('Contraseña incorrecta');
+        setAdminPassword('');
+      }
+    } catch {
+      setLoginError('Error inesperado al iniciar sesión.');
+    } finally {
+      setLoggingIn(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const loadDashboardData = async () => {
@@ -3027,7 +3040,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             🔑 Contraseña del Administrador
           </div>
           <div style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 24 }}>
-            Cambia la contraseña que se usa para acceder a este panel. La nueva contraseña se guarda en app_config.
+            Cambia la contraseña que se usa para acceder a este panel. Esta contraseña ahora es tu contraseña real de acceso (Supabase Auth), mínimo 8 caracteres.
           </div>
 
           {adminPasswordSaved && (
@@ -4721,13 +4734,32 @@ setBulkWhatsAppPending(pending);
   };
 
   // Password modal
-  if (showPasswordModal) {
+  if (checkingSession) {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <View style={styles.fullScreenContainer}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.passwordContainer}>
           <Text style={styles.passwordTitle}>🔐 Panel de Administración</Text>
-          <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
+          <Text style={styles.passwordSubtitle}>Ingresa tu correo y contraseña</Text>
+          <TextInput
+            style={[styles.passwordInput, { width: '100%', maxWidth: 400 }]}
+            placeholder="Correo"
+            value={adminEmail}
+            onChangeText={setAdminEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
           <div style={{ position: 'relative', width: '100%', maxWidth: 400 }}>
             <TextInput
               style={[styles.passwordInput, { paddingRight: 48, width: '100%' }]}
@@ -4736,7 +4768,7 @@ setBulkWhatsAppPending(pending);
               value={adminPassword}
               onChangeText={setAdminPassword}
               autoCapitalize="none"
-              onSubmitEditing={handlePasswordSubmit}
+              onSubmitEditing={handleLogin}
             />
             <button
               onClick={() => setShowLoginPassword(p => !p)}
@@ -4750,8 +4782,11 @@ setBulkWhatsAppPending(pending);
               {showLoginPassword ? '🙈' : '👁️'}
             </button>
           </div>
-          <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
-            <Text style={styles.passwordButtonText}>Acceder</Text>
+          {loginError && (
+            <Text style={{ color: '#EF4444', fontSize: 13, marginTop: 10, fontWeight: '600' }}>{loginError}</Text>
+          )}
+          <TouchableOpacity style={styles.passwordButton} onPress={handleLogin} disabled={loggingIn}>
+            <Text style={styles.passwordButtonText}>{loggingIn ? 'Ingresando...' : 'Acceder'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.backButton}
@@ -4759,7 +4794,6 @@ setBulkWhatsAppPending(pending);
           >
             <Text style={styles.backButtonText}>← Volver</Text>
           </TouchableOpacity>
-          <Text style={styles.passwordHint}>Contraseña por defecto: nospi2024</Text>
         </View>
       </View>
     );
@@ -4923,7 +4957,17 @@ setBulkWhatsAppPending(pending);
             </button>
           ))}
         </div>
-        <div className="nospi-sidebar-ftr">Nospi © 2025</div>
+                <button
+          onClick={handleLogout}
+          style={{
+            margin: '0 12px 12px', padding: '10px 14px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.10)', border: 'none', color: '#fff',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+          }}
+        >
+          🚪 Cerrar sesión
+        </button>
+<div className="nospi-sidebar-ftr">Nospi © 2025</div>
       </div>
 
       {/* MAIN — position:fixed offset from sidebar */}
