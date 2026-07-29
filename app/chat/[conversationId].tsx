@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   Modal,
+  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +20,8 @@ import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
+
+const NOSPI_SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000099';
 
 interface Message {
   id: string;
@@ -37,7 +40,13 @@ interface Participant {
 interface ConversationMeta {
   conv_type: 'event_group' | 'direct';
   event_name: string | null;
+  event_type: string | null;
   other_user_name: string | null;
+  other_user_photo: string | null;
+}
+
+function eventEmoji(eventType: string | null | undefined): string {
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
 }
 
 export default function ChatThreadScreen() {
@@ -86,12 +95,14 @@ export default function ChatThreadScreen() {
       setMeta({
         conv_type: thisConv.conv_type,
         event_name: thisConv.event_name,
+        event_type: thisConv.event_type,
         other_user_name: thisConv.other_user_name,
+        other_user_photo: thisConv.other_user_photo,
       });
     }
 
     setLoading(false);
-    supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+    await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
   }, [conversationId, user]);
 
   useEffect(() => {
@@ -115,10 +126,10 @@ export default function ChatThreadScreen() {
           table: 'chat_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        async (payload) => {
           const newMsg = payload.new as Message;
           setMessages((prev) => (prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
-          supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+          await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
         }
       )
@@ -172,8 +183,16 @@ export default function ChatThreadScreen() {
     }
   };
 
+  const handleBack = async () => {
+    if (conversationId) {
+      await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+    }
+    router.back();
+  };
+
   const isGroup = meta?.conv_type === 'event_group';
   const headerTitle = isGroup ? meta?.event_name || 'Chat del evento' : meta?.other_user_name || 'Chat';
+  const otherUserPhoto = !isGroup ? meta?.other_user_photo : null;
 
   if (loading) {
     return (
@@ -195,13 +214,27 @@ export default function ChatThreadScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackButton}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {isGroup ? '🎉 ' : ''}
-            {headerTitle}
-          </Text>
+
+          <View style={styles.headerCenter}>
+            {isGroup ? (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={styles.headerEmoji}>{eventEmoji(meta?.event_type)}</Text>
+              </View>
+            ) : otherUserPhoto ? (
+              <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
+            ) : (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={styles.headerEmoji}>👤</Text>
+              </View>
+            )}
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {headerTitle}
+            </Text>
+          </View>
+
           {isGroup ? (
             <TouchableOpacity onPress={() => setShowParticipants(true)} style={styles.headerActionButton}>
               <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={22} color="#FFFFFF" />
@@ -219,11 +252,24 @@ export default function ChatThreadScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => {
             const isMine = item.sender_id === user?.id;
-            const senderName = participantsById[item.sender_id]?.name || 'Alguien';
+            const isSystem = item.sender_id === NOSPI_SYSTEM_USER_ID;
+            const sender = participantsById[item.sender_id];
+            const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Alguien';
+            const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
+            const showSenderInfo = isGroup && !isMine;
+
             return (
               <View style={[styles.messageRow, isMine ? styles.messageRowMine : styles.messageRowTheirs]}>
+                {showSenderInfo &&
+                  (senderPhoto ? (
+                    <Image source={{ uri: senderPhoto }} style={styles.messageAvatar} />
+                  ) : (
+                    <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+                      <Text style={{ fontSize: 14 }}>{isSystem ? '📣' : '👤'}</Text>
+                    </View>
+                  ))}
                 <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                  {isGroup && !isMine && <Text style={styles.senderName}>{senderName}</Text>}
+                  {showSenderInfo && <Text style={styles.senderName}>{senderName}</Text>}
                   <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.content}</Text>
                 </View>
               </View>
@@ -270,30 +316,32 @@ export default function ChatThreadScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>Toca a alguien para chatear en privado</Text>
-            {participants
-              .filter((p) => p.user_id !== user?.id)
-              .map((p) => (
-                <TouchableOpacity
-                  key={p.user_id}
-                  style={styles.participantRow}
-                  onPress={() => handleStartDirectChat(p.user_id)}
-                  disabled={!!startingChatWith}
-                >
-                  {p.profile_photo_url ? (
-                    <Image source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} />
-                  ) : (
-                    <View style={[styles.participantAvatar, styles.participantAvatarPlaceholder]}>
-                      <Text style={{ fontSize: 18 }}>👤</Text>
-                    </View>
-                  )}
-                  <Text style={styles.participantName}>{p.name}</Text>
-                  {startingChatWith === p.user_id ? (
-                    <ActivityIndicator size="small" color={nospiColors.purpleDark} />
-                  ) : (
-                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={nospiColors.gray400} />
-                  )}
-                </TouchableOpacity>
-              ))}
+            <ScrollView style={styles.participantsScroll} showsVerticalScrollIndicator={false}>
+              {participants
+                .filter((p) => p.user_id !== user?.id)
+                .map((p) => (
+                  <TouchableOpacity
+                    key={p.user_id}
+                    style={styles.participantRow}
+                    onPress={() => handleStartDirectChat(p.user_id)}
+                    disabled={!!startingChatWith}
+                  >
+                    {p.profile_photo_url ? (
+                      <Image source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} />
+                    ) : (
+                      <View style={[styles.participantAvatar, styles.participantAvatarPlaceholder]}>
+                        <Text style={{ fontSize: 18 }}>👤</Text>
+                      </View>
+                    )}
+                    <Text style={styles.participantName}>{p.name}</Text>
+                    {startingChatWith === p.user_id ? (
+                      <ActivityIndicator size="small" color={nospiColors.purpleDark} />
+                    ) : (
+                      <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={nospiColors.gray400} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -314,11 +362,29 @@ const styles = StyleSheet.create({
   },
   headerBackButton: { padding: 8 },
   headerActionButton: { padding: 8, width: 40, alignItems: 'center' },
-  headerTitle: { flex: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
+  headerAvatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerEmoji: { fontSize: 16 },
+  headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
   messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
-  messageRow: { marginBottom: 10, flexDirection: 'row' },
+  messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end' },
   messageRowMine: { justifyContent: 'flex-end' },
   messageRowTheirs: { justifyContent: 'flex-start' },
+  messageAvatar: { width: 26, height: 26, borderRadius: 13, marginRight: 6 },
+  messageAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleMine: { backgroundColor: nospiColors.purpleLight, borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: 'rgba(255,255,255,0.15)', borderBottomLeftRadius: 4 },
@@ -368,6 +434,7 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
   modalSubtitle: { fontSize: 13, color: nospiColors.gray500, marginBottom: 16 },
+  participantsScroll: { maxHeight: 340 },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
