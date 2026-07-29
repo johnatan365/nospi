@@ -14,6 +14,8 @@ interface ConversationRow {
   event_id: string | null;
   event_name: string | null;
   event_type: string | null;
+  event_date: string | null;
+  event_status: string | null;
   other_user_id: string | null;
   other_user_name: string | null;
   other_user_photo: string | null;
@@ -38,6 +40,30 @@ function timeAgo(iso: string | null): string {
 
 function eventEmoji(eventType: string | null): string {
   return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+}
+
+// El chat grupal de un evento se habilita 30 min antes de que empiece y
+// queda abierto durante el evento. Antes de esa ventana mostramos la fila
+// bloqueada con la hora en que se habilita (hora Bogota, sin depender del
+// soporte de timeZone de Intl en el motor JS del dispositivo).
+const CHAT_UNLOCK_MINUTES_BEFORE = 30;
+const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function formatBogotaTime(date: Date): string {
+  const bogota = new Date(date.getTime() - BOGOTA_OFFSET_MS);
+  let h = bogota.getUTCHours();
+  const m = bogota.getUTCMinutes();
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel: string | null } {
+  if (item.conv_type !== 'event_group' || !item.event_date) return { locked: false, unlockLabel: null };
+  const unlockAt = new Date(new Date(item.event_date).getTime() - CHAT_UNLOCK_MINUTES_BEFORE * 60 * 1000);
+  if (Date.now() >= unlockAt.getTime()) return { locked: false, unlockLabel: null };
+  return { locked: true, unlockLabel: formatBogotaTime(unlockAt) };
 }
 
 type ChatFilter = 'grupos' | 'directos';
@@ -141,9 +167,9 @@ export default function ChatsScreen() {
 
         <TouchableOpacity style={styles.banner} activeOpacity={0.8} onPress={goToPastEvents}>
           <Text style={styles.bannerText}>
-            💬 ¿Buscas la conversación de un evento pasado? Entra a Citas → Anteriores para verla y escribirle a algún asistente.
+            💬 ¿Buscas la conversación de un evento pasado o quieres escribirle a alguien que fue contigo? Entra a Citas → Anteriores, o toca aquí
           </Text>
-          <Text style={styles.bannerArrow}>›</Text>
+          <Text style={styles.bannerArrow}>→</Text>
         </TouchableOpacity>
 
         <View style={styles.filterRow}>
@@ -209,44 +235,52 @@ export default function ChatsScreen() {
               const title = isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
               const photoUrl = isGroup ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
+              const { locked, unlockLabel } = getChatLockInfo(item);
 
               return (
                 <TouchableOpacity
                   key={item.conversation_id}
-                  style={styles.row}
-                  activeOpacity={0.7}
-                  onPress={() => openConversation(item)}
+                  style={[styles.row, locked && styles.rowLocked]}
+                  activeOpacity={locked ? 1 : 0.7}
+                  onPress={() => { if (!locked) openConversation(item); }}
+                  disabled={locked}
                 >
                   {photoUrl ? (
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />
                   ) : (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                      <Text style={styles.avatarEmoji}>{isGroup ? eventEmoji(item.event_type) : '👤'}</Text>
+                      <Text style={styles.avatarEmoji}>{locked ? '🔒' : isGroup ? eventEmoji(item.event_type) : '👤'}</Text>
                     </View>
                   )}
 
                   <View style={styles.rowContent}>
                     <View style={styles.rowHeader}>
-                      <Text style={[styles.rowTitle, hasUnread && styles.rowTitleUnread]} numberOfLines={1}>
+                      <Text style={[styles.rowTitle, hasUnread && styles.rowTitleUnread, locked && styles.rowTitleLocked]} numberOfLines={1}>
                         {title}
                       </Text>
-                      <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>
+                      {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>}
                     </View>
-                    <View style={styles.rowFooter}>
-                      <Text
-                        style={[styles.rowLastMessage, hasUnread && styles.rowLastMessageUnread]}
-                        numberOfLines={1}
-                      >
-                        {item.last_message || 'Sin mensajes todavía'}
+                    {locked ? (
+                      <Text style={styles.rowLockedText} numberOfLines={1}>
+                        Se habilita a las {unlockLabel}
                       </Text>
-                      {hasUnread && (
-                        <View style={styles.unreadBadge}>
-                          <Text style={styles.unreadBadgeText}>
-                            {item.unread_count > 9 ? '9+' : item.unread_count}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
+                    ) : (
+                      <View style={styles.rowFooter}>
+                        <Text
+                          style={[styles.rowLastMessage, hasUnread && styles.rowLastMessageUnread]}
+                          numberOfLines={1}
+                        >
+                          {item.last_message || 'Sin mensajes todavía'}
+                        </Text>
+                        {hasUnread && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>
+                              {item.unread_count > 9 ? '9+' : item.unread_count}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -279,7 +313,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   bannerText: { flex: 1, color: '#FFFFFF', fontSize: 13, lineHeight: 18 },
-  bannerArrow: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginLeft: 8 },
+  bannerArrow: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginLeft: 10 },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -336,6 +370,9 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
+  rowLocked: { opacity: 0.55 },
+  rowTitleLocked: { color: 'rgba(255,255,255,0.8)' },
+  rowLockedText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   avatar: { width: 52, height: 52, borderRadius: 26 },
   avatarPlaceholder: {
     backgroundColor: 'rgba(255,255,255,0.15)',
