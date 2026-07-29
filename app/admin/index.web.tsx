@@ -5,7 +5,6 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
-import { formatTimeAmPm } from '@/utils/formatTime';
 
 
 interface Event {
@@ -20,9 +19,6 @@ interface Event {
   location_name: string;
   location_address: string;
   maps_link: string;
-  require_gps_verification?: boolean;
-  registration_closed_men?: boolean;
-  registration_closed_women?: boolean;
   is_location_revealed: boolean;
   address: string | null;
   start_time: string | null;
@@ -85,7 +81,7 @@ interface EventAttendee {
   users: User;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'config';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'config';
 
 // Default questions to restore
 const DEFAULT_QUESTIONS_DATA = {
@@ -150,7 +146,7 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
       ``,
       `Te escribimos desde Nospi confirmando que ya estás dentro${eventPart}.`,
       ``,
-      `Recuerda: el lugar se revelará 48 horas antes del evento, prepárate para la sorpresa.`,
+      `Recuerda: el lugar se anuncia un día antes del evento, prepárate para la sorpresa.`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
@@ -183,7 +179,7 @@ function buildEventReminderWhatsAppLink(
     const mapsPart = mapsLink ? ` Ubicación en Maps: ${mapsLink}` : '';
     locationPart = `, en ${locationName}${addressPart}.${mapsPart}`;
   } else {
-    locationPart = `. El lugar se revelará 48 horas antes del evento — ¡prepárate para la sorpresa!`;
+    locationPart = `. El lugar se anuncia un día antes del evento — ¡prepárate para la sorpresa!`;
   }
 
     const message = [
@@ -222,9 +218,7 @@ function buildSameDayWhatsAppLink(
     ``,
     `Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
     ``,
-    `Cuando estén en la mesa, abran este link para confirmar e iniciar la experiencia: https://app.nospi.co/(tabs)/interaccion`,
-    ``,
-    `Antes de arrancar la dinámica para romper el hielo, elijan a alguien que se encargue de iniciarla y leer las preguntas en voz alta.`,
+    `Abre este link apenas estes en la mesa para confirmar e iniciar la experiencia con los demás: https://app.nospi.co/(tabs)/interaccion`,
     ``,
     `¡Nos vemos hoy!`,
   ].join('\n');
@@ -234,15 +228,14 @@ function buildSameDayWhatsAppLink(
 
 // Arma el link de WhatsApp para las personas cuyo último intento de pago
 // quedó declinado/con error, ofreciendo mandarles el link directo de pago.
-function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
+function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
     ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
-  const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
-    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
+    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}`
     : 'el evento';
 
   const message = [
@@ -256,6 +249,17 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
   ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+// Convierte "19:00" (24h) a "7:00 p.m." para que se lea natural en el mensaje.
+function formatTimeAmPm(time24: string): string {
+  const [hStr, mStr] = time24.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${suffix}`;
 }
 
 // ── Tabla ancha con una barra de scroll horizontal "sticky" pegada al fondo
@@ -462,12 +466,12 @@ export default function AdminPanelScreen() {
       if (localStorage.getItem('nospi_admin_session') === 'true') {
         setIsAuthenticated(true);
         setShowPasswordModal(false);
-    }
+        loadDashboardData();
+      }
     }, []);
 
   // App config state
   const [configEventPrice, setConfigEventPrice] = useState('');
-  const [configSubscriptionPrice, setConfigSubscriptionPrice] = useState('');
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
   const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
@@ -490,7 +494,6 @@ export default function AdminPanelScreen() {
 
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
-  const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
   const [users, setUsers] = useState<User[]>([]);
   const [recurringCustomers, setRecurringCustomers] = useState<any[]>([]);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
@@ -502,15 +505,6 @@ export default function AdminPanelScreen() {
   const [reconcileMessage, setReconcileMessage] = useState<string | null>(null);
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
-
-  // Suscripciones mensuales (para la pestaña "Suscripciones" del admin)
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [subscriptionEvents, setSubscriptionEvents] = useState<any[]>([]);
-  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
-  const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false);
-  const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
-  const [subscriptionStatusFilter, setSubscriptionStatusFilter] = useState<string>('all');
-  const [subscriptionSearchQuery, setSubscriptionSearchQuery] = useState('');
 
   // Event attendees modal
   const [showAttendeesModal, setShowAttendeesModal] = useState(false);
@@ -554,9 +548,6 @@ export default function AdminPanelScreen() {
     location_name: '',
     location_address: '',
     maps_link: '',
-    require_gps_verification: true,
-    registration_closed_men: false,
-    registration_closed_women: false,
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
@@ -640,7 +631,6 @@ export default function AdminPanelScreen() {
   const [eventMatches, setEventMatches] = useState<any[]>([]);
   const [eventRatings, setEventRatings] = useState<any[]>([]);
   const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
-  const eventsReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
   }, []);
@@ -667,10 +657,7 @@ export default function AdminPanelScreen() {
           table: 'events',
         },
         (payload) => {
-          if (eventsReloadTimer.current) clearTimeout(eventsReloadTimer.current);
-                      eventsReloadTimer.current = setTimeout(() => {
-                                      loadDashboardData();
-                      }, 4000);
+          loadDashboardData();
         }
       )
       .subscribe((status) => {
@@ -713,7 +700,6 @@ export default function AdminPanelScreen() {
     if (error || !data) return;
     for (const row of data) {
       if (row.key === 'event_price') setConfigEventPrice(row.value);
-      if (row.key === 'subscription_price') setConfigSubscriptionPrice(row.value);
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
       if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
@@ -726,7 +712,6 @@ export default function AdminPanelScreen() {
     try {
       const rows = [
         { key: 'event_price', value: configEventPrice.trim() },
-        { key: 'subscription_price', value: configSubscriptionPrice.trim() },
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
         { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
@@ -791,7 +776,8 @@ export default function AdminPanelScreen() {
       setIsAuthenticated(true);
       setShowPasswordModal(false);
       localStorage.setItem('nospi_admin_session', 'true');
-      } else {
+      loadDashboardData();
+    } else {
       window.alert('Contraseña incorrecta');
     }
   };
@@ -804,7 +790,7 @@ export default function AdminPanelScreen() {
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
-        .order('date', { ascending: true });
+        .order('date', { ascending: false });
 
       if (eventsError) {
         console.error('Error loading events:', eventsError);
@@ -897,7 +883,6 @@ export default function AdminPanelScreen() {
             location_name: '',
             location_address: '',
             maps_link: '',
-            require_gps_verification: true,
             is_location_revealed: false,
             address: null,
             start_time: null,
@@ -1321,9 +1306,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: '',
       location_address: '',
       maps_link: '',
-      require_gps_verification: true,
-      registration_closed_men: false,
-      registration_closed_women: false,
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
@@ -1379,9 +1361,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: event.location_name || '',
       location_address: event.location_address || '',
       maps_link: event.maps_link || '',
-      require_gps_verification: event.require_gps_verification ?? true,
-      registration_closed_men: event.registration_closed_men ?? false,
-      registration_closed_women: event.registration_closed_women ?? false,
       max_participants: event.max_participants || 6,
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
@@ -1530,11 +1509,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: eventForm.location_name,
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
-        require_gps_verification: eventForm.require_gps_verification,
-        registration_closed_men: eventForm.registration_closed_men,
-        registration_closed_women: eventForm.registration_closed_women,
         start_time: isoDate,
-        max_participants: eventForm.max_participants || 6,
+        max_participants: eventForm.max_participants,
         current_participants: 0,
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
@@ -1594,9 +1570,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: '',
         location_address: '',
         maps_link: '',
-        require_gps_verification: true,
-        registration_closed_men: false,
-        registration_closed_women: false,
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
@@ -1654,7 +1627,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: event.location_name,
         location_address: event.location_address,
         maps_link: event.maps_link,
-        require_gps_verification: event.require_gps_verification,
         is_location_revealed: false,
         max_participants: event.max_participants,
         current_participants: 0,
@@ -1731,19 +1703,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      // Enviar de inmediato el recordatorio a los asistentes confirmados de este evento.
-      // Se espera (await) ANTES del alert bloqueante: si se dispara despues de
-      // window.alert() y no se espera, el navegador puede cancelar el POST a
-      // mitad de camino (solo llega el preflight OPTIONS) si el usuario cierra
-      // la pestaña o la app pasa a segundo plano justo al cerrar el dialogo.
-      try {
-        await supabase.functions.invoke('send-email-reminders', { body: { event_id: eventId } });
-      } catch (err) {
-        console.error('Error enviando recordatorio inmediato:', err);
-      }
-
       window.alert('Ubicación revelada exitosamente');
-
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);
@@ -1811,33 +1771,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       loadDashboardData();
     } catch (error) {
       console.error('Failed to publish event:', error);
-    }
-  };
-
-  const loadSubscriptions = async (force?: boolean) => {
-    if (subscriptionsLoaded && !force) return;
-    setSubscriptionsLoading(true);
-    try {
-      const [subsRes, eventsRes] = await Promise.all([
-        supabase.rpc('get_all_subscriptions_for_admin'),
-        supabase.rpc('get_subscription_events_for_admin'),
-      ]);
-      if (subsRes.error) {
-        console.error('Error loading subscriptions:', subsRes.error);
-        window.alert('Error al cargar suscripciones: ' + subsRes.error.message);
-      } else {
-        setSubscriptions(subsRes.data || []);
-      }
-      if (eventsRes.error) {
-        console.error('Error loading subscription events:', eventsRes.error);
-      } else {
-        setSubscriptionEvents(eventsRes.data || []);
-      }
-      setSubscriptionsLoaded(true);
-    } catch (error) {
-      console.error('Failed to load subscriptions:', error);
-    } finally {
-      setSubscriptionsLoading(false);
     }
   };
 
@@ -2433,14 +2366,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const orphanPayments = paymentAttempts.filter((pa: any) => {
       if (pa.status !== 'APPROVED' || !pa.user_id || !pa.event_id) return false;
       return !appointments.some(
-        (a) =>
-          a.user_id === pa.user_id &&
-          a.event_id === pa.event_id &&
-          // Cuenta como resuelta tanto una cita completada como una cancelada
-          // y reembolsada: si el usuario canceló su asistencia (y recibió su
-          // saldo virtual de vuelta), ya no falta nada por hacer con ese pago,
-          // aunque nunca haya quedado con payment_status = 'completed'.
-          (a.payment_status === 'completed' || (a.status === 'cancelada' && a.payment_status === 'refunded'))
+        (a) => a.user_id === pa.user_id && a.event_id === pa.event_id && a.payment_status === 'completed'
       );
     });
 
@@ -2575,210 +2501,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
-  const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
-    active: 'Activa',
-    cancelled: 'Cancelada',
-    expired: 'Vencida',
-    canceled: 'Cancelada',
-  };
-  const SUBSCRIPTION_STATUS_COLOR: Record<string, string> = {
-    active: '#059669',
-    cancelled: '#EF4444',
-    canceled: '#EF4444',
-    expired: '#9CA3AF',
-  };
-
-  const renderSubscriptions = () => {
-    const now = Date.now();
-    const soonThreshold = now + 7 * 24 * 60 * 60 * 1000;
-
-    const activeSubs = subscriptions.filter((s) => s.status === 'active');
-    const cancelledSubs = subscriptions.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
-    const expiredSubs = subscriptions.filter((s) => s.status === 'expired');
-    const mrr = activeSubs.reduce((sum, s) => sum + Number(s.price || 0), 0);
-    const renewingSoon = activeSubs.filter((s) => s.auto_renew && s.next_charge_date && new Date(s.next_charge_date).getTime() <= soonThreshold);
-    const withFailedCharges = subscriptions.filter((s) => Number(s.failed_charge_count || 0) > 0);
-
-    const q = subscriptionSearchQuery.trim().toLowerCase();
-    const filtered = subscriptions.filter((s) => {
-      if (subscriptionStatusFilter !== 'all' && s.status !== subscriptionStatusFilter) return false;
-      if (!q) return true;
-      return (
-        (s.user_name || '').toLowerCase().includes(q) ||
-        (s.user_email || '').toLowerCase().includes(q) ||
-        (s.user_phone || '').toLowerCase().includes(q)
-      );
-    });
-
-    const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-
-    const summaryCards: { label: string; value: string; color: string; sub?: string }[] = [
-      { label: 'Suscriptores activos', value: String(activeSubs.length), color: '#059669' },
-      { label: 'Cancelados / vencidos', value: String(cancelledSubs.length + expiredSubs.length), color: '#EF4444' },
-      { label: 'Ingreso mensual estimado (MRR)', value: `$ ${mrr.toLocaleString('es-CO')} COP`, color: '#6B21A8' },
-      { label: 'Renuevan en 7 días', value: String(renewingSoon.length), color: '#D97706' },
-      { label: 'Con fallos de cobro', value: String(withFailedCharges.length), color: '#DC2626' },
-    ];
-
-    return (
-      <View style={styles.listContainer}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
-          <Text style={styles.sectionTitle}>👑 Suscripciones mensuales</Text>
-          <button
-            onClick={() => loadSubscriptions(true)}
-            disabled={subscriptionsLoading}
-            style={{
-              backgroundColor: nospiColors.purpleDark, color: 'white', border: 'none',
-              borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700,
-              cursor: subscriptionsLoading ? 'default' : 'pointer', opacity: subscriptionsLoading ? 0.6 : 1,
-            }}
-          >
-            {subscriptionsLoading ? 'Actualizando...' : '🔄 Actualizar'}
-          </button>
-        </div>
-        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 20 }}>
-          Quién está suscrito, quién canceló (y por qué), y a cuántos eventos ha ido cada suscriptor usando su membresía.
-        </Text>
-
-        {subscriptionsLoading && subscriptions.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-          </View>
-        ) : (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-              {summaryCards.map((c) => (
-                <div key={c.label} style={{ backgroundColor: 'white', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${c.color}` }}>
-                  <div style={{ fontSize: 12, color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>{c.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{c.value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Buscar por nombre, email o teléfono..."
-                value={subscriptionSearchQuery}
-                onChange={(e) => setSubscriptionSearchQuery(e.target.value)}
-                style={{
-                  flex: '1 1 260px', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #E5E7EB',
-                  fontSize: 14, outline: 'none',
-                }}
-              />
-              {[
-                { key: 'all', label: `Todas (${subscriptions.length})` },
-                { key: 'active', label: `Activas (${activeSubs.length})` },
-                { key: 'cancelled', label: `Canceladas (${cancelledSubs.length})` },
-                { key: 'expired', label: `Vencidas (${expiredSubs.length})` },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setSubscriptionStatusFilter(f.key)}
-                  style={{
-                    padding: '9px 14px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                    backgroundColor: subscriptionStatusFilter === f.key ? nospiColors.purpleDark : '#F3F4F6',
-                    color: subscriptionStatusFilter === f.key ? 'white' : '#4B5563',
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {filtered.length === 0 ? (
-              <Text style={{ fontSize: 14, color: '#9CA3AF' }}>No hay suscripciones que coincidan con el filtro.</Text>
-            ) : (
-              <div style={{ backgroundColor: 'white', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #F3E8FF', backgroundColor: '#FAF5FF' }}>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Suscriptor</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Estado</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Inicio</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Próx. cobro / Fin</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Auto-renovación</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Último cobro</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Eventos</th>
-                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((s) => {
-                        const isOpen = expandedSubscriptionId === s.id;
-                        const events = subscriptionEvents.filter((e) => e.user_id === s.user_id);
-                        const statusColor = SUBSCRIPTION_STATUS_COLOR[s.status] || '#9CA3AF';
-                        return (
-                          <React.Fragment key={s.id}>
-                            <tr
-                              style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
-                              onClick={() => setExpandedSubscriptionId(isOpen ? null : s.id)}
-                            >
-                              <td style={{ padding: '12px 14px' }}>
-                                <div style={{ fontWeight: 700, color: '#1F2937' }}>{s.user_name || '—'}</div>
-                                <div style={{ fontSize: 12, color: '#9CA3AF' }}>{s.user_email}{s.user_phone ? ` · ${s.user_phone}` : ''}</div>
-                              </td>
-                              <td style={{ padding: '12px 14px' }}>
-                                <span style={{ backgroundColor: `${statusColor}1A`, color: statusColor, padding: '4px 10px', borderRadius: 8, fontWeight: 700, fontSize: 12 }}>
-                                  {SUBSCRIPTION_STATUS_LABEL[s.status] || s.status}
-                                </span>
-                                {Number(s.failed_charge_count || 0) > 0 && (
-                                  <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>⚠️ {s.failed_charge_count} cobro(s) fallido(s)</div>
-                                )}
-                              </td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{fmtDate(s.start_date)}</td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>
-                                {s.status === 'active' ? fmtDate(s.next_charge_date) : fmtDate(s.end_date)}
-                              </td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.auto_renew ? '✅ Sí' : '❌ No'}</td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.last_charge_status || '—'}</td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>
-                                {s.events_attended} asistidos{Number(s.events_cancelled) > 0 ? ` · ${s.events_cancelled} cancelados` : ''}
-                              </td>
-                              <td style={{ padding: '12px 14px', color: '#9CA3AF', textAlign: 'right' }}>{isOpen ? '▲' : '▼'}</td>
-                            </tr>
-                            {isOpen && (
-                              <tr>
-                                <td colSpan={8} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
-                                  {s.cancellation_reason && (
-                                    <div style={{ margin: '10px 0', padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: 10, fontSize: 13, color: '#991B1B' }}>
-                                      <strong>Motivo de cancelación:</strong> {s.cancellation_reason}
-                                    </div>
-                                  )}
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', margin: '10px 0 6px' }}>
-                                    Eventos usando la suscripción ({events.length})
-                                  </div>
-                                  {events.length === 0 ? (
-                                    <Text style={{ fontSize: 13, color: '#9CA3AF' }}>Todavía no ha usado la suscripción para ningún evento.</Text>
-                                  ) : (
-                                    events.map((e) => (
-                                      <div key={e.appointment_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #F3F4F6', fontSize: 13 }}>
-                                        <span style={{ color: '#1F2937', fontWeight: 600 }}>{e.event_name}</span>
-                                        <span style={{ color: '#6B7280' }}>{fmtDate(e.event_date)}</span>
-                                        <span style={{ color: e.status === 'cancelada' ? '#EF4444' : '#059669', fontWeight: 700 }}>
-                                          {e.status === 'cancelada' ? 'Cancelada' : e.status === 'anterior' ? 'Asistió' : 'Confirmada'}
-                                        </span>
-                                      </div>
-                                    ))
-                                  )}
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </View>
-    );
-  };
-
   const renderConfig = () => {
     const toastColor = configSaved === 'success' ? '#10B981' : '#EF4444';
     return (
@@ -2820,30 +2542,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             />
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
               Actualmente: <strong>$ {Number(configEventPrice || 0).toLocaleString('es-CO')} COP</strong>
-            </div>
-          </div>
-
-          {/* Suscripción */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #059669' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              👑 Precio de Suscripción Mensual
-            </div>
-            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
-              Valor mensual en COP para acceso ilimitado a todos los eventos
-            </div>
-            <input
-              type="number"
-              value={configSubscriptionPrice}
-              onChange={(e) => setConfigSubscriptionPrice(e.target.value)}
-              placeholder="39900"
-              style={{
-                width: '100%', backgroundColor: '#ECFDF5', border: '2px solid #A7F3D0',
-                borderRadius: 10, padding: '12px 14px', fontSize: 18, fontWeight: 700,
-                color: '#059669', outline: 'none', boxSizing: 'border-box',
-              }}
-            />
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
-              Actualmente: <strong>$ {Number(configSubscriptionPrice || 0).toLocaleString('es-CO')} COP/mes</strong>
             </div>
           </div>
 
@@ -3367,44 +3065,13 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-          {([
-            { key: 'published', label: 'Publicado' },
-            { key: 'draft', label: 'Borrador' },
-            { key: 'closed', label: 'Cerrado' },
-            { key: 'all', label: 'Todos' },
-          ] as { key: 'published' | 'draft' | 'closed' | 'all'; label: string }[]).map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => setEventStatusFilter(tab.key)}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: eventStatusFilter === tab.key ? nospiColors.purpleDark : '#F3F4F6',
-              }}
-            >
-              <Text style={{
-                fontSize: 13,
-                fontWeight: '600',
-                color: eventStatusFilter === tab.key ? 'white' : '#6B7280',
-              }}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {events.filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter).map((event) => {
-          const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : 'Restaurante';
+        {events.map((event) => {
+          const eventTypeText = event.type === 'bar' ? 'Bar' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           const confirmationCode = event.confirmation_code || '1986';
           
-          const eventAppointments = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada');
-          const eventAppointmentsCount = eventAppointments.length;
-          const menCount = eventAppointments.filter(a => (a.users?.gender || '').toLowerCase() === 'hombre').length;
-          const womenCount = eventAppointments.filter(a => (a.users?.gender || '').toLowerCase() === 'mujer').length;
+          const eventAppointmentsCount = appointments.filter(a => a.event_id === event.id).length;
 
           return (
             <View key={event.id} style={styles.listItemCompact}>
@@ -3416,23 +3083,13 @@ setBulkWhatsAppPending(pending);
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
-                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
-                <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
+                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
+                <Text style={styles.compactInfoText}>🕐 {event.time}</Text>
               </View>
               <View style={styles.compactInfoRow}>
-                <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados (👨 {menCount} · 👩 {womenCount})</Text>
+                <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados</Text>
                 <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
-              {(event.registration_closed_men || event.registration_closed_women) && (
-                <View style={styles.compactInfoRow}>
-                  {event.registration_closed_men && (
-                    <Text style={[styles.compactInfoText, { color: '#EF4444', fontWeight: '700' }]}>🚫 Oculto para hombres</Text>
-                  )}
-                  {event.registration_closed_women && (
-                    <Text style={[styles.compactInfoText, { color: '#EF4444', fontWeight: '700' }]}>🚫 Oculto para mujeres</Text>
-                  )}
-                </View>
-              )}
 
               {/* Location — always visible in admin */}
               {(event.location_name || event.location_address) && (
@@ -4046,7 +3703,7 @@ setBulkWhatsAppPending(pending);
                         const alreadySent = !!declined.declined_whatsapp_sent_at;
                         return (
                           <a
-                            href={buildDeclinedPaymentWhatsAppLink(declined.user_phone, declined.user_name, declined.event_name, declined.event_date, declined.event_time)}
+                            href={buildDeclinedPaymentWhatsAppLink(declined.user_phone, declined.user_name, declined.event_name, declined.event_date)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => markDeclinedWhatsAppSent(declined.user_id, declined.event_id)}
@@ -4440,7 +4097,7 @@ setBulkWhatsAppPending(pending);
                   {selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}
                 </Text>
                 <Text style={styles.eventInfoDetail}>
-                  📅 {selectedEvent.date} a las {formatTimeAmPm(selectedEvent.time)}
+                  📅 {selectedEvent.date} a las {selectedEvent.time}
                 </Text>
               </View>
             )}
@@ -4578,7 +4235,6 @@ setBulkWhatsAppPending(pending);
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
-    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -4705,7 +4361,6 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}
@@ -4737,7 +4392,6 @@ setBulkWhatsAppPending(pending);
             {currentView === 'questions'    && renderQuestions()}
             {currentView === 'realtime'     && renderRealtime()}
             {currentView === 'reconciliation' && renderReconciliation()}
-            {currentView === 'subscriptions' && renderSubscriptions()}
             {currentView === 'config'       && renderConfig()}
           </div>
         </div>
@@ -4769,7 +4423,7 @@ setBulkWhatsAppPending(pending);
                     {selectedEventForConfig.name || `${selectedEventForConfig.type} - ${selectedEventForConfig.city}`}
                   </Text>
                   <Text style={styles.eventInfoDetail}>
-                    📅 {selectedEventForConfig.date} a las {formatTimeAmPm(selectedEventForConfig.time)}
+                    📅 {selectedEventForConfig.date} a las {selectedEventForConfig.time}
                   </Text>
                 </View>
 
@@ -4799,7 +4453,7 @@ setBulkWhatsAppPending(pending);
                       setReminderWhatsAppModal({ list: confirmedForEvent, kind: '48h' });
                     }}
                   >
-                    <Text style={styles.configActionButtonText}>📍 Confirmar 48 horas antes</Text>
+                    <Text style={styles.configActionButtonText}>📍 Confirmar un día antes</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -4974,7 +4628,7 @@ setBulkWhatsAppPending(pending);
           {(bulkDeclinedPending || []).map((p: any) => (
           <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
-            <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date, p.event_time)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+            <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
       </View>
@@ -4991,7 +4645,7 @@ setBulkWhatsAppPending(pending);
       <View style={styles.modalOverlay}>
       <View style={styles.configModalContent}>
       <View style={styles.configModalHeader}>
-      <Text style={styles.configModalTitle}>{reminderWhatsAppModal?.kind === '48h' ? 'Recordatorio 48 Horas Antes' : 'Mensaje del Día del Evento'}</Text>
+      <Text style={styles.configModalTitle}>{reminderWhatsAppModal?.kind === '48h' ? 'Recordatorio Un Día Antes' : 'Mensaje del Día del Evento'}</Text>
       <TouchableOpacity style={styles.closeModalButton} onPress={() => setReminderWhatsAppModal(null)}>
       <Text style={styles.closeModalButtonText}>✕</Text>
       </TouchableOpacity>
@@ -5043,7 +4697,7 @@ setBulkWhatsAppPending(pending);
             {selectedEventForAttendees && (
               <View style={styles.eventInfoSection}>
                 <Text style={styles.eventInfoTitle}>{selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}</Text>
-                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {formatTimeAmPm(selectedEventForAttendees.time)}</Text>
+                <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {selectedEventForAttendees.time}</Text>
                 <Text style={styles.eventInfoDetail}>Total registrados: {eventAttendees.length}</Text>
               </View>
             )}
@@ -5214,7 +4868,7 @@ setBulkWhatsAppPending(pending);
                 onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
               >
                 <option value="bar">Bar</option>
-                <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option>
+                <option value="restaurant">Restaurante</option>
               </select>
 
               <Text style={styles.inputLabel}>Fecha *</Text>
@@ -5282,56 +4936,14 @@ setBulkWhatsAppPending(pending);
               {mapsLinkCheck.status === 'fail' && (
                 <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ No se pudo detectar la ubicación automáticamente. Usa un link de "Compartir ubicación" desde el pin en Google Maps (no uno de "Cómo llegar").</Text>
               )}
-              
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  style={styles.checkbox}
-                  onPress={() => setEventForm({ ...eventForm, require_gps_verification: !eventForm.require_gps_verification })}
-                >
-                  <Text style={styles.checkboxText}>
-                    {eventForm.require_gps_verification ? '☑' : '☐'} Requerir verificación GPS al confirmar llegada
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.inputLabel}>Visibilidad por género</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                Apaga un género cuando consideres que ya hay suficientes de ese género inscritos: el evento deja de aparecerle por completo en la app (no ve mensaje ni botón bloqueado, simplemente no lo ve).
-              </Text>
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  style={styles.checkbox}
-                  onPress={() => setEventForm({ ...eventForm, registration_closed_men: !eventForm.registration_closed_men })}
-                >
-                  <Text style={styles.checkboxText}>
-                    {eventForm.registration_closed_men ? '🔴' : '🟢'} Visible para hombres: {eventForm.registration_closed_men ? 'NO' : 'SÍ'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  style={styles.checkbox}
-                  onPress={() => setEventForm({ ...eventForm, registration_closed_women: !eventForm.registration_closed_women })}
-                >
-                  <Text style={styles.checkboxText}>
-                    {eventForm.registration_closed_women ? '🔴' : '🟢'} Visible para mujeres: {eventForm.registration_closed_women ? 'NO' : 'SÍ'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
 
               <Text style={styles.inputLabel}>Máximo de Participantes</Text>
               <TextInput
                 style={styles.input}
                 placeholder="6"
                 keyboardType="numeric"
-                value={eventForm.max_participants === 0 ? '' : String(eventForm.max_participants)}
-                onChangeText={(text) => {
-                  const cleaned = text.replace(/[^0-9]/g, '');
-                  setEventForm({ ...eventForm, max_participants: cleaned === '' ? 0 : parseInt(cleaned) });
-                }}
-                onBlur={() => {
-                  if (!eventForm.max_participants) setEventForm({ ...eventForm, max_participants: 6 });
-                }}
+                value={String(eventForm.max_participants)}
+                onChangeText={(text) => setEventForm({ ...eventForm, max_participants: parseInt(text) || 6 })}
               />
 
               <Text style={styles.inputLabel}>Código de Confirmación</Text>
@@ -5519,7 +5131,7 @@ setBulkWhatsAppPending(pending);
                     .map((event) => {
                       const eventName = event.name || `${event.type} - ${event.city}`;
                       const eventDate = event.date;
-                      const eventTime = formatTimeAmPm(event.time);
+                      const eventTime = event.time;
                       const isSelected = targetEventId === event.id;
                       
                       return (
