@@ -13,7 +13,7 @@ import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
-const CACHE_KEY = 'cache_interaccion';
+const CACHE_KEY = 'cache_dinamica';
 
 interface Event {
   id: string;
@@ -102,7 +102,7 @@ if (Platform.OS !== 'web') {
   });
 }
 
-export default function InteraccionScreen() {
+export default function DinamicaScreen() {
   const { user } = useSupabase();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -942,7 +942,7 @@ export default function InteraccionScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Interacción</Text>
+          <Text style={styles.title}>Dinámica</Text>
           <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
 
           <View style={styles.placeholderContainer}>
