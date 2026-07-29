@@ -238,7 +238,7 @@ export default function EventsScreen() {
                             {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
                           </Text>
                         ) : (
-                          <Text style={styles.locationPlaceholderCompact}>Ubicación se anuncia un día antes</Text>
+                          <Text style={styles.locationPlaceholderCompact}>Ubicación se revelará un día antes</Text>
                         )}
                       </View>
                       <Text style={styles.chevron}>›</Text>
