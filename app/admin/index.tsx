@@ -133,8 +133,22 @@ export default function AdminPanelScreen() {
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session);
+      setCheckingSession(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // App config state
@@ -339,14 +353,28 @@ export default function AdminPanelScreen() {
     }
   };
 
-  const handlePasswordSubmit = () => {
-    if (adminPassword === 'nospi2024') {
-      setIsAuthenticated(true);
-      setShowPasswordModal(false);
-      loadDashboardData();
-    } else {
-      window.alert('Contraseña incorrecta');
+const handleLogin = async () => {
+    setLoginError(null);
+    setLoggingIn(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword,
+      });
+      if (error) {
+        setLoginError('Correo o contraseña incorrectos.');
+      } else {
+        setAdminPassword('');
+      }
+    } catch {
+      setLoginError('Error inesperado al iniciar sesión.');
+    } finally {
+      setLoggingIn(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const loadDashboardData = async () => {
@@ -2630,13 +2658,32 @@ export default function AdminPanelScreen() {
   };
 
   // Password modal
-  if (showPasswordModal) {
+if (checkingSession) {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={nospiColors.purpleDark} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <View style={styles.fullScreenContainer}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.passwordContainer}>
           <Text style={styles.passwordTitle}>🔐 Panel de Administración</Text>
-          <Text style={styles.passwordSubtitle}>Ingresa la contraseña de administrador</Text>
+          <Text style={styles.passwordSubtitle}>Ingresa tu correo y contraseña</Text>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Correo"
+            value={adminEmail}
+            onChangeText={setAdminEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
           <TextInput
             style={styles.passwordInput}
             placeholder="Contraseña"
@@ -2644,10 +2691,13 @@ export default function AdminPanelScreen() {
             value={adminPassword}
             onChangeText={setAdminPassword}
             autoCapitalize="none"
-            onSubmitEditing={handlePasswordSubmit}
+            onSubmitEditing={handleLogin}
           />
-          <TouchableOpacity style={styles.passwordButton} onPress={handlePasswordSubmit}>
-            <Text style={styles.passwordButtonText}>Acceder</Text>
+          {loginError && (
+            <Text style={{ color: '#EF4444', fontSize: 13, marginTop: 8, fontWeight: '600' }}>{loginError}</Text>
+          )}
+          <TouchableOpacity style={styles.passwordButton} onPress={handleLogin} disabled={loggingIn}>
+            <Text style={styles.passwordButtonText}>{loggingIn ? 'Ingresando...' : 'Acceder'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.backButton}
@@ -2655,7 +2705,6 @@ export default function AdminPanelScreen() {
           >
             <Text style={styles.backButtonText}>← Volver</Text>
           </TouchableOpacity>
-          <Text style={styles.passwordHint}>Contraseña por defecto: nospi2024</Text>
         </View>
       </View>
     );
@@ -2741,6 +2790,9 @@ export default function AdminPanelScreen() {
 
         {/* Footer */}
         <View style={styles.sidebarFooter}>
+                    <TouchableOpacity onPress={handleLogout} style={{ paddingVertical: 8 }}>
+            <Text style={[styles.sidebarFooterText, { fontWeight: '700' }]}>🚪 Cerrar sesión</Text>
+          </TouchableOpacity>
           <Text style={styles.sidebarFooterText}>Nospi © 2025</Text>
         </View>
       </View>
