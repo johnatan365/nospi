@@ -13,6 +13,7 @@ interface ConversationRow {
   conv_type: 'event_group' | 'direct';
   event_id: string | null;
   event_name: string | null;
+  event_type: string | null;
   other_user_id: string | null;
   other_user_name: string | null;
   other_user_photo: string | null;
@@ -35,12 +36,19 @@ function timeAgo(iso: string | null): string {
   return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 }
 
+function eventEmoji(eventType: string | null): string {
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+}
+
+type ChatFilter = 'grupos' | 'directos';
+
 export default function ChatsScreen() {
   const { user } = useSupabase();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<ChatFilter>('grupos');
   const loadedOnceRef = useRef(false);
 
   const loadConversations = useCallback(async (isRefresh = false) => {
@@ -111,6 +119,16 @@ export default function ChatsScreen() {
     router.push(`/chat/${item.conversation_id}` as any);
   };
 
+  const goToPastEvents = () => {
+    router.push('/appointments?openFilter=anteriores' as any);
+  };
+
+  const groupConversations = conversations.filter((c) => c.conv_type === 'event_group');
+  const directConversations = conversations.filter((c) => c.conv_type === 'direct');
+  const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+  const directUnread = directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+  const visibleConversations = filter === 'grupos' ? groupConversations : directConversations;
+
   return (
     <LinearGradient
       colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -119,16 +137,59 @@ export default function ChatsScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>Mensajes</Text>
+        <Text style={styles.title}>Chat</Text>
+
+        <TouchableOpacity style={styles.banner} activeOpacity={0.8} onPress={goToPastEvents}>
+          <Text style={styles.bannerText}>
+            💬 ¿Buscas la conversación de un evento pasado? Entra a Citas → Anteriores para verla y escribirle a algún asistente.
+          </Text>
+          <Text style={styles.bannerArrow}>›</Text>
+        </TouchableOpacity>
+
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.filterTab, filter === 'grupos' && styles.filterTabActive]}
+            activeOpacity={0.8}
+            onPress={() => setFilter('grupos')}
+          >
+            <Text style={[styles.filterTabText, filter === 'grupos' && styles.filterTabTextActive]}>
+              Mensajes de grupo
+            </Text>
+            {groupUnread > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{groupUnread > 9 ? '9+' : groupUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, filter === 'directos' && styles.filterTabActive]}
+            activeOpacity={0.8}
+            onPress={() => setFilter('directos')}
+          >
+            <Text style={[styles.filterTabText, filter === 'directos' && styles.filterTabTextActive]}>
+              Mensajes 1-1
+            </Text>
+            {directUnread > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{directUnread > 9 ? '9+' : directUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {loading ? (
           renderSkeleton()
-        ) : conversations.length === 0 ? (
+        ) : visibleConversations.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>💬</Text>
-            <Text style={styles.emptyTitle}>Aún no tienes conversaciones</Text>
+            <Text style={styles.emptyTitle}>
+              {filter === 'grupos' ? 'Aún no tienes chats de grupo' : 'Aún no tienes chats 1-1'}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Cuando confirmes tu cita a un evento, se abrirá automáticamente el chat grupal con los demás asistentes.
+              {filter === 'grupos'
+                ? 'Cuando confirmes tu cita a un evento, se abrirá automáticamente el chat grupal con los demás asistentes.'
+                : 'Cuando le escribas a algún asistente de un evento, la conversación aparecerá aquí.'}
             </Text>
           </View>
         ) : (
@@ -143,7 +204,7 @@ export default function ChatsScreen() {
               />
             }
           >
-            {conversations.map((item) => {
+            {visibleConversations.map((item) => {
               const isGroup = item.conv_type === 'event_group';
               const title = isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
               const photoUrl = isGroup ? null : item.other_user_photo;
@@ -160,7 +221,7 @@ export default function ChatsScreen() {
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />
                   ) : (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                      <Text style={styles.avatarEmoji}>{isGroup ? '🎉' : '👤'}</Text>
+                      <Text style={styles.avatarEmoji}>{isGroup ? eventEmoji(item.event_type) : '👤'}</Text>
                     </View>
                   )}
 
@@ -206,8 +267,50 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 12,
   },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    padding: 12,
+    marginBottom: 14,
+  },
+  bannerText: { flex: 1, color: '#FFFFFF', fontSize: 13, lineHeight: 18 },
+  bannerArrow: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginLeft: 8 },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    marginRight: 8,
+  },
+  filterTabActive: {
+    backgroundColor: nospiColors.purpleLight,
+  },
+  filterTabText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+  filterTabTextActive: { color: '#FFFFFF' },
+  filterBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 6,
+  },
+  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#AD1457' },
   scrollView: { flex: 1 },
   contentContainer: { paddingHorizontal: 16, paddingBottom: 20 },
   skeletonRow: {
