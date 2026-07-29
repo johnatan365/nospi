@@ -452,6 +452,14 @@ export default function AdminPanelScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [savingAdminPassword, setSavingAdminPassword] = useState(false);
   const [adminPasswordSaved, setAdminPasswordSaved] = useState<'success' | 'error' | 'mismatch' | null>(null);
+
+    // Enviar promo/notificacion push (Config section)
+    const [broadcastAudience, setBroadcastAudience] = useState<'all' | 'event'>('all');
+    const [broadcastEventId, setBroadcastEventId] = useState('');
+    const [broadcastTitle, setBroadcastTitle] = useState('');
+    const [broadcastBody, setBroadcastBody] = useState('');
+    const [sendingBroadcast, setSendingBroadcast] = useState(false);
+    const [broadcastResult, setBroadcastResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<AdminView>('events');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -780,6 +788,37 @@ export default function AdminPanelScreen() {
       setSavingAdminPassword(false);
     }
   };
+
+    const handleSendBroadcast = async () => {
+          if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
+          if (broadcastAudience === 'event' && !broadcastEventId) return;
+          setSendingBroadcast(true);
+          setBroadcastResult(null);
+          try {
+                  const { data, error } = await supabase.functions.invoke('send-broadcast', {
+                            body: {
+                                        audience: broadcastAudience,
+                                        event_id: broadcastAudience === 'event' ? broadcastEventId : undefined,
+                                        title: broadcastTitle.trim(),
+                                        body: broadcastBody.trim(),
+                            },
+                  });
+                  if (error) {
+                            setBroadcastResult({ ok: false, message: 'Error al enviar: ' + error.message });
+                  } else {
+                            const sentCount = data?.sent ?? 0;
+                            const audienceCount = data?.audience ?? 0;
+                            setBroadcastResult({ ok: true, message: `Enviado a ${sentCount} dispositivo(s) de ${audienceCount} usuario(s) en la audiencia.` });
+                            setBroadcastTitle('');
+                            setBroadcastBody('');
+                  }
+          } catch (err: any) {
+                  setBroadcastResult({ ok: false, message: 'Error inesperado: ' + (err?.message || String(err)) });
+          } finally {
+                  setSendingBroadcast(false);
+                  setTimeout(() => setBroadcastResult(null), 6000);
+          }
+    };
 
   const handlePasswordSubmit = async () => {
     // Check app_config first, fallback to hardcoded
@@ -3055,6 +3094,123 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             {savingAdminPassword ? '⏳ Guardando...' : '🔑 Actualizar Contraseña'}
           </button>
         </div>
+
+        <div style={{ backgroundColor: '#FDF2F8', borderRadius: 18, padding: 28, marginTop: 32 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#6B0F3A', marginBottom: 6 }}>
+            Enviar Promo / Notificacion Push
+          </div>
+          <div style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 24 }}>
+            Manda una notificacion push a todos los usuarios o a los asistentes de un evento especifico. Solo llega a quienes ya tengan la app instalada y hayan aceptado notificaciones.
+          </div>
+
+          {broadcastResult && (
+            <div style={{
+              backgroundColor: broadcastResult.ok ? '#10B981' : '#EF4444',
+              color: 'white', borderRadius: 12, padding: '12px 18px',
+              marginBottom: 20, fontSize: 14, fontWeight: 700,
+            }}>
+              {broadcastResult.message}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+            <button
+              onClick={() => setBroadcastAudience('all')}
+              style={{
+                flex: 1, padding: '12px 16px', borderRadius: 10,
+                border: broadcastAudience === 'all' ? '2px solid #6B0F3A' : '2px solid #FBCFE8',
+                backgroundColor: broadcastAudience === 'all' ? '#6B0F3A' : 'white',
+                color: broadcastAudience === 'all' ? 'white' : '#6B0F3A',
+                fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              }}
+              type="button"
+            >
+              Todos los usuarios
+            </button>
+            <button
+              onClick={() => setBroadcastAudience('event')}
+              style={{
+                flex: 1, padding: '12px 16px', borderRadius: 10,
+                border: broadcastAudience === 'event' ? '2px solid #6B0F3A' : '2px solid #FBCFE8',
+                backgroundColor: broadcastAudience === 'event' ? '#6B0F3A' : 'white',
+                color: broadcastAudience === 'event' ? 'white' : '#6B0F3A',
+                fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              }}
+              type="button"
+            >
+              Asistentes de un evento
+            </button>
+          </div>
+
+          {broadcastAudience === 'event' && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                Evento
+              </div>
+              <select
+                value={broadcastEventId}
+                onChange={(e) => setBroadcastEventId(e.target.value)}
+                style={{
+                  width: '100%', backgroundColor: 'white', border: '2px solid #FBCFE8',
+                  borderRadius: 10, padding: '11px 14px', fontSize: 15, color: '#6B0F3A',
+                }}
+              >
+                <option value="">Selecciona un evento...</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name || 'Sin nombre'} - {new Date(ev.date).toLocaleDateString('es-CO')}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+              Titulo
+            </div>
+            <input
+              type="text"
+              value={broadcastTitle}
+              onChange={(e) => setBroadcastTitle(e.target.value)}
+              placeholder="Ej: Nuevo evento este miercoles"
+              style={{
+                width: '100%', backgroundColor: 'white', border: '2px solid #FBCFE8',
+                borderRadius: 10, padding: '11px 14px', fontSize: 15, color: '#6B0F3A', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+              Mensaje
+            </div>
+            <textarea
+              value={broadcastBody}
+              onChange={(e) => setBroadcastBody(e.target.value)}
+              placeholder="Escribe el mensaje que va a recibir la gente..."
+              rows={3}
+              style={{
+                width: '100%', backgroundColor: 'white', border: '2px solid #FBCFE8',
+                borderRadius: 10, padding: '11px 14px', fontSize: 15, color: '#6B0F3A', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          <button
+            onClick={handleSendBroadcast}
+            disabled={sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)}
+            style={{
+              backgroundColor: (sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? '#9CA3AF' : '#6B0F3A',
+              color: 'white', border: 'none', borderRadius: 14,
+              padding: '14px 36px', fontSize: 16, fontWeight: 700,
+              cursor: (sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 10,
+              transition: 'background 0.2s',
+            }}
+          >
+            {sendingBroadcast ? 'Enviando...' : 'Enviar Notificacion'}
+          </button>
+        </div>
+
       </View>
     );
   };
