@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { formatTimeAmPm } from '@/utils/formatTime';
 
 interface Event {
   id: string;
@@ -48,27 +47,13 @@ export default function EventDetailsScreen() {
         return;
       }
 
-      // Igual que en el listado de eventos: si el admin apagó este evento
-      // para el género del usuario (para balancear hombres/mujeres), se
-      // trata como si no existiera — sin mensaje especial, mismo estado
-      // que "Evento no encontrado" (cubre el caso de acceso directo por
-      // link a un evento que ya no aparece en el listado).
-      if (user?.id && (data?.registration_closed_men || data?.registration_closed_women)) {
-        const { data: userRow } = await supabase.from('users').select('gender').eq('id', user.id).maybeSingle();
-        const userGender = userRow?.gender || '';
-        if ((userGender === 'hombre' && data.registration_closed_men) || (userGender === 'mujer' && data.registration_closed_women)) {
-          setEvent(null);
-          return;
-        }
-      }
-
       setEvent(data);
     } catch (error) {
       console.error('Failed to load event:', error);
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id]);
+  }, [id]);
 
   const checkEnrollment = useCallback(async () => {
     if (!user?.id) return;
@@ -126,18 +111,18 @@ export default function EventDetailsScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     };
     return date.toLocaleDateString('es-ES', options);
   };
 
   const handleOpenMaps = () => {
     if (!event?.maps_link) return;
-    
+
     Linking.openURL(event.maps_link).catch(err => {
       console.error('Failed to open maps link:', err);
     });
@@ -150,7 +135,7 @@ export default function EventDetailsScreen() {
 
   const handleConfirm = async () => {
     setConfirming(true);
-    
+
     try {
       const { data: existingAppointment } = await supabase
         .from('appointments')
@@ -242,20 +227,20 @@ export default function EventDetailsScreen() {
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
             {event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'bar' ? (
-              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'restaurante' ? (
-              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
             ) : event.type === 'cafe' ? (
-              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 71, height: 60, marginBottom: 12 }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}
             <Text style={styles.eventName}>{event.name}</Text>
             <Text style={styles.eventType}>{eventTypeText}</Text>
           </View>
-          
+
           {/* Info Grid - Compact 2-column layout */}
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
@@ -265,7 +250,7 @@ export default function EventDetailsScreen() {
 
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>🕐 Hora</Text>
-              <Text style={styles.infoValue}>{formatTimeAmPm(event.time)}</Text>
+              <Text style={styles.infoValue}>{event.time}</Text>
             </View>
 
             <View style={styles.infoItem}>
@@ -304,7 +289,7 @@ export default function EventDetailsScreen() {
               </>
             ) : (
               <Text style={styles.locationPlaceholder}>
-                Ubicación se revelará 48 horas antes del evento
+                Ubicación se anuncia un día antes del evento
               </Text>
             )}
           </View>
