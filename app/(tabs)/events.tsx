@@ -30,6 +30,7 @@ interface Event {
   location_name: string | null;
   location_address: string | null;
   maps_link: string | null;
+  price: number | null;
 }
 
 const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -79,7 +80,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
       supabase
@@ -229,7 +230,14 @@ export default function EventsScreen() {
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
                       )}
                       <View style={styles.eventCardBody}>
-                        <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
+                          {event.price === 0 && (
+                            <View style={styles.freeBadge}>
+                              <Text style={styles.freeBadgeText}>Gratis</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
                           {compactDate} • {formatTimeAmPm(event.time)} • {event.city}
                         </Text>
@@ -325,6 +333,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#880E4F',
+  },
+  freeBadge: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  freeBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#059669',
   },
   eventMetaCompact: {
     fontSize: 13,
