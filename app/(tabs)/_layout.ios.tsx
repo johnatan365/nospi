@@ -34,13 +34,13 @@ export default function TabLayout() {
       name: 'interaccion',
       route: '/(tabs)/interaccion',
       icon: 'message.fill',
-      label: 'Interacción',
+      label: 'Dinámica',
     },
     {
       name: 'chats',
       route: '/(tabs)/chats',
       icon: 'bubble.left.and.bubble.right.fill',
-      label: 'Mensajes',
+      label: 'Chat',
     },
     {
       name: 'profile',
