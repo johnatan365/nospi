@@ -354,7 +354,7 @@ export default function ChatThreadScreen() {
           />
           <TouchableOpacity
             style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
-            onPress={handleSend}
+            onPress={() => handleSend()}
             disabled={!draft.trim() || sending}
           >
             <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
