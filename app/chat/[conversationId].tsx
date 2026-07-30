@@ -211,7 +211,11 @@ export default function ChatThreadScreen() {
 
   const handleBack = async () => {
     if (conversationId) {
-      await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+            try {
+        await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+            } catch (err) {
+        console.error('ChatThread: error marking conversation read', err);
+            }
     }
     router.back();
   };
