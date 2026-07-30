@@ -3672,11 +3672,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const renderEvents = () => {
     return (
       <View style={styles.listContainer}>
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Gestión de Eventos</Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.listHeader, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 12 }]}>
+                    <Text style={[styles.sectionTitle, isMobile && { fontSize: 22, marginBottom: 0 }]}>Gestión de Eventos</Text>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
             <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: '#25D366' }]}
+                            style={[styles.createButton, { backgroundColor: '#25D366' }, isMobile && { width: '100%' }]}
               onPress={() => {
                 const pending = appointments.filter(
                   a => a.status === 'confirmada' && a.users?.phone && !a.purchase_whatsapp_sent_at
@@ -3692,7 +3692,7 @@ setBulkWhatsAppPending(pending);
               <Text style={styles.createButtonText}>💬 Enviar Confirmación a Todos (pendientes)</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.createButton}
+                            style={[styles.createButton, isMobile && { width: '100%' }]}
               onPress={openCreateEventModal}
             >
               <Text style={styles.createButtonText}>+ Crear Evento</Text>
@@ -3700,7 +3700,7 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
           {([
             { key: 'published', label: 'Publicado' },
             { key: 'draft', label: 'Borrador' },
