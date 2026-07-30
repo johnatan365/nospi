@@ -117,6 +117,7 @@ export default function DinamicaScreen() {
   const [startingExperience, setStartingExperience] = useState(false);
   const [checkingGps, setCheckingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [gamePhase, setGamePhase] = useState<string>('intro');
@@ -333,116 +334,156 @@ export default function DinamicaScreen() {
       }
     }
 
-    // 3. Always fetch fresh in background
-    try {
+    // 3. Always fetch fresh in background, con reintentos automaticos: si la
+    // red falla (comun en un evento con muchos celulares en el mismo wifi),
+    // no nos quedamos en silencio -- reintentamos unas veces antes de rendirnos,
+    // y si aun asi falla, lo dejamos claro en pantalla con boton de reintentar
+    // en vez de mostrar "No tienes ningun evento confirmado" (que seria falso
+    // si en realidad si tiene un evento y solo fallo la conexion).
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = [800, 2000, 4000];
+    let lastError: any = null;
 
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          event_id,
-          arrival_status,
-          checked_in_at,
-          location_confirmed,
-          status,
-          event:events!inner (
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data, error } = await supabase
+          .from('appointments')
+          .select(`
             id,
-            type,
-            date,
-            time,
-            location,
-            location_name,
-            location_address,
-            maps_link,
-            is_location_revealed,
-            address,
-            start_time,
-            max_participants,
-            current_participants,
+            event_id,
+            arrival_status,
+            checked_in_at,
+            location_confirmed,
             status,
-            confirmation_code,
-            game_phase,
-            current_level,
-            current_question_index,
-            answered_users,
-            current_question,
-            event_status,
-            latitude,
-            longitude,
-            radius_meters,
-            require_gps_verification
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'confirmada')
-        .eq('payment_status', 'completed')
-        .order('created_at', { ascending: false });
+            event:events!inner (
+              id,
+              type,
+              date,
+              time,
+              location,
+              location_name,
+              location_address,
+              maps_link,
+              is_location_revealed,
+              address,
+              start_time,
+              max_participants,
+              current_participants,
+              status,
+              confirmation_code,
+              game_phase,
+              current_level,
+              current_question_index,
+              answered_users,
+              current_question,
+              event_status,
+              latitude,
+              longitude,
+              radius_meters,
+              require_gps_verification
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('status', 'confirmada')
+          .eq('payment_status', 'completed')
+          .order('created_at', { ascending: false });
 
-      if (error) {
+        if (error) {
+          lastError = error;
+          if (attempt < MAX_ATTEMPTS - 1) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS[attempt]));
+            continue;
+          }
+          break;
+        }
+
+        // Respuesta exitosa del servidor -- ya no estamos en estado de error.
+        lastError = null;
+        setLoadError(false);
+
+        if (!data || data.length === 0) {
+          cacheRef.current = { data: null, timestamp: Date.now() };
+          setCached(CACHE_KEY, null);
+          setAppointment(null);
+          setLoading(false);
+          return;
+        }
+
+        const now = new Date();
+
+        const todayConfirmedAppointment = data.find(apt => {
+          if (apt.status !== 'confirmada') return false;
+          if (!apt.event?.start_time) return false;
+          const eventDate = new Date(apt.event.start_time);
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+          return eventDayStart.getTime() === todayStart.getTime();
+        });
+
+        const upcomingAppointment = data.find(apt => {
+          if (apt.status !== 'confirmada') return false;
+          if (!apt.event?.start_time) return false;
+          const eventDate = new Date(apt.event.start_time);
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+          return eventDayStart >= todayStart;
+        });
+
+        const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
+
+        if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
+          cacheRef.current = { data: null, timestamp: Date.now() };
+          setCached(CACHE_KEY, null);
+          setAppointment(null);
+          setLoading(false);
+          return;
+        }
+
+        const freshApt = appointmentData as any as Appointment;
+        cacheRef.current = { data: freshApt, timestamp: Date.now() };
+        setCached(CACHE_KEY, freshApt);
+        applyAppointmentData(freshApt);
+
+        if (freshApt.event?.start_time) {
+          scheduleNotifications(freshApt.event.start_time);
+        }
+
+        if (freshApt.event_id) {
+          loadActiveParticipants(freshApt.event_id);
+        }
 
         setLoading(false);
         return;
+      } catch (err) {
+        lastError = err;
+        if (attempt < MAX_ATTEMPTS - 1) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS[attempt]));
+          continue;
+        }
       }
-
-      if (!data || data.length === 0) {
-        cacheRef.current = { data: null, timestamp: Date.now() };
-        setCached(CACHE_KEY, null);
-        setAppointment(null);
-        setLoading(false);
-        return;
-      }
-
-      const now = new Date();
-
-      const todayConfirmedAppointment = data.find(apt => {
-        if (apt.status !== 'confirmada') return false;
-        if (!apt.event?.start_time) return false;
-        const eventDate = new Date(apt.event.start_time);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        return eventDayStart.getTime() === todayStart.getTime();
-      });
-
-      const upcomingAppointment = data.find(apt => {
-        if (apt.status !== 'confirmada') return false;
-        if (!apt.event?.start_time) return false;
-        const eventDate = new Date(apt.event.start_time);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        return eventDayStart >= todayStart;
-      });
-
-      const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
-
-      if (appointmentData.event?.event_status === 'closed' || appointmentData.status === 'anterior') {
-        cacheRef.current = { data: null, timestamp: Date.now() };
-        setCached(CACHE_KEY, null);
-        setAppointment(null);
-        setLoading(false);
-        return;
-      }
-
-      const freshApt = appointmentData as any as Appointment;
-      cacheRef.current = { data: freshApt, timestamp: Date.now() };
-      setCached(CACHE_KEY, freshApt);
-      applyAppointmentData(freshApt);
-
-      if (freshApt.event?.start_time) {
-        scheduleNotifications(freshApt.event.start_time);
-      }
-
-      if (freshApt.event_id) {
-        loadActiveParticipants(freshApt.event_id);
-      }
-
-
-    } catch (error) {
-
-    } finally {
-      setLoading(false);
     }
+
+    // Los reintentos se agotaron. Si ya teniamos una cita cargada (de cache),
+    // la dejamos tal cual en vez de borrarla -- mejor mostrar datos un poco
+    // viejos que nada. Si nunca cargamos nada, mostramos el estado de error
+    // real en vez del mensaje enganoso de "no tienes evento".
+    if (lastError && !cacheRef.current?.data) {
+      setLoadError(true);
+    }
+    setLoading(false);
   }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
+
+  // Si nos quedamos sin poder cargar la cita (ej. wifi saturado en el evento),
+  // reintentamos solos cada 8s en segundo plano -- no todo el mundo sabe que
+  // salir y volver a la pestana Dinamica fuerza un reintento.
+  useEffect(() => {
+    if (!loadError) return;
+    const intervalId = setInterval(() => {
+      loadAppointment();
+    }, 8000);
+    return () => clearInterval(intervalId);
+  }, [loadError, loadAppointment]);
+
 
   // Obtiene la posición GPS actual del dispositivo, funcionando tanto en web
   // (navigator.geolocation) como en nativo (expo-location).
@@ -933,7 +974,7 @@ export default function DinamicaScreen() {
     );
   }
 
-  if (!appointment) {
+    if (!appointment) {
     return (
       <LinearGradient
         colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -946,15 +987,26 @@ export default function DinamicaScreen() {
           <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
 
           <View style={styles.placeholderContainer}>
-            <Text style={styles.placeholderIcon}>📅</Text>
+            <Text style={styles.placeholderIcon}>{loadError ? '⚠️' : '📅'}</Text>
             <Text style={styles.placeholderText}>
-              No tienes ningún evento confirmado
+              {loadError
+                ? 'No pudimos cargar tu evento. Revisa tu conexión e intenta de nuevo.'
+                : 'No tienes ningún evento confirmado'}
             </Text>
+            {loadError && (
+              <TouchableOpacity
+                style={[styles.confirmCodeButton, { marginTop: 20 }]}
+                onPress={() => { setLoading(true); loadAppointment(); }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmCodeButtonText}>Reintentar</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </LinearGradient>
     );
-  }
+    }
 
   if (!isEventDay) {
     const eventDate = new Date(appointment.event.start_time!);
