@@ -160,8 +160,8 @@ export default function ChatThreadScreen() {
     };
   }, [conversationId]);
 
-  const handleSend = async () => {
-    const content = draft.trim();
+    const handleSend = async (overrideContent?: string) => {
+    const content = (overrideContent ?? draft).trim();
     if (!content || !user?.id || !conversationId || sending) return;
 
     setSending(true);
@@ -348,7 +348,7 @@ export default function ChatThreadScreen() {
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
-            onChangeText={setDraft}
+                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); setDraft(trimmed); handleSend(trimmed); } else { setDraft(text); } }}
             multiline
             maxLength={2000}
           />
