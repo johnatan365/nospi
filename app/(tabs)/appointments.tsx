@@ -538,6 +538,24 @@ export default function AppointmentsScreen() {
                   </View>
                 );
               }
+              if (appointment.status === 'cancelada') {
+                return (
+                  <View key={appointment.id} style={styles.compactCard}>
+                    <View style={styles.compactRow}>
+                      <Text style={styles.compactIcon}>{eventIcon}</Text>
+                      <View style={styles.compactInfo}>
+                        <Text style={styles.compactName} numberOfLines={1}>{eventName}</Text>
+                        <Text style={styles.compactMeta} numberOfLines={1}>
+                          {dateText} · {eventTime}{eventCity ? ` · ${eventCity}` : ''}
+                        </Text>
+                      </View>
+                      <View style={styles.compactCancelledBadge}>
+                        <Text style={styles.compactCancelledBadgeText}>Cancelada</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }
 
               return (
                 <View key={appointment.id} style={styles.appointmentCard}>
@@ -884,6 +902,18 @@ const styles = StyleSheet.create({
   compactChatButtonText: {
     color: 'white',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  compactCancelledBadge: {
+    backgroundColor: '#9E9E9E',
+    borderRadius: 10,
+    paddingVertical: 3,
+    paddingHorizontal: 9,
+    marginLeft: 8,
+  },
+  compactCancelledBadgeText: {
+    color: 'white',
+    fontSize: 10,
     fontWeight: 'bold',
   },
   appointmentCard: {
