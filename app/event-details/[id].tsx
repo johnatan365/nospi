@@ -35,6 +35,10 @@ export default function EventDetailsScreen() {
   const [confirming, setConfirming] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // Exoneración de responsabilidad para caminatas autogestionadas: el checkbox
+  // aparece solo cuando el evento es type='caminata' y debe marcarse
+  // activamente (nunca premarcado) para habilitar el botón de unirse.
+  const [waiverAccepted, setWaiverAccepted] = useState(false);
 
   const loadEvent = useCallback(async () => {
     try {
@@ -150,8 +154,9 @@ export default function EventDetailsScreen() {
   };
 
   const handleConfirm = async () => {
+    if (event?.type === 'caminata' && !waiverAccepted) return;
     setConfirming(true);
-    
+
     try {
       const { data: existingAppointment } = await supabase
         .from('appointments')
@@ -170,6 +175,14 @@ export default function EventDetailsScreen() {
 
       const eventId = Array.isArray(id) ? id[0] : id as string;
       await AsyncStorage.setItem('pending_event_confirmation', eventId);
+      // Se guarda junto al evento pendiente; el punto de confirmación final
+      // (subscription-plans.tsx / payment-callback.tsx) lo lee para setear
+      // appointments.waiver_accepted_at al crear/actualizar la cita.
+      if (event?.type === 'caminata') {
+        await AsyncStorage.setItem('pending_waiver_accepted', 'true');
+      } else {
+        await AsyncStorage.removeItem('pending_waiver_accepted');
+      }
       setConfirming(false);
       // En web, router.push puede pasar por index.tsx causando pantalla en blanco.
       // router.replace navega directamente sin re-evaluar la ruta raíz.
@@ -319,10 +332,29 @@ export default function EventDetailsScreen() {
                 </View>
               )}
               <Text style={styles.question}>¿Deseas asistir?</Text>
+
+              {event.type === 'caminata' && (
+                <TouchableOpacity
+                  style={styles.waiverRow}
+                  onPress={() => setWaiverAccepted(prev => !prev)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkbox, waiverAccepted && styles.checkboxActive]}>
+                    {waiverAccepted && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                  <Text style={styles.waiverText}>
+                    Leí la información anterior y acepto participar bajo mi propia responsabilidad.
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
+                style={[
+                  styles.confirmButton,
+                  (confirming || (event.type === 'caminata' && !waiverAccepted)) && styles.confirmButtonDisabled,
+                ]}
                 onPress={handleConfirm}
-                disabled={confirming}
+                disabled={confirming || (event.type === 'caminata' && !waiverAccepted)}
                 activeOpacity={0.8}
               >
                 {confirming ? (
@@ -495,6 +527,38 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
+  },
+  waiverRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#AAA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    marginTop: 1,
+  },
+  checkboxActive: {
+    backgroundColor: nospiColors.purpleDark,
+    borderColor: nospiColors.purpleDark,
+  },
+  checkmark: {
+    color: nospiColors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  waiverText: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#555',
+    lineHeight: 18,
   },
   question: {
     fontSize: 18,

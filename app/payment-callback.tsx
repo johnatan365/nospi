@@ -88,7 +88,14 @@ async function confirmAppointmentInSupabase(
   eventId: string,
   userId: string,
 ): Promise<boolean> {
-  
+
+
+  // Caminatas autogestionadas: checkbox de exoneración marcado en event-details,
+  // guardado en AsyncStorage porque este flujo pasa por un redirect externo (Wompi).
+  const waiverPending = await AsyncStorage.getItem('pending_waiver_accepted');
+  const waiverFields: Record<string, any> = waiverPending === 'true'
+    ? { waiver_accepted_at: new Date().toISOString() }
+    : {};
 
   // Intentar upsert con todos los campos extendidos
   const { error: upsertError } = await supabase
@@ -102,6 +109,7 @@ async function confirmAppointmentInSupabase(
         transaction_id: transactionId,
         payment_method: paymentMethod,
         confirmed_at: new Date().toISOString(),
+        ...waiverFields,
       },
       { onConflict: 'user_id,event_id', ignoreDuplicates: false },
     );
@@ -184,6 +192,7 @@ async function cleanupAsyncStorage(): Promise<void> {
     'nospi_access_token',
     'nospi_refresh_token',
     'pending_event_confirmation',
+    'pending_waiver_accepted',
   ]);
 }
 

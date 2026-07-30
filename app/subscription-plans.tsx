@@ -317,7 +317,12 @@ export default function SubscriptionPlansScreen() {
       if (!userId) userId = user?.id || null;
       if (!userId) return false;
 
-      const appointmentData = {
+      // Caminatas autogestionadas: el usuario marcó el checkbox de exoneración
+      // en event-details antes de llegar aquí (guardado en AsyncStorage porque
+      // este flujo de confirmación puede pasar por pantallas intermedias/redirects).
+      const waiverPending = await AsyncStorage.getItem('pending_waiver_accepted');
+
+      const appointmentData: Record<string, any> = {
         user_id: userId,
         event_id: pendingEventId,
         status: 'confirmada',
@@ -326,6 +331,9 @@ export default function SubscriptionPlansScreen() {
         payment_method: paymentMethod, amount_paid_cop: amountPaidCOP ?? 0,
         confirmed_at: new Date().toISOString(),
       };
+      if (waiverPending === 'true') {
+        appointmentData.waiver_accepted_at = new Date().toISOString();
+      }
 
       // Verificar si ya existe una cita para este usuario y evento
       const { data: existing } = await supabase
@@ -367,6 +375,7 @@ export default function SubscriptionPlansScreen() {
       if (!verification) return false;
 
       await AsyncStorage.removeItem('pending_event_confirmation');
+      await AsyncStorage.removeItem('pending_waiver_accepted');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
 
       // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia
