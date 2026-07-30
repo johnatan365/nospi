@@ -167,7 +167,7 @@ export default function ChatsScreen() {
 
         <TouchableOpacity style={styles.banner} activeOpacity={0.8} onPress={goToPastEvents}>
           <Text style={styles.bannerText}>
-            💬 ¿Buscas la conversación de un evento pasado o quieres escribirle a alguien que fue contigo? Entra a Citas → Anteriores, o toca aquí
+                        💬 Habla con alguien de un evento pasado → toca aquí
           </Text>
           <Text style={styles.bannerArrow}>→</Text>
         </TouchableOpacity>
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 14,
   },
-  bannerText: { flex: 1, color: '#FFFFFF', fontSize: 13, lineHeight: 18 },
+      bannerText: { flex: 1, color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '600' },
   bannerArrow: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginLeft: 10 },
   filterRow: {
     flexDirection: 'row',
