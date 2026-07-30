@@ -167,16 +167,21 @@ export default function ChatThreadScreen() {
     setSending(true);
     setDraft('');
 
-    const { error } = await supabase.from('chat_messages').insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      content,
-    });
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content,
+      })
+      .select('id, conversation_id, sender_id, content, created_at')
+      .single();
 
     if (error) {
       console.error('ChatThread: error sending message', error);
       setDraft(content);
-    } else {
+    } else if (data) {
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
