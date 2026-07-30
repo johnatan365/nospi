@@ -16,6 +16,7 @@ import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useDeviceActivity } from "@/hooks/useDeviceActivity";
+import { useNotificationRouting } from "@/hooks/useNotificationRouting";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme, Platform } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
@@ -39,9 +40,10 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   usePushNotifications(user?.id);
   useDeviceActivity(user?.id);
+  useNotificationRouting(!authLoading);
 
   return (
     <AppConfigProvider>
