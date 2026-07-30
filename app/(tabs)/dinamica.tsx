@@ -484,7 +484,6 @@ export default function DinamicaScreen() {
     return () => clearInterval(intervalId);
   }, [loadError, loadAppointment]);
 
-
   // Obtiene la posición GPS actual del dispositivo, funcionando tanto en web
   // (navigator.geolocation) como en nativo (expo-location).
   const getCurrentGpsPosition = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
@@ -974,7 +973,7 @@ export default function DinamicaScreen() {
     );
   }
 
-    if (!appointment) {
+  if (!appointment) {
     return (
       <LinearGradient
         colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -1006,7 +1005,7 @@ export default function DinamicaScreen() {
         </ScrollView>
       </LinearGradient>
     );
-    }
+  }
 
   if (!isEventDay) {
     const eventDate = new Date(appointment.event.start_time!);
