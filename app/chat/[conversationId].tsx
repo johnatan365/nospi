@@ -12,6 +12,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -194,6 +195,7 @@ export default function ChatThreadScreen() {
 
     if (error) {
       console.error('ChatThread: error starting direct chat', error);
+      Alert.alert('No se pudo abrir el chat', 'Intenta de nuevo en unos segundos.');
       return;
     }
 
