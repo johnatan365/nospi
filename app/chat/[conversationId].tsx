@@ -303,6 +303,11 @@ export default function ChatThreadScreen() {
             <View style={styles.headerActionButton} />
           )}
         </View>
+        {isGroup && (
+          <TouchableOpacity style={styles.directChatBanner} onPress={() => setShowParticipants(true)} activeOpacity={0.8}>
+            <Text style={styles.directChatBannerText}>💬 Toca aquí para escribirle en privado a alguien del grupo</Text>
+          </TouchableOpacity>
+        )}
 
         <FlatList
           ref={listRef}
@@ -426,6 +431,8 @@ const styles = StyleSheet.create({
   },
   headerBackButton: { padding: 8 },
   headerActionButton: { padding: 8, width: 40, alignItems: 'center' },
+  directChatBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingVertical: 10, marginHorizontal: 12, marginBottom: 8, borderRadius: 10 },
+  directChatBannerText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
   headerAvatarPlaceholder: {
