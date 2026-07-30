@@ -500,6 +500,44 @@ export default function AppointmentsScreen() {
               const isConfirmed = appointment.status === 'confirmada';
               const isAnterior = appointment.status === 'anterior';
               const needsRating = isAnterior && !appointment.ratings_submitted_at;
+              if (isAnterior) {
+                return (
+                  <View key={appointment.id} style={styles.compactCard}>
+                    <View style={styles.compactRow}>
+                      <Text style={styles.compactIcon}>{eventIcon}</Text>
+                      <View style={styles.compactInfo}>
+                        <Text style={styles.compactName} numberOfLines={1}>{eventName}</Text>
+                        <Text style={styles.compactMeta} numberOfLines={1}>
+                          {dateText} · {eventTime}{eventCity ? ` · ${eventCity}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    {appointment.event?.id && (
+                      <View style={styles.compactActions}>
+                        {needsRating && (
+                          <TouchableOpacity
+                            style={styles.compactRateButton}
+                            onPress={() => router.push(`/catch-up-rating/${appointment.event!.id}`)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.compactRateButtonText}>⭐ Calificar</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.compactChatButton}
+                          onPress={() => handleOpenChat(appointment.event!.id)}
+                          activeOpacity={0.8}
+                          disabled={openingChatFor === appointment.event.id}
+                        >
+                          <Text style={styles.compactChatButtonText}>
+                            {openingChatFor === appointment.event.id ? 'Abriendo...' : '💬 Chat'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              }
 
               return (
                 <View key={appointment.id} style={styles.appointmentCard}>
@@ -573,27 +611,6 @@ export default function AppointmentsScreen() {
                     </>
                   )}
 
-                  {needsRating && appointment.event?.id && (
-                    <TouchableOpacity
-                      style={styles.rateButton}
-                      onPress={() => router.push(`/catch-up-rating/${appointment.event!.id}`)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.rateButtonText}>⭐ Calificar participantes</Text>
-                    </TouchableOpacity>
-                  )}
-                  {isAnterior && appointment.event?.id && (
-                  <TouchableOpacity
-                    style={styles.chatButton}
-                    onPress={() => handleOpenChat(appointment.event!.id)}
-                    activeOpacity={0.8}
-                    disabled={openingChatFor === appointment.event.id}
-                    >
-                  <Text style={styles.chatButtonText}>
-                    {openingChatFor === appointment.event.id ? 'Abriendo...' : '💬 Ver chat'}
-                  </Text>
-                                  </TouchableOpacity>
-              )}
                 </View>
               );
             })}
@@ -807,6 +824,67 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
+  },
+  compactCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: nospiColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  compactIcon: {
+    fontSize: 22,
+    marginRight: 10,
+  },
+  compactInfo: {
+    flex: 1,
+  },
+  compactName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#880E4F',
+  },
+  compactMeta: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  compactActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  compactRateButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#AD1457',
+  },
+  compactRateButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  compactChatButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#F06292',
+  },
+  compactChatButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   appointmentCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
