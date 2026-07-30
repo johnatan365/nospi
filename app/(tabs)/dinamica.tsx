@@ -1133,7 +1133,7 @@ export default function DinamicaScreen() {
 
         <View style={styles.countdownCard}>
           <Text style={styles.countdownLabel}>
-            {checkInPhase === 'code_entry' ? 'Tiempo para iniciar la dinámica' : 'Tiempo para ingresar código'}
+            {checkInPhase === 'code_entry' ? 'Tiempo para confirmar tu llegada' : 'Tiempo para iniciar la dinámica'}
           </Text>
           <Text style={styles.countdownTime}>{countdownDisplay}</Text>
         </View>
