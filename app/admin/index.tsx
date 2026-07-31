@@ -389,7 +389,7 @@ const handleLogin = async () => {
         // panel donde todas las consultas fallarian con "not authorized".
         const { data: isAdmin } = await supabase.rpc('is_admin');
         if (isAdmin !== true) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: 'local' });
           setLoginError('Esta cuenta no tiene permisos de administrador.');
         } else {
           setAdminPassword('');
@@ -403,7 +403,7 @@ const handleLogin = async () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
   };
 
   const loadDashboardData = async () => {

@@ -417,7 +417,7 @@ export default function ProfileScreen() {
       }
 
       // Cerrar sesión local y limpiar storage antes de navegar
-      try { await supabase.auth.signOut(); } catch (_) {}
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
       await AsyncStorage.clear();
       router.replace('/welcome');
     } catch (err: any) {

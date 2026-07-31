@@ -200,7 +200,7 @@ export default function Index() {
                   } else {
                     Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
                   }
-                  await supabase.auth.signOut();
+                  await supabase.auth.signOut({ scope: 'local' });
                   router.replace('/welcome');
                   return;
                 }
@@ -214,7 +214,7 @@ export default function Index() {
               } catch (createErr) {
                 console.error('Index: Unexpected error creating profile:', createErr);
                 await hideSplash();
-                await supabase.auth.signOut();
+                await supabase.auth.signOut({ scope: 'local' });
                 router.replace('/welcome');
               }
             } else {
@@ -262,7 +262,7 @@ export default function Index() {
                 }
               }
               try {
-                await supabase.auth.signOut();
+                await supabase.auth.signOut({ scope: 'local' });
               } catch (signOutError) {
                 console.error('Index: Error signing out:', signOutError);
               }

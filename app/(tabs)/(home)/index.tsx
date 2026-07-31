@@ -38,7 +38,7 @@ export default function Index() {
                 Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
               }
               
-              await supabase.auth.signOut();
+              await supabase.auth.signOut({ scope: 'local' });
               router.replace('/welcome');
               return;
             }
@@ -46,7 +46,7 @@ export default function Index() {
             if (!profile) {
               // User authenticated via Google/Apple but no profile in users table
               console.log('Index: OAuth user authenticated but no profile found. Signing out.');
-              await supabase.auth.signOut();
+              await supabase.auth.signOut({ scope: 'local' });
               
               if (Platform.OS === 'web') {
                 window.alert('Debes registrarte primero antes de iniciar sesión.');
@@ -103,7 +103,7 @@ export default function Index() {
               Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
             }
             
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
             router.replace('/welcome');
           } finally {
             setIsCheckingProfile(false);

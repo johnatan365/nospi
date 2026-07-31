@@ -195,7 +195,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       console.log('SupabaseProvider: Signing out user');
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) {
         console.error('Sign out error:', error.message);
         throw error;
