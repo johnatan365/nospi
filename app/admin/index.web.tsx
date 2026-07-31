@@ -157,19 +157,21 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
 
-  let eventPart = '';
+  let eventBlock = '';
   if (eventName && eventDate) {
     const formattedDate = new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-    eventPart = ` de la ${eventName} del ${formattedDate}${timePart}`;
+    eventBlock = `\n\n*${eventName}*\n📅 ${formattedDate}${timePart}`;
   }
 
-    const message = [
-      `¡Hola ${firstName}!`,
-      ``,
-      `Te escribimos desde Nospi confirmando que ya estás dentro${eventPart}.`,
-      ``,
-      `Recuerda: el lugar se revelará un día antes del evento, prepárate para la sorpresa.`,
+  const message = [
+    `¡Hola ${firstName}! 👋`,
+    ``,
+    `Te escribimos desde Nospi confirmando que ya estás dentro.${eventBlock}`,
+    ``,
+    `📍 El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`,
+    ``,
+    `_Equipo Nospi_`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
@@ -187,31 +189,38 @@ function buildEventReminderWhatsAppLink(
   locationName?: string,
   locationAddress?: string,
   mapsLink?: string
-): string {
+  ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
-    ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-  const eventPart = eventName && eventDate ? ` tu ${eventName} programada para el ${formattedDate}${timePart}` : ' tu evento';
+  const eventLabel = eventName || 'evento';
+  const dateLine = eventDate ? `📅 ${formattedDate}${timePart}` : '';
 
-  let locationPart: string;
+  let locationBlock: string;
   if (isLocationRevealed && locationName) {
     const addressPart = locationAddress ? ` (${locationAddress})` : '';
-    const mapsPart = mapsLink ? ` Ubicación en Maps: ${mapsLink}` : '';
-    locationPart = `, en ${locationName}${addressPart}.${mapsPart}`;
+    const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
+    locationBlock = `📍 ${locationName}${addressPart}${mapsLine}`;
   } else {
-    locationPart = `. El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`;
+    locationBlock = `📍 El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`;
   }
 
-    const message = [
-      `¡Hola ${firstName}!`,
-      ``,
-      `Te escribimos desde Nospi para recordarte${eventPart}${locationPart}`,
-      ``,
-      `Si no puedes asistir, avísanos respondiendo este mensaje.`,
-  ].join('\n');
+  const message = [
+    `¡Hola ${firstName}! 👋`,
+    ``,
+    `Te recordamos tu evento:`,
+    ``,
+    `*${eventLabel}*`,
+    dateLine,
+    locationBlock,
+    ``,
+    `¿No puedes asistir? Avísanos respondiendo este mensaje.`,
+    ``,
+    `_Equipo Nospi_`,
+    ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -225,28 +234,32 @@ function buildSameDayWhatsAppLink(
   locationName?: string,
   locationAddress?: string,
   mapsLink?: string
-): string {
+  ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const addressPart = locationAddress ? ` (${locationAddress})` : '';
-  const mapsLine = mapsLink ? `\nUbicación en Maps: ${mapsLink}` : '';
+  const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
 
   const message = [
-    `¡Hola ${firstName}!`,
+    `¡Hola ${firstName}! 👋`,
     ``,
-    `Hoy es tu ${eventName || 'evento'}${timePart}, en ${locationName || 'el lugar acordado'}${addressPart}.${mapsLine}`,
+    `*Hoy es tu ${eventName || 'evento'}* 🍽️`,
+    `📅${timePart || ' hoy'}`,
+    `📍 ${locationName || 'el lugar acordado'}${addressPart}${mapsLine}`,
     ``,
-    `Al llegar, dile al personal del lugar que vienes de Nospi y ellos te indican la mesa correspondiente.`,
+    `*Al llegar:* dile al personal que vienes de Nospi, te indican la mesa correspondiente.`,
     ``,
-    `Llega puntual: el evento arranca con una dinámica para romper el hielo, no querrás perderte el inicio.`,
+    `⏰ Llega puntual: el evento arranca con una dinámica para romper el hielo.`,
     ``,
-    `Cuando estén en la mesa, abran este link para confirmar e iniciar la experiencia: https://app.nospi.co/(tabs)/dinamica`,
+    `📲 Cuando estén en la mesa, abran este link para confirmar e iniciar la experiencia:`,
+    `https://app.nospi.co/(tabs)/dinamica`,
     ``,
-    `Antes de arrancar la dinámica para romper el hielo, elijan a alguien que se encargue de iniciarla y leer las preguntas en voz alta.`,
+    `💡 Antes de arrancar, elijan a alguien que se encargue de iniciar la dinámica y leer las preguntas en voz alta.`,
     ``,
-    `¡Nos vemos hoy!`,
-  ].join('\n');
+    `¡Nos vemos hoy! 🎉`,
+    `_Equipo Nospi_`,
+    ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
@@ -257,22 +270,26 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
-    ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
-    ? `la ${eventName}${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
-    : 'el evento';
+  ? `*${eventName}*${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
+    : 'tu evento';
 
   const message = [
-    `¡Hola ${firstName}! Te escribimos desde Nospi, la app que organiza cenas y planes para conocer gente nueva.`,
+    `¡Hola ${firstName}! 👋`,
     ``,
-    `Vimos que intentaste pagar tu cupo para ${eventPart}, pero el pago no se pudo completar.`,
+    `Te escribimos desde Nospi, la app que organiza cenas y planes para conocer gente nueva.`,
+    ``,
+    `⚠️ Vimos que intentaste pagar tu cupo para ${eventPart}, pero el pago no se pudo completar.`,
     ``,
     `A veces pasa por un tema técnico del banco o de la app — nada grave.`,
     ``,
-    `Si quieres, te mandamos el link directo para que sea más fácil completar el pago. Solo cuéntanos y te lo enviamos.`,
-  ].join('\n');
+    `💳 Si quieres, te mandamos el link directo para que sea más fácil completar el pago. Solo cuéntanos y te lo enviamos.`,
+    ``,
+    `_Equipo Nospi_`,
+    ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
