@@ -171,6 +171,8 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     ``,
     `📍 El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`,
     ``,
+    `ℹ️ Si necesitas cancelar, hazlo desde la app con más de 24 horas de anticipación y recibirás tu saldo para otro evento. Con menos de 24 horas no hay devolución.`,
+    ``,
     `_Equipo Nospi_`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
@@ -217,7 +219,7 @@ function buildEventReminderWhatsAppLink(
     dateLine,
     locationBlock,
     ``,
-    `¿No puedes asistir? Avísanos respondiendo este mensaje.`,
+    `¿No puedes asistir? Cancela desde la app con más de 24 horas de anticipación y conservas tu saldo para otro evento. Con menos de 24 horas no hay devolución.`,
     ``,
     `_Equipo Nospi_`,
     ].join('\n');

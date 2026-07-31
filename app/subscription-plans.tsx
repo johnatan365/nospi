@@ -1999,6 +1999,7 @@ export default function SubscriptionPlansScreen() {
         {/* ========== END TEST BUTTON ========== */}
 
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
+				<Text style={styles.cancelPolicyFooter}>Puedes cancelar hasta 24 horas antes del evento y recibir el valor como saldo para otro evento. Con menos de 24 horas de anticipación no hay devolución.</Text>
           </>
         )}
 
@@ -2131,6 +2132,7 @@ const styles = StyleSheet.create({
   btnArrow: { fontSize: 26, color: '#999', fontWeight: '300' },
   btnIcon: { fontSize: 32, marginRight: 14 },
   secureFooter: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 16 },
+  cancelPolicyFooter: { fontSize: 12, color: 'rgba(255,255,255,0.65)', textAlign: 'center', marginTop: 10, lineHeight: 17, paddingHorizontal: 8 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 40, width: '100%', maxWidth: 400, alignItems: 'center' },
   successIcon: { fontSize: 72, marginBottom: 24 },
