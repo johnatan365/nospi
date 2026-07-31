@@ -1979,11 +1979,25 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         .order('question_order', { ascending: true });
 
       if (!qError && originalQuestions && originalQuestions.length > 0) {
-        const questionsToInsert = originalQuestions.map((q) => ({
+        // Mismo contenido que el original, pero con un orden aleatorio NUEVO
+        // dentro de cada nivel — si no, el duplicado repetiria exactamente el
+        // mismo orden sorteado del evento original.
+        const levelOrder: string[] = [];
+        const byLevel: Record<string, typeof originalQuestions> = {};
+        for (const q of originalQuestions) {
+          if (!byLevel[q.level]) {
+            byLevel[q.level] = [];
+            levelOrder.push(q.level);
+          }
+          byLevel[q.level].push(q);
+        }
+        const reshuffled = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
+
+        const questionsToInsert = reshuffled.map((q, index) => ({
           event_id: newEvent.id,
           level: q.level,
           question_text: q.question_text,
-          question_order: q.question_order,
+          question_order: index,
           is_default: q.is_default,
         }));
         const { error: insertError } = await supabase
