@@ -145,10 +145,6 @@ export default function ChatsScreen() {
     router.push(`/chat/${item.conversation_id}` as any);
   };
 
-  const goToPastEvents = () => {
-    router.push('/appointments?openFilter=anteriores' as any);
-  };
-
   const groupConversations = conversations.filter((c) => c.conv_type === 'event_group');
   const directConversations = conversations.filter((c) => c.conv_type === 'direct');
   const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
@@ -164,13 +160,6 @@ export default function ChatsScreen() {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Chat</Text>
-
-        <TouchableOpacity style={styles.banner} activeOpacity={0.8} onPress={goToPastEvents}>
-          <Text style={styles.bannerText}>
-                        💬 Habla con alguien de un evento pasado → toca aquí
-          </Text>
-          <Text style={styles.bannerArrow}>→</Text>
-        </TouchableOpacity>
 
         <View style={styles.filterRow}>
           <TouchableOpacity
@@ -303,17 +292,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 12,
   },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 14,
-    marginHorizontal: 16,
-    padding: 12,
-    marginBottom: 14,
-  },
-      bannerText: { flex: 1, color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  bannerArrow: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginLeft: 10 },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
