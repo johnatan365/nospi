@@ -542,21 +542,20 @@ export default function AdminPanelScreen() {
     useEffect(() => {
       let mounted = true;
       const init = async () => {
+        // getSession() ya renueva el token por su cuenta SOLO si esta vencido.
+        // Antes aqui se llamaba refreshSession() incondicionalmente en cada
+        // carga de pagina, y eso causaba dos problemas: (1) cualquier error
+        // transitorio de red en ese refresh botaba al login aunque el token
+        // actual siguiera siendo valido, y (2) rotar el refresh token en cada
+        // recarga, con otras pestañas de app.nospi.co abiertas usando la misma
+        // sesion, provocaba colisiones de rotacion que invalidaban la sesion
+        // completa ("se sale solo al refrescar"). Si el token esta vencido de
+        // verdad, verifyAdminSession() ya refresca y reintenta por dentro.
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-                    // El token restaurado desde el almacenamiento local puede estar
-          // vencido o a punto de vencer; si disparamos las primeras consultas
-                    // con ese token viejo el backend responde "not authorized" hasta
-          // que el usuario cierra sesion y vuelve a entrar. Refrescamos de
-          // forma proactiva antes de marcar la sesion como valida.
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          const okAdmin = !refreshError && (await verifyAdminSession());
-          if (!mounted) return;
-          setIsAuthenticated(okAdmin);
-        } else if (mounted) {
-          setIsAuthenticated(false);
-        }
-        if (mounted) setCheckingSession(false);
+        const okAdmin = session ? await verifyAdminSession() : false;
+        if (!mounted) return;
+        setIsAuthenticated(okAdmin);
+        setCheckingSession(false);
       };
       init();
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
