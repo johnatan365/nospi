@@ -11,6 +11,10 @@ const LEVEL_ORDER: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
 // Textos de la tarjeta "¿Cómo vamos?" que aparece cada 3 preguntas dentro de un
 // nivel. Cualquiera de la mesa presiona la opción que decidieron entre ellos —
 // no hay conteo de votos, igual que el botón "Continuar" ya existente.
+// Subtítulo corto bajo la pregunta del check-in: invita a decidir en grupo
+// sin agregar mecánica de votación (cualquiera presiona la decisión tomada).
+const CHECKIN_SUBTITLE = 'Lo que elija la mayoría 🙌';
+
 const CHECKIN_COPY: Record<QuestionLevel, {
   emoji: string;
   title: string;
@@ -896,6 +900,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           <Text style={styles.checkinEmoji}>{checkin.emoji}</Text>
           <Text style={styles.checkinTitle}>{checkin.title}</Text>
           <Text style={styles.checkinText}>{checkin.text}</Text>
+          <Text style={styles.checkinSubtitle}>{CHECKIN_SUBTITLE}</Text>
 
           <TouchableOpacity
             style={[styles.checkinButtonPrimary, loading && styles.buttonDisabled]}
@@ -1245,7 +1250,15 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 40,
+    marginBottom: 12,
+  },
+  checkinSubtitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 36,
   },
   checkinButtonPrimary: {
     backgroundColor: '#FFFFFF',
