@@ -63,7 +63,7 @@ const formatCompactDate = (dateString: string) => {
 
 export default function EventsScreen() {
   const router = useRouter();
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -142,13 +142,16 @@ export default function EventsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('EventsScreen: Tab focused, user:', user?.id ?? 'none');
+      console.log('EventsScreen: Tab focused, user:', user?.id ?? 'none', 'authLoading:', authLoading);
+      // Sesión todavía resolviéndose (refresh reciente, red lenta) — esperar
+      // en vez de concluir "no hay usuario".
+      if (authLoading) return;
       if (!user?.id) {
         setLoading(false);
         return;
       }
       loadEvents();
-    }, [user?.id, loadEvents])
+    }, [user?.id, authLoading, loadEvents])
   );
 
   const handleEventPress = (event: Event) => {

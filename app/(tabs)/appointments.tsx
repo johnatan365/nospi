@@ -43,7 +43,7 @@ type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 export default function AppointmentsScreen() {
   const router = useRouter();
     const params = useLocalSearchParams<{ openFilter?: string }>();
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +168,11 @@ export default function AppointmentsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('AppointmentsScreen: Tab focused, user:', user?.id ?? 'none');
+      console.log('AppointmentsScreen: Tab focused, user:', user?.id ?? 'none', 'authLoading:', authLoading);
+
+      // Sesión todavía resolviéndose (refresh reciente, red lenta) — esperar
+      // en vez de concluir "no hay usuario".
+      if (authLoading) return;
 
       if (!user?.id) {
         setLoading(false);
@@ -221,7 +225,7 @@ export default function AppointmentsScreen() {
 
         checkFirstTimeNotificationPrompt();
       })();
-    }, [loadAppointments, user?.id, checkFirstTimeNotificationPrompt])
+    }, [loadAppointments, user?.id, authLoading, checkFirstTimeNotificationPrompt])
   );
 
   const formatDate = (dateString: string) => {

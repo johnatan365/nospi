@@ -124,7 +124,7 @@ interface SubscriptionRow {
 
 export default function SubscriptionMembershipScreen() {
   const router = useRouter();
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
   const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
   const subscriptionPrice = parseInt(appConfig.subscription_price, 10) || 29900;
@@ -149,6 +149,9 @@ export default function SubscriptionMembershipScreen() {
   const [cardHolder, setCardHolder] = useState('');
 
   const loadSubscription = useCallback(async () => {
+    // Sesión todavía resolviéndose (refresh reciente, red lenta) — esperar en
+    // vez de concluir "no hay usuario".
+    if (authLoading) return;
     if (!user?.id) {
       setLoading(false);
       return;
@@ -161,7 +164,7 @@ export default function SubscriptionMembershipScreen() {
       .maybeSingle();
     setSubscription(data as SubscriptionRow | null);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   useEffect(() => { loadSubscription(); }, [loadSubscription]);
 

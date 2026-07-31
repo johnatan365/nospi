@@ -63,20 +63,44 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             // No session yet — could be a cold start or OAuth in progress.
             // We do NOT set a timeout here; instead we resolve loading=false
             // only after we've confirmed there is truly no session via getSession().
+            //
+            // getSession() puede fallar por una simple falla de red transitoria
+            // (wifi congestionado en un evento, señal débil) — antes, si eso
+            // pasaba, dábamos por hecho "no hay sesión" y dejábamos user=null
+            // para siempre, aunque el usuario sí tuviera una sesión guardada.
+            // Eso hacía que pantallas como Dinámica o Perfil, que solo miran
+            // `user` sin revisar este `loading`, concluyeran "no hay evento" /
+            // "error al cargar el perfil" de forma falsa justo al refrescar con
+            // mala señal. Ahora reintentamos unas veces antes de rendirnos.
             console.log('SupabaseProvider: INITIAL_SESSION null — confirming with getSession()');
-            getSessionShared().then(({ data: { session: s } }) => {
-              if (s) {
-                console.log('SupabaseProvider: getSession found session, updating state');
-                setSession(s);
-                setUser(s.user);
-              } else {
-                console.log('SupabaseProvider: getSession confirmed no session — user is not logged in');
+            const RETRY_DELAYS_MS = [800, 2000, 4000];
+
+            const confirmSessionWithRetry = async () => {
+              for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+                try {
+                  const { data: { session: s } } = await getSessionShared();
+                  if (s) {
+                    console.log('SupabaseProvider: getSession found session, updating state');
+                    setSession(s);
+                    setUser(s.user);
+                  } else {
+                    console.log('SupabaseProvider: getSession confirmed no session — user is not logged in');
+                  }
+                  setLoading(false);
+                  return;
+                } catch (err) {
+                  if (attempt < RETRY_DELAYS_MS.length) {
+                    console.warn(`SupabaseProvider: getSession error (intento ${attempt + 1}), reintentando…`, err);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+                    continue;
+                  }
+                  console.warn('SupabaseProvider: getSession error tras reintentos, resolviendo loading', err);
+                  setLoading(false);
+                }
               }
-              setLoading(false);
-            }).catch(() => {
-              console.warn('SupabaseProvider: getSession error, resolving loading');
-              setLoading(false);
-            });
+            };
+
+            confirmSessionWithRetry();
           }
         } else if (event === 'SIGNED_IN') {
           // Cancelar el timeout si estaba esperando (cancela un SIGNED_OUT pendiente)

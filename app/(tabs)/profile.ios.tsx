@@ -121,7 +121,7 @@ const AVAILABLE_PERSONALITY = [
 ];
 
 export default function ProfileScreen() {
-  const { user, signOut } = useSupabase();
+  const { user, signOut, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -191,6 +191,9 @@ export default function ProfileScreen() {
   };
 
   const loadProfile = useCallback(async (force = false) => {
+    // Sesión todavía resolviéndose (refresh reciente, red lenta) — esperar en
+    // vez de concluir "no hay usuario".
+    if (authLoading) return;
     if (!user?.id) {
       setError('No se encontró información de usuario');
       setLoading(false);
@@ -289,15 +292,18 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, user?.email]);
+  }, [user?.id, user?.email, authLoading]);
 
   useFocusEffect(
     useCallback(() => {
-      
+      if (authLoading) return;
+
       if (user) {
         loadProfile();
+      } else {
+        setLoading(false);
       }
-    }, [user, loadProfile])
+    }, [user, authLoading, loadProfile])
   );
 
   const handleSupportEmail = () => {

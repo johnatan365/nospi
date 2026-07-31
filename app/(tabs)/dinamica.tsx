@@ -103,7 +103,7 @@ if (Platform.OS !== 'web') {
 }
 
 export default function DinamicaScreen() {
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
@@ -314,6 +314,13 @@ export default function DinamicaScreen() {
   }, [checkIfEventDay]);
 
   const loadAppointment = useCallback(async () => {
+    // Si la sesión todavía se está resolviendo (p. ej. justo después de un
+    // refresh con mala señal), NO concluir todavía "no hay usuario" — eso
+    // mostraba "No tienes ningún evento confirmado" de forma falsa aunque el
+    // usuario sí tuviera una cita, solo porque el contexto de auth aún no
+    // había terminado de leer la sesión guardada. Nos quedamos en loading y
+    // este efecto se vuelve a disparar solo cuando authLoading pase a false.
+    if (authLoading) return;
     if (!user) {
       setLoading(false);
       return;
@@ -471,7 +478,7 @@ export default function DinamicaScreen() {
       setLoadError(true);
     }
     setLoading(false);
-  }, [user, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
+  }, [user, authLoading, applyAppointmentData, scheduleNotifications, loadActiveParticipants]);
 
   // Si nos quedamos sin poder cargar la cita (ej. wifi saturado en el evento),
   // reintentamos solos cada 8s en segundo plano -- no todo el mundo sabe que
@@ -791,13 +798,17 @@ export default function DinamicaScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Todavía resolviendo la sesión (refresh reciente, red lenta) — esperar
+      // en vez de concluir "no hay usuario". Este efecto se vuelve a disparar
+      // solo con que authLoading cambie a false, sin necesidad de otro focus.
+      if (authLoading) return;
 
       if (!user?.id) {
         setLoading(false);
         return;
       }
       loadAppointment();
-    }, [user?.id, loadAppointment])
+    }, [user?.id, authLoading, loadAppointment])
   );
 
   useEffect(() => {
