@@ -1640,6 +1640,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setShowEventModal(true);
   };
 
+  // Baraja un array (Fisher-Yates) sin mutar el original. Se usa para que el
+  // orden de las preguntas dentro de cada nivel sea aleatorio por evento, en
+  // vez de siempre el orden fijo en que se cargaron en el admin. El orden se
+  // fija una sola vez al crear/guardar el evento y queda igual para todos los
+  // participantes (se guarda en question_order en la base de datos).
+  const shuffleArray = <T,>(arr: T[]): T[] => {
+    const result = [...arr];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  };
+
   const saveEventQuestions = async (eventId: string) => {
     try {
       // Verificar si el admin agregó preguntas custom para este evento
@@ -1648,23 +1662,23 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       );
 
       if (hasCustomQuestions) {
-        // El admin configuró preguntas específicas — usarlas
+        // El admin configuró preguntas específicas — usarlas, con orden
+        // aleatorio dentro de cada nivel.
         await supabase.from('event_questions').delete().eq('event_id', eventId);
 
         const questionsToInsert: any[] = [];
         let orderCounter = 0;
 
         for (const [level, questionsList] of Object.entries(eventQuestions)) {
-          questionsList.forEach((questionText) => {
-            if (questionText.trim()) {
-              questionsToInsert.push({
-                event_id: eventId,
-                level,
-                question_text: questionText.trim(),
-                question_order: orderCounter++,
-                is_default: false,
-              });
-            }
+          const shuffledLevel = shuffleArray(questionsList.filter((q) => q.trim()));
+          shuffledLevel.forEach((questionText) => {
+            questionsToInsert.push({
+              event_id: eventId,
+              level,
+              question_text: questionText.trim(),
+              question_order: orderCounter++,
+              is_default: false,
+            });
           });
         }
 
@@ -1690,7 +1704,21 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         // Borrar preguntas previas del evento (por si es una edición)
         await supabase.from('event_questions').delete().eq('event_id', eventId);
 
-        const questionsToInsert = globalQuestions.map((q, index) => ({
+        // Agrupar por nivel y barajar el orden dentro de cada nivel, manteniendo
+        // los niveles agrupados (divertido, luego sensual, luego atrevido).
+        const levelOrder: string[] = [];
+        const byLevel: Record<string, typeof globalQuestions> = {};
+        for (const q of globalQuestions) {
+          if (!byLevel[q.level]) {
+            byLevel[q.level] = [];
+            levelOrder.push(q.level);
+          }
+          byLevel[q.level].push(q);
+        }
+
+        const shuffledQuestions = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
+
+        const questionsToInsert = shuffledQuestions.map((q, index) => ({
           event_id: eventId,
           level: q.level,
           question_text: q.question_text,
@@ -1705,7 +1733,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         if (insertError) {
           console.error('Error copiando preguntas globales al evento:', insertError);
         } else {
-          console.log(`saveEventQuestions: ${questionsToInsert.length} preguntas globales copiadas al evento`);
+          console.log(`saveEventQuestions: ${questionsToInsert.length} preguntas globales copiadas al evento (orden aleatorio por nivel)`);
         }
       }
     } catch (error) {

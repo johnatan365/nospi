@@ -4,7 +4,42 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'level_transition' | 'finished' | 'free_phase';
+type GamePhase = 'questions' | 'level_transition' | 'finished' | 'free_phase' | 'level_checkin';
+
+const LEVEL_ORDER: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
+
+// Textos de la tarjeta "¿Cómo vamos?" que aparece cada 3 preguntas dentro de un
+// nivel. Cualquiera de la mesa presiona la opción que decidieron entre ellos —
+// no hay conteo de votos, igual que el botón "Continuar" ya existente.
+const CHECKIN_COPY: Record<QuestionLevel, {
+  emoji: string;
+  title: string;
+  text: string;
+  stayLabel: string;
+  advanceLabel: string;
+}> = {
+  divertido: {
+    emoji: '😄',
+    title: '¿Cómo vamos? 😄',
+    text: '¿Quieren seguir con más preguntas de Divertido, o subir al nivel Sensual?',
+    stayLabel: 'Más de Divertido 😄',
+    advanceLabel: 'Subir a Sensual 💕',
+  },
+  sensual: {
+    emoji: '💕',
+    title: '¿Cómo vamos? 💕',
+    text: '¿Quieren seguir con más preguntas de Sensual, o subir al nivel Atrevido?',
+    stayLabel: 'Más de Sensual 💕',
+    advanceLabel: 'Subir a Atrevido 🔥',
+  },
+  atrevido: {
+    emoji: '🔥',
+    title: '¿Cómo vamos? 🔥',
+    text: '¿Quieren seguir con más preguntas Atrevidas, o pasar a la fase libre de conversación?',
+    stayLabel: 'Más Atrevido 🔥',
+    advanceLabel: 'Pasar a fase libre ✨',
+  },
+};
 
 interface Participant {
   id: string;
@@ -319,6 +354,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           console.log(`[Timer] Restoring timer: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
           startTimer(remaining);
         }
+      } else if (data.game_phase === 'level_checkin') {
+        // current_question_index guarda el índice PENDIENTE al que se salta
+        // si la mesa decide "seguir con más preguntas" de este nivel.
+        setGamePhase('level_checkin');
+        setCurrentLevel(data.current_level || 'divertido');
+        setCurrentQuestionIndex(data.current_question_index || 0);
       } else if (data.game_phase === 'level_transition') {
         setGamePhase('level_transition');
       } else if (data.game_phase === 'finished') {
@@ -380,6 +421,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               console.log(`[Timer] Real-time update: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
               startTimer(remaining);
             }
+          } else if (newEvent.game_phase === 'level_checkin') {
+            setGamePhase('level_checkin');
+            setCurrentLevel(newEvent.current_level || 'divertido');
+            setCurrentQuestionIndex(newEvent.current_question_index || 0);
           } else if (newEvent.game_phase === 'level_transition') {
             setGamePhase('level_transition');
           } else if (newEvent.game_phase === 'finished') {
@@ -452,8 +497,65 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     });
   }, [scaleAnim, fadeAnim]);
 
+  // Extraído de la rama "nivel completo" original: avanza al siguiente nivel
+  // (o a fase libre si ya estábamos en Atrevido). Se usa tanto cuando se acaban
+  // las preguntas del nivel (forzado) como cuando presionan "Subir a..." en la
+  // tarjeta de check-in cada 3 preguntas.
+  const advanceToNextLevelOrFreePhase = useCallback(async () => {
+    if (!appointment?.event_id) return;
+
+    const nextLevel: QuestionLevel =
+      currentLevel === 'divertido' ? 'sensual' :
+      currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
+
+    if (currentLevel === 'divertido' || currentLevel === 'sensual') {
+      showLevelTransitionAnimation(nextLevel);
+
+      const firstQuestion = QUESTIONS[nextLevel][0];
+
+      setGamePhase('questions');
+      setCurrentLevel(nextLevel);
+      setCurrentQuestionIndex(0);
+      setCurrentQuestion(firstQuestion);
+      startTimer();
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'questions',
+          current_level: nextLevel,
+          current_question_index: 0,
+          answered_users: [],
+          current_question: firstQuestion,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error starting next level:', error);
+        setGamePhase('questions');
+        setCurrentLevel(currentLevel);
+      }
+    } else {
+      setGamePhase('free_phase');
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'free_phase',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error ending game:', error);
+        setGamePhase('questions');
+      }
+    }
+  }, [appointment, currentLevel, showLevelTransitionAnimation, startTimer]);
+
   const handleContinue = useCallback(async () => {
-    
+
     if (!appointment?.event_id || loading) return;
 
     const questionsForLevel = QUESTIONS[currentLevel];
@@ -464,6 +566,35 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
+        // Cada 3 preguntas respondidas dentro del nivel, en vez de seguir
+        // automático se le pregunta a la mesa si quiere más preguntas de
+        // este nivel o subir al siguiente — lo hablan entre ellos y
+        // cualquiera presiona la decisión, igual que "Continuar" hoy.
+        if (nextQuestionIndex % 3 === 0) {
+          setGamePhase('level_checkin');
+          setCurrentQuestionIndex(nextQuestionIndex); // índice pendiente si eligen "seguir"
+
+          const { error } = await supabase
+            .from('events')
+            .update({
+              game_phase: 'level_checkin',
+              current_question_index: nextQuestionIndex,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', appointment.event_id);
+
+          if (error) {
+            console.error('❌ Error mostrando check-in de nivel:', error);
+            setGamePhase('questions');
+            setCurrentQuestionIndex(currentQuestionIndex);
+            setLoading(false);
+            return;
+          }
+
+          setLoading(false);
+          return;
+        }
+
         // Continue to next question in same level
         const nextQuestion = questionsForLevel[nextQuestionIndex];
 
@@ -491,82 +622,62 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           return;
         }
 
-        
+
       } else {
-        // Level completed - advance to next level or free phase
-
-        const nextLevel: QuestionLevel = 
-          currentLevel === 'divertido' ? 'sensual' :
-          currentLevel === 'sensual' ? 'atrevido' : 'atrevido';
-
-        if (currentLevel === 'divertido' || currentLevel === 'sensual') {
-          // Advance to next level
-          
-          // CRITICAL: Show level transition animation BEFORE updating database
-          showLevelTransitionAnimation(nextLevel);
-          
-          const firstQuestion = QUESTIONS[nextLevel][0];
-
-          // CRITICAL FIX: Immediately update local state BEFORE database call
-          setGamePhase('questions');
-          setCurrentLevel(nextLevel);
-          setCurrentQuestionIndex(0);
-          setCurrentQuestion(firstQuestion);
-          startTimer(); // Start fresh 60s timer for new level
-
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'questions',
-              current_level: nextLevel,
-              current_question_index: 0,
-              answered_users: [],
-              current_question: firstQuestion,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error starting next level:', error);
-            // Revert optimistic update on error
-            setGamePhase('questions');
-            setCurrentLevel(currentLevel);
-            setCurrentQuestionIndex(questionsForLevel.length - 1);
-            setLoading(false);
-            return;
-          }
-
-          
-        } else {
-          // All levels complete - go to free phase
-          
-          // CRITICAL FIX: Immediately update local state BEFORE database call
-          setGamePhase('free_phase');
-          
-          const { error } = await supabase
-            .from('events')
-            .update({
-              game_phase: 'free_phase',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', appointment.event_id);
-
-          if (error) {
-            console.error('❌ Error ending game:', error);
-            // Revert optimistic update on error
-            setGamePhase('questions');
-            setLoading(false);
-            return;
-          }
-
-        }
+        // Level completed (se acabaron las preguntas) - se fuerza el paso
+        // al siguiente nivel, sin importar qué habían elegido antes.
+        await advanceToNextLevelOrFreePhase();
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, showLevelTransitionAnimation, startTimer]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, advanceToNextLevelOrFreePhase, startTimer]);
+
+  // Botón "Más de [Nivel]" en la tarjeta de check-in: sigue con la siguiente
+  // pregunta ya calculada (currentQuestionIndex quedó guardado como pendiente).
+  const handleStayInLevel = useCallback(async () => {
+    if (!appointment?.event_id || loading) return;
+    setLoading(true);
+    try {
+      const questionsForLevel = QUESTIONS[currentLevel];
+      const nextQuestion = questionsForLevel[currentQuestionIndex];
+
+      setGamePhase('questions');
+      setCurrentQuestion(nextQuestion);
+      startTimer();
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'questions',
+          current_question_index: currentQuestionIndex,
+          answered_users: [],
+          current_question: nextQuestion,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+
+      if (error) {
+        console.error('❌ Error continuando en el nivel:', error);
+        setGamePhase('level_checkin');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, currentLevel, currentQuestionIndex, loading, startTimer]);
+
+  // Botón "Subir a [Siguiente nivel]" en la tarjeta de check-in.
+  const handleAdvanceLevelFromCheckin = useCallback(async () => {
+    if (!appointment?.event_id || loading) return;
+    setLoading(true);
+    try {
+      await advanceToNextLevelOrFreePhase();
+    } finally {
+      setLoading(false);
+    }
+  }, [appointment, loading, advanceToNextLevelOrFreePhase]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -651,6 +762,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+  const levelPosition = LEVEL_ORDER.indexOf(currentLevel) + 1;
 
   const theme = LEVEL_THEMES[currentLevel];
   
@@ -676,7 +788,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           {/* Level badge */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()}</Text>
+            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()} · Nivel {levelPosition} de 3</Text>
           </View>
 
           {/* Question card */}
@@ -767,6 +879,46 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </Animated.View>
           </View>
         )}
+      </LinearGradient>
+    );
+  }
+
+  if (gamePhase === 'level_checkin') {
+    const checkin = CHECKIN_COPY[currentLevel];
+    return (
+      <LinearGradient
+        colors={theme.gradient}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <View style={styles.checkinContainer}>
+          <Text style={styles.checkinEmoji}>{checkin.emoji}</Text>
+          <Text style={styles.checkinTitle}>{checkin.title}</Text>
+          <Text style={styles.checkinText}>{checkin.text}</Text>
+
+          <TouchableOpacity
+            style={[styles.checkinButtonPrimary, loading && styles.buttonDisabled]}
+            onPress={handleStayInLevel}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.checkinButtonPrimaryText, { color: theme.continueButtonBg }]}>
+              {checkin.stayLabel}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.checkinButtonSecondary, loading && styles.buttonDisabled]}
+            onPress={handleAdvanceLevelFromCheckin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.checkinButtonSecondaryText}>
+              {checkin.advanceLabel}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
     );
   }
@@ -1066,6 +1218,61 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+
+  // ── Level check-in card ("¿Cómo vamos?") ─────────────────────────────────────
+  checkinContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+  },
+  checkinEmoji: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  checkinTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  checkinText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+  },
+  checkinButtonPrimary: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 50,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 14,
+  },
+  checkinButtonPrimaryText: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  checkinButtonSecondary: {
+    borderRadius: 50,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  checkinButtonSecondaryText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   // ── Level transition full screen ─────────────────────────────────────────────
