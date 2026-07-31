@@ -161,7 +161,7 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
   if (eventName && eventDate) {
     const formattedDate = new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-    eventBlock = `\n\n*${eventName}*\n📅 ${formattedDate}${timePart}`;
+      eventBlock = `\n\n*${eventName.trim()}*\n📅 ${formattedDate}${timePart}`;
   }
 
   const message = [
@@ -196,7 +196,7 @@ function buildEventReminderWhatsAppLink(
   ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-  const eventLabel = eventName || 'evento';
+      const eventLabel = (eventName || 'evento').trim();
   const dateLine = eventDate ? `📅 ${formattedDate}${timePart}` : '';
 
   let locationBlock: string;
@@ -244,7 +244,7 @@ function buildSameDayWhatsAppLink(
   const message = [
     `¡Hola ${firstName}! 👋`,
     ``,
-    `*Hoy es tu ${eventName || 'evento'}* 🍽️`,
+          `*Hoy es tu ${(eventName || 'evento').trim()}* 🍽️`,
     `📅${timePart || ' hoy'}`,
     `📍 ${locationName || 'el lugar acordado'}${addressPart}${mapsLine}`,
     ``,
@@ -274,7 +274,7 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
-  ? `*${eventName}*${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
+      ? `*${eventName.trim()}*${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
     : 'tu evento';
 
   const message = [
