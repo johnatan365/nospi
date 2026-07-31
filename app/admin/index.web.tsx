@@ -1026,9 +1026,22 @@ const handleLogin = async () => {
         setActiveEvents(activeCount);
       }
 
-      // Load users using the secure admin function
-      const { data: usersData, error: usersError } = await supabase
+      // Load users using the secure admin function. Esta función valida
+      // auth.uid() contra la tabla admins (SECURITY DEFINER) — si el token
+      // guardado en el navegador quedó vencido o a punto de vencer justo al
+      // cargar la página, Supabase puede responder "not authorized" aunque la
+      // cuenta sí sea admin. Antes de mostrar el error al usuario, refrescamos
+      // la sesión una vez y reintentamos — evita el falso "no autorizado".
+      let { data: usersData, error: usersError } = await supabase
         .rpc('get_all_users_for_admin');
+
+      if (usersError && usersError.message?.includes('not authorized')) {
+        console.warn('get_all_users_for_admin: not authorized, refrescando sesión y reintentando…');
+        await supabase.auth.refreshSession();
+        const retry = await supabase.rpc('get_all_users_for_admin');
+        usersData = retry.data;
+        usersError = retry.error;
+      }
 
       if (usersError) {
         console.error('Error loading users:', usersError);
