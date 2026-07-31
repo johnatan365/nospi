@@ -31,7 +31,7 @@ interface Event {
   current_participants: number;
   status: string;
   confirmation_code: string | null;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'level_checkin' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
@@ -282,7 +282,7 @@ export default function DinamicaScreen() {
         // Bug 1 fix: if the game is already in an active phase and the user
         // confirmed the rules, they must be ready for the game — force it true
         // and persist it so future refreshes also work.
-        const activeGamePhases = ['questions', 'question_active', 'level_transition', 'finished', 'free_phase'];
+        const activeGamePhases = ['questions', 'question_active', 'level_transition', 'level_checkin', 'finished', 'free_phase'];
         const currentPhase = apt.event?.game_phase ?? '';
         if (restoredReadyForRules && activeGamePhases.includes(currentPhase) && !restoredReadyForGame) {
           restoredReadyForGame = true;
@@ -631,7 +631,7 @@ export default function DinamicaScreen() {
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
 
-    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase') {
       return;
     }
 
@@ -937,7 +937,7 @@ export default function DinamicaScreen() {
   // cierra el hueco sin efectos secundarios.
   useEffect(() => {
     if (!userReadyForGame) return;
-    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
+    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase';
     if (yaArranco) return;
 
     handleStartExperience();
@@ -1086,7 +1086,7 @@ export default function DinamicaScreen() {
     );
   }
 
-  if ((gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') && userReadyForRules && userReadyForGame) {
+  if ((gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase') && userReadyForRules && userReadyForGame) {
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
