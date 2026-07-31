@@ -925,11 +925,27 @@ export default function DinamicaScreen() {
     }
   }, [appointment?.event_id]);
 
+  // Antes esto se evaluaba una sola vez al marcar userReadyForGame=true: si
+  // en ese instante exacto activeParticipants aun no reflejaba a todos los
+  // que ya habian confirmado llegada (dato que llega por realtime y puede
+  // tardar un segundo), handleStartExperience se quedaba callado para
+  // siempre por el guard "activeParticipants.length < 2" y nadie en la mesa
+  // veia arrancar la dinamica, sin ningun reintento. Ahora, mientras el
+  // usuario siga listo y la fase no haya arrancado, reintentamos cada 3s
+  // -- handleStartExperience ya es seguro de llamar de mas (sale solo si ya
+  // arranco o si aun no hay suficientes participantes), asi que esto solo
+  // cierra el hueco sin efectos secundarios.
   useEffect(() => {
     if (!userReadyForGame) return;
-    if (gamePhase !== 'questions' && gamePhase !== 'question_active' && gamePhase !== 'level_transition' && gamePhase !== 'finished' && gamePhase !== 'free_phase') {
+    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
+    if (yaArranco) return;
+
+    handleStartExperience();
+    const retryInterval = setInterval(() => {
       handleStartExperience();
-    }
+    }, 3000);
+
+    return () => clearInterval(retryInterval);
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
   const handleFinishGame = useCallback(async () => {
