@@ -221,8 +221,17 @@ export default function ChatThreadScreen() {
   };
 
   const isGroup = meta?.conv_type === 'event_group';
-  const headerTitle = isGroup ? meta?.event_name || 'Chat del evento' : meta?.other_user_name || 'Chat';
-  const otherUserPhoto = !isGroup ? meta?.other_user_photo : null;
+  // Para chats directos, "el otro" participante sirve de respaldo: cuando la
+  // conversacion aun no tiene mensajes no aparece en get_my_conversations, asi
+  // que meta llega null y el nombre/foto hay que sacarlos de los participantes
+  // (get_conversation_participants si los trae, con o sin mensajes).
+  const otherParticipant = !isGroup ? participants.find((p) => p.user_id !== user?.id) : undefined;
+  const headerTitle = isGroup
+    ? meta?.event_name || 'Chat del evento'
+    : meta?.other_user_name || otherParticipant?.name || 'Chat';
+  const otherUserPhoto = !isGroup
+    ? meta?.other_user_photo || otherParticipant?.profile_photo_url || null
+    : null;
 
   const unlockAt = isGroup && meta?.event_date
     ? new Date(new Date(meta.event_date).getTime() - CHAT_UNLOCK_MINUTES_BEFORE * 60 * 1000)
