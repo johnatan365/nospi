@@ -78,7 +78,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             const confirmSessionWithRetry = async () => {
               for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
                 try {
-                  const { data: { session: s } } = await getSessionShared();
+                  const { data: { session: s }, error } = await getSessionShared();
+                  // getSession puede fallar de dos formas: lanzando (throw) o
+                  // devolviendo { session: null, error } cuando el refresh del
+                  // token falla por red. Ambas son transitorias — reintentar
+                  // en vez de dar por hecho "no hay sesión".
+                  if (!s && error) {
+                    throw error;
+                  }
                   if (s) {
                     console.log('SupabaseProvider: getSession found session, updating state');
                     setSession(s);

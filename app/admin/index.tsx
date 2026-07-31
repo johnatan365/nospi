@@ -139,13 +139,33 @@ export default function AdminPanelScreen() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
+  // No basta con que exista una sesion — tiene que ser de una cuenta admin.
+  // El admin comparte el almacenamiento de sesion de Supabase con la app, asi
+  // que puede haber una sesion de una cuenta normal (p. ej. de prueba). Antes
+  // el panel la tomaba como valida y todas las consultas fallaban con
+  // "not authorized". Validamos con el RPC is_admin() antes de dejar pasar.
+  const verifyAdminSession = async (): Promise<boolean> => {
+    const { data: isAdmin, error } = await supabase.rpc('is_admin');
+    if (error) {
+      await supabase.auth.refreshSession();
+      const retry = await supabase.rpc('is_admin');
+      return !retry.error && retry.data === true;
+    }
+    return isAdmin === true;
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const okAdmin = session ? await verifyAdminSession() : false;
+      setIsAuthenticated(okAdmin);
       setCheckingSession(false);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(!!session);
+      if (!session) {
+        setIsAuthenticated(false);
+        return;
+      }
+      verifyAdminSession().then((ok) => setIsAuthenticated(ok));
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -364,7 +384,16 @@ const handleLogin = async () => {
       if (error) {
         setLoginError('Correo o contraseña incorrectos.');
       } else {
-        setAdminPassword('');
+        // Credenciales validas pero ¿es una cuenta admin? Si no lo es,
+        // cerramos esa sesion y avisamos claro, en vez de dejar entrar a un
+        // panel donde todas las consultas fallarian con "not authorized".
+        const { data: isAdmin } = await supabase.rpc('is_admin');
+        if (isAdmin !== true) {
+          await supabase.auth.signOut();
+          setLoginError('Esta cuenta no tiene permisos de administrador.');
+        } else {
+          setAdminPassword('');
+        }
       }
     } catch {
       setLoginError('Error inesperado al iniciar sesión.');

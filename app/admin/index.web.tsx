@@ -519,6 +519,26 @@ export default function AdminPanelScreen() {
 
     // Login real con Supabase Auth: revisa si ya hay sesion valida y se queda
     // escuchando cambios (login / logout / expiracion de sesion).
+    //
+    // IMPORTANTE: no basta con que exista una sesion — tiene que ser de una
+    // cuenta admin. El admin vive en el mismo dominio que la app
+    // (app.nospi.co/admin) y COMPARTE el almacenamiento de sesion de Supabase
+    // con la app. Si en este navegador hay una sesion de una cuenta normal
+    // (p. ej. una cuenta de prueba usada en la dinamica), antes el panel la
+    // tomaba como valida, dejaba entrar, y todas las consultas de admin
+    // fallaban con "not authorized". Por eso validamos con el RPC is_admin()
+    // (SECURITY DEFINER contra la tabla admin_users) antes de dejar pasar.
+    const verifyAdminSession = async (): Promise<boolean> => {
+      const { data: isAdmin, error } = await supabase.rpc('is_admin');
+      if (error) {
+        console.warn('is_admin() fallo, reintentando tras refresh de sesion:', error.message);
+        await supabase.auth.refreshSession();
+        const retry = await supabase.rpc('is_admin');
+        return !retry.error && retry.data === true;
+      }
+      return isAdmin === true;
+    };
+
     useEffect(() => {
       let mounted = true;
       const init = async () => {
@@ -529,9 +549,10 @@ export default function AdminPanelScreen() {
                     // con ese token viejo el backend responde "not authorized" hasta
           // que el usuario cierra sesion y vuelve a entrar. Refrescamos de
           // forma proactiva antes de marcar la sesion como valida.
-          const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          const okAdmin = !refreshError && (await verifyAdminSession());
           if (!mounted) return;
-          setIsAuthenticated(!refreshError && !!(refreshed?.session || session));
+          setIsAuthenticated(okAdmin);
         } else if (mounted) {
           setIsAuthenticated(false);
         }
@@ -539,7 +560,12 @@ export default function AdminPanelScreen() {
       };
       init();
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setIsAuthenticated(!!session);
+        if (!session) {
+          setIsAuthenticated(false);
+          return;
+        }
+        // Sesion nueva (login) o refrescada: validar que sea admin de verdad.
+        verifyAdminSession().then((ok) => setIsAuthenticated(ok));
       });
       return () => {
         mounted = false;
@@ -993,7 +1019,16 @@ const handleLogin = async () => {
       if (error) {
         setLoginError('Correo o contraseña incorrectos.');
       } else {
-        setAdminPassword('');
+        // Credenciales validas pero ¿es una cuenta admin? Si no lo es,
+        // cerramos esa sesion y avisamos claro, en vez de dejar entrar a un
+        // panel donde todas las consultas fallarian con "not authorized".
+        const { data: isAdmin } = await supabase.rpc('is_admin');
+        if (isAdmin !== true) {
+          await supabase.auth.signOut();
+          setLoginError('Esta cuenta no tiene permisos de administrador.');
+        } else {
+          setAdminPassword('');
+        }
       }
     } catch {
       setLoginError('Error inesperado al iniciar sesión.');
