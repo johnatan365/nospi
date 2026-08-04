@@ -2105,8 +2105,122 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  // Al cerrar un evento, crea automaticamente un borrador para la semana
+  // siguiente (mismo dia de la semana = fecha + 7 dias), con el nombre
+  // actualizado a la nueva fecha y el resto de campos igual que al duplicar.
+  // Devuelve un texto para avisarle al admin que paso.
+  const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  const createNextWeekDraft = async (event: Event): Promise<string> => {
+    // Parseamos la fecha 'YYYY-MM-DD' como fecha local (sin corrimiento de zona).
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(event.date || '');
+    if (!m) return 'No se pudo crear el borrador siguiente: el evento no tiene una fecha valida.';
+
+    const next = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    next.setDate(next.getDate() + 7); // +1 semana = mismo dia de la semana
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const nextDateStr = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+    const nuevaFechaTexto = `${next.getDate()} de ${MESES_ES[next.getMonth()]}`;
+
+    // Nombre: reemplaza la fecha entre parentesis por la nueva; si no hay
+    // parentesis, la agrega al final.
+    let nextName: string | null = null;
+    if (event.name) {
+      nextName = /\([^)]*\)/.test(event.name)
+        ? event.name.replace(/\([^)]*\)([^()]*)$/, `(${nuevaFechaTexto})$1`).trim()
+        : `${event.name} (${nuevaFechaTexto})`;
+    }
+
+    // start_time: si existe, tambien lo corremos +7 dias para que quede
+    // consistente con la nueva fecha.
+    let nextStartTime: string | null = null;
+    if (event.start_time) {
+      const st = new Date(event.start_time);
+      if (!isNaN(st.getTime())) {
+        st.setDate(st.getDate() + 7);
+        nextStartTime = st.toISOString();
+      }
+    }
+
+    // Anti-duplicado: si ya existe un evento para esa fecha con el mismo nombre
+    // (o mismo tipo+ciudad cuando no hay nombre), no creamos otro repetido.
+    try {
+      let dupQuery = supabase.from('events').select('id').eq('date', nextDateStr);
+      dupQuery = nextName
+        ? dupQuery.eq('name', nextName)
+        : dupQuery.eq('type', event.type).eq('city', event.city);
+      const { data: existing } = await dupQuery.limit(1);
+      if (existing && existing.length > 0) {
+        return `Ya existia un evento para el ${nuevaFechaTexto}, no se creo un duplicado.`;
+      }
+    } catch (e) {
+      // Si el chequeo falla, seguimos e intentamos crear igual.
+    }
+
+    const { data: newEvent, error } = await supabase.from('events').insert({
+      name: nextName,
+      city: event.city,
+      description: event.description,
+      type: event.type,
+      date: nextDateStr,
+      start_time: nextStartTime,
+      time: event.time,
+      location_name: event.location_name,
+      location_address: event.location_address,
+      maps_link: event.maps_link,
+      require_gps_verification: event.require_gps_verification,
+      is_location_revealed: false,
+      max_participants: event.max_participants,
+      current_participants: 0,
+      event_status: 'draft',
+      confirmation_code: event.confirmation_code,
+      price: event.price,
+    }).select('id').single();
+
+    if (error || !newEvent) {
+      return 'El evento se cerro, pero no se pudo crear el borrador siguiente: ' + (error?.message || 'sin respuesta');
+    }
+
+    // Copia las preguntas del evento cerrado, re-barajando el orden dentro de
+    // cada nivel (igual que al duplicar).
+    try {
+      const { data: originalQuestions } = await supabase
+        .from('event_questions')
+        .select('level, question_text, question_order, is_default')
+        .eq('event_id', event.id)
+        .order('level', { ascending: true })
+        .order('question_order', { ascending: true });
+
+      if (originalQuestions && originalQuestions.length > 0) {
+        const levelOrder: string[] = [];
+        const byLevel: Record<string, typeof originalQuestions> = {};
+        for (const q of originalQuestions) {
+          if (!byLevel[q.level]) {
+            byLevel[q.level] = [];
+            levelOrder.push(q.level);
+          }
+          byLevel[q.level].push(q);
+        }
+        const reshuffled = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
+        const questionsToInsert = reshuffled.map((q, index) => ({
+          event_id: newEvent.id,
+          level: q.level,
+          question_text: q.question_text,
+          question_order: index,
+          is_default: q.is_default,
+        }));
+        await supabase.from('event_questions').insert(questionsToInsert);
+      }
+    } catch (e) {
+      console.error('Error copiando preguntas al borrador siguiente:', e);
+    }
+
+    const nombreMostrado = nextName || `${event.type} - ${event.city}`;
+    return `Se creo el borrador "${nombreMostrado}" para el ${nuevaFechaTexto}. Revisalo y publicalo cuando quieras.`;
+  };
+
   const handleCloseEvent = async (eventId: string) => {
-    const confirmed = window.confirm('¿Cerrar este evento?');
+    const confirmed = window.confirm('¿Cerrar este evento? Se creará automáticamente un borrador para la semana siguiente (mismo día y hora).');
     if (!confirmed) return;
 
     try {
@@ -2120,7 +2234,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      window.alert('Evento cerrado exitosamente');
+      // Crear el borrador de la semana siguiente a partir del evento cerrado.
+      const closedEvent = events.find(e => e.id === eventId);
+      let nextMsg = '';
+      if (closedEvent) {
+        nextMsg = '\n\n' + await createNextWeekDraft(closedEvent);
+      }
+
+      window.alert('Evento cerrado exitosamente.' + nextMsg);
       loadDashboardData();
     } catch (error) {
       console.error('Failed to close event:', error);
