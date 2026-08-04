@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Platform, Image, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -675,6 +675,37 @@ export default function AdminPanelScreen() {
   });
 
   const [mapsLinkCheck, setMapsLinkCheck] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; lat?: number; lng?: number; error?: string }>({ status: 'idle' });
+
+  // Autocompletado de lugares ya usados en eventos anteriores.
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
+
+  // Lista deduplicada de lugares usados en eventos previos. Como `events`
+  // viene ordenado por fecha ascendente, la última aparición de cada lugar
+  // (la más reciente) es la que queda, y esa es la que sugerimos.
+  const knownVenues = useMemo(() => {
+    const byName = new Map<string, { location_name: string; location_address: string; maps_link: string }>();
+    for (const ev of events) {
+      const name = (ev.location_name || '').trim();
+      if (!name) continue;
+      byName.set(name.toLowerCase(), {
+        location_name: name,
+        location_address: (ev.location_address || '').trim(),
+        maps_link: (ev.maps_link || '').trim(),
+      });
+    }
+    return Array.from(byName.values());
+  }, [events]);
+
+  // Sugerencias que empiezan por lo que se está escribiendo en "Nombre del
+  // Lugar". Solo aparecen al escribir (campo vacío = sin lista), se van
+  // descartando conforme se agregan letras, y toleran tildes (escribir "cafe"
+  // encuentra "Café"). Si el texto coincide exacto con un lugar, queda ese.
+  const venueSuggestions = useMemo(() => {
+    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const q = norm(eventForm.location_name || '');
+    if (!q) return [];
+    return knownVenues.filter(v => norm(v.location_name).startsWith(q)).slice(0, 6);
+  }, [knownVenues, eventForm.location_name]);
 
   const checkMapsLink = async (link: string) => {
     if (!link || !link.trim()) return;
@@ -5851,12 +5882,60 @@ setBulkWhatsAppPending(pending);
               />
 
               <Text style={styles.inputLabel}>Nombre del Lugar</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Bar La Terraza"
-                value={eventForm.location_name}
-                onChangeText={(text) => setEventForm({ ...eventForm, location_name: text })}
-              />
+              <View style={{ position: 'relative', zIndex: 10 }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Bar La Terraza"
+                  value={eventForm.location_name}
+                  onChangeText={(text) => { setEventForm({ ...eventForm, location_name: text }); setShowVenueSuggestions(true); }}
+                  onFocus={() => setShowVenueSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 150)}
+                />
+                {showVenueSuggestions && venueSuggestions.length > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: -12,
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid #E0E0E0',
+                      borderRadius: 12,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                      overflow: 'hidden',
+                      maxHeight: 240,
+                    }}
+                  >
+                    {venueSuggestions.map((v, i) => (
+                      <TouchableOpacity
+                        key={v.location_name + i}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: i < venueSuggestions.length - 1 ? 1 : 0,
+                          borderBottomColor: '#F0F0F0',
+                        }}
+                        onPress={() => {
+                          setEventForm({
+                            ...eventForm,
+                            location_name: v.location_name,
+                            location_address: v.location_address,
+                            maps_link: v.maps_link,
+                          });
+                          setShowVenueSuggestions(false);
+                          setMapsLinkCheck({ status: 'idle' });
+                        }}
+                      >
+                        <Text style={{ fontSize: 15, color: '#111827', fontWeight: '600' }}>📍 {v.location_name}</Text>
+                        {!!v.location_address && (
+                          <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{v.location_address}</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
 
               <Text style={styles.inputLabel}>Dirección del Lugar</Text>
               <TextInput
