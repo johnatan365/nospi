@@ -2105,19 +2105,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
-  // Al cerrar un evento, crea automaticamente un borrador para la semana
-  // siguiente (mismo dia de la semana = fecha + 7 dias), con el nombre
+  // Al cerrar un evento, crea automaticamente borradores para las proximas
+  // semanas (mismo dia de la semana = fecha + N dias), con el nombre
   // actualizado a la nueva fecha y el resto de campos igual que al duplicar.
-  // Devuelve un texto para avisarle al admin que paso.
+  // Devuelve un texto para avisarle al admin que paso con cada borrador.
   const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-  const createNextWeekDraft = async (event: Event): Promise<string> => {
+  const createDraftForOffset = async (event: Event, daysOffset: number): Promise<string> => {
     // Parseamos la fecha 'YYYY-MM-DD' como fecha local (sin corrimiento de zona).
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(event.date || '');
-    if (!m) return 'No se pudo crear el borrador siguiente: el evento no tiene una fecha valida.';
+    if (!m) return 'No se pudo crear el borrador: el evento no tiene una fecha valida.';
 
     const next = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    next.setDate(next.getDate() + 7); // +1 semana = mismo dia de la semana
+    next.setDate(next.getDate() + daysOffset); // +N dias = mismo dia de la semana
     const pad = (n: number) => String(n).padStart(2, '0');
     const nextDateStr = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
     const nuevaFechaTexto = `${next.getDate()} de ${MESES_ES[next.getMonth()]}`;
@@ -2131,13 +2131,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         : `${event.name} (${nuevaFechaTexto})`;
     }
 
-    // start_time: si existe, tambien lo corremos +7 dias para que quede
-    // consistente con la nueva fecha.
+    // start_time: si existe, tambien lo corremos los mismos dias para que
+    // quede consistente con la nueva fecha.
     let nextStartTime: string | null = null;
     if (event.start_time) {
       const st = new Date(event.start_time);
       if (!isNaN(st.getTime())) {
-        st.setDate(st.getDate() + 7);
+        st.setDate(st.getDate() + daysOffset);
         nextStartTime = st.toISOString();
       }
     }
@@ -2220,7 +2220,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handleCloseEvent = async (eventId: string) => {
-    const confirmed = window.confirm('¿Cerrar este evento? Se creará automáticamente un borrador para la semana siguiente (mismo día y hora).');
+    const confirmed = window.confirm('¿Cerrar este evento? Se crearán automáticamente 2 borradores para las próximas dos semanas (mismo día y hora).');
     if (!confirmed) return;
 
     try {
@@ -2234,11 +2234,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      // Crear el borrador de la semana siguiente a partir del evento cerrado.
+      // Crear los borradores de las proximas dos semanas (+7 y +14 dias, mismo
+      // dia de la semana) a partir del evento cerrado.
       const closedEvent = events.find(e => e.id === eventId);
       let nextMsg = '';
       if (closedEvent) {
-        nextMsg = '\n\n' + await createNextWeekDraft(closedEvent);
+        for (const daysOffset of [7, 14]) {
+          nextMsg += '\n\n' + await createDraftForOffset(closedEvent, daysOffset);
+        }
       }
 
       window.alert('Evento cerrado exitosamente.' + nextMsg);
