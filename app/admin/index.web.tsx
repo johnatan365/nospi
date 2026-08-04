@@ -2112,15 +2112,35 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
   const createDraftForOffset = async (event: Event, daysOffset: number): Promise<string> => {
-    // Parseamos la fecha 'YYYY-MM-DD' como fecha local (sin corrimiento de zona).
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(event.date || '');
-    if (!m) return 'No se pudo crear el borrador: el evento no tiene una fecha valida.';
+    // La columna date/start_time es un timestamptz: guarda el instante de
+    // inicio del evento en UTC. Tomamos ese instante y le sumamos exactamente
+    // los dias pedidos. Colombia no tiene horario de verano, asi que sumar
+    // dias exactos mantiene la misma hora local y el mismo dia de la semana.
+    const baseIso = event.date || event.start_time;
+    const base = baseIso ? new Date(baseIso) : null;
+    if (!base || isNaN(base.getTime())) {
+      return 'No se pudo crear el borrador: el evento no tiene una fecha valida.';
+    }
+    const MS_POR_DIA = 24 * 60 * 60 * 1000;
+    const shiftedIso = new Date(base.getTime() + daysOffset * MS_POR_DIA).toISOString();
 
-    const next = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    next.setDate(next.getDate() + daysOffset); // +N dias = mismo dia de la semana
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const nextDateStr = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
-    const nuevaFechaTexto = `${next.getDate()} de ${MESES_ES[next.getMonth()]}`;
+    // start_time: mismo corrimiento (si el evento lo tiene).
+    let nextStartTime: string | null = null;
+    if (event.start_time) {
+      const st = new Date(event.start_time);
+      if (!isNaN(st.getTime())) {
+        nextStartTime = new Date(st.getTime() + daysOffset * MS_POR_DIA).toISOString();
+      }
+    }
+
+    // Fecha para el NOMBRE: el dia calendario en hora de Colombia (America/
+    // Bogota), que es como el admin lee y nombra las fechas — NO el dia en UTC,
+    // que para eventos de noche cae un dia despues.
+    const localYMD = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(shiftedIso)); // "2026-08-13"
+    const [, lmStr, ldStr] = localYMD.split('-');
+    const nuevaFechaTexto = `${Number(ldStr)} de ${MESES_ES[Number(lmStr) - 1]}`;
 
     // Nombre: reemplaza la fecha entre parentesis por la nueva; si no hay
     // parentesis, la agrega al final.
@@ -2131,30 +2151,18 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         : `${event.name} (${nuevaFechaTexto})`;
     }
 
-    // start_time: si existe, tambien lo corremos los mismos dias para que
-    // quede consistente con la nueva fecha.
-    let nextStartTime: string | null = null;
-    if (event.start_time) {
-      const st = new Date(event.start_time);
-      if (!isNaN(st.getTime())) {
-        st.setDate(st.getDate() + daysOffset);
-        nextStartTime = st.toISOString();
+    // Anti-duplicado: si ya existe un evento con ese mismo nombre (el nombre ya
+    // incluye la fecha local), no creamos otro repetido.
+    if (nextName) {
+      try {
+        const { data: existing } = await supabase
+          .from('events').select('id').eq('name', nextName).limit(1);
+        if (existing && existing.length > 0) {
+          return `Ya existia un evento "${nextName}", no se creo un duplicado.`;
+        }
+      } catch (e) {
+        // Si el chequeo falla, seguimos e intentamos crear igual.
       }
-    }
-
-    // Anti-duplicado: si ya existe un evento para esa fecha con el mismo nombre
-    // (o mismo tipo+ciudad cuando no hay nombre), no creamos otro repetido.
-    try {
-      let dupQuery = supabase.from('events').select('id').eq('date', nextDateStr);
-      dupQuery = nextName
-        ? dupQuery.eq('name', nextName)
-        : dupQuery.eq('type', event.type).eq('city', event.city);
-      const { data: existing } = await dupQuery.limit(1);
-      if (existing && existing.length > 0) {
-        return `Ya existia un evento para el ${nuevaFechaTexto}, no se creo un duplicado.`;
-      }
-    } catch (e) {
-      // Si el chequeo falla, seguimos e intentamos crear igual.
     }
 
     const { data: newEvent, error } = await supabase.from('events').insert({
@@ -2162,12 +2170,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       city: event.city,
       description: event.description,
       type: event.type,
-      date: nextDateStr,
-      start_time: nextStartTime,
+      date: shiftedIso,
+      start_time: nextStartTime ?? shiftedIso,
       time: event.time,
-      location_name: event.location_name,
-      location_address: event.location_address,
-      maps_link: event.maps_link,
+      // El lugar NO se copia a proposito: los borradores quedan sin lugar,
+      // direccion ni link de maps para llenarlos despues.
+      location_name: '',
+      location_address: '',
+      maps_link: '',
       require_gps_verification: event.require_gps_verification,
       is_location_revealed: false,
       max_participants: event.max_participants,
