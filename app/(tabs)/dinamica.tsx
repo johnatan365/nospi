@@ -1132,12 +1132,7 @@ export default function DinamicaScreen() {
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>👥</Text>
-              <Text style={styles.rulesText}>Todos deben responder cada pregunta para avanzar a la siguiente.</Text>
-            </View>
-            <View style={styles.rulesDivider} />
-            <View style={styles.rulesRow}>
-              <Text style={styles.rulesEmoji}>🥃</Text>
-              <Text style={styles.rulesText}>Si alguien no responde, deberá tomar un shot o cumplir un reto del grupo.</Text>
+              <Text style={styles.rulesText}>En cada pregunta responde quien tenga algo que contar; no es obligatorio para todos.</Text>
             </View>
           </View>
 

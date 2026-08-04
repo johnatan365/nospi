@@ -1734,6 +1734,60 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     return result;
   };
 
+  // Cuántas preguntas por nivel recibe cada evento (incluye la fijada en Divertido).
+  const QUESTIONS_PER_LEVEL = 8;
+
+  // Arma las preguntas de un evento tomando un subconjunto ALEATORIO del banco
+  // global (event_id = null): QUESTIONS_PER_LEVEL por nivel. En Divertido, la
+  // pregunta fijada (is_pinned) va SIEMPRE primera y no entra en el sorteo; el
+  // resto del cupo se completa al azar. Se usa al crear un evento nuevo y al
+  // crear los borradores automáticos de las próximas semanas, para que cada
+  // evento salga con preguntas distintas.
+  const insertRandomQuestionsFromBank = async (eventId: string) => {
+    const { data: globalQuestions, error: fetchError } = await supabase
+      .from('event_questions')
+      .select('level, question_text, is_pinned')
+      .is('event_id', null);
+
+    if (fetchError || !globalQuestions || globalQuestions.length === 0) {
+      console.log('insertRandomQuestionsFromBank: no hay preguntas globales');
+      return;
+    }
+
+    // Borrar preguntas previas del evento (por si es una edición o re-generación)
+    await supabase.from('event_questions').delete().eq('event_id', eventId);
+
+    const LEVELS = ['divertido', 'sensual', 'atrevido'];
+    const questionsToInsert: any[] = [];
+    let order = 0;
+    for (const level of LEVELS) {
+      const inLevel = globalQuestions.filter((q) => q.level === level);
+      const pinned = inLevel.filter((q) => q.is_pinned);
+      const rest = shuffleArray(inLevel.filter((q) => !q.is_pinned));
+      const selected = pinned.length > 0
+        ? [pinned[0], ...rest.slice(0, QUESTIONS_PER_LEVEL - 1)]
+        : rest.slice(0, QUESTIONS_PER_LEVEL);
+      for (const q of selected) {
+        questionsToInsert.push({
+          event_id: eventId,
+          level,
+          question_text: q.question_text,
+          question_order: order++,
+          is_default: true,
+        });
+      }
+    }
+
+    if (questionsToInsert.length > 0) {
+      const { error: insertError } = await supabase.from('event_questions').insert(questionsToInsert);
+      if (insertError) {
+        console.error('Error copiando preguntas del banco al evento:', insertError);
+      } else {
+        console.log(`insertRandomQuestionsFromBank: ${questionsToInsert.length} preguntas (${QUESTIONS_PER_LEVEL}/nivel, aleatorias + fijada) copiadas al evento`);
+      }
+    }
+  };
+
   const saveEventQuestions = async (eventId: string) => {
     try {
       // Verificar si el admin agregó preguntas custom para este evento
@@ -1768,53 +1822,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
         }
       } else {
-        // No hay preguntas custom — copiar las globales (event_id = null) al evento
-        const { data: globalQuestions, error: fetchError } = await supabase
-          .from('event_questions')
-          .select('level, question_text, question_order')
-          .is('event_id', null)
-          .order('level', { ascending: true })
-          .order('question_order', { ascending: true });
-
-        if (fetchError || !globalQuestions || globalQuestions.length === 0) {
-          console.log('saveEventQuestions: no hay preguntas globales para copiar');
-          return;
-        }
-
-        // Borrar preguntas previas del evento (por si es una edición)
-        await supabase.from('event_questions').delete().eq('event_id', eventId);
-
-        // Agrupar por nivel y barajar el orden dentro de cada nivel, manteniendo
-        // los niveles agrupados (divertido, luego sensual, luego atrevido).
-        const levelOrder: string[] = [];
-        const byLevel: Record<string, typeof globalQuestions> = {};
-        for (const q of globalQuestions) {
-          if (!byLevel[q.level]) {
-            byLevel[q.level] = [];
-            levelOrder.push(q.level);
-          }
-          byLevel[q.level].push(q);
-        }
-
-        const shuffledQuestions = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
-
-        const questionsToInsert = shuffledQuestions.map((q, index) => ({
-          event_id: eventId,
-          level: q.level,
-          question_text: q.question_text,
-          question_order: index,
-          is_default: true,
-        }));
-
-        const { error: insertError } = await supabase
-          .from('event_questions')
-          .insert(questionsToInsert);
-
-        if (insertError) {
-          console.error('Error copiando preguntas globales al evento:', insertError);
-        } else {
-          console.log(`saveEventQuestions: ${questionsToInsert.length} preguntas globales copiadas al evento (orden aleatorio por nivel)`);
-        }
+        // No hay preguntas custom — armar el evento con un SUBCONJUNTO ALEATORIO
+        // del banco global (event_id = null): QUESTIONS_PER_LEVEL por nivel, y en
+        // Divertido la pregunta FIJADA (is_pinned) siempre primera.
+        await insertRandomQuestionsFromBank(eventId);
       }
     } catch (error) {
       console.error('Failed to save event questions:', error);
@@ -2191,38 +2202,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       return 'El evento se cerro, pero no se pudo crear el borrador siguiente: ' + (error?.message || 'sin respuesta');
     }
 
-    // Copia las preguntas del evento cerrado, re-barajando el orden dentro de
-    // cada nivel (igual que al duplicar).
+    // Preguntas del borrador: en vez de copiar las del evento cerrado, se toma
+    // un subconjunto ALEATORIO fresco del banco global (8/nivel + fijada), para
+    // que la siguiente semana no repita las mismas preguntas.
     try {
-      const { data: originalQuestions } = await supabase
-        .from('event_questions')
-        .select('level, question_text, question_order, is_default')
-        .eq('event_id', event.id)
-        .order('level', { ascending: true })
-        .order('question_order', { ascending: true });
-
-      if (originalQuestions && originalQuestions.length > 0) {
-        const levelOrder: string[] = [];
-        const byLevel: Record<string, typeof originalQuestions> = {};
-        for (const q of originalQuestions) {
-          if (!byLevel[q.level]) {
-            byLevel[q.level] = [];
-            levelOrder.push(q.level);
-          }
-          byLevel[q.level].push(q);
-        }
-        const reshuffled = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
-        const questionsToInsert = reshuffled.map((q, index) => ({
-          event_id: newEvent.id,
-          level: q.level,
-          question_text: q.question_text,
-          question_order: index,
-          is_default: q.is_default,
-        }));
-        await supabase.from('event_questions').insert(questionsToInsert);
-      }
+      await insertRandomQuestionsFromBank(newEvent.id);
     } catch (e) {
-      console.error('Error copiando preguntas al borrador siguiente:', e);
+      console.error('Error asignando preguntas al borrador siguiente:', e);
     }
 
     const nombreMostrado = nextName || `${event.type} - ${event.city}`;
@@ -2388,6 +2374,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handleDeleteQuestion = async (questionId: string) => {
+    const target = questions.find((q) => q.id === questionId);
+    if (target?.is_pinned) {
+      window.alert('La pregunta fijada no se puede eliminar. Si quieres cambiarla, edita su texto.');
+      return;
+    }
     const confirmed = window.confirm('¿Eliminar esta pregunta?');
     if (!confirmed) return;
 
@@ -2801,11 +2792,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const renderQuestions = () => {
+    const pinnedQuestion = questions.find((q) => q.is_pinned);
+    const normalQuestions = questions.filter((q) => !q.is_pinned);
     return (
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Preguntas Globales</Text>
         <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 24 }}>
-          Estas preguntas aplican a todos los eventos. Puedes reordenarlas arrastrando.
+          Estas preguntas son el banco. En cada evento se eligen 8 al azar por nivel (en Divertido, la fijada va primero). Puedes agregar, editar y eliminar las de abajo.
         </Text>
 
         <View style={styles.levelSelector}>
@@ -2868,12 +2861,29 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
         </View>
 
+        {pinnedQuestion && (
+          <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400E', marginBottom: 6 }}>
+              📌 Pregunta fijada — siempre es la PRIMERA de la dinámica y no entra en el sorteo. Puedes editarla, pero no se elimina.
+            </Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 0 }]}
+              value={pinnedQuestion.question_text}
+              multiline
+              onChangeText={(text) => {
+                setQuestions(questions.map((q) => (q.id === pinnedQuestion.id ? { ...q, question_text: text } : q)));
+              }}
+              onBlur={() => handleUpdateQuestion(pinnedQuestion.id, pinnedQuestion.question_text)}
+            />
+          </View>
+        )}
+
         {loadingQuestions ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={nospiColors.purpleDark} />
             <Text style={styles.loadingText}>Cargando preguntas...</Text>
           </View>
-        ) : questions.length === 0 ? (
+        ) : normalQuestions.length === 0 ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
               No hay preguntas para este nivel. Agrega una o restaura las predeterminadas.
@@ -2881,7 +2891,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </View>
         ) : (
           <View>
-            {questions.map((question, index) => (
+            {normalQuestions.map((question, index) => (
               <div
                 key={question.id}
                 draggable
@@ -2897,9 +2907,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     style={[styles.input, { flex: 1, marginBottom: 0 }]}
                     value={question.question_text}
                     onChangeText={(text) => {
-                      const updated = [...questions];
-                      updated[index].question_text = text;
-                      setQuestions(updated);
+                      setQuestions(questions.map((q) => (q.id === question.id ? { ...q, question_text: text } : q)));
                     }}
                     onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
                   />

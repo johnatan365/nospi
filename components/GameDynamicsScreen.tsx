@@ -570,11 +570,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
     try {
       if (nextQuestionIndex < questionsForLevel.length) {
-        // Cada 3 preguntas respondidas dentro del nivel, en vez de seguir
-        // automático se le pregunta a la mesa si quiere más preguntas de
-        // este nivel o subir al siguiente — lo hablan entre ellos y
-        // cualquiera presiona la decisión, igual que "Continuar" hoy.
-        if (nextQuestionIndex % 3 === 0) {
+        // Cada 4 preguntas respondidas dentro del nivel (o sea, en la mitad de
+        // las 8), en vez de seguir automático se le pregunta a la mesa si quiere
+        // más preguntas de este nivel o subir al siguiente — lo hablan entre
+        // ellos y cualquiera presiona la decisión, igual que "Continuar" hoy.
+        if (nextQuestionIndex % 4 === 0) {
           setGamePhase('level_checkin');
           setCurrentQuestionIndex(nextQuestionIndex); // índice pendiente si eligen "seguir"
 
@@ -768,6 +768,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
   const levelPosition = LEVEL_ORDER.indexOf(currentLevel) + 1;
 
+  // Progreso dentro del nivel, para que la mesa sepa cuántas van y cuántas
+  // faltan (antes decidían a ciegas si pasar de nivel).
+  const questionsInLevel = QUESTIONS[currentLevel]?.length ?? 0;
+  const questionNumber = Math.min(currentQuestionIndex + 1, questionsInLevel);
+
   const theme = LEVEL_THEMES[currentLevel];
   
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
@@ -792,7 +797,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           {/* Level badge */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
             <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()} · Nivel {levelPosition} de 3</Text>
+            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()} · Nivel {levelPosition} de 3 · Pregunta {questionNumber} de {questionsInLevel}</Text>
           </View>
 
           {/* Question card */}
@@ -804,7 +809,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             },
           ]}>
             <View style={[styles.everyoneBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
-              <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>👥 Todos deben responder esta pregunta</Text>
+              <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>🙌 Responde quien tenga algo que contar</Text>
             </View>
 
             <Text style={[
@@ -828,7 +833,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           {/* Instruction card */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
-              Todos en la mesa responden esta misma pregunta, por turnos. Cuando todos hayan respondido, presionen Continuar.
+              No todos tienen que responder: habla quien tenga una historia o algo que aportar. Cuando terminen, presionen Continuar.
             </Text>
           </View>
 
@@ -899,6 +904,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         <View style={styles.checkinContainer}>
           <Text style={styles.checkinEmoji}>{checkin.emoji}</Text>
           <Text style={styles.checkinTitle}>{checkin.title}</Text>
+          <Text style={styles.checkinText}>Llevan {currentQuestionIndex} de {questionsInLevel} preguntas de {levelName}.</Text>
           <Text style={styles.checkinText}>{checkin.text}</Text>
           <Text style={styles.checkinSubtitle}>{CHECKIN_SUBTITLE}</Text>
 
