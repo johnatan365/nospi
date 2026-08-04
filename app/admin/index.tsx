@@ -1727,7 +1727,7 @@ const handleLogin = async () => {
             onPress={() => { setSelectedLevel('sensual'); setTimeout(loadQuestions, 0); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
-              😘 Sensual
+              😘 Coqueto
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2702,7 +2702,7 @@ const handleLogin = async () => {
                   ) : (
                     eventMatches.map((match) => {
                       const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '😘' : '🔥';
-                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Coqueto' : 'Atrevido';
                       
                       return (
                         <View key={match.id} style={styles.matchItem}>
@@ -3443,7 +3443,7 @@ if (checkingSession) {
 
                     {(['divertido', 'sensual', 'atrevido'] as const).map((level) => {
                       const levelEmoji = level === 'divertido' ? '😄' : level === 'sensual' ? '😘' : '🔥';
-                      const levelText = level === 'divertido' ? 'Divertido' : level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      const levelText = level === 'divertido' ? 'Divertido' : level === 'sensual' ? 'Coqueto' : 'Atrevido';
                       
                       return (
                         <View key={level} style={styles.questionLevelSection}>
@@ -3661,7 +3661,7 @@ if (checkingSession) {
                   }}
                 >
                   <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
-                    😘 Sensual
+                    😘 Coqueto
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity

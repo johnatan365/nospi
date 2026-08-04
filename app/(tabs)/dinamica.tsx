@@ -1127,7 +1127,7 @@ export default function DinamicaScreen() {
           <View style={styles.rulesCard}>
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🎯</Text>
-              <Text style={styles.rulesText}>Pasarás por 3 niveles: Divertido, Sensual y Atrevido.</Text>
+              <Text style={styles.rulesText}>Pasarás por 3 niveles: Divertido, Coqueto y Atrevido.</Text>
             </View>
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>

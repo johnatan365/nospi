@@ -25,15 +25,15 @@ const CHECKIN_COPY: Record<QuestionLevel, {
   divertido: {
     emoji: '😄',
     title: '¿Cómo vamos? 😄',
-    text: '¿Quieren seguir con más preguntas de Divertido, o subir al nivel Sensual?',
+    text: '¿Quieren seguir con más preguntas de Divertido, o subir al nivel Coqueto?',
     stayLabel: 'Más de Divertido 😄',
-    advanceLabel: 'Subir a Sensual 💕',
+    advanceLabel: 'Subir a Coqueto 💕',
   },
   sensual: {
     emoji: '💕',
     title: '¿Cómo vamos? 💕',
-    text: '¿Quieren seguir con más preguntas de Sensual, o subir al nivel Atrevido?',
-    stayLabel: 'Más de Sensual 💕',
+    text: '¿Quieren seguir con más preguntas de Coqueto, o subir al nivel Atrevido?',
+    stayLabel: 'Más de Coqueto 💕',
     advanceLabel: 'Subir a Atrevido 🔥',
   },
   atrevido: {
@@ -765,13 +765,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   }, [appointment, currentUserId, loading, onFinish]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
-  const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+  const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
   const levelPosition = LEVEL_ORDER.indexOf(currentLevel) + 1;
 
   const theme = LEVEL_THEMES[currentLevel];
   
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
-  const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Sensual' : 'Atrevido';
+  const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
   const transitionTheme = transitionLevel ? LEVEL_THEMES[transitionLevel] : theme;
 
   // Timer color thresholds
@@ -931,7 +931,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   if (gamePhase === 'level_transition' || gamePhase === 'finished') {
     const isFinished = gamePhase === 'finished';
     const nextLevelEmoji = currentLevel === 'divertido' ? '💕' : currentLevel === 'sensual' ? '🔥' : '✨';
-    const nextLevelName = currentLevel === 'divertido' ? 'Sensual' : currentLevel === 'sensual' ? 'Atrevido' : 'Fase libre';
+    const nextLevelName = currentLevel === 'divertido' ? 'Coqueto' : currentLevel === 'sensual' ? 'Atrevido' : 'Fase libre';
     const transitionColors: [string, string, ...string[]] = isFinished
       ? ['#1C1C2E', '#2C2C3E', '#3C3C4E']
       : LEVEL_THEMES[currentLevel === 'divertido' ? 'sensual' : 'atrevido'].gradient;

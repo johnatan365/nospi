@@ -2822,7 +2822,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             onPress={() => { setSelectedLevel('sensual'); setTimeout(loadQuestions, 0); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
-              😘 Sensual
+              😘 Coqueto
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -5082,7 +5082,7 @@ setBulkWhatsAppPending(pending);
                   ) : (
                     eventMatches.map((match) => {
                       const levelEmoji = match.level === 'divertido' ? '😄' : match.level === 'sensual' ? '😘' : '🔥';
-                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      const levelText = match.level === 'divertido' ? 'Divertido' : match.level === 'sensual' ? 'Coqueto' : 'Atrevido';
                       
                       return (
                         <View key={match.id} style={styles.matchItem}>
@@ -6224,7 +6224,7 @@ setBulkWhatsAppPending(pending);
 
                     {(['divertido', 'sensual', 'atrevido'] as const).map((level) => {
                       const levelEmoji = level === 'divertido' ? '😄' : level === 'sensual' ? '😘' : '🔥';
-                      const levelText = level === 'divertido' ? 'Divertido' : level === 'sensual' ? 'Sensual' : 'Atrevido';
+                      const levelText = level === 'divertido' ? 'Divertido' : level === 'sensual' ? 'Coqueto' : 'Atrevido';
                       
                       return (
                         <View key={level} style={styles.questionLevelSection}>
@@ -6695,7 +6695,7 @@ setBulkWhatsAppPending(pending);
                   }}
                 >
                   <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
-                    😘 Sensual
+                    😘 Coqueto
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
