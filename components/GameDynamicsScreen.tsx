@@ -794,10 +794,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          {/* Level badge */}
+          {/* Level badge: nombre del nivel arriba (grande y centrado) y, debajo,
+              el detalle "Nivel X de 3 · Pregunta Y de N". */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
-            <Text style={styles.levelEmoji}>{levelEmoji}</Text>
-            <Text style={[styles.levelText, { color: '#FFFFFF' }]}>{levelName.toUpperCase()} · Nivel {levelPosition} de 3 · Pregunta {questionNumber} de {questionsInLevel}</Text>
+            <Text style={styles.levelName}>{levelEmoji} {levelName}</Text>
+            <Text style={styles.levelDetail}>Nivel {levelPosition} de 3 · Pregunta {questionNumber} de {questionsInLevel}</Text>
           </View>
 
           {/* Question card */}
@@ -1076,17 +1077,34 @@ const styles = StyleSheet.create({
 
   // ── Level badge ──────────────────────────────────────────────────────────────
   levelBadge: {
-    borderRadius: 30,
+    borderRadius: 24,
     borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
     marginTop: 60,
     marginBottom: 14,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
   },
+  levelName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  levelDetail: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.82)',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  // Estilos antiguos del badge de una sola línea (ya no se usan, se conservan
+  // por si algún otro punto los referencia).
   levelEmoji: {
     fontSize: 18,
     marginRight: 7,
