@@ -775,7 +775,7 @@ export default function AppointmentsScreen() {
                 ¡Pago exitoso!
               </Text>
               <Text style={{ fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                Tu asistencia al evento ha sido confirmada. ¡Nos vemos pronto!
+                Tu asistencia al evento ha sido confirmada. ¡Pronto Nospi! 😄
               </Text>
               <TouchableOpacity
                 style={{ backgroundColor: nospiColors.purpleDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%' }}

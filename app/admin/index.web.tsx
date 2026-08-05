@@ -133,6 +133,7 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     ``,
     `ℹ️ Si necesitas cancelar, hazlo desde la app con más de 24 horas de anticipación y recibirás tu saldo para otro evento. Con menos de 24 horas no hay devolución.`,
     ``,
+    `¡Nos pillamos pronto! 😎`,
     `_Equipo Nospi_`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
@@ -181,6 +182,7 @@ function buildEventReminderWhatsAppLink(
     ``,
     `¿No puedes asistir? Cancela desde la app con más de 24 horas de anticipación y conservas tu saldo para otro evento. Con menos de 24 horas no hay devolución.`,
     ``,
+    `¡Nos pillamos! 😄`,
     `_Equipo Nospi_`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
@@ -219,7 +221,7 @@ function buildSameDayWhatsAppLink(
     ``,
     `💡 Antes de arrancar, elijan a alguien que se encargue de iniciar la dinámica y leer las preguntas en voz alta.`,
     ``,
-    `¡Nos vemos hoy! 🎉`,
+    `¡Hoy Nospi! 🎉`,
     `_Equipo Nospi_`,
     ].join('\n');
 
@@ -250,6 +252,7 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
     ``,
     `💳 Si quieres, te mandamos el link directo para que sea más fácil completar el pago. Solo cuéntanos y te lo enviamos.`,
     ``,
+    `¡Te esperamos! Nospi 🙌`,
     `_Equipo Nospi_`,
     ].join('\n');
 
