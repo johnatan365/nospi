@@ -10,6 +10,8 @@ export interface TabBarItem {
   route: string;
   icon: string;
   label: string;
+  /** Contador opcional (ej. mensajes sin leer); si es > 0 se muestra un badge. */
+  badge?: number;
 }
 
 interface FloatingTabBarProps {
@@ -49,6 +51,11 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
                   size={26}
                   color={iconColor}
                 />
+                {!!tab.badge && tab.badge > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{tab.badge > 9 ? '9+' : tab.badge}</Text>
+                  </View>
+                )}
               </View>
               <Text style={[styles.label, { color: labelColor }]}>{tab.label}</Text>
             </TouchableOpacity>
@@ -94,6 +101,26 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginBottom: 4,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -12,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#F0245A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   label: {
     fontSize: 11,

@@ -3,9 +3,11 @@ import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
 
 export default function TabLayout() {
   const { loading: supabaseLoading } = useSupabase();
+  const unreadChats = useUnreadChatCount();
 
   // Show a spinner while Supabase session is being established.
   // This prevents the OAuth flicker: tabs render only once the session is ready.
@@ -41,6 +43,7 @@ export default function TabLayout() {
       route: '/(tabs)/chats',
       icon: 'forum',
       label: 'Chat',
+      badge: unreadChats,
     },
     {
       name: 'profile',
