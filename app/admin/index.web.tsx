@@ -1077,12 +1077,42 @@ const handleLogin = async () => {
     try {
       setLoading(true);
 
-      // Load events
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: true });
+      // ── Datos ESENCIALES: se cargan en PARALELO (antes iban una tras otra en
+      // serie, lo que sumaba varios segundos). Con Promise.all el tiempo total
+      // pasa a ser el de la consulta más lenta, no la suma de todas.
+      const eventsP = supabase.from('events').select('*').order('date', { ascending: true });
 
+      // Usuarios: la función valida auth.uid() contra la tabla admins
+      // (SECURITY DEFINER). Si el token del navegador venció justo al cargar,
+      // Supabase puede responder "not authorized" aunque sí seas admin —
+      // refrescamos la sesión una vez y reintentamos para evitar el falso error.
+      const usersP = (async () => {
+        let { data, error } = await supabase.rpc('get_all_users_for_admin');
+        if (error && error.message?.includes('not authorized')) {
+          console.warn('get_all_users_for_admin: not authorized, refrescando sesión y reintentando…');
+          await supabase.auth.refreshSession();
+          const retry = await supabase.rpc('get_all_users_for_admin');
+          data = retry.data;
+          error = retry.error;
+        }
+        return { data, error };
+      })();
+
+      const createdDatesP = supabase.rpc('get_user_created_dates');
+      const ratingsP = supabase.from('event_ratings').select('rated_user_id, rating');
+      const platformP = supabase.from('user_platform_activity').select('user_id, platform, last_seen_at');
+      const appointmentsP = supabase.rpc('get_all_appointments_for_admin');
+
+      const [
+        { data: eventsData, error: eventsError },
+        { data: usersData, error: usersError },
+        { data: usersDates },
+        { data: allRatings },
+        { data: platformActivityData },
+        { data: appointmentsRawData, error: appointmentsError },
+      ] = await Promise.all([eventsP, usersP, createdDatesP, ratingsP, platformP, appointmentsP]);
+
+      // Events
       if (eventsError) {
         console.error('Error loading events:', eventsError);
         window.alert('Error al cargar eventos: ' + eventsError.message);
@@ -1093,30 +1123,11 @@ const handleLogin = async () => {
         setActiveEvents(activeCount);
       }
 
-      // Load users using the secure admin function. Esta función valida
-      // auth.uid() contra la tabla admins (SECURITY DEFINER) — si el token
-      // guardado en el navegador quedó vencido o a punto de vencer justo al
-      // cargar la página, Supabase puede responder "not authorized" aunque la
-      // cuenta sí sea admin. Antes de mostrar el error al usuario, refrescamos
-      // la sesión una vez y reintentamos — evita el falso "no autorizado".
-      let { data: usersData, error: usersError } = await supabase
-        .rpc('get_all_users_for_admin');
-
-      if (usersError && usersError.message?.includes('not authorized')) {
-        console.warn('get_all_users_for_admin: not authorized, refrescando sesión y reintentando…');
-        await supabase.auth.refreshSession();
-        const retry = await supabase.rpc('get_all_users_for_admin');
-        usersData = retry.data;
-        usersError = retry.error;
-      }
-
+      // Users (+ fechas de registro, que la RPC principal puede no devolver)
       if (usersError) {
         console.error('Error loading users:', usersError);
         window.alert('No se pudieron cargar los usuarios: ' + usersError.message);
       } else {
-        // Also fetch created_at which the RPC may not return
-        const { data: usersDates } = await supabase
-          .rpc('get_user_created_dates');
         const datesMap: Record<string, string> = {};
         (usersDates || []).forEach((u: any) => { datesMap[u.id] = u.created_at; });
         const merged = (usersData || []).map((u: any) => ({
@@ -1127,10 +1138,7 @@ const handleLogin = async () => {
         setTotalUsers(merged.length);
       }
 
-      // Load all event_ratings to compute per-user average ratings
-      const { data: allRatings } = await supabase
-        .from('event_ratings')
-        .select('rated_user_id, rating');
+      // Calificaciones → promedio por usuario
       if (allRatings && allRatings.length > 0) {
         const map: Record<string, { sum: number; count: number }> = {};
         for (const r of allRatings) {
@@ -1145,10 +1153,7 @@ const handleLogin = async () => {
         setUserRatingAverages(avgs);
       }
 
-      // Load user_platform_activity para saber que plataformas usa cada usuario actualmente
-      const { data: platformActivityData } = await supabase
-        .from('user_platform_activity')
-        .select('user_id, platform, last_seen_at');
+      // Actividad de plataformas por usuario
       if (platformActivityData && platformActivityData.length > 0) {
         const activityMap: Record<string, { platform: string; last_seen_at: string }[]> = {};
         for (const row of platformActivityData) {
@@ -1158,10 +1163,7 @@ const handleLogin = async () => {
         setUserPlatformActivity(activityMap);
       }
 
-// Load appointments using the secure admin function
-      const { data: appointmentsRawData, error: appointmentsError } = await supabase
-        .rpc('get_all_appointments_for_admin');
-
+      // Appointments
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
@@ -1216,26 +1218,37 @@ const handleLogin = async () => {
         setTotalAppointments(transformedAppointments.length);
       }
 
-      // Load payment_attempts para el reporte de reconciliación (pagos de Wompi vs. citas)
-      const { data: paymentAttemptsData, error: paymentAttemptsError } = await supabase
-        .from('payment_attempts')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (paymentAttemptsError) {
-        console.error('Error loading payment_attempts:', paymentAttemptsError);
-      } else {
-        setPaymentAttempts(paymentAttemptsData || []);
-      }
+      // Ya tenemos lo esencial (eventos, usuarios, citas): liberamos la pantalla
+      // para que el admin sea usable de inmediato.
+      setLoading(false);
 
-      // Cargar pagos declinados (último intento de pago por usuario, sin importar el evento)
-      try {
-        await loadDeclinedPayments();
-      } catch (e) { console.warn('Error cargando pagos declinados', e); }
+      // ── Datos SECUNDARIOS (reconciliación / stats): se cargan en SEGUNDO
+      // PLANO, sin bloquear la carga inicial. Solo se usan en las pestañas de
+      // Reconciliación y Estadísticas, así que no tiene sentido esperarlos para
+      // mostrar Eventos. Se disparan en paralelo entre sí.
+      void (async () => {
+        try {
+          const { data: paymentAttemptsData, error: paymentAttemptsError } = await supabase
+            .from('payment_attempts')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (paymentAttemptsError) {
+            console.error('Error loading payment_attempts:', paymentAttemptsError);
+          } else {
+            setPaymentAttempts(paymentAttemptsData || []);
+          }
+        } catch (e) { console.warn('Error cargando payment_attempts', e); }
+      })();
 
-      // Load funnel inicial sin filtros
-      try {
-        await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
-      } catch (e) { console.warn('Funnel error', e); }
+      void (async () => {
+        try { await loadDeclinedPayments(); } catch (e) { console.warn('Error cargando pagos declinados', e); }
+      })();
+
+      void (async () => {
+        try {
+          await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
+        } catch (e) { console.warn('Funnel error', e); }
+      })();
 
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
