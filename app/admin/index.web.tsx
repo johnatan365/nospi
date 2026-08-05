@@ -2724,83 +2724,74 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setShowConfigModal(true);
   };
 
+  // Re-sortea (reemplaza) las preguntas de TODOS los eventos abiertos de hoy en
+  // adelante usando el banco global ACTUAL: QUESTIONS_PER_LEVEL al azar por
+  // nivel, con la pregunta fijada de primera en Divertido. Es la misma lógica
+  // que se aplica al crear un evento (insertRandomQuestionsFromBank).
   const handleSyncQuestionsToAllEvents = async () => {
     const confirmed = window.confirm(
-      '¿Copiar las preguntas globales a TODOS los eventos que no tienen preguntas propias? ' +
-      'Los eventos que ya tienen preguntas configuradas NO serán modificados.'
+      'Esto RE-SORTEA las preguntas de TODOS los eventos abiertos (publicados y en borrador) de HOY en adelante, ' +
+      'usando el banco actual: 8 al azar por nivel, con la pregunta fijada de primera en Divertido. ' +
+      'Se REEMPLAZAN las preguntas que tengan ahora. ¿Continuar?'
     );
     if (!confirmed) return;
 
     setLoadingQuestions(true);
     try {
-      // 1. Traer todas las preguntas globales
-      const { data: globalQuestions, error: fetchError } = await supabase
-        .from('event_questions')
-        .select('level, question_text, question_order')
-        .is('event_id', null)
-        .order('level', { ascending: true })
-        .order('question_order', { ascending: true });
-
-      if (fetchError || !globalQuestions || globalQuestions.length === 0) {
-        window.alert('No hay preguntas globales para sincronizar. Agrega preguntas primero.');
-        return;
-      }
-
-      // 2. Traer todos los eventos publicados y en borrador
       const { data: allEvents, error: eventsError } = await supabase
         .from('events')
-        .select('id')
+        .select('id, date, event_status')
         .in('event_status', ['published', 'draft']);
 
-      if (eventsError || !allEvents || allEvents.length === 0) {
-        window.alert('No se encontraron eventos.');
+      if (eventsError || !allEvents) {
+        window.alert('No se pudieron cargar los eventos: ' + (eventsError?.message || ''));
         return;
       }
 
-      // 3. Para cada evento, verificar si ya tiene preguntas propias
-      let synced = 0;
-      let skipped = 0;
+      // Solo eventos de HOY en adelante (fecha local de Bogotá >= hoy).
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });
+      const hoy = fmt.format(new Date());
+      const targets = allEvents.filter((e: any) => e.date && fmt.format(new Date(e.date)) >= hoy);
 
-      for (const event of allEvents) {
-        const { data: existing } = await supabase
-          .from('event_questions')
-          .select('id')
-          .eq('event_id', event.id)
-          .limit(1);
-
-        if (existing && existing.length > 0) {
-          skipped++;
-          continue; // Ya tiene preguntas — no tocar
-        }
-
-        // No tiene preguntas — copiar las globales
-        const toInsert = globalQuestions.map((q, index) => ({
-          event_id: event.id,
-          level: q.level,
-          question_text: q.question_text,
-          question_order: index,
-          is_default: true,
-        }));
-
-        const { error: insertError } = await supabase
-          .from('event_questions')
-          .insert(toInsert);
-
-        if (!insertError) synced++;
+      if (targets.length === 0) {
+        window.alert('No hay eventos abiertos de hoy en adelante para sincronizar.');
+        return;
       }
 
-      window.alert(
-        `✅ Sincronización completada.
-` +
-        `• ${synced} evento(s) actualizados con las preguntas globales.
-` +
-        `• ${skipped} evento(s) omitidos (ya tenían preguntas propias).`
-      );
+      let ok = 0;
+      for (const ev of targets) {
+        try {
+          await insertRandomQuestionsFromBank(ev.id);
+          ok++;
+        } catch (e) {
+          console.error('Error re-sorteando evento', ev.id, e);
+        }
+      }
+
+      window.alert(`✅ Listo. Se re-sortearon las preguntas de ${ok} evento(s) abierto(s), tomando 8 al azar por nivel del banco actual.`);
+      loadQuestions();
     } catch (err: any) {
       console.error('handleSyncQuestionsToAllEvents error:', err);
       window.alert('Error inesperado: ' + err.message);
     } finally {
       setLoadingQuestions(false);
+    }
+  };
+
+  // Re-sortea las preguntas de UN solo evento (botón dentro de la config del
+  // evento). Mismo criterio: 8 al azar por nivel + fijada primera en Divertido.
+  const handleReshuffleEventQuestions = async (eventId: string, eventName?: string) => {
+    const confirmed = window.confirm(
+      `¿Re-sortear las preguntas de "${eventName || 'este evento'}"? ` +
+      'Se reemplazan por 8 nuevas al azar por nivel (la fijada sigue primera en Divertido).'
+    );
+    if (!confirmed) return;
+    try {
+      await insertRandomQuestionsFromBank(eventId);
+      window.alert('✅ Preguntas re-sorteadas para este evento.');
+    } catch (e: any) {
+      console.error('handleReshuffleEventQuestions error:', e);
+      window.alert('Error al re-sortear: ' + (e?.message || ''));
     }
   };
 
@@ -2855,21 +2846,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         </View>
 
         <View style={styles.bulkActionsSection}>
-          <TouchableOpacity style={styles.bulkActionButton} onPress={handleRestoreDefaultQuestions}>
-            <Text style={styles.bulkActionButtonText}>🔄 Restaurar predeterminadas</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.bulkActionButton} onPress={handleDownloadTemplate}>
-            <Text style={styles.bulkActionButtonText}>📥 Descargar plantilla Excel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.bulkActionButton} onPress={handleMassUpload}>
-            <Text style={styles.bulkActionButtonText}>📤 Cargar desde Excel (.xlsx)</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.bulkActionButton, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#059669' }]}
             onPress={handleSyncQuestionsToAllEvents}
           >
             <Text style={[styles.bulkActionButtonText, { color: '#065F46' }]}>
-              📋 Sincronizar a todos los eventos
+              🔀 Sincronizar a todos los eventos (re-sortea con el banco actual)
             </Text>
           </TouchableOpacity>
         </View>
@@ -5595,6 +5577,13 @@ setBulkWhatsAppPending(pending);
                   </TouchableOpacity>
 
                   <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
+                    onPress={() => handleReshuffleEventQuestions(selectedEventForConfig.id, selectedEventForConfig.name)}
+                  >
+                    <Text style={styles.configActionButtonText}>🔀 Re-sortear preguntas de este evento</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#EF4444' }]}
                     onPress={() => {
                       setShowConfigModal(false);
@@ -6741,27 +6730,6 @@ setBulkWhatsAppPending(pending);
                 />
                 <TouchableOpacity style={styles.addButton} onPress={handleAddQuestion}>
                   <Text style={styles.addButtonText}>+ Agregar</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.bulkActionsSection}>
-                <TouchableOpacity
-                  style={styles.bulkActionButton}
-                  onPress={handleRestoreDefaultQuestions}
-                >
-                  <Text style={styles.bulkActionButtonText}>🔄 Restaurar Predeterminadas</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.bulkActionButton}
-                  onPress={handleDownloadTemplate}
-                >
-                  <Text style={styles.bulkActionButtonText}>📥 Descargar Plantilla Excel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.bulkActionButton}
-                  onPress={handleMassUpload}
-                >
-                  <Text style={styles.bulkActionButtonText}>📤 Cargar desde Excel (.xlsx)</Text>
                 </TouchableOpacity>
               </View>
 
