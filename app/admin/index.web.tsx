@@ -1750,6 +1750,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           question_text: q.question_text,
           question_order: order++,
           is_default: true,
+          // La copia conserva la marca de fijada, para que la dinámica la
+          // muestre SIEMPRE primera aunque después se reordenen las preguntas.
+          is_pinned: !!q.is_pinned,
         });
       }
     }

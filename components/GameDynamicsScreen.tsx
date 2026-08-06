@@ -233,6 +233,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           .select('*')
           .eq('event_id', appointment.event_id)
           .order('level', { ascending: true })
+          // La pregunta fijada (is_pinned) va SIEMPRE primera dentro de su
+          // nivel, sin importar el question_order — así, aunque se reordenen
+          // o editen las preguntas del evento, la de presentación abre la
+          // dinámica.
+          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true });
 
         if (eventError) {
@@ -267,6 +272,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           .select('*')
           .is('event_id', null)
           .order('level', { ascending: true })
+          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true });
 
         if (defaultError) {
