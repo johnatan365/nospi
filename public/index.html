@@ -26,9 +26,15 @@
     src="https://www.facebook.com/tr?id=956701276734114&ev=PageView&noscript=1"/></noscript>
     <!-- End Meta Pixel Code -->
     <style id="expo-reset">
-      html, body { height: 100%; }
+      /* 100dvh = alto REAL visible en navegadores moviles (descuenta la barra
+         de URL de Chrome y las barras de los navegadores internos de
+         Instagram/WhatsApp). Con height:100% a secas, el lienzo quedaba mas
+         alto que lo visible y la barra de pestanas + el boton Continuar de la
+         dinamica quedaban cortados abajo sin poder scrollear (overflow:hidden).
+         El height:100% previo queda como fallback para navegadores viejos. */
+      html, body { height: 100%; height: 100dvh; }
       body { overflow: hidden; }
-      #root { display: flex; height: 100%; flex: 1; }
+      #root { display: flex; height: 100%; height: 100dvh; flex: 1; }
     </style>
   </head>
   <body class="">
