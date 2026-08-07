@@ -122,6 +122,10 @@ export default function DinamicaScreen() {
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
+  // Cuantas preguntas tiene cargadas ESTE evento por nivel (para mostrarlo en
+  // la pantalla de reglas). null mientras carga o si no se pudo saber.
+  const [questionsPerLevel, setQuestionsPerLevel] = useState<{ divertido: number; sensual: number; atrevido: number } | null>(null);
+
   // Per-user flow states
   const [userReadyForRules, setUserReadyForRules] = useState(false);
   const [userReadyForGame, setUserReadyForGame] = useState(false);
@@ -691,6 +695,7 @@ export default function DinamicaScreen() {
           .select('question_text')
           .eq('event_id', appointment.event_id)
           .eq('level', 'divertido')
+          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true })
           .limit(1);
 
@@ -702,6 +707,7 @@ export default function DinamicaScreen() {
             .select('question_text')
             .is('event_id', null)
             .eq('level', 'divertido')
+            .order('is_pinned', { ascending: false })
             .order('question_order', { ascending: true })
             .limit(1);
 
@@ -888,7 +894,42 @@ export default function DinamicaScreen() {
     };
   }, [appointmentEventId, user, loadActiveParticipants]);
 
-  const canStartExperience = countdown <= 0 && activeParticipants.length >= 2;
+  // Carga el numero de preguntas por nivel del evento (con fallback al banco
+  // global, igual que hace el juego) para mostrarlo en las reglas.
+  useEffect(() => {
+    const eventId = appointment?.event_id;
+    if (!eventId) { setQuestionsPerLevel(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        let { data } = await supabase
+          .from('event_questions')
+          .select('level')
+          .eq('event_id', eventId);
+        if (!data || data.length === 0) {
+          const g = await supabase.from('event_questions').select('level').is('event_id', null);
+          data = g.data;
+        }
+        if (cancelled || !data) return;
+        const counts = { divertido: 0, sensual: 0, atrevido: 0 } as any;
+        for (const q of data) if (counts[q.level] !== undefined) counts[q.level]++;
+        setQuestionsPerLevel(counts);
+      } catch (_e) { /* si falla, las reglas muestran el texto sin numeros */ }
+    })();
+    return () => { cancelled = true; };
+  }, [appointment?.event_id]);
+
+  // Con 1 solo confirmado ya se puede AVANZAR (ver reglas); las preguntas
+  // como tal siguen exigiendo minimo 2 (guard en handleStartExperience) y
+  // arrancan solas cuando confirma el segundo (retry de 3s mas realtime).
+  const canStartExperience = countdown <= 0 && activeParticipants.length >= 1;
+
+  // Total de inscritos al evento, para el aviso "van X de Y". Si el dato no
+  // esta disponible, se omite el "de Y".
+  const totalExpected = appointment?.event?.current_participants || 0;
+  const missingPeople = totalExpected > 0
+    ? activeParticipants.length < totalExpected
+    : activeParticipants.length < 2;
 
   // Rules screen 20-second countdown
   useEffect(() => {
@@ -1149,6 +1190,19 @@ export default function DinamicaScreen() {
   }
 
   if (userReadyForRules && !userReadyForGame && checkInPhase === 'confirmed') {
+    // Texto del primer punto de las reglas, con el numero real de preguntas
+    // cargadas en ESTE evento. Si los 3 niveles tienen la misma cantidad se
+    // resume ("con 8 preguntas cada uno"); si difieren, se detalla por nivel;
+    // si aun no se conoce, se muestra el texto sin numeros.
+    let nivelesText = 'Pasarás por 3 niveles: Divertido, Coqueto y Atrevido.';
+    if (questionsPerLevel) {
+      const { divertido: d, sensual: s, atrevido: a } = questionsPerLevel;
+      if (d > 0 && d === s && s === a) {
+        nivelesText = `Pasarás por 3 niveles — Divertido, Coqueto y Atrevido — con ${d} preguntas cada uno.`;
+      } else if (d + s + a > 0) {
+        nivelesText = `Pasarás por 3 niveles: Divertido (${d} preguntas), Coqueto (${s}) y Atrevido (${a}).`;
+      }
+    }
     return (
       <LinearGradient
         colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -1163,7 +1217,7 @@ export default function DinamicaScreen() {
           <View style={styles.rulesCard}>
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🎯</Text>
-              <Text style={styles.rulesText}>Pasarás por 3 niveles: Divertido, Coqueto y Atrevido.</Text>
+              <Text style={styles.rulesText}>{nivelesText}</Text>
             </View>
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>
@@ -1171,6 +1225,14 @@ export default function DinamicaScreen() {
               <Text style={styles.rulesText}>En cada pregunta responde quien tenga algo que contar; no es obligatorio para todos.</Text>
             </View>
           </View>
+
+          {missingPeople && (
+            <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 12, marginTop: 14, maxWidth: 340 }}>
+              <Text style={{ color: 'rgba(255,224,178,0.95)', fontSize: 13, textAlign: 'center', lineHeight: 19 }}>
+                ⏳ Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados — esperen a que estén todos para arrancar.
+              </Text>
+            </View>
+          )}
 
           {rulesCountdown > 0 ? (
             <View style={styles.rulesCountdownContainer}>
@@ -1344,16 +1406,43 @@ export default function DinamicaScreen() {
               </View>
             )}
 
-            {canStartExperience && (
+            {/* Ya paso por las reglas pero sigue solo: la dinamica arranca
+                automaticamente apenas confirme alguien mas (retry de 3s +
+                realtime de participantes). */}
+            {userReadyForGame && activeParticipants.length < 2 && (
+              <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 16 }}>
+                <Text style={{ color: '#FFD9A0', fontSize: 15, fontWeight: '800', textAlign: 'center' }}>
+                  🕐 Esperando a que llegue alguien más…
+                </Text>
+                <Text style={{ color: 'rgba(255,224,178,0.9)', fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 }}>
+                  La dinámica inicia automáticamente apenas otra persona confirme su llegada. No tienes que hacer nada.
+                </Text>
+              </View>
+            )}
+
+            {canStartExperience && !userReadyForGame && (
               <>
-                <View style={styles.infoCard}>
-                  <Text style={styles.infoText}>
-                    ✨ Hay {activeParticipants.length} participantes confirmados
-                  </Text>
-                  <Text style={styles.infoTextSecondary}>
-                    Presiona &quot;Continuar&quot; para ver las reglas del juego
-                  </Text>
-                </View>
+                {missingPeople && (
+                  <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                    <Text style={{ color: '#FFD9A0', fontSize: 14, fontWeight: '800', textAlign: 'center' }}>
+                      ⏳ Aún faltan compañeros por llegar
+                    </Text>
+                    <Text style={{ color: 'rgba(255,224,178,0.9)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 }}>
+                      Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados. Puedes avanzar y leer las reglas mientras esperas, pero inicien la dinámica cuando estén todos en la mesa.
+                    </Text>
+                  </View>
+                )}
+
+                {!missingPeople && (
+                  <View style={styles.infoCard}>
+                    <Text style={styles.infoText}>
+                      ✨ Hay {activeParticipants.length} participantes confirmados
+                    </Text>
+                    <Text style={styles.infoTextSecondary}>
+                      Presiona &quot;Continuar&quot; para ver las reglas del juego
+                    </Text>
+                  </View>
+                )}
 
                 <TouchableOpacity
                   style={styles.continueButton}
