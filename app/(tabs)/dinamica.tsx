@@ -107,7 +107,10 @@ export default function DinamicaScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [countdown, setCountdown] = useState<number>(0);
+  // Arranca en "infinito" (aun sin calcular) y no en 0: si arrancara en 0, el
+  // primer render creeria que ya es hora de iniciar y mostraria por un segundo
+  // el aviso de "faltan companeros" antes de calcular el tiempo real (flash).
+  const [countdown, setCountdown] = useState<number>(Number.MAX_SAFE_INTEGER);
   const [countdownDisplay, setCountdownDisplay] = useState<string>('');
   const [isEventDay, setIsEventDay] = useState(false);
   const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
