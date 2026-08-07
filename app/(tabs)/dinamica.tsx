@@ -351,6 +351,36 @@ export default function DinamicaScreen() {
     const RETRY_DELAY_MS = [800, 2000, 4000];
     let lastError: any = null;
 
+    // FIX (asistentes que veian la pantalla vacia en pleno evento): si la
+    // sesion guardada esta vencida o no se adjunta el token, la consulta a
+    // appointments NO falla — devuelve 0 filas porque RLS filtra todo, y la
+    // app concluia (falsamente) "no tienes ningun evento confirmado". Antes de
+    // consultar, verificamos que haya sesion valida y, si no, la refrescamos.
+    // Si aun asi no hay sesion, lo tratamos como error recuperable (boton de
+    // reintentar), nunca como "sin eventos".
+    let sessionOk = false;
+    try {
+      const { data: sessData } = await supabase.auth.getSession();
+      let session = sessData?.session ?? null;
+      const expMs = session?.expires_at ? session.expires_at * 1000 : 0;
+      const aboutToExpire = expMs > 0 && expMs - Date.now() < 60 * 1000;
+      if (!session || aboutToExpire) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        session = refreshed?.session ?? session;
+      }
+      sessionOk = !!session;
+    } catch (_e) {
+      sessionOk = false;
+    }
+
+    if (!sessionOk) {
+      // Sin sesion utilizable: NO tocar la cache (podria tener la cita buena)
+      // y mostrar el estado de error con reintento.
+      setLoadError(true);
+      setLoading(false);
+      return;
+    }
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const { data, error } = await supabase
@@ -397,6 +427,12 @@ export default function DinamicaScreen() {
 
         if (error) {
           lastError = error;
+          // Token vencido a mitad de camino: refrescar la sesion antes del
+          // siguiente intento (antes esto se confundia con "mala conexion").
+          const msg = String(error.message || '').toLowerCase();
+          if (msg.includes('jwt') || msg.includes('token') || (error as any).code === 'PGRST301') {
+            try { await supabase.auth.refreshSession(); } catch (_e) { /* reintento normal */ }
+          }
           if (attempt < MAX_ATTEMPTS - 1) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS[attempt]));
             continue;
