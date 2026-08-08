@@ -30,7 +30,6 @@ interface Event {
   current_participants: number;
   status: string;
   event_status: 'draft' | 'published' | 'closed';
-  confirmation_code: string | null;
   is_full: boolean;
   price: number | null;
 }
@@ -633,7 +632,6 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
-    confirmation_code: '1986',
     price: '',
   });
 
@@ -1175,7 +1173,6 @@ const handleLogin = async () => {
             type: apt.event_type,
             date: apt.event_date,
             time: apt.event_time,
-            confirmation_code: apt.event_confirmation_code,
             location: '',
             location_name: '',
             location_address: '',
@@ -1621,7 +1618,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
-      confirmation_code: '1986',
       price: '',
     });
     setMapsLinkCheck({ status: 'idle' });
@@ -1680,7 +1676,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       max_participants: event.max_participants || 6,
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
-      confirmation_code: event.confirmation_code || '1986',
       price: (event.price === null || event.price === undefined) ? '' : String(event.price),
     });
     setMapsLinkCheck({ status: 'idle' });
@@ -1839,11 +1834,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      let finalConfirmationCode = eventForm.confirmation_code.trim();
-      if (!finalConfirmationCode) {
-        finalConfirmationCode = '1986';
-      }
-
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       const combinedDate = new Date(combinedDateString);
 
@@ -1877,7 +1867,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
-        confirmation_code: finalConfirmationCode,
         price: eventForm.price.trim() === '' ? null : (parseInt(eventForm.price, 10) || 0),
       };
 
@@ -1939,7 +1928,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
-        confirmation_code: '1986',
         price: '',
       });
       setMapsLinkCheck({ status: 'idle' });
@@ -1999,7 +1987,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         max_participants: event.max_participants,
         current_participants: 0,
         event_status: 'draft',
-        confirmation_code: event.confirmation_code,
         price: event.price,
       }).select('id').single();
 
@@ -2188,7 +2175,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       max_participants: event.max_participants,
       current_participants: 0,
       event_status: 'draft',
-      confirmation_code: event.confirmation_code,
       price: event.price,
     }).select('id').single();
 
@@ -3845,7 +3831,6 @@ setBulkWhatsAppPending(pending);
           const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
-          const confirmationCode = event.confirmation_code || '1986';
           
           const eventAppointments = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada');
           const eventAppointmentsCount = eventAppointments.length;
@@ -3867,7 +3852,6 @@ setBulkWhatsAppPending(pending);
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados (👨 {menCount} · 👩 {womenCount})</Text>
-                <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
               {(event.registration_closed_men || event.registration_closed_women) && (
                 <View style={styles.compactInfoRow}>
@@ -6009,14 +5993,6 @@ setBulkWhatsAppPending(pending);
               <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: -4, marginBottom: 4 }}>
                 {`Déjalo vacío para usar el precio global ($ ${Number(configEventPrice || 0).toLocaleString('es-CO')} COP). Pon 0 para que el evento sea gratis.`}
               </Text>
-
-              <Text style={styles.inputLabel}>Código de Confirmación</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="1986"
-                value={eventForm.confirmation_code}
-                onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
-              />
 
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity

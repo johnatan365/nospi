@@ -30,7 +30,6 @@ interface Event {
   current_participants: number;
   status: string;
   event_status: 'draft' | 'published' | 'closed';
-  confirmation_code: string | null;
 }
 
 interface User {
@@ -229,7 +228,6 @@ export default function AdminPanelScreen() {
     max_participants: 6,
     is_location_revealed: false,
     event_status: 'draft' as 'draft' | 'published' | 'closed',
-    confirmation_code: '1986',
   });
 
   // Autocompletado de lugares ya usados en eventos anteriores.
@@ -532,7 +530,6 @@ const handleLogin = async () => {
             type: apt.event_type,
             date: apt.event_date,
             time: apt.event_time,
-            confirmation_code: apt.event_confirmation_code,
             location: '',
             location_name: '',
             location_address: '',
@@ -729,7 +726,6 @@ const handleLogin = async () => {
       max_participants: 6,
       is_location_revealed: false,
       event_status: 'draft',
-      confirmation_code: '1986',
     });
     // Load default questions for new event
     // No precargar preguntas hardcodeadas — saveEventQuestions copiará
@@ -772,7 +768,6 @@ const handleLogin = async () => {
       max_participants: event.max_participants || 6,
       is_location_revealed: event.is_location_revealed || false,
       event_status: event.event_status || 'draft',
-      confirmation_code: event.confirmation_code || '1986',
     });
 
     // Load existing questions for this event
@@ -915,11 +910,6 @@ const handleLogin = async () => {
         return;
       }
 
-      let finalConfirmationCode = eventForm.confirmation_code.trim();
-      if (!finalConfirmationCode) {
-        finalConfirmationCode = '1986';
-      }
-
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       const combinedDate = new Date(combinedDateString);
 
@@ -953,7 +943,6 @@ const handleLogin = async () => {
         status: 'active',
         is_location_revealed: eventForm.is_location_revealed,
         event_status: eventForm.event_status,
-        confirmation_code: finalConfirmationCode,
       };
 
 
@@ -1014,7 +1003,6 @@ const handleLogin = async () => {
         max_participants: 6,
         is_location_revealed: false,
         event_status: 'draft',
-        confirmation_code: '1986',
       });
       setEventQuestions({
         divertido: [],
@@ -2042,7 +2030,6 @@ const handleLogin = async () => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
-          const confirmationCode = event.confirmation_code || '1986';
           
           const eventAppointments = appointments.filter(a => a.event_id === event.id && a.status !== 'cancelada');
           const eventAppointmentsCount = eventAppointments.length;
@@ -2064,7 +2051,6 @@ const handleLogin = async () => {
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>👥 {eventAppointmentsCount} registrados (👨 {menCount} · 👩 {womenCount})</Text>
-                <Text style={styles.compactInfoText}>🔑 {confirmationCode}</Text>
               </View>
               {(event.registration_closed_men || event.registration_closed_women) && (
                 <View style={styles.compactInfoRow}>
@@ -3380,14 +3366,6 @@ if (checkingSession) {
                 onBlur={() => {
                   if (!eventForm.max_participants) setEventForm({ ...eventForm, max_participants: 6 });
                 }}
-              />
-
-              <Text style={styles.inputLabel}>Código de Confirmación</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="1986"
-                value={eventForm.confirmation_code}
-                onChangeText={(text) => setEventForm({ ...eventForm, confirmation_code: text })}
               />
 
               <View style={styles.checkboxContainer}>
