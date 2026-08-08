@@ -94,7 +94,7 @@ const DEFAULT_QUESTIONS = {
 
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
-const TIMER_DURATION = 60;
+const TIMER_DURATION = 10;
 
 // ─── Per-level theme system ───────────────────────────────────────────────────
 interface LevelTheme {
@@ -262,6 +262,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             questionsByLevel.sensual.length > 0 &&
             questionsByLevel.atrevido.length > 0
           ) {
+            // Red de seguridad: la pregunta de presentación (fijada en el banco
+            // global, event_id null, is_pinned) debe ABRIR SIEMPRE la dinámica,
+            // aunque la copia de este evento haya perdido el is_pinned. La
+            // traemos y la forzamos de primera en Divertido.
+            try {
+              const { data: pinnedGlobal } = await supabase
+                .from('event_questions')
+                .select('question_text')
+                .is('event_id', null)
+                .eq('is_pinned', true)
+                .eq('level', 'divertido')
+                .order('question_order', { ascending: true })
+                .limit(1);
+              const pinnedText = pinnedGlobal?.[0]?.question_text;
+              if (pinnedText && questionsByLevel.divertido.length > 0) {
+                questionsByLevel.divertido = [
+                  pinnedText,
+                  ...questionsByLevel.divertido.filter((t: string) => t !== pinnedText),
+                ];
+              }
+            } catch (_e) { /* si falla, seguimos con el orden del evento */ }
+
             QUESTIONS = questionsByLevel;
             return;
           }
@@ -370,10 +392,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setGamePhase('level_checkin');
         setCurrentLevel(data.current_level || 'divertido');
         setCurrentQuestionIndex(data.current_question_index || 0);
-      } else if (data.game_phase === 'level_transition') {
-        setGamePhase('level_transition');
-      } else if (data.game_phase === 'finished') {
-        setGamePhase('finished');
       } else if (data.game_phase === 'free_phase') {
         setGamePhase('free_phase');
       }
@@ -435,10 +453,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             setGamePhase('level_checkin');
             setCurrentLevel(newEvent.current_level || 'divertido');
             setCurrentQuestionIndex(newEvent.current_question_index || 0);
-          } else if (newEvent.game_phase === 'level_transition') {
-            setGamePhase('level_transition');
-          } else if (newEvent.game_phase === 'finished') {
-            setGamePhase('finished');
           } else if (newEvent.game_phase === 'free_phase') {
             setGamePhase('free_phase');
           }
@@ -678,16 +692,28 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     }
   }, [appointment, currentLevel, currentQuestionIndex, loading, startTimer]);
 
-  // Botón "Subir a [Siguiente nivel]" en la tarjeta de check-in.
-  const handleAdvanceLevelFromCheckin = useCallback(async () => {
+  // Botón "Pasar a fase libre" del checkpoint: salta directo a la fase libre de
+  // conversación, sin importar el nivel en el que estén.
+  const handleGoToFreePhase = useCallback(async () => {
     if (!appointment?.event_id || loading) return;
     setLoading(true);
     try {
-      await advanceToNextLevelOrFreePhase();
+      setGamePhase('free_phase');
+      const { error } = await supabase
+        .from('events')
+        .update({
+          game_phase: 'free_phase',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.event_id);
+      if (error) {
+        console.error('❌ Error pasando a fase libre:', error);
+        setGamePhase('level_checkin');
+      }
     } finally {
       setLoading(false);
     }
-  }, [appointment, loading, advanceToNextLevelOrFreePhase]);
+  }, [appointment, loading]);
 
   const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
     if (!appointment?.event_id || !currentUserId) return;
@@ -786,7 +812,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const transitionTheme = transitionLevel ? LEVEL_THEMES[transitionLevel] : theme;
 
   // Timer color thresholds
-  const timerColor = timeLeft > 30 ? '#FFFFFF' : timeLeft > 10 ? '#FFE082' : '#FF5252';
+  const timerColor = timeLeft > 6 ? '#FFFFFF' : timeLeft > 3 ? '#FFE082' : '#FF5252';
   const timerLabel = `${timeLeft}s`;
   const timerExpired = timeLeft === 0;
 
@@ -900,7 +926,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   }
 
   if (gamePhase === 'level_checkin') {
-    const checkin = CHECKIN_COPY[currentLevel];
     return (
       <LinearGradient
         colors={theme.gradient}
@@ -909,10 +934,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.checkinContainer}>
-          <Text style={styles.checkinEmoji}>{checkin.emoji}</Text>
-          <Text style={styles.checkinTitle}>{checkin.title}</Text>
-          <Text style={styles.checkinText}>Llevan {currentQuestionIndex} de {questionsInLevel} preguntas de {levelName}.</Text>
-          <Text style={styles.checkinText}>{checkin.text}</Text>
+          <Text style={styles.checkinEmoji}>🙌</Text>
+          <Text style={styles.checkinTitle}>¿Cómo vamos? 🙌</Text>
+          <Text style={styles.checkinText}>¿Quieren continuar con la dinámica de preguntas o pasar a la fase libre?</Text>
           <Text style={styles.checkinSubtitle}>{CHECKIN_SUBTITLE}</Text>
 
           <TouchableOpacity
@@ -922,18 +946,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             activeOpacity={0.85}
           >
             <Text style={[styles.checkinButtonPrimaryText, { color: theme.continueButtonBg }]}>
-              {checkin.stayLabel}
+              Continuar con las preguntas 💬
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.checkinButtonSecondary, loading && styles.buttonDisabled]}
-            onPress={handleAdvanceLevelFromCheckin}
+            onPress={handleGoToFreePhase}
             disabled={loading}
             activeOpacity={0.85}
           >
             <Text style={styles.checkinButtonSecondaryText}>
-              {checkin.advanceLabel}
+              Pasar a fase libre ✨
             </Text>
           </TouchableOpacity>
         </View>
@@ -941,38 +965,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     );
   }
 
-  if (gamePhase === 'level_transition' || gamePhase === 'finished') {
-    const isFinished = gamePhase === 'finished';
-    const nextLevelEmoji = currentLevel === 'divertido' ? '💕' : currentLevel === 'sensual' ? '🔥' : '✨';
-    const nextLevelName = currentLevel === 'divertido' ? 'Coqueto' : currentLevel === 'sensual' ? 'Atrevido' : 'Fase libre';
-    const transitionColors: [string, string, ...string[]] = isFinished
-      ? ['#1C1C2E', '#2C2C3E', '#3C3C4E']
-      : LEVEL_THEMES[currentLevel === 'divertido' ? 'sensual' : 'atrevido'].gradient;
-
-    return (
-      <LinearGradient
-        colors={transitionColors}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.transitionFullScreen}>
-          <Text style={styles.transitionFullEmoji}>
-            {isFinished ? '🎉' : nextLevelEmoji}
-          </Text>
-          <Text style={styles.transitionFullTitle}>
-            {isFinished ? '¡Lo lograron!' : 'Siguiente nivel'}
-          </Text>
-          <Text style={styles.transitionFullSubtitle}>
-            {isFinished
-              ? 'Completaron todos los niveles. Ahora disfruten la noche ✨'
-              : `Se viene el nivel ${nextLevelName}. ¡Prepárense!`}
-          </Text>
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" style={{ marginTop: 32 }} />
-        </View>
-      </LinearGradient>
-    );
-  }
 
   if (gamePhase === 'free_phase') {
     return (
