@@ -121,6 +121,12 @@ const AVAILABLE_PERSONALITY = [
   '🤓 Geek', '🌟 Carismático', '💼 Profesional', '🎨 Artístico', '🏆 Competitivo',
 ];
 
+function isInAppBrowser(): boolean {
+  if (Platform.OS !== 'web') return false;
+  if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+  return /(FBAN|FBAV|Instagram|WhatsApp|Line\/|Messenger|MicroMessenger)/i.test(navigator.userAgent);
+}
+
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
@@ -775,10 +781,24 @@ export default function ProfileScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => loadProfile(true)}>
-            <Text style={styles.retryButtonText}>Reintentar</Text>
-          </TouchableOpacity>
+          {!user?.id ? (
+            <>
+              <Text style={styles.errorText}>Tu sesión se cerró. Inicia sesión de nuevo para ver tu perfil y confirmar tu asistencia.</Text>
+              {isInAppBrowser() && (
+                <Text style={styles.errorHint}>Estás viendo Nospi dentro de otra app (por ejemplo WhatsApp). Ábrelo en Safari, Chrome o en la app de Nospi para poder iniciar sesión.</Text>
+              )}
+              <TouchableOpacity style={styles.retryButton} onPress={() => router.replace('/login')}>
+                <Text style={styles.retryButtonText}>Iniciar sesión</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => loadProfile(true)}>
+                <Text style={styles.retryButtonText}>Reintentar</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </LinearGradient>
     );
@@ -1361,6 +1381,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   skeletonSection: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 20, marginBottom: 16 },
   errorText: { fontSize: 16, color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
+  errorHint: { fontSize: 14, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginBottom: 16, lineHeight: 20 },
   retryButton: { backgroundColor: '#880E4F', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 },
   retryButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
