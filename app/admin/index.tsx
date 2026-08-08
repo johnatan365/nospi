@@ -847,7 +847,7 @@ const handleLogin = async () => {
         // No hay preguntas custom — copiar las globales (event_id = null) al evento
         const { data: globalQuestions, error: fetchError } = await supabase
           .from('event_questions')
-          .select('level, question_text, question_order')
+          .select('level, question_text, question_order, is_pinned')
           .is('event_id', null)
           .order('level', { ascending: true })
           .order('question_order', { ascending: true });
@@ -860,8 +860,10 @@ const handleLogin = async () => {
         // Borrar preguntas previas del evento (por si es una edición)
         await supabase.from('event_questions').delete().eq('event_id', eventId);
 
-        // Agrupar por nivel y barajar el orden dentro de cada nivel, manteniendo
-        // los niveles agrupados (divertido, luego sensual, luego atrevido).
+        // Agrupar por nivel, manteniendo los niveles agrupados (divertido, luego
+        // sensual, luego atrevido). La pregunta FIJADA (is_pinned) va SIEMPRE
+        // primera dentro de su nivel y NO entra en el sorteo; el resto se baraja.
+        // Se conserva la marca is_pinned para que la dinámica la abra primero.
         const levelOrder: string[] = [];
         const byLevel: Record<string, typeof globalQuestions> = {};
         for (const q of globalQuestions) {
@@ -872,14 +874,20 @@ const handleLogin = async () => {
           byLevel[q.level].push(q);
         }
 
-        const shuffledQuestions = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
+        const orderedQuestions = levelOrder.flatMap((level) => {
+          const inLevel = byLevel[level];
+          const pinned = inLevel.filter((q: any) => q.is_pinned);
+          const rest = shuffleArray(inLevel.filter((q: any) => !q.is_pinned));
+          return [...pinned, ...rest];
+        });
 
-        const questionsToInsert = shuffledQuestions.map((q, index) => ({
+        const questionsToInsert = orderedQuestions.map((q: any, index: number) => ({
           event_id: eventId,
           level: q.level,
           question_text: q.question_text,
           question_order: index,
           is_default: true,
+          is_pinned: !!q.is_pinned,
         }));
 
         const { error: insertError } = await supabase
