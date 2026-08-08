@@ -30,7 +30,6 @@ interface Event {
   max_participants: number;
   current_participants: number;
   status: string;
-  confirmation_code: string | null;
   game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'level_checkin' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
@@ -114,9 +113,6 @@ export default function DinamicaScreen() {
   const [countdownDisplay, setCountdownDisplay] = useState<string>('');
   const [isEventDay, setIsEventDay] = useState(false);
   const [checkInPhase, setCheckInPhase] = useState<CheckInPhase>('waiting');
-  const [confirmationCode, setConfirmationCode] = useState('');
-  const [codeError, setCodeError] = useState('');
-  const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [startingExperience, setStartingExperience] = useState(false);
   const [checkingGps, setCheckingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
@@ -414,7 +410,6 @@ export default function DinamicaScreen() {
               max_participants,
               current_participants,
               status,
-              confirmation_code,
               game_phase,
               current_level,
               current_question_index,
@@ -616,8 +611,6 @@ export default function DinamicaScreen() {
       const confirmedAt = new Date().toISOString();
 
       setCheckInPhase('confirmed');
-      setConfirmationCode('');
-      setCodeError('');
       setGpsError('');
       if (appointment.event_id) {
         AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
