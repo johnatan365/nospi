@@ -1045,26 +1045,41 @@ const handleLogin = async () => {
       // pasa a ser el de la consulta más lenta, no la suma de todas.
       const eventsP = supabase.from('events').select('*').order('date', { ascending: true });
 
-      // Usuarios: la función valida auth.uid() contra la tabla admins
-      // (SECURITY DEFINER). Si el token del navegador venció justo al cargar,
-      // Supabase puede responder "not authorized" aunque sí seas admin —
-      // refrescamos la sesión una vez y reintentamos para evitar el falso error.
-      const usersP = (async () => {
-        let { data, error } = await supabase.rpc('get_all_users_for_admin');
-        if (error && error.message?.includes('not authorized')) {
-          console.warn('get_all_users_for_admin: not authorized, refrescando sesión y reintentando…');
-          await supabase.auth.refreshSession();
-          const retry = await supabase.rpc('get_all_users_for_admin');
-          data = retry.data;
-          error = retry.error;
+      // Las RPC de admin devuelven una TABLE y Supabase (PostgREST) corta la
+      // respuesta a 1.000 filas por defecto. Con más de 1.000 usuarios eso hacía
+      // que el panel mostrara solo los primeros 1.000 (no era un tope de registro,
+      // solo de la consulta). Paginamos de a 1.000 con .range() hasta traer todo.
+      //
+      // La función valida auth.uid() contra la tabla admins (SECURITY DEFINER). Si
+      // el token del navegador venció justo al cargar, Supabase puede responder
+      // "not authorized" aunque sí seas admin — refrescamos la sesión una vez y
+      // reintentamos esa página para evitar el falso error.
+      const RPC_PAGE_SIZE = 1000;
+      const rpcAllForAdmin = async (fnName: string) => {
+        let from = 0;
+        const all: any[] = [];
+        while (true) {
+          let { data, error } = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+          if (error && error.message?.includes('not authorized')) {
+            console.warn(`${fnName}: not authorized, refrescando sesión y reintentando…`);
+            await supabase.auth.refreshSession();
+            const retry = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+            data = retry.data;
+            error = retry.error;
+          }
+          if (error) return { data: all.length ? all : null, error };
+          all.push(...(data || []));
+          if (!data || data.length < RPC_PAGE_SIZE) break;
+          from += RPC_PAGE_SIZE;
         }
-        return { data, error };
-      })();
+        return { data: all, error: null };
+      };
 
-      const createdDatesP = supabase.rpc('get_user_created_dates');
+      const usersP = rpcAllForAdmin('get_all_users_for_admin');
+      const createdDatesP = rpcAllForAdmin('get_user_created_dates');
       const ratingsP = supabase.from('event_ratings').select('rated_user_id, rating');
       const platformP = supabase.from('user_platform_activity').select('user_id, platform, last_seen_at');
-      const appointmentsP = supabase.rpc('get_all_appointments_for_admin');
+      const appointmentsP = rpcAllForAdmin('get_all_appointments_for_admin');
 
       const [
         { data: eventsData, error: eventsError },
