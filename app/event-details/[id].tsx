@@ -22,6 +22,8 @@ interface Event {
   maps_link: string;
   is_location_revealed: boolean;
   max_participants: number;
+  registration_closed_men?: boolean;
+  registration_closed_women?: boolean;
   event_status: 'draft' | 'published' | 'closed';
   price: number | null;
 }
@@ -232,7 +234,15 @@ export default function EventDetailsScreen() {
   const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
   const dateText = formatDate(event.date);
-  const participantsText = 'Hombres y mujeres';
+  // Etiqueta del grupo sin revelar cantidad. Si el registro de un genero esta
+  // cerrado, el evento es del otro genero (ej. eventos solo de mujeres);
+  // si ambos estan abiertos, es mixto.
+  const participantsText =
+    event.registration_closed_men && !event.registration_closed_women
+      ? 'Mujeres'
+      : event.registration_closed_women && !event.registration_closed_men
+      ? 'Hombres'
+      : 'Hombres y mujeres';
   const showLocation = isEnrolled && event.is_location_revealed;
 
   return (
