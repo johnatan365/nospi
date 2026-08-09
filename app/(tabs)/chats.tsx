@@ -82,12 +82,42 @@ export default function ChatsScreen() {
     if (isRefresh) setRefreshing(true);
     else if (!loadedOnceRef.current) setLoading(true);
 
+    // FIX (chat vacio en pleno evento): si la sesion guardada esta vencida o el
+    // token no se adjunta bien (wifi saturado del evento), el RPC
+    // get_my_conversations NO falla — devuelve vacio porque RLS filtra todo al
+    // no resolver auth.uid(), y la lista quedaba falsamente "sin chats" aunque el
+    // usuario si es participante del grupo del evento. Antes de consultar
+    // aseguramos una sesion valida, refrescandola si esta por vencerse o no esta
+    // cargada. Si el refresh falla por mala senal, seguimos: el resguardo de
+    // abajo conserva la lista previa en vez de vaciarla.
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const expMs = sess?.session?.expires_at ? sess.session.expires_at * 1000 : 0;
+      const aboutToExpire = expMs > 0 && expMs - Date.now() < 60 * 1000;
+      if (!sess?.session || aboutToExpire) {
+        await supabase.auth.refreshSession();
+      }
+    } catch (_e) {
+      /* seguimos; el resguardo de abajo evita vaciar la lista por un parpadeo */
+    }
+
     const { data, error } = await supabase.rpc('get_my_conversations');
 
     if (error) {
       console.error('ChatsScreen: error loading conversations', error);
     } else {
-      setConversations((data as ConversationRow[]) || []);
+      const rows = (data as ConversationRow[]) || [];
+      // No reemplazar una lista ya cargada por una vacia que puede venir de un
+      // parpadeo (token/RLS/replica). Solo aplica en auto-cargas: si ya habiamos
+      // cargado antes y ahora llega vacio, conservamos lo previo. En un refresh
+      // manual (pull-to-refresh) si confiamos en el servidor y aplicamos lo que
+      // venga, para que el usuario pueda limpiar la lista a proposito.
+      setConversations(prev => {
+        if (!isRefresh && rows.length === 0 && loadedOnceRef.current && prev.length > 0) {
+          return prev;
+        }
+        return rows;
+      });
       loadedOnceRef.current = true;
     }
 

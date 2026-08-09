@@ -447,6 +447,31 @@ export default function DinamicaScreen() {
         setLoadError(false);
 
         if (!data || data.length === 0) {
+          // 0 filas con sesion validada NO siempre significa "no tiene eventos":
+          // un parpadeo de token/RLS/replica en pleno evento (wifi saturado del
+          // sitio) puede filtrar todo y devolver vacio. Si ya teniamos en cache
+          // un evento de HOY, no cerrado, NO lo borramos — a alguien que esta
+          // fisicamente en el evento no se le puede desaparecer el evento por un
+          // parpadeo, ni dejarlo sin chat. Conservamos lo cacheado y se
+          // reintenta en el proximo focus. Solo concluimos "sin eventos" (borrar
+          // cache) cuando NO hay un evento de hoy protegido en cache.
+          const cachedApt = cacheRef.current?.data;
+          const cachedStart = cachedApt?.event?.start_time;
+          const cachedIsClosed = cachedApt?.event?.event_status === 'closed' || cachedApt?.status === 'anterior';
+          let cacheProtege = false;
+          if (cachedStart && !cachedIsClosed) {
+            const nowC = new Date();
+            const ev = new Date(cachedStart);
+            const todayStartC = new Date(nowC.getFullYear(), nowC.getMonth(), nowC.getDate()).getTime();
+            const evDayStartC = new Date(ev.getFullYear(), ev.getMonth(), ev.getDate()).getTime();
+            cacheProtege = evDayStartC === todayStartC;
+          }
+          if (cacheProtege) {
+            // Mantener visible el evento de hoy que ya teniamos; no vaciar.
+            applyAppointmentData(cachedApt!);
+            setLoading(false);
+            return;
+          }
           cacheRef.current = { data: null, timestamp: Date.now() };
           setCached(CACHE_KEY, null);
           setAppointment(null);
