@@ -232,7 +232,7 @@ export default function EventDetailsScreen() {
   const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
   const dateText = formatDate(event.date);
-  const participantsText = `${event.max_participants} participantes`;
+  const participantsText = 'Hombres y mujeres';
   const showLocation = isEnrolled && event.is_location_revealed;
 
   return (
@@ -288,7 +288,7 @@ export default function EventDetailsScreen() {
             </View>
 
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>👥 Personas</Text>
+              <Text style={styles.infoLabel}>👥 Grupo</Text>
               <Text style={styles.infoValue}>{participantsText}</Text>
             </View>
           </View>
