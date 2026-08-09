@@ -22,8 +22,6 @@ interface Event {
   maps_link: string;
   is_location_revealed: boolean;
   max_participants: number;
-  registration_closed_men?: boolean;
-  registration_closed_women?: boolean;
   event_status: 'draft' | 'published' | 'closed';
   price: number | null;
 }
@@ -234,15 +232,12 @@ export default function EventDetailsScreen() {
   const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
   const dateText = formatDate(event.date);
-  // Etiqueta del grupo sin revelar cantidad. Si el registro de un genero esta
-  // cerrado, el evento es del otro genero (ej. eventos solo de mujeres);
-  // si ambos estan abiertos, es mixto.
-  const participantsText =
-    event.registration_closed_men && !event.registration_closed_women
-      ? 'Mujeres'
-      : event.registration_closed_women && !event.registration_closed_men
-      ? 'Hombres'
-      : 'Hombres y mujeres';
+  // Los eventos son de hombres y mujeres. El cierre de registro por genero
+  // (registration_closed_men/women) es un tope DINAMICO para balancear cupos
+  // — se cierra un lado cuando ya hay suficientes del otro — y NO define un
+  // evento de un solo genero. Por eso NO se usa aqui: el grupo sigue siendo
+  // mixto aunque se cierre temporalmente un lado. Ademas no revelamos cantidad.
+  const participantsText = 'Hombres y mujeres';
   const showLocation = isEnrolled && event.is_location_revealed;
 
   return (
