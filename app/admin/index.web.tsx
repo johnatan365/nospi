@@ -34,6 +34,40 @@ interface Event {
   price: number | null;
 }
 
+// --- Ubicación: extraer coordenadas de un link largo de Google Maps ---
+// Saca lat/lng del texto pegado (patrones @lat,lng, !3d!4d, q=/ll=) y, si viene,
+// el nombre del lugar (segmento /place/Nombre/). No hace peticiones de red.
+function extractGpsFromLink(text: string): { lat: number; lng: number; name: string } | null {
+  if (!text) return null;
+  let m = text.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  if (!m) m = text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (!m) m = text.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (isNaN(lat) || isNaN(lng)) return null;
+  let name = '';
+  const nameMatch = text.match(/\/place\/([^/@]+)/);
+  if (nameMatch) {
+    try { name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' ')); }
+    catch { name = nameMatch[1].replace(/\+/g, ' '); }
+  }
+  return { lat, lng, name };
+}
+
+// Arma un link limpio (con nombre si lo hay) a partir de las coordenadas.
+function buildCleanMapsLink(lat: number, lng: number, name: string): string {
+  if (name) {
+    return 'https://www.google.com/maps/place/' + encodeURIComponent(name).replace(/%20/g, '+') + '/@' + lat + ',' + lng + ',17z';
+  }
+  return 'https://maps.google.com/?q=' + lat + ',' + lng;
+}
+
+// Chequeo de cordura: coordenadas dentro de Colombia (lat positiva, lng negativa).
+function coordsEnColombia(lat: number, lng: number): boolean {
+  return lat > 3 && lat < 9 && lng < -70 && lng > -79;
+}
+
 interface User {
   id: string;
   name: string;
@@ -636,6 +670,21 @@ export default function AdminPanelScreen() {
   });
 
   const [mapsLinkCheck, setMapsLinkCheck] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; lat?: number; lng?: number; error?: string }>({ status: 'idle' });
+
+  // "Link del computador (para el GPS)": campo aparte donde se pega el link largo.
+  // Al pegarlo se extraen las coordenadas localmente (sin red) y, si el "Link
+  // para mostrar" está vacío, se autollena con un link limpio.
+  const [gpsLink, setGpsLink] = useState('');
+  const handleGpsLinkChange = (text: string) => {
+    setGpsLink(text);
+    const t = text.trim();
+    if (!t) { setMapsLinkCheck({ status: 'idle' }); return; }
+    const g = extractGpsFromLink(t);
+    if (!g) { setMapsLinkCheck({ status: 'fail', error: 'sin-coordenadas' }); return; }
+    if (!coordsEnColombia(g.lat, g.lng)) { setMapsLinkCheck({ status: 'fail', error: 'fuera-rango', lat: g.lat, lng: g.lng }); return; }
+    setMapsLinkCheck({ status: 'ok', lat: g.lat, lng: g.lng });
+    setEventForm((prev) => prev.maps_link.trim() ? prev : { ...prev, maps_link: buildCleanMapsLink(g.lat, g.lng, g.name) });
+  };
 
   // Autocompletado de lugares ya usados en eventos anteriores.
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
@@ -1621,6 +1670,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       price: '',
     });
     setMapsLinkCheck({ status: 'idle' });
+    setGpsLink('');
     // Load default questions for new event
     // No precargar preguntas hardcodeadas — saveEventQuestions copiará
     // automáticamente las preguntas globales de la DB al crear el evento.
@@ -1678,7 +1728,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       event_status: event.event_status || 'draft',
       price: (event.price === null || event.price === undefined) ? '' : String(event.price),
     });
-    setMapsLinkCheck({ status: 'idle' });
+    // Prefill de coordenadas ya guardadas (para no perderlas al editar y
+    // reguardar). Si el evento no tiene, queda idle.
+    const evLat = (event as any).latitude;
+    const evLng = (event as any).longitude;
+    if (typeof evLat === 'number' && typeof evLng === 'number') {
+      setMapsLinkCheck({ status: 'ok', lat: evLat, lng: evLng });
+    } else {
+      setMapsLinkCheck({ status: 'idle' });
+    }
+    setGpsLink('');
 
     // Load existing questions for this event
     try {
@@ -1858,6 +1917,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: eventForm.location_name,
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
+        ...(mapsLinkCheck.status === 'ok' && typeof mapsLinkCheck.lat === 'number' && typeof mapsLinkCheck.lng === 'number'
+          ? { latitude: mapsLinkCheck.lat, longitude: mapsLinkCheck.lng }
+          : {}),
         require_gps_verification: eventForm.require_gps_verification,
         registration_closed_men: eventForm.registration_closed_men,
         registration_closed_women: eventForm.registration_closed_women,
@@ -1931,6 +1993,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         price: '',
       });
       setMapsLinkCheck({ status: 'idle' });
+      setGpsLink('');
       setEventQuestions({
         divertido: [],
         sensual: [],
@@ -5910,23 +5973,36 @@ setBulkWhatsAppPending(pending);
                 onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
               />
 
-              <Text style={styles.inputLabel}>Enlace de Google Maps</Text>
+              <Text style={styles.inputLabel}>Link del computador (para el GPS)</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                Pega aquí primero el link largo de Google Maps del computador (el que tiene @ seguido de dos números). De aquí se sacan las coordenadas del confirmar-llegada.
+              </Text>
               <TextInput
                 style={styles.input}
-                placeholder="https://maps.google.com/..."
-                value={eventForm.maps_link}
-                onChangeText={(text) => { setEventForm({ ...eventForm, maps_link: text }); if (mapsLinkCheck.status !== 'idle') setMapsLinkCheck({ status: 'idle' }); }}
-                onBlur={() => checkMapsLink(eventForm.maps_link)}
+                placeholder="https://www.google.com/maps/place/Nombre/@6.2454,-75.5920,16z/data=..."
+                value={gpsLink}
+                onChangeText={handleGpsLinkChange}
               />
-              {mapsLinkCheck.status === 'checking' && (
-                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>Verificando ubicación...</Text>
-              )}
               {mapsLinkCheck.status === 'ok' && (
-                <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Ubicación detectada (lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)})</Text>
+                <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Coordenadas detectadas (lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}) — el confirmar-llegada queda listo.</Text>
               )}
-              {mapsLinkCheck.status === 'fail' && (
-                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ No se pudo detectar la ubicación automáticamente. Usa un link de "Compartir ubicación" desde el pin en Google Maps (no uno de "Cómo llegar").</Text>
+              {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error === 'fuera-rango' && (
+                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Detecté lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}, pero no parecen de Colombia. Revisa el link por si quedó cruzado.</Text>
               )}
+              {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error !== 'fuera-rango' && (
+                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Este link no trae coordenadas. Abre el link en el computador y pega la dirección larga (la que tiene @ con dos números).</Text>
+              )}
+
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Link para mostrar</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                El link bonito que se envía a la gente por correo y WhatsApp (muestra el nombre del lugar). Si lo dejas vacío, se llena solo con el link limpio del de arriba.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://maps.app.goo.gl/...  (o se autogenera del link de arriba)"
+                value={eventForm.maps_link}
+                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+              />
               
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
