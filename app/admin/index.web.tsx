@@ -693,14 +693,21 @@ export default function AdminPanelScreen() {
   // viene ordenado por fecha ascendente, la última aparición de cada lugar
   // (la más reciente) es la que queda, y esa es la que sugerimos.
   const knownVenues = useMemo(() => {
-    const byName = new Map<string, { location_name: string; location_address: string; maps_link: string }>();
+    const byName = new Map<string, { location_name: string; location_address: string; maps_link: string; gps_link: string; latitude: number | null; longitude: number | null }>();
     for (const ev of events) {
       const name = (ev.location_name || '').trim();
       if (!name) continue;
-      byName.set(name.toLowerCase(), {
+      const key = name.toLowerCase();
+      const prev = byName.get(key);
+      byName.set(key, {
         location_name: name,
         location_address: (ev.location_address || '').trim(),
         maps_link: (ev.maps_link || '').trim(),
+        // gps_link y coordenadas: se conserva el más reciente que NO esté vacío,
+        // para que reusar un lugar traiga su GPS aunque un evento posterior no lo tuviera.
+        gps_link: ((ev as any).gps_link || '').trim() || (prev ? prev.gps_link : ''),
+        latitude: ((ev as any).latitude ?? null) ?? (prev ? prev.latitude : null),
+        longitude: ((ev as any).longitude ?? null) ?? (prev ? prev.longitude : null),
       });
     }
     return Array.from(byName.values());
@@ -1728,16 +1735,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       event_status: event.event_status || 'draft',
       price: (event.price === null || event.price === undefined) ? '' : String(event.price),
     });
-    // Prefill de coordenadas ya guardadas (para no perderlas al editar y
-    // reguardar). Si el evento no tiene, queda idle.
+    // Prefill del "link del computador" y de las coordenadas ya guardadas, para
+    // que al reabrir el evento el campo NO quede vacío y no se pierdan al reguardar.
+    const savedGps = (event as any).gps_link || '';
+    setGpsLink(savedGps);
+    const gPrefill = savedGps ? extractGpsFromLink(savedGps) : null;
     const evLat = (event as any).latitude;
     const evLng = (event as any).longitude;
-    if (typeof evLat === 'number' && typeof evLng === 'number') {
+    if (gPrefill && coordsEnColombia(gPrefill.lat, gPrefill.lng)) {
+      setMapsLinkCheck({ status: 'ok', lat: gPrefill.lat, lng: gPrefill.lng });
+    } else if (typeof evLat === 'number' && typeof evLng === 'number') {
       setMapsLinkCheck({ status: 'ok', lat: evLat, lng: evLng });
     } else {
       setMapsLinkCheck({ status: 'idle' });
     }
-    setGpsLink('');
 
     // Load existing questions for this event
     try {
@@ -1917,6 +1928,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: eventForm.location_name,
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
+        gps_link: gpsLink.trim() ? gpsLink.trim() : null,
         ...(mapsLinkCheck.status === 'ok' && typeof mapsLinkCheck.lat === 'number' && typeof mapsLinkCheck.lng === 'number'
           ? { latitude: mapsLinkCheck.lat, longitude: mapsLinkCheck.lng }
           : {}),
@@ -5952,7 +5964,16 @@ setBulkWhatsAppPending(pending);
                             maps_link: v.maps_link,
                           });
                           setShowVenueSuggestions(false);
-                          setMapsLinkCheck({ status: 'idle' });
+                          // Traer también el link del GPS y las coordenadas del lugar reusado.
+                          setGpsLink(v.gps_link || '');
+                          const vg = v.gps_link ? extractGpsFromLink(v.gps_link) : null;
+                          if (vg && coordsEnColombia(vg.lat, vg.lng)) {
+                            setMapsLinkCheck({ status: 'ok', lat: vg.lat, lng: vg.lng });
+                          } else if (typeof v.latitude === 'number' && typeof v.longitude === 'number') {
+                            setMapsLinkCheck({ status: 'ok', lat: v.latitude, lng: v.longitude });
+                          } else {
+                            setMapsLinkCheck({ status: 'idle' });
+                          }
                         }}
                       >
                         <Text style={{ fontSize: 15, color: '#111827', fontWeight: '600' }}>📍 {v.location_name}</Text>
