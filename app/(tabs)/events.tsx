@@ -37,12 +37,34 @@ const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const WEEK_SECTION_ORDER = ['Esta semana', 'La próxima semana', 'En 2 semanas', 'Más adelante'];
 
+// event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota =
+// sabado 00:00 UTC). Si calculamos dia/fecha con los metodos locales de Date
+// (getDay, getDate, toLocaleDateString sin timeZone), el resultado depende de
+// la zona horaria del dispositivo — funciona bien en un celular puesto en
+// hora de Colombia, pero se rompe (muestra un dia adelantado) en cualquier
+// dispositivo/navegador/entorno con otra zona horaria. Por eso siempre
+// extraemos primero el año/mes/día calendario en America/Bogota de forma
+// explicita, y a partir de ahi construimos un Date anclado en UTC (mismos
+// componentes, sin desfase) para los calculos de dia de la semana.
+const getBogotaYMD = (dateInput: Date | string): { year: number; month: number; day: number } => {
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const map: Record<string, string> = {};
+  parts.forEach((p) => { if (p.type !== 'literal') map[p.type] = p.value; });
+  return { year: Number(map.year), month: Number(map.month), day: Number(map.day) };
+};
+
+const bogotaYMDToUTCDate = (year: number, month: number, day: number): Date =>
+  new Date(Date.UTC(year, month - 1, day));
+
 const getMonday = (input: Date): Date => {
-  const date = new Date(input);
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
+  const { year, month, day } = getBogotaYMD(input);
+  const date = bogotaYMDToUTCDate(year, month, day);
+  const dow = date.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  date.setUTCDate(date.getUTCDate() + diff);
   return date;
 };
 
@@ -57,8 +79,9 @@ const getWeekSection = (dateString: string): string => {
 };
 
 const formatCompactDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return `${WEEKDAY_ABBR[date.getDay()]} ${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
+  const { year, month, day } = getBogotaYMD(dateString);
+  const utcDate = bogotaYMDToUTCDate(year, month, day);
+  return `${WEEKDAY_ABBR[utcDate.getUTCDay()]} ${day} ${MONTH_ABBR[month - 1]}`;
 };
 
 export default function EventsScreen() {

@@ -131,11 +131,16 @@ export default function EventDetailsScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    // event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota
+    // = sabado 00:00 UTC). Sin timeZone explicito, toLocaleDateString usa la
+    // zona horaria del dispositivo — funciona en un celular en hora de
+    // Colombia, pero muestra un dia adelantado en cualquier otro entorno.
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'America/Bogota',
     };
     return date.toLocaleDateString('es-ES', options);
   };
