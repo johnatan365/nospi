@@ -35,10 +35,12 @@ export default function EventDetailsScreen() {
   const [confirming, setConfirming] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  // Exoneración de responsabilidad para caminatas autogestionadas: el checkbox
-  // aparece solo cuando el evento es type='caminata' y debe marcarse
-  // activamente (nunca premarcado) para habilitar el botón de unirse.
+  // Checkbox de confirmación de lectura: aparece para caminatas autogestionadas
+  // (exoneración de responsabilidad) y para bolos (aviso de que la pista y los
+  // zapatos se pagan aparte, en la bolera). Debe marcarse activamente (nunca
+  // premarcado) para habilitar el botón de unirse.
   const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const requiresWaiver = (t: string | undefined) => t === 'caminata' || t === 'bolos';
 
   const loadEvent = useCallback(async () => {
     try {
@@ -159,7 +161,7 @@ export default function EventDetailsScreen() {
   };
 
   const handleConfirm = async () => {
-    if (event?.type === 'caminata' && !waiverAccepted) return;
+    if (requiresWaiver(event?.type) && !waiverAccepted) return;
     setConfirming(true);
 
     try {
@@ -183,7 +185,7 @@ export default function EventDetailsScreen() {
       // Se guarda junto al evento pendiente; el punto de confirmación final
       // (subscription-plans.tsx / payment-callback.tsx) lo lee para setear
       // appointments.waiver_accepted_at al crear/actualizar la cita.
-      if (event?.type === 'caminata') {
+      if (requiresWaiver(event?.type)) {
         await AsyncStorage.setItem('pending_waiver_accepted', 'true');
       } else {
         await AsyncStorage.removeItem('pending_waiver_accepted');
@@ -345,7 +347,7 @@ export default function EventDetailsScreen() {
               )}
               <Text style={styles.question}>¿Deseas asistir?</Text>
 
-              {event.type === 'caminata' && (
+              {requiresWaiver(event.type) && (
                 <TouchableOpacity
                   style={styles.waiverRow}
                   onPress={() => setWaiverAccepted(prev => !prev)}
@@ -355,7 +357,9 @@ export default function EventDetailsScreen() {
                     {waiverAccepted && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={styles.waiverText}>
-                    Leí la información anterior y acepto participar bajo mi propia responsabilidad.
+                    {event.type === 'bolos'
+                      ? 'Leí que la pista y los zapatos se pagan aparte, directamente en la bolera.'
+                      : 'Leí la información anterior y acepto participar bajo mi propia responsabilidad.'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -363,10 +367,10 @@ export default function EventDetailsScreen() {
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
-                  (confirming || (event.type === 'caminata' && !waiverAccepted)) && styles.confirmButtonDisabled,
+                  (confirming || (requiresWaiver(event.type) && !waiverAccepted)) && styles.confirmButtonDisabled,
                 ]}
                 onPress={handleConfirm}
-                disabled={confirming || (event.type === 'caminata' && !waiverAccepted)}
+                disabled={confirming || (requiresWaiver(event.type) && !waiverAccepted)}
                 activeOpacity={0.8}
               >
                 {confirming ? (
