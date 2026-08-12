@@ -253,7 +253,13 @@ export default function EventsScreen() {
                       ) : event.type === 'cafe' ? (
                         <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'bolos' ? (
-                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        // El icono de bolos se ve chico dentro del recuadro estandar de
+                        // 62x53, asi que lo renderizamos ~35% mas grande pero centrado en
+                        // una caja de 62x53 (mismo tamano que los demas iconos) para que no
+                        // empuje el texto y la tarjeta siga alineada con el resto de eventos.
+                        <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 72, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        </View>
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
                       )}

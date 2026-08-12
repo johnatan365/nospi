@@ -1341,7 +1341,11 @@ export default function DinamicaScreen() {
             ) : appointment.event.type === 'cafe' ? (
               <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'bolos' ? (
-              <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              // Caja del mismo tamano que los demas iconos (84x70) para no
+              // desalinear la tarjeta; el icono va ~35% mas grande adentro.
+              <View style={{ width: 84, height: 70, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 114, height: 95, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              </View>
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
             )}

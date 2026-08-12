@@ -276,7 +276,12 @@ export default function EventDetailsScreen() {
             ) : event.type === 'cafe' ? (
               <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'bolos' ? (
-              <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              // Mismo truco que en events.tsx: caja del mismo tamano que los demas
+              // iconos (156x132) para no desalinear el layout, con el icono ~35% mas
+              // grande centrado adentro (se ve chico si no se agranda un poco).
+              <View style={{ width: 156, height: 132, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 211, height: 178, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              </View>
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}
