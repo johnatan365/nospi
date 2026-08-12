@@ -39,7 +39,7 @@ function timeAgo(iso: string | null): string {
 }
 
 function eventEmoji(eventType: string | null): string {
-  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
 }
 
 // El chat grupal de un evento se habilita 30 min antes de que empiece y

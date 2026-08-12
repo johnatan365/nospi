@@ -48,7 +48,7 @@ interface ConversationMeta {
 }
 
 function eventEmoji(eventType: string | null | undefined): string {
-  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
 }
 
 // Mismo criterio que en la lista de Chat: el grupo se habilita 30 min antes

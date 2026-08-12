@@ -477,8 +477,8 @@ export default function AppointmentsScreen() {
               if (!appointment.event) return null;
 
               const eventType = appointment.event.type || 'restaurant';
-              const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : 'Restaurante';
-              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : '🍽️';
+              const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : eventType === 'cafe' ? 'Café' : eventType === 'bolos' ? 'Bolos' : 'Restaurante';
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
@@ -572,6 +572,8 @@ export default function AppointmentsScreen() {
                       <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'cafe' ? (
                       <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                    ) : eventType === 'bolos' ? (
+                      <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
                     )}

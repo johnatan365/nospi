@@ -1301,8 +1301,8 @@ export default function DinamicaScreen() {
     );
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : '🍽️';
+  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : appointment.event.type === 'cafe' ? 'Café' : appointment.event.type === 'bolos' ? 'Bolos' : 'Restaurante';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -1340,6 +1340,8 @@ export default function DinamicaScreen() {
               <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'cafe' ? (
               <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+            ) : appointment.event.type === 'bolos' ? (
+              <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
             )}

@@ -234,8 +234,8 @@ export default function EventDetailsScreen() {
     );
   }
 
-  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : 'Restaurante';
-  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : '🍽️';
+  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : 'Restaurante';
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : '🍽️';
   const dateText = formatDate(event.date);
   // Los eventos son de hombres y mujeres. El cierre de registro por genero
   // (registration_closed_men/women) es un tope DINAMICO para balancear cupos
@@ -273,6 +273,8 @@ export default function EventDetailsScreen() {
               <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'cafe' ? (
               <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+            ) : event.type === 'bolos' ? (
+              <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}
