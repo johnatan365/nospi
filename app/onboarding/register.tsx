@@ -39,6 +39,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showGoToLogin, setShowGoToLogin] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -311,6 +312,7 @@ export default function RegisterScreen() {
 
     setLoading(true);
     setError('');
+    setShowGoToLogin(false);
 
     try {
       const interestsData = await AsyncStorage.getItem('onboarding_interests');
@@ -414,8 +416,10 @@ export default function RegisterScreen() {
       if (profileError) {
         if (profileError.message.includes('users_phone_key') || profileError.message.includes('duplicate key')) {
           setError('Este número de celular ya está registrado. Por favor usa otro número o inicia sesión con tu cuenta existente.');
+          setShowGoToLogin(true);
         } else if (profileError.message.includes('users_email_key') || profileError.message.includes('email')) {
           setError('Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.');
+          setShowGoToLogin(true);
         } else {
           setError('Error al crear el perfil. Por favor intenta de nuevo.');
         }
@@ -515,6 +519,16 @@ export default function RegisterScreen() {
             <Text style={styles.modalTitle}>Registro con Email</Text>
 
             {error ? <Text style={styles.errorTextModal}>{error}</Text> : null}
+
+            {showGoToLogin ? (
+              <TouchableOpacity
+                style={styles.goToLoginButton}
+                onPress={() => router.replace('/login')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.goToLoginButtonText}>Iniciar sesión con mi cuenta</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TextInput
               style={[styles.input, emailFocused && styles.inputFocused]}
@@ -779,6 +793,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    textAlign: 'center',
+  },
+  goToLoginButton: {
+    backgroundColor: '#AD1457',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  goToLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
     textAlign: 'center',
   },
   input: {
