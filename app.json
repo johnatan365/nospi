@@ -45,6 +45,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "app.nospi.mobile",
+      "splash": {
+        "image": "./assets/splash-blank.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#1a0010"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -89,7 +94,7 @@
           ]
         }
       ],
-            "versionCode": 43
+            "versionCode": 44
     },
     "web": {
       "favicon": "./assets/icon.png",
