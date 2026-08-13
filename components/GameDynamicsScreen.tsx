@@ -627,7 +627,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setCurrentQuestion(nextQuestion);
         startTimer(); // Start fresh 60s timer immediately
 
-        const { error } = await supabase
+        // CANDADO ANTI-SALTO (multi-persona): el avance solo se aplica si la
+        // pregunta que hay en la BASE DE DATOS sigue siendo la que este
+        // teléfono cree (current_question_index === currentQuestionIndex). Si
+        // otra persona de la mesa ya le dio "Continuar" un instante antes, la
+        // condición no coincide y este UPDATE no afecta ninguna fila: así
+        // evitamos que dos toques casi simultáneos SALTEN una pregunta, y que
+        // un teléfono desincronizado empuje a la mesa hacia atrás. En ese caso
+        // deshacemos el cambio local y dejamos que el tiempo real nos ponga al
+        // día con la pregunta correcta.
+        const { data: advancedRows, error } = await supabase
           .from('events')
           .update({
             current_question_index: nextQuestionIndex,
@@ -635,11 +644,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             current_question: nextQuestion,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', appointment.event_id);
+          .eq('id', appointment.event_id)
+          .eq('current_question_index', currentQuestionIndex)
+          .select('id');
 
         if (error) {
           console.error('❌ Error advancing question:', error);
           // Revert optimistic update on error
+          setCurrentQuestionIndex(currentQuestionIndex);
+          setCurrentQuestion(currentQuestion);
+          setLoading(false);
+          return;
+        }
+
+        if (!advancedRows || advancedRows.length === 0) {
+          // Otro teléfono ya movió la pregunta: no pisamos a la mesa.
+          // Revertimos el optimismo local; el tiempo real corregirá enseguida.
+          console.log('[Candado] Otro participante ya avanzó — no se salta pregunta');
           setCurrentQuestionIndex(currentQuestionIndex);
           setCurrentQuestion(currentQuestion);
           setLoading(false);
