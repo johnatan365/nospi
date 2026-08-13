@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { nospiColors } from '@/constants/Colors';
 import { Asset } from 'expo-asset';
+import appJson from '@/app.json';
 
 const { width, height } = Dimensions.get('window');
 
@@ -86,6 +87,8 @@ export default function WelcomeScreen() {
               <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.versionText}>v{appJson.expo.version}{Platform.OS !== 'web' ? ` (${appJson.expo.android?.versionCode || '—'})` : ''}</Text>
         </View>
       </View>
     </LinearGradient>
@@ -182,5 +185,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 20,
   },
 });
