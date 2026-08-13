@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
     borderRadius: 23,
   },
   splashLogo: {
-    width: 78,
-    height: 78,
-    borderRadius: 20,
+    width: 100,
+    height: 100,
+    borderRadius: 25,
   },
 });
 
