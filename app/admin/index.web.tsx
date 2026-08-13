@@ -1601,6 +1601,29 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setShowMoveAttendeeModal(true);
   };
 
+  const [confirmingArrivalId, setConfirmingArrivalId] = useState<string | null>(null);
+
+  const handleConfirmArrival = async (eventId: string, userId: string, attendeeKey: string) => {
+    if (confirmingArrivalId) return;
+    try {
+      setConfirmingArrivalId(attendeeKey);
+      const { data, error } = await supabase.functions.invoke('admin-confirm-arrival', {
+        body: { eventId, userId },
+      });
+      if (error || (data && data.error)) {
+        window.alert('Error al confirmar llegada: ' + (error?.message || data?.error || 'desconocido'));
+        return;
+      }
+      window.alert('✅ Llegada confirmada');
+      if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
+      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
+    } catch (err: any) {
+      window.alert('Error al confirmar llegada: ' + (err?.message || 'desconocido'));
+    } finally {
+      setConfirmingArrivalId(null);
+    }
+  };
+
   const handleMoveAttendee = async () => {
     if (!selectedAttendeeToMove || !targetEventId) {
       window.alert('Por favor selecciona un evento de destino');
@@ -5812,6 +5835,15 @@ setBulkWhatsAppPending(pending);
                         onPress={() => handleOpenMoveAttendeeModal(attendee)}
                       >
                         <Text style={styles.moveAttendeeButtonText}>🔄 Mover a Otro Evento</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.moveAttendeeButton, { backgroundColor: '#DCFCE7', marginTop: 8 }]}
+                        disabled={confirmingArrivalId === attendee.id}
+                        onPress={() => handleConfirmArrival(attendee.event_id, attendee.user_id, attendee.id)}
+                      >
+                        <Text style={[styles.moveAttendeeButtonText, { color: '#166534' }]}>
+                          {confirmingArrivalId === attendee.id ? '⏳ Confirmando...' : '✅ Confirmar llegada'}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   );
