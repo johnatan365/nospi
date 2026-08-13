@@ -709,6 +709,46 @@ export default function DinamicaScreen() {
     setStartingExperience(true);
 
     try {
+      // ————————————————————————————————————————————————————————————————
+      // CANDADO ANTI-REINICIO (multi-persona):
+      // Antes de "arrancar" la dinámica, confirmamos contra la BASE DE DATOS
+      // (no contra el estado local de ESTE teléfono) si el juego de verdad ya
+      // empezó. Sin esto, un teléfono que se quedó desincronizado —perdió el
+      // aviso en tiempo real, minimizó la app, o reentró a la pestaña de
+      // dinámica— creía que el juego no había arrancado y, por el reintento
+      // automático cada 3s, volvía a escribir "pregunta 0 / Divertido",
+      // devolviendo a TODA la mesa a la primera pregunta una y otra vez.
+      // Ahora, si la BD dice que ya arrancó, solo re-sincronizamos este
+      // teléfono con el estado real y salimos SIN reiniciar a nadie.
+      const { data: currentEvent } = await supabase
+        .from('events')
+        .select('game_phase, current_question_index')
+        .eq('id', appointment.event_id)
+        .maybeSingle();
+
+      const yaArrancoEnBD =
+        !!currentEvent &&
+        (
+          currentEvent.game_phase === 'questions' ||
+          currentEvent.game_phase === 'question_active' ||
+          currentEvent.game_phase === 'level_transition' ||
+          currentEvent.game_phase === 'level_checkin' ||
+          currentEvent.game_phase === 'finished' ||
+          currentEvent.game_phase === 'free_phase' ||
+          (typeof currentEvent.current_question_index === 'number' && currentEvent.current_question_index > 0)
+        );
+
+      if (yaArrancoEnBD) {
+        // Auto-curación: este teléfono estaba desincronizado. Lo movemos a la
+        // fase real para que deje de reintentar el arranque y muestre la
+        // dinámica donde va la mesa, sin tocar el estado compartido.
+        if (currentEvent.game_phase) {
+          setGamePhase(currentEvent.game_phase);
+        }
+        setStartingExperience(false);
+        return;
+      }
+
       let firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
       try {
         const { data: eventFirstQuestion } = await supabase
