@@ -1126,6 +1126,20 @@ export default function DinamicaScreen() {
                 <Text style={styles.confirmCodeButtonText}>Reintentar</Text>
               </TouchableOpacity>
             )}
+            {!loadError && user?.email && (
+              <View style={styles.sessionInfoContainer}>
+                <Text style={styles.sessionInfoText}>Sesión iniciada como: {user.email}</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
+                    router.replace('/welcome');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sessionSignOutText}>¿No es tu cuenta? Cerrar sesión</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
       </LinearGradient>
@@ -1570,4 +1584,7 @@ const styles = StyleSheet.create({
   divertidoEmoji: { fontSize: 100, marginBottom: 24 },
   divertidoModalTitle: { fontSize: 20, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: 10, textAlign: 'center' },
   divertidoModalLevel: { fontSize: 38, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  sessionInfoContainer: { marginTop: 20, alignItems: 'center' },
+  sessionInfoText: { fontSize: 13, color: '#888', textAlign: 'center' },
+  sessionSignOutText: { fontSize: 13, color: '#AD1457', fontWeight: '600', textAlign: 'center', marginTop: 8, textDecorationLine: 'underline' },
 });
