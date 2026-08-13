@@ -31,10 +31,10 @@
         "NSPhotoLibraryUsageDescription": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas."
       },
       "splash": {
-        "image": "./assets/splash.png",
+        "image": "./assets/splash-blank.png",
         "resizeMode": "contain",
         "backgroundColor": "#1a0010",
-        "tabletImage": "./assets/splash.png"
+        "tabletImage": "./assets/splash-blank.png"
       }
     },
     "android": {
