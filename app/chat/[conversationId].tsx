@@ -51,6 +51,18 @@ function eventEmoji(eventType: string | null | undefined): string {
   return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
 }
 
+// Mismos íconos PNG que usa la pestaña de Eventos. El require debe ser estático
+// (literal) para que Metro lo empaquete; por eso se resuelve con un switch.
+function eventIconSource(eventType: string | null | undefined) {
+  switch (eventType) {
+    case 'caminata': return require('@/assets/images/icon-caminata.png');
+    case 'bar': return require('@/assets/images/icon-bar.png');
+    case 'cafe': return require('@/assets/images/icon-cafe.png');
+    case 'bolos': return require('@/assets/images/icon-bolos.png');
+    default: return require('@/assets/images/icon-restaurante.png');
+  }
+}
+
 // Mismo criterio que en la lista de Chat: el grupo se habilita 30 min antes
 // del evento. Este guard evita que alguien entre directo por link/deeplink
 // antes de esa ventana (la fila ya aparece bloqueada en la lista, pero un
@@ -290,7 +302,7 @@ export default function ChatThreadScreen() {
           <View style={styles.headerCenter}>
             {isGroup ? (
               <View style={styles.headerAvatarPlaceholder}>
-                <Text style={styles.headerEmoji}>{eventEmoji(meta?.event_type)}</Text>
+                <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
               </View>
             ) : otherUserPhoto ? (
               <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
@@ -445,15 +457,16 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
   headerAvatarPlaceholder: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     marginRight: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerEmoji: { fontSize: 16 },
+  headerEventIcon: { width: 20, height: 20, tintColor: '#880E4F' },
   headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
   messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
   messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end' },
@@ -466,10 +479,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  bubbleMine: { backgroundColor: nospiColors.purpleLight, borderBottomRightRadius: 4 },
-  bubbleTheirs: { backgroundColor: 'rgba(255,255,255,0.15)', borderBottomLeftRadius: 4 },
-  senderName: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.75)', marginBottom: 2 },
-  messageText: { fontSize: 15, color: '#FFFFFF', lineHeight: 20 },
+  bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
+  bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
+  senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
+  messageText: { fontSize: 15, color: '#2a2a2e', lineHeight: 20 },
   messageTextMine: { color: '#FFFFFF' },
   emptyMessages: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 40 },
   emptyMessagesText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' },
