@@ -42,6 +42,18 @@ function eventEmoji(eventType: string | null): string {
   return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
 }
 
+// Mismos íconos PNG que usa la pestaña de Eventos. El require debe ser estático
+// (literal) para que Metro lo empaquete; por eso se resuelve con un switch.
+function eventIconSource(eventType: string | null) {
+  switch (eventType) {
+    case 'caminata': return require('@/assets/images/icon-caminata.png');
+    case 'bar': return require('@/assets/images/icon-bar.png');
+    case 'cafe': return require('@/assets/images/icon-cafe.png');
+    case 'bolos': return require('@/assets/images/icon-bolos.png');
+    default: return require('@/assets/images/icon-restaurante.png');
+  }
+}
+
 // El chat grupal de un evento se habilita 30 min antes de que empiece y
 // queda abierto durante el evento. Antes de esa ventana mostramos la fila
 // bloqueada con la hora en que se habilita (hora Bogota, sin depender del
@@ -266,9 +278,17 @@ export default function ChatsScreen() {
                 >
                   {photoUrl ? (
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />
+                  ) : locked ? (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarEmoji}>🔒</Text>
+                    </View>
+                  ) : isGroup ? (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <Image source={eventIconSource(item.event_type)} style={styles.avatarEventIcon} resizeMode="contain" />
+                    </View>
                   ) : (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                      <Text style={styles.avatarEmoji}>{locked ? '🔒' : isGroup ? eventEmoji(item.event_type) : '👤'}</Text>
+                      <Text style={styles.avatarEmoji}>👤</Text>
                     </View>
                   )}
 
@@ -338,12 +358,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterTabActive: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: '#FFFFFF',
   },
   filterTabText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
-  filterTabTextActive: { color: '#FFFFFF' },
+  filterTabTextActive: { color: '#880E4F' },
   filterBadge: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#AD1457',
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -352,7 +372,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginLeft: 6,
   },
-  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#AD1457' },
+  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
   scrollView: { flex: 1 },
   contentContainer: { paddingHorizontal: 16, paddingBottom: 20 },
   skeletonRow: {
@@ -373,31 +393,37 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 12,
+    padding: 11,
     marginBottom: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.13,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  rowLocked: { opacity: 0.55 },
-  rowTitleLocked: { color: 'rgba(255,255,255,0.8)' },
-  rowLockedText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  avatar: { width: 52, height: 52, borderRadius: 26 },
+  rowLocked: { opacity: 0.6 },
+  rowTitleLocked: { color: '#9a9a9e' },
+  rowLockedText: { fontSize: 12, color: '#AD1457' },
+  avatar: { width: 52, height: 52, borderRadius: 15 },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(136,14,79,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarEmoji: { fontSize: 24 },
+  avatarEventIcon: { width: 32, height: 32, tintColor: '#880E4F' },
   rowContent: { flex: 1, marginLeft: 12 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', flex: 1, marginRight: 8 },
-  rowTitleUnread: { fontWeight: '700' },
-  rowTime: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  rowTitle: { fontSize: 15, fontWeight: '700', color: '#1c1c1e', flex: 1, marginRight: 8 },
+  rowTitleUnread: { fontWeight: '800' },
+  rowTime: { fontSize: 12, color: '#8a8a8e' },
   rowFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLastMessage: { fontSize: 13, color: 'rgba(255,255,255,0.7)', flex: 1, marginRight: 8 },
-  rowLastMessageUnread: { color: '#FFFFFF', fontWeight: '600' },
+  rowLastMessage: { fontSize: 13, color: '#8a8a8e', flex: 1, marginRight: 8 },
+  rowLastMessageUnread: { color: '#3a3a3e', fontWeight: '600' },
   unreadBadge: {
-    backgroundColor: nospiColors.purpleLight,
+    backgroundColor: '#880E4F',
     borderRadius: 10,
     minWidth: 20,
     height: 20,

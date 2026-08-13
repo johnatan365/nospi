@@ -858,30 +858,47 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.heroStats}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatNum}>{profile.interests.length}</Text>
+            <Text style={styles.heroStatLabel}>GUSTOS</Text>
+          </View>
+          <View style={[styles.heroStat, styles.heroStatBorder]}>
+            <Text style={styles.heroStatNum}>{profile.personality_traits.length}</Text>
+            <Text style={styles.heroStatLabel}>RASGOS</Text>
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Información Personal</Text>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email:</Text>
+            <Ionicons name="mail-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>{profile.email}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Teléfono:</Text>
+            <Ionicons name="call-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Teléfono</Text>
             <Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Género:</Text>
+            <Ionicons name="person-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Género</Text>
             <Text style={styles.infoValue}>{genderText}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Interesado en:</Text>
+            <Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Interesado en</Text>
             <Text style={styles.infoValue}>{interestedInText}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Rango de edad:</Text>
+            <Ionicons name="options-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Rango de edad</Text>
             <Text style={styles.infoValue}>{ageRangeText}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Ubicación:</Text>
+            <Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>Ubicación</Text>
             <Text style={styles.infoValue}>{locationText}</Text>
           </View>
         </View>
@@ -916,19 +933,37 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.section} onPress={handleNotificationPress} activeOpacity={0.8}>
-          <Text style={styles.sectionTitle}>Preferencias de Notificaciones</Text>
-          <Text style={styles.sectionSubtitle}>Toca para configurar</Text>
+        <TouchableOpacity style={styles.menuRow} onPress={handleNotificationPress} activeOpacity={0.8}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="notifications-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.menuSub}>Toca para configurar</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.section} onPress={() => setShowPasswordModal(true)} activeOpacity={0.8}>
-          <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
-          <Text style={styles.sectionSubtitle}>Actualiza tu contraseña</Text>
+        <TouchableOpacity style={styles.menuRow} onPress={() => setShowPasswordModal(true)} activeOpacity={0.8}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="lock-closed-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>Cambiar Contraseña</Text>
+            <Text style={styles.menuSub}>Actualiza tu contraseña</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.section} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
-          <Text style={styles.sectionTitle}>Suscripción mensual Nospi</Text>
-          <Text style={styles.sectionSubtitle}>Acceso ilimitado a todos los eventos del mes</Text>
+        <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="diamond-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>Suscripción mensual Nospi</Text>
+            <Text style={styles.menuSub}>Acceso ilimitado a todos los eventos del mes</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
         <View style={styles.section}>
@@ -1398,12 +1433,23 @@ const styles = StyleSheet.create({
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12 },
   sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  infoIcon: { width: 20, textAlign: 'center' },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
-  infoValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right' },
+  infoValue: { fontSize: 14, color: '#1c1c1e', fontWeight: '700', flex: 1, textAlign: 'right' },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 2, borderColor: 'rgba(240, 98, 146, 0.50)' },
-  chipText: { color: '#880E4F', fontSize: 14, fontWeight: '500' },
+  chip: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(136, 14, 79, 0.35)' },
+  chipText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
+  heroStats: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, marginBottom: 16, overflow: 'hidden', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 },
+  heroStat: { flex: 1, alignItems: 'center', paddingVertical: 14 },
+  heroStatBorder: { borderLeftWidth: 1, borderLeftColor: '#ECECEE' },
+  heroStatNum: { fontSize: 18, fontWeight: '800', color: '#880E4F' },
+  heroStatLabel: { fontSize: 10, color: '#8A8A8E', marginTop: 2, letterSpacing: 0.3 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 16 },
+  menuIconCircle: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(136, 14, 79, 0.10)', justifyContent: 'center', alignItems: 'center' },
+  menuTextWrap: { flex: 1 },
+  menuTitle: { fontSize: 16, fontWeight: '700', color: '#1c1c1e' },
+  menuSub: { fontSize: 13, color: '#666', marginTop: 2 },
   emptyText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
   deleteAccountButton: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'rgba(220, 38, 38, 0.5)', paddingVertical: 16, paddingHorizontal: 32, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 8 },
   deleteAccountButtonText: { color: '#DC2626', fontSize: 16, fontWeight: '600' },
