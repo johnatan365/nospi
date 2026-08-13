@@ -47,6 +47,7 @@ export default function PhoneScreen() {
   const [showCountryModal, setShowCountryModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [phoneAlreadyExists, setPhoneAlreadyExists] = useState(false);
   const [checking, setChecking] = useState(false);
   const [phoneStatus, setPhoneStatus] = useState<'idle'|'checking'|'available'|'taken'>('idle');
   const debounceRef = useRef<any>(null);
@@ -85,6 +86,7 @@ export default function PhoneScreen() {
     // Validate prefix
     const startsOk = selectedCountry.starts.some(p => cleanNumber.startsWith(p));
     if (!startsOk) {
+      setPhoneAlreadyExists(false);
       setErrorMessage(`Para ${selectedCountry.name} el número debe empezar con ${selectedCountry.starts.join(' o ')}.`);
       setShowErrorModal(true);
       return;
@@ -96,6 +98,7 @@ export default function PhoneScreen() {
     setChecking(false);
 
     if (exists) {
+      setPhoneAlreadyExists(true);
       setErrorMessage('Este número ya está registrado. Usa otro número o inicia sesión con tu cuenta existente.');
       setShowErrorModal(true);
       return;
@@ -233,8 +236,21 @@ export default function PhoneScreen() {
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>⚠️ Número no disponible</Text>
             <Text style={styles.errorMsg}>{errorMessage}</Text>
-            <TouchableOpacity style={styles.errorBtn} onPress={() => setShowErrorModal(false)}>
-              <Text style={styles.errorBtnText}>Entendido</Text>
+            {phoneAlreadyExists && (
+              <TouchableOpacity
+                style={styles.errorLoginBtn}
+                onPress={() => { setShowErrorModal(false); router.replace('/login'); }}
+              >
+                <Text style={styles.errorLoginBtnText}>Iniciar sesión</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.errorBtn, phoneAlreadyExists && styles.errorBtnSecondary]}
+              onPress={() => setShowErrorModal(false)}
+            >
+              <Text style={[styles.errorBtnText, phoneAlreadyExists && styles.errorBtnSecondaryText]}>
+                {phoneAlreadyExists ? 'Usar otro número' : 'Entendido'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -326,4 +342,8 @@ const styles = StyleSheet.create({
   errorMsg: { fontSize: 16, color: '#6B7280', marginBottom: 24, textAlign: 'center', lineHeight: 24 },
   errorBtn: { backgroundColor: nospiColors.purpleDark, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%' },
   errorBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  errorLoginBtn: { backgroundColor: '#AD1457', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%', marginBottom: 12 },
+  errorLoginBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  errorBtnSecondary: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'rgba(136, 14, 79, 0.4)' },
+  errorBtnSecondaryText: { color: nospiColors.purpleDark },
 });
