@@ -21,6 +21,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme, Platform, View, Animated, StyleSheet } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 import * as Sentry from "@sentry/react-native";
 
 Sentry.init({
@@ -156,6 +157,7 @@ function RootLayoutInner() {
 
   return (
     <AppConfigProvider>
+      <ForceUpdateGate>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <SystemBars style="auto" />
         <StatusBar style="dark" />
@@ -192,6 +194,7 @@ function RootLayoutInner() {
           {showSplashAnim && <AnimatedSplash onFinish={() => setShowSplashAnim(false)} />}
         </View>
       </ThemeProvider>
+      </ForceUpdateGate>
     </AppConfigProvider>
   );
 }
