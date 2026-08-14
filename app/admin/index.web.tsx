@@ -627,6 +627,8 @@ export default function AdminPanelScreen() {
   const [selectedEventForAttendees, setSelectedEventForAttendees] = useState<Event | null>(null);
   const [eventAttendees, setEventAttendees] = useState<EventAttendee[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+  // Búsqueda dentro del modal de asistentes (por nombre, correo o celular).
+  const [attendeeSearch, setAttendeeSearch] = useState('');
 
   // Move attendee modal
   const [showMoveAttendeeModal, setShowMoveAttendeeModal] = useState(false);
@@ -1549,8 +1551,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handleViewAttendees = async (event: Event) => {
-    
+
     setSelectedEventForAttendees(event);
+    setAttendeeSearch(''); // limpiar el buscador al abrir/recargar
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
 
@@ -5756,6 +5759,24 @@ setBulkWhatsAppPending(pending);
               </View>
             )}
 
+            {!loadingAttendees && eventAttendees.length > 0 && (
+              <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+                <TextInput
+                  style={{
+                    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
+                    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14,
+                    backgroundColor: '#FFFFFF', color: '#111827',
+                  }}
+                  placeholder="🔎 Buscar por nombre, correo o celular…"
+                  placeholderTextColor="#9CA3AF"
+                  value={attendeeSearch}
+                  onChangeText={setAttendeeSearch}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            )}
+
             {loadingAttendees ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={nospiColors.purpleDark} />
@@ -5765,9 +5786,28 @@ setBulkWhatsAppPending(pending);
               <View style={styles.emptyAttendeesContainer}>
                 <Text style={styles.emptyAttendeesText}>No hay usuarios registrados en este evento aún</Text>
               </View>
-            ) : (
+            ) : (() => {
+              // Filtra por nombre (sin acentos), correo, o celular (por dígitos).
+              const raw = norm(attendeeSearch);
+              const rawDigits = raw.replace(/\D/g, '');
+              const filteredAttendees = raw
+                ? eventAttendees.filter((a) => {
+                    const name = norm(a.users.name || '');
+                    const email = (a.users.email || '').toLowerCase();
+                    const phoneDigits = (a.users.phone || '').replace(/\D/g, '');
+                    return name.includes(raw) || email.includes(raw) || (rawDigits.length > 0 && phoneDigits.includes(rawDigits));
+                  })
+                : eventAttendees;
+              if (filteredAttendees.length === 0) {
+                return (
+                  <View style={styles.emptyAttendeesContainer}>
+                    <Text style={styles.emptyAttendeesText}>Sin resultados para "{attendeeSearch}"</Text>
+                  </View>
+                );
+              }
+              return (
               <ScrollView style={styles.attendeesList}>
-                {eventAttendees.map((attendee, index) => {
+                {filteredAttendees.map((attendee, index) => {
                   const statusColor = attendee.status === 'confirmed' ? '#10B981' : '#F59E0B';
                   const paymentColor = attendee.payment_status === 'paid' ? '#10B981' : '#EF4444';
                   const interestedInText = attendee.users.interested_in === 'hombres' ? 'Hombres' : attendee.users.interested_in === 'mujeres' ? 'Mujeres' : attendee.users.interested_in === 'ambos' ? 'Ambos' : 'No especificado';
@@ -5862,7 +5902,8 @@ setBulkWhatsAppPending(pending);
                   );
                 })}
               </ScrollView>
-            )}
+              );
+            })()}
           </View>
         </View>
       </Modal>
