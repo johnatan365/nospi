@@ -13,7 +13,9 @@ import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
-const CACHE_KEY = 'cache_dinamica';
+// Clave legacy (global, compartida entre cuentas). Se conserva solo para
+// limpiarla una vez y que no quede "pegado" el evento de otra cuenta.
+const CACHE_KEY_LEGACY = 'cache_dinamica';
 
 interface Event {
   id: string;
@@ -103,7 +105,19 @@ if (Platform.OS !== 'web') {
 
 export default function DinamicaScreen() {
   const { user, loading: authLoading } = useSupabase();
+  // CACHE POR USUARIO: la caché de la dinámica se guarda con una clave atada al
+  // id de la cuenta logueada. Antes era una clave global ('cache_dinamica'), así
+  // que en un mismo dispositivo/navegador una cuenta podía HEREDAR el evento
+  // cacheado de la cuenta anterior (p.ej. alguien no inscrito veía la dinámica
+  // en vivo). Con la clave por usuario, cada cuenta solo ve lo suyo.
+  const CACHE_KEY = `cache_dinamica_${user?.id ?? 'anon'}`;
   const router = useRouter();
+
+  // Limpieza única de la caché global vieja: si quedó guardado el evento de otra
+  // cuenta con la clave antigua, lo borramos para que no se herede.
+  useEffect(() => {
+    clearCached(CACHE_KEY_LEGACY);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   // Arranca en "infinito" (aun sin calcular) y no en 0: si arrancara en 0, el
