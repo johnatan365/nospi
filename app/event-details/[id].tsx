@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Linking, Modal, Platform, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -162,6 +162,27 @@ export default function EventDetailsScreen() {
 
   const handleConfirm = async () => {
     if (requiresWaiver(event?.type) && !waiverAccepted) return;
+
+    // Bloqueo por suspensión de reservas (amonestaciones por no confirmar
+    // asistencia). Se revisa antes de cualquier pago.
+    try {
+      const { data: me } = await supabase
+        .from('users')
+        .select('reservas_suspendidas_hasta')
+        .eq('id', user?.id)
+        .maybeSingle();
+      const until = me?.reservas_suspendidas_hasta ? new Date(me.reservas_suspendidas_hasta) : null;
+      if (until && until.getTime() > Date.now()) {
+        const untilText = until.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+        const msg = `Tu cuenta está suspendida para reservar nuevos eventos hasta el ${untilText} porque no se confirmó tu asistencia a eventos anteriores. Puedes seguir usando la app con normalidad. Si crees que es un error, escríbenos a soporte para revisar tu caso.`;
+        if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Reservas suspendidas', msg); }
+        return;
+      }
+    } catch (e) {
+      // Si la consulta falla, no bloqueamos la reserva.
+      console.error('Chequeo de suspensión falló:', e);
+    }
+
     setConfirming(true);
 
     try {
