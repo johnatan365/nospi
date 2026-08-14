@@ -468,11 +468,11 @@ export default function EventDetailsScreen() {
               </View>
 
               <Text style={styles.ticketPolicy}>
-                ℹ️ Puedes <Text style={styles.ticketPolicyBold}>cancelar hasta 24 horas antes del evento</Text> y
-                te devolvemos el valor como <Text style={styles.ticketPolicyBold}>saldo</Text> para otro evento.
-                Si cancelas con <Text style={styles.ticketPolicyBold}>menos de 24 horas</Text> o{' '}
-                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no hay devolución del saldo y tu cuenta
-                podría ser <Text style={styles.ticketPolicyBold}>suspendida para reservar</Text> nuevos eventos.
+                ℹ️ Si no vas a poder asistir, puedes <Text style={styles.ticketPolicyBold}>cancelar desde la app con más de 24 horas</Text> de
+                anticipación y te devolvemos tu <Text style={styles.ticketPolicyBold}>saldo</Text> para que lo uses en otro evento.
+                Si lo haces con <Text style={styles.ticketPolicyBold}>menos de 24 horas</Text> o{' '}
+                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no alcanzamos a devolverte el saldo y tu cuenta
+                <Text> </Text>podría <Text style={styles.ticketPolicyBold}>quedar suspendida</Text> para reservar por un tiempo.
               </Text>
 
               <TouchableOpacity
