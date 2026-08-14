@@ -2011,6 +2011,10 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
             <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <TouchableOpacity onPress={() => { setShowSuccessModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
+              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
@@ -2028,6 +2032,10 @@ export default function SubscriptionPlansScreen() {
                 ? 'Tu suscripción cubre este evento — ya tienes tu lugar asegurado'
                 : 'Este evento es gratis — ya tienes tu lugar asegurado'}
             </Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <TouchableOpacity onPress={() => { setShowSubscriptionConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
+              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
@@ -2041,6 +2049,10 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successIcon}>🎟️</Text>
             <Text style={styles.successTitle}>¡Cupo confirmado gratis!</Text>
             <Text style={styles.successMessage}>Tu código promocional cubrió este evento — ya tienes tu lugar asegurado</Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <TouchableOpacity onPress={() => { setShowPromoConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
+              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
             </TouchableOpacity>
@@ -2137,7 +2149,9 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 40, width: '100%', maxWidth: 400, alignItems: 'center' },
   successIcon: { fontSize: 72, marginBottom: 24 },
   successTitle: { fontSize: 28, fontWeight: 'bold', color: nospiColors.purpleDark, marginBottom: 16, textAlign: 'center' },
-  successMessage: { fontSize: 16, color: '#666', textAlign: 'center', lineHeight: 24, marginBottom: 32 },
+  successMessage: { fontSize: 16, color: '#666', textAlign: 'center', lineHeight: 24, marginBottom: 16 },
+  policyNote: { fontSize: 12.5, color: '#5b4a53', backgroundColor: '#faf3f6', borderRadius: 10, padding: 11, lineHeight: 18, textAlign: 'left', marginBottom: 12 },
+  policyLink: { fontSize: 13, fontWeight: '700', color: nospiColors.purpleDark, textAlign: 'center', textDecorationLine: 'underline', marginBottom: 18 },
   successButton: { backgroundColor: nospiColors.purpleDark, paddingVertical: 18, paddingHorizontal: 48, borderRadius: 16, width: '100%', alignItems: 'center' },
   bankPickerContainer: { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', marginTop: 4, marginBottom: 8, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
   bankOption: { paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
