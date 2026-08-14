@@ -58,10 +58,10 @@ export default function PoliticaAsistenciaScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>🗓️  Cancelación</Text>
               <Text style={styles.cardText}>
-                Cancela <Text style={styles.bold}>hasta 24 horas antes del evento</Text> y te
-                devolvemos el valor como <Text style={styles.bold}>saldo</Text> para otro evento.
-                Con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
-                <Text style={styles.bold}>no asistes</Text>, no hay devolución del saldo.
+                Si no vas a poder asistir, puedes <Text style={styles.bold}>cancelar desde la app con más de 24 horas</Text> de
+                anticipación y te devolvemos tu <Text style={styles.bold}>saldo</Text> para que lo uses en otro evento.
+                Si lo haces con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
+                <Text style={styles.bold}>no asistes</Text>, no alcanzamos a devolverte el saldo.
               </Text>
             </View>
 
