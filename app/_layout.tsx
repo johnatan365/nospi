@@ -155,6 +155,18 @@ function RootLayoutInner() {
 
   const [showSplashAnim, setShowSplashAnim] = useState(true);
 
+  // Fallback SOLO en web: en web la animación del splash (con useNativeDriver)
+  // a veces no dispara su callback onFinish, y el overlay del splash se quedaba
+  // encima para siempre tapando la pantalla (por ejemplo el formulario de nueva
+  // contraseña al abrir el link de recuperación en el navegador). Este timer
+  // garantiza que en web el splash se oculte a los 2.2s pase lo que pase. En
+  // iOS/Android no aplica: ahí onFinish sigue controlando el splash como antes.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const t = setTimeout(() => setShowSplashAnim(false), 2200);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <AppConfigProvider>
       <ForceUpdateGate>

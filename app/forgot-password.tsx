@@ -36,8 +36,17 @@ export default function ForgotPasswordScreen() {
     setError('');
 
     try {
+      // El link de recuperación debe abrir en CUALQUIER navegador / cliente de
+      // correo. Antes, en la app nativa apuntaba a un deep link 'nospi://...'
+      // que muchos correos (Hotmail/Outlook/Gmail) NO abren, y el usuario veía
+      // "el link no abre". Ahora siempre mandamos a una URL https real: la web
+      // de Nospi (app.nospi.co/auth/callback), que ya sabe procesar el link de
+      // recovery y llevar a la pantalla de nueva contraseña. Funciona en web,
+      // iOS y Android por igual.
       const redirectTo =
-        Platform.OS === 'web' ? `${window.location.origin}/auth/callback` : 'nospi://auth/callback';
+        Platform.OS === 'web'
+          ? `${window.location.origin}/auth/callback`
+          : 'https://app.nospi.co/auth/callback';
 
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
