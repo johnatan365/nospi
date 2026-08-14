@@ -13,6 +13,7 @@ const DEFAULT_CONFIG: AppConfig = {
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',
+  min_app_version: '0.0.0',
 };
 
 const AppConfigContext = createContext<AppConfigContextValue>({
