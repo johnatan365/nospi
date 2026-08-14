@@ -69,9 +69,13 @@ export default function LoginScreen() {
         });
 
         if (error) {
-          
-          if (error.message.includes('already')) {
+          const m = (error.message || '').toLowerCase();
+          if (m.includes('already')) {
             setError('Ya existe una cuenta con este email');
+          } else if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('weak')) {
+            setError('Tu contraseña debe incluir una mayúscula, una minúscula y un número (mínimo 8 caracteres). Ejemplo: Nospi2025');
+          } else if (m.includes('at least') && m.includes('character')) {
+            setError('Tu contraseña es muy corta. Usa al menos 8 caracteres, con mayúsculas, minúsculas y números.');
           } else {
             setError('Error al crear cuenta. Intenta de nuevo.');
           }
