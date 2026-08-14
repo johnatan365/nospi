@@ -251,16 +251,15 @@ function buildSameDayWhatsAppLink(
     ``,
     `⏰ Llega puntual: el evento arranca con una dinámica para romper el hielo.`,
     ``,
-    `📲 Cuando estén en la mesa, abran este link para confirmar e iniciar la experiencia:`,
+    `✅ *Muy importante:* ya en la mesa, abre la Dinámica en la app y *confirma tu asistencia*. Con eso queda registrada tu llegada y pueden iniciar la dinámica:`,
     `https://app.nospi.co/(tabs)/dinamica`,
     ``,
     `💡 Antes de arrancar, elijan a alguien que se encargue de iniciar la dinámica y leer las preguntas en voz alta.`,
     ``,
-    `ℹ️ ¿Tienes algún problema para confirmar tu asistencia o entrar? Escríbenos y lo solucionamos — no queremos amonestar a nadie por un fallo técnico.`,
+    `ℹ️ *Si no confirmas tu asistencia en la app, puede figurar como falta y generar una amonestación.* ¿Tienes algún problema para confirmar o entrar? Escríbenos y lo solucionamos — no amonestamos por un fallo técnico.`,
     `📋 Consulta la política de asistencia: https://nospi.co/#politica`,
     ``,
     `¡Hoy Nospi! 🎉`,
-    `_Equipo Nospi_`,
     ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
