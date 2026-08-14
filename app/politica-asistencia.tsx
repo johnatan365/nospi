@@ -61,13 +61,13 @@ export default function PoliticaAsistenciaScreen() {
                 Cancela <Text style={styles.bold}>hasta 24 horas antes del evento</Text> y te
                 devolvemos el valor como <Text style={styles.bold}>saldo</Text> para otro evento.
                 Con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
-                <Text style={styles.bold}>no asistes</Text>, no hay devolución.
+                <Text style={styles.bold}>no asistes</Text>, no hay devolución del saldo.
               </Text>
             </View>
 
-            {/* Niveles / amonestaciones */}
+            {/* Niveles / suspensiones */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Si faltas sin avisar (amonestaciones)</Text>
+              <Text style={styles.cardTitle}>Si faltas sin avisar</Text>
 
               <View style={[styles.level, styles.level1]}>
                 <View style={[styles.levelNum, styles.levelNum1]}>
@@ -106,7 +106,7 @@ export default function PoliticaAsistenciaScreen() {
               </View>
 
               <Text style={styles.note}>
-                Las amonestaciones se borran a los ~4 meses de buen comportamiento.
+                Las faltas se borran a los ~4 meses de buen comportamiento.
               </Text>
             </View>
 
@@ -125,7 +125,7 @@ export default function PoliticaAsistenciaScreen() {
               <Text style={styles.supportText}>
                 Si algo falló al confirmar tu asistencia o al entrar,{' '}
                 <Text style={styles.supportBold}>escríbenos a soporte</Text> y lo solucionamos.
-                Nunca amonestamos por un fallo técnico ni por avisar a tiempo.
+                Nunca suspendemos por un fallo técnico ni por avisar a tiempo.
               </Text>
             </View>
 

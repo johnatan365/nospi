@@ -1999,7 +1999,7 @@ export default function SubscriptionPlansScreen() {
         {/* ========== END TEST BUTTON ========== */}
 
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
-				<Text style={styles.cancelPolicyFooter}>Puedes cancelar hasta 24 horas antes del evento y recibir el valor como saldo para otro evento. Con menos de 24 horas de anticipación no hay devolución.</Text>
+				<Text style={styles.cancelPolicyFooter}>Cancela con más de 24 horas de anticipación y recibes el valor como saldo para otro evento. Si cancelas con menos de 24 horas o no asistes, no hay devolución del saldo y tu cuenta podría ser suspendida para reservar nuevos eventos.</Text>
           </>
         )}
 
@@ -2011,7 +2011,7 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
             <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
-            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela con más de 24 horas de anticipación y recuperas tu saldo. Si cancelas con menos de 24 horas o no asistes, no hay devolución del saldo y tu cuenta podría ser suspendida para reservar.</Text>
             <TouchableOpacity onPress={() => { setShowSuccessModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
               <Text style={styles.policyLink}>Ver política de asistencia</Text>
             </TouchableOpacity>
@@ -2032,7 +2032,7 @@ export default function SubscriptionPlansScreen() {
                 ? 'Tu suscripción cubre este evento — ya tienes tu lugar asegurado'
                 : 'Este evento es gratis — ya tienes tu lugar asegurado'}
             </Text>
-            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: si vas a cancelar, hazlo con más de 24 horas de anticipación. Si cancelas con menos de 24 horas o no asistes, tu cuenta podría ser suspendida para reservar nuevos eventos.</Text>
             <TouchableOpacity onPress={() => { setShowSubscriptionConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
               <Text style={styles.policyLink}>Ver política de asistencia</Text>
             </TouchableOpacity>
@@ -2049,7 +2049,7 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successIcon}>🎟️</Text>
             <Text style={styles.successTitle}>¡Cupo confirmado gratis!</Text>
             <Text style={styles.successMessage}>Tu código promocional cubrió este evento — ya tienes tu lugar asegurado</Text>
-            <Text style={styles.policyNote}>ℹ️ Recuerda: cancela hasta 24 horas antes y recuperas tu saldo. Con menos de 24 horas o si no asistes, no hay devolución y puede haber una amonestación.</Text>
+            <Text style={styles.policyNote}>ℹ️ Recuerda: si vas a cancelar, hazlo con más de 24 horas de anticipación. Si cancelas con menos de 24 horas o no asistes, tu cuenta podría ser suspendida para reservar nuevos eventos.</Text>
             <TouchableOpacity onPress={() => { setShowPromoConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
               <Text style={styles.policyLink}>Ver política de asistencia</Text>
             </TouchableOpacity>
