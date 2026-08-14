@@ -2313,6 +2313,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
+      // Marca los no-shows (cupos pagados que no confirmaron asistencia) de
+      // este evento. El cron notify-no-show se encarga luego de avisarles.
+      try {
+        await supabase.rpc('flag_event_no_shows', { p_event_id: eventId });
+      } catch (e) {
+        console.error('flag_event_no_shows fallo:', e);
+      }
+
       // Crear los borradores de las proximas dos semanas (+7 y +14 dias, mismo
       // dia de la semana) a partir del evento cerrado.
       const closedEvent = events.find(e => e.id === eventId);
@@ -5150,6 +5158,7 @@ setBulkWhatsAppPending(pending);
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
     { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' },
+    { key: 'no-shows',     icon: '🚫', label: 'No-shows' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -5276,7 +5285,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; }
+                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}

@@ -1160,6 +1160,14 @@ const handleLogin = async () => {
         return;
       }
 
+      // Marca los no-shows (cupos pagados que no confirmaron asistencia) de
+      // este evento. El cron notify-no-show se encarga luego de avisarles.
+      try {
+        await supabase.rpc('flag_event_no_shows', { p_event_id: eventId });
+      } catch (e) {
+        console.error('flag_event_no_shows fallo:', e);
+      }
+
       window.alert('Evento cerrado exitosamente');
       loadDashboardData();
     } catch (error) {
