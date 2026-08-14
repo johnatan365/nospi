@@ -175,6 +175,7 @@ export default function AdminPanelScreen() {
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
   const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
+  const [configMinAppVersion, setConfigMinAppVersion] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
 
@@ -373,6 +374,7 @@ export default function AdminPanelScreen() {
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
       if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
+      if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
     }
   };
 
@@ -385,6 +387,7 @@ export default function AdminPanelScreen() {
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
         { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
+        { key: 'min_app_version', value: configMinAppVersion.trim() },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -1953,6 +1956,30 @@ const handleLogin = async () => {
                   {configTestPaymentEnabled ? 'El botón 🧪 aparece en la pantalla de pago' : 'Los usuarios no ven el botón de prueba'}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* ── ACTUALIZACIÓN OBLIGATORIA ── */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #880E4F' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#880E4F', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              📲 Actualización Obligatoria
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
+              Versión mínima que deben tener los usuarios. Si su app es más vieja, se les bloquea con una pantalla que los obliga a actualizar desde la tienda.
+            </div>
+            <input
+              type="text"
+              value={configMinAppVersion}
+              onChange={(e) => setConfigMinAppVersion(e.target.value)}
+              placeholder="0.0.0"
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '12px 14px',
+                fontSize: 16, borderRadius: 10, border: '2px solid #E5E7EB',
+                outline: 'none', fontWeight: 600, color: '#111827',
+              }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10, lineHeight: 1.5 }}>
+              Deja <strong>0.0.0</strong> para NO obligar a nadie. Para forzar: primero publica la build nueva en las tiendas y, cuando ya esté disponible, pon aquí ESA versión (ej. <strong>1.0.16</strong>). Nunca pongas una versión mayor a la que ya está publicada o dejarías a todos bloqueados. Solo aplica a quien ya tenga una build que traiga este control.
             </div>
           </div>
         </div>
