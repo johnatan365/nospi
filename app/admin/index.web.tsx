@@ -5788,11 +5788,12 @@ setBulkWhatsAppPending(pending);
               </View>
             ) : (() => {
               // Filtra por nombre (sin acentos), correo, o celular (por dígitos).
-              const raw = norm(attendeeSearch);
+              const normed = (s: string | null | undefined) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+              const raw = normed(attendeeSearch);
               const rawDigits = raw.replace(/\D/g, '');
               const filteredAttendees = raw
                 ? eventAttendees.filter((a) => {
-                    const name = norm(a.users.name || '');
+                    const name = normed(a.users.name);
                     const email = (a.users.email || '').toLowerCase();
                     const phoneDigits = (a.users.phone || '').replace(/\D/g, '');
                     return name.includes(raw) || email.includes(raw) || (rawDigits.length > 0 && phoneDigits.includes(rawDigits));
