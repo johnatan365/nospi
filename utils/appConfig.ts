@@ -6,6 +6,7 @@ export interface AppConfig {
   support_email: string;
   support_whatsapp: string;
   test_payment_enabled: string; // 'true' | 'false'
+  min_app_version: string; // ej '1.0.16' — versión mínima obligatoria (fail-open si '0.0.0')
 }
 
 const DEFAULTS: AppConfig = {
@@ -14,6 +15,7 @@ const DEFAULTS: AppConfig = {
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',
+  min_app_version: '0.0.0',
 };
 
 let cachedConfig: AppConfig | null = null;
@@ -47,6 +49,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       if (row.key === 'support_email') config.support_email = row.value;
       if (row.key === 'support_whatsapp') config.support_whatsapp = row.value;
       if (row.key === 'test_payment_enabled') config.test_payment_enabled = row.value;
+      if (row.key === 'min_app_version') config.min_app_version = row.value;
     }
 
     console.log('[AppConfig] Config loaded:', config);
