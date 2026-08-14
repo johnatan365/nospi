@@ -471,8 +471,8 @@ export default function EventDetailsScreen() {
                 ℹ️ Puedes <Text style={styles.ticketPolicyBold}>cancelar hasta 24 horas antes del evento</Text> y
                 te devolvemos el valor como <Text style={styles.ticketPolicyBold}>saldo</Text> para otro evento.
                 Si cancelas con <Text style={styles.ticketPolicyBold}>menos de 24 horas</Text> o{' '}
-                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no hay devolución y tu cuenta puede
-                recibir una <Text style={styles.ticketPolicyBold}>amonestación</Text>.
+                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no hay devolución del saldo y tu cuenta
+                podría ser <Text style={styles.ticketPolicyBold}>suspendida para reservar</Text> nuevos eventos.
               </Text>
 
               <TouchableOpacity
