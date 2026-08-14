@@ -2698,7 +2698,7 @@ const handleLogin = async () => {
             ) : (
               <>
                 <View style={styles.matchesSection}>
-                  <Text style={styles.subsectionTitle}>💜 Matches por Nivel ({eventMatches.length})</Text>
+                  <Text style={styles.subsectionTitle}><Text style={{ color: '#880E4F' }}>♥</Text> Matches por Nivel ({eventMatches.length})</Text>
                   {eventMatches.length === 0 ? (
                     <Text style={styles.emptyText}>No hay matches registrados para este evento</Text>
                   ) : (
