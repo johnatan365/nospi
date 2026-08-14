@@ -711,7 +711,7 @@ export default function PaymentCallbackScreen() {
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={styles.footerText}>Gracias por confiar en Nospi </Text>
-              <Text style={{ fontSize: 18, color: '#F06292' }}>❤️</Text>
+              <Text style={{ fontSize: 18, color: '#880E4F' }}>♥</Text>
             </View>
           </View>
         </ScrollView>

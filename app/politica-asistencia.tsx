@@ -50,8 +50,8 @@ export default function PoliticaAsistenciaScreen() {
             showsVerticalScrollIndicator={false}
           >
             <Text style={styles.lead}>
-              Cuidamos que cada mesa esté completa para que la experiencia sea buena para todas 💜
-              Por eso te pedimos avisar a tiempo si no puedes ir.
+              Cuidamos que cada mesa esté completa para que la experiencia sea buena para todas <Text style={{ color: '#880E4F' }}>♥</Text>
+              {' '}Por eso te pedimos avisar a tiempo si no puedes ir.
             </Text>
 
             {/* Cancelación */}
