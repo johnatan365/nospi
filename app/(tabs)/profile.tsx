@@ -966,6 +966,17 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/politica-asistencia')} activeOpacity={0.8}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="document-text-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>Política de asistencia</Text>
+            <Text style={styles.menuSub}>Cancelación, saldo y amonestaciones</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+        </TouchableOpacity>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Soporte</Text>
           <Text style={styles.sectionSubtitle}>¿Necesitas ayuda? Contáctanos</Text>
