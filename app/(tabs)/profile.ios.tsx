@@ -917,7 +917,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.menuTextWrap}>
             <Text style={styles.menuTitle}>Política de asistencia</Text>
-            <Text style={styles.menuSub}>Cancelación, saldo y amonestaciones</Text>
+            <Text style={styles.menuSub}>Cancelación, saldo y suspensiones</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
