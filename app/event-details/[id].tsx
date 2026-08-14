@@ -397,20 +397,85 @@ export default function EventDetailsScreen() {
 
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.successIcon}>✅</Text>
-            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
-            <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
+          <View style={styles.ticketWrap}>
+            <Text style={styles.ticketCheer}>✦ ¡RESERVADO! ✦</Text>
+
+            <View style={styles.ticket}>
+              <LinearGradient
+                colors={[nospiColors.purpleDark, nospiColors.purpleMid]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.ticketTop}
+              >
+                {event?.type === 'caminata' ? (
+                  <Image source={require('@/assets/images/icon-caminata.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'bar' ? (
+                  <Image source={require('@/assets/images/icon-bar.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'restaurante' ? (
+                  <Image source={require('@/assets/images/icon-restaurante.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'cafe' ? (
+                  <Image source={require('@/assets/images/icon-cafe.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'bolos' ? (
+                  <Image source={require('@/assets/images/icon-bolos.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.ticketIconEmoji}>{eventIcon}</Text>
+                )}
+                <Text style={styles.ticketTitle}>Pase confirmado</Text>
+                <Text style={styles.ticketSubtitle}>Tu cupo está asegurado 🎉</Text>
+              </LinearGradient>
+
+              <View style={styles.ticketPerf}>
+                <View style={styles.perfNotchLeft} />
+                <View style={styles.perfNotchRight} />
+              </View>
+
+              <View style={styles.ticketBody}>
+                <View style={styles.ticketRow}>
+                  <Text style={styles.ticketRowIcon}>🎟️</Text>
+                  <Text style={styles.ticketRowStrong}>{event?.name}</Text>
+                </View>
+                <View style={styles.ticketRow}>
+                  <Text style={styles.ticketRowIcon}>📅</Text>
+                  <Text style={styles.ticketRowText}>{dateText} · {formatTimeAmPm(event?.time || '')}</Text>
+                </View>
+                <View style={styles.ticketRow}>
+                  <Text style={styles.ticketRowIcon}>📍</Text>
+                  <Text style={styles.ticketRowText}>
+                    {showLocation ? event?.location_name : 'Te enviaremos la ubicación un día antes'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.ticketPolicy}>
+                ℹ️ Puedes <Text style={styles.ticketPolicyBold}>cancelar hasta 24 horas antes del evento</Text> y
+                te devolvemos el valor como <Text style={styles.ticketPolicyBold}>saldo</Text> para otro evento.
+                Si cancelas con <Text style={styles.ticketPolicyBold}>menos de 24 horas</Text> o{' '}
+                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no hay devolución y tu cuenta puede
+                recibir una <Text style={styles.ticketPolicyBold}>amonestación</Text>.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.ticketPolicyLink}
+                onPress={() => {
+                  setShowSuccessModal(false);
+                  router.push('/politica-asistencia');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.ticketPolicyLinkText}>Ver política completa</Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
-              style={styles.successButton}
+              style={styles.ticketCta}
               onPress={() => {
                 console.log('EventDetails: success modal dismissed, navigating to appointments');
                 setShowSuccessModal(false);
                 router.replace('/(tabs)/appointments');
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={styles.successButtonText}>Ver mis citas</Text>
+              <Text style={styles.ticketCtaText}>Ver mi cupo</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -683,5 +748,143 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  // --- Pase / boleto post-compra (Opción 2) ---
+  ticketWrap: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
+  },
+  ticketCheer: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: '#ffd9e6',
+    marginBottom: 12,
+  },
+  ticket: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  ticketTop: {
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  ticketIcon: {
+    width: 58,
+    height: 50,
+    marginBottom: 6,
+    tintColor: '#ffffff',
+  },
+  ticketIconEmoji: {
+    fontSize: 40,
+    marginBottom: 6,
+  },
+  ticketTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  ticketSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.92)',
+    marginTop: 3,
+  },
+  ticketPerf: {
+    height: 2,
+    marginHorizontal: 14,
+    borderTopWidth: 2,
+    borderTopColor: '#e9d6df',
+    borderStyle: 'dashed',
+  },
+  perfNotchLeft: {
+    position: 'absolute',
+    top: -11,
+    left: -25,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  perfNotchRight: {
+    position: 'absolute',
+    top: -11,
+    right: -25,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  ticketBody: {
+    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingBottom: 6,
+  },
+  ticketRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  ticketRowIcon: {
+    fontSize: 15,
+    width: 20,
+    textAlign: 'center',
+  },
+  ticketRowStrong: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#241019',
+  },
+  ticketRowText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#3a2a33',
+  },
+  ticketPolicy: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6b5560',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#f3ebee',
+    marginTop: 8,
+  },
+  ticketPolicyBold: {
+    fontWeight: '800',
+    color: '#241019',
+  },
+  ticketPolicyLink: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ticketPolicyLinkText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: nospiColors.purpleDark,
+  },
+  ticketCta: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  ticketCtaText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: nospiColors.purpleDark,
   },
 });
