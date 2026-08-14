@@ -31,6 +31,28 @@ async function saveOnboardingToLocalStorage() {
   localStorage.setItem('onboarding_data', JSON.stringify(data));
 }
 
+// Traduce los errores crudos (en ingles) de Supabase Auth a mensajes claros
+// en espanol para que cualquier usuario los entienda.
+function friendlyAuthError(msg?: string): string {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('too weak') || m.includes('weak password')) {
+    return 'Tu contraseña debe incluir al menos una letra minúscula, una letra mayúscula y un número. Ejemplo: Nospi2025';
+  }
+  if (m.includes('at least') && m.includes('character')) {
+    return 'Tu contraseña es muy corta. Usa al menos 8 caracteres, con mayúsculas, minúsculas y números.';
+  }
+  if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already exists')) {
+    return 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.';
+  }
+  if (m.includes('unable to validate email') || m.includes('invalid email') || m.includes('valid email')) {
+    return 'El correo no parece válido. Revísalo e intenta de nuevo.';
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Demasiados intentos. Espera un momento e intenta de nuevo.';
+  }
+  return 'No pudimos crear tu cuenta. Revisa los datos e intenta de nuevo.';
+}
+
 export default function RegisterScreen() {
   const router = useRouter();
   const [showEmailForm, setShowEmailForm] = useState(false);
@@ -346,7 +368,7 @@ export default function RegisterScreen() {
       const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
 
       if (authError) {
-        setError(`Error al crear la cuenta: ${authError.message}`);
+        setError(friendlyAuthError(authError.message));
         return;
       }
 
@@ -567,6 +589,8 @@ export default function RegisterScreen() {
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.passwordHint}>Usa al menos 8 caracteres, con una mayúscula, una minúscula y un número.</Text>
 
             <View style={[styles.passwordWrapper, confirmPasswordFocused && styles.passwordWrapperFocused]}>
               <TextInput
@@ -832,6 +856,14 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     borderRadius: 16,
     marginBottom: 16,
+  },
+  passwordHint: {
+    fontSize: 12,
+    color: '#8a8a8a',
+    lineHeight: 16,
+    marginTop: -8,
+    marginBottom: 14,
+    marginHorizontal: 4,
   },
   passwordWrapperFocused: {
     borderColor: 'rgba(240, 98, 146, 0.50)',
