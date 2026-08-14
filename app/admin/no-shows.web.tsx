@@ -65,7 +65,7 @@ export default function NoShowsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const waive = async (strikeId: string) => {
-    if (!(typeof window !== 'undefined' && window.confirm('¿Perdonar esta amonestación? Dejará de contar para la escala.'))) return;
+    if (!(typeof window !== 'undefined' && window.confirm('¿Perdonar esta falta? Dejará de contar para la escala.'))) return;
     setBusy(strikeId);
     try {
       const { error } = await supabase.rpc('admin_waive_strike', { p_strike_id: strikeId });
@@ -89,11 +89,11 @@ export default function NoShowsScreen() {
   };
 
   const exportCsv = () => {
-    const header = ['Usuario', 'Correo', 'Telefono', 'Amonestaciones activas', 'Total', 'Estado', 'Suspendido hasta', 'Ultima falta'];
+    const header = ['Usuario', 'Correo', 'Telefono', 'Faltas activas', 'Total', 'Estado', 'Suspendido hasta', 'Ultima falta'];
     const rows = users.map((u) => [
       u.name || '', u.email || '', u.phone || '',
       String(u.active_strikes), String(u.total_strikes),
-      isSuspended(u) ? 'Suspendido' : (u.active_strikes > 0 ? 'Advertido' : 'Sin amonestacion vigente'),
+      isSuspended(u) ? 'Suspendido' : (u.active_strikes > 0 ? 'Advertido' : 'Sin falta vigente'),
       isSuspended(u) ? fmt(u.reservas_suspendidas_hasta) : '',
       u.last_event_name ? `${u.last_event_name} (${fmt(u.last_strike_at)})` : fmt(u.last_strike_at),
     ]);
@@ -102,7 +102,7 @@ export default function NoShowsScreen() {
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'nospi-amonestaciones.csv';
+      a.href = url; a.download = 'nospi-faltas.csv';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch { window.alert('No se pudo exportar el CSV'); }
@@ -120,14 +120,14 @@ export default function NoShowsScreen() {
         <Text style={styles.backLinkText}>‹ Volver al panel</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>No-shows / Amonestaciones</Text>
+      <Text style={styles.title}>No-shows / Faltas</Text>
       <Text style={styles.subtitle}>Usuarios que no confirmaron su asistencia. Los avisos y suspensiones se aplican en automático al cerrar cada evento.</Text>
 
       {/* KPIs */}
       <View style={styles.kpiRow}>
         <View style={styles.kpi}><Text style={[styles.kpiVal, { color: '#D7385E' }]}>{kpis.no_shows_this_month}</Text><Text style={styles.kpiLabel}>Faltas este mes</Text></View>
         <View style={styles.kpi}><Text style={[styles.kpiVal, { color: '#F4823E' }]}>{kpis.suspended_active}</Text><Text style={styles.kpiLabel}>Suspendidos activos</Text></View>
-        <View style={styles.kpi}><Text style={[styles.kpiVal, { color: nospiColors.purpleDark }]}>{kpis.with_active_strike}</Text><Text style={styles.kpiLabel}>Con amonestación vigente</Text></View>
+        <View style={styles.kpi}><Text style={[styles.kpiVal, { color: nospiColors.purpleDark }]}>{kpis.with_active_strike}</Text><Text style={styles.kpiLabel}>Con faltas vigentes</Text></View>
       </View>
 
       {/* Filtros + export */}
@@ -149,7 +149,7 @@ export default function NoShowsScreen() {
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : filtered.length === 0 ? (
-        <Text style={styles.empty}>No hay usuarios con amonestaciones{filter !== 'all' ? ' en este filtro' : ''}.</Text>
+        <Text style={styles.empty}>No hay usuarios con faltas{filter !== 'all' ? ' en este filtro' : ''}.</Text>
       ) : (
         <View style={styles.table}>
           <View style={[styles.tr, styles.trHead]}>
@@ -229,7 +229,7 @@ export default function NoShowsScreen() {
         </View>
       )}
 
-      <Text style={styles.foot}>Regla: 1ª falta = aviso · 2ª = suspensión 15 días · 3ª = 60 días. Las amonestaciones dejan de contar a los ~4 meses. "Perdonar" quita una falta; "Levantar suspensión" reactiva las reservas de inmediato.</Text>
+      <Text style={styles.foot}>Regla: 1ª falta = aviso · 2ª = suspensión 15 días · 3ª = 60 días. Las faltas dejan de contar a los ~4 meses. "Perdonar" quita una falta; "Levantar suspensión" reactiva las reservas de inmediato.</Text>
     </ScrollView>
   );
 }
