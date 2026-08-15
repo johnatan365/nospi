@@ -94,6 +94,7 @@ export default function ChatThreadScreen() {
   const [sending, setSending] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
+  const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
 
   const participantsById = participants.reduce<Record<string, Participant>>((acc, p) => {
@@ -305,7 +306,9 @@ export default function ChatThreadScreen() {
                 <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
               </View>
             ) : otherUserPhoto ? (
-              <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
+              <TouchableOpacity onPress={() => setZoomedPhoto(otherUserPhoto)} activeOpacity={0.8}>
+                <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
+              </TouchableOpacity>
             ) : (
               <View style={styles.headerAvatarPlaceholder}>
                 <Text style={styles.headerEmoji}>👤</Text>
@@ -348,7 +351,9 @@ export default function ChatThreadScreen() {
               <View style={[styles.messageRow, isMine ? styles.messageRowMine : styles.messageRowTheirs]}>
                 {showSenderInfo &&
                   (senderPhoto ? (
-                    <Image source={{ uri: senderPhoto }} style={styles.messageAvatar} />
+                    <TouchableOpacity onPress={() => setZoomedPhoto(senderPhoto)} activeOpacity={0.8}>
+                      <Image source={{ uri: senderPhoto }} style={styles.messageAvatar} />
+                    </TouchableOpacity>
                   ) : (
                     <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
                       <Text style={{ fontSize: 14 }}>{isSystem ? '📣' : '👤'}</Text>
@@ -413,7 +418,9 @@ export default function ChatThreadScreen() {
                     disabled={!!startingChatWith}
                   >
                     {p.profile_photo_url ? (
-                      <Image source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} />
+                      <TouchableOpacity onPress={() => setZoomedPhoto(p.profile_photo_url)} activeOpacity={0.8}>
+                        <Image source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} />
+                      </TouchableOpacity>
                     ) : (
                       <View style={[styles.participantAvatar, styles.participantAvatarPlaceholder]}>
                         <Text style={{ fontSize: 18 }}>👤</Text>
@@ -430,6 +437,20 @@ export default function ChatThreadScreen() {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={!!zoomedPhoto} animationType="fade" transparent onRequestClose={() => setZoomedPhoto(null)}>
+        <TouchableOpacity style={styles.photoViewerOverlay} activeOpacity={1} onPress={() => setZoomedPhoto(null)}>
+          {zoomedPhoto && (
+            <Image source={{ uri: zoomedPhoto }} style={styles.photoViewerImage} resizeMode="contain" />
+          )}
+          <TouchableOpacity
+            style={[styles.photoViewerClose, { top: insets.top + 12 }]}
+            onPress={() => setZoomedPhoto(null)}
+          >
+            <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={26} color="#FFFFFF" />
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </LinearGradient>
   );
@@ -545,4 +566,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   participantName: { flex: 1, fontSize: 15, fontWeight: '600', color: nospiColors.gray800 },
+  photoViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  photoViewerImage: { width: '90%', height: '75%' },
+  photoViewerClose: {
+    position: 'absolute',
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
