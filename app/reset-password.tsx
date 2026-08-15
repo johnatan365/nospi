@@ -69,7 +69,19 @@ export default function ResetPasswordScreen() {
 
       if (updateError) {
         console.error('[ResetPassword] updateUser error:', updateError.message);
-        setError('No pudimos actualizar tu contraseña. El link puede haber expirado — solicita uno nuevo.');
+        // Mostrar el motivo REAL en vez de culpar siempre al link. Antes,
+        // cualquier error (incluida una contraseña rechazada por la política)
+        // decia "el link expiro", y la persona pedia links nuevos en circulos.
+        const m = (updateError.message || '').toLowerCase();
+        let friendly = 'No pudimos actualizar tu contraseña. Intenta de nuevo.';
+        if (m.includes('different') || m.includes('same as')) {
+          friendly = 'La nueva contraseña debe ser diferente a la anterior.';
+        } else if (m.includes('at least') || m.includes('should be') || m.includes('length') || m.includes('short') || m.includes('should contain') || m.includes('weak') || m.includes('character of each')) {
+          friendly = 'Esa contraseña no cumple los requisitos. Usa al menos 6 caracteres.';
+        } else if (m.includes('expired') || m.includes('invalid') || m.includes('token') || m.includes('session') || m.includes('missing') || m.includes('otp')) {
+          friendly = 'Este enlace ya venció o se usó. Vuelve a "¿Olvidaste tu contraseña?" y solicita uno nuevo.';
+        }
+        setError(friendly);
         return;
       }
 
@@ -138,7 +150,7 @@ export default function ResetPasswordScreen() {
               ) : (
                 <>
                   <Text style={styles.title}>Crea una nueva contraseña</Text>
-                  <Text style={styles.subtitle}>Elige una contraseña segura para tu cuenta de Nospi.</Text>
+                  <Text style={styles.subtitle}>Elige una contraseña para tu cuenta de Nospi (mínimo 6 caracteres).</Text>
 
                   {error ? (
                     <View style={styles.errorContainer}>
