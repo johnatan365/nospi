@@ -73,9 +73,9 @@ export default function LoginScreen() {
           if (m.includes('already')) {
             setError('Ya existe una cuenta con este email');
           } else if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('weak')) {
-            setError('Tu contraseña debe incluir una mayúscula, una minúscula y un número (mínimo 8 caracteres). Ejemplo: Nospi2025');
+            setError('Esa contraseña no es válida. Usa al menos 6 caracteres.');
           } else if (m.includes('at least') && m.includes('character')) {
-            setError('Tu contraseña es muy corta. Usa al menos 8 caracteres, con mayúsculas, minúsculas y números.');
+            setError('Tu contraseña es muy corta. Usa al menos 6 caracteres.');
           } else {
             setError('Error al crear cuenta. Intenta de nuevo.');
           }
@@ -93,7 +93,25 @@ export default function LoginScreen() {
         });
 
         if (error) {
-          
+          // Antes de decir "clave incorrecta", revisamos si esta cuenta se creó
+          // con Google/Apple. Mucha gente se registra con Google, luego intenta
+          // con correo+contraseña, falla, y termina creando una cuenta duplicada.
+          // Si es el caso, la guiamos al botón correcto en vez de confundirla.
+          try {
+            const { data: method } = await supabase.rpc('auth_method_for_email', {
+              p_email: email.trim(),
+            });
+            if (method === 'google') {
+              setError('Esta cuenta la creaste con Google. Toca "Continuar con Google" (arriba) para entrar — no necesitas contraseña.');
+              return;
+            }
+            if (method === 'apple') {
+              setError('Esta cuenta la creaste con Apple. Toca "Continuar con Apple" (arriba) para entrar — no necesitas contraseña.');
+              return;
+            }
+          } catch (_e) {
+            // Si la verificación falla, seguimos con el mensaje normal.
+          }
           setError('Email o contraseña incorrectos');
           return;
         }
