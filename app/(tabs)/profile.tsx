@@ -828,7 +828,7 @@ export default function ProfileScreen() {
             {profile.profile_photo_url ? (
               <View>
                 <Image
-                  source={{ uri: profile.profile_photo_url }}
+                  source={{ uri: profile.profile_photo_url, cache: 'force-cache' }}
                   style={styles.profilePhoto}
                   key={profile.profile_photo_url}
                 />
