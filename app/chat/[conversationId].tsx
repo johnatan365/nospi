@@ -36,6 +36,7 @@ interface Message {
   sender_id: string;
   content: string;
   created_at: string;
+  reply_to?: string | null;
 }
 
 interface Participant {
@@ -86,6 +87,33 @@ function formatBogotaTime(date: Date): string {
   return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+function initialsOf(name?: string | null): string {
+  return (name || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
+// Avatar de usuario con respaldo: si no hay foto o si la foto FALLA al cargar
+// (onError), muestra la inicial del nombre en un círculo, en vez de quedar en
+// blanco. Esto arregla el "a veces carga, a veces no" de las fotos del chat.
+function ChatAvatar({
+  uri, name, size, marginRight = 0, onPress,
+}: { uri: string | null; name: string; size: number; marginRight?: number; onPress?: () => void }) {
+  const [failed, setFailed] = useState(false);
+  const box = { width: size, height: size, borderRadius: size / 2, marginRight } as const;
+  const inner = uri && !failed ? (
+    // cache 'force-cache': una vez descargada, la foto se reusa desde el cache
+    // (no se vuelve a bajar al salir y volver al chat) -> queda estática.
+    <Image source={{ uri, cache: 'force-cache' }} style={box} onError={() => setFailed(true)} />
+  ) : (
+    <View style={[box, styles.avatarInitials]}>
+      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.42 }}>{initialsOf(name)}</Text>
+    </View>
+  );
+  if (onPress) {
+    return <TouchableOpacity onPress={onPress} activeOpacity={0.8}>{inner}</TouchableOpacity>;
+  }
+  return inner;
+}
+
 // Detecta URLs (http/https o que empiecen por www.) para poder abrirlas al tocar.
 const URL_RE = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
 
@@ -124,6 +152,7 @@ export default function ChatThreadScreen() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
@@ -141,7 +170,7 @@ export default function ChatThreadScreen() {
       await Promise.all([
         supabase
           .from('chat_messages')
-          .select('id, conversation_id, sender_id, content, created_at')
+          .select('id, conversation_id, sender_id, content, created_at, reply_to')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true }),
         supabase.rpc('get_conversation_participants', { p_conversation_id: conversationId }),
@@ -230,14 +259,17 @@ export default function ChatThreadScreen() {
     setSending(true);
     setDraft('');
 
+    const replyId = replyingTo?.id ?? null;
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         conversation_id: conversationId,
         sender_id: user.id,
         content,
+        reply_to: replyId,
       })
-      .select('id, conversation_id, sender_id, content, created_at')
+      .select('id, conversation_id, sender_id, content, created_at, reply_to')
       .single();
 
     if (error) {
@@ -245,6 +277,7 @@ export default function ChatThreadScreen() {
       updateDraft(content); // se restaura y se vuelve a guardar el borrador
     } else if (data) {
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      setReplyingTo(null);
       if (conversationId) AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
@@ -273,15 +306,22 @@ export default function ChatThreadScreen() {
     }
   };
 
-  const handleBack = async () => {
+  const handleBack = () => {
+    // Marcar leído NO debe bloquear la navegación (antes se hacía await y si el
+    // RPC se demoraba, la flecha "no respondía"). Se dispara en segundo plano.
     if (conversationId) {
-            try {
-        await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
-            } catch (err) {
-        console.error('ChatThread: error marking conversation read', err);
-            }
+      supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId })
+        .then(() => {})
+        .catch((err) => console.error('ChatThread: error marking conversation read', err));
     }
-    router.back();
+    // Si no hay pantalla anterior en la pila (se entró por notificación, deep
+    // link o desde el pop-up de match con router.push), router.back() no hace
+    // nada. En ese caso vamos a la lista de chats.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/chats' as any);
+    }
   };
 
   const isGroup = meta?.conv_type === 'event_group';
@@ -318,8 +358,8 @@ export default function ChatThreadScreen() {
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color="#FFFFFF" />
+          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={28} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
@@ -347,8 +387,8 @@ export default function ChatThreadScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color="#FFFFFF" />
+          <TouchableOpacity onPress={handleBack} style={styles.headerBackButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={28} color="#FFFFFF" />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
@@ -356,14 +396,14 @@ export default function ChatThreadScreen() {
               <View style={styles.headerAvatarPlaceholder}>
                 <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
               </View>
-            ) : otherUserPhoto ? (
-              <TouchableOpacity onPress={() => setZoomedPhoto(otherUserPhoto)} activeOpacity={0.8}>
-                <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
-              </TouchableOpacity>
             ) : (
-              <View style={styles.headerAvatarPlaceholder}>
-                <Text style={styles.headerEmoji}>👤</Text>
-              </View>
+              <ChatAvatar
+                uri={otherUserPhoto}
+                name={headerTitle}
+                size={30}
+                marginRight={8}
+                onPress={otherUserPhoto ? () => setZoomedPhoto(otherUserPhoto) : undefined}
+              />
             )}
             <Text style={styles.headerTitle} numberOfLines={1}>
               {headerTitle}
@@ -398,27 +438,54 @@ export default function ChatThreadScreen() {
             const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
             const showSenderInfo = isGroup && !isMine;
 
+            // Si este mensaje responde a otro, buscamos el original para citarlo.
+            const repliedMsg = item.reply_to ? messages.find((m) => m.id === item.reply_to) : undefined;
+            const repliedName = repliedMsg
+              ? (repliedMsg.sender_id === user?.id
+                  ? 'Tú'
+                  : repliedMsg.sender_id === NOSPI_SYSTEM_USER_ID
+                  ? 'Equipo Nospi'
+                  : participantsById[repliedMsg.sender_id]?.name || 'Alguien')
+              : null;
+
             return (
               <View style={[styles.messageRow, isMine ? styles.messageRowMine : styles.messageRowTheirs]}>
-                {showSenderInfo &&
-                  (senderPhoto ? (
-                    <TouchableOpacity onPress={() => setZoomedPhoto(senderPhoto)} activeOpacity={0.8}>
-                      <Image source={{ uri: senderPhoto }} style={styles.messageAvatar} />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
-                      <Text style={{ fontSize: 14 }}>{isSystem ? '📣' : '👤'}</Text>
-                    </View>
-                  ))}
-                <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                {showSenderInfo && !isSystem && (
+                  <ChatAvatar
+                    uri={senderPhoto}
+                    name={senderName}
+                    size={26}
+                    marginRight={6}
+                    onPress={senderPhoto ? () => setZoomedPhoto(senderPhoto) : undefined}
+                  />
+                )}
+                {showSenderInfo && isSystem && (
+                  <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+                    <Text style={{ fontSize: 14 }}>📣</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onLongPress={() => setReplyingTo(item)}
+                  delayLongPress={250}
+                  style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
+                >
                   {showSenderInfo && <Text style={styles.senderName}>{senderName}</Text>}
+                  {repliedMsg && (
+                    <View style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}>
+                      <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
+                      <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
+                        {repliedMsg.content}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
                     {renderMessageContent(item.content, isMine)}
                   </Text>
                   <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
                     {formatBogotaTime(new Date(item.created_at))}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </View>
             );
           }}
@@ -432,6 +499,25 @@ export default function ChatThreadScreen() {
             </View>
           }
         />
+
+        {replyingTo && (
+          <View style={styles.replyPreview}>
+            <View style={styles.replyPreviewBar} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyPreviewName} numberOfLines={1}>
+                Respondiendo a {replyingTo.sender_id === user?.id
+                  ? 'ti'
+                  : replyingTo.sender_id === NOSPI_SYSTEM_USER_ID
+                  ? 'Equipo Nospi'
+                  : participantsById[replyingTo.sender_id]?.name || 'Alguien'}
+              </Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>{replyingTo.content}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyPreviewClose}>
+              <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
           <TextInput
@@ -527,7 +613,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
-  headerBackButton: { padding: 8 },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
   headerActionButton: { padding: 8, width: 40, alignItems: 'center' },
   directChatBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingVertical: 10, marginHorizontal: 12, marginBottom: 8, borderRadius: 10 },
   directChatBannerText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
@@ -555,6 +649,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarInitials: { backgroundColor: '#AD1457', alignItems: 'center', justifyContent: 'center' },
+  quoteBox: { borderLeftWidth: 3, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6 },
+  quoteBoxMine: { backgroundColor: 'rgba(255,255,255,0.18)', borderLeftColor: 'rgba(255,255,255,0.7)' },
+  quoteBoxTheirs: { backgroundColor: 'rgba(136,14,79,0.08)', borderLeftColor: '#AD1457' },
+  quoteName: { fontSize: 11.5, fontWeight: '800', color: '#AD1457', marginBottom: 1 },
+  quoteNameMine: { color: 'rgba(255,255,255,0.95)' },
+  quoteText: { fontSize: 12.5, color: '#6a6a70' },
+  quoteTextMine: { color: 'rgba(255,255,255,0.8)' },
   bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
@@ -567,6 +669,20 @@ const styles = StyleSheet.create({
   messageTimeMine: { color: 'rgba(255,255,255,0.65)' },
   emptyMessages: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 40 },
   emptyMessagesText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' },
+  replyPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginBottom: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+  },
+  replyPreviewBar: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: '#F06292', marginRight: 8 },
+  replyPreviewName: { color: '#F8BBD0', fontSize: 12, fontWeight: '800', marginBottom: 1 },
+  replyPreviewText: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
+  replyPreviewClose: { padding: 6, marginLeft: 6 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
