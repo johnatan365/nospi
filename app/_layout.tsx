@@ -22,6 +22,7 @@ import { useColorScheme, Platform, View, Animated, StyleSheet } from "react-nati
 import { SystemBars } from "react-native-edge-to-edge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ForceUpdateGate } from "@/components/ForceUpdateGate";
+import MatchPopup from "@/components/MatchPopup";
 import * as Sentry from "@sentry/react-native";
 
 Sentry.init({
@@ -204,6 +205,7 @@ function RootLayoutInner() {
             <Stack.Screen name="+not-found" />
           </Stack>
           {showSplashAnim && <AnimatedSplash onFinish={() => setShowSplashAnim(false)} />}
+          <MatchPopup userId={user?.id} />
         </View>
       </ThemeProvider>
       </ForceUpdateGate>
