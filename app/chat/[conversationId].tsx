@@ -13,6 +13,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -78,6 +79,32 @@ function formatBogotaTime(date: Date): string {
   h = h % 12;
   if (h === 0) h = 12;
   return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+// Detecta URLs (http/https o que empiecen por www.) para poder abrirlas al tocar.
+const URL_RE = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+
+// Convierte el texto de un mensaje en <Text> normal + <Text> tocables para los
+// links. Se abren con Linking.openURL (navegador / app correspondiente).
+function renderMessageContent(text: string, mine: boolean) {
+  if (!text) return null;
+  const parts = text.split(URL_RE);
+  return parts.map((part, i) => {
+    if (!part) return null;
+    if (/^(https?:\/\/|www\.)/i.test(part)) {
+      const url = part.startsWith('www.') ? `https://${part}` : part;
+      return (
+        <Text
+          key={i}
+          style={[styles.linkText, mine && styles.linkTextMine]}
+          onPress={() => { Linking.openURL(url).catch(() => {}); }}
+        >
+          {part}
+        </Text>
+      );
+    }
+    return <Text key={i}>{part}</Text>;
+  });
 }
 
 export default function ChatThreadScreen() {
@@ -361,7 +388,12 @@ export default function ChatThreadScreen() {
                   ))}
                 <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
                   {showSenderInfo && <Text style={styles.senderName}>{senderName}</Text>}
-                  <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.content}</Text>
+                  <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
+                    {renderMessageContent(item.content, isMine)}
+                  </Text>
+                  <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
+                    {formatBogotaTime(new Date(item.created_at))}
+                  </Text>
                 </View>
               </View>
             );
@@ -505,6 +537,10 @@ const styles = StyleSheet.create({
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
   messageText: { fontSize: 15, color: '#2a2a2e', lineHeight: 20 },
   messageTextMine: { color: '#FFFFFF' },
+  linkText: { color: '#0a58ca', textDecorationLine: 'underline' },
+  linkTextMine: { color: '#dce9ff', textDecorationLine: 'underline' },
+  messageTime: { fontSize: 10, color: 'rgba(42,42,46,0.45)', marginTop: 3, alignSelf: 'flex-end' },
+  messageTimeMine: { color: 'rgba(255,255,255,0.65)' },
   emptyMessages: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 40 },
   emptyMessagesText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' },
   inputBar: {
