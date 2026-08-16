@@ -18,10 +18,15 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
+
+// Prefijo para guardar el borrador (lo que se está escribiendo pero aún no se
+// envía) por conversación, para que no se pierda al salir y volver al chat.
+const DRAFT_KEY = (id?: string) => `chat_draft_${id}`;
 
 const NOSPI_SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000099';
 
@@ -169,6 +174,24 @@ export default function ChatThreadScreen() {
     loadEverything();
   }, [loadEverything]);
 
+  // Recupera el borrador guardado al entrar (o volver) al chat.
+  useEffect(() => {
+    if (!conversationId) return;
+    let active = true;
+    AsyncStorage.getItem(DRAFT_KEY(conversationId))
+      .then((saved) => { if (active && saved) setDraft(saved); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [conversationId]);
+
+  // Actualiza el borrador en pantalla y lo persiste (o lo borra si queda vacío).
+  const updateDraft = useCallback((text: string) => {
+    setDraft(text);
+    if (!conversationId) return;
+    if (text) AsyncStorage.setItem(DRAFT_KEY(conversationId), text).catch(() => {});
+    else AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
+  }, [conversationId]);
+
   useEffect(() => {
     if (!conversationId) return;
 
@@ -219,9 +242,10 @@ export default function ChatThreadScreen() {
 
     if (error) {
       console.error('ChatThread: error sending message', error);
-      setDraft(content);
+      updateDraft(content); // se restaura y se vuelve a guardar el borrador
     } else if (data) {
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      if (conversationId) AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
@@ -415,7 +439,7 @@ export default function ChatThreadScreen() {
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
-                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); setDraft(trimmed); handleSend(trimmed); } else { setDraft(text); } }}
+                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); handleSend(trimmed); } else { updateDraft(text); } }}
             multiline
             maxLength={2000}
           />
