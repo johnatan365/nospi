@@ -19,12 +19,13 @@ const GRAD: [string, string, ...string[]] = ['#1a0010', '#4a0d2c', '#880E4F'];
 const VINO = '#880E4F';
 
 // Items de la calificacion. (Se pueden adaptar por tipo de evento a futuro.)
+// OTRA_KEY: si el usuario elige esta opcion, se abre un campo de texto libre.
+const OTRA_KEY = 'Otra';
 const ITEMS: { key: string; emo: string; label: string; reasons: string[] }[] = [
-  { key: 'lugar',    emo: '🏠', label: 'El lugar / ambiente',       reasons: ['Muy ruidoso', 'Incómodo', 'Mal servicio', 'Difícil de ubicar', 'Otra'] },
-  { key: 'comida',   emo: '🍽️', label: 'La comida y bebida',        reasons: ['Poca cantidad', 'Calidad regular', 'Demoró', 'Pocas opciones', 'Otra'] },
-  { key: 'grupo',    emo: '👥', label: 'El grupo (las personas)',    reasons: ['Poca conexión', 'Ambiente apagado', 'Muy poca gente', 'Otra'] },
-  { key: 'dinamica', emo: '🎲', label: 'La dinámica (el juego)',     reasons: ['Muy larga', 'Preguntas aburridas', 'No todos participaron', 'Incómoda', 'Otra'] },
-  { key: 'precio',   emo: '💵', label: '¿Valió lo que pagaste?',     reasons: ['Caro para lo que fue', 'La comida no lo valía', 'Otra'] },
+  { key: 'lugar',    emo: '🏠', label: 'El lugar / ambiente',       reasons: ['Muy ruidoso', 'Incómodo', 'Mal servicio', 'Difícil de ubicar', 'Muy costoso', 'Muy lejos', OTRA_KEY] },
+  { key: 'comida',   emo: '🍽️', label: 'La comida y bebida',        reasons: ['Poca cantidad', 'Calidad regular', 'Demoró', 'Pocas opciones', 'Muy cara', OTRA_KEY] },
+  { key: 'grupo',    emo: '👥', label: 'El grupo (las personas)',    reasons: ['Poca conexión', 'Ambiente apagado', 'Muy poca gente', OTRA_KEY] },
+  { key: 'dinamica', emo: '🎲', label: 'La dinámica (el juego)',     reasons: ['Muy larga', 'Preguntas aburridas', 'No todos participaron', 'Incómoda', OTRA_KEY] },
 ];
 const LEVELS = [
   { v: 1, emo: '🙁' },
@@ -45,7 +46,11 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [scores, setScores] = useState<Record<string, number>>({});
   const [reasons, setReasons] = useState<Record<string, Set<string>>>({});
+  const [otraText, setOtraText] = useState<Record<string, string>>({});
   const [comment, setComment] = useState('');
+  // ¿Volverías a usar Nospi? -> 'si' | 'no' | null ; si es 'no' pedimos el motivo.
+  const [volveria, setVolveria] = useState<'si' | 'no' | null>(null);
+  const [volveriaWhy, setVolveriaWhy] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -74,7 +79,10 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
   };
   const setScore = (key: string, v: number) => {
     setScores(prev => ({ ...prev, [key]: v }));
-    if (v !== 1) setReasons(prev => { const n = { ...prev }; delete n[key]; return n; });
+    if (v !== 1) {
+      setReasons(prev => { const n = { ...prev }; delete n[key]; return n; });
+      setOtraText(prev => { const n = { ...prev }; delete n[key]; return n; });
+    }
   };
   const toggleReason = (key: string, r: string) => {
     setReasons(prev => {
@@ -82,6 +90,14 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       set.has(r) ? set.delete(r) : set.add(r);
       return { ...prev, [key]: set };
     });
+    // Si desmarcan "Otra", limpiamos su texto.
+    if (r === OTRA_KEY) {
+      setOtraText(prev => {
+        const wasOn = (reasons[key] || new Set()).has(OTRA_KEY);
+        if (wasOn) { const n = { ...prev }; delete n[key]; return n; }
+        return prev;
+      });
+    }
   };
 
   const submitAll = useCallback(async () => {
@@ -100,12 +116,25 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       // 2) Feedback por items. Todas las filas llevan las MISMAS llaves
       // (event_id, user_id, item_key, score, reasons, comment) porque PostgREST
       // exige que un upsert en lote tenga objetos con llaves idénticas.
+      // Si marcaron "Otra", el texto libre va en la columna comment de ese item.
       const fbRows: any[] = ITEMS
         .filter(it => scores[it.key])
-        .map(it => ({
-          event_id: eventId, user_id: currentUserId, item_key: it.key,
-          score: scores[it.key], reasons: Array.from(reasons[it.key] || []), comment: null,
-        }));
+        .map(it => {
+          const rs = Array.from(reasons[it.key] || []);
+          const otra = rs.includes(OTRA_KEY) ? (otraText[it.key] || '').trim() : '';
+          return {
+            event_id: eventId, user_id: currentUserId, item_key: it.key,
+            score: scores[it.key], reasons: rs, comment: otra || null,
+          };
+        });
+      // ¿Volverías a usar Nospi? -> reasons:['si'|'no'], y si es 'no' el motivo en comment.
+      if (volveria) {
+        fbRows.push({
+          event_id: eventId, user_id: currentUserId, item_key: 'volveria',
+          score: null, reasons: [volveria],
+          comment: volveria === 'no' ? (volveriaWhy.trim() || null) : null,
+        });
+      }
       if (comment.trim()) {
         fbRows.push({
           event_id: eventId, user_id: currentUserId, item_key: '_comentario',
@@ -133,7 +162,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       setSaving(false);
       setStep('done');
     }
-  }, [liked, scores, reasons, comment, eventId, currentUserId]);
+  }, [liked, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId]);
 
   const openChat = async (m: Match) => {
     try {
@@ -199,6 +228,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
           <>
             <Text style={styles.kicker}>¿Qué tal estuvo?</Text>
             <Text style={styles.h1}>Califica el encuentro</Text>
+            <Text style={styles.help}>Tu opinión nos ayuda a mejorar para los próximos eventos 🙌</Text>
             <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
             {ITEMS.map((it) => {
               const sc = scores[it.key];
@@ -227,11 +257,56 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
                           );
                         })}
                       </View>
+                      {(reasons[it.key] || new Set()).has(OTRA_KEY) && (
+                        <TextInput
+                          style={styles.otraInput}
+                          placeholder="Cuéntanos qué pasó…"
+                          placeholderTextColor="#b9a7b0"
+                          value={otraText[it.key] || ''}
+                          onChangeText={(t) => setOtraText(prev => ({ ...prev, [it.key]: t }))}
+                          multiline
+                        />
+                      )}
                     </View>
                   )}
                 </View>
               );
             })}
+
+            {/* ¿Volverías a usar Nospi? */}
+            <View style={styles.item}>
+              <Text style={styles.volveriaQ}>¿Volverías a usar Nospi?</Text>
+              <View style={styles.yesno}>
+                <TouchableOpacity
+                  style={[styles.ynBtn, volveria === 'si' && styles.ynBtnYes]}
+                  onPress={() => { setVolveria('si'); setVolveriaWhy(''); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.ynTxt, volveria === 'si' && styles.ynTxtOn]}>👍  Sí</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.ynBtn, volveria === 'no' && styles.ynBtnNo]}
+                  onPress={() => setVolveria('no')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.ynTxt, volveria === 'no' && styles.ynTxtOn]}>👎  No</Text>
+                </TouchableOpacity>
+              </View>
+              {volveria === 'no' && (
+                <View style={styles.why}>
+                  <Text style={styles.whyQ}>¿Por qué no? Cuéntanos para mejorar</Text>
+                  <TextInput
+                    style={styles.otraInput}
+                    placeholder="Escribe tu razón…"
+                    placeholderTextColor="#b9a7b0"
+                    value={volveriaWhy}
+                    onChangeText={setVolveriaWhy}
+                    multiline
+                  />
+                </View>
+              )}
+            </View>
+
             <TextInput
               style={styles.comment}
               placeholder="¿Algo más que quieras contarnos? (opcional)"
@@ -312,6 +387,7 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: VINO, borderRadius: 30, paddingVertical: 16, alignItems: 'center', marginTop: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
   btnDis: { opacity: 0.6 },
   btnTxt: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  help: { color: '#ffdff0', fontSize: 13, textAlign: 'center', lineHeight: 19, marginBottom: 10, paddingHorizontal: 6 },
   legend: { color: 'rgba(255,255,255,.7)', fontSize: 11.5, textAlign: 'center', marginBottom: 12 },
   item: { backgroundColor: '#fff', borderRadius: 15, padding: 11, marginBottom: 9 },
   itemTop: { flexDirection: 'row', alignItems: 'center' },
@@ -327,6 +403,14 @@ const styles = StyleSheet.create({
   rChipOn: { backgroundColor: VINO, borderColor: VINO },
   rChipTxt: { fontSize: 12, color: '#7c5768', fontWeight: '600' },
   rChipTxtOn: { color: '#fff' },
+  otraInput: { backgroundColor: '#faf3f7', borderWidth: 1, borderColor: '#ecd7e2', borderRadius: 10, padding: 10, fontSize: 13.5, color: '#241019', minHeight: 44, marginTop: 8, textAlignVertical: 'top' },
+  volveriaQ: { fontWeight: '800', fontSize: 15, color: '#241019', marginBottom: 10, textAlign: 'center' },
+  yesno: { flexDirection: 'row', gap: 10 },
+  ynBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#f4eef1', borderWidth: 2, borderColor: 'transparent' },
+  ynBtnYes: { backgroundColor: '#e9f8ee', borderColor: '#2e9c56' },
+  ynBtnNo: { backgroundColor: '#fdecec', borderColor: '#d34b4b' },
+  ynTxt: { fontWeight: '800', fontSize: 15, color: '#7c5768' },
+  ynTxtOn: { color: '#241019' },
   comment: { backgroundColor: '#fff', borderRadius: 14, padding: 12, fontSize: 14, color: '#241019', minHeight: 64, marginTop: 12, marginBottom: 4, textAlignVertical: 'top' },
   doneWrap: { alignItems: 'center', paddingTop: 30 },
   boom: { fontSize: 46, marginBottom: 4 },
