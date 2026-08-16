@@ -1,401 +1,341 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
-// Pantalla de calificación en retrospectiva ("catch-up"), independiente del
-// motor de juego en vivo (GameDynamicsScreen). Se usa cuando un evento ya
-// cerró (automática o manualmente) y el usuario todavía no calificó a los
-// demás participantes desde la pestaña "Anteriores". Replica visualmente el
-// bloque `free_phase` de GameDynamicsScreen pero sin ninguna dependencia de
-// `game_phase` ni de canales realtime, porque aquí no hace falta ningún
-// estado en vivo entre participantes.
+// -----------------------------------------------------------------------------
+// Cierre del encuentro (reemplaza las estrellas 1-5):
+//   Paso 1 · AFINIDAD  -> ¿con quién te gustaría volver a coincidir? (privado)
+//   Paso 2 · FEEDBACK  -> califica el encuentro por items (lugar, comida, grupo,
+//                         dinamica, precio) con 3 niveles; si es "mejorable" pide
+//                         el por que con motivos rapidos. + comentario opcional.
+//   Paso 3 · RESULTADO -> si hubo match mutuo, lo muestra y abre el chat 1 a 1.
+// Backend: event_affinity, event_matches (trigger), event_feedback, y las RPC
+// get_my_event_matches / open_direct_conversation.
+// -----------------------------------------------------------------------------
 
-interface CatchUpParticipant {
-  id: string;
-  user_id: string;
-  name: string;
-  profile_photo_url: string | null;
-}
+const GRAD: [string, string, ...string[]] = ['#1a0010', '#4a0d2c', '#880E4F'];
+const VINO = '#880E4F';
 
-interface CatchUpRatingScreenProps {
-  eventId: string;
-  currentUserId: string;
-}
+// Items de la calificacion. (Se pueden adaptar por tipo de evento a futuro.)
+const ITEMS: { key: string; emo: string; label: string; reasons: string[] }[] = [
+  { key: 'lugar',    emo: '🏠', label: 'El lugar / ambiente',       reasons: ['Muy ruidoso', 'Incómodo', 'Mal servicio', 'Difícil de ubicar', 'Otra'] },
+  { key: 'comida',   emo: '🍽️', label: 'La comida y bebida',        reasons: ['Poca cantidad', 'Calidad regular', 'Demoró', 'Pocas opciones', 'Otra'] },
+  { key: 'grupo',    emo: '👥', label: 'El grupo (las personas)',    reasons: ['Poca conexión', 'Ambiente apagado', 'Muy poca gente', 'Otra'] },
+  { key: 'dinamica', emo: '🎲', label: 'La dinámica (el juego)',     reasons: ['Muy larga', 'Preguntas aburridas', 'No todos participaron', 'Incómoda', 'Otra'] },
+  { key: 'precio',   emo: '💵', label: '¿Valió lo que pagaste?',     reasons: ['Caro para lo que fue', 'La comida no lo valía', 'Otra'] },
+];
+const LEVELS = [
+  { v: 1, emo: '🙁' },
+  { v: 2, emo: '🙂' },
+  { v: 3, emo: '🤩' },
+];
 
-const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1a0010', '#880E4F', '#AD1457'];
+interface CatchUpParticipant { user_id: string; name: string; profile_photo_url: string | null; }
+interface Match { user_id: string; name: string; profile_photo_url: string | null; conversation_id: string | null; }
+interface Props { eventId: string; currentUserId: string; }
 
-export default function CatchUpRatingScreen({ eventId, currentUserId }: CatchUpRatingScreenProps) {
+export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
   const router = useRouter();
-  const [loadingData, setLoadingData] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [participants, setParticipants] = useState<CatchUpParticipant[]>([]);
-  const [userRatings, setUserRatings] = useState<Record<string, number>>({});
+  const [step, setStep] = useState<'afinidad' | 'feedback' | 'done'>('afinidad');
+
+  const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [reasons, setReasons] = useState<Record<string, Set<string>>>({});
+  const [comment, setComment] = useState('');
+
   const [saving, setSaving] = useState(false);
-
-  const loadParticipants = useCallback(async () => {
-    setLoadingData(true);
-    try {
-      const { data, error } = await supabase
-        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
-
-      if (error) {
-        console.error('❌ Error loading participants for catch-up rating:', error);
-        setParticipants([]);
-        return;
-      }
-
-      const list: CatchUpParticipant[] = (data || [])
-        .filter((item: any) => item.user_name && item.confirmed === true)
-        .map((item: any) => ({
-          id: item.id,
-          user_id: item.user_id,
-          name: item.user_name,
-          profile_photo_url: item.user_profile_photo_url || null,
-        }));
-
-      setParticipants(list);
-
-      // Precargar calificaciones ya guardadas previamente, por si el usuario
-      // vuelve a entrar a calificar a los que le faltaron.
-      const { data: existingRatings } = await supabase
-        .from('event_ratings')
-        .select('rated_user_id, rating')
-        .eq('event_id', eventId)
-        .eq('rater_user_id', currentUserId);
-
-      if (existingRatings) {
-        const map: Record<string, number> = {};
-        existingRatings.forEach((r: any) => {
-          map[r.rated_user_id] = r.rating;
-        });
-        setUserRatings(map);
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error loading catch-up participants:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  }, [eventId, currentUserId]);
+  const [matches, setMatches] = useState<Match[]>([]);
 
   useEffect(() => {
-    loadParticipants();
-  }, [loadParticipants]);
-
-  const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
-    if (!eventId || !currentUserId) return;
-    try {
-      const { error } = await supabase
-        .from('event_ratings')
-        .upsert(
-          {
-            event_id: eventId,
-            rater_user_id: currentUserId,
-            rated_user_id: ratedUserId,
-            rating: rating,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'event_id,rater_user_id,rated_user_id' }
-        );
-      if (error) {
-        console.error('❌ Error saving rating:', error);
-        return;
-      }
-      setUserRatings((prev) => ({ ...prev, [ratedUserId]: rating }));
-    } catch (error) {
-      console.error('❌ Failed to save rating:', error);
-    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_event_participants_for_interaction', { p_event_id: eventId });
+        if (error) { console.error('[cierre] participantes:', error.message); }
+        // La RPC devuelve user_name / user_profile_photo_url -> los mapeamos.
+        const list: CatchUpParticipant[] = (data || [])
+          .filter((p: any) => p.user_id !== currentUserId)
+          .map((p: any) => ({
+            user_id: p.user_id,
+            name: p.user_name || 'Participante',
+            profile_photo_url: p.user_profile_photo_url ?? null,
+          }));
+        setParticipants(list);
+      } catch (e) { console.error('[cierre] load error:', e); }
+      finally { setLoading(false); }
+    })();
   }, [eventId, currentUserId]);
 
-  const handleFinish = useCallback(async () => {
-    if (!eventId || !currentUserId || saving) return;
+  const toggleLike = (uid: string) => {
+    setLiked(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; });
+  };
+  const setScore = (key: string, v: number) => {
+    setScores(prev => ({ ...prev, [key]: v }));
+    if (v !== 1) setReasons(prev => { const n = { ...prev }; delete n[key]; return n; });
+  };
+  const toggleReason = (key: string, r: string) => {
+    setReasons(prev => {
+      const set = new Set(prev[key] || []);
+      set.has(r) ? set.delete(r) : set.add(r);
+      return { ...prev, [key]: set };
+    });
+  };
+
+  const submitAll = useCallback(async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('appointments')
-        .update({
-          ratings_submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('event_id', eventId)
-        .eq('user_id', currentUserId);
-
-      if (error) {
-        console.error('❌ Error updating ratings_submitted_at:', error);
-        setSaving(false);
-        return;
+      // 1) Afinidad (privado). El trigger crea el match si es mutuo.
+      const likedArr = Array.from(liked);
+      if (likedArr.length > 0) {
+        const rows = likedArr.map(uid => ({ event_id: eventId, rater_user_id: currentUserId, liked_user_id: uid }));
+        const { error } = await supabase
+          .from('event_affinity')
+          .upsert(rows, { onConflict: 'event_id,rater_user_id,liked_user_id', ignoreDuplicates: true });
+        if (error) console.error('[cierre] afinidad:', error.message);
       }
 
-      router.back();
-    } catch (error) {
-      console.error('❌ Unexpected error finishing catch-up rating:', error);
-      setSaving(false);
-    }
-  }, [eventId, currentUserId, saving, router]);
+      // 2) Feedback por items. Todas las filas llevan las MISMAS llaves
+      // (event_id, user_id, item_key, score, reasons, comment) porque PostgREST
+      // exige que un upsert en lote tenga objetos con llaves idénticas.
+      const fbRows: any[] = ITEMS
+        .filter(it => scores[it.key])
+        .map(it => ({
+          event_id: eventId, user_id: currentUserId, item_key: it.key,
+          score: scores[it.key], reasons: Array.from(reasons[it.key] || []), comment: null,
+        }));
+      if (comment.trim()) {
+        fbRows.push({
+          event_id: eventId, user_id: currentUserId, item_key: '_comentario',
+          score: null, reasons: [], comment: comment.trim(),
+        });
+      }
+      if (fbRows.length > 0) {
+        const { error } = await supabase
+          .from('event_feedback')
+          .upsert(fbRows, { onConflict: 'event_id,user_id,item_key' });
+        if (error) console.error('[cierre] feedback:', error.message);
+      }
 
-  if (loadingData) {
+      // 3) Marcar cerrado (mantiene el comportamiento previo)
+      await supabase.from('appointments')
+        .update({ ratings_submitted_at: new Date().toISOString() })
+        .eq('event_id', eventId).eq('user_id', currentUserId);
+
+      // 4) ¿Ya hay match? (el otro pudo haber elegido antes)
+      const { data: myMatches } = await supabase.rpc('get_my_event_matches', { p_event_id: eventId });
+      setMatches((myMatches || []) as Match[]);
+    } catch (e) {
+      console.error('[cierre] submit error:', e);
+    } finally {
+      setSaving(false);
+      setStep('done');
+    }
+  }, [liked, scores, reasons, comment, eventId, currentUserId]);
+
+  const openChat = async (m: Match) => {
+    try {
+      let convId = m.conversation_id;
+      if (!convId) {
+        const { data } = await supabase.rpc('open_direct_conversation', { p_other: m.user_id });
+        convId = data as string;
+      }
+      if (convId) router.push(`/chat/${convId}` as any);
+    } catch (e) { console.error('[cierre] openChat:', e); }
+  };
+
+  const initial = (n: string) => (n || '?').trim().charAt(0).toUpperCase();
+
+  if (loading) {
     return (
-      <LinearGradient
-        colors={FREE_PHASE_GRADIENT}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-        </View>
+      <LinearGradient colors={GRAD} style={styles.g}>
+        <View style={styles.center}><ActivityIndicator size="large" color="#fff" /></View>
       </LinearGradient>
     );
   }
 
-  const othersToRate = participants.filter((p) => p.user_id !== currentUserId);
-
   return (
-    <LinearGradient
-      colors={FREE_PHASE_GRADIENT}
-      style={styles.gradient}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-    >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.iceBreakCard}>
-          <Text style={styles.iceBreakIcon}>✨</Text>
-          <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
-          <Text style={styles.iceBreakSubtitle}>
-            Ahora disfruten el resto de la noche y déjense sorprender ✨
-          </Text>
-        </View>
+    <LinearGradient colors={GRAD} style={styles.g} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.evaluationCard}>
-          <Text style={styles.evaluationIcon}>⭐</Text>
-          <Text style={styles.evaluationTitle}>Evalúa tu experiencia</Text>
-          <Text style={styles.evaluationText}>
-            Puedes calificar a los demás participantes.
-          </Text>
+        {/* PASO 1 · AFINIDAD */}
+        {step === 'afinidad' && (
+          <>
+            <Text style={styles.kicker}>La dinámica terminó 🎉</Text>
+            <Text style={styles.h1}>¿Con quién te gustaría volver a coincidir?</Text>
+            <Text style={styles.sub}>Elige a las personas con las que sentiste buena conexión.</Text>
+            <View style={styles.privacy}>
+              <Text style={styles.privacyTxt}>🔒 Es privado. La otra persona solo se entera si el gusto es mutuo — ahí hacen match.</Text>
+            </View>
+            {participants.length === 0 ? (
+              <Text style={styles.empty}>No encontramos a otros participantes en este encuentro.</Text>
+            ) : participants.map((p) => {
+              const on = liked.has(p.user_id);
+              return (
+                <TouchableOpacity key={p.user_id} style={[styles.person, on && styles.personOn]} onPress={() => toggleLike(p.user_id)} activeOpacity={0.85}>
+                  {p.profile_photo_url ? (
+                    <Image source={{ uri: p.profile_photo_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarPh]}><Text style={styles.avatarTxt}>{initial(p.name)}</Text></View>
+                  )}
+                  <Text style={styles.pName}>{p.name}</Text>
+                  <View style={[styles.heart, on && styles.heartOn]}>
+                    <Text style={styles.heartTxt}>{on ? '❤️' : '🤍'}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <Text style={styles.hint}>Puedes elegir a varias… o a ninguna.</Text>
+            <TouchableOpacity style={styles.btn} onPress={() => setStep('feedback')} activeOpacity={0.85}>
+              <Text style={styles.btnTxt}>Continuar</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-          {othersToRate.length === 0 ? (
-            <Text style={styles.evaluationText}>
-              No encontramos participantes confirmados para calificar en este evento.
-            </Text>
-          ) : (
-            <View style={styles.participantsRatingSection}>
-              {othersToRate.map((participant, index) => {
-                const displayName = participant.name;
-                const currentRating = userRatings[participant.user_id] || 0;
-
-                return (
-                  <View key={index} style={styles.participantRatingCard}>
-                    <View style={styles.participantRatingHeader}>
-                      {participant.profile_photo_url ? (
-                        <Image
-                          source={{ uri: participant.profile_photo_url }}
-                          style={styles.participantRatingPhoto}
-                        />
-                      ) : (
-                        <View style={styles.participantRatingPhotoPlaceholder}>
-                          <Text style={styles.participantRatingPhotoPlaceholderText}>
-                            {displayName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <Text style={styles.participantRatingName}>{displayName}</Text>
-                    </View>
-
-                    <View style={styles.starsContainer}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <TouchableOpacity
-                          key={star}
-                          style={styles.starButton}
-                          onPress={() => handleRateUser(participant.user_id, star)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.starIcon,
-                              star <= currentRating && styles.starIconSelected,
-                            ]}
-                          >
-                            ⭐
-                          </Text>
+        {/* PASO 2 · FEEDBACK */}
+        {step === 'feedback' && (
+          <>
+            <Text style={styles.kicker}>¿Qué tal estuvo?</Text>
+            <Text style={styles.h1}>Califica el encuentro</Text>
+            <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
+            {ITEMS.map((it) => {
+              const sc = scores[it.key];
+              return (
+                <View key={it.key} style={styles.item}>
+                  <View style={styles.itemTop}>
+                    <Text style={styles.itemLabel}>{it.emo}  {it.label}</Text>
+                    <View style={styles.chips}>
+                      {LEVELS.map(l => (
+                        <TouchableOpacity key={l.v} style={[styles.chip, sc === l.v && styles.chipOn]} onPress={() => setScore(it.key, l.v)} activeOpacity={0.8}>
+                          <Text style={styles.chipTxt}>{l.emo}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                    {currentRating > 0 && (
-                      <Text style={styles.ratingConfirmation}>✓ Calificación guardada</Text>
-                    )}
                   </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
+                  {sc === 1 && (
+                    <View style={styles.why}>
+                      <Text style={styles.whyQ}>¿Qué mejorarías?</Text>
+                      <View style={styles.rChips}>
+                        {it.reasons.map(r => {
+                          const on = (reasons[it.key] || new Set()).has(r);
+                          return (
+                            <TouchableOpacity key={r} style={[styles.rChip, on && styles.rChipOn]} onPress={() => toggleReason(it.key, r)} activeOpacity={0.8}>
+                              <Text style={[styles.rChipTxt, on && styles.rChipTxtOn]}>{r}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+            <TextInput
+              style={styles.comment}
+              placeholder="¿Algo más que quieras contarnos? (opcional)"
+              placeholderTextColor="#b9a7b0"
+              value={comment} onChangeText={setComment} multiline
+            />
+            <TouchableOpacity style={[styles.btn, saving && styles.btnDis]} onPress={submitAll} disabled={saving} activeOpacity={0.85}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnTxt}>Enviar</Text>}
+            </TouchableOpacity>
+          </>
+        )}
 
-        <TouchableOpacity
-          style={[styles.finishButton, saving && styles.buttonDisabled]}
-          onPress={handleFinish}
-          disabled={saving}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.finishButtonText}>
-            {saving ? '⏳ Guardando...' : '✅ Listo'}
-          </Text>
-        </TouchableOpacity>
+        {/* PASO 3 · RESULTADO */}
+        {step === 'done' && (
+          <View style={styles.doneWrap}>
+            {matches.length > 0 ? (
+              <>
+                <Text style={styles.boom}>💘</Text>
+                <Text style={styles.matchTitle}>{matches.length === 1 ? '¡Hiciste match!' : `¡Hiciste ${matches.length} matches!`}</Text>
+                <Text style={styles.matchSub}>A estas personas también les gustaría volver a coincidir contigo. Ya pueden escribirse 💬</Text>
+                {matches.map((m) => (
+                  <View key={m.user_id} style={styles.matchCard}>
+                    {m.profile_photo_url ? (
+                      <Image source={{ uri: m.profile_photo_url }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatar, styles.avatarPh]}><Text style={styles.avatarTxt}>{initial(m.name)}</Text></View>
+                    )}
+                    <Text style={[styles.pName, { color: '#241019' }]}>{m.name}</Text>
+                    <TouchableOpacity style={styles.chatBtn} onPress={() => openChat(m)} activeOpacity={0.85}>
+                      <Text style={styles.chatBtnTxt}>💬 Chat</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <>
+                <Text style={styles.boom}>💫</Text>
+                <Text style={styles.matchTitle}>¡Listo!</Text>
+                <Text style={styles.matchSub}>
+                  {liked.size > 0
+                    ? 'Si alguna de esas personas también te eligió, te avisamos y podrán hablar por el chat.'
+                    : 'Gracias por participar 🙌'}
+                </Text>
+              </>
+            )}
+            <Text style={styles.thanks}>Gracias por calificar el encuentro 🙌</Text>
+            <TouchableOpacity style={styles.btnGhost} onPress={() => router.replace('/(tabs)/events' as any)} activeOpacity={0.85}>
+              <Text style={styles.btnGhostTxt}>Volver al inicio</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
       </ScrollView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 24,
-    paddingBottom: 120,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iceBreakCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 28,
-    marginTop: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-  },
-  iceBreakIcon: {
-    fontSize: 72,
-    marginBottom: 12,
-  },
-  iceBreakTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  iceBreakSubtitle: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  evaluationCard: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    padding: 24,
-    alignItems: 'center',
-  },
-  evaluationIcon: {
-    fontSize: 56,
-    marginBottom: 12,
-  },
-  evaluationTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  evaluationText: {
-    fontSize: 17,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  participantsRatingSection: {
-    width: '100%',
-  },
-  participantRatingCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 16,
-    marginBottom: 12,
-  },
-  participantRatingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  participantRatingPhoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-  },
-  participantRatingPhotoPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  participantRatingPhotoPlaceholderText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  participantRatingName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  starButton: {
-    padding: 2,
-  },
-  starIcon: {
-    fontSize: 28,
-    opacity: 0.3,
-  },
-  starIconSelected: {
-    opacity: 1,
-  },
-  ratingConfirmation: {
-    fontSize: 14,
-    color: '#A5F3C4',
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  finishButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  finishButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
+  g: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll: { padding: 20, paddingTop: 34, paddingBottom: 40 },
+  kicker: { color: 'rgba(255,255,255,.72)', fontSize: 12, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', textAlign: 'center', marginBottom: 6 },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center', lineHeight: 27, marginBottom: 8 },
+  sub: { color: 'rgba(255,255,255,.8)', fontSize: 13.5, textAlign: 'center', lineHeight: 20, marginBottom: 14 },
+  privacy: { backgroundColor: 'rgba(255,255,255,.1)', borderColor: 'rgba(255,255,255,.16)', borderWidth: 1, borderRadius: 12, padding: 11, marginBottom: 14 },
+  privacyTxt: { color: '#ffdff0', fontSize: 12.5, lineHeight: 18 },
+  empty: { color: 'rgba(255,255,255,.8)', fontSize: 14, textAlign: 'center', marginVertical: 20 },
+  person: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 15, padding: 11, marginBottom: 9, borderWidth: 2, borderColor: 'transparent' },
+  personOn: { borderColor: VINO, backgroundColor: '#fff0f6' },
+  avatar: { width: 46, height: 46, borderRadius: 23, marginRight: 12 },
+  avatarPh: { backgroundColor: VINO, justifyContent: 'center', alignItems: 'center' },
+  avatarTxt: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  pName: { flex: 1, fontWeight: '800', fontSize: 15.5, color: '#241019' },
+  heart: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: '#f0d3e0', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  heartOn: { backgroundColor: VINO, borderColor: VINO },
+  heartTxt: { fontSize: 18 },
+  hint: { color: 'rgba(255,255,255,.6)', fontSize: 11.5, textAlign: 'center', marginTop: 6, marginBottom: 10 },
+  btn: { backgroundColor: VINO, borderRadius: 30, paddingVertical: 16, alignItems: 'center', marginTop: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  btnDis: { opacity: 0.6 },
+  btnTxt: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  legend: { color: 'rgba(255,255,255,.7)', fontSize: 11.5, textAlign: 'center', marginBottom: 12 },
+  item: { backgroundColor: '#fff', borderRadius: 15, padding: 11, marginBottom: 9 },
+  itemTop: { flexDirection: 'row', alignItems: 'center' },
+  itemLabel: { flex: 1, fontWeight: '700', fontSize: 13.5, color: '#241019' },
+  chips: { flexDirection: 'row', gap: 6 },
+  chip: { width: 38, height: 38, borderRadius: 11, backgroundColor: '#f4eef1', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
+  chipOn: { borderColor: VINO, backgroundColor: '#fff0f6' },
+  chipTxt: { fontSize: 19 },
+  why: { marginTop: 11, paddingTop: 11, borderTopWidth: 1, borderTopColor: '#f0dde7' },
+  whyQ: { fontSize: 12, color: VINO, fontWeight: '800', marginBottom: 8 },
+  rChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  rChip: { borderWidth: 1.5, borderColor: '#ecd7e2', backgroundColor: '#fff', borderRadius: 16, paddingVertical: 6, paddingHorizontal: 11 },
+  rChipOn: { backgroundColor: VINO, borderColor: VINO },
+  rChipTxt: { fontSize: 12, color: '#7c5768', fontWeight: '600' },
+  rChipTxtOn: { color: '#fff' },
+  comment: { backgroundColor: '#fff', borderRadius: 14, padding: 12, fontSize: 14, color: '#241019', minHeight: 64, marginTop: 12, marginBottom: 4, textAlignVertical: 'top' },
+  doneWrap: { alignItems: 'center', paddingTop: 30 },
+  boom: { fontSize: 46, marginBottom: 4 },
+  matchTitle: { fontSize: 26, fontWeight: '900', color: '#fff', marginBottom: 8, textAlign: 'center' },
+  matchSub: { color: 'rgba(255,255,255,.82)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 18, paddingHorizontal: 8 },
+  matchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 11, marginBottom: 10, width: '100%' },
+  chatBtn: { backgroundColor: VINO, borderRadius: 20, paddingVertical: 9, paddingHorizontal: 16 },
+  chatBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  thanks: { color: 'rgba(255,255,255,.8)', fontSize: 12.5, marginTop: 12, textAlign: 'center' },
+  btnGhost: { marginTop: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,.35)', borderRadius: 30, paddingVertical: 14, paddingHorizontal: 30 },
+  btnGhostTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
