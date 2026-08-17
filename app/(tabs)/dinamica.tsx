@@ -1263,7 +1263,7 @@ export default function DinamicaScreen() {
             <Text style={styles.preEventTipIcon}>💘</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.preEventTipTitle}>Lo mejor es al final</Text>
-              <Text style={styles.preEventTipText}>Si quieres, eliges con quién sentiste conexión. Nadie sabrá a quién elegiste y si es mutuo se abre un <Text style={styles.preEventTipStrong}>chat privado</Text>.</Text>
+              <Text style={styles.preEventTipText}>Al terminar te aparecerán los nombres de todas las personas y, si quieres, eliges con quién sentiste conexión. Nadie sabrá a quién elegiste; solo si es <Text style={styles.preEventTipStrong}>mutuo</Text>, ambos se enteran.</Text>
             </View>
           </View>
 
