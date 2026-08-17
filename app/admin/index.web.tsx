@@ -137,7 +137,23 @@ interface AdminChatMessage {
   created_at: string;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'config';
+interface AdminDirectConversation {
+  conversation_id: string;
+  person_a_id: string; person_a_name: string | null; person_a_photo: string | null;
+  person_b_id: string; person_b_name: string | null; person_b_photo: string | null;
+  last_message: string | null; last_message_at: string | null;
+  message_count: number; created_at: string;
+}
+
+interface AdminMatch {
+  match_id: string;
+  event_id: string | null; event_name: string | null;
+  user_a_id: string; user_a_name: string | null; user_a_photo: string | null;
+  user_b_id: string; user_b_name: string | null; user_b_photo: string | null;
+  conversation_id: string | null; created_at: string;
+}
+
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config';
 
 
 
@@ -255,6 +271,8 @@ function buildSameDayWhatsAppLink(
     `https://app.nospi.co/(tabs)/dinamica`,
     ``,
     `💡 Antes de arrancar, elijan a alguien que se encargue de iniciar la dinámica y leer las preguntas en voz alta.`,
+    ``,
+    `💘 Ojo que lo bueno es al final: eliges con quién hiciste clic y *nadie se entera a quién elegiste* 🙈 Solo si es mutuo se abre un *chat privado* entre ustedes 👀 Además calificas cómo te pareció todo 🙌`,
     ``,
     `ℹ️ *Si no confirmas tu asistencia en la app, puede figurar como falta y tu cuenta podría ser suspendida para reservar.* ¿Tienes algún problema para confirmar o entrar? Escríbenos y lo solucionamos — no suspendemos a nadie por un fallo técnico.`,
     `📋 Consulta la política de asistencia: https://nospi.co/#politica`,
@@ -793,6 +811,45 @@ export default function AdminPanelScreen() {
   const [eventChatMessagesLoading, setEventChatMessagesLoading] = useState(false);
   const [eventChatDraft, setEventChatDraft] = useState('');
   const [eventChatSending, setEventChatSending] = useState(false);
+
+  // ── Moderación: visor global de chats privados y matches (solo admin)
+  const [moderationTab, setModerationTab] = useState<'chats' | 'matches'>('chats');
+  const [allDirectConvos, setAllDirectConvos] = useState<AdminDirectConversation[]>([]);
+  const [allDirectConvosLoading, setAllDirectConvosLoading] = useState(false);
+  const [allMatches, setAllMatches] = useState<AdminMatch[]>([]);
+  const [allMatchesLoading, setAllMatchesLoading] = useState(false);
+  const [activeModConvId, setActiveModConvId] = useState<string | null>(null);
+  const [modMessages, setModMessages] = useState<AdminChatMessage[]>([]);
+  const [modMessagesLoading, setModMessagesLoading] = useState(false);
+
+  const loadAllDirectConversations = useCallback(async () => {
+    setAllDirectConvosLoading(true);
+    const { data, error } = await supabase.rpc('admin_get_all_direct_conversations');
+    if (error) { console.error('Admin: error cargando chats privados', error); setAllDirectConvos([]); }
+    else setAllDirectConvos((data as AdminDirectConversation[]) || []);
+    setAllDirectConvosLoading(false);
+  }, []);
+
+  const loadAllMatches = useCallback(async () => {
+    setAllMatchesLoading(true);
+    const { data, error } = await supabase.rpc('admin_get_all_matches');
+    if (error) { console.error('Admin: error cargando matches', error); setAllMatches([]); }
+    else setAllMatches((data as AdminMatch[]) || []);
+    setAllMatchesLoading(false);
+  }, []);
+
+  const loadModMessages = useCallback(async (conversationId: string) => {
+    setModMessagesLoading(true);
+    const { data, error } = await supabase.rpc('admin_get_conversation_messages', { p_conversation_id: conversationId });
+    if (error) { console.error('Admin: error cargando mensajes (moderación)', error); setModMessages([]); }
+    else setModMessages((data as AdminChatMessage[]) || []);
+    setModMessagesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeModConvId) loadModMessages(activeModConvId);
+    else setModMessages([]);
+  }, [activeModConvId, loadModMessages]);
 // Envío masivo de WhatsApp de confirmación: uno por uno (el navegador móvil
   // bloquea varias pestañas si se abren todas de una), por eso mostramos un
   // modal con un botón individual por persona pendiente.
@@ -3210,6 +3267,116 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  const renderModeration = () => (
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginBottom: 4 }}>🛡️ Chats & Matches</Text>
+      <Text style={{ color: '#6b7280', fontSize: 13, marginBottom: 14 }}>
+        Modera la comunidad: aquí ves todas las conversaciones privadas entre personas y los matches de afinidad. Modo lectura.
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <TouchableOpacity
+          onPress={() => { setModerationTab('chats'); setActiveModConvId(null); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'chats' ? '#880E4F' : '#f1f1f4' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'chats' ? '#fff' : '#374151' }}>💬 Chats privados ({allDirectConvos.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { setModerationTab('matches'); setActiveModConvId(null); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'matches' ? '#880E4F' : '#f1f1f4' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'matches' ? '#fff' : '#374151' }}>💘 Matches ({allMatches.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { loadAllDirectConversations(); loadAllMatches(); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.eventChatBody}>
+        <ScrollView style={styles.eventChatConvList}>
+          {moderationTab === 'chats' ? (
+            allDirectConvosLoading ? (
+              <Text style={styles.eventChatEmptyText}>Cargando chats…</Text>
+            ) : allDirectConvos.length === 0 ? (
+              <Text style={styles.eventChatEmptyText}>Sin chats privados todavía</Text>
+            ) : (
+              allDirectConvos.map((conv) => (
+                <TouchableOpacity
+                  key={conv.conversation_id}
+                  style={[styles.eventChatConvRow, activeModConvId === conv.conversation_id && styles.eventChatConvRowActive]}
+                  onPress={() => setActiveModConvId(conv.conversation_id)}
+                >
+                  <Text style={styles.eventChatConvIcon}>💬</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventChatConvLabel} numberOfLines={1}>{(conv.person_a_name || '?')} ↔ {(conv.person_b_name || '?')}</Text>
+                    <Text style={styles.eventChatConvPreview} numberOfLines={1}>{conv.last_message || `${conv.message_count} mensajes`}</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '700' }}>{conv.message_count}</Text>
+                </TouchableOpacity>
+              ))
+            )
+          ) : (
+            allMatchesLoading ? (
+              <Text style={styles.eventChatEmptyText}>Cargando matches…</Text>
+            ) : allMatches.length === 0 ? (
+              <Text style={styles.eventChatEmptyText}>Aún no hay matches de afinidad</Text>
+            ) : (
+              allMatches.map((m) => (
+                <TouchableOpacity
+                  key={m.match_id}
+                  style={[styles.eventChatConvRow, activeModConvId === m.conversation_id && styles.eventChatConvRowActive]}
+                  onPress={() => { if (m.conversation_id) setActiveModConvId(m.conversation_id); }}
+                >
+                  <Text style={styles.eventChatConvIcon}>💘</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventChatConvLabel} numberOfLines={1}>{(m.user_a_name || '?')} ↔ {(m.user_b_name || '?')}</Text>
+                    <Text style={styles.eventChatConvPreview} numberOfLines={1}>{(m.event_name || 'Evento')} · {new Date(m.created_at).toLocaleDateString('es-CO')}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )
+          )}
+        </ScrollView>
+
+        <View style={styles.eventChatThread}>
+          <ScrollView style={styles.eventChatMessagesScroll}>
+            {!activeModConvId ? (
+              <Text style={styles.eventChatEmptyText}>Selecciona una conversación para leerla</Text>
+            ) : modMessagesLoading ? (
+              <Text style={styles.eventChatEmptyText}>Cargando mensajes…</Text>
+            ) : modMessages.length === 0 ? (
+              <Text style={styles.eventChatEmptyText}>Sin mensajes en esta conversación</Text>
+            ) : (
+              modMessages.map((msg) => {
+                const isAdmin = msg.sender_id === '00000000-0000-0000-0000-000000000099';
+                return (
+                  <View key={msg.id} style={styles.eventChatMsgRow}>
+                    {msg.sender_photo ? (
+                      <Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} />
+                    ) : (
+                      <View style={[styles.eventChatMsgAvatar, styles.eventChatMsgAvatarPlaceholder]}>
+                        <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
+                      <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi' : msg.sender_name}</Text>
+                      <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>{new Date(msg.created_at).toLocaleString('es-CO')}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+          <Text style={{ color: '#9ca3af', fontSize: 11, padding: 8, textAlign: 'center' }}>Modo lectura — moderación. No se envían mensajes desde aquí.</Text>
+        </View>
+      </View>
+    </View>
+  );
+
   const renderConfig = () => {
     const toastColor = configSaved === 'success' ? '#10B981' : '#EF4444';
     return (
@@ -5188,6 +5355,7 @@ setBulkWhatsAppPending(pending);
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
     { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' },
     { key: 'no-shows',     icon: '🚫', label: 'No-shows' },
+    { key: 'moderation',   icon: '🛡️', label: 'Chats & Matches' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -5314,6 +5482,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
+                if (item.key === 'moderation') { loadAllDirectConversations(); loadAllMatches(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
@@ -5357,6 +5526,7 @@ setBulkWhatsAppPending(pending);
             {currentView === 'realtime'     && renderRealtime()}
             {currentView === 'reconciliation' && renderReconciliation()}
             {currentView === 'subscriptions' && renderSubscriptions()}
+            {currentView === 'moderation'   && renderModeration()}
             {currentView === 'config'       && renderConfig()}
           </div>
         </div>
