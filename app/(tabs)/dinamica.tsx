@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, Image, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -1252,12 +1252,24 @@ export default function DinamicaScreen() {
           </View>
 
           <View style={styles.preEventTipCard}>
-            <Text style={styles.preEventTipIcon}>💬</Text>
+            <Text style={styles.preEventTipIcon}>✅</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Cuando llegues</Text>
-              <Text style={styles.preEventTipText}>Abre esta pestaña para confirmar tu asistencia e iniciar la experiencia con los demás.</Text>
+              <Text style={styles.preEventTipTitle}>Confirma tu asistencia</Text>
+              <Text style={styles.preEventTipText}>Ya en el lugar, abre esta pestaña y confirma tu asistencia para registrar tu llegada. Si no confirmas, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</Text>
             </View>
           </View>
+
+          <View style={styles.preEventTipCard}>
+            <Text style={styles.preEventTipIcon}>💘</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.preEventTipTitle}>Lo mejor es al final</Text>
+              <Text style={styles.preEventTipText}>Si quieres, eliges con quién sentiste conexión. Nadie sabrá a quién elegiste y si es mutuo se abre un <Text style={styles.preEventTipStrong}>chat privado</Text>.</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity onPress={() => Linking.openURL('https://nospi.co/#politica')} style={styles.policyLinkWrap}>
+            <Text style={styles.policyLinkText}>📋 Ver la política de asistencia</Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     );
@@ -1578,6 +1590,9 @@ const styles = StyleSheet.create({
   preEventTipIcon: { fontSize: 26, marginTop: 2 },
   preEventTipTitle: { fontSize: 15, fontWeight: '700', color: '#880E4F', marginBottom: 4 },
   preEventTipText: { fontSize: 14, color: '#444', lineHeight: 20 },
+  preEventTipStrong: { fontWeight: '700', color: '#880E4F' },
+  policyLinkWrap: { alignItems: 'center', marginTop: 4, marginBottom: 4 },
+  policyLinkText: { fontSize: 13, fontWeight: '700', color: '#ffd9ea', textDecorationLine: 'underline' },
   eventInfoIcon: { fontSize: 60, marginBottom: 16 },
   eventInfoTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 16 },
   eventInfoDate: { fontSize: 16, color: '#444', marginBottom: 8, textAlign: 'center' },
