@@ -628,7 +628,7 @@ export default function AdminPanelScreen() {
   const [loadingRecurring, setLoadingRecurring] = useState(false);
   const [showRecurringPanel, setShowRecurringPanel] = useState(false);
   const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
-  const [userPlatformActivity, setUserPlatformActivity] = useState<Record<string, { platform: string; last_seen_at: string }[]>>({});
+  const [userPlatformActivity, setUserPlatformActivity] = useState<Record<string, { platform: string; last_seen_at: string; first_seen_at: string }[]>>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
   const [reconciling, setReconciling] = useState(false);
@@ -1203,7 +1203,7 @@ const handleLogin = async () => {
       const usersP = rpcAllForAdmin('get_all_users_for_admin');
       const createdDatesP = rpcAllForAdmin('get_user_created_dates');
       const ratingsP = supabase.from('event_ratings').select('rated_user_id, rating');
-      const platformP = supabase.from('user_platform_activity').select('user_id, platform, last_seen_at');
+      const platformP = supabase.from('user_platform_activity').select('user_id, platform, last_seen_at, first_seen_at');
       const appointmentsP = rpcAllForAdmin('get_all_appointments_for_admin');
 
       const [
@@ -1258,10 +1258,10 @@ const handleLogin = async () => {
 
       // Actividad de plataformas por usuario
       if (platformActivityData && platformActivityData.length > 0) {
-        const activityMap: Record<string, { platform: string; last_seen_at: string }[]> = {};
+        const activityMap: Record<string, { platform: string; last_seen_at: string; first_seen_at: string }[]> = {};
         for (const row of platformActivityData) {
           if (!activityMap[row.user_id]) activityMap[row.user_id] = [];
-          activityMap[row.user_id].push({ platform: row.platform, last_seen_at: row.last_seen_at });
+          activityMap[row.user_id].push({ platform: row.platform, last_seen_at: row.last_seen_at, first_seen_at: row.first_seen_at });
         }
         setUserPlatformActivity(activityMap);
       }
@@ -4799,19 +4799,27 @@ setBulkWhatsAppPending(pending);
                       )}
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      {(userPlatformActivity[user.id] && userPlatformActivity[user.id].length > 0) ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                          {[...userPlatformActivity[user.id]]
-                            .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime())
-                            .map((pa) => (
-                              <span key={pa.platform} style={{ fontSize: 11, color: '#6B7280' }}>
-                                {pa.platform === 'ios' ? '🍎' : pa.platform === 'android' ? '🤖' : '🌐'} {formatPlatformRecency(pa.last_seen_at)}
-                              </span>
-                            ))}
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin datos</span>
-                      )}
+                      {(() => {
+                        const acts = userPlatformActivity[user.id] || [];
+                        if (acts.length === 0) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin datos</span>;
+                        const web = acts.find(a => a.platform === 'web');
+                        const appActs = acts.filter(a => a.platform === 'ios' || a.platform === 'android');
+                        const startedWebThenApp = !!web && appActs.length > 0 && appActs.every(a => new Date(web.first_seen_at).getTime() < new Date(a.first_seen_at).getTime());
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                            {startedWebThenApp && (
+                              <span title="Empezó en la web y luego instaló la app" style={{ fontSize: 10, fontWeight: 700, color: '#065F46', background: '#D1FAE5', borderRadius: 8, padding: '1px 6px' }}>🌐→📱 Empezó en web</span>
+                            )}
+                            {[...acts]
+                              .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime())
+                              .map((pa) => (
+                                <span key={pa.platform} style={{ fontSize: 11, color: '#6B7280' }}>
+                                  {pa.platform === 'ios' ? '🍎' : pa.platform === 'android' ? '🤖' : '🌐'} {formatPlatformRecency(pa.last_seen_at)}
+                                </span>
+                              ))}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
