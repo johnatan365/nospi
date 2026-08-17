@@ -38,6 +38,7 @@
       }
     },
     "android": {
+      "icon": "./assets/adaptive-icon.png",
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -95,7 +96,7 @@
           ]
         }
       ],
-            "versionCode": 52
+            "versionCode": 53
     },
     "web": {
       "favicon": "./assets/icon.png",
