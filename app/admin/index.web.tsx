@@ -620,6 +620,9 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar'>('all');
+  const [eventSearch, setEventSearch] = useState('');
+  const [eventSortDesc, setEventSortDesc] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [recurringCustomers, setRecurringCustomers] = useState<any[]>([]);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
@@ -4079,6 +4082,21 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const renderEvents = () => {
+    const filteredEvents = events
+      .filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter)
+      .filter(event => eventTypeFilter === 'all' || event.type === eventTypeFilter)
+      .filter(event => {
+        const term = eventSearch.trim().toLowerCase();
+        if (!term) return true;
+        return (event.name || '').toLowerCase().includes(term)
+          || (event.location_name || '').toLowerCase().includes(term)
+          || (event.location_address || '').toLowerCase().includes(term);
+      })
+      .sort((a, b) => {
+        const da = new Date(a.start_time || a.date).getTime();
+        const db = new Date(b.start_time || b.date).getTime();
+        return eventSortDesc ? (db - da) : (da - db);
+      });
     return (
       <View style={styles.listContainer}>
                 <View style={[styles.listHeader, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 12 }]}>
@@ -4137,7 +4155,37 @@ setBulkWhatsAppPending(pending);
           ))}
         </View>
 
-        {events.filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter).map((event) => {
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 18 }}>
+          <div style={{ flex: 1, minWidth: 220, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔎</span>
+            <input
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              placeholder="Buscar por nombre del evento o lugar…"
+              style={{ width: '100%', padding: '11px 14px 11px 38px', borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 14, background: '#fff', boxSizing: 'border-box' }}
+            />
+          </div>
+          <select
+            value={eventTypeFilter}
+            onChange={(e) => setEventTypeFilter(e.target.value as any)}
+            style={{ padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 14, background: '#fff', cursor: 'pointer' }}
+          >
+            <option value="all">Todos los tipos</option>
+            <option value="restaurante">Restaurante</option>
+            <option value="cafe">Café</option>
+            <option value="caminata">Caminata</option>
+            <option value="bolos">Bolos</option>
+            <option value="bar">Bar</option>
+          </select>
+          <button
+            onClick={() => setEventSortDesc((v) => !v)}
+            style={{ padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+          >
+            {eventSortDesc ? '↓ Más recientes primero' : '↑ Más antiguos primero'}
+          </button>
+        </div>
+
+        {filteredEvents.map((event) => {
           const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
@@ -4201,6 +4249,9 @@ setBulkWhatsAppPending(pending);
             </View>
           );
         })}
+        {filteredEvents.length === 0 && (
+          <Text style={{ textAlign: 'center', color: '#9ca3af', padding: 24 }}>No hay eventos que coincidan con la búsqueda.</Text>
+        )}
       </View>
     );
   };
