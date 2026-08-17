@@ -36,10 +36,10 @@ async function saveOnboardingToLocalStorage() {
 function friendlyAuthError(msg?: string): string {
   const m = (msg || '').toLowerCase();
   if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('too weak') || m.includes('weak password')) {
-    return 'Tu contraseña debe incluir al menos una letra minúscula, una letra mayúscula y un número. Ejemplo: Nospi2025';
+    return 'Tu contraseña debe tener al menos 8 caracteres.';
   }
   if (m.includes('at least') && m.includes('character')) {
-    return 'Tu contraseña es muy corta. Usa al menos 8 caracteres, con mayúsculas, minúsculas y números.';
+    return 'Tu contraseña es muy corta. Usa al menos 8 caracteres.';
   }
   if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already exists')) {
     return 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.';
@@ -327,8 +327,8 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
@@ -590,7 +590,7 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.passwordHint}>Usa al menos 8 caracteres, con una mayúscula, una minúscula y un número.</Text>
+            <Text style={styles.passwordHint}>Usa al menos 8 caracteres.</Text>
 
             <View style={[styles.passwordWrapper, confirmPasswordFocused && styles.passwordWrapperFocused]}>
               <TextInput
