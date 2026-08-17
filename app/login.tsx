@@ -73,9 +73,9 @@ export default function LoginScreen() {
           if (m.includes('already')) {
             setError('Ya existe una cuenta con este email');
           } else if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('weak')) {
-            setError('Esa contraseña no es válida. Usa al menos 6 caracteres.');
+            setError('Esa contraseña no es válida. Usa al menos 8 caracteres.');
           } else if (m.includes('at least') && m.includes('character')) {
-            setError('Tu contraseña es muy corta. Usa al menos 6 caracteres.');
+            setError('Tu contraseña es muy corta. Usa al menos 8 caracteres.');
           } else {
             setError('Error al crear cuenta. Intenta de nuevo.');
           }

@@ -52,8 +52,8 @@ export default function ResetPasswordScreen() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!password || password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+    if (!password || password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres');
       return;
     }
     if (password !== confirmPassword) {
@@ -77,7 +77,7 @@ export default function ResetPasswordScreen() {
         if (m.includes('different') || m.includes('same as')) {
           friendly = 'La nueva contraseña debe ser diferente a la anterior.';
         } else if (m.includes('at least') || m.includes('should be') || m.includes('length') || m.includes('short') || m.includes('should contain') || m.includes('weak') || m.includes('character of each')) {
-          friendly = 'Esa contraseña no cumple los requisitos. Usa al menos 6 caracteres.';
+          friendly = 'Esa contraseña no cumple los requisitos. Usa al menos 8 caracteres.';
         } else if (m.includes('expired') || m.includes('invalid') || m.includes('token') || m.includes('session') || m.includes('missing') || m.includes('otp')) {
           friendly = 'Este enlace ya venció o se usó. Vuelve a "¿Olvidaste tu contraseña?" y solicita uno nuevo.';
         }
@@ -150,7 +150,7 @@ export default function ResetPasswordScreen() {
               ) : (
                 <>
                   <Text style={styles.title}>Crea una nueva contraseña</Text>
-                  <Text style={styles.subtitle}>Elige una contraseña para tu cuenta de Nospi (mínimo 6 caracteres).</Text>
+                  <Text style={styles.subtitle}>Elige una contraseña para tu cuenta de Nospi (mínimo 8 caracteres).</Text>
 
                   {error ? (
                     <View style={styles.errorContainer}>
