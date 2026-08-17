@@ -141,6 +141,7 @@ interface AdminDirectConversation {
   conversation_id: string;
   person_a_id: string; person_a_name: string | null; person_a_photo: string | null;
   person_b_id: string; person_b_name: string | null; person_b_photo: string | null;
+  event_id: string | null; event_name: string | null;
   last_message: string | null; last_message_at: string | null;
   message_count: number; created_at: string;
 }
@@ -821,6 +822,7 @@ export default function AdminPanelScreen() {
   const [activeModConvId, setActiveModConvId] = useState<string | null>(null);
   const [modMessages, setModMessages] = useState<AdminChatMessage[]>([]);
   const [modMessagesLoading, setModMessagesLoading] = useState(false);
+  const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
 
   const loadAllDirectConversations = useCallback(async () => {
     setAllDirectConvosLoading(true);
@@ -3312,6 +3314,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   <Text style={styles.eventChatConvIcon}>💬</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.eventChatConvLabel} numberOfLines={1}>{(conv.person_a_name || '?')} ↔ {(conv.person_b_name || '?')}</Text>
+                    {conv.event_name ? <Text style={{ fontSize: 10, color: '#880E4F', fontWeight: '700' }} numberOfLines={1}>📍 {conv.event_name}</Text> : null}
                     <Text style={styles.eventChatConvPreview} numberOfLines={1}>{conv.last_message || `${conv.message_count} mensajes`}</Text>
                   </View>
                   <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '700' }}>{conv.message_count}</Text>
@@ -3355,7 +3358,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 return (
                   <View key={msg.id} style={styles.eventChatMsgRow}>
                     {msg.sender_photo ? (
-                      <Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} />
+                      <TouchableOpacity onPress={() => setZoomedPhoto(msg.sender_photo)}><Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} /></TouchableOpacity>
                     ) : (
                       <View style={[styles.eventChatMsgAvatar, styles.eventChatMsgAvatarPlaceholder]}>
                         <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
@@ -5792,7 +5795,7 @@ setBulkWhatsAppPending(pending);
                       return (
                         <View key={msg.id} style={styles.eventChatMsgRow}>
                           {msg.sender_photo ? (
-                            <Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} />
+                            <TouchableOpacity onPress={() => setZoomedPhoto(msg.sender_photo)}><Image source={{ uri: msg.sender_photo }} style={styles.eventChatMsgAvatar} /></TouchableOpacity>
                           ) : (
                             <View style={[styles.eventChatMsgAvatar, styles.eventChatMsgAvatarPlaceholder]}>
                               <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
@@ -5831,6 +5834,13 @@ setBulkWhatsAppPending(pending);
             </View>
           </View>
         </View>
+      </Modal>
+{/* Lightbox — foto de perfil ampliada (chat global y por evento) */}
+      <Modal visible={zoomedPhoto !== null} transparent animationType="fade" onRequestClose={() => setZoomedPhoto(null)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setZoomedPhoto(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', alignItems: 'center', justifyContent: 'center' }}>
+          {zoomedPhoto ? <Image source={{ uri: zoomedPhoto }} style={{ width: 340, height: 340, borderRadius: 18 }} resizeMode="contain" /> : null}
+          <Text style={{ color: '#fff', marginTop: 16, fontSize: 13 }}>Toca para cerrar</Text>
+        </TouchableOpacity>
       </Modal>
 {/* Bulk WhatsApp Pending Modal — envío uno por uno, evita que el navegador móvil bloquee varias pestañas a la vez */}
       <Modal
