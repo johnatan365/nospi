@@ -4813,7 +4813,7 @@ setBulkWhatsAppPending(pending);
                             {[...acts]
                               .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime())
                               .map((pa) => (
-                                <span key={pa.platform} style={{ fontSize: 11, color: '#6B7280' }}>
+                                <span key={pa.platform} title={`Última vez: ${new Date(pa.last_seen_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}  ·  Primera vez: ${new Date(pa.first_seen_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}`} style={{ fontSize: 11, color: '#6B7280', cursor: 'help' }}>
                                   {pa.platform === 'ios' ? '🍎' : pa.platform === 'android' ? '🤖' : '🌐'} {formatPlatformRecency(pa.last_seen_at)}
                                 </span>
                               ))}
