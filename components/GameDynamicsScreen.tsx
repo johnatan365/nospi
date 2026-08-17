@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
@@ -197,14 +198,14 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1a0010', '#880E4F', '#AD1457'];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
-  
+  const router = useRouter();
+
   const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [userRatings, setUserRatings] = useState<{ [userId: string]: number }>({});
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
@@ -736,86 +737,24 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     }
   }, [appointment, loading]);
 
-  const handleRateUser = useCallback(async (ratedUserId: string, rating: number) => {
-    if (!appointment?.event_id || !currentUserId) return;
-
-
-    try {
-      const { error } = await supabase
-        .from('event_ratings')
-        .upsert(
-          {
-            event_id: appointment.event_id,
-            rater_user_id: currentUserId,
-            rated_user_id: ratedUserId,
-            rating: rating,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'event_id,rater_user_id,rated_user_id',
-          }
-        );
-
-      if (error) {
-        console.error('❌ Error saving rating:', error);
-        return;
-      }
-
-      
-      setUserRatings((prev) => ({
-        ...prev,
-        [ratedUserId]: rating,
-      }));
-    } catch (error) {
-      console.error('❌ Failed to save rating:', error);
-    }
-  }, [appointment, currentUserId]);
-
-  const handleFinishEvent = useCallback(async () => {
-    
+  // Cierre nuevo: marca la cita como pasada y lleva a la pantalla de
+  // afinidad + match + feedback (reemplaza el viejo puntaje de estrellas).
+  const goToClosing = useCallback(async () => {
     if (!appointment?.event_id || !currentUserId || loading) return;
-
-    
-    // CRITICAL FIX: Immediately set loading state for instant UI feedback
     setLoading(true);
-
     try {
-      
-      // Update ONLY this user's appointment: marca que ya calificó
-      // (ratings_submitted_at) y, si todavia estaba 'confirmada', la pasa a
-      // 'anterior' de una vez (no hace falta esperar al cierre automatico
-      // del dia siguiente). OJO: ya NO se filtra por .eq('status',
-      // 'confirmada') -- este mismo boton se usa tambien para calificar en
-      // retrospectiva desde la pestaña Anteriores, donde la cita ya esta en
-      // 'anterior' (el evento se cerro automatica o manualmente), y ahi
-      // tambien debe poder guardar sin que el update no afecte ninguna fila.
-      const { error: appointmentError } = await supabase
+      await supabase
         .from('appointments')
-        .update({ 
-          status: 'anterior',
-          ratings_submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .update({ status: 'anterior', updated_at: new Date().toISOString() })
         .eq('event_id', appointment.event_id)
         .eq('user_id', currentUserId);
-
-      if (appointmentError) {
-        console.error('❌ Error updating user appointment to anterior:', appointmentError);
-        setLoading(false);
-        return;
-      }
-      
-      // Immediately notify parent to navigate away
-      if (onFinish) {
-        onFinish();
-      }
-      
-    } catch (error) {
-      console.error('❌ Unexpected error finishing event:', error);
+    } catch (e) {
+      console.error('goToClosing error:', e);
+    } finally {
       setLoading(false);
     }
-  }, [appointment, currentUserId, loading, onFinish]);
+    router.push(`/catch-up-rating/${appointment.event_id}` as any);
+  }, [appointment, currentUserId, loading, router]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
@@ -1005,73 +944,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           </View>
 
           <View style={styles.evaluationCard}>
-            <Text style={styles.evaluationIcon}>⭐</Text>
-            <Text style={styles.evaluationTitle}>Evalúa tu experiencia</Text>
+            <Text style={styles.evaluationIcon}>💘</Text>
+            <Text style={styles.evaluationTitle}>Antes de terminar</Text>
             <Text style={styles.evaluationText}>
-              Puedes calificar a los demás participantes.
+              Cuéntanos con quién sentiste afinidad (¡puede haber match!) y qué tal estuvo el encuentro.
             </Text>
-            
-            <View style={styles.participantsRatingSection}>
-              {activeParticipants
-                .filter((p) => p.user_id !== currentUserId)
-                .map((participant, index) => {
-                  const displayName = participant.name;
-                  const currentRating = userRatings[participant.user_id] || 0;
-                  
-                  return (
-                    <View key={index} style={styles.participantRatingCard}>
-                      <View style={styles.participantRatingHeader}>
-                        {participant.profile_photo_url ? (
-                          <Image
-                            source={{ uri: participant.profile_photo_url }}
-                            style={styles.participantRatingPhoto}
-                          />
-                        ) : (
-                          <View style={styles.participantRatingPhotoPlaceholder}>
-                            <Text style={styles.participantRatingPhotoPlaceholderText}>
-                              {displayName.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                        <Text style={styles.participantRatingName}>{displayName}</Text>
-                      </View>
-                      
-                      <View style={styles.starsContainer}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <TouchableOpacity
-                            key={star}
-                            style={styles.starButton}
-                            onPress={() => handleRateUser(participant.user_id, star)}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.starIcon,
-                                star <= currentRating && styles.starIconSelected,
-                              ]}
-                            >
-                              ⭐
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      {currentRating > 0 && (
-                        <Text style={styles.ratingConfirmation}>✓ Calificación guardada</Text>
-                      )}
-                    </View>
-                  );
-                })}
-            </View>
           </View>
 
           <TouchableOpacity
             style={[styles.finishButton, loading && styles.buttonDisabled]}
-            onPress={handleFinishEvent}
+            onPress={goToClosing}
             disabled={loading}
             activeOpacity={0.8}
           >
             <Text style={styles.finishButtonText}>
-              {loading ? '⏳ Finalizando...' : '✅ Finalizar'}
+              {loading ? '⏳ Un momento...' : 'Continuar →'}
             </Text>
           </TouchableOpacity>
         </ScrollView>
