@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "53958423708",
+    "project_id": "nospi-f7952",
+    "storage_bucket": "nospi-f7952.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:53958423708:android:8543aadbf9a64702aea959",
+        "android_client_info": {
+          "package_name": "app.nospi.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrOiRW0FArsluXvXBHgzD8oDDcf7jMOfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
