@@ -194,7 +194,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
           <>
             <Text style={styles.kicker}>La dinámica terminó 🎉</Text>
             <Text style={styles.h1}>¿Con quién te gustaría volver a coincidir?</Text>
-            <Text style={styles.sub}>Elige a las personas con las que sentiste buena conexión.</Text>
+            <Text style={styles.sub}>Elige a las personas con las que sentiste buena conexión. Es totalmente opcional: si no quieres elegir a nadie, también está bien.</Text>
             <View style={styles.privacy}>
               <Text style={styles.privacyTxt}>🔒 Es privado. La otra persona solo se entera si el gusto es mutuo — ahí hacen match.</Text>
             </View>
@@ -216,9 +216,9 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
                 </TouchableOpacity>
               );
             })}
-            <Text style={styles.hint}>Puedes elegir a varias… o a ninguna.</Text>
+            <Text style={styles.hint}>Sin compromiso: puedes elegir a varias, a una… o a nadie. Nadie sabrá a quién elegiste, salvo que sea mutuo.</Text>
             <TouchableOpacity style={styles.btn} onPress={() => setStep('feedback')} activeOpacity={0.85}>
-              <Text style={styles.btnTxt}>Continuar</Text>
+              <Text style={styles.btnTxt}>{liked.size === 0 ? 'No elegir a nadie y continuar' : 'Continuar'}</Text>
             </TouchableOpacity>
           </>
         )}
