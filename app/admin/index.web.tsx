@@ -4516,6 +4516,27 @@ setBulkWhatsAppPending(pending);
 
   const applySort = (arr: any[], col: string, asc: boolean) => {
     if (!col) return arr;
+    // Columna "Uso actual": no vive en el objeto usuario sino en userPlatformActivity.
+    // Se ordena por la fecha de ULTIMO uso en la APP (iOS/Android). Quienes SI han
+    // usado la app quedan siempre agrupados arriba; el toggle asc/desc ordena
+    // entre ellos de mas antiguo a mas reciente. Quienes nunca usaron la app van al final.
+    if (col === '_platform_activity') {
+      const appLastSeen = (item: any) => {
+        const acts = userPlatformActivity[item.id] || [];
+        const appActs = acts.filter(a => a.platform === 'ios' || a.platform === 'android');
+        if (appActs.length === 0) return '';
+        return appActs.reduce((max, a) => (a.last_seen_at > max ? a.last_seen_at : max), '');
+      };
+      return [...arr].sort((a, b) => {
+        const ka = appLastSeen(a);
+        const kb = appLastSeen(b);
+        const aHas = ka !== '';
+        const bHas = kb !== '';
+        if (aHas !== bHas) return aHas ? -1 : 1; // usuarios de la app siempre arriba
+        const n = ka.localeCompare(kb, undefined, { numeric: true });
+        return asc ? n : -n;
+      });
+    }
     return [...arr].sort((a, b) => {
       const va = (a[col] ?? '').toString().toLowerCase();
       const vb = (b[col] ?? '').toString().toLowerCase();
