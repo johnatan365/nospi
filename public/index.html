@@ -44,6 +44,22 @@
             var a = arguments;
             if (a[0] === 'track' && window.ttq) {
               if (a[1] === 'Lead') { window.ttq.track('SubmitForm'); }
+              if (a[1] === 'ViewContent') {
+                window.ttq.track('ViewContent', {
+                  content_type: 'product',
+                  content_id: (a[2] && a[2].content_ids && a[2].content_ids[0]) || 'nospi_event',
+                  content_name: (a[2] && a[2].content_name) || 'Evento Nospi',
+                  currency: 'COP',
+                  value: (a[2] && a[2].value) || 9900
+                });
+              }
+              if (a[1] === 'InitiateCheckout') {
+                window.ttq.track('InitiateCheckout', {
+                  content_type: 'product',
+                  currency: 'COP',
+                  value: (a[2] && a[2].value) || 9900
+                });
+              }
               if (a[1] === 'Purchase') {
                 window.ttq.track('CompletePayment', {
                   currency: (a[2] && a[2].currency) || 'COP',
