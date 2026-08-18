@@ -999,13 +999,17 @@ export default function DinamicaScreen() {
   // Confirmados → "Continuar": mueve a TODA la mesa al paso de elegir moderador.
   const handleGoToChooseModerator = useCallback(async () => {
     if (!appointment?.event_id) return;
+    const prevPhase = gamePhase;
     setGamePhase('choosing_moderator'); // feedback inmediato; realtime confirma
     const { error } = await supabase
       .from('events')
       .update({ game_phase: 'choosing_moderator', updated_at: new Date().toISOString() })
       .eq('id', appointment.event_id);
-    if (error) console.error('❌ Error yendo a elegir moderador:', error);
-  }, [appointment?.event_id]);
+    if (error) {
+      console.error('❌ Error yendo a elegir moderador:', error);
+      setGamePhase(prevPhase); // no dejar la pantalla en una fase que la BD no guardó
+    }
+  }, [appointment?.event_id, gamePhase]);
 
   // "Quiero ser el moderador": primero en postularse queda. El candado
   // `is('moderator_id', null)` evita que dos toques casi simultáneos se pisen;
@@ -1037,13 +1041,17 @@ export default function DinamicaScreen() {
   // Moderador elegido → "Continuar": pasa la mesa a la pantalla de reglas.
   const handleModeratorContinueToRules = useCallback(async () => {
     if (!appointment?.event_id) return;
+    const prevPhase = gamePhase;
     setGamePhase('rules');
     const { error } = await supabase
       .from('events')
       .update({ game_phase: 'rules', updated_at: new Date().toISOString() })
       .eq('id', appointment.event_id);
-    if (error) console.error('❌ Error pasando a reglas:', error);
-  }, [appointment?.event_id]);
+    if (error) {
+      console.error('❌ Error pasando a reglas:', error);
+      setGamePhase(prevPhase); // no dejar la pantalla en una fase que la BD no guardó
+    }
+  }, [appointment?.event_id, gamePhase]);
 
   const showDivertidoModalAnimation = useCallback(() => {
     setShowDivertidoModal(true);
@@ -1291,8 +1299,6 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
-          <Text style={styles.rulesIcon}>🕹️</Text>
-
           {!moderatorId ? (
             <>
               <Text style={styles.rulesTitle}>¿Quién será el moderador?</Text>
@@ -1314,7 +1320,7 @@ export default function DinamicaScreen() {
                   <Text style={styles.modChosenAvatarText}>{(moderatorName || '?').charAt(0).toUpperCase()}</Text>
                 </View>
                 <Text style={styles.modChosenName}>{moderatorName}</Text>
-                <View style={styles.modChosenRole}><Text style={styles.modChosenRoleText}>🕹️ Moderador</Text></View>
+                <View style={styles.modChosenRole}><Text style={styles.modChosenRoleText}>Moderador</Text></View>
               </View>
 
               {isModerator ? (
@@ -1713,7 +1719,7 @@ const styles = StyleSheet.create({
   modWait: { backgroundColor: 'rgba(0,0,0,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', borderRadius: 26, paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center', marginTop: 8, width: '100%' },
   modWaitText: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,0.9)', textAlign: 'center' },
   comenzarButton: { backgroundColor: '#880E4F', borderRadius: 50, paddingVertical: 18, paddingHorizontal: 56, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(240,98,146,0.50)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginTop: 8 },
-  comenzarButtonText: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1 },
+  comenzarButtonText: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1, textAlign: 'center' },
   divertidoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   divertidoCard: { borderRadius: 32, overflow: 'hidden', minWidth: 280 },
   divertidoCardGradient: { padding: 48, alignItems: 'center', borderRadius: 32 },
