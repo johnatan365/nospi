@@ -80,6 +80,15 @@ type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 
 const DEFAULT_GPS_RADIUS_METERS = 150;
 
+// ── Tiempos de arranque, contados desde la hora del evento ───────────────────
+// A la hora exacta se habilita "Confirmar asistencia" (GPS). Luego:
+//  · START_WINDOW_MINUTES: cuándo aparece el botón "Continuar" de la lista de
+//    confirmados (empezar a elegir moderador y leer las reglas). Antes de eso
+//    la pantalla muestra el conteo regresivo.
+//    Durante ese conteo la tarjeta de espera explica que es para darle chance a
+//    quien se haya retrasado, e invita a pedir algo mientras tanto.
+const START_WINDOW_MINUTES = 5;
+
 // Distancia en metros entre dos coordenadas (fórmula de Haversine)
 function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // radio de la Tierra en metros
@@ -180,24 +189,27 @@ export default function DinamicaScreen() {
 
     const diffToEventTime = eventDate.getTime() - now.getTime();
 
-    const eventDatePlus10 = new Date(startTime);
-    eventDatePlus10.setMinutes(eventDatePlus10.getMinutes() + 5);
-    const diffToPlus10 = eventDatePlus10.getTime() - now.getTime();
+    // Momento a partir del cual se habilita el botón "Continuar" de la lista de
+    // confirmados (empezar a elegir moderador y leer las reglas). Hasta que
+    // llegue, la pantalla muestra el conteo regresivo.
+    const startWindowAt = new Date(startTime);
+    startWindowAt.setMinutes(startWindowAt.getMinutes() + START_WINDOW_MINUTES);
+    const diffToStartWindow = startWindowAt.getTime() - now.getTime();
 
-    setCountdown(diffToPlus10);
+    setCountdown(diffToStartWindow);
 
     if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
       setCheckInPhase('code_entry');
     }
 
-    if (diffToPlus10 <= 0) {
+    if (diffToStartWindow <= 0) {
       setCountdownDisplay('Ahora');
       return;
     }
 
-    const hours = Math.floor(diffToPlus10 / (1000 * 60 * 60));
-    const minutes = Math.floor((diffToPlus10 % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffToPlus10 % (1000 * 60)) / 1000);
+    const hours = Math.floor(diffToStartWindow / (1000 * 60 * 60));
+    const minutes = Math.floor((diffToStartWindow % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffToStartWindow % (1000 * 60)) / 1000);
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
@@ -986,31 +998,11 @@ export default function DinamicaScreen() {
   // arrancan solas cuando confirma el segundo (retry de 3s mas realtime).
   const canStartExperience = countdown <= 0 && activeParticipants.length >= 1;
 
-  // Total de inscritos al evento, para el aviso "van X de Y". Si el dato no
-  // esta disponible, se omite el "de Y".
-  const totalExpected = appointment?.event?.current_participants || 0;
-  const missingPeople = totalExpected > 0
-    ? activeParticipants.length < totalExpected
-    : activeParticipants.length < 2;
-
-  // ── Semáforo de arranque (pantalla de reglas) ───────────────────────────────
-  // Cortesía de 10 minutos desde la hora del evento: mientras falte gente y no
-  // se cumplan, se pide esperar mostrando la HORA EXACTA a partir de la cual
-  // pueden arrancar; cumplidos los 10 min (o si ya llegaron todos) pasa a verde.
-  // Nunca bloquea: el botón "Comenzar" del moderador sigue disponible siempre.
-  // El render se refresca cada segundo (interval del countdown), así que el
-  // paso de ámbar a verde ocurre solo, sin que nadie tenga que refrescar.
-  const GRACE_MINUTES = 10;
-  const graceEndsAt = appointment?.event?.start_time
-    ? new Date(new Date(appointment.event.start_time).getTime() + GRACE_MINUTES * 60000)
-    : null;
-  // Sin hora de evento no hay con qué calcular la cortesía: se muestra verde
-  // para no dejar a la mesa esperando un aviso que nunca cambiaría.
-  const graceOver = !graceEndsAt || Date.now() >= graceEndsAt.getTime();
-  const canStartNow = graceOver || !missingPeople;
-  const graceEndsAtText = graceEndsAt
-    ? formatTimeAmPm(`${String(graceEndsAt.getHours()).padStart(2, '0')}:${String(graceEndsAt.getMinutes()).padStart(2, '0')}`)
-    : '';
+  // Conteo mm:ss que muestra la tarjeta de espera mientras no se abre el botón
+  // "Continuar". Se refresca solo: el interval del countdown corre cada segundo.
+  const waitMinutes = Math.max(0, Math.floor(countdown / 60000));
+  const waitSeconds = Math.max(0, Math.floor((countdown % 60000) / 1000));
+  const waitCountdownText = `${String(waitMinutes).padStart(2, '0')}:${String(waitSeconds).padStart(2, '0')}`;
 
   // ── Moderador (derivados para el render) ────────────────────────────────────
   const isModerator = !!user?.id && !!moderatorId && user.id === moderatorId;
@@ -1361,8 +1353,15 @@ export default function DinamicaScreen() {
             <>
               <Text style={styles.rulesTitle}>¿Quién será el moderador?</Text>
               <View style={styles.modRoleCard}>
-                <Text style={styles.modRoleEmoji}>🗣️</Text>
-                <Text style={styles.modRoleText}>El moderador debe leer las preguntas en voz alta y es quien pasa a la siguiente pregunta.</Text>
+                <View style={styles.modRoleRow}>
+                  <Text style={styles.modRoleEmoji}>🗣️</Text>
+                  <Text style={styles.modRoleText}>El moderador debe leer las preguntas en voz alta y es quien pasa a la siguiente pregunta.</Text>
+                </View>
+                <View style={styles.modRoleDivider} />
+                <View style={styles.modRoleRow}>
+                  <Text style={styles.modRoleEmoji}>🔄</Text>
+                  <Text style={styles.modRoleText}>El moderador se puede cambiar por otro en cualquier parte de la dinámica.</Text>
+                </View>
               </View>
               <TouchableOpacity style={styles.comenzarButton} onPress={handleBecomeModerator} activeOpacity={0.85}>
                 <Text style={styles.comenzarButtonText}>🙋 Quiero ser el moderador</Text>
@@ -1466,24 +1465,6 @@ export default function DinamicaScreen() {
               <Text style={styles.rulesText}>Lo mejor es al final: al terminar las preguntas, si quieres, puedes elegir con quién sentiste conexión. Nadie sabrá a quién elegiste y, si es mutuo, se abre un chat privado.</Text>
             </View>
           </View>
-
-          {/* Semáforo de arranque: lo ve TODA la mesa (moderador y demás) para
-              que la regla sea de todos y nadie presione de más. */}
-          {canStartNow ? (
-            <View style={styles.semGreen}>
-              <Text style={styles.semGreenTitle}>✅ Ya pueden arrancar</Text>
-              <Text style={styles.semGreenText}>Quien llegue después se suma a la pregunta en la que vayan.</Text>
-            </View>
-          ) : (
-            <View style={styles.semAmber}>
-              <Text style={styles.semAmberTitle}>
-                ⏳ Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados
-              </Text>
-              <Text style={styles.semAmberText}>
-                Denles unos minutos a los que faltan. Pueden arrancar a las <Text style={styles.semAmberHora}>{graceEndsAtText}</Text> aunque no estén todos.
-              </Text>
-            </View>
-          )}
 
           {isModerator ? (
             <TouchableOpacity
@@ -1650,39 +1631,32 @@ export default function DinamicaScreen() {
             </View>
 
             {!canStartExperience && countdown > 0 && (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoText}>
-                  ⏰ Esperando el momento de inicio
+              <View style={styles.waitCard}>
+                <Text style={styles.waitCardTitle}>⏳ Arrancamos en</Text>
+                <Text style={styles.waitCardCountdown}>{waitCountdownText}</Text>
+                <Text style={styles.waitCardWhy}>
+                  Le damos unos minutos a quien se haya retrasado.
                 </Text>
-                <Text style={styles.infoTextSecondary}>
-                  El botón &quot;Continuar&quot; aparecerá cuando termine el conteo y así poder iniciar la dinámica
-                </Text>
+                <View style={styles.waitCardDivider} />
+                <View style={styles.waitCardDrink}>
+                  <Text style={styles.waitCardDrinkEmoji}>🍹</Text>
+                  <Text style={styles.waitCardDrinkText}>
+                    Mientras tanto <Text style={styles.waitCardDrinkStrong}>pide algo de tomar o la cena</Text>. La experiencia es mucho mejor con algo en la mesa.
+                  </Text>
+                </View>
               </View>
             )}
 
             {canStartExperience && (
               <>
-                {missingPeople && (
-                  <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
-                    <Text style={{ color: '#FFD9A0', fontSize: 14, fontWeight: '800', textAlign: 'center' }}>
-                      ⏳ Aún faltan compañeros por llegar
-                    </Text>
-                    <Text style={{ color: 'rgba(255,224,178,0.9)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 }}>
-                      Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados. Pueden continuar y elegir moderador mientras esperan, pero inicien la dinámica cuando estén todos en la mesa.
-                    </Text>
-                  </View>
-                )}
-
-                {!missingPeople && (
-                  <View style={styles.infoCard}>
-                    <Text style={styles.infoText}>
-                      ✨ Hay {activeParticipants.length} participantes confirmados
-                    </Text>
-                    <Text style={styles.infoTextSecondary}>
-                      Presiona &quot;Continuar&quot; para elegir el moderador
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    ✨ Hay {activeParticipants.length} participantes confirmados
+                  </Text>
+                  <Text style={styles.infoTextSecondary}>
+                    Presiona &quot;Continuar&quot; para elegir el moderador
+                  </Text>
+                </View>
 
                 <TouchableOpacity
                   style={styles.continueButton}
@@ -1765,6 +1739,17 @@ const styles = StyleSheet.create({
   infoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
   infoText: { fontSize: 16, fontWeight: '600', color: '#880E4F', textAlign: 'center', marginBottom: 8 },
   infoTextSecondary: { fontSize: 13, color: '#666', textAlign: 'center' },
+  // Tarjeta de espera de la lista de confirmados: conteo + por qué esperamos +
+  // invitación a pedir algo mientras llegan los que faltan.
+  waitCard: { backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.55)', borderRadius: 16, padding: 16, marginBottom: 12 },
+  waitCardTitle: { color: '#FFD9A0', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  waitCardCountdown: { color: '#FFD9A0', fontSize: 38, fontWeight: '800', textAlign: 'center', letterSpacing: 2, marginTop: 2 },
+  waitCardWhy: { color: 'rgba(255,224,178,0.92)', fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 },
+  waitCardDivider: { height: 1, backgroundColor: 'rgba(255,214,0,0.3)', marginVertical: 12 },
+  waitCardDrink: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  waitCardDrinkEmoji: { fontSize: 21 },
+  waitCardDrinkText: { flex: 1, color: 'rgba(255,235,205,0.95)', fontSize: 13.5, lineHeight: 20 },
+  waitCardDrinkStrong: { color: '#FFFFFF', fontWeight: '800' },
   continueButton: { backgroundColor: '#880E4F', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.50)' },
   continueButtonText: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', letterSpacing: 0.5 },
   rulesIcon: { fontSize: 72, marginBottom: 16 },
@@ -1775,20 +1760,14 @@ const styles = StyleSheet.create({
   rulesText: { flex: 1, fontSize: 17, color: '#FFFFFF', lineHeight: 24, fontWeight: '400' },
   rulesDivider: { height: 1, backgroundColor: 'rgba(240,98,146,0.20)', marginVertical: 16 },
   // ── Moderador (elegir / elegido / esperas) ──────────────────────────────────
-  modRoleCard: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', padding: 16, width: '100%', marginBottom: 20 },
+  modRoleCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', padding: 16, width: '100%', marginBottom: 20 },
+  modRoleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  modRoleDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.14)', marginVertical: 12 },
   modRoleEmoji: { fontSize: 22 },
   modRoleText: { flex: 1, fontSize: 15, color: 'rgba(255,255,255,0.92)', lineHeight: 22 },
   modFirstTag: { alignSelf: 'center', marginTop: 16, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.40)', borderRadius: 22, paddingVertical: 11, paddingHorizontal: 18 },
   modFirstTagText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   modBackLink: { marginTop: 22, fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
-  // Semáforo de arranque (pantalla de reglas)
-  semAmber: { backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.55)', borderRadius: 14, padding: 13, marginTop: 14, width: '100%', maxWidth: 340 },
-  semAmberTitle: { color: '#FFD9A0', fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  semAmberText: { color: 'rgba(255,224,178,0.92)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 },
-  semAmberHora: { color: '#FFFFFF', fontWeight: '800' },
-  semGreen: { backgroundColor: 'rgba(16,185,129,0.16)', borderWidth: 1, borderColor: 'rgba(52,211,153,0.6)', borderRadius: 14, padding: 13, marginTop: 14, width: '100%', maxWidth: 340 },
-  semGreenTitle: { color: '#A7F3D0', fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  semGreenText: { color: 'rgba(209,250,229,0.92)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 },
   modChosenCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 18, padding: 20, alignItems: 'center', width: '100%', marginBottom: 20 },
   modChosenAvatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#f0c8dd', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   modChosenAvatarText: { fontSize: 26, fontWeight: '800', color: '#6d0e3c' },

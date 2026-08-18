@@ -524,7 +524,7 @@ export default function AppointmentsScreen() {
                             onPress={() => router.push(`/catch-up-rating/${appointment.event!.id}`)}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.compactRateButtonText}>⭐ Calificar</Text>
+                            <Text style={styles.compactRateButtonText}>💘 Elegir con quién conecté</Text>
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -901,6 +901,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   compactChatButton: {
     flex: 1,
