@@ -784,7 +784,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
           {moderatorId && (
             <Text style={styles.moderatorTag}>
-              {isModerator ? '🕹️ Eres el moderador · solo tú avanzas' : `${moderatorName} es el moderador 🕹️`}
+              {isModerator ? 'Eres el moderador · solo tú avanzas' : `${moderatorName} es el moderador`}
             </Text>
           )}
         </ScrollView>
