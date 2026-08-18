@@ -32,10 +32,11 @@ interface Event {
   max_participants: number;
   current_participants: number;
   status: string;
-  game_phase: 'intro' | 'ready' | 'question_active' | 'level_transition' | 'level_checkin' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'choosing_moderator' | 'rules' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
+  moderator_id: string | null;
   current_question: string | null;
   event_status?: 'draft' | 'published' | 'closed';
   latitude: number | null;
@@ -139,11 +140,13 @@ export default function DinamicaScreen() {
   // la pantalla de reglas). null mientras carga o si no se pudo saber.
   const [questionsPerLevel, setQuestionsPerLevel] = useState<{ divertido: number; sensual: number; atrevido: number } | null>(null);
 
-  // Per-user flow states
-  const [userReadyForRules, setUserReadyForRules] = useState(false);
+  // Moderador de la dinámica (sincronizado por events.moderator_id). Desde el
+  // paso "elegir moderador", solo él avanza reglas/preguntas; el resto espera.
+  const [moderatorId, setModeratorId] = useState<string | null>(null);
+
+  // Bandera local del moderador para arrancar el juego (dispara el reintento de
+  // handleStartExperience). Solo la usa quien presiona "Comenzar".
   const [userReadyForGame, setUserReadyForGame] = useState(false);
-  const [rulesCountdown, setRulesCountdown] = useState(20);
-  const rulesCountdownRef = useRef(20);
   const [showDivertidoModal, setShowDivertidoModal] = useState(false);
   const divertidoScaleAnim = useRef(new Animated.Value(0)).current;
   const divertidoFadeAnim = useRef(new Animated.Value(0)).current;
@@ -283,48 +286,19 @@ export default function DinamicaScreen() {
           setGamePhase(apt.event.game_phase);
         }
 
-        // Restore all persisted per-user progress atomically so the render
-        // never sees an inconsistent intermediate state (e.g. checkInPhase
-        // 'confirmed' but both ready flags still false).
-        const [savedReadyForRules, savedReadyForGame, savedCheckInPhase, savedRulesCountdown] = await Promise.all([
-          AsyncStorage.getItem(`nospi_readyForRules_${apt.event_id}`),
-          AsyncStorage.getItem(`nospi_readyForGame_${apt.event_id}`),
-          AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`),
-          AsyncStorage.getItem(`nospi_rulesCountdown_${apt.event_id}`),
-        ]);
+        // El moderador y la fase de la dinámica viven en la fila events y se
+        // sincronizan a toda la mesa por realtime.
+        setModeratorId(apt.event?.moderator_id ?? null);
 
-        const restoredReadyForRules = savedReadyForRules === 'true';
-        let restoredReadyForGame = savedReadyForGame === 'true';
-
-        // Bug 1 fix: if the game is already in an active phase and the user
-        // confirmed the rules, they must be ready for the game — force it true
-        // and persist it so future refreshes also work.
-        const activeGamePhases = ['questions', 'question_active', 'level_transition', 'level_checkin', 'finished', 'free_phase'];
-        const currentPhase = apt.event?.game_phase ?? '';
-        if (restoredReadyForRules && activeGamePhases.includes(currentPhase) && !restoredReadyForGame) {
-          restoredReadyForGame = true;
-          AsyncStorage.setItem(`nospi_readyForGame_${apt.event_id}`, 'true');
-        }
-
-        // Bug 2 fix: restore the saved countdown value so a refresh doesn't
-        // reset it back to 20.
-        const parsedCountdown = savedRulesCountdown !== null ? parseInt(savedRulesCountdown, 10) : 20;
-        const restoredRulesCountdown = !isNaN(parsedCountdown) && parsedCountdown >= 0 ? parsedCountdown : 20;
-
-        // Fall back to 'confirmed' (location_confirmed is true) if nothing persisted yet
+        // La confirmación de llegada (GPS) sí es por persona: se restaura de
+        // AsyncStorage. Si no hay nada guardado pero location_confirmed es true,
+        // se asume 'confirmed'.
+        const savedCheckInPhase = await AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`);
         const restoredCheckInPhase: CheckInPhase =
           savedCheckInPhase === 'confirmed' || savedCheckInPhase === 'code_entry' || savedCheckInPhase === 'waiting'
             ? (savedCheckInPhase as CheckInPhase)
             : 'confirmed';
-
-
-
-        // Apply all in one synchronous batch so React renders them together
-        setUserReadyForRules(restoredReadyForRules);
-        setUserReadyForGame(restoredReadyForGame);
         setCheckInPhase(restoredCheckInPhase);
-        rulesCountdownRef.current = restoredRulesCountdown;
-        setRulesCountdown(restoredRulesCountdown);
       }
       if (apt.event?.start_time) checkIfEventDay(apt.event.start_time);
     }
@@ -430,6 +404,7 @@ export default function DinamicaScreen() {
               answered_users,
               current_question,
               event_status,
+              moderator_id,
               latitude,
               longitude,
               radius_meters,
@@ -713,7 +688,7 @@ export default function DinamicaScreen() {
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
 
-    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
       return;
     }
 
@@ -746,7 +721,6 @@ export default function DinamicaScreen() {
           currentEvent.game_phase === 'questions' ||
           currentEvent.game_phase === 'question_active' ||
           currentEvent.game_phase === 'level_transition' ||
-          currentEvent.game_phase === 'level_checkin' ||
           currentEvent.game_phase === 'finished' ||
           currentEvent.game_phase === 'free_phase' ||
           (typeof currentEvent.current_question_index === 'number' && currentEvent.current_question_index > 0)
@@ -872,8 +846,12 @@ export default function DinamicaScreen() {
                 answered_users: newEvent.answered_users,
                 current_question: newEvent.current_question,
                 event_status: newEvent.event_status,
+                moderator_id: newEvent.moderator_id ?? null,
               },
             };
+
+            // Moderador vigente (elegido o cambiado durante la dinámica).
+            setModeratorId(newEvent.moderator_id ?? null);
 
             if (prev.location_confirmed && newEvent.game_phase) {
               setGamePhase(newEvent.game_phase);
@@ -1006,35 +984,66 @@ export default function DinamicaScreen() {
     ? activeParticipants.length < totalExpected
     : activeParticipants.length < 2;
 
-  // Rules screen 20-second countdown
-  useEffect(() => {
-    if (!userReadyForRules || userReadyForGame) return;
+  // ── Moderador (derivados para el render) ────────────────────────────────────
+  const isModerator = !!user?.id && !!moderatorId && user.id === moderatorId;
+  const moderatorName = moderatorId
+    ? (activeParticipants.find(p => p.user_id === moderatorId)?.profiles?.name || 'el moderador')
+    : null;
+  // Fases en las que la dinámica ya arrancó (todos entran a la pantalla de juego).
+  const gameStarted =
+    gamePhase === 'questions' || gamePhase === 'question_active' ||
+    gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
 
-    // Use the ref value (restored from AsyncStorage) as the starting point
-    // instead of always resetting to 20, so refreshes resume where they left off.
-    const startValue = rulesCountdownRef.current;
-    setRulesCountdown(startValue);
+  // ── Flujo del moderador (sincronizado por la fila events) ───────────────────
 
-    if (startValue <= 0) return;
+  // Confirmados → "Continuar": mueve a TODA la mesa al paso de elegir moderador.
+  const handleGoToChooseModerator = useCallback(async () => {
+    if (!appointment?.event_id) return;
+    setGamePhase('choosing_moderator'); // feedback inmediato; realtime confirma
+    const { error } = await supabase
+      .from('events')
+      .update({ game_phase: 'choosing_moderator', updated_at: new Date().toISOString() })
+      .eq('id', appointment.event_id);
+    if (error) console.error('❌ Error yendo a elegir moderador:', error);
+  }, [appointment?.event_id]);
 
-    const interval = setInterval(() => {
-      setRulesCountdown(prev => {
-        const next = prev <= 1 ? 0 : prev - 1;
-        rulesCountdownRef.current = next;
-        // Persist every tick so a refresh restores the correct value
-        if (appointment?.event_id) {
-          AsyncStorage.setItem(`nospi_rulesCountdown_${appointment.event_id}`, String(next));
-        }
-        if (next <= 0) {
-          clearInterval(interval);
-        }
-        return next;
-      });
-    }, 1000);
+  // "Quiero ser el moderador": primero en postularse queda. El candado
+  // `is('moderator_id', null)` evita que dos toques casi simultáneos se pisen;
+  // si otro llegó primero, se lee el moderador real (realtime también corrige).
+  const handleBecomeModerator = useCallback(async () => {
+    if (!appointment?.event_id || !user?.id) return;
+    const { data, error } = await supabase
+      .from('events')
+      .update({ moderator_id: user.id, updated_at: new Date().toISOString() })
+      .eq('id', appointment.event_id)
+      .is('moderator_id', null)
+      .select('moderator_id');
+    if (error) {
+      console.error('❌ Error postulándose como moderador:', error);
+      return;
+    }
+    if (data && data.length > 0) {
+      setModeratorId(user.id);
+    } else {
+      const { data: row } = await supabase
+        .from('events')
+        .select('moderator_id')
+        .eq('id', appointment.event_id)
+        .maybeSingle();
+      if (row?.moderator_id) setModeratorId(row.moderator_id);
+    }
+  }, [appointment?.event_id, user?.id]);
 
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userReadyForRules, userReadyForGame]);
+  // Moderador elegido → "Continuar": pasa la mesa a la pantalla de reglas.
+  const handleModeratorContinueToRules = useCallback(async () => {
+    if (!appointment?.event_id) return;
+    setGamePhase('rules');
+    const { error } = await supabase
+      .from('events')
+      .update({ game_phase: 'rules', updated_at: new Date().toISOString() })
+      .eq('id', appointment.event_id);
+    if (error) console.error('❌ Error pasando a reglas:', error);
+  }, [appointment?.event_id]);
 
   const showDivertidoModalAnimation = useCallback(() => {
     setShowDivertidoModal(true);
@@ -1072,35 +1081,19 @@ export default function DinamicaScreen() {
         ]).start(() => {
           setShowDivertidoModal(false);
           setUserReadyForGame(true);
-          if (appointment?.event_id) {
-            AsyncStorage.setItem(`nospi_readyForGame_${appointment.event_id}`, 'true');
-          }
         });
       }, 2000);
     });
-  }, [divertidoScaleAnim, divertidoFadeAnim, appointment?.event_id]);
+  }, [divertidoScaleAnim, divertidoFadeAnim]);
 
-  const handleUserContinue = useCallback(async () => {
-
-    setUserReadyForRules(true);
-    if (appointment?.event_id) {
-      await AsyncStorage.setItem(`nospi_readyForRules_${appointment.event_id}`, 'true');
-    }
-  }, [appointment?.event_id]);
-
-  // Antes esto se evaluaba una sola vez al marcar userReadyForGame=true: si
-  // en ese instante exacto activeParticipants aun no reflejaba a todos los
-  // que ya habian confirmado llegada (dato que llega por realtime y puede
-  // tardar un segundo), handleStartExperience se quedaba callado para
-  // siempre por el guard "activeParticipants.length < 2" y nadie en la mesa
-  // veia arrancar la dinamica, sin ningun reintento. Ahora, mientras el
-  // usuario siga listo y la fase no haya arrancado, reintentamos cada 3s
-  // -- handleStartExperience ya es seguro de llamar de mas (sale solo si ya
-  // arranco o si aun no hay suficientes participantes), asi que esto solo
-  // cierra el hueco sin efectos secundarios.
+  // Solo el moderador marca userReadyForGame (al presionar "Comenzar" en las
+  // reglas). Mientras siga listo y la dinámica no haya arrancado, reintentamos
+  // handleStartExperience cada 3s: es seguro de llamar de más (sale solo si ya
+  // arrancó o si aún no hay 2 confirmados), y cierra el hueco de que
+  // activeParticipants aún no reflejara a todos por el retraso del realtime.
   useEffect(() => {
     if (!userReadyForGame) return;
-    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase';
+    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
     if (yaArranco) return;
 
     handleStartExperience();
@@ -1114,12 +1107,7 @@ export default function DinamicaScreen() {
   const handleFinishGame = useCallback(async () => {
 
     if (appointment?.event_id) {
-      await Promise.all([
-        AsyncStorage.removeItem(`nospi_readyForRules_${appointment.event_id}`),
-        AsyncStorage.removeItem(`nospi_readyForGame_${appointment.event_id}`),
-        AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`),
-        AsyncStorage.removeItem(`nospi_rulesCountdown_${appointment.event_id}`),
-      ]);
+      await AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`);
     }
     setAppointment(null);
     cacheRef.current = null;
@@ -1275,7 +1263,8 @@ export default function DinamicaScreen() {
     );
   }
 
-  if ((gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'level_checkin' || gamePhase === 'finished' || gamePhase === 'free_phase') && userReadyForRules && userReadyForGame) {
+  // La dinámica ya arrancó (el moderador la inició): todos entran al juego.
+  if (gameStarted && checkInPhase === 'confirmed') {
     const transformedParticipants = activeParticipants.map(p => ({
       id: p.id,
       user_id: p.user_id,
@@ -1290,18 +1279,86 @@ export default function DinamicaScreen() {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} onFinish={handleFinishGame} />;
   }
 
-  if (userReadyForRules && !userReadyForGame && checkInPhase === 'confirmed') {
+  // Paso "elegir moderador": mientras nadie se postula, todos ven la
+  // postulación (card 2); apenas hay moderador, se muestra "moderador elegido"
+  // (card 3) — el moderador puede continuar, el resto espera.
+  if (gamePhase === 'choosing_moderator' && checkInPhase === 'confirmed') {
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
+          <Text style={styles.rulesIcon}>🕹️</Text>
+
+          {!moderatorId ? (
+            <>
+              <Text style={styles.rulesTitle}>¿Quién será el moderador?</Text>
+              <View style={styles.modRoleCard}>
+                <Text style={styles.modRoleEmoji}>🗣️</Text>
+                <Text style={styles.modRoleText}>El moderador debe leer las preguntas en voz alta y es quien pasa a la siguiente pregunta.</Text>
+              </View>
+              <TouchableOpacity style={styles.comenzarButton} onPress={handleBecomeModerator} activeOpacity={0.85}>
+                <Text style={styles.comenzarButtonText}>🙋 Quiero ser el moderador</Text>
+              </TouchableOpacity>
+              <View style={styles.modFirstTag}>
+                <Text style={styles.modFirstTagText}>El primero que se postule queda</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.modChosenCard}>
+                <View style={styles.modChosenAvatar}>
+                  <Text style={styles.modChosenAvatarText}>{(moderatorName || '?').charAt(0).toUpperCase()}</Text>
+                </View>
+                <Text style={styles.modChosenName}>{moderatorName}</Text>
+                <View style={styles.modChosenRole}><Text style={styles.modChosenRoleText}>🕹️ Moderador</Text></View>
+              </View>
+
+              {isModerator ? (
+                <>
+                  <Text style={styles.rulesTitle}>¡Tú eres el moderador! 🎉</Text>
+                  <View style={styles.modVoice}>
+                    <Text style={styles.modVoiceEmoji}>🗣️</Text>
+                    <Text style={styles.modVoiceText}>De aquí en adelante, lee todo en voz alta para que todos entiendan la dinámica. Tú eres quien pasa a la siguiente pantalla y pregunta.</Text>
+                  </View>
+                  <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
+                    <Text style={styles.comenzarButtonText}>Continuar</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.rulesTitle}>Moderador de la mesa</Text>
+                  <View style={styles.modVoiceOth}>
+                    <Text style={styles.modVoiceOthText}>🗣️ {moderatorName} irá leyendo todo en voz alta. Escuchen para entender la dinámica.</Text>
+                  </View>
+                  <View style={styles.modWait}>
+                    <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} continúe</Text>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // Reglas (card 4): solo el moderador ve "Comenzar"; el resto espera.
+  if (gamePhase === 'rules' && checkInPhase === 'confirmed') {
     // Texto del primer punto de las reglas, con el numero real de preguntas
     // cargadas en ESTE evento. Si los 3 niveles tienen la misma cantidad se
     // resume ("con 8 preguntas cada uno"); si difieren, se detalla por nivel;
     // si aun no se conoce, se muestra el texto sin numeros.
-    let nivelesText = 'Pasarás por 3 niveles: Divertido, Coqueto y Atrevido.';
+    let nivelesText = 'Pasarán por 3 niveles: Divertido, Coqueto y Atrevido.';
     if (questionsPerLevel) {
       const { divertido: d, sensual: s, atrevido: a } = questionsPerLevel;
       if (d > 0 && d === s && s === a) {
-        nivelesText = `Pasarás por 3 niveles — Divertido, Coqueto y Atrevido — con ${d} preguntas cada uno.`;
+        nivelesText = `Pasarán por 3 niveles — Divertido, Coqueto y Atrevido — con ${d} preguntas cada uno.`;
       } else if (d + s + a > 0) {
-        nivelesText = `Pasarás por 3 niveles: Divertido (${d} preguntas), Coqueto (${s}) y Atrevido (${a}).`;
+        nivelesText = `Pasarán por 3 niveles: Divertido (${d} preguntas), Coqueto (${s}) y Atrevido (${a}).`;
       }
     }
     return (
@@ -1315,6 +1372,13 @@ export default function DinamicaScreen() {
           <Text style={styles.rulesIcon}>🎲</Text>
           <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
 
+          {isModerator && (
+            <View style={styles.modVoice}>
+              <Text style={styles.modVoiceEmoji}>🗣️</Text>
+              <Text style={styles.modVoiceText}>Léelo en voz alta para el grupo.</Text>
+            </View>
+          )}
+
           <View style={styles.rulesCard}>
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🎯</Text>
@@ -1324,6 +1388,11 @@ export default function DinamicaScreen() {
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>👥</Text>
               <Text style={styles.rulesText}>En cada pregunta responde quien tenga algo que contar; no es obligatorio para todos.</Text>
+            </View>
+            <View style={styles.rulesDivider} />
+            <View style={styles.rulesRow}>
+              <Text style={styles.rulesEmoji}>💘</Text>
+              <Text style={styles.rulesText}>Lo mejor es al final: al terminar las preguntas, si quieres, puedes elegir con quién sentiste conexión. Nadie sabrá a quién elegiste y, si es mutuo, se abre un chat privado.</Text>
             </View>
           </View>
 
@@ -1335,14 +1404,7 @@ export default function DinamicaScreen() {
             </View>
           )}
 
-          {rulesCountdown > 0 ? (
-            <View style={styles.rulesCountdownContainer}>
-              <Text style={styles.rulesCountdownLabel}>Léelo con calma</Text>
-              <View style={styles.rulesCountdownCircle}>
-                <Text style={styles.rulesCountdownNumber}>{rulesCountdown}</Text>
-              </View>
-            </View>
-          ) : (
+          {isModerator ? (
             <TouchableOpacity
               style={styles.comenzarButton}
               onPress={showDivertidoModalAnimation}
@@ -1350,6 +1412,10 @@ export default function DinamicaScreen() {
             >
               <Text style={styles.comenzarButtonText}>Comenzar</Text>
             </TouchableOpacity>
+          ) : (
+            <View style={styles.modWait}>
+              <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} comience</Text>
+            </View>
           )}
         </ScrollView>
 
@@ -1513,21 +1579,7 @@ export default function DinamicaScreen() {
               </View>
             )}
 
-            {/* Ya paso por las reglas pero sigue solo: la dinamica arranca
-                automaticamente apenas confirme alguien mas (retry de 3s +
-                realtime de participantes). */}
-            {userReadyForGame && activeParticipants.length < 2 && (
-              <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 16 }}>
-                <Text style={{ color: '#FFD9A0', fontSize: 15, fontWeight: '800', textAlign: 'center' }}>
-                  🕐 Esperando a que llegue alguien más…
-                </Text>
-                <Text style={{ color: 'rgba(255,224,178,0.9)', fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 }}>
-                  La dinámica inicia automáticamente apenas otra persona confirme su llegada. No tienes que hacer nada.
-                </Text>
-              </View>
-            )}
-
-            {canStartExperience && !userReadyForGame && (
+            {canStartExperience && (
               <>
                 {missingPeople && (
                   <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
@@ -1535,7 +1587,7 @@ export default function DinamicaScreen() {
                       ⏳ Aún faltan compañeros por llegar
                     </Text>
                     <Text style={{ color: 'rgba(255,224,178,0.9)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 }}>
-                      Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados. Puedes avanzar y leer las reglas mientras esperas, pero inicien la dinámica cuando estén todos en la mesa.
+                      Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados. Pueden continuar y elegir moderador mientras esperan, pero inicien la dinámica cuando estén todos en la mesa.
                     </Text>
                   </View>
                 )}
@@ -1546,14 +1598,14 @@ export default function DinamicaScreen() {
                       ✨ Hay {activeParticipants.length} participantes confirmados
                     </Text>
                     <Text style={styles.infoTextSecondary}>
-                      Presiona &quot;Continuar&quot; para ver las reglas del juego
+                      Presiona &quot;Continuar&quot; para elegir el moderador
                     </Text>
                   </View>
                 )}
 
                 <TouchableOpacity
                   style={styles.continueButton}
-                  onPress={handleUserContinue}
+                  onPress={handleGoToChooseModerator}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.continueButtonText}>
@@ -1641,10 +1693,25 @@ const styles = StyleSheet.create({
   rulesEmoji: { fontSize: 26, marginTop: 2 },
   rulesText: { flex: 1, fontSize: 17, color: '#FFFFFF', lineHeight: 24, fontWeight: '400' },
   rulesDivider: { height: 1, backgroundColor: 'rgba(240,98,146,0.20)', marginVertical: 16 },
-  rulesCountdownContainer: { alignItems: 'center', marginTop: 8 },
-  rulesCountdownLabel: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 14, fontWeight: '500', letterSpacing: 0.5 },
-  rulesCountdownCircle: { width: 72, height: 72, borderRadius: 36, borderWidth: 2.5, borderColor: '#F06292', backgroundColor: 'rgba(240,98,146,0.12)', justifyContent: 'center', alignItems: 'center' },
-  rulesCountdownNumber: { fontSize: 30, fontWeight: '700', color: '#F06292' },
+  // ── Moderador (elegir / elegido / esperas) ──────────────────────────────────
+  modRoleCard: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', padding: 16, width: '100%', marginBottom: 20 },
+  modRoleEmoji: { fontSize: 22 },
+  modRoleText: { flex: 1, fontSize: 15, color: 'rgba(255,255,255,0.92)', lineHeight: 22 },
+  modFirstTag: { alignSelf: 'center', marginTop: 16, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.40)', borderRadius: 22, paddingVertical: 11, paddingHorizontal: 18 },
+  modFirstTagText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  modChosenCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 18, padding: 20, alignItems: 'center', width: '100%', marginBottom: 20 },
+  modChosenAvatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#f0c8dd', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  modChosenAvatarText: { fontSize: 26, fontWeight: '800', color: '#6d0e3c' },
+  modChosenName: { fontSize: 19, fontWeight: '800', color: '#6d0e3c' },
+  modChosenRole: { marginTop: 6, backgroundColor: '#AD1457', borderRadius: 16, paddingVertical: 4, paddingHorizontal: 12 },
+  modChosenRoleText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+  modVoice: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: 'rgba(255,214,0,0.16)', borderWidth: 1, borderColor: 'rgba(255,214,0,0.5)', borderRadius: 16, padding: 14, width: '100%', marginBottom: 20 },
+  modVoiceEmoji: { fontSize: 22 },
+  modVoiceText: { flex: 1, fontSize: 14, color: '#ffe9a8', lineHeight: 21, fontWeight: '600' },
+  modVoiceOth: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 12, width: '100%', marginBottom: 20 },
+  modVoiceOthText: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 20, textAlign: 'center' },
+  modWait: { backgroundColor: 'rgba(0,0,0,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', borderRadius: 26, paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center', marginTop: 8, width: '100%' },
+  modWaitText: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,0.9)', textAlign: 'center' },
   comenzarButton: { backgroundColor: '#880E4F', borderRadius: 50, paddingVertical: 18, paddingHorizontal: 56, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(240,98,146,0.50)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginTop: 8 },
   comenzarButtonText: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1 },
   divertidoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
