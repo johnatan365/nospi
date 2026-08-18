@@ -362,6 +362,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         }
       } else if (data.game_phase === 'free_phase') {
         setGamePhase('free_phase');
+      } else if (data.game_phase === 'finished') {
+        setGamePhase('finished');
       }
     };
 
@@ -422,6 +424,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             }
           } else if (newEvent.game_phase === 'free_phase') {
             setGamePhase('free_phase');
+          } else if (newEvent.game_phase === 'finished') {
+            // El moderador cerró la fase libre: todos pasan al cierre
+            // (afinidad + match), cada quien en su propio teléfono.
+            setGamePhase('finished');
           }
         }
       )
@@ -655,6 +661,33 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     router.push(`/catch-up-rating/${appointment.event_id}` as any);
   }, [appointment, currentUserId, loading, router]);
 
+  // "Continuar" del moderador en la fase libre: cierra la dinámica para TODA la
+  // mesa (game_phase='finished'); cada teléfono navega solo al cierre.
+  const handleModeratorFinish = useCallback(async () => {
+    if (!appointment?.event_id || loading) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from('events')
+      .update({ game_phase: 'finished', updated_at: new Date().toISOString() })
+      .eq('id', appointment.event_id);
+    setLoading(false);
+    if (error) {
+      console.error('❌ Error cerrando la fase libre:', error);
+      return;
+    }
+    setGamePhase('finished');
+  }, [appointment, loading]);
+
+  // Al llegar la fase 'finished' (la puso el moderador; llega por realtime o
+  // restore), cada teléfono pasa UNA sola vez al cierre (afinidad + match).
+  const closingTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (gamePhase !== 'finished' || closingTriggeredRef.current) return;
+    if (!appointment?.event_id || !currentUserId || loading) return; // reintenta en el próximo render
+    closingTriggeredRef.current = true;
+    goToClosing();
+  }, [gamePhase, appointment?.event_id, currentUserId, loading, goToClosing]);
+
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
   const levelPosition = LEVEL_ORDER.indexOf(currentLevel) + 1;
@@ -682,6 +715,45 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const moderatorName = moderatorId
     ? (activeParticipants.find(p => p.user_id === moderatorId)?.name || 'el moderador')
     : null;
+
+  // Bottom sheet "Cambiar moderador", compartido por la pantalla de preguntas y
+  // la fase libre (cualquiera puede tomar el rol si el moderador se fue).
+  const changeModeratorSheet = (
+    <Modal
+      visible={showChangeModerator}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowChangeModerator(false)}
+    >
+      <TouchableOpacity
+        style={styles.changeOverlay}
+        activeOpacity={1}
+        onPress={() => setShowChangeModerator(false)}
+      >
+        <TouchableOpacity style={styles.changeSheet} activeOpacity={1} onPress={() => {}}>
+          <Text style={styles.changeSheetTitle}>Cambiar moderador</Text>
+          <Text style={styles.changeSheetText}>¿Quieren cambiar de moderador por algún motivo?</Text>
+
+          <TouchableOpacity
+            style={[styles.changeSheetPrimary, loading && styles.buttonDisabled]}
+            onPress={handleBecomeModerator}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.changeSheetPrimaryText}>🙋 Ser yo el moderador</Text>
+          </TouchableOpacity>
+
+          <View style={styles.changeSheetFirstTag}>
+            <Text style={styles.changeSheetFirstTagText}>El primero que se postule queda</Text>
+          </View>
+
+          <TouchableOpacity onPress={() => setShowChangeModerator(false)} activeOpacity={0.7}>
+            <Text style={styles.changeSheetCancel}>Cancelar</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
 
 
   if (gamePhase === 'questions' && currentQuestion) {
@@ -789,42 +861,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           )}
         </ScrollView>
 
-        {/* Bottom sheet: cambiar moderador */}
-        <Modal
-          visible={showChangeModerator}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowChangeModerator(false)}
-        >
-          <TouchableOpacity
-            style={styles.changeOverlay}
-            activeOpacity={1}
-            onPress={() => setShowChangeModerator(false)}
-          >
-            <TouchableOpacity style={styles.changeSheet} activeOpacity={1} onPress={() => {}}>
-              <Text style={styles.changeSheetTitle}>Cambiar moderador</Text>
-              <Text style={styles.changeSheetText}>¿Quieren cambiar de moderador por algún motivo?</Text>
+        {changeModeratorSheet}
 
-              <TouchableOpacity
-                style={[styles.changeSheetPrimary, loading && styles.buttonDisabled]}
-                onPress={handleBecomeModerator}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.changeSheetPrimaryText}>🙋 Ser yo el moderador</Text>
-              </TouchableOpacity>
-
-              <View style={styles.changeSheetFirstTag}>
-                <Text style={styles.changeSheetFirstTagText}>El primero que se postule queda</Text>
-              </View>
-
-              <TouchableOpacity onPress={() => setShowChangeModerator(false)} activeOpacity={0.7}>
-                <Text style={styles.changeSheetCancel}>Cancelar</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
-        
         {/* Level Transition Animation Overlay */}
         {showLevelTransition && transitionLevel && (
           <View style={styles.transitionOverlay}>
@@ -879,17 +917,45 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </Text>
           </View>
 
+          {/* La fase libre también la controla el moderador: la lee en voz alta
+              y su "Continuar" lleva a TODA la mesa al cierre. De ahí en
+              adelante (elegir afinidad), cada quien va a su ritmo. */}
+          {isModerator ? (
+            <>
+              <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
+                <Text style={[styles.instructionText, { color: 'rgba(255,255,255,0.9)' }]}>
+                  🗣️ Lee esto en voz alta. Cuando terminen, presiona Continuar: todos pasarán a elegir con quién sintieron conexión.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.finishButton, loading && styles.buttonDisabled]}
+                onPress={handleModeratorFinish}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.finishButtonText}>
+                  {loading ? '⏳ Un momento...' : 'Continuar →'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.continueButtonWaitingC}>
+              <Text style={styles.continueButtonTextWaiting}>
+                ⏳ Espera a que {moderatorName} continúe
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
-            style={[styles.finishButton, loading && styles.buttonDisabled]}
-            onPress={goToClosing}
-            disabled={loading}
+            style={styles.changeModeratorBtn}
+            onPress={() => setShowChangeModerator(true)}
             activeOpacity={0.8}
           >
-            <Text style={styles.finishButtonText}>
-              {loading ? '⏳ Un momento...' : 'Continuar →'}
-            </Text>
+            <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        {changeModeratorSheet}
       </LinearGradient>
     );
   }
