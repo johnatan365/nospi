@@ -70,6 +70,24 @@ export default function EventDetailsScreen() {
       }
 
       setEvent(data);
+
+      // Embudo de anuncios: ViewContent al abrir el detalle de un evento. En web
+      // dispara el pixel de Meta, y el wrapper de public/index.html lo espeja a
+      // TikTok. Le da al algoritmo una senal frecuente mientras acumula compras.
+      if (Platform.OS === 'web' && data) {
+        try {
+          const win = window as any;
+          if (typeof win.fbq === 'function') {
+            win.fbq('track', 'ViewContent', {
+              content_type: 'product',
+              content_ids: [String(data.id)],
+              content_name: data.name,
+              currency: 'COP',
+              value: data.price || 9900,
+            });
+          }
+        } catch (e) {}
+      }
     } catch (error) {
       console.error('Failed to load event:', error);
     } finally {
