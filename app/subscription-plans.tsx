@@ -26,6 +26,18 @@ async function trackMetaPurchase(
   userPhone: string = '',
   amount: number = 9900
 ) {
+	// Espejo para TikTok: misma logica que Meta, evento server-side con el mismo
+	// event_id para deduplicar. Fire-and-forget: si falla no bloquea la compra.
+	fetch(`${SUPABASE_URL}/functions/v1/tiktok-purchase`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'apikey': SUPABASE_ANON_KEY,
+			'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+		},
+		body: JSON.stringify({ transactionId, amount, currency: 'COP', eventId, userEmail, userPhone }),
+	}).catch(() => {});
+	
   if (Platform.OS === 'web') {
     try {
       const win = window as any;
