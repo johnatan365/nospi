@@ -622,7 +622,10 @@ export default function AdminPanelScreen() {
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar'>('all');
   const [eventSearch, setEventSearch] = useState('');
-  const [eventSortDesc, setEventSortDesc] = useState(true);
+  // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
+  // ascendente (los más próximos a venir primero); las demás pestañas en
+  // descendente (el más reciente primero). Se ajusta al cambiar de pestaña.
+  const [eventSortDesc, setEventSortDesc] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [recurringCustomers, setRecurringCustomers] = useState<any[]>([]);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
@@ -4136,7 +4139,12 @@ setBulkWhatsAppPending(pending);
           ] as { key: 'published' | 'draft' | 'closed' | 'all'; label: string }[]).map(tab => (
             <TouchableOpacity
               key={tab.key}
-              onPress={() => setEventStatusFilter(tab.key)}
+              onPress={() => {
+                setEventStatusFilter(tab.key);
+                // Publicados: por defecto los más próximos primero (ascendente).
+                // Resto de pestañas: el más reciente primero (descendente).
+                setEventSortDesc(tab.key !== 'published');
+              }}
               style={{
                 paddingHorizontal: 16,
                 paddingVertical: 8,
@@ -4181,7 +4189,9 @@ setBulkWhatsAppPending(pending);
             onClick={() => setEventSortDesc((v) => !v)}
             style={{ padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
           >
-            {eventSortDesc ? '↓ Más recientes primero' : '↑ Más antiguos primero'}
+            {eventStatusFilter === 'published'
+              ? (eventSortDesc ? '↓ Más lejanos primero' : '↑ Más próximos primero')
+              : (eventSortDesc ? '↓ Más recientes primero' : '↑ Más antiguos primero')}
           </button>
         </div>
 
