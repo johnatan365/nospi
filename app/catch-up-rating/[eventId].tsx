@@ -21,7 +21,7 @@ export default function CatchUpRatingRoute() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <Stack.Screen options={{ headerShown: true, title: 'Calificar participantes', headerBackTitle: 'Atrás' }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Cierre de la experiencia', headerBackTitle: 'Atrás' }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FFFFFF" />
           {!user?.id && (
@@ -34,7 +34,7 @@ export default function CatchUpRatingRoute() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Calificar participantes', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Cierre de la experiencia', headerBackTitle: 'Atrás' }} />
       <CatchUpRatingScreen eventId={resolvedEventId} currentUserId={user.id} />
     </>
   );
