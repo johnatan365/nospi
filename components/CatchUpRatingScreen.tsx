@@ -69,6 +69,18 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
             profile_photo_url: p.user_profile_photo_url ?? null,
           }));
         setParticipants(list);
+
+        // Afinidad que esta persona ya guardo en un intento anterior. Sin esto,
+        // quien no alcanzo a terminar el cierre y vuelve por el boton de Citas
+        // encontraria la lista en blanco y tendria que elegir de nuevo.
+        const { data: prev } = await supabase
+          .from('event_affinity')
+          .select('liked_user_id')
+          .eq('event_id', eventId)
+          .eq('rater_user_id', currentUserId);
+        if (prev && prev.length > 0) {
+          setLiked(new Set(prev.map((r: any) => r.liked_user_id)));
+        }
       } catch (e) { console.error('[cierre] load error:', e); }
       finally { setLoading(false); }
     })();
@@ -100,11 +112,15 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
     }
   };
 
-  const submitAll = useCallback(async () => {
-    setSaving(true);
+  // Guarda la afinidad SINCRONIZANDO: agrega las nuevas y borra las que la
+  // persona haya desmarcado. Se llama al pasar del paso 1 al 2 -- NO al final --
+  // porque antes solo se guardaba junto con la calificacion: si alguien elegia
+  // sus corazones y se salia sin presionar "Enviar", la eleccion se perdia y el
+  // match nunca se creaba (ni para esa persona ni para quien si la eligio).
+  const saveAffinity = useCallback(async () => {
     try {
-      // 1) Afinidad (privado). El trigger crea el match si es mutuo.
       const likedArr = Array.from(liked);
+
       if (likedArr.length > 0) {
         const rows = likedArr.map(uid => ({ event_id: eventId, rater_user_id: currentUserId, liked_user_id: uid }));
         const { error } = await supabase
@@ -112,6 +128,35 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
           .upsert(rows, { onConflict: 'event_id,rater_user_id,liked_user_id', ignoreDuplicates: true });
         if (error) console.error('[cierre] afinidad:', error.message);
       }
+
+      // Quitar las que ya no estan marcadas (caso: vuelve a entrar y desmarca).
+      let del = supabase
+        .from('event_affinity')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('rater_user_id', currentUserId);
+      if (likedArr.length > 0) del = del.not('liked_user_id', 'in', `(${likedArr.join(',')})`);
+      const { error: delErr } = await del;
+      if (delErr) console.error('[cierre] afinidad (limpieza):', delErr.message);
+    } catch (e) {
+      console.error('[cierre] saveAffinity:', e);
+    }
+  }, [liked, eventId, currentUserId]);
+
+  const goToFeedback = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    await saveAffinity();
+    setSaving(false);
+    setStep('feedback');
+  }, [saveAffinity, saving]);
+
+  const submitAll = useCallback(async () => {
+    setSaving(true);
+    try {
+      // 1) Afinidad: ya quedo guardada al pasar de paso, pero se reintenta por
+      // si aquella escritura fallo (sin red, por ejemplo). Es idempotente.
+      await saveAffinity();
 
       // 2) Feedback por items. Todas las filas llevan las MISMAS llaves
       // (event_id, user_id, item_key, score, reasons, comment) porque PostgREST
@@ -162,7 +207,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       setSaving(false);
       setStep('done');
     }
-  }, [liked, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId]);
+  }, [saveAffinity, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId]);
 
   const openChat = async (m: Match) => {
     try {
@@ -217,8 +262,10 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
               );
             })}
             <Text style={styles.hint}>Sin compromiso: puedes elegir a varias, a una… o a nadie. Nadie sabrá a quién elegiste, salvo que sea mutuo.</Text>
-            <TouchableOpacity style={styles.btn} onPress={() => setStep('feedback')} activeOpacity={0.85}>
-              <Text style={styles.btnTxt}>{liked.size === 0 ? 'No elegir a nadie y continuar' : 'Continuar'}</Text>
+            <TouchableOpacity style={[styles.btn, saving && styles.btnDis]} onPress={goToFeedback} disabled={saving} activeOpacity={0.85}>
+              {saving ? <ActivityIndicator color="#fff" /> : (
+                <Text style={styles.btnTxt}>{liked.size === 0 ? 'No elegir a nadie y continuar' : 'Continuar'}</Text>
+              )}
             </TouchableOpacity>
           </>
         )}
@@ -228,6 +275,12 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
           <>
             <Text style={styles.kicker}>¿Qué tal estuvo?</Text>
             <Text style={styles.h1}>Califica el encuentro</Text>
+            {liked.size > 0 && (
+              <View style={styles.savedNote}>
+                <Text style={styles.savedNoteEmoji}>✅</Text>
+                <Text style={styles.savedNoteTxt}>Tu elección ya quedó guardada. Si es mutuo, te avisamos.</Text>
+              </View>
+            )}
             <Text style={styles.help}>Tu opinión nos ayuda a mejorar para los próximos eventos 🙌</Text>
             <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
             {ITEMS.map((it) => {
@@ -352,6 +405,11 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
                 </Text>
               </>
             )}
+            <View style={styles.iceBreak}>
+              <Text style={styles.iceBreakIcon}>✨</Text>
+              <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
+              <Text style={styles.iceBreakSub}>Ahora disfruten el resto de la noche y déjense sorprender ✨</Text>
+            </View>
             <Text style={styles.thanks}>Gracias por calificar el encuentro 🙌</Text>
             <TouchableOpacity style={styles.btnGhost} onPress={() => router.replace('/(tabs)/events' as any)} activeOpacity={0.85}>
               <Text style={styles.btnGhostTxt}>Volver al inicio</Text>
@@ -419,6 +477,14 @@ const styles = StyleSheet.create({
   matchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 11, marginBottom: 10, width: '100%' },
   chatBtn: { backgroundColor: VINO, borderRadius: 20, paddingVertical: 9, paddingHorizontal: 16 },
   chatBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  savedNote: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: 'rgba(16,185,129,.16)', borderWidth: 1, borderColor: 'rgba(52,211,153,.6)', borderRadius: 14, padding: 11, marginBottom: 10 },
+  savedNoteEmoji: { fontSize: 16 },
+  savedNoteTxt: { flex: 1, color: '#A7F3D0', fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  // Remate de la experiencia: los devuelve a la mesa despues del resultado.
+  iceBreak: { backgroundColor: 'rgba(255,255,255,.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,.2)', borderRadius: 20, padding: 18, marginTop: 16, alignItems: 'center', width: '100%' },
+  iceBreakIcon: { fontSize: 34 },
+  iceBreakTitle: { fontSize: 18, fontWeight: '800', color: '#fff', marginTop: 6, marginBottom: 6, textAlign: 'center' },
+  iceBreakSub: { fontSize: 13.5, color: 'rgba(255,255,255,.8)', lineHeight: 19, textAlign: 'center' },
   thanks: { color: 'rgba(255,255,255,.8)', fontSize: 12.5, marginTop: 12, textAlign: 'center' },
   btnGhost: { marginTop: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,.35)', borderRadius: 30, paddingVertical: 14, paddingHorizontal: 30 },
   btnGhostTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },

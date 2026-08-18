@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'level_transition' | 'finished' | 'free_phase';
+type GamePhase = 'questions' | 'level_transition' | 'finished';
 
 const LEVEL_ORDER: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
 
@@ -159,7 +159,6 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 };
 
 // Free phase uses the brand dark gradient
-const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1a0010', '#880E4F', '#AD1457'];
 
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
   const router = useRouter();
@@ -360,9 +359,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           console.log(`[Timer] Restoring timer: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
           startTimer(remaining);
         }
-      } else if (data.game_phase === 'free_phase') {
-        setGamePhase('free_phase');
-      } else if (data.game_phase === 'finished') {
+      } else if (data.game_phase === 'finished' || data.game_phase === 'free_phase') {
+        // 'free_phase' es un estado viejo (la pantalla intermedia ya no existe).
+        // Se trata como cierre para que una mesa que quedó ahí no se atasque.
         setGamePhase('finished');
       }
     };
@@ -422,11 +421,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               console.log(`[Timer] Real-time update: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
               startTimer(remaining);
             }
-          } else if (newEvent.game_phase === 'free_phase') {
-            setGamePhase('free_phase');
-          } else if (newEvent.game_phase === 'finished') {
-            // El moderador cerró la fase libre: todos pasan al cierre
+          } else if (newEvent.game_phase === 'finished' || newEvent.game_phase === 'free_phase') {
+            // El moderador terminó la última pregunta: todos pasan al cierre
             // (afinidad + match), cada quien en su propio teléfono.
+            // 'free_phase' es un estado viejo y se trata igual (ver restore).
             setGamePhase('finished');
           }
         }
@@ -494,11 +492,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     });
   }, [scaleAnim, fadeAnim]);
 
-  // Extraído de la rama "nivel completo" original: avanza al siguiente nivel
-  // (o a fase libre si ya estábamos en Atrevido). Se usa tanto cuando se acaban
-  // las preguntas del nivel (forzado) como cuando presionan "Subir a..." en la
-  // tarjeta de check-in cada 3 preguntas.
-  const advanceToNextLevelOrFreePhase = useCallback(async () => {
+  // Avanza al siguiente nivel; si ya estábamos en Atrevido, CIERRA la dinámica
+  // para toda la mesa (game_phase='finished') y cada teléfono navega solo al
+  // cierre. Ya no hay pantalla intermedia entre la última pregunta y el cierre.
+  const advanceToNextLevelOrFinish = useCallback(async () => {
     if (!appointment?.event_id) return;
 
     const nextLevel: QuestionLevel =
@@ -534,12 +531,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setCurrentLevel(currentLevel);
       }
     } else {
-      setGamePhase('free_phase');
+      setGamePhase('finished');
 
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'free_phase',
+          game_phase: 'finished',
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
@@ -615,14 +612,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
       } else {
         // Level completed (se acabaron las preguntas) - se fuerza el paso
         // al siguiente nivel, sin importar qué habían elegido antes.
-        await advanceToNextLevelOrFreePhase();
+        await advanceToNextLevelOrFinish();
       }
     } catch (error) {
       console.error('❌ Unexpected error:', error);
     } finally {
       setLoading(false);
     }
-  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, advanceToNextLevelOrFreePhase, startTimer]);
+  }, [appointment, currentLevel, currentQuestionIndex, activeParticipants, loading, currentQuestion, advanceToNextLevelOrFinish, startTimer]);
 
   // "Cambiar moderador" (cualquiera puede tocarlo, por si el moderador se fue o
   // se quedó sin batería): quien lo presione toma el rol. El primero que se
@@ -661,25 +658,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     router.push(`/catch-up-rating/${appointment.event_id}` as any);
   }, [appointment, currentUserId, loading, router]);
 
-  // "Continuar" del moderador en la fase libre: cierra la dinámica para TODA la
-  // mesa (game_phase='finished'); cada teléfono navega solo al cierre.
-  const handleModeratorFinish = useCallback(async () => {
-    if (!appointment?.event_id || loading) return;
-    setLoading(true);
-    const { error } = await supabase
-      .from('events')
-      .update({ game_phase: 'finished', updated_at: new Date().toISOString() })
-      .eq('id', appointment.event_id);
-    setLoading(false);
-    if (error) {
-      console.error('❌ Error cerrando la fase libre:', error);
-      return;
-    }
-    setGamePhase('finished');
-  }, [appointment, loading]);
-
-  // Al llegar la fase 'finished' (la puso el moderador; llega por realtime o
-  // restore), cada teléfono pasa UNA sola vez al cierre (afinidad + match).
+  // Al llegar la fase 'finished' (la puso el moderador al terminar la última
+  // pregunta; llega por realtime o restore), cada teléfono pasa UNA sola vez al
+  // cierre (afinidad + match).
   const closingTriggeredRef = useRef(false);
   useEffect(() => {
     if (gamePhase !== 'finished' || closingTriggeredRef.current) return;
@@ -696,6 +677,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // faltan (antes decidían a ciegas si pasar de nivel).
   const questionsInLevel = QUESTIONS[currentLevel]?.length ?? 0;
   const questionNumber = Math.min(currentQuestionIndex + 1, questionsInLevel);
+
+  // Última pregunta de TODO el juego (última del último nivel). Al pasarla no
+  // hay pantalla intermedia: el moderador cierra y toda la mesa va al cierre,
+  // así que su botón dice "Terminar" y arriba le aparece el aviso para que
+  // sepa cómo rematar en voz alta.
+  const isLastQuestion =
+    currentLevel === LEVEL_ORDER[LEVEL_ORDER.length - 1] &&
+    questionsInLevel > 0 &&
+    currentQuestionIndex >= questionsInLevel - 1;
 
   const theme = LEVEL_THEMES[currentLevel];
   
@@ -772,6 +762,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             <Text style={styles.levelDetail}>Nivel {levelPosition} de 3 · Pregunta {questionNumber} de {questionsInLevel}</Text>
           </View>
 
+          {/* Aviso de última pregunta: solo el moderador, y solo cuando ya no
+              queda ninguna. Va ARRIBA de la pregunta para que sea lo primero
+              que lee y sepa cómo va a cerrar. */}
+          {isModerator && isLastQuestion && (
+            <View style={styles.lastQuestionNotice}>
+              <Text style={styles.lastQuestionNoticeEmoji}>🗣️</Text>
+              <Text style={styles.lastQuestionNoticeText}>
+                <Text style={styles.lastQuestionNoticeStrong}>Esta es la última pregunta.</Text> Cuando terminen, presiona Terminar y todos pasarán a elegir con quién sintieron conexión.
+              </Text>
+            </View>
+          )}
+
           {/* Question card */}
           <View style={[
             styles.questionCard,
@@ -806,7 +808,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
               {isModerator
-                ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. Cuando terminen, pasas a la siguiente.'
+                ? (isLastQuestion
+                    ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar.'
+                    : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. Cuando terminen, pasas a la siguiente.')
                 : 'No todos tienen que responder: habla quien tenga una historia o algo que aportar.'}
             </Text>
           </View>
@@ -824,7 +828,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 activeOpacity={0.85}
               >
                 <Text style={styles.continueButtonCText}>
-                  {loading ? 'Cargando...' : 'Siguiente'}
+                  {loading ? 'Cargando...' : (isLastQuestion ? 'Terminar' : 'Siguiente')}
                 </Text>
                 <View style={[styles.continueButtonCCircle, { borderColor: theme.accentColor, backgroundColor: theme.accentColor + '25' }]}>
                   <Text style={[styles.continueButtonCArrow, { color: theme.accentColor }]}>›</Text>
@@ -840,7 +844,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           ) : (
             <View style={styles.continueButtonWaitingC}>
               <Text style={styles.continueButtonTextWaiting}>
-                ⏳ Espera a que {moderatorName} pase a la siguiente
+                ⏳ Espera a que {moderatorName} {isLastQuestion ? 'termine la dinámica' : 'pase a la siguiente'}
               </Text>
             </View>
           )}
@@ -888,74 +892,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </Animated.View>
           </View>
         )}
-      </LinearGradient>
-    );
-  }
-
-  if (gamePhase === 'free_phase') {
-    return (
-      <LinearGradient
-        colors={FREE_PHASE_GRADIENT}
-        style={styles.gradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.iceBreakCard}>
-            <Text style={styles.iceBreakIcon}>✨</Text>
-            <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
-            <Text style={styles.iceBreakSubtitle}>
-              Ahora disfruten el resto de la noche y déjense sorprender ✨
-            </Text>
-          </View>
-
-          <View style={styles.evaluationCard}>
-            <Text style={styles.evaluationIcon}>💘</Text>
-            <Text style={styles.evaluationTitle}>Antes de terminar</Text>
-            <Text style={styles.evaluationText}>
-              Cuéntanos con quién sentiste afinidad (¡puede haber match!) y qué tal estuvo el encuentro.
-            </Text>
-          </View>
-
-          {/* La fase libre también la controla el moderador: la lee en voz alta
-              y su "Continuar" lleva a TODA la mesa al cierre. De ahí en
-              adelante (elegir afinidad), cada quien va a su ritmo. */}
-          {isModerator ? (
-            <>
-              <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
-                <Text style={[styles.instructionText, { color: 'rgba(255,255,255,0.9)' }]}>
-                  🗣️ Lee esto en voz alta. Cuando terminen, presiona Continuar: todos pasarán a elegir con quién sintieron conexión.
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.finishButton, loading && styles.buttonDisabled]}
-                onPress={handleModeratorFinish}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.finishButtonText}>
-                  {loading ? '⏳ Un momento...' : 'Continuar →'}
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.continueButtonWaitingC}>
-              <Text style={styles.continueButtonTextWaiting}>
-                ⏳ Espera a que {moderatorName} continúe
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.changeModeratorBtn}
-            onPress={() => setShowChangeModerator(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {changeModeratorSheet}
       </LinearGradient>
     );
   }
@@ -1063,6 +999,33 @@ const styles = StyleSheet.create({
   },
 
   // ── Instruction card ─────────────────────────────────────────────────────────
+  // Aviso de última pregunta (solo moderador). Mismo amarillo que el "léelo en
+  // voz alta" de la pantalla de reglas, para que reconozca de una que le toca leer.
+  lastQuestionNotice: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255,214,0,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,214,0,0.5)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  lastQuestionNoticeEmoji: {
+    fontSize: 22,
+  },
+  lastQuestionNoticeText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#ffe9a8',
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  lastQuestionNoticeStrong: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
   instructionCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -1301,61 +1264,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
   },
 
-  // ── Free phase ───────────────────────────────────────────────────────────────
-  iceBreakCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 28,
-    marginTop: 60,
-    marginBottom: 20,
-    alignItems: 'center',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-  },
-  iceBreakIcon: {
-    fontSize: 72,
-    marginBottom: 12,
-  },
-  iceBreakTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  iceBreakSubtitle: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  evaluationCard: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    padding: 24,
-    alignItems: 'center',
-  },
-  evaluationIcon: {
-    fontSize: 56,
-    marginBottom: 12,
-  },
-  evaluationTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  evaluationText: {
-    fontSize: 17,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
   participantsRatingSection: {
     width: '100%',
   },
@@ -1418,22 +1326,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 8,
-  },
-  finishButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  finishButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 
   // ── Unused legacy (kept for safety) ─────────────────────────────────────────
