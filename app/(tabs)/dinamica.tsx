@@ -993,6 +993,25 @@ export default function DinamicaScreen() {
     ? activeParticipants.length < totalExpected
     : activeParticipants.length < 2;
 
+  // ── Semáforo de arranque (pantalla de reglas) ───────────────────────────────
+  // Cortesía de 10 minutos desde la hora del evento: mientras falte gente y no
+  // se cumplan, se pide esperar mostrando la HORA EXACTA a partir de la cual
+  // pueden arrancar; cumplidos los 10 min (o si ya llegaron todos) pasa a verde.
+  // Nunca bloquea: el botón "Comenzar" del moderador sigue disponible siempre.
+  // El render se refresca cada segundo (interval del countdown), así que el
+  // paso de ámbar a verde ocurre solo, sin que nadie tenga que refrescar.
+  const GRACE_MINUTES = 10;
+  const graceEndsAt = appointment?.event?.start_time
+    ? new Date(new Date(appointment.event.start_time).getTime() + GRACE_MINUTES * 60000)
+    : null;
+  // Sin hora de evento no hay con qué calcular la cortesía: se muestra verde
+  // para no dejar a la mesa esperando un aviso que nunca cambiaría.
+  const graceOver = !graceEndsAt || Date.now() >= graceEndsAt.getTime();
+  const canStartNow = graceOver || !missingPeople;
+  const graceEndsAtText = graceEndsAt
+    ? formatTimeAmPm(`${String(graceEndsAt.getHours()).padStart(2, '0')}:${String(graceEndsAt.getMinutes()).padStart(2, '0')}`)
+    : '';
+
   // ── Moderador (derivados para el render) ────────────────────────────────────
   const isModerator = !!user?.id && !!moderatorId && user.id === moderatorId;
   const moderatorName = moderatorId
@@ -1448,10 +1467,20 @@ export default function DinamicaScreen() {
             </View>
           </View>
 
-          {missingPeople && (
-            <View style={{ backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.5)', borderRadius: 14, padding: 12, marginTop: 14, maxWidth: 340 }}>
-              <Text style={{ color: 'rgba(255,224,178,0.95)', fontSize: 13, textAlign: 'center', lineHeight: 19 }}>
-                ⏳ Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados — esperen a que estén todos para arrancar.
+          {/* Semáforo de arranque: lo ve TODA la mesa (moderador y demás) para
+              que la regla sea de todos y nadie presione de más. */}
+          {canStartNow ? (
+            <View style={styles.semGreen}>
+              <Text style={styles.semGreenTitle}>✅ Ya pueden arrancar</Text>
+              <Text style={styles.semGreenText}>Quien llegue después se suma a la pregunta en la que vayan.</Text>
+            </View>
+          ) : (
+            <View style={styles.semAmber}>
+              <Text style={styles.semAmberTitle}>
+                ⏳ Van {activeParticipants.length}{totalExpected > 0 ? ` de ${totalExpected}` : ''} confirmados
+              </Text>
+              <Text style={styles.semAmberText}>
+                Denles unos minutos a los que faltan. Pueden arrancar a las <Text style={styles.semAmberHora}>{graceEndsAtText}</Text> aunque no estén todos.
               </Text>
             </View>
           )}
@@ -1752,6 +1781,14 @@ const styles = StyleSheet.create({
   modFirstTag: { alignSelf: 'center', marginTop: 16, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.40)', borderRadius: 22, paddingVertical: 11, paddingHorizontal: 18 },
   modFirstTagText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   modBackLink: { marginTop: 22, fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
+  // Semáforo de arranque (pantalla de reglas)
+  semAmber: { backgroundColor: 'rgba(255,183,77,0.15)', borderWidth: 1, borderColor: 'rgba(255,183,77,0.55)', borderRadius: 14, padding: 13, marginTop: 14, width: '100%', maxWidth: 340 },
+  semAmberTitle: { color: '#FFD9A0', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  semAmberText: { color: 'rgba(255,224,178,0.92)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 },
+  semAmberHora: { color: '#FFFFFF', fontWeight: '800' },
+  semGreen: { backgroundColor: 'rgba(16,185,129,0.16)', borderWidth: 1, borderColor: 'rgba(52,211,153,0.6)', borderRadius: 14, padding: 13, marginTop: 14, width: '100%', maxWidth: 340 },
+  semGreenTitle: { color: '#A7F3D0', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  semGreenText: { color: 'rgba(209,250,229,0.92)', fontSize: 13, textAlign: 'center', marginTop: 5, lineHeight: 19 },
   modChosenCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 18, padding: 20, alignItems: 'center', width: '100%', marginBottom: 20 },
   modChosenAvatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#f0c8dd', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   modChosenAvatarText: { fontSize: 26, fontWeight: '800', color: '#6d0e3c' },
