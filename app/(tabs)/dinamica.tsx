@@ -1112,6 +1112,27 @@ export default function DinamicaScreen() {
     return () => clearInterval(retryInterval);
   }, [userReadyForGame, gamePhase, handleStartExperience]);
 
+  // Red de seguridad de la pre-partida: además del realtime, un sondeo liviano
+  // cada 4s mantiene sincronizados fase y moderador mientras la mesa está entre
+  // "confirmado" y el arranque del juego (cubre avisos realtime perdidos por
+  // red móvil inestable). Se detiene solo al entrar a las preguntas.
+  useEffect(() => {
+    if (!appointmentEventId || checkInPhase !== 'confirmed' || gameStarted) return;
+
+    const pollInterval = setInterval(async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('game_phase, moderator_id')
+        .eq('id', appointmentEventId)
+        .maybeSingle();
+      if (!data) return;
+      setModeratorId(data.moderator_id ?? null);
+      if (data.game_phase) setGamePhase(data.game_phase);
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [appointmentEventId, checkInPhase, gameStarted]);
+
   const handleFinishGame = useCallback(async () => {
 
     if (appointment?.event_id) {
