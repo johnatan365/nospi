@@ -878,6 +878,12 @@ export default function DinamicaScreen() {
               setGamePhase(newEvent.game_phase);
             }
 
+            // Persistir la fase actualizada: sin esto, la cache guardaba la
+            // fase VIEJA y un refresh pintaba primero la pantalla equivocada
+            // (flash feo) antes de corregirse con el fetch fresco.
+            cacheRef.current = { data: updatedAppointment, timestamp: Date.now() };
+            setCached(CACHE_KEY, updatedAppointment);
+
             return updatedAppointment;
           });
         }
@@ -1077,45 +1083,56 @@ export default function DinamicaScreen() {
     }
   }, [appointment?.event_id, gamePhase]);
 
+  // El cierre del modal (y el arranque del juego) van por TEMPORIZADORES, no
+  // encadenados a los callbacks de la animacion: si un callback no disparaba
+  // (animacion interrumpida, o web sin driver nativo), el velo negro quedaba
+  // pegado en pantalla y userReadyForGame nunca se marcaba -> el juego no
+  // arrancaba. Con timers el velo SIEMPRE se quita y el juego SIEMPRE arranca.
+  const divertidoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { divertidoTimersRef.current.forEach(clearTimeout); }, []);
+
   const showDivertidoModalAnimation = useCallback(() => {
     setShowDivertidoModal(true);
     divertidoScaleAnim.setValue(0);
     divertidoFadeAnim.setValue(0);
+    const nativeDriver = Platform.OS !== 'web';
 
     Animated.parallel([
       Animated.spring(divertidoScaleAnim, {
         toValue: 1,
         tension: 50,
         friction: 7,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }),
       Animated.timing(divertidoFadeAnim, {
         toValue: 1,
         duration: 300,
         easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(divertidoScaleAnim, {
-            toValue: 1.2,
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(divertidoFadeAnim, {
-            toValue: 0,
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setShowDivertidoModal(false);
-          setUserReadyForGame(true);
-        });
-      }, 2000);
-    });
+    ]).start();
+
+    divertidoTimersRef.current.push(setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(divertidoScaleAnim, {
+          toValue: 1.2,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+        Animated.timing(divertidoFadeAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+      ]).start();
+    }, 2300));
+
+    divertidoTimersRef.current.push(setTimeout(() => {
+      setShowDivertidoModal(false);
+      setUserReadyForGame(true);
+    }, 2650));
   }, [divertidoScaleAnim, divertidoFadeAnim]);
 
   // Solo el moderador marca userReadyForGame (al presionar "Comenzar" en las
@@ -1535,7 +1552,7 @@ export default function DinamicaScreen() {
           <Text style={styles.countdownLabel}>
             {checkInPhase === 'code_entry' ? 'Tiempo para confirmar tu llegada' : 'Tiempo para iniciar la dinámica'}
           </Text>
-          <Text style={styles.countdownTime}>{countdownDisplay}</Text>
+          <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
         </View>
 
         <View style={styles.eventCard}>
@@ -1630,7 +1647,9 @@ export default function DinamicaScreen() {
               )}
             </View>
 
-            {!canStartExperience && countdown > 0 && (
+            {/* countdown arranca en MAX_SAFE_INTEGER mientras carga: sin este
+                guard, la tarjeta mostraba un numero gigante por un instante. */}
+            {!canStartExperience && countdown > 0 && countdown !== Number.MAX_SAFE_INTEGER && (
               <View style={styles.waitCard}>
                 <Text style={styles.waitCardTitle}>⏳ Arrancamos en</Text>
                 <Text style={styles.waitCardCountdown}>{waitCountdownText}</Text>

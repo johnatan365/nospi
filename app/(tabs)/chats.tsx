@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SkeletonBox } from '@/components/SkeletonBox';
+import { getCached, setCached } from '@/utils/cache';
 
 interface ConversationRow {
   conversation_id: string;
@@ -88,6 +89,25 @@ export default function ChatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<ChatFilter>('grupos');
   const loadedOnceRef = useRef(false);
+  const CHATS_CACHE_KEY = `chats_${user?.id ?? 'anon'}`;
+
+  // Pintar AL INSTANTE la lista de la ultima vez (cache persistida) mientras
+  // la carga fresca corre por detras. Sin esto, cada entrada a la pestana
+  // esperaba hasta 2 llamadas de red (validar sesion + traer chats) mostrando
+  // solo el "cargando", que con la senal de un evento se hacia largo.
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id || loadedOnceRef.current) return;
+    (async () => {
+      const cached = await getCached<ConversationRow[]>(CHATS_CACHE_KEY);
+      if (cancelled || loadedOnceRef.current) return;
+      if (cached && cached.length > 0) {
+        setConversations(cached);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, CHATS_CACHE_KEY]);
 
   const loadConversations = useCallback(async (isRefresh = false) => {
     if (!user?.id) return;
@@ -131,6 +151,8 @@ export default function ChatsScreen() {
         return rows;
       });
       loadedOnceRef.current = true;
+      // Guardar para que la proxima entrada a la pestana pinte de una.
+      if (rows.length > 0 || isRefresh) setCached(CHATS_CACHE_KEY, rows);
     }
 
     setLoading(false);
