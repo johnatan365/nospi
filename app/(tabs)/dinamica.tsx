@@ -32,7 +32,7 @@ interface Event {
   max_participants: number;
   current_participants: number;
   status: string;
-  game_phase: 'intro' | 'ready' | 'choosing_moderator' | 'rules' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'rules' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
@@ -143,6 +143,11 @@ export default function DinamicaScreen() {
   // Moderador de la dinámica (sincronizado por events.moderator_id). Desde el
   // paso "elegir moderador", solo él avanza reglas/preguntas; el resto espera.
   const [moderatorId, setModeratorId] = useState<string | null>(null);
+
+  // Paso INDIVIDUAL de la lista de confirmados a la pantalla de elegir
+  // moderador: cada quien pasa cuando presiona "Continuar" (se persiste para
+  // sobrevivir refrescos). Desde el moderador en adelante el flujo es compartido.
+  const [wentToChooseModerator, setWentToChooseModerator] = useState(false);
 
   // Bandera local del moderador para arrancar el juego (dispara el reintento de
   // handleStartExperience). Solo la usa quien presiona "Comenzar".
@@ -293,7 +298,11 @@ export default function DinamicaScreen() {
         // La confirmación de llegada (GPS) sí es por persona: se restaura de
         // AsyncStorage. Si no hay nada guardado pero location_confirmed es true,
         // se asume 'confirmed'.
-        const savedCheckInPhase = await AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`);
+        const [savedCheckInPhase, savedWentModerator] = await Promise.all([
+          AsyncStorage.getItem(`nospi_checkInPhase_${apt.event_id}`),
+          AsyncStorage.getItem(`nospi_wentModerator_${apt.event_id}`),
+        ]);
+        setWentToChooseModerator(savedWentModerator === 'true');
         const restoredCheckInPhase: CheckInPhase =
           savedCheckInPhase === 'confirmed' || savedCheckInPhase === 'code_entry' || savedCheckInPhase === 'waiting'
             ? (savedCheckInPhase as CheckInPhase)
@@ -996,20 +1005,14 @@ export default function DinamicaScreen() {
 
   // ── Flujo del moderador (sincronizado por la fila events) ───────────────────
 
-  // Confirmados → "Continuar": mueve a TODA la mesa al paso de elegir moderador.
-  const handleGoToChooseModerator = useCallback(async () => {
+  // Confirmados → "Continuar": paso INDIVIDUAL. Solo mueve a ESTA persona a la
+  // pantalla de elegir moderador; el resto sigue en su lista hasta que cada
+  // quien presione. El flujo vuelve a ser compartido desde el moderador.
+  const handleGoToChooseModerator = useCallback(() => {
     if (!appointment?.event_id) return;
-    const prevPhase = gamePhase;
-    setGamePhase('choosing_moderator'); // feedback inmediato; realtime confirma
-    const { error } = await supabase
-      .from('events')
-      .update({ game_phase: 'choosing_moderator', updated_at: new Date().toISOString() })
-      .eq('id', appointment.event_id);
-    if (error) {
-      console.error('❌ Error yendo a elegir moderador:', error);
-      setGamePhase(prevPhase); // no dejar la pantalla en una fase que la BD no guardó
-    }
-  }, [appointment?.event_id, gamePhase]);
+    setWentToChooseModerator(true);
+    AsyncStorage.setItem(`nospi_wentModerator_${appointment.event_id}`, 'true');
+  }, [appointment?.event_id]);
 
   // "Quiero ser el moderador": primero en postularse queda. El candado
   // `is('moderator_id', null)` evita que dos toques casi simultáneos se pisen;
@@ -1136,7 +1139,10 @@ export default function DinamicaScreen() {
   const handleFinishGame = useCallback(async () => {
 
     if (appointment?.event_id) {
-      await AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`);
+      await Promise.all([
+        AsyncStorage.removeItem(`nospi_checkInPhase_${appointment.event_id}`),
+        AsyncStorage.removeItem(`nospi_wentModerator_${appointment.event_id}`),
+      ]);
     }
     setAppointment(null);
     cacheRef.current = null;
@@ -1308,10 +1314,12 @@ export default function DinamicaScreen() {
     return <GameDynamicsScreen appointment={appointment} activeParticipants={transformedParticipants} onFinish={handleFinishGame} />;
   }
 
-  // Paso "elegir moderador": mientras nadie se postula, todos ven la
-  // postulación (card 2); apenas hay moderador, se muestra "moderador elegido"
-  // (card 3) — el moderador puede continuar, el resto espera.
-  if (gamePhase === 'choosing_moderator' && checkInPhase === 'confirmed') {
+  // Paso "elegir moderador": se entra INDIVIDUALMENTE (cada quien con su
+  // "Continuar" de la lista de confirmados). Mientras nadie se postula se ve la
+  // postulación (card 2); apenas hay moderador, "moderador elegido" (card 3) —
+  // el moderador continúa por todos, el resto espera. Si el moderador ya pasó a
+  // reglas (gamePhase 'rules'), esa rama va primero y arrastra a todos.
+  if (wentToChooseModerator && gamePhase !== 'rules' && checkInPhase === 'confirmed') {
     return (
       <LinearGradient
         colors={['#1a0010', '#880E4F', '#AD1457']}
