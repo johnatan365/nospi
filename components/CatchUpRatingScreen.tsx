@@ -209,6 +209,47 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
     }
   }, [saveAffinity, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId]);
 
+  // Mientras la persona esta en la pantalla final ('done'), escuchar los
+  // matches que se creen y refrescar la lista EN VIVO. Cubre el hueco real de
+  // los cierres casi simultaneos: si la otra persona completa el match cuando
+  // yo ya estoy viendo mi resultado, el popup global esta suprimido en esta
+  // ruta (a proposito) y esta pantalla solo mostraba lo que existia al enviar
+  // -> el match nuevo no se veia por ningun lado. Realtime + sondeo de respaldo
+  // cada 10s (por si el aviso realtime se pierde con la red del evento).
+  useEffect(() => {
+    if (step !== 'done') return;
+
+    let cancelled = false;
+    const refreshMatches = async () => {
+      try {
+        const { data } = await supabase.rpc('get_my_event_matches', { p_event_id: eventId });
+        if (!cancelled && data) setMatches(data as Match[]);
+      } catch (e) { console.error('[cierre] refreshMatches:', e); }
+    };
+
+    const channel = supabase
+      .channel(`done-matches-${eventId}-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'event_matches', filter: `event_id=eq.${eventId}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (row && (row.user_a === currentUserId || row.user_b === currentUserId)) {
+            refreshMatches();
+          }
+        }
+      )
+      .subscribe();
+
+    const poll = setInterval(refreshMatches, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [step, eventId, currentUserId]);
+
   const openChat = async (m: Match) => {
     try {
       let convId = m.conversation_id;

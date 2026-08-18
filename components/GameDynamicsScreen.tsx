@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -324,7 +324,12 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   useEffect(() => {
     if (!appointment?.event_id) return;
 
-    
+    // Si la consulta falla (red inestable, refresh en web), REINTENTAR: antes
+    // se abandonaba en silencio y la pantalla quedaba en negro sin salida,
+    // porque sin pregunta cargada no habia nada que dibujar.
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
     const restoreStateFromDatabase = async () => {
       const { data, error } = await supabase
         .from('events')
@@ -332,12 +337,11 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         .eq('id', appointment.event_id)
         .maybeSingle();
 
-      if (error) {
-        console.error('❌ Error fetching event state:', error);
-        return;
-      }
+      if (cancelled) return;
 
-      if (!data) {
+      if (error || !data) {
+        if (error) console.error('❌ Error fetching event state:', error);
+        retryTimer = setTimeout(restoreStateFromDatabase, 2500);
         return;
       }
 
@@ -367,6 +371,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     };
 
     restoreStateFromDatabase();
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [appointment?.event_id, activeParticipants, startTimer]);
 
   // Keep a ref to activeParticipants so the realtime handler always has the latest
@@ -443,53 +448,62 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     };
   }, []);
 
-  // Level transition animation function
+  // Velo de "Siguiente Nivel". Su cierre va por TEMPORIZADORES, no encadenado a
+  // los callbacks de la animacion: si un callback no disparaba (animacion
+  // interrumpida, o web sin driver nativo), el velo oscuro quedaba pegado sobre
+  // la pantalla de preguntas. Con timers el velo SIEMPRE se quita.
+  const transitionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { transitionTimersRef.current.forEach(clearTimeout); }, []);
+
   const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
-    
+    // Si habia una transicion anterior a medio camino, cancelar sus timers
+    // para que no cierren esta antes de tiempo.
+    transitionTimersRef.current.forEach(clearTimeout);
+    transitionTimersRef.current = [];
+
     setTransitionLevel(level);
     setShowLevelTransition(true);
-    
-    // Reset animations
+
     scaleAnim.setValue(0);
     fadeAnim.setValue(0);
-    
-    // Animate in
+    const nativeDriver = Platform.OS !== 'web';
+
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
         friction: 7,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }),
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
         easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }),
-    ]).start(() => {
-      // Hold for 2 seconds
-      setTimeout(() => {
-        // Animate out
-        Animated.parallel([
-          Animated.timing(scaleAnim, {
-            toValue: 1.2,
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setShowLevelTransition(false);
-          setTransitionLevel(null);
-        });
-      }, 2000);
-    });
+    ]).start();
+
+    transitionTimersRef.current.push(setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1.2,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+      ]).start();
+    }, 2300));
+
+    transitionTimersRef.current.push(setTimeout(() => {
+      setShowLevelTransition(false);
+      setTransitionLevel(null);
+    }, 2650));
   }, [scaleAnim, fadeAnim]);
 
   // Avanza al siguiente nivel; si ya estábamos en Atrevido, CIERRA la dinámica
@@ -642,21 +656,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // Cierre nuevo: marca la cita como pasada y lleva a la pantalla de
   // afinidad + match + feedback (reemplaza el viejo puntaje de estrellas).
   const goToClosing = useCallback(async () => {
-    if (!appointment?.event_id || !currentUserId || loading) return;
-    setLoading(true);
-    try {
-      await supabase
-        .from('appointments')
-        .update({ status: 'anterior', updated_at: new Date().toISOString() })
-        .eq('event_id', appointment.event_id)
-        .eq('user_id', currentUserId);
-    } catch (e) {
-      console.error('goToClosing error:', e);
-    } finally {
-      setLoading(false);
-    }
+    if (!appointment?.event_id || !currentUserId) return;
+    // Navegar PRIMERO: antes se esperaba el UPDATE de la cita y, con red lenta,
+    // la mesa quedaba mirando una pantalla negra "cargando" varios segundos.
+    // Ademas ese UPDATE hacia reaccionar a las pantallas de atras (saltos
+    // visibles). El marcado de la cita como pasada corre en segundo plano.
     router.push(`/catch-up-rating/${appointment.event_id}` as any);
-  }, [appointment, currentUserId, loading, router]);
+    supabase
+      .from('appointments')
+      .update({ status: 'anterior', updated_at: new Date().toISOString() })
+      .eq('event_id', appointment.event_id)
+      .eq('user_id', currentUserId)
+      .then(({ error }) => {
+        if (error) console.error('goToClosing (marcar cita) error:', error.message);
+      });
+  }, [appointment, currentUserId, router]);
 
   // Al llegar la fase 'finished' (la puso el moderador al terminar la última
   // pregunta; llega por realtime o restore), cada teléfono pasa UNA sola vez al
@@ -664,10 +678,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const closingTriggeredRef = useRef(false);
   useEffect(() => {
     if (gamePhase !== 'finished' || closingTriggeredRef.current) return;
-    if (!appointment?.event_id || !currentUserId || loading) return; // reintenta en el próximo render
+    if (!appointment?.event_id || !currentUserId) return; // reintenta en el próximo render
     closingTriggeredRef.current = true;
     goToClosing();
-  }, [gamePhase, appointment?.event_id, currentUserId, loading, goToClosing]);
+  }, [gamePhase, appointment?.event_id, currentUserId, goToClosing]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
   const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
@@ -896,12 +910,85 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     );
   }
 
-  return null;
+  // Cualquier estado sin pantalla propia (restaurando tras un refresh, o la
+  // fase 'finished' mientras navega al cierre) muestra este cargador en vez de
+  // una pantalla negra: antes aqui habia un "return null" y el usuario veia
+  // negro puro durante la sincronizacion o al terminar la dinamica.
+  return (
+    <LinearGradient
+      colors={['#1a0010', '#880E4F', '#AD1457']}
+      style={styles.gradient}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
+      <View style={styles.syncContainer}>
+        {gamePhase === 'finished' ? (
+          // La navegacion al cierre ya se disparo una vez (closingTriggeredRef).
+          // Si la persona VUELVE a esta pestana despues, no puede quedarse
+          // mirando un spinner eterno: se le dice que termino y se le da el
+          // boton para volver al cierre cuando quiera.
+          <>
+            <Text style={styles.syncEmoji}>🎉</Text>
+            <Text style={styles.syncTitle}>La dinámica terminó</Text>
+            <Text style={styles.syncText}>Ahora viene lo mejor: elegir con quién sentiste conexión.</Text>
+            <TouchableOpacity
+              style={styles.syncButton}
+              onPress={() => router.push(`/catch-up-rating/${appointment?.event_id}` as any)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.syncButtonText}>💘 Ir al cierre</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.syncText}>Sincronizando la dinámica…</Text>
+          </>
+        )}
+      </View>
+    </LinearGradient>
+  );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+  },
+  syncContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  syncText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 30,
+  },
+  syncEmoji: {
+    fontSize: 52,
+  },
+  syncTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  syncButton: {
+    backgroundColor: '#880E4F',
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: 'rgba(240,98,146,0.5)',
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    marginTop: 8,
+  },
+  syncButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   container: {
     flex: 1,
