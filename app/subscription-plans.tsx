@@ -746,6 +746,22 @@ export default function SubscriptionPlansScreen() {
   };
 
   const getWompiTokens = async () => {
+	  // Embudo de anuncios: InitiateCheckout. getWompiTokens se llama justo antes
+	  // de crear la transaccion en cualquier metodo de pago (tarjeta, PSE,
+	  // Bancolombia), asi que es el punto unico donde el usuario inicia el pago.
+	  // En web dispara Meta y el wrapper de public/index.html lo espeja a TikTok.
+	  if (Platform.OS === 'web') {
+		  try {
+			  const win = window as any;
+			  if (typeof win.fbq === 'function') {
+				  win.fbq('track', 'InitiateCheckout', {
+					  content_type: 'product',
+					  currency: 'COP',
+					  value: effectivePriceCOP || 9900,
+				  });
+			  }
+		  } catch (e) {}
+	  }
     const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
     const data = await res.json();
     return {
