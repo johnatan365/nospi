@@ -1014,6 +1014,16 @@ export default function DinamicaScreen() {
     AsyncStorage.setItem(`nospi_wentModerator_${appointment.event_id}`, 'true');
   }, [appointment?.event_id]);
 
+  // "← Volver a la lista" desde la pantalla de elegir moderador: regresa a la
+  // lista de confirmados (para seguir viendo quién llega). Es local a este
+  // teléfono; cuando el moderador pase a las reglas, la fase compartida lo trae
+  // de vuelta al flujo sin que se pierda nada.
+  const handleBackToConfirmedList = useCallback(() => {
+    if (!appointment?.event_id) return;
+    setWentToChooseModerator(false);
+    AsyncStorage.removeItem(`nospi_wentModerator_${appointment.event_id}`);
+  }, [appointment?.event_id]);
+
   // "Quiero ser el moderador": primero en postularse queda. El candado
   // `is('moderator_id', null)` evita que dos toques casi simultáneos se pisen;
   // si otro llegó primero, se lee el moderador real (realtime también corrige).
@@ -1341,6 +1351,13 @@ export default function DinamicaScreen() {
               <View style={styles.modFirstTag}>
                 <Text style={styles.modFirstTagText}>El primero que se postule queda</Text>
               </View>
+              {/* Volver a la lista: para quien entró por curiosidad y no quiere
+                  ser moderador (puede seguir viendo quién va llegando). Es un
+                  paso local: no afecta a la mesa, y si el moderador arranca las
+                  reglas igual lo trae de vuelta al flujo. */}
+              <TouchableOpacity onPress={handleBackToConfirmedList} activeOpacity={0.7}>
+                <Text style={styles.modBackLink}>← Volver a la lista</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -1734,6 +1751,7 @@ const styles = StyleSheet.create({
   modRoleText: { flex: 1, fontSize: 15, color: 'rgba(255,255,255,0.92)', lineHeight: 22 },
   modFirstTag: { alignSelf: 'center', marginTop: 16, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.40)', borderRadius: 22, paddingVertical: 11, paddingHorizontal: 18 },
   modFirstTagText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  modBackLink: { marginTop: 22, fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
   modChosenCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 18, padding: 20, alignItems: 'center', width: '100%', marginBottom: 20 },
   modChosenAvatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#f0c8dd', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   modChosenAvatarText: { fontSize: 26, fontWeight: '800', color: '#6d0e3c' },
