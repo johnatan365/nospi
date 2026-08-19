@@ -1343,7 +1343,7 @@ export default function DinamicaScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', flexGrow: 1 }]}>
           {!moderatorId ? (
             <>
               <Text style={styles.rulesTitle}>¿Quién será el moderador?</Text>
@@ -1519,9 +1519,10 @@ export default function DinamicaScreen() {
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
         {/* Conteo a la HORA PACTADA. "Tiempo para confirmar tu llegada" hacía
-            creer que ese era el plazo para confirmar. Tras confirmar se oculta:
-            el conteo que manda pasa a ser el de la tarjeta de espera. */}
-        {checkInPhase !== 'confirmed' && (
+            creer que ese era el plazo para confirmar. Quien confirma temprano
+            lo sigue viendo hasta las en punto; ahí se oculta y lo reemplaza la
+            tarjeta de espera de 7 minutos. */}
+        {(checkInPhase !== 'confirmed' || countdown > START_WINDOW_MINUTES * 60 * 1000) && (
           <View style={styles.countdownCard}>
             <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
             <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
@@ -1624,9 +1625,11 @@ export default function DinamicaScreen() {
               )}
             </View>
 
-            {/* countdown arranca en MAX_SAFE_INTEGER mientras carga: sin este
-                guard, la tarjeta mostraba un numero gigante por un instante. */}
-            {!canStartExperience && countdown > 0 && countdown !== Number.MAX_SAFE_INTEGER && (
+            {/* La tarjeta de espera APARECE a la hora pactada en punto (no antes):
+                countdown apunta a hora + START_WINDOW_MINUTES, así que "ya es la
+                hora" equivale a countdown <= esa ventana. El tope tambien filtra
+                el MAX_SAFE_INTEGER inicial de la carga (numero gigante). */}
+            {!canStartExperience && countdown > 0 && countdown <= START_WINDOW_MINUTES * 60 * 1000 && (
               <View style={styles.waitCard}>
                 <Text style={styles.waitCardTitle}>⏳ Arrancamos en</Text>
                 <Text style={styles.waitCardCountdown}>{waitCountdownText}</Text>
