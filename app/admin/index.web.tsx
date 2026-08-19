@@ -82,6 +82,8 @@ interface User {
   age_range_max?: number;
   created_at?: string;
   registered_from?: string;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
 }
 
 interface Appointment {
@@ -4382,6 +4384,7 @@ setBulkWhatsAppPending(pending);
       'Rango edad máx': u.age_range_max || 99,
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
       'Plataforma': u.registered_from === 'ios' ? 'iOS' : u.registered_from === 'android' ? 'Android' : u.registered_from === 'web' ? 'Web' : 'Desconocido',
+      'Origen': u.utm_source || 'sin dato',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -4660,6 +4663,7 @@ setBulkWhatsAppPending(pending);
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
+      { label: 'Origen', key: 'utm_source', w: 110 },
       { label: 'Uso actual', key: '_platform_activity', w: 170 },
       { label: 'Editar', key: '_edit', w: 90 },
       { label: 'WhatsApp', key: '_whatsapp', w: 100 },
@@ -4828,6 +4832,33 @@ setBulkWhatsAppPending(pending);
                       ) : (
                         <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>
                       )}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {(() => {
+                        // Canal por el que llego el usuario. Se captura en la
+                        // primera visita web; los registros previos al 18 ago
+                        // 2026 y los hechos desde la app nativa no lo traen.
+                        const src = (user.utm_source || '').toLowerCase();
+                        if (!src) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>;
+                        const PAGO = ['tiktok', 'facebook', 'instagram', 'google'];
+                        const COLORES: Record<string, string> = {
+                          tiktok: '#000000', facebook: '#1877F2', instagram: '#C13584',
+                          google: '#EA4335', whatsapp: '#25D366', referido: '#6B7280', directo: '#9CA3AF',
+                        };
+                        const bg = COLORES[src] || '#6B21A8';
+                        return (
+                          <span
+                            title={user.utm_campaign ? 'Campana: ' + user.utm_campaign : src}
+                            style={{
+                              display: 'inline-block', fontSize: 11, fontWeight: 700,
+                              padding: '3px 9px', borderRadius: 99, color: '#fff',
+                              backgroundColor: bg, textTransform: 'capitalize',
+                            }}
+                          >
+                            {src}{PAGO.indexOf(src) > -1 ? ' $' : ''}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
                       {(() => {
