@@ -4385,6 +4385,7 @@ setBulkWhatsAppPending(pending);
       'Calificación promedio': userRatingAverages[u.id] ? `${userRatingAverages[u.id].avg.toFixed(1)}/5 (${userRatingAverages[u.id].count} votos)` : 'Sin votos',
       'Plataforma': u.registered_from === 'ios' ? 'iOS' : u.registered_from === 'android' ? 'Android' : u.registered_from === 'web' ? 'Web' : 'Desconocido',
       'Origen': u.utm_source || 'sin dato',
+      'Reservas': appointments.filter(a => a.user_id === u.id).length,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -4664,6 +4665,7 @@ setBulkWhatsAppPending(pending);
       { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
       { label: 'Origen', key: 'utm_source', w: 110 },
+      { label: 'Reservas', key: '_reservas', w: 95 },
       { label: 'Uso actual', key: '_platform_activity', w: 170 },
       { label: 'Editar', key: '_edit', w: 90 },
       { label: 'WhatsApp', key: '_whatsapp', w: 100 },
@@ -4856,6 +4858,23 @@ setBulkWhatsAppPending(pending);
                             }}
                           >
                             {src}{PAGO.indexOf(src) > -1 ? ' $' : ''}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {(() => {
+                        // Cuantos eventos ha reservado este usuario. Responde de
+                        // un vistazo si el registro se convirtio en asistencia.
+                        const n = appointments.filter(a => a.user_id === user.id).length;
+                        if (n === 0) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>;
+                        return (
+                          <span style={{
+                            display: 'inline-block', fontSize: 12, fontWeight: 700,
+                            minWidth: 24, padding: '3px 8px', borderRadius: 99,
+                            color: '#065F46', backgroundColor: '#D1FAE5',
+                          }}>
+                            {n}
                           </span>
                         );
                       })()}
@@ -5477,7 +5496,7 @@ setBulkWhatsAppPending(pending);
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
-    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' },
+    { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' }, { key: 'origen', icon: '🎯', label: 'Origen' },
     { key: 'no-shows',     icon: '🚫', label: 'No-shows' },
     { key: 'moderation',   icon: '🛡️', label: 'Chats & Matches' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
@@ -5607,7 +5626,7 @@ setBulkWhatsAppPending(pending);
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
                 if (item.key === 'moderation') { loadAllDirectConversations(); loadAllMatches(); }
-                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; }
+                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}
