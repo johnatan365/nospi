@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +8,13 @@ type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
 type GamePhase = 'questions' | 'level_transition' | 'finished';
 
 const LEVEL_ORDER: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
+
+// Candado de navegacion al cierre a nivel de MODULO: si este componente se
+// vuelve a montar (Android recuperando memoria, volver a la pestana), un ref
+// interno se reinicia y se volvia a empujar OTRA pantalla de cierre encima de
+// la anterior -- de ahi el efecto de "carga varias pantallas" y de aparecer en
+// una pantalla vieja apilada. Se resetea solo si la dinamica vuelve a empezar.
+let closingNavigatedForEvent: string | null = null;
 
 interface Participant {
   id: string;
@@ -163,10 +170,20 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
   const router = useRouter();
 
-  const [gamePhase, setGamePhase] = useState<GamePhase>('questions');
-  const [currentLevel, setCurrentLevel] = useState<QuestionLevel>('divertido');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
+  // Estado inicial HIDRATADO desde la cita (que dinamica mantiene al dia por
+  // realtime y cache): asi, si este componente se vuelve a montar (volver a la
+  // pestana, Android recuperando memoria), la pregunta pinta AL INSTANTE en vez
+  // de quedarse en "Sincronizando la dinamica..." mientras responde la red.
+  // El restore de abajo reconcilia contra la BD por si la cita estaba vieja.
+  const initialEvent = appointment?.event;
+  const [gamePhase, setGamePhase] = useState<GamePhase>(
+    initialEvent?.game_phase === 'finished' || initialEvent?.game_phase === 'free_phase'
+      ? 'finished'
+      : 'questions'
+  );
+  const [currentLevel, setCurrentLevel] = useState<QuestionLevel>(initialEvent?.current_level || 'divertido');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialEvent?.current_question_index ?? 0);
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(initialEvent?.current_question ?? null);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -183,8 +200,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // Level transition animation state
   const [showLevelTransition, setShowLevelTransition] = useState(false);
   const [transitionLevel, setTransitionLevel] = useState<QuestionLevel | null>(null);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -331,16 +346,19 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const restoreStateFromDatabase = async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', appointment.event_id)
-        .maybeSingle();
+      // Carrera contra un timeout: en Android, tras volver del background, el
+      // fetch puede quedarse COLGADO sin resolver nunca (conexion muerta) y sin
+      // esto no habia ni error ni reintento -- la pantalla quedaba cargando.
+      const result: any = await Promise.race([
+        supabase.from('events').select('*').eq('id', appointment.event_id).maybeSingle(),
+        new Promise(resolve => setTimeout(() => resolve({ data: null, error: { message: 'timeout' } }), 6000)),
+      ]);
+      const { data, error } = result;
 
       if (cancelled) return;
 
       if (error || !data) {
-        if (error) console.error('❌ Error fetching event state:', error);
+        if (error) console.error('❌ Error fetching event state:', error.message || error);
         retryTimer = setTimeout(restoreStateFromDatabase, 2500);
         return;
       }
@@ -448,63 +466,25 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     };
   }, []);
 
-  // Velo de "Siguiente Nivel". Su cierre va por TEMPORIZADORES, no encadenado a
-  // los callbacks de la animacion: si un callback no disparaba (animacion
-  // interrumpida, o web sin driver nativo), el velo oscuro quedaba pegado sobre
-  // la pantalla de preguntas. Con timers el velo SIEMPRE se quita.
+  // Velo de "Siguiente Nivel" SIN animaciones: se muestra fijo 2 segundos y se
+  // quita por temporizador. Las versiones animadas (spring/fade) se comportaban
+  // distinto por plataforma y en iOS a veces quedaba una capa translucida
+  // pegada sobre la pregunta; estatico es identico y estable en iOS/Android/web.
   const transitionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { transitionTimersRef.current.forEach(clearTimeout); }, []);
 
   const showLevelTransitionAnimation = useCallback((level: QuestionLevel) => {
-    // Si habia una transicion anterior a medio camino, cancelar sus timers
-    // para que no cierren esta antes de tiempo.
     transitionTimersRef.current.forEach(clearTimeout);
     transitionTimersRef.current = [];
 
     setTransitionLevel(level);
     setShowLevelTransition(true);
 
-    scaleAnim.setValue(0);
-    fadeAnim.setValue(0);
-    const nativeDriver = Platform.OS !== 'web';
-
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: nativeDriver,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: nativeDriver,
-      }),
-    ]).start();
-
-    transitionTimersRef.current.push(setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 1.2,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: nativeDriver,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: nativeDriver,
-        }),
-      ]).start();
-    }, 2300));
-
     transitionTimersRef.current.push(setTimeout(() => {
       setShowLevelTransition(false);
       setTransitionLevel(null);
-    }, 2650));
-  }, [scaleAnim, fadeAnim]);
+    }, 2000));
+  }, []);
 
   // Avanza al siguiente nivel; si ya estábamos en Atrevido, CIERRA la dinámica
   // para toda la mesa (game_phase='finished') y cada teléfono navega solo al
@@ -655,12 +635,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
   // Cierre nuevo: marca la cita como pasada y lleva a la pantalla de
   // afinidad + match + feedback (reemplaza el viejo puntaje de estrellas).
+  const [closingNavigated, setClosingNavigated] = useState(false);
+
   const goToClosing = useCallback(async () => {
     if (!appointment?.event_id || !currentUserId) return;
+    // Candado global: UNA sola navegacion al cierre por evento, aunque el
+    // componente se re-monte. Sin esto se apilaban varias pantallas de cierre.
+    if (closingNavigatedForEvent === appointment.event_id) {
+      setClosingNavigated(true);
+      return;
+    }
+    closingNavigatedForEvent = appointment.event_id;
+    setClosingNavigated(true);
     // Navegar PRIMERO: antes se esperaba el UPDATE de la cita y, con red lenta,
     // la mesa quedaba mirando una pantalla negra "cargando" varios segundos.
-    // Ademas ese UPDATE hacia reaccionar a las pantallas de atras (saltos
-    // visibles). El marcado de la cita como pasada corre en segundo plano.
+    // El marcado de la cita como pasada corre en segundo plano.
     router.push(`/catch-up-rating/${appointment.event_id}` as any);
     supabase
       .from('appointments')
@@ -671,6 +660,17 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         if (error) console.error('goToClosing (marcar cita) error:', error.message);
       });
   }, [appointment, currentUserId, router]);
+
+  // Si la dinamica del MISMO evento vuelve a arrancar (se reinicio para otra
+  // ronda o para pruebas), liberar el candado para que el proximo cierre
+  // vuelva a navegar normal.
+  useEffect(() => {
+    if (gamePhase === 'questions' && closingNavigatedForEvent === appointment?.event_id) {
+      closingNavigatedForEvent = null;
+      closingTriggeredRef.current = false;
+      setClosingNavigated(false);
+    }
+  }, [gamePhase, appointment?.event_id]);
 
   // Al llegar la fase 'finished' (la puso el moderador al terminar la última
   // pregunta; llega por realtime o restore), cada teléfono pasa UNA sola vez al
@@ -863,7 +863,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </View>
           )}
 
-          {/* Cambiar moderador: cualquiera puede tomar el rol. */}
+          {/* Cambiar moderador: para los DEMAS (tomar el relevo). El moderador
+              actual no lo necesita -- ya tiene el control -- y verlo lo
+              confundia. Si no hay moderador (dato viejo), se muestra a todos. */}
+          {!(moderatorId && currentUserId === moderatorId) && (
           <TouchableOpacity
             style={styles.changeModeratorBtn}
             onPress={() => setShowChangeModerator(true)}
@@ -871,6 +874,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           >
             <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
           </TouchableOpacity>
+          )}
 
           {moderatorId && (
             <Text style={styles.moderatorTag}>
@@ -884,15 +888,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         {/* Level Transition Animation Overlay */}
         {showLevelTransition && transitionLevel && (
           <View style={styles.transitionOverlay}>
-            <Animated.View
-              style={[
-                styles.transitionCard,
-                {
-                  transform: [{ scale: scaleAnim }],
-                  opacity: fadeAnim,
-                },
-              ]}
-            >
+            <View style={styles.transitionCard}>
               <LinearGradient
                 colors={transitionTheme.gradient}
                 style={styles.transitionCardGradient}
@@ -903,7 +899,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
                 <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
               </LinearGradient>
-            </Animated.View>
+            </View>
           </View>
         )}
       </LinearGradient>
@@ -922,7 +918,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
       end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.syncContainer}>
-        {gamePhase === 'finished' ? (
+        {gamePhase === 'finished' && !closingNavigated ? (
+          // Primer instante tras terminar: un solo estado de carga continuo
+          // hasta que abre el cierre (antes se alcanzaba a ver esta pantalla
+          // completa un frame y la transicion se sentia como varios brincos).
+          <>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.syncText}>💘 Preparando el cierre…</Text>
+          </>
+        ) : gamePhase === 'finished' ? (
           // La navegacion al cierre ya se disparo una vez (closingTriggeredRef).
           // Si la persona VUELVE a esta pestana despues, no puede quedarse
           // mirando un spinner eterno: se le dice que termino y se le da el

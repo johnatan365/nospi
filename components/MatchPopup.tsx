@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 // -----------------------------------------------------------------------------
@@ -21,12 +21,7 @@ interface Props { userId?: string | null; }
 
 export default function MatchPopup({ userId }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
   const [match, setMatch] = useState<MatchInfo | null>(null);
-  // Guardamos el path en un ref para leerlo dentro del callback del canal sin
-  // re-suscribir cada vez que cambia la navegación.
-  const pathRef = useRef(pathname);
-  useEffect(() => { pathRef.current = pathname; }, [pathname]);
 
   const initial = (n: string) => (n || '?').trim().charAt(0).toUpperCase();
 
@@ -38,9 +33,11 @@ export default function MatchPopup({ userId }: Props) {
         if (!row) return;
         // Seguridad extra: solo si el usuario es parte del match.
         if (row.user_a !== userId && row.user_b !== userId) return;
-        // Si la persona está en la propia pantalla de calificar, no la
-        // interrumpimos: ahí ya ve su resultado del match.
-        if ((pathRef.current || '').includes('catch-up-rating')) return;
+        // Antes se suprimia el popup dentro de la pantalla de cierre, asumiendo
+        // que "ahi ya ve su resultado". Falso en los cierres casi simultaneos:
+        // el match podia crearse cuando la persona YA estaba viendo su
+        // resultado y no se enteraba por ningun lado. Ahora el popup suena
+        // SIEMPRE: es el momento mas feliz de la app, que no se lo pierda nadie.
 
         const otherId = row.user_a === userId ? row.user_b : row.user_a;
         // Traemos nombre/foto/conversación del match (ya con conversation_id set).
