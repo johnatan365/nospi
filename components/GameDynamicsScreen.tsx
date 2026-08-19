@@ -466,6 +466,46 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     };
   }, []);
 
+  // Sondeo de respaldo EN PLENO JUEGO (espejo del que ya existia en la
+  // pre-partida): si el canal realtime muere en silencio (radio movil, app que
+  // volvio del background), este telefono no se enteraba de los avances del
+  // moderador ni del final de la dinamica y se quedaba pegado en una pregunta
+  // vieja "cargando un buen rato". Cada 4s reconcilia contra la BD; solo
+  // escribe estado cuando hay diferencia real, y no pelea con un avance en
+  // curso del moderador (loading).
+  const pollSnapshotRef = useRef({ gamePhase, currentLevel, currentQuestionIndex, loading });
+  useEffect(() => {
+    pollSnapshotRef.current = { gamePhase, currentLevel, currentQuestionIndex, loading };
+  });
+  useEffect(() => {
+    if (!appointment?.event_id) return;
+    const pollId = setInterval(async () => {
+      const snap = pollSnapshotRef.current;
+      if (snap.loading) return;
+      const { data } = await supabase
+        .from('events')
+        .select('game_phase, current_level, current_question_index, current_question, moderator_id')
+        .eq('id', appointment.event_id)
+        .maybeSingle();
+      if (!data) return;
+      setModeratorId(data.moderator_id ?? null);
+      if (data.game_phase === 'finished' || data.game_phase === 'free_phase') {
+        setGamePhase('finished');
+        return;
+      }
+      if (
+        (data.game_phase === 'questions' || data.game_phase === 'question_active') &&
+        (data.current_question_index !== snap.currentQuestionIndex || data.current_level !== snap.currentLevel)
+      ) {
+        setGamePhase('questions');
+        setCurrentLevel(data.current_level || 'divertido');
+        setCurrentQuestionIndex(data.current_question_index || 0);
+        setCurrentQuestion(data.current_question || null);
+      }
+    }, 4000);
+    return () => clearInterval(pollId);
+  }, [appointment?.event_id]);
+
   // Velo de "Siguiente Nivel" SIN animaciones: se muestra fijo 2 segundos y se
   // quita por temporizador. Las versiones animadas (spring/fade) se comportaban
   // distinto por plataforma y en iOS a veces quedaba una capa translucida

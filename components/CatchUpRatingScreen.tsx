@@ -37,6 +37,16 @@ interface CatchUpParticipant { user_id: string; name: string; profile_photo_url:
 interface Match { user_id: string; name: string; profile_photo_url: string | null; conversation_id: string | null; }
 interface Props { eventId: string; currentUserId: string; }
 
+// Carrera contra un timeout: en Android, tras volver del background, un fetch
+// puede quedarse COLGADO sin resolver nunca (conexion muerta). Sin esto, cada
+// paso del cierre se "quedaba cargando un rato" hasta que la red revivia.
+function withTimeout<T>(p: PromiseLike<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -56,10 +66,21 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
   const [matches, setMatches] = useState<Match[]>([]);
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
       try {
-        const { data, error } = await supabase.rpc('get_event_participants_for_interaction', { p_event_id: eventId });
-        if (error) { console.error('[cierre] participantes:', error.message); }
+        const { data, error } = await withTimeout(
+          supabase.rpc('get_event_participants_for_interaction', { p_event_id: eventId }),
+          7000,
+          { data: null, error: { message: 'timeout' } } as any
+        );
+        if (cancelled) return;
+        if (error || !data) {
+          if (error) console.error('[cierre] participantes:', error.message);
+          retryTimer = setTimeout(load, 2500); // reintentar en vez de quedarse cargando
+          return;
+        }
         // La RPC devuelve user_name / user_profile_photo_url -> los mapeamos.
         const list: CatchUpParticipant[] = (data || [])
           .filter((p: any) => p.user_id !== currentUserId)
@@ -73,17 +94,23 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
         // Afinidad que esta persona ya guardo en un intento anterior. Sin esto,
         // quien no alcanzo a terminar el cierre y vuelve por el boton de Citas
         // encontraria la lista en blanco y tendria que elegir de nuevo.
-        const { data: prev } = await supabase
-          .from('event_affinity')
-          .select('liked_user_id')
-          .eq('event_id', eventId)
-          .eq('rater_user_id', currentUserId);
-        if (prev && prev.length > 0) {
+        const { data: prev } = await withTimeout(
+          supabase
+            .from('event_affinity')
+            .select('liked_user_id')
+            .eq('event_id', eventId)
+            .eq('rater_user_id', currentUserId),
+          7000,
+          { data: null } as any
+        );
+        if (!cancelled && prev && prev.length > 0) {
           setLiked(new Set(prev.map((r: any) => r.liked_user_id)));
         }
       } catch (e) { console.error('[cierre] load error:', e); }
-      finally { setLoading(false); }
-    })();
+      finally { if (!cancelled) setLoading(false); }
+    };
+    load();
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [eventId, currentUserId]);
 
   const toggleLike = (uid: string) => {
@@ -123,9 +150,13 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
 
       if (likedArr.length > 0) {
         const rows = likedArr.map(uid => ({ event_id: eventId, rater_user_id: currentUserId, liked_user_id: uid }));
-        const { error } = await supabase
-          .from('event_affinity')
-          .upsert(rows, { onConflict: 'event_id,rater_user_id,liked_user_id', ignoreDuplicates: true });
+        const { error } = await withTimeout(
+          supabase
+            .from('event_affinity')
+            .upsert(rows, { onConflict: 'event_id,rater_user_id,liked_user_id', ignoreDuplicates: true }),
+          8000,
+          { error: { message: 'timeout' } } as any
+        );
         if (error) console.error('[cierre] afinidad:', error.message);
       }
 
@@ -136,7 +167,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
         .eq('event_id', eventId)
         .eq('rater_user_id', currentUserId);
       if (likedArr.length > 0) del = del.not('liked_user_id', 'in', `(${likedArr.join(',')})`);
-      const { error: delErr } = await del;
+      const { error: delErr } = await withTimeout(del, 8000, { error: { message: 'timeout' } } as any);
       if (delErr) console.error('[cierre] afinidad (limpieza):', delErr.message);
     } catch (e) {
       console.error('[cierre] saveAffinity:', e);
@@ -187,9 +218,11 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
         });
       }
       if (fbRows.length > 0) {
-        const { error } = await supabase
-          .from('event_feedback')
-          .upsert(fbRows, { onConflict: 'event_id,user_id,item_key' });
+        const { error } = await withTimeout(
+          supabase.from('event_feedback').upsert(fbRows, { onConflict: 'event_id,user_id,item_key' }),
+          8000,
+          { error: { message: 'timeout' } } as any
+        );
         if (error) console.error('[cierre] feedback:', error.message);
       }
 
@@ -199,7 +232,12 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
         .eq('event_id', eventId).eq('user_id', currentUserId);
 
       // 4) ¿Ya hay match? (el otro pudo haber elegido antes)
-      const { data: myMatches } = await supabase.rpc('get_my_event_matches', { p_event_id: eventId });
+      const { data: myMatches } = await withTimeout(
+        supabase.rpc('get_my_event_matches', { p_event_id: eventId }),
+        6000,
+        { data: null } as any
+      );
+      // Si se vencio, no importa: el sondeo de la pantalla final los trae.
       setMatches((myMatches || []) as Match[]);
     } catch (e) {
       console.error('[cierre] submit error:', e);
@@ -316,12 +354,6 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
           <>
             <Text style={styles.kicker}>¿Qué tal estuvo?</Text>
             <Text style={styles.h1}>Califica el encuentro</Text>
-            {liked.size > 0 && (
-              <View style={styles.savedNote}>
-                <Text style={styles.savedNoteEmoji}>✅</Text>
-                <Text style={styles.savedNoteTxt}>Tu elección ya quedó guardada. Si es mutuo, te avisamos.</Text>
-              </View>
-            )}
             <Text style={styles.help}>Tu opinión nos ayuda a mejorar para los próximos eventos 🙌</Text>
             <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
             {ITEMS.map((it) => {
@@ -518,9 +550,6 @@ const styles = StyleSheet.create({
   matchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 11, marginBottom: 10, width: '100%' },
   chatBtn: { backgroundColor: VINO, borderRadius: 20, paddingVertical: 9, paddingHorizontal: 16 },
   chatBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
-  savedNote: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: 'rgba(16,185,129,.16)', borderWidth: 1, borderColor: 'rgba(52,211,153,.6)', borderRadius: 14, padding: 11, marginBottom: 10 },
-  savedNoteEmoji: { fontSize: 16 },
-  savedNoteTxt: { flex: 1, color: '#A7F3D0', fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
   // Remate de la experiencia: los devuelve a la mesa despues del resultado.
   iceBreak: { backgroundColor: 'rgba(255,255,255,.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,.2)', borderRadius: 20, padding: 18, marginTop: 16, alignItems: 'center', width: '100%' },
   iceBreakIcon: { fontSize: 34 },
