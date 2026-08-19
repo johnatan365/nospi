@@ -154,7 +154,7 @@ interface AdminMatch {
   conversation_id: string | null; created_at: string;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
 
 
 
