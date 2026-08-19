@@ -76,6 +76,43 @@
     </script>
     </script>
     </script>
+    <!-- Atribucion de canal: guarda de donde llego el visitante en su PRIMERA
+         visita y lo conserva hasta que se registre (puede ser dias despues).
+         Lo lee app/index.tsx al crear el perfil. -->
+    <script>
+      (function () {
+        try {
+          var K = 'nospi_attr';
+          if (localStorage.getItem(K)) return;
+          var p = new URLSearchParams(window.location.search);
+          var ref = document.referrer || '';
+          var src = p.get('utm_source') || '';
+          var clickId = p.get('ttclid') || p.get('fbclid') || p.get('gclid') || '';
+          if (!src) {
+            if (p.get('ttclid')) { src = 'tiktok'; }
+            else if (p.get('fbclid')) { src = 'facebook'; }
+            else if (p.get('gclid')) { src = 'google'; }
+            else if (ref.indexOf('tiktok') > -1) { src = 'tiktok'; }
+            else if (ref.indexOf('instagram') > -1) { src = 'instagram'; }
+            else if (ref.indexOf('facebook') > -1 || ref.indexOf('fb.com') > -1) { src = 'facebook'; }
+            else if (ref.indexOf('google') > -1) { src = 'google'; }
+            else if (ref.indexOf('whatsapp') > -1 || ref.indexOf('wa.me') > -1) { src = 'whatsapp'; }
+            else if (ref && ref.indexOf(location.hostname) === -1) { src = 'referido'; }
+            else { src = 'directo'; }
+          }
+          localStorage.setItem(K, JSON.stringify({
+            utm_source: src,
+            utm_medium: p.get('utm_medium') || (clickId ? 'cpc' : ''),
+            utm_campaign: p.get('utm_campaign') || '',
+            utm_content: p.get('utm_content') || '',
+            click_id: clickId,
+            referrer: ref.slice(0, 300),
+            first_landing_at: new Date().toISOString()
+          }));
+        } catch (e) {}
+      })();
+    </script>
+    </script>
     <style id="expo-reset">
       /* 100dvh = alto REAL visible en navegadores moviles (descuenta la barra
          de URL de Chrome y las barras de los navegadores internos de
