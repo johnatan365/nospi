@@ -148,6 +148,14 @@ export default function SubscriptionMembershipScreen() {
   const [cardCvc, setCardCvc] = useState('');
   const [cardHolder, setCardHolder] = useState('');
 
+  // ── Cambiar tarjeta de cobro (suscripcion activa) ──────────────────────────
+  // La marca / ultimos 4 se consultan EN VIVO a Wompi via la edge function
+  // wompi-update-payment-method; Nospi nunca guarda datos de la tarjeta.
+  const [currentCard, setCurrentCard] = useState<{ brand: string | null; lastFour: string | null; expMonth: string | null; expYear: string | null } | null>(null);
+  const [showChangeCardForm, setShowChangeCardForm] = useState(false);
+  const [changingCard, setChangingCard] = useState(false);
+  const [showCardChangedModal, setShowCardChangedModal] = useState(false);
+
   const loadSubscription = useCallback(async () => {
     // Sesión todavía resolviéndose (refresh reciente, red lenta) — esperar en
     // vez de concluir "no hay usuario".
@@ -170,6 +178,23 @@ export default function SubscriptionMembershipScreen() {
 
   const isActive = subscription?.status === 'active' && subscription?.end_date && new Date(subscription.end_date) > new Date();
 
+  useEffect(() => {
+    if (!isActive || !subscription?.wompi_payment_source_id || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/wompi-update-payment-method`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ action: 'get', userId: user.id }),
+        });
+        const data = await res.json();
+        if (!cancelled && data?.card) setCurrentCard(data.card);
+      } catch (_e) { /* sin tarjeta visible; el boton de cambiar sigue funcionando */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isActive, subscription?.wompi_payment_source_id, user?.id]);
+
   const getWompiTokens = async () => {
     const res = await fetch(`${WOMPI_API_URL}/merchants/${WOMPI_PUBLIC_KEY}`);
     const data = await res.json();
@@ -177,6 +202,77 @@ export default function SubscriptionMembershipScreen() {
       acceptanceToken: data.data?.presigned_acceptance?.acceptance_token,
       personalDataToken: data.data?.presigned_personal_data_auth?.acceptance_token,
     };
+  };
+
+  const handleChangeCard = async () => {
+    if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
+      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      return;
+    }
+    if (cardHolder.trim().length < 5) {
+      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      return;
+    }
+    setChangingCard(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      if (!currentUser) throw new Error('Sesión no encontrada');
+
+      const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
+      const expMonth = (expMonthRaw || '').trim();
+      const expYearTrimmed = (expYearRaw || '').trim();
+      if (!expMonth || !expYearTrimmed) throw new Error('Fecha de vencimiento inválida. Usa el formato MM/AA.');
+      const expYearFull = expYearTrimmed.length === 4 ? expYearTrimmed.slice(2) : expYearTrimmed;
+
+      // El numero de la tarjeta va DIRECTO a Wompi (tokenizacion), nunca a Nospi.
+      const tokenRes = await fetch(`${WOMPI_API_URL}/tokens/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WOMPI_PUBLIC_KEY}` },
+        body: JSON.stringify({
+          number: cardNumber.replace(/\s/g, ''),
+          exp_month: expMonth,
+          exp_year: expYearFull,
+          cvc: cardCvc,
+          card_holder: cardHolder,
+        }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.data?.id) {
+        const msgs = tokenData.error?.messages;
+        const readable = msgs ? Object.values(msgs).flat().join(', ') : JSON.stringify(tokenData.error);
+        throw new Error(readable || 'Datos de tarjeta inválidos');
+      }
+
+      const { acceptanceToken, personalDataToken } = await getWompiTokens();
+      if (!acceptanceToken) throw new Error('No se pudo obtener token de aceptación de Wompi');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wompi-update-payment-method`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          action: 'change',
+          userId: currentUser.id,
+          userEmail: currentUser.email || '',
+          cardToken: tokenData.data.id,
+          acceptanceToken,
+          personalDataToken,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.ok) {
+        throw new Error(typeof result?.error === 'string' ? result.error : 'No se pudo cambiar la tarjeta');
+      }
+
+      if (result.card) setCurrentCard(result.card);
+      setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder('');
+      setShowChangeCardForm(false);
+      setShowCardChangedModal(true);
+    } catch (e: any) {
+      showAlert('No se pudo cambiar la tarjeta', e.message || 'Intenta de nuevo.');
+    } finally {
+      setChangingCard(false);
+    }
   };
 
   const handleSubscribe = async () => {
@@ -483,6 +579,92 @@ export default function SubscriptionMembershipScreen() {
             <Text style={styles.activeSubtitle}>
               {subscription.auto_renew ? 'Se renueva automáticamente cada mes' : 'No se renovará — termina en la fecha indicada'}
             </Text>
+
+            {!showChangeCardForm ? (
+              <View style={styles.payBox}>
+                <Text style={styles.payBoxTitle}>Método de pago</Text>
+                <View style={styles.payCardRow}>
+                  {(() => {
+                    const b = (currentCard?.brand || '').toLowerCase();
+                    if (b === 'visa' || b === 'mastercard' || b === 'amex' || b === 'diners' || b === 'discover') {
+                      return renderCardBrandMark(b as any);
+                    }
+                    return <Ionicons name="card-outline" size={22} color={nospiColors.purpleMid} />;
+                  })()}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.payCardNum}>
+                      {currentCard?.lastFour ? `•••• ${currentCard.lastFour}` : 'Tarjeta registrada'}
+                    </Text>
+                    {currentCard?.expMonth && currentCard?.expYear ? (
+                      <Text style={styles.payCardExp}>Vence {String(currentCard.expMonth).padStart(2, '0')}/{String(currentCard.expYear).slice(-2)}</Text>
+                    ) : null}
+                  </View>
+                </View>
+                {subscription.auto_renew && subscription.next_charge_date ? (
+                  <Text style={styles.payNextCharge}>
+                    Próximo cobro: <Text style={styles.payNextChargeStrong}>{new Date(subscription.next_charge_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</Text> · <Text style={styles.payNextChargeStrong}>${Number(subscription.price).toLocaleString('es-CO')} COP</Text>
+                  </Text>
+                ) : null}
+                <TouchableOpacity style={styles.changeCardBtn} onPress={() => setShowChangeCardForm(true)} activeOpacity={0.85}>
+                  <Text style={styles.changeCardBtnText}>💳 Cambiar tarjeta</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.payBox}>
+                <Text style={styles.changeFormTitle}>💳 Cambiar tarjeta</Text>
+                <Text style={styles.changeFormSubtitle}>
+                  Tu suscripción sigue igual. No se hace ningún cobro ahora: el próximo cobro se hará a la tarjeta nueva.
+                </Text>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
+                  <View style={styles.cardNumberRow}>
+                    <TextInput
+                      style={[styles.input, styles.cardNumberInput]}
+                      placeholder="Número de tarjeta"
+                      placeholderTextColor={nospiColors.gray400}
+                      keyboardType="number-pad"
+                      value={cardNumber}
+                      onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 16); setCardNumber(digits.replace(/(.{4})/g, '$1 ').trim()); }}
+                      maxLength={19}
+                      autoComplete="cc-number"
+                      textContentType="creditCardNumber"
+                      importantForAutofill="yes"
+                    />
+                    {(() => {
+                      const brand = getCardBrand(cardNumber.replace(/\s/g, ''));
+                      if (!brand) return null;
+                      return renderCardBrandMark(brand);
+                    })()}
+                  </View>
+                  <View style={{ flexDirection: 'row' }}>
+                    <TextInput
+                      style={[styles.input, { flex: 1, minWidth: 0, marginRight: 10 }]}
+                      placeholder="MM/AA"
+                      placeholderTextColor={nospiColors.gray400}
+                      value={cardExpiry}
+                      onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(digits.length >= 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits); }}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      autoComplete="cc-exp"
+                      importantForAutofill="yes"
+                    />
+                    <TextInput style={[styles.input, { flex: 1, minWidth: 0 }]} placeholder="CVC" placeholderTextColor={nospiColors.gray400} keyboardType="number-pad" maxLength={4} value={cardCvc} onChangeText={setCardCvc} autoComplete="cc-csc" importantForAutofill="yes" />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.subscribeButton}
+                    onPress={() => { Keyboard.dismiss(); handleChangeCard(); }}
+                    disabled={changingCard}
+                    activeOpacity={0.85}
+                  >
+                    {changingCard ? <ActivityIndicator color="#fff" /> : <Text style={styles.subscribeButtonText}>Guardar tarjeta nueva</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { if (!changingCard) { setShowChangeCardForm(false); setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder(''); } }} activeOpacity={0.7}>
+                    <Text style={styles.changeFormBackLink}>← Volver sin cambiar</Text>
+                  </TouchableOpacity>
+                </KeyboardAvoidingView>
+              </View>
+            )}
+
             {subscription.auto_renew ? (
               <TouchableOpacity style={styles.cancelLink} onPress={handleCancel} disabled={cancelling}>
                 {cancelling ? <ActivityIndicator color={nospiColors.error} /> : <Text style={styles.cancelLinkText}>Cancelar renovación automática</Text>}
@@ -677,6 +859,25 @@ export default function SubscriptionMembershipScreen() {
         </View>
       </Modal>
 
+      <Modal visible={showCardChangedModal} transparent animationType="fade">
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <Text style={styles.successModalEmoji}>💳</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>Tarjeta actualizada</Text>
+            <Text style={styles.successModalSubtitle}>
+              {`Tu próximo cobro${subscription?.next_charge_date ? ` del ${new Date(subscription.next_charge_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}` : ''} se hará a la tarjeta ${currentCard?.lastFour ? `terminada en ${currentCard.lastFour}` : 'nueva'}. No se realizó ningún cobro.`}
+            </Text>
+            <TouchableOpacity
+              style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
+              onPress={() => setShowCardChangedModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.successModalButtonText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showReactivateSuccessModal} transparent animationType="fade">
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
@@ -698,6 +899,19 @@ export default function SubscriptionMembershipScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Metodo de pago (cambiar tarjeta) ────────────────────────────────────────
+  payBox: { marginTop: 16, backgroundColor: '#faf5f8', borderWidth: 1, borderColor: '#eedde7', borderRadius: 14, padding: 14, width: '100%' },
+  payBoxTitle: { fontSize: 11, fontWeight: '800', color: '#9b6b83', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, textAlign: 'left' },
+  payCardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  payCardNum: { fontSize: 15, fontWeight: '700', color: '#2b2b2e', letterSpacing: 1, textAlign: 'left' },
+  payCardExp: { fontSize: 11.5, color: '#8a8a8f', marginTop: 2, textAlign: 'left' },
+  payNextCharge: { fontSize: 12.5, color: '#555', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0e2ea', textAlign: 'left' },
+  payNextChargeStrong: { color: '#880E4F', fontWeight: '800' },
+  changeCardBtn: { marginTop: 12, borderWidth: 1.5, borderColor: '#AD1457', borderRadius: 24, paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff' },
+  changeCardBtnText: { color: '#AD1457', fontSize: 13.5, fontWeight: '800' },
+  changeFormTitle: { fontSize: 16.5, fontWeight: '800', color: '#6d0e3c', textAlign: 'center', marginBottom: 4 },
+  changeFormSubtitle: { fontSize: 12.5, color: '#666', textAlign: 'center', lineHeight: 18, marginBottom: 14 },
+  changeFormBackLink: { textAlign: 'center', color: '#8a8a8f', fontSize: 13, marginTop: 14 },
   safeArea: { flex: 1, backgroundColor: nospiColors.gradientDark },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
