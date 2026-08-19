@@ -1351,8 +1351,8 @@ export default function DinamicaScreen() {
                   <Text style={styles.modRoleText}>El moderador se puede cambiar por otro en cualquier parte de la dinámica.</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.comenzarButton} onPress={handleBecomeModerator} activeOpacity={0.85}>
-                <Text style={styles.comenzarButtonText}>🙋 Quiero ser el moderador</Text>
+              <TouchableOpacity style={[styles.comenzarButton, styles.becomeModBtn]} onPress={handleBecomeModerator} activeOpacity={0.85}>
+                <Text style={styles.becomeModBtnText} numberOfLines={1}>🙋 Quiero ser el moderador</Text>
               </TouchableOpacity>
               <View style={styles.modFirstTag}>
                 <Text style={styles.modFirstTagText}>El primero que se postule queda</Text>
@@ -1765,6 +1765,11 @@ const styles = StyleSheet.create({
   modWaitText: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,0.9)', textAlign: 'center' },
   comenzarButton: { backgroundColor: '#880E4F', borderRadius: 50, paddingVertical: 18, paddingHorizontal: 56, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(240,98,146,0.50)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 10, marginTop: 8 },
   comenzarButtonText: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1, textAlign: 'center' },
+  // Variante del boton de postularse: el texto es mas largo que "Comenzar" y
+  // con la letra de 22 se partia en dos lineas; letra 18 y menos padding lo
+  // dejan en UNA linea en cualquier pantalla.
+  becomeModBtn: { paddingHorizontal: 24, alignSelf: 'stretch' },
+  becomeModBtnText: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.4, textAlign: 'center' },
   divertidoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   divertidoCard: { borderRadius: 32, overflow: 'hidden', minWidth: 280 },
   divertidoCardGradient: { padding: 48, alignItems: 'center', borderRadius: 32 },
