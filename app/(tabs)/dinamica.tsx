@@ -81,13 +81,16 @@ type CheckInPhase = 'waiting' | 'code_entry' | 'confirmed';
 const DEFAULT_GPS_RADIUS_METERS = 150;
 
 // ── Tiempos de arranque, contados desde la hora del evento ───────────────────
-// A la hora exacta se habilita "Confirmar asistencia" (GPS). Luego:
-//  · START_WINDOW_MINUTES: cuándo aparece el botón "Continuar" de la lista de
-//    confirmados (empezar a elegir moderador y leer las reglas). Antes de eso
-//    la pantalla muestra el conteo regresivo.
+//  · CONFIRM_EARLY_MINUTES: cuánto ANTES de la hora se habilita "Confirmar
+//    asistencia" (GPS), para quien llega temprano al lugar.
+//  · START_WINDOW_MINUTES: cuánto DESPUÉS de la hora aparece el botón
+//    "Continuar" de la lista de confirmados (elegir moderador y leer reglas).
+//    Elegido con datos reales de llegadas: a los 5 min ha llegado ~60% de la
+//    gente y a los 10 ~80%; 7 recoge a los del minuto 6-7 sin estirar tanto.
 //    Durante ese conteo la tarjeta de espera explica que es para darle chance a
 //    quien se haya retrasado, e invita a pedir algo mientras tanto.
-const START_WINDOW_MINUTES = 5;
+const CONFIRM_EARLY_MINUTES = 15;
+const START_WINDOW_MINUTES = 7;
 
 // Distancia en metros entre dos coordenadas (fórmula de Haversine)
 function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -196,18 +199,22 @@ export default function DinamicaScreen() {
 
     setCountdown(diffToStartWindow);
 
-    if (diffToEventTime <= 0 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
+    // "Confirmar asistencia" se abre desde CONFIRM_EARLY_MINUTES antes de la
+    // hora, para quien llega temprano al lugar (el GPS sigue exigiendo estar ahí).
+    if (diffToEventTime <= CONFIRM_EARLY_MINUTES * 60 * 1000 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
       setCheckInPhase('code_entry');
     }
 
-    if (diffToStartWindow <= 0) {
-      setCountdownDisplay('Ahora');
+    // El conteo grande apunta a la HORA PACTADA del evento (no a la hora + la
+    // espera): la gente creía que ese tiempo era el plazo para confirmar.
+    if (diffToEventTime <= 0) {
+      setCountdownDisplay('¡Es la hora!');
       return;
     }
 
-    const hours = Math.floor(diffToStartWindow / (1000 * 60 * 60));
-    const minutes = Math.floor((diffToStartWindow % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffToStartWindow % (1000 * 60)) / 1000);
+    const hours = Math.floor(diffToEventTime / (1000 * 60 * 60));
+    const minutes = Math.floor((diffToEventTime % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffToEventTime % (1000 * 60)) / 1000);
 
     const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     setCountdownDisplay(countdownText);
@@ -1511,12 +1518,15 @@ export default function DinamicaScreen() {
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>
-            {checkInPhase === 'code_entry' ? 'Tiempo para confirmar tu llegada' : 'Tiempo para iniciar la dinámica'}
-          </Text>
-          <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
-        </View>
+        {/* Conteo a la HORA PACTADA. "Tiempo para confirmar tu llegada" hacía
+            creer que ese era el plazo para confirmar. Tras confirmar se oculta:
+            el conteo que manda pasa a ser el de la tarjeta de espera. */}
+        {checkInPhase !== 'confirmed' && (
+          <View style={styles.countdownCard}>
+            <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
+            <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
+          </View>
+        )}
 
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
@@ -1553,7 +1563,11 @@ export default function DinamicaScreen() {
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
             <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
-            <Text style={styles.codeEntrySubtitle}>Presiona el botón cuando estés en el lugar del evento</Text>
+            <Text style={styles.codeEntrySubtitle}>
+              {countdownDisplay === '¡Es la hora!'
+                ? 'Presiona el botón cuando estés en el lugar del evento'
+                : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
+            </Text>
 
             {gpsError ? (
               <Text style={styles.codeErrorText}>{gpsError}</Text>
@@ -1619,13 +1633,20 @@ export default function DinamicaScreen() {
                 <Text style={styles.waitCardWhy}>
                   Le damos unos minutos a quien se haya retrasado.
                 </Text>
-                <View style={styles.waitCardDivider} />
-                <View style={styles.waitCardDrink}>
-                  <Text style={styles.waitCardDrinkEmoji}>🍹</Text>
-                  <Text style={styles.waitCardDrinkText}>
-                    Mientras tanto <Text style={styles.waitCardDrinkStrong}>pide algo de tomar o la cena</Text>. La experiencia es mucho mejor con algo en la mesa.
-                  </Text>
-                </View>
+                {/* La invitación a pedir depende del TIPO de evento: en una
+                    cena aplica "la cena", en bar/café/bolos solo algo de tomar,
+                    y en caminata no hay dónde ordenar, así que no se muestra. */}
+                {appointment.event.type !== 'caminata' && (
+                  <>
+                    <View style={styles.waitCardDivider} />
+                    <View style={styles.waitCardDrink}>
+                      <Text style={styles.waitCardDrinkEmoji}>🍹</Text>
+                      <Text style={styles.waitCardDrinkText}>
+                        Mientras tanto <Text style={styles.waitCardDrinkStrong}>{appointment.event.type === 'restaurante' ? 'pide algo de tomar o la cena' : 'pide algo de tomar'}</Text>. La experiencia es mucho mejor con algo en la mesa.
+                      </Text>
+                    </View>
+                  </>
+                )}
               </View>
             )}
 
