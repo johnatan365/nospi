@@ -3095,7 +3095,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const activeSubs = subscriptions.filter((s) => s.status === 'active');
     const cancelledSubs = subscriptions.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
     const expiredSubs = subscriptions.filter((s) => s.status === 'expired');
-    const mrr = activeSubs.reduce((sum, s) => sum + Number(s.price || 0), 0);
+    // MRR: solo cuentan las suscripciones que VAN A RENOVAR (auto_renew).
+    // Las activas con renovacion cancelada estan terminando su mes pagado y
+    // no generan ingreso el mes entrante: contarlas inflaba el numero.
+    const mrr = activeSubs.filter((s) => s.auto_renew).reduce((sum, s) => sum + Number(s.price || 0), 0);
     const renewingSoon = activeSubs.filter((s) => s.auto_renew && s.next_charge_date && new Date(s.next_charge_date).getTime() <= soonThreshold);
     const withFailedCharges = subscriptions.filter((s) => Number(s.failed_charge_count || 0) > 0);
 
