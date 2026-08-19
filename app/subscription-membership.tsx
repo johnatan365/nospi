@@ -459,8 +459,14 @@ export default function SubscriptionMembershipScreen() {
 
   const confirmCancelWithReason = async () => {
     if (!subscription) return;
+    // Con "Otro" el texto es OBLIGATORIO: antes se podia enviar vacio y en el
+    // admin quedaba "Otro" a secas, sin saber el motivo real.
+    if (selectedCancelReason === 'Otro' && !otherCancelReason.trim()) {
+      showAlert('Cuéntanos el motivo', 'Escribe brevemente por qué cancelas para poder mejorar.');
+      return;
+    }
     const reason = selectedCancelReason === 'Otro'
-      ? (otherCancelReason.trim() || 'Otro')
+      ? otherCancelReason.trim()
       : selectedCancelReason;
 
     if (!reason) {
@@ -796,7 +802,7 @@ export default function SubscriptionMembershipScreen() {
             {selectedCancelReason === 'Otro' && (
               <TextInput
                 style={[styles.input, { marginTop: 8 }]}
-                placeholder="Cuéntanos brevemente"
+                placeholder="Cuéntanos cuál es el motivo"
                 placeholderTextColor={nospiColors.gray400}
                 value={otherCancelReason}
                 onChangeText={setOtherCancelReason}
@@ -814,7 +820,7 @@ export default function SubscriptionMembershipScreen() {
               <TouchableOpacity
                 style={styles.cancelModalButtonPrimary}
                 onPress={confirmCancelWithReason}
-                disabled={cancelling || !selectedCancelReason}
+                disabled={cancelling || !selectedCancelReason || (selectedCancelReason === 'Otro' && !otherCancelReason.trim())}
               >
                 {cancelling
                   ? <ActivityIndicator color="#fff" />
