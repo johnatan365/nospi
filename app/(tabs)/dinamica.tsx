@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Animated, Easing, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Image, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -162,8 +162,6 @@ export default function DinamicaScreen() {
   // handleStartExperience). Solo la usa quien presiona "Comenzar".
   const [userReadyForGame, setUserReadyForGame] = useState(false);
   const [showDivertidoModal, setShowDivertidoModal] = useState(false);
-  const divertidoScaleAnim = useRef(new Animated.Value(0)).current;
-  const divertidoFadeAnim = useRef(new Animated.Value(0)).current;
 
   // Cache ref to avoid re-fetching on every focus
   const cacheRef = useRef<{ data: Appointment | null; timestamp: number } | null>(null);
@@ -1046,25 +1044,35 @@ export default function DinamicaScreen() {
   // si otro llegó primero, se lee el moderador real (realtime también corrige).
   const handleBecomeModerator = useCallback(async () => {
     if (!appointment?.event_id || !user?.id) return;
-    const { data, error } = await supabase
-      .from('events')
-      .update({ moderator_id: user.id, updated_at: new Date().toISOString() })
-      .eq('id', appointment.event_id)
-      .is('moderator_id', null)
-      .select('moderator_id');
-    if (error) {
-      console.error('❌ Error postulándose como moderador:', error);
-      return;
-    }
-    if (data && data.length > 0) {
-      setModeratorId(user.id);
-    } else {
-      const { data: row } = await supabase
+    // Feedback INMEDIATO: la pantalla pasa a "eres el moderador" ya. Antes se
+    // esperaba la respuesta de la red y, con senal lenta (o el fetch colgado
+    // tras volver del background en Android), el boton parecia muerto. Si otra
+    // persona gano la carrera, abajo (o el sondeo de 4s) lo corrige.
+    setModeratorId(user.id);
+    try {
+      const { data, error } = await supabase
         .from('events')
-        .select('moderator_id')
+        .update({ moderator_id: user.id, updated_at: new Date().toISOString() })
         .eq('id', appointment.event_id)
-        .maybeSingle();
-      if (row?.moderator_id) setModeratorId(row.moderator_id);
+        .is('moderator_id', null)
+        .select('moderator_id');
+      if (error) {
+        console.error('❌ Error postulándose como moderador:', error);
+        setModeratorId(null); // revertir; el sondeo trae el estado real
+        return;
+      }
+      if (!data || data.length === 0) {
+        // Otro se postulo primero: mostrar al moderador real.
+        const { data: row } = await supabase
+          .from('events')
+          .select('moderator_id')
+          .eq('id', appointment.event_id)
+          .maybeSingle();
+        if (row?.moderator_id) setModeratorId(row.moderator_id);
+      }
+    } catch (e) {
+      console.error('❌ Error postulándose como moderador:', e);
+      setModeratorId(null);
     }
   }, [appointment?.event_id, user?.id]);
 
@@ -1083,57 +1091,20 @@ export default function DinamicaScreen() {
     }
   }, [appointment?.event_id, gamePhase]);
 
-  // El cierre del modal (y el arranque del juego) van por TEMPORIZADORES, no
-  // encadenados a los callbacks de la animacion: si un callback no disparaba
-  // (animacion interrumpida, o web sin driver nativo), el velo negro quedaba
-  // pegado en pantalla y userReadyForGame nunca se marcaba -> el juego no
-  // arrancaba. Con timers el velo SIEMPRE se quita y el juego SIEMPRE arranca.
+  // Modal "Comenzar" SIN animaciones: se muestra fijo ~2s y se cierra por
+  // temporizador, y ahi mismo se marca userReadyForGame (el arranque real del
+  // juego). Las versiones animadas dejaban el velo pegado si un callback no
+  // disparaba, y el juego no arrancaba. Estatico es estable en iOS/Android/web.
   const divertidoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { divertidoTimersRef.current.forEach(clearTimeout); }, []);
 
   const showDivertidoModalAnimation = useCallback(() => {
     setShowDivertidoModal(true);
-    divertidoScaleAnim.setValue(0);
-    divertidoFadeAnim.setValue(0);
-    const nativeDriver = Platform.OS !== 'web';
-
-    Animated.parallel([
-      Animated.spring(divertidoScaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: nativeDriver,
-      }),
-      Animated.timing(divertidoFadeAnim, {
-        toValue: 1,
-        duration: 300,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: nativeDriver,
-      }),
-    ]).start();
-
-    divertidoTimersRef.current.push(setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(divertidoScaleAnim, {
-          toValue: 1.2,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: nativeDriver,
-        }),
-        Animated.timing(divertidoFadeAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: nativeDriver,
-        }),
-      ]).start();
-    }, 2300));
-
     divertidoTimersRef.current.push(setTimeout(() => {
       setShowDivertidoModal(false);
       setUserReadyForGame(true);
-    }, 2650));
-  }, [divertidoScaleAnim, divertidoFadeAnim]);
+    }, 2200));
+  }, []);
 
   // Solo el moderador marca userReadyForGame (al presionar "Comenzar" en las
   // reglas). Mientras siga listo y la dinámica no haya arrancado, reintentamos
@@ -1500,15 +1471,7 @@ export default function DinamicaScreen() {
 
         {showDivertidoModal && (
           <View style={styles.divertidoOverlay}>
-            <Animated.View
-              style={[
-                styles.divertidoCard,
-                {
-                  transform: [{ scale: divertidoScaleAnim }],
-                  opacity: divertidoFadeAnim,
-                },
-              ]}
-            >
+            <View style={styles.divertidoCard}>
               <LinearGradient
                 colors={['#4FC3F7', '#0288D1', '#01579B']}
                 style={styles.divertidoCardGradient}
@@ -1519,7 +1482,7 @@ export default function DinamicaScreen() {
                 <Text style={styles.divertidoModalTitle}>Nivel</Text>
                 <Text style={styles.divertidoModalLevel}>Divertido</Text>
               </LinearGradient>
-            </Animated.View>
+            </View>
           </View>
         )}
       </LinearGradient>
