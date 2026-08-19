@@ -8,6 +8,30 @@ import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
 
+// Atribucion de canal. El script de public/index.html guarda en localStorage
+// de donde llego el visitante en su PRIMERA visita (utm_source, ttclid/fbclid,
+// referrer). Aca lo leemos al crear el perfil para saber que canal trajo a cada
+// usuario. Solo aplica en web: en nativo no hay landing con parametros.
+function leerAtribucion() {
+  if (Platform.OS !== 'web') return {};
+  try {
+    const raw = localStorage.getItem('nospi_attr');
+    if (!raw) return {};
+    const a = JSON.parse(raw);
+    return {
+      utm_source: a.utm_source || null,
+      utm_medium: a.utm_medium || null,
+      utm_campaign: a.utm_campaign || null,
+      utm_content: a.utm_content || null,
+      click_id: a.click_id || null,
+      referrer: a.referrer || null,
+      first_landing_at: a.first_landing_at || null,
+    };
+  } catch (e) {
+    return {};
+  }
+}
+
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
   if (Platform.OS === 'web') {
@@ -190,6 +214,7 @@ export default function Index() {
                     push: true,
                   },
                   registered_from: Platform.OS,
+                  ...leerAtribucion(),
                 });
 
                 if (insertError) {
@@ -239,6 +264,7 @@ export default function Index() {
                   compatibility_percentage: 95,
                   notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
                   registered_from: 'web',
+                  ...leerAtribucion(),
                 });
                 if (!fallbackInsertError) {
                   hasNavigated.current = true;
