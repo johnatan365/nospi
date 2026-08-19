@@ -86,6 +86,11 @@
           if (localStorage.getItem(K)) return;
           var p = new URLSearchParams(window.location.search);
           var ref = document.referrer || '';
+// Los redirects de login (Apple, Google, Supabase) dejan su propio dominio
+// como referrer y se contaban como 'referido'. No son un canal: se ignoran
+// para no ensuciar la atribucion.
+var AUTH = ['appleid.apple.com', 'accounts.google.com', 'supabase.co', 'supabase.io', 'auth0.com'];
+for (var z = 0; z < AUTH.length; z++) { if (ref.indexOf(AUTH[z]) > -1) { ref = ''; break; } }
           var src = p.get('utm_source') || '';
           var clickId = p.get('ttclid') || p.get('fbclid') || p.get('gclid') || '';
           if (!src) {
