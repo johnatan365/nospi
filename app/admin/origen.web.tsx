@@ -7,8 +7,28 @@ import { supabase } from '@/lib/supabase';
 // La atribucion se captura en public/index.html (primera visita) y se guarda al
 // crear el perfil en app/index.tsx. Solo hay datos desde que eso se desplego.
 
-type UserRow = { id: string; created_at: string; utm_source: string | null; utm_campaign: string | null };
-type Fila = { origen: string; registros: number; reservaron: number; tasa: number };
+type UserRow = {
+  id: string;
+  created_at: string;
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_medium: string | null;
+  click_id: string | null;
+};
+type Fila = { clave: string; canal: string; pago: boolean; sinDato: boolean; registros: number; reservaron: number; tasa: number };
+
+// Un mismo canal puede ser pago u organico y no cuestan lo mismo: alguien que
+// llega del link de la bio de Instagram no vale igual que uno que llego por un
+// anuncio. Se separan en filas distintas.
+function esPago(u: UserRow) {
+  const m = (u.utm_medium || '').toLowerCase();
+  if (m.indexOf('cpc') > -1 || m.indexOf('paid') > -1 || m.indexOf('ppc') > -1) return true;
+  return !!u.click_id;
+}
+
+// Meta manda 'fb' e 'ig' en la macro {{site_source_name}}; se normalizan para
+// no terminar con cuatro nombres para dos canales.
+const ALIAS: Record<string, string> = { fb: 'facebook', ig: 'instagram', msg: 'messenger', an: 'audience network' };
 
 const RANGOS = [
   { key: '7', label: '7 dias' },
@@ -16,9 +36,6 @@ const RANGOS = [
   { key: '90', label: '90 dias' },
   { key: 'all', label: 'Todo' },
 ];
-
-// Canales que cuestan plata: se marcan para distinguirlos del trafico organico.
-const PAGO = ['tiktok', 'facebook', 'instagram', 'google'];
 
 const COLOR: Record<string, string> = {
   tiktok: '#000000',
@@ -43,7 +60,7 @@ export default function OrigenScreen() {
     try {
       const r1 = await supabase
         .from('users')
-        .select('id, created_at, utm_source, utm_campaign')
+        .select('id, created_at, utm_source, utm_campaign, utm_medium, click_id')
         .order('created_at', { ascending: false })
         .limit(5000);
       if (r1.error) throw r1.error;
@@ -69,19 +86,29 @@ export default function OrigenScreen() {
   const filas: Fila[] = useMemo(function () {
     const map: Record<string, Fila> = {};
     filtrados.forEach(function (u) {
-      const k = (u.utm_source || 'sin dato').toLowerCase();
-      if (!map[k]) map[k] = { origen: k, registros: 0, reservaron: 0, tasa: 0 };
+      const bruto = (u.utm_source || '').toLowerCase();
+      const sinDato = !bruto;
+      const canal = sinDato ? 'sin dato' : (ALIAS[bruto] || bruto);
+      const pago = sinDato ? false : esPago(u);
+      const k = canal + (pago ? '|pago' : '|org');
+      if (!map[k]) map[k] = { clave: k, canal: canal, pago: pago, sinDato: sinDato, registros: 0, reservaron: 0, tasa: 0 };
       map[k].registros += 1;
       if (conCita.has(u.id)) map[k].reservaron += 1;
     });
     const arr = Object.values(map);
     arr.forEach(function (f) { f.tasa = f.registros ? (f.reservaron / f.registros) * 100 : 0; });
-    return arr.sort(function (x, y) { return y.registros - x.registros; });
+    // "sin dato" siempre al final: es histórico y va a ser la fila mas grande
+    // durante semanas, no debe competir con los canales reales.
+    return arr.sort(function (x, y) {
+      if (x.sinDato !== y.sinDato) return x.sinDato ? 1 : -1;
+      return y.registros - x.registros;
+    });
   }, [filtrados, conCita]);
 
   const totalReg = filtrados.length;
   const totalRes = filtrados.filter(function (u) { return conCita.has(u.id); }).length;
-  const maxReg = filas.length ? filas[0].registros : 1;
+  const reales = filas.filter(function (f) { return !f.sinDato; });
+  const maxReg = reales.length ? reales[0].registros : (filas.length ? filas[0].registros : 1);
   const e = React.createElement;
 
   const tabs = RANGOS.map(function (r) {
@@ -116,18 +143,19 @@ export default function OrigenScreen() {
           e(Text, { style: [s.th, s.colNum] }, 'Conversion')),
 
         filas.map(function (f) {
-          const sinDato = f.origen === 'sin dato';
-          const ancho = Math.max(2, (f.registros / maxReg) * 100);
-          const color = sinDato ? '#CFCFCF' : (COLOR[f.origen] || '#880E4F');
-          return e(View, { key: f.origen, style: s.tr },
+          const ancho = f.sinDato ? 100 : Math.max(2, Math.min(100, (f.registros / maxReg) * 100));
+          const color = f.sinDato ? '#D8D8D8' : (COLOR[f.canal] || '#880E4F');
+          return e(View, { key: f.clave, style: [s.tr, f.sinDato ? s.trGris : null] },
             e(View, { style: s.colCanal },
               e(View, { style: s.canalLinea },
-                e(Text, { style: [s.canal, sinDato ? s.canalGris : null] }, f.origen),
-                PAGO.indexOf(f.origen) > -1 ? e(Text, { style: s.badge }, 'PAGO') : null),
+                e(Text, { style: [s.canal, f.sinDato ? s.canalGris : null] }, f.canal),
+                f.sinDato
+                  ? e(Text, { style: s.historico }, '· historico')
+                  : e(Text, { style: [s.badge, f.pago ? null : s.badgeOrg] }, f.pago ? 'PAGO' : 'ORGANICO')),
               e(View, { style: s.barra }, e(View, { style: [s.barraFill, { width: (ancho + '%') as any, backgroundColor: color }] }))),
-            e(Text, { style: [s.td, s.colNum] }, String(f.registros)),
-            e(Text, { style: [s.td, s.colNum] }, String(f.reservaron)),
-            e(Text, { style: [s.td, s.colNum, s.bold, f.tasa > 0 ? (sinDato ? s.gris : s.verde) : s.apagado] },
+            e(Text, { style: [s.td, s.colNum, f.sinDato ? s.gris : null] }, String(f.registros)),
+            e(Text, { style: [s.td, s.colNum, f.sinDato ? s.gris : null] }, String(f.reservaron)),
+            e(Text, { style: [s.td, s.colNum, s.bold, f.tasa > 0 ? (f.sinDato ? s.gris : s.verde) : s.apagado] },
               f.tasa.toFixed(1).replace('.', ',') + '%'));
         }),
 
@@ -177,6 +205,9 @@ const s = StyleSheet.create({
   canal: { fontSize: 14, fontWeight: '600', color: '#1A1A1A', textTransform: 'capitalize' },
   canalGris: { color: '#777' },
   badge: { fontSize: 9, fontWeight: '700', color: '#fff', backgroundColor: '#880E4F', paddingVertical: 2, paddingHorizontal: 7, borderRadius: 99, overflow: 'hidden' },
+  badgeOrg: { backgroundColor: '#E8E8E8', color: '#555' },
+  historico: { fontSize: 10, color: '#BBB' },
+  trGris: { backgroundColor: '#FCFCFC' },
   barra: { height: 4, backgroundColor: '#F0F0F0', borderRadius: 99, marginTop: 7, width: '88%', overflow: 'hidden' },
   barraFill: { height: '100%', borderRadius: 99 },
 

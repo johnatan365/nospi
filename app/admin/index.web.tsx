@@ -84,6 +84,8 @@ interface User {
   registered_from?: string;
   utm_source?: string | null;
   utm_campaign?: string | null;
+  utm_medium?: string | null;
+  click_id?: string | null;
 }
 
 interface Appointment {
@@ -4840,9 +4842,15 @@ setBulkWhatsAppPending(pending);
                         // Canal por el que llego el usuario. Se captura en la
                         // primera visita web; los registros previos al 18 ago
                         // 2026 y los hechos desde la app nativa no lo traen.
-                        const src = (user.utm_source || '').toLowerCase();
-                        if (!src) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>;
-                        const PAGO = ['tiktok', 'facebook', 'instagram', 'google'];
+                        const bruto = (user.utm_source || '').toLowerCase();
+                        if (!bruto) return <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>;
+                        // Meta manda 'fb'/'ig' en {{site_source_name}}: se normaliza.
+                        const ALIAS: Record<string, string> = { fb: 'facebook', ig: 'instagram', msg: 'messenger', an: 'audience network' };
+                        const src = ALIAS[bruto] || bruto;
+                        // Pago se deduce del medio real o del click id del anuncio,
+                        // no de una lista fija: Instagram puede ser pauta o bio.
+                        const med = (user.utm_medium || '').toLowerCase();
+                        const pago = med.indexOf('cpc') > -1 || med.indexOf('paid') > -1 || med.indexOf('ppc') > -1 || !!user.click_id;
                         const COLORES: Record<string, string> = {
                           tiktok: '#000000', facebook: '#1877F2', instagram: '#C13584',
                           google: '#EA4335', whatsapp: '#25D366', referido: '#6B7280', directo: '#9CA3AF',
@@ -4850,14 +4858,14 @@ setBulkWhatsAppPending(pending);
                         const bg = COLORES[src] || '#6B21A8';
                         return (
                           <span
-                            title={user.utm_campaign ? 'Campana: ' + user.utm_campaign : src}
+                            title={(pago ? 'Pago' : 'Organico') + (user.utm_campaign ? ' - campana: ' + user.utm_campaign : '')}
                             style={{
                               display: 'inline-block', fontSize: 11, fontWeight: 700,
                               padding: '3px 9px', borderRadius: 99, color: '#fff',
                               backgroundColor: bg, textTransform: 'capitalize',
                             }}
                           >
-                            {src}{PAGO.indexOf(src) > -1 ? ' $' : ''}
+                            {src}{pago ? ' $' : ''}
                           </span>
                         );
                       })()}
