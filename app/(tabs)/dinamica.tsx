@@ -1023,9 +1023,13 @@ export default function DinamicaScreen() {
     ? (activeParticipants.find(p => p.user_id === moderatorId)?.profiles?.name || 'el moderador')
     : null;
   // Fases en las que la dinámica ya arrancó (todos entran a la pantalla de juego).
+  // OJO: debe incluir TODAS las fases que escribe GameDynamicsScreen — si falta
+  // una (p. ej. 'closing_intro'), al llegar esa fase el juego se DESMONTA y la
+  // mesa cae de vuelta a las pantallas previas.
   const gameStarted =
     gamePhase === 'questions' || gamePhase === 'question_active' ||
-    gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
+    gamePhase === 'level_transition' || gamePhase === 'closing_intro' ||
+    gamePhase === 'finished' || gamePhase === 'free_phase';
 
   // ── Flujo del moderador (sincronizado por la fila events) ───────────────────
 
