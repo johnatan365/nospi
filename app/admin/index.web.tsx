@@ -802,6 +802,9 @@ export default function AdminPanelScreen() {
   // Ranking de impacto (S): resumen mesas/promedio por texto de pregunta.
   const [questionStats, setQuestionStats] = useState<Map<string, { mesas: number; avg: number }>>(new Map());
   const [rankingMode, setRankingMode] = useState(false);
+  // Votación 👍/👎 (U): agregados anónimos por pregunta + ayuda de lectura.
+  const [questionVotes, setQuestionVotes] = useState<Map<string, { up: number; down: number; pct: number }>>(new Map());
+  const [showMetricsHelp, setShowMetricsHelp] = useState(false);
   // Cupo de preguntas por evento por nivel (Q), leído de app_config.
   const [questionsPerLevel, setQuestionsPerLevel] = useState<{ divertido: number; sensual: number; atrevido: number }>({ divertido: 8, sensual: 8, atrevido: 8 });
   const [qplDraft, setQplDraft] = useState<{ divertido: string; sensual: string; atrevido: string }>({ divertido: '8', sensual: '8', atrevido: '8' });
@@ -2563,6 +2566,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
       setQuestionStats(statsMap);
 
+      // Votación 👍/👎 (U): agregados anónimos por pregunta.
+      const { data: voteRows } = await supabase.from('question_votes_summary').select('*');
+      const votesMap = new Map<string, { up: number; down: number; pct: number }>();
+      for (const v of voteRows || []) {
+        votesMap.set(v.question_text, { up: v.up, down: v.down, pct: v.pct_up });
+      }
+      setQuestionVotes(votesMap);
+
       // Cupo por nivel (Q) desde app_config.
       const { data: cfgRows } = await supabase
         .from('app_config')
@@ -3033,18 +3044,27 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       );
     };
 
-    // Badge de impacto (S): mesas y tiempo promedio. Verde = genera
-    // conversación; rojo = la pasan rápido; gris = poca muestra (<5 mesas).
+    // Badge de impacto (S + U): mesas, tiempo promedio y % de 👍. Verde =
+    // genera conversación; rojo = la pasan rápido; gris = poca muestra (<5 mesas).
     const statsBadge = (q: any) => {
       const s = questionStats.get(q.question_text);
-      if (!s) return null;
+      const v = questionVotes.get(q.question_text);
+      const voteText = v ? ` · 👍 ${v.pct}% (${v.up + v.down})` : '';
+      if (!s) {
+        if (!v) return null;
+        return (
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#374151', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+            👍 {v.pct}% ({v.up + v.down} votos)
+          </Text>
+        );
+      }
       const mins = Math.floor(s.avg / 60);
       const secs = String(s.avg % 60).padStart(2, '0');
       const timeText = `${mins}:${secs}`;
       if (s.mesas < 5) {
         return (
           <Text style={{ fontSize: 10, fontWeight: '600', color: '#9CA3AF', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
-            📊 {s.mesas} mesas · ⏱️ {timeText} (poca muestra)
+            📊 {s.mesas} mesas · ⏱️ {timeText}{voteText} (poca muestra)
           </Text>
         );
       }
@@ -3052,7 +3072,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const bad = s.avg < 80;
       return (
         <Text style={{ fontSize: 10, fontWeight: '800', color: good ? '#166534' : bad ? '#991B1B' : '#374151', backgroundColor: good ? '#DCFCE7' : bad ? '#FEE2E2' : '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
-          📊 {s.mesas} mesas · ⏱️ prom. {timeText}
+          📊 {s.mesas} mesas · ⏱️ prom. {timeText}{voteText}
         </Text>
       );
     };
@@ -3248,7 +3268,39 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               📊 Ranking por tiempo promedio
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkActionButton, { backgroundColor: showMetricsHelp ? '#E0F2FE' : '#fff', borderWidth: 1.5, borderColor: '#0284C7' }]}
+            onPress={() => setShowMetricsHelp(!showMetricsHelp)}
+          >
+            <Text style={[styles.bulkActionButtonText, { color: '#075985' }]}>
+              ℹ️ Cómo leer las métricas
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Guía de lectura de las métricas (S + U): badge y los 4 cuadrantes. */}
+        {showMetricsHelp && (
+          <View style={{ borderWidth: 1.5, borderColor: '#0284C7', backgroundColor: '#F0F9FF', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#075985', marginBottom: 6 }}>El badge de cada pregunta cruza dos señales:</Text>
+            <Text style={{ fontSize: 12, color: '#0C4A6E', lineHeight: 19, marginBottom: 10 }}>
+              ⏱️ <Text style={{ fontWeight: '700' }}>Tiempo promedio</Text> que las mesas dejaron la pregunta en pantalla (verde = generó conversación, rojo = la pasaron rápido; con menos de 5 mesas es dato provisional). {'\n'}
+              👍 <Text style={{ fontWeight: '700' }}>% de aprobación</Text> de los asistentes que votaron si la pregunta se queda (entre paréntesis, cuántos votaron). El voto no sufre el corrimiento del moderador que adelanta preguntas: es la señal limpia.
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#075985', marginBottom: 6 }}>Los 4 cuadrantes para decidir:</Text>
+            <View style={{ backgroundColor: '#DCFCE7', borderRadius: 10, padding: 9, marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: '#14532D', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ alto + 👍 alto = JOYA.</Text> Genera conversación Y gusta → protégela o fíjala.</Text>
+            </View>
+            <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 9, marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ bajo + 👎 alto = ELIMINAR.</Text> Aburrida y rechazada, sin duda.</Text>
+            </View>
+            <View style={{ backgroundColor: '#FEF3C7', borderRadius: 10, padding: 9, marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: '#78350F', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ alto + 👎 alto = INCÓMODA.</Text> Dio de qué hablar pero no gustó → re-redactar o mover de nivel.</Text>
+            </View>
+            <View style={{ backgroundColor: '#E0F2FE', borderRadius: 10, padding: 9 }}>
+              <Text style={{ fontSize: 12, color: '#0C4A6E', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ bajo + 👍 alto = REVISAR.</Text> Gustó pero pasó rápido: quizás mala posición o moderador acelerado — el voto la salva.</Text>
+            </View>
+          </View>
+        )}
         {rankingMode && !searching && (
           <Text style={{ fontSize: 12, color: '#831843', fontWeight: '700', marginBottom: 12 }}>
             Ranking de PEOR a MEJOR tiempo, en los 3 niveles (solo preguntas con 5+ mesas) — las de arriba son candidatas a eliminar. Los datos se acumulan con cada evento real.
