@@ -871,14 +871,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </View>
           </View>
 
-          {/* Instruction card */}
+          {/* Instruction card. La coletilla del moderador va en modo NEGATIVO
+              (prohibición) y en negrilla: se detectó que los moderadores
+              adelantan la pregunta para "dejarla en espera" mientras responden
+              la anterior, lo que descuadra el ritmo (y la métrica de tiempos). */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
               {isModerator
                 ? (isLastQuestion
                     ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar.'
-                    : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. Cuando terminen, pasas a la siguiente.')
+                    : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. ')
                 : 'No todos tienen que responder: habla quien tenga una historia o algo que aportar.'}
+              {isModerator && !isLastQuestion && (
+                <Text style={styles.instructionTextStrong}>No pases a la siguiente hasta que terminen de responder esta.</Text>
+              )}
             </Text>
           </View>
 
@@ -1352,6 +1358,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '400',
     lineHeight: 19,
+  },
+  // Coletilla-prohibición del moderador ("No pases a la siguiente…"): en
+  // negrilla y amarillo suave para que pese sobre el resto de la instrucción.
+  instructionTextStrong: {
+    fontWeight: '800',
+    color: '#FFF176',
   },
 
   // ── Continue button ──────────────────────────────────────────────────────────
