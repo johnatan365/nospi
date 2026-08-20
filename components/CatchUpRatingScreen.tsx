@@ -316,7 +316,9 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
         {/* PASO 1 · AFINIDAD */}
         {step === 'afinidad' && (
           <>
-            <Text style={styles.kicker}>La dinámica terminó 🎉</Text>
+            {/* Sin rótulo "La dinámica terminó": la pantalla intermedia de la
+                dinámica ya anuncia el final, aquí quedaba redundante. El estilo
+                kicker sigue en uso en el paso 2. */}
             <Text style={styles.h1}>¿Con quién te gustaría volver a coincidir?</Text>
             <Text style={styles.sub}>Elige a las personas con las que sentiste buena conexión. Es totalmente opcional: si no quieres elegir a nadie, también está bien.</Text>
             <View style={styles.privacy}>

@@ -5,7 +5,10 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
-type GamePhase = 'questions' | 'level_transition' | 'finished';
+// 'closing_intro': pantalla intermedia tras la última pregunta — el moderador
+// lee en voz alta que todos saquen el celular, se le agradece, y su botón
+// "Continuar" pasa a toda la mesa al cierre ('finished').
+type GamePhase = 'questions' | 'level_transition' | 'closing_intro' | 'finished';
 
 const LEVEL_ORDER: QuestionLevel[] = ['divertido', 'sensual', 'atrevido'];
 
@@ -179,7 +182,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const [gamePhase, setGamePhase] = useState<GamePhase>(
     initialEvent?.game_phase === 'finished' || initialEvent?.game_phase === 'free_phase'
       ? 'finished'
-      : 'questions'
+      : initialEvent?.game_phase === 'closing_intro'
+        ? 'closing_intro'
+        : 'questions'
   );
   const [currentLevel, setCurrentLevel] = useState<QuestionLevel>(initialEvent?.current_level || 'divertido');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialEvent?.current_question_index ?? 0);
@@ -213,16 +218,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     const loadQuestions = async () => {
       try {
         
+        // El orden lo manda question_order a secas: el sorteo del admin deja
+        // cada pregunta FIJADA en su POSICIÓN elegida (puede ser la 2, la 5…),
+        // así que forzar is_pinned de primera rompería ese orden.
         const { data: eventQuestions, error: eventError } = await supabase
           .from('event_questions')
           .select('*')
           .eq('event_id', appointment.event_id)
           .order('level', { ascending: true })
-          // La pregunta fijada (is_pinned) va SIEMPRE primera dentro de su
-          // nivel, sin importar el question_order — así, aunque se reordenen
-          // o editen las preguntas del evento, la de presentación abre la
-          // dinámica.
-          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true });
 
         if (eventError) {
@@ -247,28 +250,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             questionsByLevel.sensual.length > 0 &&
             questionsByLevel.atrevido.length > 0
           ) {
-            // Red de seguridad: la pregunta de presentación (fijada en el banco
-            // global, event_id null, is_pinned) debe ABRIR SIEMPRE la dinámica,
-            // aunque la copia de este evento haya perdido el is_pinned. La
-            // traemos y la forzamos de primera en Divertido.
-            try {
-              const { data: pinnedGlobal } = await supabase
-                .from('event_questions')
-                .select('question_text')
-                .is('event_id', null)
-                .eq('is_pinned', true)
-                .eq('level', 'divertido')
-                .order('question_order', { ascending: true })
-                .limit(1);
-              const pinnedText = pinnedGlobal?.[0]?.question_text;
-              if (pinnedText && questionsByLevel.divertido.length > 0) {
-                questionsByLevel.divertido = [
-                  pinnedText,
-                  ...questionsByLevel.divertido.filter((t: string) => t !== pinnedText),
-                ];
-              }
-            } catch (_e) { /* si falla, seguimos con el orden del evento */ }
-
             QUESTIONS = questionsByLevel;
             return;
           }
@@ -279,7 +260,6 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           .select('*')
           .is('event_id', null)
           .order('level', { ascending: true })
-          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true });
 
         if (defaultError) {
@@ -381,6 +361,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           console.log(`[Timer] Restoring timer: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
           startTimer(remaining);
         }
+      } else if (data.game_phase === 'closing_intro') {
+        // Pantalla intermedia post-preguntas: quien refresque o vuelva a la
+        // app mientras la mesa está ahí, la ve igual (no se la salta).
+        setGamePhase('closing_intro');
       } else if (data.game_phase === 'finished' || data.game_phase === 'free_phase') {
         // 'free_phase' es un estado viejo (la pantalla intermedia ya no existe).
         // Se trata como cierre para que una mesa que quedó ahí no se atasque.
@@ -444,9 +428,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               console.log(`[Timer] Real-time update: elapsed=${elapsed.toFixed(1)}s, remaining=${remaining.toFixed(1)}s`);
               startTimer(remaining);
             }
+          } else if (newEvent.game_phase === 'closing_intro') {
+            // El moderador terminó la última pregunta: toda la mesa pasa a la
+            // pantalla intermedia (saquen el celular + gracias al moderador).
+            setGamePhase('closing_intro');
           } else if (newEvent.game_phase === 'finished' || newEvent.game_phase === 'free_phase') {
-            // El moderador terminó la última pregunta: todos pasan al cierre
-            // (afinidad + match), cada quien en su propio teléfono.
+            // El moderador dio Continuar en la pantalla intermedia: todos pasan
+            // al cierre (afinidad + match), cada quien en su propio teléfono.
             // 'free_phase' es un estado viejo y se trata igual (ver restore).
             setGamePhase('finished');
           }
@@ -489,6 +477,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         .maybeSingle();
       if (!data) return;
       setModeratorId(data.moderator_id ?? null);
+      if (data.game_phase === 'closing_intro') {
+        setGamePhase('closing_intro');
+        return;
+      }
       if (data.game_phase === 'finished' || data.game_phase === 'free_phase') {
         setGamePhase('finished');
         return;
@@ -526,9 +518,10 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     }, 2000));
   }, []);
 
-  // Avanza al siguiente nivel; si ya estábamos en Atrevido, CIERRA la dinámica
-  // para toda la mesa (game_phase='finished') y cada teléfono navega solo al
-  // cierre. Ya no hay pantalla intermedia entre la última pregunta y el cierre.
+  // Avanza al siguiente nivel; si ya estábamos en Atrevido, pasa la mesa a la
+  // pantalla intermedia 'closing_intro' (saquen el celular + gracias al
+  // moderador). Desde ahí, el Continuar del moderador pone 'finished' y cada
+  // teléfono navega solo al cierre.
   const advanceToNextLevelOrFinish = useCallback(async () => {
     if (!appointment?.event_id) return;
 
@@ -565,22 +558,43 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         setCurrentLevel(currentLevel);
       }
     } else {
-      setGamePhase('finished');
+      setGamePhase('closing_intro');
 
       const { error } = await supabase
         .from('events')
         .update({
-          game_phase: 'finished',
+          game_phase: 'closing_intro',
           updated_at: new Date().toISOString(),
         })
         .eq('id', appointment.event_id);
 
       if (error) {
-        console.error('❌ Error ending game:', error);
+        console.error('❌ Error moving to closing intro:', error);
         setGamePhase('questions');
       }
     }
   }, [appointment, currentLevel, showLevelTransitionAnimation, startTimer]);
+
+  // Continuar de la pantalla intermedia (solo el moderador): cierra la
+  // dinámica para toda la mesa. Cada teléfono navega solo al cierre al recibir
+  // 'finished' por realtime/sondeo.
+  const handleFinishClosingIntro = useCallback(async () => {
+    if (!appointment?.event_id || loading) return;
+    setLoading(true);
+    setGamePhase('finished');
+    const { error } = await supabase
+      .from('events')
+      .update({
+        game_phase: 'finished',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', appointment.event_id);
+    if (error) {
+      console.error('❌ Error ending game:', error);
+      setGamePhase('closing_intro');
+    }
+    setLoading(false);
+  }, [appointment, loading]);
 
   const handleContinue = useCallback(async () => {
 
@@ -732,10 +746,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const questionsInLevel = QUESTIONS[currentLevel]?.length ?? 0;
   const questionNumber = Math.min(currentQuestionIndex + 1, questionsInLevel);
 
-  // Última pregunta de TODO el juego (última del último nivel). Al pasarla no
-  // hay pantalla intermedia: el moderador cierra y toda la mesa va al cierre,
-  // así que su botón dice "Terminar" y arriba le aparece el aviso para que
-  // sepa cómo rematar en voz alta.
+  // Última pregunta de TODO el juego (última del último nivel). El botón del
+  // moderador dice "Terminar" y arriba le aparece el aviso: al presionarlo,
+  // toda la mesa pasa a la pantalla intermedia de cierre ('closing_intro').
   const isLastQuestion =
     currentLevel === LEVEL_ORDER[LEVEL_ORDER.length - 1] &&
     questionsInLevel > 0 &&
@@ -823,7 +836,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             <View style={styles.lastQuestionNotice}>
               <Text style={styles.lastQuestionNoticeEmoji}>🗣️</Text>
               <Text style={styles.lastQuestionNoticeText}>
-                <Text style={styles.lastQuestionNoticeStrong}>Esta es la última pregunta.</Text> Cuando terminen, presiona Terminar y todos pasarán a elegir con quién sintieron conexión.
+                <Text style={styles.lastQuestionNoticeStrong}>Esta es la última pregunta.</Text> Cuando terminen, presiona Terminar y pasarán a la pantalla de cierre.
               </Text>
             </View>
           )}
@@ -946,6 +959,80 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     );
   }
 
+  // Pantalla intermedia post-preguntas: el moderador lee en voz alta que todos
+  // saquen el celular (para que nadie se pierda la elección), se le agradece su
+  // participación, y su "Continuar" pasa a toda la mesa al cierre. El botón
+  // "Cambiar moderador" sigue disponible por si justo aquí se queda sin batería.
+  if (gamePhase === 'closing_intro') {
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, styles.closingIntroContainer]}>
+          <Text style={styles.closingIntroEmoji}>🎬</Text>
+          <Text style={styles.closingIntroTitle}>¡Terminaron las preguntas!</Text>
+          {!isModerator && (
+            <Text style={styles.closingIntroSubtitle}>Ya viene la parte final</Text>
+          )}
+
+          {isModerator ? (
+            <>
+              <View style={styles.closingIntroVoiceTag}>
+                <Text style={styles.closingIntroVoiceTagText}>🗣️ Lee en voz alta lo que sigue</Text>
+              </View>
+              <View style={styles.closingIntroReadCard}>
+                <Text style={styles.closingIntroReadText}>
+                  “Hasta aquí llega la dinámica de preguntas 🎉. Ahora <Text style={styles.closingIntroStrong}>todos saquen su celular</Text>: viene la parte final, donde cada uno elige <Text style={styles.closingIntroStrong}>en privado</Text> con quién sintió conexión.”
+                </Text>
+              </View>
+              <View style={styles.closingIntroThanksCard}>
+                <Text style={styles.closingIntroThanksText}>
+                  👏 <Text style={styles.closingIntroStrong}>¡Gracias por moderar la dinámica!</Text> Lo hiciste increíble.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.closingIntroContinueBtn, loading && styles.buttonDisabled]}
+                onPress={handleFinishClosingIntro}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.closingIntroContinueText}>{loading ? 'Cargando...' : '🚀 Continuar'}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.closingIntroReadCard}>
+                <Text style={styles.closingIntroReadText}>
+                  📱 <Text style={styles.closingIntroStrong}>Saca tu celular</Text>: ahora vas a elegir <Text style={styles.closingIntroStrong}>en privado</Text> con quién sentiste conexión.
+                </Text>
+              </View>
+              <View style={styles.closingIntroThanksCard}>
+                <Text style={styles.closingIntroThanksText}>
+                  👏 Denle un aplauso a <Text style={styles.closingIntroStrong}>{moderatorName}</Text>, que moderó la dinámica.
+                </Text>
+              </View>
+              <View style={styles.closingIntroWaitCard}>
+                <Text style={styles.closingIntroWaitText}>⏳ Espera a que {moderatorName} presione Continuar</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.changeModeratorBtn}
+                onPress={() => setShowChangeModerator(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </ScrollView>
+
+        {changeModeratorSheet}
+      </LinearGradient>
+    );
+  }
+
   // Cualquier estado sin pantalla propia (restaurando tras un refresh, o la
   // fase 'finished' mientras navega al cierre) muestra este cargador en vez de
   // una pantalla negra: antes aqui habia un "return null" y el usuario veia
@@ -1040,6 +1127,102 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 24,
     paddingBottom: 120,
+  },
+
+  // ── Pantalla intermedia post-preguntas ('closing_intro') ────────────────────
+  closingIntroContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  closingIntroEmoji: {
+    fontSize: 46,
+    textAlign: 'center',
+  },
+  closingIntroTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  closingIntroSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: -6,
+  },
+  closingIntroVoiceTag: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,214,0,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,214,0,0.5)',
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+  },
+  closingIntroVoiceTagText: {
+    color: '#ffe9a8',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  closingIntroReadCard: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    padding: 18,
+  },
+  closingIntroReadText: {
+    color: '#FFFFFF',
+    fontSize: 16.5,
+    fontWeight: '600',
+    lineHeight: 25,
+    textAlign: 'center',
+  },
+  closingIntroStrong: {
+    color: '#FFD6E8',
+    fontWeight: '800',
+  },
+  closingIntroThanksCard: {
+    backgroundColor: 'rgba(76,175,80,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.45)',
+    borderRadius: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 15,
+  },
+  closingIntroThanksText: {
+    color: '#d7f5d8',
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  closingIntroWaitCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  closingIntroWaitText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13.5,
+    textAlign: 'center',
+  },
+  closingIntroContinueBtn: {
+    backgroundColor: '#E91E63',
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: '#E91E63',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  closingIntroContinueText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
 
   // ── Level badge ──────────────────────────────────────────────────────────────
