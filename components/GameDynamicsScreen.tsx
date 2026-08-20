@@ -201,6 +201,42 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Votación 👍/👎 por pregunta (U): cada persona califica si la pregunta se
+  // queda para próximos eventos. Anónimo (la app no muestra votos ni conteos)
+  // y opcional. La tarjeta aparece 5 s después de la pregunta, para que
+  // primero la vivan y luego la califiquen.
+  const [myVote, setMyVote] = useState<'up' | 'down' | null>(null);
+  const [voteVisible, setVoteVisible] = useState(false);
+  const voteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setMyVote(null);
+    setVoteVisible(false);
+    if (voteTimerRef.current) clearTimeout(voteTimerRef.current);
+    if (gamePhase === 'questions' && currentQuestion) {
+      voteTimerRef.current = setTimeout(() => setVoteVisible(true), 5000);
+    }
+    return () => { if (voteTimerRef.current) clearTimeout(voteTimerRef.current); };
+  }, [currentQuestion, gamePhase]);
+
+  const handleVoteQuestion = useCallback(async (vote: 'up' | 'down') => {
+    if (!appointment?.event_id || !currentUserId || !currentQuestion) return;
+    setMyVote(vote); // feedback inmediato; se puede cambiar mientras esté en pantalla
+    const { error } = await supabase
+      .from('question_votes')
+      .upsert(
+        {
+          event_id: appointment.event_id,
+          user_id: currentUserId,
+          question_text: currentQuestion,
+          vote: vote === 'up' ? 1 : -1,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'event_id,user_id,question_text' },
+      );
+    if (error) console.error('question_votes upsert error:', error.message);
+  }, [appointment?.event_id, currentUserId, currentQuestion]);
   
   // Level transition animation state
   const [showLevelTransition, setShowLevelTransition] = useState(false);
@@ -888,6 +924,33 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </Text>
           </View>
 
+          {/* Votación 👍/👎 (U): debajo de la instrucción, para todos. Aparece
+              a los 5 s de mostrarse la pregunta. */}
+          {voteVisible && (
+            <View style={styles.voteCard}>
+              <Text style={styles.voteTitle}>¿Esta pregunta se queda para próximos eventos?</Text>
+              <View style={styles.voteBtnRow}>
+                <TouchableOpacity
+                  style={[styles.voteBtn, myVote === 'up' && styles.voteBtnUp]}
+                  onPress={() => handleVoteQuestion('up')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.voteBtnText}>👍</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.voteBtn, myVote === 'down' && styles.voteBtnDown]}
+                  onPress={() => handleVoteQuestion('down')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.voteBtnText}>👎</Text>
+                </TouchableOpacity>
+              </View>
+              {myVote && (
+                <Text style={styles.voteThanks}>✓ ¡Gracias! Puedes cambiarlo mientras la pregunta esté en pantalla.</Text>
+              )}
+            </View>
+          )}
+
           {/* Avance: solo el moderador; el resto espera a que él pase. */}
           {isModerator ? (
             timerExpired ? (
@@ -1364,6 +1427,57 @@ const styles = StyleSheet.create({
   instructionTextStrong: {
     fontWeight: '800',
     color: '#FFF176',
+  },
+
+  // ── Votación 👍/👎 por pregunta (U) ──────────────────────────────────────────
+  voteCard: {
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  voteTitle: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  voteBtnRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  voteBtn: {
+    width: 56,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voteBtnUp: {
+    backgroundColor: '#2E7D32',
+    borderColor: '#A5D6A7',
+  },
+  voteBtnDown: {
+    backgroundColor: '#C62828',
+    borderColor: '#FFCDD2',
+  },
+  voteBtnText: {
+    fontSize: 20,
+  },
+  voteThanks: {
+    color: '#B9F6CA',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
+    textAlign: 'center',
   },
 
   // ── Continue button ──────────────────────────────────────────────────────────
