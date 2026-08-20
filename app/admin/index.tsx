@@ -850,7 +850,7 @@ const handleLogin = async () => {
         // No hay preguntas custom — copiar las globales (event_id = null) al evento
         const { data: globalQuestions, error: fetchError } = await supabase
           .from('event_questions')
-          .select('level, question_text, question_order, is_pinned')
+          .select('level, question_text, question_order, is_pinned, pinned_position')
           .is('event_id', null)
           .order('level', { ascending: true })
           .order('question_order', { ascending: true });
@@ -864,9 +864,10 @@ const handleLogin = async () => {
         await supabase.from('event_questions').delete().eq('event_id', eventId);
 
         // Agrupar por nivel, manteniendo los niveles agrupados (divertido, luego
-        // sensual, luego atrevido). La pregunta FIJADA (is_pinned) va SIEMPRE
-        // primera dentro de su nivel y NO entra en el sorteo; el resto se baraja.
-        // Se conserva la marca is_pinned para que la dinámica la abra primero.
+        // sensual, luego atrevido). Las preguntas FIJADAS (is_pinned +
+        // pinned_position) NO entran al sorteo: ocupan su posición exacta
+        // dentro del nivel (igual que en el admin web); el resto se baraja en
+        // los espacios libres.
         const levelOrder: string[] = [];
         const byLevel: Record<string, typeof globalQuestions> = {};
         for (const q of globalQuestions) {
@@ -879,9 +880,21 @@ const handleLogin = async () => {
 
         const orderedQuestions = levelOrder.flatMap((level) => {
           const inLevel = byLevel[level];
-          const pinned = inLevel.filter((q: any) => q.is_pinned);
+          const pinned = inLevel
+            .filter((q: any) => q.is_pinned)
+            .map((q: any) => ({ ...q, _pos: Math.min(Math.max(q.pinned_position || 1, 1), inLevel.length) }));
           const rest = shuffleArray(inLevel.filter((q: any) => !q.is_pinned));
-          return [...pinned, ...rest];
+          const slots: any[] = new Array(inLevel.length).fill(null);
+          for (const q of pinned.sort((a: any, b: any) => a._pos - b._pos)) {
+            let idx = q._pos - 1;
+            while (idx < slots.length && slots[idx] !== null) idx++;
+            if (idx < slots.length) slots[idx] = q;
+          }
+          let restIdx = 0;
+          for (let i = 0; i < slots.length; i++) {
+            if (slots[i] === null && restIdx < rest.length) slots[i] = rest[restIdx++];
+          }
+          return slots.filter((s) => s !== null);
         });
 
         const questionsToInsert = orderedQuestions.map((q: any, index: number) => ({

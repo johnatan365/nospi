@@ -1896,15 +1896,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const QUESTIONS_PER_LEVEL = 8;
 
   // Arma las preguntas de un evento tomando un subconjunto ALEATORIO del banco
-  // global (event_id = null): QUESTIONS_PER_LEVEL por nivel. En Divertido, la
-  // pregunta fijada (is_pinned) va SIEMPRE primera y no entra en el sorteo; el
-  // resto del cupo se completa al azar. Se usa al crear un evento nuevo y al
-  // crear los borradores automáticos de las próximas semanas, para que cada
-  // evento salga con preguntas distintas.
+  // global (event_id = null): QUESTIONS_PER_LEVEL por nivel. Las preguntas
+  // FIJADAS (is_pinned + pinned_position 1..QUESTIONS_PER_LEVEL) no entran al
+  // sorteo: ocupan su posición exacta en TODOS los eventos; los espacios
+  // libres se completan al azar. Se usa al crear un evento nuevo y al crear
+  // los borradores automáticos de las próximas semanas.
   const insertRandomQuestionsFromBank = async (eventId: string) => {
     const { data: globalQuestions, error: fetchError } = await supabase
       .from('event_questions')
-      .select('level, question_text, is_pinned')
+      .select('level, question_text, is_pinned, pinned_position')
       .is('event_id', null);
 
     if (fetchError || !globalQuestions || globalQuestions.length === 0) {
@@ -1920,20 +1920,36 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     let order = 0;
     for (const level of LEVELS) {
       const inLevel = globalQuestions.filter((q) => q.level === level);
-      const pinned = inLevel.filter((q) => q.is_pinned);
+      // Fijadas válidas: con posición dentro del cupo. Una fijada sin posición
+      // (dato viejo) se trata como posición 1 para no perderla.
+      const pinned = inLevel
+        .filter((q) => q.is_pinned)
+        .map((q) => ({ ...q, _pos: Math.min(Math.max(q.pinned_position || 1, 1), QUESTIONS_PER_LEVEL) }));
       const rest = shuffleArray(inLevel.filter((q) => !q.is_pinned));
-      const selected = pinned.length > 0
-        ? [pinned[0], ...rest.slice(0, QUESTIONS_PER_LEVEL - 1)]
-        : rest.slice(0, QUESTIONS_PER_LEVEL);
-      for (const q of selected) {
+
+      // Armar los QUESTIONS_PER_LEVEL espacios: primero las fijadas en su
+      // posición (si dos chocan en la misma, la segunda cae al siguiente
+      // espacio libre), luego el azar rellena lo que quede.
+      const slots: any[] = new Array(QUESTIONS_PER_LEVEL).fill(null);
+      for (const q of pinned.sort((a, b) => a._pos - b._pos)) {
+        let idx = q._pos - 1;
+        while (idx < QUESTIONS_PER_LEVEL && slots[idx] !== null) idx++;
+        if (idx < QUESTIONS_PER_LEVEL) slots[idx] = q;
+      }
+      let restIdx = 0;
+      for (let i = 0; i < QUESTIONS_PER_LEVEL; i++) {
+        if (slots[i] === null && restIdx < rest.length) slots[i] = rest[restIdx++];
+      }
+
+      for (const q of slots.filter((s) => s !== null)) {
         questionsToInsert.push({
           event_id: eventId,
           level,
           question_text: q.question_text,
           question_order: order++,
           is_default: true,
-          // La copia conserva la marca de fijada, para que la dinámica la
-          // muestre SIEMPRE primera aunque después se reordenen las preguntas.
+          // La copia conserva la marca de fijada (informativo): la POSICIÓN ya
+          // quedó codificada en question_order, que es lo que ordena la app.
           is_pinned: !!q.is_pinned,
         });
       }
@@ -1944,7 +1960,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       if (insertError) {
         console.error('Error copiando preguntas del banco al evento:', insertError);
       } else {
-        console.log(`insertRandomQuestionsFromBank: ${questionsToInsert.length} preguntas (${QUESTIONS_PER_LEVEL}/nivel, aleatorias + fijada) copiadas al evento`);
+        console.log(`insertRandomQuestionsFromBank: ${questionsToInsert.length} preguntas (${QUESTIONS_PER_LEVEL}/nivel, fijadas en su posición + azar) copiadas al evento`);
       }
     }
   };
@@ -2540,11 +2556,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
   const handleDeleteQuestion = async (questionId: string) => {
     const target = questions.find((q) => q.id === questionId);
-    if (target?.is_pinned) {
-      window.alert('La pregunta fijada no se puede eliminar. Si quieres cambiarla, edita su texto.');
-      return;
-    }
-    const confirmed = window.confirm('¿Eliminar esta pregunta?');
+    const confirmed = window.confirm(
+      target?.is_pinned
+        ? 'Esta pregunta está FIJADA (sale en todos los eventos). ¿Eliminarla de todas formas?'
+        : '¿Eliminar esta pregunta?'
+    );
     if (!confirmed) return;
 
     try {
@@ -2588,6 +2604,51 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       window.alert('Pregunta actualizada exitosamente');
     } catch (error) {
       console.error('Failed to update question:', error);
+    }
+  };
+
+  // Fijar / desfijar una pregunta del banco. Al fijar, toma la POSICIÓN donde
+  // está en la lista en ese momento (1..QUESTIONS_PER_LEVEL): esa pregunta
+  // saldrá en TODOS los eventos como la pregunta N de su nivel. Al desfijar,
+  // vuelve al sorteo normal. Aplica a eventos nuevos de inmediato; los ya
+  // creados necesitan el botón de sincronizar (o el re-sorteo puntual).
+  const handleTogglePin = async (questionId: string) => {
+    const index = questions.findIndex((q) => q.id === questionId);
+    if (index === -1) return;
+    const target = questions[index];
+
+    let update: any;
+    if (target.is_pinned) {
+      update = { is_pinned: false, pinned_position: null };
+    } else {
+      const position = index + 1;
+      if (position > QUESTIONS_PER_LEVEL) {
+        window.alert(
+          `Solo se pueden fijar preguntas en las posiciones 1 a ${QUESTIONS_PER_LEVEL} (cada evento recibe ${QUESTIONS_PER_LEVEL} por nivel). ` +
+          'Arrastra la pregunta más arriba, a la posición donde quieres que salga, y vuelve a fijarla.'
+        );
+        return;
+      }
+      const conflict = questions.find((q) => q.is_pinned && q.pinned_position === position && q.id !== questionId);
+      if (conflict) {
+        window.alert(`Ya hay una pregunta fijada en la posición ${position}. Desfíjala primero o mueve esta a otra posición.`);
+        return;
+      }
+      update = { is_pinned: true, pinned_position: position };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('event_questions')
+        .update({ ...update, updated_at: new Date().toISOString() })
+        .eq('id', questionId);
+      if (error) {
+        window.alert('Error al fijar/desfijar: ' + error.message);
+        return;
+      }
+      loadQuestions();
+    } catch (error) {
+      console.error('Failed to toggle pin:', error);
     }
   };
 
@@ -2739,7 +2800,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const handleSyncQuestionsToAllEvents = async () => {
     const confirmed = window.confirm(
       'Esto RE-SORTEA las preguntas de TODOS los eventos abiertos (publicados y en borrador) de HOY en adelante, ' +
-      'usando el banco actual: 8 al azar por nivel, con la pregunta fijada de primera en Divertido. ' +
+      'usando el banco actual: 8 por nivel, con las preguntas FIJADAS 📌 en su posición exacta y el resto al azar. ' +
       'Se REEMPLAZAN las preguntas que tengan ahora. ¿Continuar?'
     );
     if (!confirmed) return;
@@ -2776,7 +2837,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         }
       }
 
-      window.alert(`✅ Listo. Se re-sortearon las preguntas de ${ok} evento(s) abierto(s), tomando 8 al azar por nivel del banco actual.`);
+      window.alert(`✅ Listo. Se re-sortearon las preguntas de ${ok} evento(s) abierto(s): fijadas en su posición + azar, del banco actual.`);
       loadQuestions();
     } catch (err: any) {
       console.error('handleSyncQuestionsToAllEvents error:', err);
@@ -2787,11 +2848,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   // Re-sortea las preguntas de UN solo evento (botón dentro de la config del
-  // evento). Mismo criterio: 8 al azar por nivel + fijada primera en Divertido.
+  // evento). Mismo criterio: 8 por nivel, fijadas en su posición + azar.
   const handleReshuffleEventQuestions = async (eventId: string, eventName?: string) => {
     const confirmed = window.confirm(
       `¿Re-sortear las preguntas de "${eventName || 'este evento'}"? ` +
-      'Se reemplazan por 8 nuevas al azar por nivel (la fijada sigue primera en Divertido).'
+      'Se reemplazan por 8 nuevas por nivel (las fijadas 📌 quedan en su posición, el resto al azar).'
     );
     if (!confirmed) return;
     try {
@@ -2804,13 +2865,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const renderQuestions = () => {
-    const pinnedQuestion = questions.find((q) => q.is_pinned);
-    const normalQuestions = questions.filter((q) => !q.is_pinned);
     return (
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Preguntas Globales</Text>
         <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 24 }}>
-          Estas preguntas son el banco. En cada evento se eligen 8 al azar por nivel (en Divertido, la fijada va primero). Puedes agregar, editar y eliminar las de abajo.
+          Estas preguntas son el banco. En cada evento se eligen {QUESTIONS_PER_LEVEL} al azar por nivel. Las fijadas 📌 no entran al sorteo: salen en TODOS los eventos, en la posición exacta donde las fijaste. Arrastra ⋮⋮ una pregunta a la posición que quieras y tócale el 📌.
         </Text>
 
         <View style={styles.levelSelector}>
@@ -2864,29 +2923,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
         </View>
 
-        {pinnedQuestion && (
-          <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400E', marginBottom: 6 }}>
-              📌 Pregunta fijada — siempre es la PRIMERA de la dinámica y no entra en el sorteo. Puedes editarla, pero no se elimina.
-            </Text>
-            <TextInput
-              style={[styles.input, { marginBottom: 0 }]}
-              value={pinnedQuestion.question_text}
-              multiline
-              onChangeText={(text) => {
-                setQuestions(questions.map((q) => (q.id === pinnedQuestion.id ? { ...q, question_text: text } : q)));
-              }}
-              onBlur={() => handleUpdateQuestion(pinnedQuestion.id, pinnedQuestion.question_text)}
-            />
-          </View>
-        )}
-
         {loadingQuestions ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={nospiColors.purpleDark} />
             <Text style={styles.loadingText}>Cargando preguntas...</Text>
           </View>
-        ) : normalQuestions.length === 0 ? (
+        ) : questions.length === 0 ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
               No hay preguntas para este nivel. Agrega una o restaura las predeterminadas.
@@ -2894,7 +2936,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </View>
         ) : (
           <View>
-            {normalQuestions.map((question, index) => (
+            {questions.map((question, index) => (
               <div
                 key={question.id}
                 draggable
@@ -2903,7 +2945,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 onDrop={() => handleDrop(question.id)}
                 style={{ cursor: 'grab', opacity: draggedQuestionId === question.id ? 0.5 : 1 }}
               >
-                <View style={styles.questionItem}>
+                <View style={[styles.questionItem, question.is_pinned && { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 10, paddingHorizontal: 8 }]}>
                   <Text style={styles.dragHandle}>⋮⋮</Text>
                   <Text style={styles.questionNumber}>#{index + 1}</Text>
                   <TextInput
@@ -2914,6 +2956,21 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     }}
                     onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
                   />
+                  {question.is_pinned ? (
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
+                      📌 FIJA · sale en todos, posición {question.pinned_position || index + 1}
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#6B7280', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
+                      🎲 entra al sorteo
+                    </Text>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.deleteQuestionButton, question.is_pinned && { backgroundColor: '#F59E0B', borderRadius: 8 }]}
+                    onPress={() => handleTogglePin(question.id)}
+                  >
+                    <Text style={styles.deleteQuestionButtonText}>📌</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteQuestionButton}
                     onPress={() => handleDeleteQuestion(question.id)}
