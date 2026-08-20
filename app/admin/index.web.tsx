@@ -796,6 +796,15 @@ export default function AdminPanelScreen() {
   const [selectedLevel, setSelectedLevel] = useState<'divertido' | 'sensual' | 'atrevido'>('divertido');
   const [newQuestionText, setNewQuestionText] = useState('');
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
+  // Buscador (R): filtra en los 3 niveles a la vez sobre allQuestions.
+  const [allQuestions, setAllQuestions] = useState<any[]>([]);
+  const [questionSearch, setQuestionSearch] = useState('');
+  // Ranking de impacto (S): resumen mesas/promedio por texto de pregunta.
+  const [questionStats, setQuestionStats] = useState<Map<string, { mesas: number; avg: number }>>(new Map());
+  const [rankingMode, setRankingMode] = useState(false);
+  // Cupo de preguntas por evento por nivel (Q), leído de app_config.
+  const [questionsPerLevel, setQuestionsPerLevel] = useState<{ divertido: number; sensual: number; atrevido: number }>({ divertido: 8, sensual: 8, atrevido: 8 });
+  const [qplDraft, setQplDraft] = useState<{ divertido: string; sensual: string; atrevido: string }>({ divertido: '8', sensual: '8', atrevido: '8' });
 
   // Matches and ratings
 
@@ -1892,13 +1901,37 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     return result;
   };
 
-  // Cuántas preguntas por nivel recibe cada evento (incluye la fijada en Divertido).
-  const QUESTIONS_PER_LEVEL = 8;
+  // Cuántas preguntas por nivel recibe cada evento si app_config no tiene el
+  // valor (Q): el cupo real se configura en Preguntas Globales y se guarda en
+  // app_config (questions_per_level_divertido / _sensual / _atrevido).
+  const QUESTIONS_PER_LEVEL_DEFAULT = 8;
+
+  // Lee el cupo por nivel DIRECTO de app_config (no del estado de React):
+  // el sorteo se dispara también desde crear evento / borradores automáticos,
+  // donde la pestaña Preguntas puede no haberse abierto nunca.
+  const fetchQuestionsPerLevel = async (): Promise<Record<string, number>> => {
+    const cfg: Record<string, number> = {
+      divertido: QUESTIONS_PER_LEVEL_DEFAULT,
+      sensual: QUESTIONS_PER_LEVEL_DEFAULT,
+      atrevido: QUESTIONS_PER_LEVEL_DEFAULT,
+    };
+    try {
+      const { data } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['questions_per_level_divertido', 'questions_per_level_sensual', 'questions_per_level_atrevido']);
+      for (const row of data || []) {
+        const n = parseInt(row.value, 10);
+        if (!Number.isNaN(n) && n >= 1) cfg[row.key.replace('questions_per_level_', '')] = n;
+      }
+    } catch (_e) { /* con el default seguimos */ }
+    return cfg;
+  };
 
   // Arma las preguntas de un evento tomando un subconjunto ALEATORIO del banco
-  // global (event_id = null): QUESTIONS_PER_LEVEL por nivel. Las preguntas
-  // FIJADAS (is_pinned + pinned_position 1..QUESTIONS_PER_LEVEL) no entran al
-  // sorteo: ocupan su posición exacta en TODOS los eventos; los espacios
+  // global (event_id = null): el cupo por nivel viene de app_config (Q). Las
+  // preguntas FIJADAS (is_pinned + pinned_position dentro del cupo) no entran
+  // al sorteo: ocupan su posición exacta en TODOS los eventos; los espacios
   // libres se completan al azar. Se usa al crear un evento nuevo y al crear
   // los borradores automáticos de las próximas semanas.
   const insertRandomQuestionsFromBank = async (eventId: string) => {
@@ -1912,6 +1945,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       return;
     }
 
+    const perLevel = await fetchQuestionsPerLevel();
+
     // Borrar preguntas previas del evento (por si es una edición o re-generación)
     await supabase.from('event_questions').delete().eq('event_id', eventId);
 
@@ -1919,25 +1954,27 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const questionsToInsert: any[] = [];
     let order = 0;
     for (const level of LEVELS) {
+      const cupo = perLevel[level] || QUESTIONS_PER_LEVEL_DEFAULT;
       const inLevel = globalQuestions.filter((q) => q.level === level);
       // Fijadas válidas: con posición dentro del cupo. Una fijada sin posición
-      // (dato viejo) se trata como posición 1 para no perderla.
+      // (dato viejo) se trata como posición 1 para no perderla. Una fijada con
+      // posición MAYOR que el cupo queda por fuera (el admin avisa al bajar el cupo).
       const pinned = inLevel
-        .filter((q) => q.is_pinned)
-        .map((q) => ({ ...q, _pos: Math.min(Math.max(q.pinned_position || 1, 1), QUESTIONS_PER_LEVEL) }));
+        .filter((q) => q.is_pinned && (q.pinned_position || 1) <= cupo)
+        .map((q) => ({ ...q, _pos: Math.max(q.pinned_position || 1, 1) }));
       const rest = shuffleArray(inLevel.filter((q) => !q.is_pinned));
 
-      // Armar los QUESTIONS_PER_LEVEL espacios: primero las fijadas en su
-      // posición (si dos chocan en la misma, la segunda cae al siguiente
-      // espacio libre), luego el azar rellena lo que quede.
-      const slots: any[] = new Array(QUESTIONS_PER_LEVEL).fill(null);
+      // Armar los espacios del cupo: primero las fijadas en su posición (si dos
+      // chocan en la misma, la segunda cae al siguiente espacio libre), luego
+      // el azar rellena lo que quede.
+      const slots: any[] = new Array(cupo).fill(null);
       for (const q of pinned.sort((a, b) => a._pos - b._pos)) {
         let idx = q._pos - 1;
-        while (idx < QUESTIONS_PER_LEVEL && slots[idx] !== null) idx++;
-        if (idx < QUESTIONS_PER_LEVEL) slots[idx] = q;
+        while (idx < cupo && slots[idx] !== null) idx++;
+        if (idx < cupo) slots[idx] = q;
       }
       let restIdx = 0;
-      for (let i = 0; i < QUESTIONS_PER_LEVEL; i++) {
+      for (let i = 0; i < cupo; i++) {
         if (slots[i] === null && restIdx < rest.length) slots[i] = rest[restIdx++];
       }
 
@@ -1960,7 +1997,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       if (insertError) {
         console.error('Error copiando preguntas del banco al evento:', insertError);
       } else {
-        console.log(`insertRandomQuestionsFromBank: ${questionsToInsert.length} preguntas (${QUESTIONS_PER_LEVEL}/nivel, fijadas en su posición + azar) copiadas al evento`);
+        console.log(`insertRandomQuestionsFromBank: ${questionsToInsert.length} preguntas (cupo por nivel de app_config, fijadas en su posición + azar) copiadas al evento`);
       }
     }
   };
@@ -2000,7 +2037,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         }
       } else {
         // No hay preguntas custom — armar el evento con un SUBCONJUNTO ALEATORIO
-        // del banco global (event_id = null): QUESTIONS_PER_LEVEL por nivel, y en
+        // del banco global (event_id = null): cupo por nivel de app_config, y en
         // Divertido la pregunta FIJADA (is_pinned) siempre primera.
         await insertRandomQuestionsFromBank(eventId);
       }
@@ -2500,11 +2537,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const loadQuestions = async () => {
     setLoadingQuestions(true);
     try {
+      // Se trae TODO el banco de una: el nivel activo se filtra en memoria, y
+      // el buscador (R) y el ranking (S) necesitan los 3 niveles a la vez.
       const { data, error } = await supabase
         .from('event_questions')
         .select('*')
         .is('event_id', null)
-        .eq('level', selectedLevel)
+        .order('level', { ascending: true })
         .order('question_order', { ascending: true });
 
       if (error) {
@@ -2513,7 +2552,33 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      setQuestions(data || []);
+      setAllQuestions(data || []);
+      setQuestions((data || []).filter((q: any) => q.level === selectedLevel));
+
+      // Métricas de impacto (S): mesas y promedio por texto de pregunta.
+      const { data: statsRows } = await supabase.from('question_stats_summary').select('*');
+      const statsMap = new Map<string, { mesas: number; avg: number }>();
+      for (const s of statsRows || []) {
+        statsMap.set(s.question_text, { mesas: s.mesas, avg: s.avg_seconds });
+      }
+      setQuestionStats(statsMap);
+
+      // Cupo por nivel (Q) desde app_config.
+      const { data: cfgRows } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['questions_per_level_divertido', 'questions_per_level_sensual', 'questions_per_level_atrevido']);
+      const cfg = { divertido: 8, sensual: 8, atrevido: 8 };
+      for (const row of cfgRows || []) {
+        const n = parseInt(row.value, 10);
+        if (!Number.isNaN(n) && n >= 1) {
+          if (row.key === 'questions_per_level_divertido') cfg.divertido = n;
+          if (row.key === 'questions_per_level_sensual') cfg.sensual = n;
+          if (row.key === 'questions_per_level_atrevido') cfg.atrevido = n;
+        }
+      }
+      setQuestionsPerLevel(cfg);
+      setQplDraft({ divertido: String(cfg.divertido), sensual: String(cfg.sensual), atrevido: String(cfg.atrevido) });
     } catch (error) {
       console.error('Failed to load questions:', error);
     } finally {
@@ -2521,10 +2586,83 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  // Normalización para el buscador y el anti-duplicados: sin tildes ni mayúsculas.
+  const normalizeQuestionText = (s: string): string =>
+    (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  // Anti-duplicados (R2): la más parecida del banco a un texto dado.
+  const findSimilarQuestion = (text: string): any | null => {
+    const words = normalizeQuestionText(text).split(/\s+/).filter((w) => w.length > 3);
+    if (words.length < 2) return null;
+    let best: any = null;
+    let bestScore = 0;
+    for (const q of allQuestions) {
+      const target = normalizeQuestionText(q.question_text);
+      const score = words.filter((w) => target.includes(w)).length;
+      if (score > bestScore) { bestScore = score; best = q; }
+    }
+    return bestScore >= 3 || (bestScore >= 2 && words.length <= 3) ? best : null;
+  };
+
+  // Guardar el cupo de preguntas por evento (Q). Avisa si alguna FIJADA queda
+  // por fuera del nuevo cupo de su nivel.
+  const handleSaveQuestionsPerLevel = async () => {
+    const parsed = {
+      divertido: parseInt(qplDraft.divertido, 10),
+      sensual: parseInt(qplDraft.sensual, 10),
+      atrevido: parseInt(qplDraft.atrevido, 10),
+    };
+    for (const [lvl, n] of Object.entries(parsed)) {
+      if (Number.isNaN(n) || n < 1) {
+        window.alert(`El número de ${lvl} no es válido (mínimo 1).`);
+        return;
+      }
+    }
+    try {
+      for (const [lvl, n] of Object.entries(parsed)) {
+        const key = `questions_per_level_${lvl}`;
+        const { error } = await supabase
+          .from('app_config')
+          .upsert({ key, value: String(n), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+        if (error) {
+          window.alert('Error guardando la configuración: ' + error.message);
+          return;
+        }
+      }
+      const fueras = allQuestions.filter(
+        (q: any) => q.is_pinned && q.pinned_position && q.pinned_position > (parsed as any)[q.level]
+      );
+      setQuestionsPerLevel(parsed);
+      if (fueras.length > 0) {
+        window.alert(
+          `✅ Guardado, pero OJO: ${fueras.length} pregunta(s) fijada(s) quedaron en una posición mayor que el nuevo cupo de su nivel y NO saldrán en los eventos. Reubícalas o sube el cupo.`
+        );
+      } else {
+        window.alert(
+          `✅ Guardado: ${parsed.divertido} Divertido · ${parsed.sensual} Coqueto · ${parsed.atrevido} Atrevido por evento. ` +
+          'Aplica a eventos nuevos de inmediato; para los ya creados usa Sincronizar o el re-sorteo.'
+        );
+      }
+    } catch (e: any) {
+      console.error('handleSaveQuestionsPerLevel:', e);
+    }
+  };
+
   const handleAddQuestion = async () => {
     if (!newQuestionText.trim()) {
       window.alert('Por favor ingresa el texto de la pregunta');
       return;
+    }
+
+    // Anti-duplicados (R2): si ya existe una muy parecida en CUALQUIER nivel,
+    // pedir confirmación antes de agregarla.
+    const similar = findSimilarQuestion(newQuestionText);
+    if (similar) {
+      const lvlName = similar.level === 'divertido' ? '😄 Divertido' : similar.level === 'sensual' ? '😘 Coqueto' : '🔥 Atrevido';
+      const proceed = window.confirm(
+        `⚠️ Ya existe una pregunta muy parecida en ${lvlName}:\n\n"${similar.question_text}"\n\n¿Agregar la nueva de todas formas?`
+      );
+      if (!proceed) return;
     }
 
     try {
@@ -2555,7 +2693,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handleDeleteQuestion = async (questionId: string) => {
-    const target = questions.find((q) => q.id === questionId);
+    const target = allQuestions.find((q) => q.id === questionId) || questions.find((q) => q.id === questionId);
     const confirmed = window.confirm(
       target?.is_pinned
         ? 'Esta pregunta está FIJADA (sale en todos los eventos). ¿Eliminarla de todas formas?'
@@ -2608,28 +2746,33 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   // Fijar / desfijar una pregunta del banco. Al fijar, toma la POSICIÓN donde
-  // está en la lista en ese momento (1..QUESTIONS_PER_LEVEL): esa pregunta
+  // está dentro de SU NIVEL en ese momento (1..cupo del nivel): esa pregunta
   // saldrá en TODOS los eventos como la pregunta N de su nivel. Al desfijar,
   // vuelve al sorteo normal. Aplica a eventos nuevos de inmediato; los ya
   // creados necesitan el botón de sincronizar (o el re-sorteo puntual).
+  // Funciona también desde los resultados del buscador (calcula la posición
+  // dentro del nivel de la pregunta, no dentro de la lista filtrada).
   const handleTogglePin = async (questionId: string) => {
-    const index = questions.findIndex((q) => q.id === questionId);
+    const target = allQuestions.find((q) => q.id === questionId);
+    if (!target) return;
+    const levelList = allQuestions.filter((q) => q.level === target.level);
+    const index = levelList.findIndex((q) => q.id === questionId);
     if (index === -1) return;
-    const target = questions[index];
+    const cupo = (questionsPerLevel as any)[target.level] || QUESTIONS_PER_LEVEL_DEFAULT;
 
     let update: any;
     if (target.is_pinned) {
       update = { is_pinned: false, pinned_position: null };
     } else {
       const position = index + 1;
-      if (position > QUESTIONS_PER_LEVEL) {
+      if (position > cupo) {
         window.alert(
-          `Solo se pueden fijar preguntas en las posiciones 1 a ${QUESTIONS_PER_LEVEL} (cada evento recibe ${QUESTIONS_PER_LEVEL} por nivel). ` +
+          `Solo se pueden fijar preguntas en las posiciones 1 a ${cupo} (cada evento recibe ${cupo} en este nivel). ` +
           'Arrastra la pregunta más arriba, a la posición donde quieres que salga, y vuelve a fijarla.'
         );
         return;
       }
-      const conflict = questions.find((q) => q.is_pinned && q.pinned_position === position && q.id !== questionId);
+      const conflict = levelList.find((q) => q.is_pinned && q.pinned_position === position && q.id !== questionId);
       if (conflict) {
         window.alert(`Ya hay una pregunta fijada en la posición ${position}. Desfíjala primero o mueve esta a otra posición.`);
         return;
@@ -2686,8 +2829,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       question_order: index,
     }));
 
-    // Optimistically update UI
+    // Optimistically update UI (también allQuestions, que alimenta buscador,
+    // ranking y el cálculo de posiciones al fijar).
     setQuestions(newQuestions);
+    const orderById = new Map(updates.map((u) => [u.id, u.question_order]));
+    setAllQuestions(allQuestions.map((q) => (orderById.has(q.id) ? { ...q, question_order: orderById.get(q.id) } : q))
+      .sort((a, b) => (a.level === b.level ? a.question_order - b.question_order : a.level.localeCompare(b.level))));
     setDraggedQuestionId(null);
 
     // Update database
@@ -2794,7 +2941,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   // Re-sortea (reemplaza) las preguntas de TODOS los eventos abiertos de hoy en
-  // adelante usando el banco global ACTUAL: QUESTIONS_PER_LEVEL al azar por
+  // adelante usando el banco global ACTUAL: cupo por nivel de app_config al azar por
   // nivel, con la pregunta fijada de primera en Divertido. Es la misma lógica
   // que se aplica al crear un evento (insertRandomQuestionsFromBank).
   const handleSyncQuestionsToAllEvents = async () => {
@@ -2865,17 +3012,180 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const renderQuestions = () => {
+    const searching = questionSearch.trim().length > 0;
+    const searchNorm = normalizeQuestionText(questionSearch.trim());
+
+    // Posición de una pregunta DENTRO de su nivel (para el buscador y ranking).
+    const levelPosition = (q: any): number =>
+      allQuestions.filter((x) => x.level === q.level).findIndex((x) => x.id === q.id) + 1;
+
+    const levelChip = (lvl: string) => {
+      const map: any = {
+        divertido: ['😄 Div', '#E0F2FE', '#075985'],
+        sensual: ['😘 Coq', '#FCE7F3', '#9D174D'],
+        atrevido: ['🔥 Atr', '#FFEDD5', '#9A3412'],
+      };
+      const [label, bg, color] = map[lvl] || ['?', '#f3f4f6', '#374151'];
+      return (
+        <Text style={{ fontSize: 10, fontWeight: '800', backgroundColor: bg, color, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+          {label}
+        </Text>
+      );
+    };
+
+    // Badge de impacto (S): mesas y tiempo promedio. Verde = genera
+    // conversación; rojo = la pasan rápido; gris = poca muestra (<5 mesas).
+    const statsBadge = (q: any) => {
+      const s = questionStats.get(q.question_text);
+      if (!s) return null;
+      const mins = Math.floor(s.avg / 60);
+      const secs = String(s.avg % 60).padStart(2, '0');
+      const timeText = `${mins}:${secs}`;
+      if (s.mesas < 5) {
+        return (
+          <Text style={{ fontSize: 10, fontWeight: '600', color: '#9CA3AF', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+            📊 {s.mesas} mesas · ⏱️ {timeText} (poca muestra)
+          </Text>
+        );
+      }
+      const good = s.avg >= 160;
+      const bad = s.avg < 80;
+      return (
+        <Text style={{ fontSize: 10, fontWeight: '800', color: good ? '#166534' : bad ? '#991B1B' : '#374151', backgroundColor: good ? '#DCFCE7' : bad ? '#FEE2E2' : '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+          📊 {s.mesas} mesas · ⏱️ prom. {timeText}
+        </Text>
+      );
+    };
+
+    // Fila reutilizada por los 3 modos (nivel / búsqueda / ranking).
+    const questionRow = (question: any, index: number, mode: 'level' | 'search' | 'ranking') => {
+      const inner = (
+        <View style={[styles.questionItem, question.is_pinned && { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 10, paddingHorizontal: 8 }]}>
+          {mode === 'level' && <Text style={styles.dragHandle}>⋮⋮</Text>}
+          {mode !== 'level' && levelChip(question.level)}
+          <Text style={styles.questionNumber}>{mode === 'ranking' ? `${index + 1}°` : `#${mode === 'search' ? levelPosition(question) : index + 1}`}</Text>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            value={question.question_text}
+            onChangeText={(text) => {
+              setQuestions(questions.map((q) => (q.id === question.id ? { ...q, question_text: text } : q)));
+              setAllQuestions(allQuestions.map((q) => (q.id === question.id ? { ...q, question_text: text } : q)));
+            }}
+            onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
+          />
+          {question.is_pinned ? (
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
+              📌 FIJA · pos. {question.pinned_position || levelPosition(question)}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#6B7280', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
+              🎲 sorteo
+            </Text>
+          )}
+          {statsBadge(question)}
+          <TouchableOpacity
+            style={[styles.deleteQuestionButton, question.is_pinned && { backgroundColor: '#F59E0B', borderRadius: 8 }]}
+            onPress={() => handleTogglePin(question.id)}
+          >
+            <Text style={styles.deleteQuestionButtonText}>📌</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteQuestionButton}
+            onPress={() => handleDeleteQuestion(question.id)}
+          >
+            <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+      );
+
+      if (mode !== 'level') {
+        return <div key={question.id}>{inner}</div>;
+      }
+      return (
+        <div
+          key={question.id}
+          draggable
+          onDragStart={() => handleDragStart(question.id)}
+          onDragOver={handleDragOver}
+          onDrop={() => handleDrop(question.id)}
+          style={{ cursor: 'grab', opacity: draggedQuestionId === question.id ? 0.5 : 1 }}
+        >
+          {inner}
+        </div>
+      );
+    };
+
+    const searchResults = searching
+      ? allQuestions.filter((q) => normalizeQuestionText(q.question_text).includes(searchNorm))
+      : [];
+    const rankingResults = rankingMode && !searching
+      ? allQuestions
+          .filter((q) => (questionStats.get(q.question_text)?.mesas || 0) >= 5)
+          .sort((a, b) => (questionStats.get(a.question_text)?.avg || 0) - (questionStats.get(b.question_text)?.avg || 0))
+      : [];
+
+    const liveSimilar = newQuestionText.trim().length >= 8 ? findSimilarQuestion(newQuestionText) : null;
+
     return (
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Preguntas Globales</Text>
-        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 24 }}>
-          Estas preguntas son el banco. En cada evento se eligen {QUESTIONS_PER_LEVEL} al azar por nivel. Las fijadas 📌 no entran al sorteo: salen en TODOS los eventos, en la posición exacta donde las fijaste. Arrastra ⋮⋮ una pregunta a la posición que quieras y tócale el 📌.
+        <Text style={{ fontSize: 15, color: '#6B7280', marginBottom: 16 }}>
+          Estas preguntas son el banco. En cada evento se eligen {questionsPerLevel.divertido}/{questionsPerLevel.sensual}/{questionsPerLevel.atrevido} al azar (Divertido/Coqueto/Atrevido). Las fijadas 📌 no entran al sorteo: salen en TODOS los eventos, en la posición exacta donde las fijaste. Arrastra ⋮⋮ una pregunta a la posición que quieras y tócale el 📌.
         </Text>
+
+        {/* Buscador (R): filtra en los 3 niveles a la vez, sin tildes/mayúsculas. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: nospiColors.purpleDark, backgroundColor: '#FDF2F8', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 6 }}>
+          <Text style={{ fontSize: 15 }}>🔎</Text>
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: '#111', borderWidth: 0 }}
+            placeholder="Buscar una pregunta en TODOS los niveles… (ignora tildes y mayúsculas)"
+            value={questionSearch}
+            onChangeText={setQuestionSearch}
+          />
+          {searching && (
+            <TouchableOpacity onPress={() => setQuestionSearch('')}>
+              <Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '800' }}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {searching && (
+          <Text style={{ fontSize: 12, color: '#831843', fontWeight: '700', marginBottom: 12 }}>
+            {searchResults.length} resultado(s) en todo el banco
+          </Text>
+        )}
+
+        {/* Cupo por evento (Q): configurable por nivel, sin límite. */}
+        <View style={{ borderWidth: 1.5, borderColor: nospiColors.purpleDark, backgroundColor: '#FDF2F8', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: '#831843', marginBottom: 2 }}>🎯 Preguntas por evento</Text>
+          <Text style={{ fontSize: 12, color: '#9D5A78', marginBottom: 10 }}>
+            Cuántas recibe cada evento por nivel. Aplica a eventos nuevos de inmediato; los ya creados necesitan Sincronizar o su re-sorteo.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', marginBottom: 3 }}>😄 Divertido</Text>
+              <TextInput style={[styles.input, { width: 90, marginBottom: 0, textAlign: 'center', fontWeight: '800' }]} value={qplDraft.divertido} keyboardType="numeric" onChangeText={(t) => setQplDraft({ ...qplDraft, divertido: t })} />
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', marginBottom: 3 }}>😘 Coqueto</Text>
+              <TextInput style={[styles.input, { width: 90, marginBottom: 0, textAlign: 'center', fontWeight: '800' }]} value={qplDraft.sensual} keyboardType="numeric" onChangeText={(t) => setQplDraft({ ...qplDraft, sensual: t })} />
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', marginBottom: 3 }}>🔥 Atrevido</Text>
+              <TextInput style={[styles.input, { width: 90, marginBottom: 0, textAlign: 'center', fontWeight: '800' }]} value={qplDraft.atrevido} keyboardType="numeric" onChangeText={(t) => setQplDraft({ ...qplDraft, atrevido: t })} />
+            </View>
+            <TouchableOpacity style={{ backgroundColor: nospiColors.purpleDark, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 18 }} onPress={handleSaveQuestionsPerLevel}>
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800' }}>Guardar</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontSize: 12, color: '#831843', fontWeight: '700', marginTop: 8 }}>
+            Total por dinámica: {(parseInt(qplDraft.divertido, 10) || 0) + (parseInt(qplDraft.sensual, 10) || 0) + (parseInt(qplDraft.atrevido, 10) || 0)} preguntas
+          </Text>
+        </View>
 
         <View style={styles.levelSelector}>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('divertido'); setTimeout(loadQuestions, 0); }}
+            onPress={() => { setSelectedLevel('divertido'); setQuestions(allQuestions.filter((q) => q.level === 'divertido')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
               😄 Divertido
@@ -2883,7 +3193,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('sensual'); setTimeout(loadQuestions, 0); }}
+            onPress={() => { setSelectedLevel('sensual'); setQuestions(allQuestions.filter((q) => q.level === 'sensual')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
               😘 Coqueto
@@ -2891,7 +3201,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('atrevido'); setTimeout(loadQuestions, 0); }}
+            onPress={() => { setSelectedLevel('atrevido'); setQuestions(allQuestions.filter((q) => q.level === 'atrevido')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
               🔥 Atrevido
@@ -2912,6 +3222,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
         </View>
 
+        {/* Anti-duplicados (R2): aviso en vivo mientras escribe la nueva pregunta. */}
+        {liveSimilar && (
+          <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, color: '#92400E', lineHeight: 18 }}>
+              ⚠️ <Text style={{ fontWeight: '800' }}>Ojo: ya existe una muy parecida</Text> en {liveSimilar.level === 'divertido' ? '😄 Divertido' : liveSimilar.level === 'sensual' ? '😘 Coqueto' : '🔥 Atrevido'}: “{liveSimilar.question_text}”. Puedes agregarla igual si de verdad es distinta.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.bulkActionsSection}>
           <TouchableOpacity
             style={[styles.bulkActionButton, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#059669' }]}
@@ -2921,13 +3240,46 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               🔀 Sincronizar a todos los eventos (re-sortea con el banco actual)
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkActionButton, { backgroundColor: rankingMode ? nospiColors.purpleDark : '#fff', borderWidth: 1.5, borderColor: nospiColors.purpleDark }]}
+            onPress={() => setRankingMode(!rankingMode)}
+          >
+            <Text style={[styles.bulkActionButtonText, { color: rankingMode ? '#fff' : nospiColors.purpleDark }]}>
+              📊 Ranking por tiempo promedio
+            </Text>
+          </TouchableOpacity>
         </View>
+        {rankingMode && !searching && (
+          <Text style={{ fontSize: 12, color: '#831843', fontWeight: '700', marginBottom: 12 }}>
+            Ranking de PEOR a MEJOR tiempo, en los 3 niveles (solo preguntas con 5+ mesas) — las de arriba son candidatas a eliminar. Los datos se acumulan con cada evento real.
+          </Text>
+        )}
 
         {loadingQuestions ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={nospiColors.purpleDark} />
             <Text style={styles.loadingText}>Cargando preguntas...</Text>
           </View>
+        ) : searching ? (
+          searchResults.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Text style={{ fontSize: 15, color: '#9CA3AF', textAlign: 'center' }}>
+                No hay ninguna pregunta con ese texto — no está en el banco. ✅ Puedes agregarla sin miedo a duplicar.
+              </Text>
+            </View>
+          ) : (
+            <View>{searchResults.map((q, i) => questionRow(q, i, 'search'))}</View>
+          )
+        ) : rankingMode ? (
+          rankingResults.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Text style={{ fontSize: 15, color: '#9CA3AF', textAlign: 'center' }}>
+                Aún no hay preguntas con 5+ mesas medidas. Los tiempos se registran automáticamente en cada evento real de aquí en adelante.
+              </Text>
+            </View>
+          ) : (
+            <View>{rankingResults.map((q, i) => questionRow(q, i, 'ranking'))}</View>
+          )
         ) : questions.length === 0 ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
@@ -2935,52 +3287,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </Text>
           </View>
         ) : (
-          <View>
-            {questions.map((question, index) => (
-              <div
-                key={question.id}
-                draggable
-                onDragStart={() => handleDragStart(question.id)}
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(question.id)}
-                style={{ cursor: 'grab', opacity: draggedQuestionId === question.id ? 0.5 : 1 }}
-              >
-                <View style={[styles.questionItem, question.is_pinned && { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 10, paddingHorizontal: 8 }]}>
-                  <Text style={styles.dragHandle}>⋮⋮</Text>
-                  <Text style={styles.questionNumber}>#{index + 1}</Text>
-                  <TextInput
-                    style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                    value={question.question_text}
-                    onChangeText={(text) => {
-                      setQuestions(questions.map((q) => (q.id === question.id ? { ...q, question_text: text } : q)));
-                    }}
-                    onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
-                  />
-                  {question.is_pinned ? (
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
-                      📌 FIJA · sale en todos, posición {question.pinned_position || index + 1}
-                    </Text>
-                  ) : (
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#6B7280', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
-                      🎲 entra al sorteo
-                    </Text>
-                  )}
-                  <TouchableOpacity
-                    style={[styles.deleteQuestionButton, question.is_pinned && { backgroundColor: '#F59E0B', borderRadius: 8 }]}
-                    onPress={() => handleTogglePin(question.id)}
-                  >
-                    <Text style={styles.deleteQuestionButtonText}>📌</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteQuestionButton}
-                    onPress={() => handleDeleteQuestion(question.id)}
-                  >
-                    <Text style={styles.deleteQuestionButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              </div>
-            ))}
-          </View>
+          <View>{questions.map((q, i) => questionRow(q, i, 'level'))}</View>
         )}
       </View>
     );

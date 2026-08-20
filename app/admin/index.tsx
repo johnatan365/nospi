@@ -863,11 +863,25 @@ const handleLogin = async () => {
         // Borrar preguntas previas del evento (por si es una edición)
         await supabase.from('event_questions').delete().eq('event_id', eventId);
 
+        // Cupo por nivel (Q): configurable desde el admin web, guardado en
+        // app_config. Espejo de fetchQuestionsPerLevel del admin web.
+        const perLevel: Record<string, number> = { divertido: 8, sensual: 8, atrevido: 8 };
+        try {
+          const { data: cfgRows } = await supabase
+            .from('app_config')
+            .select('key, value')
+            .in('key', ['questions_per_level_divertido', 'questions_per_level_sensual', 'questions_per_level_atrevido']);
+          for (const row of cfgRows || []) {
+            const n = parseInt(row.value, 10);
+            if (!Number.isNaN(n) && n >= 1) perLevel[row.key.replace('questions_per_level_', '')] = n;
+          }
+        } catch (_e) { /* con el default seguimos */ }
+
         // Agrupar por nivel, manteniendo los niveles agrupados (divertido, luego
         // sensual, luego atrevido). Las preguntas FIJADAS (is_pinned +
-        // pinned_position) NO entran al sorteo: ocupan su posición exacta
-        // dentro del nivel (igual que en el admin web); el resto se baraja en
-        // los espacios libres.
+        // pinned_position dentro del cupo) NO entran al sorteo: ocupan su
+        // posición exacta dentro del nivel (igual que en el admin web); el
+        // resto se baraja en los espacios libres del cupo.
         const levelOrder: string[] = [];
         const byLevel: Record<string, typeof globalQuestions> = {};
         for (const q of globalQuestions) {
@@ -880,11 +894,12 @@ const handleLogin = async () => {
 
         const orderedQuestions = levelOrder.flatMap((level) => {
           const inLevel = byLevel[level];
+          const cupo = perLevel[level] || 8;
           const pinned = inLevel
-            .filter((q: any) => q.is_pinned)
-            .map((q: any) => ({ ...q, _pos: Math.min(Math.max(q.pinned_position || 1, 1), inLevel.length) }));
+            .filter((q: any) => q.is_pinned && (q.pinned_position || 1) <= cupo)
+            .map((q: any) => ({ ...q, _pos: Math.max(q.pinned_position || 1, 1) }));
           const rest = shuffleArray(inLevel.filter((q: any) => !q.is_pinned));
-          const slots: any[] = new Array(inLevel.length).fill(null);
+          const slots: any[] = new Array(cupo).fill(null);
           for (const q of pinned.sort((a: any, b: any) => a._pos - b._pos)) {
             let idx = q._pos - 1;
             while (idx < slots.length && slots[idx] !== null) idx++;
