@@ -85,12 +85,13 @@ const DEFAULT_GPS_RADIUS_METERS = 150;
 //    asistencia" (GPS), para quien llega temprano al lugar.
 //  · START_WINDOW_MINUTES: cuánto DESPUÉS de la hora aparece el botón
 //    "Continuar" de la lista de confirmados (elegir moderador y leer reglas).
-//    Elegido con datos reales de llegadas: a los 5 min ha llegado ~60% de la
-//    gente y a los 10 ~80%; 7 recoge a los del minuto 6-7 sin estirar tanto.
 //    Durante ese conteo la tarjeta de espera explica que es para darle chance a
 //    quien se haya retrasado, e invita a pedir algo mientras tanto.
+//    OJO: el push y el correo de inicio (send-push-reminders /
+//    send-email-reminders, bloque event_start) disparan a la hora del evento +
+//    este mismo margen — si se cambia aquí, cambiarlo también allá.
 const CONFIRM_EARLY_MINUTES = 15;
-const START_WINDOW_MINUTES = 7;
+const START_WINDOW_MINUTES = 5;
 
 // Distancia en metros entre dos coordenadas (fórmula de Haversine)
 function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -765,12 +766,14 @@ export default function DinamicaScreen() {
 
       let firstQuestion = '¿Cuál es tu nombre y a qué te dedicas?';
       try {
+        // El orden lo manda question_order a secas: el sorteo del admin ya
+        // deja cada pregunta fijada en su POSICIÓN elegida (puede no ser la
+        // primera), así que forzar is_pinned de primera rompería ese orden.
         const { data: eventFirstQuestion } = await supabase
           .from('event_questions')
           .select('question_text')
           .eq('event_id', appointment.event_id)
           .eq('level', 'divertido')
-          .order('is_pinned', { ascending: false })
           .order('question_order', { ascending: true })
           .limit(1);
 
@@ -782,7 +785,6 @@ export default function DinamicaScreen() {
             .select('question_text')
             .is('event_id', null)
             .eq('level', 'divertido')
-            .order('is_pinned', { ascending: false })
             .order('question_order', { ascending: true })
             .limit(1);
 
@@ -1650,6 +1652,17 @@ export default function DinamicaScreen() {
                     </View>
                   </>
                 )}
+                {/* Aviso de NO presentarse todavía: la dinámica abre con la
+                    pregunta de presentación, y es más divertida si nadie se
+                    presentó antes. Se muestra en TODOS los tipos de evento
+                    (en caminata queda directo debajo de la línea de espera). */}
+                <View style={styles.waitCardDivider} />
+                <View style={styles.waitCardDrink}>
+                  <Text style={styles.waitCardDrinkEmoji}>🤫</Text>
+                  <Text style={styles.waitCardDrinkText}>
+                    <Text style={styles.waitCardDrinkStrong}>Aún no se presenten:</Text> la dinámica lo va a hacer por ustedes… de una forma mucho más divertida.
+                  </Text>
+                </View>
               </View>
             )}
 
