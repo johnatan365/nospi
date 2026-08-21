@@ -496,24 +496,31 @@ export default function DinamicaScreen() {
         }
 
         const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        const todayConfirmedAppointment = data.find(apt => {
-          if (apt.status !== 'confirmada') return false;
-          if (!apt.event?.start_time) return false;
-          const eventDate = new Date(apt.event.start_time);
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // OJO: 'data' viene ordenado por created_at (orden de inscripción), NO
+        // por fecha del evento. Antes se usaba data.find(), que devolvía el
+        // primero de ESE orden — si alguien se inscribía primero a un evento
+        // lejano y luego a uno próximo, la pestaña mostraba el lejano como "el
+        // evento". Ahora se ordena por fecha real antes de elegir, para que
+        // siempre se muestre el más próximo.
+        const confirmedUpcoming = data
+          .filter(apt => {
+            if (apt.status !== 'confirmada') return false;
+            if (!apt.event?.start_time) return false;
+            const eventDate = new Date(apt.event.start_time);
+            const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+            return eventDayStart >= todayStart;
+          })
+          .sort((a, b) => new Date(a.event!.start_time!).getTime() - new Date(b.event!.start_time!).getTime());
+
+        const todayConfirmedAppointment = confirmedUpcoming.find(apt => {
+          const eventDate = new Date(apt.event!.start_time!);
           const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
           return eventDayStart.getTime() === todayStart.getTime();
         });
 
-        const upcomingAppointment = data.find(apt => {
-          if (apt.status !== 'confirmada') return false;
-          if (!apt.event?.start_time) return false;
-          const eventDate = new Date(apt.event.start_time);
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-          return eventDayStart >= todayStart;
-        });
+        const upcomingAppointment = confirmedUpcoming[0];
 
         const appointmentData = todayConfirmedAppointment || upcomingAppointment || data[0];
 
