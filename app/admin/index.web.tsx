@@ -498,6 +498,21 @@ function ExcelFilterTh({
   );
 }
 
+// Categorías temáticas de preguntas (independientes del nivel Divertido/Coqueto/
+// Atrevido): clasifican de qué TRATA la pregunta, no qué tan subida de tono es.
+const QUESTION_CATEGORIES = ['debate_genero', 'opinion', 'anecdota', 'grupo'] as const;
+type QuestionCategory = typeof QUESTION_CATEGORIES[number];
+const CATEGORY_META: Record<QuestionCategory, { label: string; short: string; bg: string; fg: string; desc: string }> = {
+  debate_genero: { label: '⚔️ Debate H vs M', short: '⚔️ Debate', bg: '#FFEDD5', fg: '#9A3412', desc: 'Enfrenta opiniones entre hombres y mujeres.' },
+  opinion: { label: '💭 Opinión / dilema', short: '💭 Opinión', bg: '#E0E7FF', fg: '#3730A3', desc: 'Posturas y dilemas sobre relaciones.' },
+  anecdota: { label: '📖 Anécdota', short: '📖 Anécdota', bg: '#DCFCE7', fg: '#166534', desc: 'Historias personales — "cuéntanos una vez que...".' },
+  grupo: { label: '🎯 Grupo / en la mesa', short: '🎯 Grupo', bg: '#FCE7F3', fg: '#9D174D', desc: 'Sobre los presentes: "¿quién de este grupo...?".' },
+};
+const nextCategory = (c: QuestionCategory): QuestionCategory => {
+  const i = QUESTION_CATEGORIES.indexOf(c);
+  return QUESTION_CATEGORIES[(i + 1) % QUESTION_CATEGORIES.length];
+};
+
 export default function AdminPanelScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -805,6 +820,10 @@ export default function AdminPanelScreen() {
   // Votación 👍/👎 (U): agregados anónimos por pregunta + ayuda de lectura.
   const [questionVotes, setQuestionVotes] = useState<Map<string, { up: number; down: number; pct: number }>>(new Map());
   const [showMetricsHelp, setShowMetricsHelp] = useState(false);
+  // Categorías temáticas (⚔️💭📖🎯): filtro para revisar el banco por tema,
+  // y categoría elegida al agregar una pregunta nueva.
+  const [categoryFilter, setCategoryFilter] = useState<'all' | QuestionCategory>('all');
+  const [newQuestionCategory, setNewQuestionCategory] = useState<QuestionCategory>('opinion');
   // Cupo de preguntas por evento por nivel (Q), leído de app_config.
   const [questionsPerLevel, setQuestionsPerLevel] = useState<{ divertido: number; sensual: number; atrevido: number }>({ divertido: 8, sensual: 8, atrevido: 8 });
   const [qplDraft, setQplDraft] = useState<{ divertido: string; sensual: string; atrevido: string }>({ divertido: '8', sensual: '8', atrevido: '8' });
@@ -1962,7 +1981,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const insertRandomQuestionsFromBank = async (eventId: string) => {
     const { data: globalQuestions, error: fetchError } = await supabase
       .from('event_questions')
-      .select('level, question_text, is_pinned, pinned_position')
+      .select('level, question_text, is_pinned, pinned_position, category')
       .is('event_id', null);
 
     if (fetchError || !globalQuestions || globalQuestions.length === 0) {
@@ -1987,7 +2006,36 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const pinned = inLevel
         .filter((q) => q.is_pinned && (q.pinned_position || 1) <= cupo)
         .map((q) => ({ ...q, _pos: Math.max(q.pinned_position || 1, 1) }));
-      const rest = shuffleArray(inLevel.filter((q) => !q.is_pinned));
+      // Mix por categoría (⚔️💭📖🎯): en vez de un azar puro sobre todo el
+      // resto, se reparte lo más parejo posible entre las 4 categorías (en
+      // orden aleatorio en cada vuelta), para que ninguna dinámica salga
+      // "puro debate" o "puras anécdotas".
+      const rest = (() => {
+        const notPinned = inLevel.filter((q) => !q.is_pinned);
+        const byCat: Record<string, any[]> = {};
+        for (const q of notPinned) {
+          const cat = (q as any).category || 'opinion';
+          if (!byCat[cat]) byCat[cat] = [];
+          byCat[cat].push(q);
+        }
+        for (const cat of Object.keys(byCat)) byCat[cat] = shuffleArray(byCat[cat]);
+        const cats = Object.keys(byCat);
+        const mixed: any[] = [];
+        let remaining = notPinned.length;
+        while (remaining > 0) {
+          const order = shuffleArray(cats);
+          let took = false;
+          for (const cat of order) {
+            if (byCat[cat] && byCat[cat].length > 0) {
+              mixed.push(byCat[cat].shift());
+              remaining--;
+              took = true;
+            }
+          }
+          if (!took) break;
+        }
+        return mixed;
+      })();
 
       // Armar los espacios del cupo: primero las fijadas en su posición (si dos
       // chocan en la misma, la segunda cae al siguiente espacio libre), luego
@@ -2013,6 +2061,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           // La copia conserva la marca de fijada (informativo): la POSICIÓN ya
           // quedó codificada en question_order, que es lo que ordena la app.
           is_pinned: !!q.is_pinned,
+          category: (q as any).category || 'opinion',
         });
       }
     }
@@ -2716,6 +2765,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           question_text: newQuestionText.trim(),
           question_order: maxOrder + 1,
           is_default: true,
+          category: newQuestionCategory,
         });
 
       if (error) {
@@ -2725,6 +2775,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       setNewQuestionText('');
+      setNewQuestionCategory('opinion');
       loadQuestions();
       window.alert('Pregunta agregada exitosamente');
     } catch (error) {
@@ -2792,6 +2843,23 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // creados necesitan el botón de sincronizar (o el re-sorteo puntual).
   // Funciona también desde los resultados del buscador (calcula la posición
   // dentro del nivel de la pregunta, no dentro de la lista filtrada).
+  // Tocando el chip de categoría de una pregunta, la rota entre las 4
+  // categorías (⚔️ Debate → 💭 Opinión → 📖 Anécdota → 🎯 Grupo → ⚔️...).
+  const handleCycleQuestionCategory = async (question: any) => {
+    const current: QuestionCategory = (question.category as QuestionCategory) || 'opinion';
+    const updated = nextCategory(current);
+    setQuestions(questions.map((q) => (q.id === question.id ? { ...q, category: updated } : q)));
+    setAllQuestions(allQuestions.map((q) => (q.id === question.id ? { ...q, category: updated } : q)));
+    const { error } = await supabase.from('event_questions').update({ category: updated }).eq('id', question.id);
+    if (error) {
+      console.error('Error actualizando categoría:', error);
+      window.alert('Error al cambiar la categoría: ' + error.message);
+      // revertir en memoria si falló en la base de datos
+      setQuestions(questions.map((q) => (q.id === question.id ? { ...q, category: current } : q)));
+      setAllQuestions(allQuestions.map((q) => (q.id === question.id ? { ...q, category: current } : q)));
+    }
+  };
+
   const handleTogglePin = async (questionId: string) => {
     const target = allQuestions.find((q) => q.id === questionId);
     if (!target) return;
@@ -3113,6 +3181,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           {mode === 'level' && <Text style={styles.dragHandle}>⋮⋮</Text>}
           {mode !== 'level' && levelChip(question.level)}
           <Text style={styles.questionNumber}>{mode === 'ranking' ? `${index + 1}°` : `#${mode === 'search' ? levelPosition(question) : index + 1}`}</Text>
+          <TouchableOpacity onPress={() => handleCycleQuestionCategory(question)}>
+            <Text style={{ fontSize: 10, fontWeight: '800', backgroundColor: CATEGORY_META[(question.category as QuestionCategory) || 'opinion'].bg, color: CATEGORY_META[(question.category as QuestionCategory) || 'opinion'].fg, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+              {CATEGORY_META[(question.category as QuestionCategory) || 'opinion'].short}
+            </Text>
+          </TouchableOpacity>
           <TextInput
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
             value={question.question_text}
@@ -3258,6 +3331,29 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
         </View>
 
+        {/* Filtro por categoría temática (⚔️💭📖🎯): combinable con el nivel y el buscador. */}
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          <TouchableOpacity
+            style={{ borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: categoryFilter === 'all' ? '#374151' : '#fff', borderWidth: 1.5, borderColor: categoryFilter === 'all' ? '#374151' : '#E5E7EB' }}
+            onPress={() => setCategoryFilter('all')}
+          >
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: categoryFilter === 'all' ? '#fff' : '#6B7280' }}>Todas</Text>
+          </TouchableOpacity>
+          {QUESTION_CATEGORIES.map((cat) => {
+            const meta = CATEGORY_META[cat];
+            const active = categoryFilter === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={{ borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: active ? meta.fg : '#fff', borderWidth: 1.5, borderColor: active ? meta.fg : '#E5E7EB' }}
+                onPress={() => setCategoryFilter(cat)}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: active ? '#fff' : '#6B7280' }}>{meta.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.addQuestionSection}>
           <TextInput
             style={[styles.input, { flex: 1 }]}
@@ -3269,6 +3365,24 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <TouchableOpacity style={styles.addButton} onPress={handleAddQuestion}>
             <Text style={styles.addButtonText}>+ Agregar</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Categoría de la pregunta nueva (⚔️💭📖🎯): a qué tema pertenece, independiente del nivel. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, marginTop: -6 }}>
+          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#6B7280' }}>Categoría:</Text>
+          {QUESTION_CATEGORIES.map((cat) => {
+            const meta = CATEGORY_META[cat];
+            const active = newQuestionCategory === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={{ borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: active ? meta.bg : '#fff', borderWidth: 1.5, borderColor: active ? meta.fg : '#E5E7EB' }}
+                onPress={() => setNewQuestionCategory(cat)}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: active ? meta.fg : '#6B7280' }}>{meta.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Anti-duplicados (R2): aviso en vivo mientras escribe la nueva pregunta. */}
@@ -3325,9 +3439,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <View style={{ backgroundColor: '#FEF3C7', borderRadius: 10, padding: 9, marginBottom: 6 }}>
               <Text style={{ fontSize: 12, color: '#78350F', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ alto + 👎 alto = INCÓMODA.</Text> Dio de qué hablar pero no gustó → re-redactar o mover de nivel.</Text>
             </View>
-            <View style={{ backgroundColor: '#E0F2FE', borderRadius: 10, padding: 9 }}>
+            <View style={{ backgroundColor: '#E0F2FE', borderRadius: 10, padding: 9, marginBottom: 6 }}>
               <Text style={{ fontSize: 12, color: '#0C4A6E', lineHeight: 18 }}><Text style={{ fontWeight: '800' }}>⏱️ bajo + 👍 alto = REVISAR.</Text> Gustó pero pasó rápido: quizás mala posición o moderador acelerado — el voto la salva.</Text>
             </View>
+
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#075985', marginTop: 8, marginBottom: 6 }}>Las 4 categorías temáticas (⚔️💭📖🎯):</Text>
+            <Text style={{ fontSize: 12, color: '#0C4A6E', lineHeight: 20 }}>
+              Clasifican de qué TRATA la pregunta — es independiente del nivel Divertido/Coqueto/Atrevido, que mide qué tan subida de tono es.{'\n\n'}
+              {QUESTION_CATEGORIES.map((cat) => `${CATEGORY_META[cat].label}: ${CATEGORY_META[cat].desc}`).join('\n')}
+              {'\n\n'}Toca el chip de categoría en cualquier pregunta para cambiarla. En el sorteo de cada evento, los espacios libres (los que no están fijados con 📌) se reparten lo más parejo posible entre las 4 categorías.
+            </Text>
           </View>
         )}
         {rankingMode && !searching && (
@@ -3361,15 +3482,21 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           ) : (
             <View>{rankingResults.map((q, i) => questionRow(q, i, 'ranking'))}</View>
           )
-        ) : questions.length === 0 ? (
-          <View style={{ padding: 40, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
-              No hay preguntas para este nivel. Agrega una o restaura las predeterminadas.
-            </Text>
-          </View>
-        ) : (
-          <View>{questions.map((q, i) => questionRow(q, i, 'level'))}</View>
-        )}
+        ) : (() => {
+          const filtered = categoryFilter === 'all' ? questions : questions.filter((q) => ((q.category as QuestionCategory) || 'opinion') === categoryFilter);
+          if (filtered.length === 0) {
+            return (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#9CA3AF' }}>
+                  {questions.length === 0
+                    ? 'No hay preguntas para este nivel. Agrega una o restaura las predeterminadas.'
+                    : `No hay preguntas de ${CATEGORY_META[categoryFilter as QuestionCategory]?.label || 'esta categoría'} en este nivel.`}
+                </Text>
+              </View>
+            );
+          }
+          return <View>{filtered.map((q, i) => questionRow(q, i, 'level'))}</View>;
+        })()}
       </View>
     );
   };
