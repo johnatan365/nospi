@@ -15,6 +15,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -102,7 +103,7 @@ function ChatAvatar({
   const inner = uri && !failed ? (
     // cache 'force-cache': una vez descargada, la foto se reusa desde el cache
     // (no se vuelve a bajar al salir y volver al chat) -> queda estática.
-    <Image source={{ uri, cache: 'force-cache' }} style={box} onError={() => setFailed(true)} />
+    <ExpoImage source={{ uri }} style={box} cachePolicy="memory-disk" transition={0} onError={() => setFailed(true)} />
   ) : (
     <View style={[box, styles.avatarInitials]}>
       <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.42 }}>{initialsOf(name)}</Text>
@@ -561,7 +562,7 @@ export default function ChatThreadScreen() {
                   >
                     {p.profile_photo_url ? (
                       <TouchableOpacity onPress={() => setZoomedPhoto(p.profile_photo_url)} activeOpacity={0.8}>
-                        <Image source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} />
+                        <ExpoImage source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} cachePolicy="memory-disk" transition={0} />
                       </TouchableOpacity>
                     ) : (
                       <View style={[styles.participantAvatar, styles.participantAvatarPlaceholder]}>
@@ -584,7 +585,7 @@ export default function ChatThreadScreen() {
       <Modal visible={!!zoomedPhoto} animationType="fade" transparent onRequestClose={() => setZoomedPhoto(null)}>
         <TouchableOpacity style={styles.photoViewerOverlay} activeOpacity={1} onPress={() => setZoomedPhoto(null)}>
           {zoomedPhoto && (
-            <Image source={{ uri: zoomedPhoto }} style={styles.photoViewerImage} resizeMode="contain" />
+            <ExpoImage source={{ uri: zoomedPhoto }} style={styles.photoViewerImage} contentFit="contain" cachePolicy="memory-disk" transition={0} />
           )}
           <TouchableOpacity
             style={[styles.photoViewerClose, { top: insets.top + 12 }]}
