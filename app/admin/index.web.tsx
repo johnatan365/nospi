@@ -844,6 +844,12 @@ export default function AdminPanelScreen() {
   // NEW: Event configuration modal
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedEventForConfig, setSelectedEventForConfig] = useState<Event | null>(null);
+  // Visor de preguntas REALES asignadas a un evento específico (con categoría):
+  // distinto del editor de preguntas custom — esto solo lee lo que ya quedó
+  // guardado en event_questions para ese event_id.
+  const [showEventQuestionsViewer, setShowEventQuestionsViewer] = useState(false);
+  const [eventAssignedQuestions, setEventAssignedQuestions] = useState<any[]>([]);
+  const [loadingEventAssignedQuestions, setLoadingEventAssignedQuestions] = useState(false);
     // NEW: Event chat viewer (admin)
   const [showEventChatModal, setShowEventChatModal] = useState(false);
   const [eventConversations, setEventConversations] = useState<AdminEventConversation[]>([]);
@@ -3046,6 +3052,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const handleOpenConfigModal = (event: Event) => {
     setSelectedEventForConfig(event);
     setShowConfigModal(true);
+    // Reset del visor de preguntas: evita mostrar por un instante los datos
+    // del evento anterior mientras carga el nuevo.
+    setShowEventQuestionsViewer(false);
+    setEventAssignedQuestions([]);
   };
 
   // Re-sortea (reemplaza) las preguntas de TODOS los eventos abiertos de hoy en
@@ -3113,9 +3123,44 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     try {
       await insertRandomQuestionsFromBank(eventId);
       window.alert('✅ Preguntas re-sorteadas para este evento.');
+      // Si el visor de preguntas del evento está abierto, refrescarlo para
+      // que muestre el mix nuevo sin que el admin tenga que cerrarlo y abrirlo.
+      if (showEventQuestionsViewer) loadEventAssignedQuestions(eventId);
     } catch (e: any) {
       console.error('handleReshuffleEventQuestions error:', e);
       window.alert('Error al re-sortear: ' + (e?.message || ''));
+    }
+  };
+
+  // Trae las preguntas REALES ya guardadas para un evento específico
+  // (event_questions.event_id = eventId), con su categoría — para el visor
+  // de solo lectura junto al botón de re-sortear.
+  const loadEventAssignedQuestions = async (eventId: string) => {
+    setLoadingEventAssignedQuestions(true);
+    try {
+      const { data, error } = await supabase
+        .from('event_questions')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('level', { ascending: true })
+        .order('question_order', { ascending: true });
+      if (error) {
+        console.error('Error cargando preguntas del evento:', error);
+        window.alert('Error al cargar las preguntas de este evento: ' + error.message);
+        setEventAssignedQuestions([]);
+      } else {
+        setEventAssignedQuestions(data || []);
+      }
+    } finally {
+      setLoadingEventAssignedQuestions(false);
+    }
+  };
+
+  const toggleEventQuestionsViewer = () => {
+    const opening = !showEventQuestionsViewer;
+    setShowEventQuestionsViewer(opening);
+    if (opening && selectedEventForConfig) {
+      loadEventAssignedQuestions(selectedEventForConfig.id);
     }
   };
 
@@ -6440,6 +6485,74 @@ setBulkWhatsAppPending(pending);
                   >
                     <Text style={styles.configActionButtonText}>🔀 Re-sortear preguntas de este evento</Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: showEventQuestionsViewer ? nospiColors.purpleDark : '#fff', borderWidth: 1.5, borderColor: nospiColors.purpleDark }]}
+                    onPress={toggleEventQuestionsViewer}
+                  >
+                    <Text style={[styles.configActionButtonText, { color: showEventQuestionsViewer ? '#fff' : nospiColors.purpleDark }]}>
+                      👁️ {showEventQuestionsViewer ? 'Ocultar' : 'Ver'} preguntas asignadas
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showEventQuestionsViewer && (
+                    <View style={{ borderWidth: 1, borderColor: '#EEE2E8', borderRadius: 12, padding: 12, marginBottom: 12, backgroundColor: '#fff' }}>
+                      <Text style={{ fontSize: 11.5, color: '#8b7480', lineHeight: 17, marginBottom: 10 }}>
+                        Esto es lo que realmente quedó guardado para este evento (no el banco global). Las fijadas 📌 salen igual en todos los eventos; el resto vino del mix por categoría al sortear.
+                      </Text>
+                      {loadingEventAssignedQuestions ? (
+                        <ActivityIndicator size="small" color={nospiColors.purpleDark} />
+                      ) : eventAssignedQuestions.length === 0 ? (
+                        <Text style={{ fontSize: 13, color: '#9CA3AF' }}>
+                          Este evento todavía no tiene preguntas guardadas. Usa "🔀 Re-sortear" para asignarle un mix del banco.
+                        </Text>
+                      ) : (
+                        <>
+                          {(['divertido', 'sensual', 'atrevido'] as const).map((lvl) => {
+                            const lvlQs = eventAssignedQuestions.filter((q) => q.level === lvl);
+                            if (lvlQs.length === 0) return null;
+                            const lvlLabel = lvl === 'divertido' ? '😄 Divertido' : lvl === 'sensual' ? '😘 Coqueto' : '🔥 Atrevido';
+                            return (
+                              <View key={lvl} style={{ marginBottom: 12 }}>
+                                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#5c0a37', marginBottom: 6 }}>
+                                  {lvlLabel} <Text style={{ fontSize: 10, fontWeight: '700', color: '#8b7480', backgroundColor: '#F3E8FF', borderRadius: 999, paddingVertical: 2, paddingHorizontal: 7 }}>{lvlQs.length} preguntas</Text>
+                                </Text>
+                                {lvlQs.map((q, i) => {
+                                  const meta = CATEGORY_META[(q.category as QuestionCategory) || 'opinion'];
+                                  return (
+                                    <View key={q.id || i} style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#EEE2E8', borderRadius: 9, paddingVertical: 6, paddingHorizontal: 8, marginBottom: 5, backgroundColor: '#fff' }, q.is_pinned && { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+                                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#8b7480', width: 18 }}>#{i + 1}</Text>
+                                      <Text style={{ fontSize: 9.5, fontWeight: '800', backgroundColor: meta.bg, color: meta.fg, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+                                        {meta.short}
+                                      </Text>
+                                      <Text style={{ fontSize: 12, flex: 1, lineHeight: 17 }}>{q.question_text}</Text>
+                                      {q.is_pinned ? (
+                                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>📌 FIJA</Text>
+                                      ) : (
+                                        <Text style={{ fontSize: 9.5, fontWeight: '600', color: '#6B7280', backgroundColor: '#F3F4F6', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>🎲 sorteo</Text>
+                                      )}
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            );
+                          })}
+                          {/* Resumen de conteos por categoría, sobre TODO el evento (los 3 niveles). */}
+                          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#EEE2E8', borderStyle: 'dashed' as any }}>
+                            {QUESTION_CATEGORIES.map((cat) => {
+                              const meta = CATEGORY_META[cat];
+                              const count = eventAssignedQuestions.filter((q) => ((q.category as QuestionCategory) || 'opinion') === cat).length;
+                              return (
+                                <Text key={cat} style={{ fontSize: 10, fontWeight: '800', backgroundColor: meta.bg, color: meta.fg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9 }}>
+                                  {meta.short}: {count}
+                                </Text>
+                              );
+                            })}
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  )}
 
                   <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#EF4444' }]}
