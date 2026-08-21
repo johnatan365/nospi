@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, Modal, TextInput, Alert, Linking, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -811,10 +812,11 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
             {profile.profile_photo_url ? (
               <View>
-                <Image
-                  source={{ uri: profile.profile_photo_url, cache: 'force-cache' }}
+                <ExpoImage
+                  source={{ uri: profile.profile_photo_url }}
                   style={styles.profilePhoto}
-                  key={profile.profile_photo_url}
+                  cachePolicy="memory-disk"
+                  transition={0}
                 />
                 {uploadingPhoto && <View style={styles.photoOverlay} />}
                 <View style={styles.editPhotoIcon}>
