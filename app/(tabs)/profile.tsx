@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -827,10 +828,11 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
             {profile.profile_photo_url ? (
               <View>
-                <Image
-                  source={{ uri: profile.profile_photo_url, cache: 'force-cache' }}
+                <ExpoImage
+                  source={{ uri: profile.profile_photo_url }}
                   style={styles.profilePhoto}
-                  key={profile.profile_photo_url}
+                  cachePolicy="memory-disk"
+                  transition={0}
                 />
                 {uploadingPhoto && (
                   <View style={styles.photoOverlay} />
