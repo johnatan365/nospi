@@ -32,7 +32,7 @@ interface Event {
   max_participants: number;
   current_participants: number;
   status: string;
-  game_phase: 'intro' | 'ready' | 'rules' | 'question_active' | 'level_transition' | 'finished' | 'free_phase' | 'questions';
+  game_phase: 'intro' | 'ready' | 'rules' | 'question_active' | 'level_transition' | 'closing_intro' | 'finished' | 'free_phase' | 'questions';
   current_level: string | null;
   current_question_index: number | null;
   answered_users: string[] | null;
@@ -715,7 +715,7 @@ export default function DinamicaScreen() {
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
 
-    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase') {
+    if (gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'closing_intro' || gamePhase === 'finished' || gamePhase === 'free_phase') {
       return;
     }
 
@@ -748,6 +748,7 @@ export default function DinamicaScreen() {
           currentEvent.game_phase === 'questions' ||
           currentEvent.game_phase === 'question_active' ||
           currentEvent.game_phase === 'level_transition' ||
+          currentEvent.game_phase === 'closing_intro' ||
           currentEvent.game_phase === 'finished' ||
           currentEvent.game_phase === 'free_phase' ||
           (typeof currentEvent.current_question_index === 'number' && currentEvent.current_question_index > 0)
@@ -1126,7 +1127,7 @@ export default function DinamicaScreen() {
   // activeParticipants aún no reflejara a todos por el retraso del realtime.
   useEffect(() => {
     if (!userReadyForGame) return;
-    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'finished' || gamePhase === 'free_phase';
+    const yaArranco = gamePhase === 'questions' || gamePhase === 'question_active' || gamePhase === 'level_transition' || gamePhase === 'closing_intro' || gamePhase === 'finished' || gamePhase === 'free_phase';
     if (yaArranco) return;
 
     handleStartExperience();
