@@ -978,6 +978,21 @@ export default function AdminPanelScreen() {
   const [eventRatings, setEventRatings] = useState<any[]>([]);
   const [selectedEventForMatches, setSelectedEventForMatches] = useState<string | null>(null);
   const eventsReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Evita la doble carga: cuando el propio admin guarda/duplica/cierra/etc.
+  // un evento, ya llamamos a loadDashboardData() manualmente al instante.
+  // Ese mismo cambio en la tabla "events" también dispara la suscripción
+  // realtime de abajo, que antes programaba OTRA recarga ~4s después
+  // (de ahí el "carga 2 veces" / "carga después"). Con esta bandera,
+  // marcamos que el cambio fue nuestro y la suscripción realtime lo ignora.
+  const selfEventMutationRef = useRef(false);
+  const selfEventMutationResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markSelfEventsMutation = () => {
+    selfEventMutationRef.current = true;
+    if (selfEventMutationResetTimer.current) clearTimeout(selfEventMutationResetTimer.current);
+    selfEventMutationResetTimer.current = setTimeout(() => {
+      selfEventMutationRef.current = false;
+    }, 5000);
+  };
 
   useEffect(() => {
   }, []);
@@ -1004,6 +1019,13 @@ export default function AdminPanelScreen() {
           table: 'events',
         },
         (payload) => {
+          if (selfEventMutationRef.current) {
+            // Este cambio en "events" lo acabamos de hacer nosotros mismos
+            // (guardar/duplicar/cerrar/publicar/etc.) y ya recargamos los
+            // datos al instante en el propio handler — ignoramos el eco de
+            // la suscripción realtime para no recargar dos veces.
+            return;
+          }
           if (eventsReloadTimer.current) clearTimeout(eventsReloadTimer.current);
                       eventsReloadTimer.current = setTimeout(() => {
                                       loadDashboardData();
@@ -2169,6 +2191,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         sensual: [],
         atrevido: [],
       });
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Unexpected error saving event:', error);
@@ -2192,6 +2215,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert('Evento eliminado exitosamente');
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Failed to delete event:', error);
@@ -2267,6 +2291,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert('✅ Evento duplicado como borrador con sus preguntas. Recuerda cambiarle la fecha.');
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (err) {
       window.alert('Error inesperado al duplicar');
@@ -2324,6 +2349,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
       window.alert('Ubicación revelada exitosamente');
 
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Failed to reveal location:', error);
@@ -2462,6 +2488,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert('Evento cerrado exitosamente.' + nextMsg);
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Failed to close event:', error);
@@ -2482,6 +2509,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert(closeIt ? 'Inscripciones cerradas' : 'Inscripciones reabiertas');
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Failed to toggle registration:', error);
@@ -2504,6 +2532,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
 
       window.alert('Evento publicado exitosamente');
+      markSelfEventsMutation();
       loadDashboardData();
     } catch (error) {
       console.error('Failed to publish event:', error);
