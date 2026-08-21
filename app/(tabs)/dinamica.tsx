@@ -1404,6 +1404,10 @@ export default function DinamicaScreen() {
                     <Text style={styles.modVoiceEmoji}>🗣️</Text>
                     <Text style={styles.modVoiceText}>De aquí en adelante, lee todo en voz alta para que todos entiendan la dinámica. Tú eres quien pasa a la siguiente pantalla y pregunta.</Text>
                   </View>
+                  <View style={styles.modVoice}>
+                    <Text style={styles.modVoiceEmoji}>💬</Text>
+                    <Text style={styles.modVoiceText}>Anímalos a que no solo respondan sí o no, sino que expliquen su respuesta — así la charla fluye mejor.</Text>
+                  </View>
                   <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
                     <Text style={styles.comenzarButtonText}>Continuar</Text>
                   </TouchableOpacity>
@@ -1413,6 +1417,7 @@ export default function DinamicaScreen() {
                   <Text style={styles.rulesTitle}>Moderador de la mesa</Text>
                   <View style={styles.modVoiceOth}>
                     <Text style={styles.modVoiceOthText}>🗣️ {moderatorName} irá leyendo todo en voz alta. Escuchen para entender la dinámica.</Text>
+                    <Text style={[styles.modVoiceOthText, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed' }]}>💬 Intenten no solo responder sí o no: expliquen su respuesta para que la charla fluya mejor.</Text>
                   </View>
                   <View style={styles.modWait}>
                     <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} continúe</Text>
