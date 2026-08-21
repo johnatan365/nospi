@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Image, Linking } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -1629,14 +1630,24 @@ export default function DinamicaScreen() {
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => {
                     const displayName = participant.profiles?.name || 'Participante';
+                    const photoUrl = participant.profiles?.profile_photo_url || null;
                     return (
                       <React.Fragment key={index}>
                         <View style={styles.participantListItem}>
-                          <View style={styles.participantListPhotoPlaceholder}>
-                            <Text style={styles.participantListPhotoText}>
-                              {displayName.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
+                          {photoUrl ? (
+                            <ExpoImage
+                              source={{ uri: photoUrl }}
+                              style={styles.participantListPhoto}
+                              cachePolicy="memory-disk"
+                              transition={0}
+                            />
+                          ) : (
+                            <View style={styles.participantListPhotoPlaceholder}>
+                              <Text style={styles.participantListPhotoText}>
+                                {displayName.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
                           <Text style={styles.participantListName}>{displayName}</Text>
                         </View>
                       </React.Fragment>
@@ -1771,6 +1782,7 @@ const styles = StyleSheet.create({
   participantsList: { marginTop: 6 },
   participantListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   participantListPhotoPlaceholder: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(173, 20, 87, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  participantListPhoto: { width: 34, height: 34, borderRadius: 17, marginRight: 10, backgroundColor: 'rgba(173, 20, 87, 0.15)' },
   participantListPhotoText: { fontSize: 14, fontWeight: 'bold', color: '#880E4F' },
   participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
   buttonDisabled: { opacity: 0.5 },
