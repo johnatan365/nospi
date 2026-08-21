@@ -127,6 +127,31 @@ export default function AppointmentsScreen() {
       event: apt.events as any,
     })) as Appointment[];
 
+    // Orden por FECHA DEL EVENTO (no por cuándo se creó la reserva). Antes se
+    // ordenaba por created_at, así que si alguien se inscribía primero a un
+    // evento lejano y luego a uno próximo, el lejano quedaba de primero en la
+    // lista — el orden reflejaba el momento de inscripción, no la cercanía
+    // real del evento. Ahora: próximas (confirmadas) de más cercana a más
+    // lejana; anteriores/canceladas de la más reciente a la más antigua.
+    const getEventTime = (apt: Appointment): number => {
+      const ev = apt.event;
+      if (!ev) return filterType === 'confirmadas' ? Number.MAX_SAFE_INTEGER : 0;
+      if (ev.start_time) {
+        const t = new Date(ev.start_time).getTime();
+        if (!Number.isNaN(t)) return t;
+      }
+      if (ev.date) {
+        const t = new Date(`${ev.date}T${ev.time || '00:00'}`).getTime();
+        if (!Number.isNaN(t)) return t;
+      }
+      return filterType === 'confirmadas' ? Number.MAX_SAFE_INTEGER : 0;
+    };
+
+    transformed.sort((a, b) => {
+      const diff = getEventTime(a) - getEventTime(b);
+      return filterType === 'confirmadas' ? diff : -diff;
+    });
+
     console.log('AppointmentsScreen: Loaded', transformed.length, 'appointments for filter:', filterType);
     return transformed;
   }, [user]);
