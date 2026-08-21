@@ -1986,7 +1986,6 @@ export default function SubscriptionPlansScreen() {
             <Image source={require('@/assets/images/logo-nequi.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
               <Text style={styles.btnTitle}>Nequi</Text>
-              <Text style={styles.btnSub}>Recomendado · Sin salir de la app</Text>
             </View>
             <Text style={styles.btnArrow}>›</Text>
           </View>
@@ -1997,7 +1996,6 @@ export default function SubscriptionPlansScreen() {
             <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
               <Text style={styles.btnTitle}>Bancolombia</Text>
-              <Text style={styles.btnSub}>Te lleva a tu banco · vuelve a Nospi al terminar</Text>
             </View>
             {isProcessing('bancolombia') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
@@ -2008,7 +2006,6 @@ export default function SubscriptionPlansScreen() {
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
               <Text style={styles.btnTitle}>PSE</Text>
-              <Text style={styles.btnSub}>Te lleva a tu banco · vuelve a Nospi al terminar</Text>
             </View>
             {isProcessing('pse') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
