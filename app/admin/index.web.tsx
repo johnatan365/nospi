@@ -793,10 +793,14 @@ export default function AdminPanelScreen() {
   };
 
   // Event questions management (for specific event)
+  // Cada pregunta guarda su id real (si ya existía en la BD), texto y
+  // categoría — así, al editar/guardar, solo se toca lo que realmente
+  // cambió: no se re-sortea el orden ni se pierde la categoría de las demás.
+  type EventQuestionDraft = { id?: string; text: string; category: QuestionCategory; is_pinned?: boolean };
   const [eventQuestions, setEventQuestions] = useState<{
-    divertido: string[];
-    sensual: string[];
-    atrevido: string[];
+    divertido: EventQuestionDraft[];
+    sensual: EventQuestionDraft[];
+    atrevido: EventQuestionDraft[];
   }>({
     divertido: [],
     sensual: [],
@@ -1923,9 +1927,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         console.error('Error loading event questions:', error);
       } else {
         const questionsByLevel = {
-          divertido: existingQuestions?.filter(q => q.level === 'divertido').map(q => q.question_text) || [],
-          sensual: existingQuestions?.filter(q => q.level === 'sensual').map(q => q.question_text) || [],
-          atrevido: existingQuestions?.filter(q => q.level === 'atrevido').map(q => q.question_text) || [],
+          divertido: existingQuestions?.filter(q => q.level === 'divertido').map(q => ({ id: q.id, text: q.question_text, category: (q.category as QuestionCategory) || 'opinion', is_pinned: q.is_pinned })) || [],
+          sensual: existingQuestions?.filter(q => q.level === 'sensual').map(q => ({ id: q.id, text: q.question_text, category: (q.category as QuestionCategory) || 'opinion', is_pinned: q.is_pinned })) || [],
+          atrevido: existingQuestions?.filter(q => q.level === 'atrevido').map(q => ({ id: q.id, text: q.question_text, category: (q.category as QuestionCategory) || 'opinion', is_pinned: q.is_pinned })) || [],
         };
         setEventQuestions(questionsByLevel);
       }
@@ -2086,34 +2090,68 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     try {
       // Verificar si el admin agregó preguntas custom para este evento
       const hasCustomQuestions = Object.values(eventQuestions).some(
-        (list) => list.some((q) => q.trim().length > 0)
+        (list) => list.some((q) => q.text.trim().length > 0)
       );
 
       if (hasCustomQuestions) {
-        // El admin configuró preguntas específicas — usarlas, con orden
-        // aleatorio dentro de cada nivel.
-        await supabase.from('event_questions').delete().eq('event_id', eventId);
+        // Antes: se borraban y re-insertaban TODAS las preguntas del evento
+        // cada vez que se guardaba (aunque solo se editara una), lo que las
+        // reordenaba al azar y les perdía la categoría. Ahora: solo se toca
+        // lo que realmente cambió, fila por fila, usando el id real.
+        const { data: existingRows } = await supabase
+          .from('event_questions')
+          .select('id')
+          .eq('event_id', eventId);
+        const existingIds = new Set((existingRows || []).map((r: any) => r.id));
 
-        const questionsToInsert: any[] = [];
+        const keptIds = new Set<string>();
         let orderCounter = 0;
+        const toInsert: any[] = [];
+        const toUpdate: { id: string; question_text: string; category: string; question_order: number }[] = [];
 
-        for (const [level, questionsList] of Object.entries(eventQuestions)) {
-          const shuffledLevel = shuffleArray(questionsList.filter((q) => q.trim()));
-          shuffledLevel.forEach((questionText) => {
-            questionsToInsert.push({
-              event_id: eventId,
-              level,
-              question_text: questionText.trim(),
-              question_order: orderCounter++,
-              is_default: false,
-            });
-          });
+        for (const [level, list] of Object.entries(eventQuestions)) {
+          for (const q of list) {
+            if (!q.text.trim()) continue;
+            if (q.id) {
+              keptIds.add(q.id);
+              toUpdate.push({ id: q.id, question_text: q.text.trim(), category: q.category, question_order: orderCounter });
+            } else {
+              toInsert.push({
+                event_id: eventId,
+                level,
+                question_text: q.text.trim(),
+                question_order: orderCounter,
+                is_default: false,
+                category: q.category,
+              });
+            }
+            orderCounter++;
+          }
         }
 
-        const { error } = await supabase.from('event_questions').insert(questionsToInsert);
-        if (error) {
-          console.error('Error saving custom event questions:', error);
-          window.alert('Advertencia: No se pudieron guardar las preguntas del evento');
+        // Borrar solo las que el admin QUITÓ de la lista (existían antes y ya no están).
+        const idsToDelete = [...existingIds].filter((id) => !keptIds.has(id));
+        if (idsToDelete.length > 0) {
+          const { error: delError } = await supabase.from('event_questions').delete().in('id', idsToDelete);
+          if (delError) console.error('Error eliminando preguntas quitadas del evento:', delError);
+        }
+
+        // Actualizar solo texto/categoría/orden de las que ya existían — cada
+        // una en su propia fila, sin tocar las que no se editaron.
+        for (const u of toUpdate) {
+          const { error: updError } = await supabase
+            .from('event_questions')
+            .update({ question_text: u.question_text, category: u.category, question_order: u.question_order })
+            .eq('id', u.id);
+          if (updError) console.error('Error actualizando pregunta del evento:', updError);
+        }
+
+        if (toInsert.length > 0) {
+          const { error: insError } = await supabase.from('event_questions').insert(toInsert);
+          if (insError) {
+            console.error('Error saving custom event questions:', insError);
+            window.alert('Advertencia: No se pudieron guardar las preguntas nuevas del evento');
+          }
         }
       } else {
         // No hay preguntas custom — armar el evento con un SUBCONJUNTO ALEATORIO
@@ -7283,7 +7321,7 @@ setBulkWhatsAppPending(pending);
                           </Text>
                           {eventQuestions[level].map((question, index) => (
                             <div
-                              key={index}
+                              key={question.id || `new-${level}-${index}`}
                               draggable
                               onDragStart={() => {
                                 // Store the dragged question info
@@ -7311,13 +7349,25 @@ setBulkWhatsAppPending(pending);
                             >
                               <View style={styles.questionInputRow}>
                                 <Text style={styles.dragHandle}>⋮⋮</Text>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    const newQuestions = { ...eventQuestions };
+                                    const current = newQuestions[level][index].category || 'opinion';
+                                    newQuestions[level][index] = { ...newQuestions[level][index], category: nextCategory(current) };
+                                    setEventQuestions(newQuestions);
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 10, fontWeight: '800', backgroundColor: CATEGORY_META[question.category || 'opinion'].bg, color: CATEGORY_META[question.category || 'opinion'].fg, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>
+                                    {CATEGORY_META[question.category || 'opinion'].short}
+                                  </Text>
+                                </TouchableOpacity>
                                 <TextInput
                                   style={[styles.input, { flex: 1 }]}
                                   placeholder={`Pregunta ${index + 1}`}
-                                  value={question}
+                                  value={question.text}
                                   onChangeText={(text) => {
                                     const newQuestions = { ...eventQuestions };
-                                    newQuestions[level][index] = text;
+                                    newQuestions[level][index] = { ...newQuestions[level][index], text };
                                     setEventQuestions(newQuestions);
                                   }}
                                 />
@@ -7338,7 +7388,7 @@ setBulkWhatsAppPending(pending);
                             style={styles.addQuestionButton}
                             onPress={() => {
                               const newQuestions = { ...eventQuestions };
-                              newQuestions[level].push('');
+                              newQuestions[level].push({ text: '', category: 'opinion' });
                               setEventQuestions(newQuestions);
                             }}
                           >
