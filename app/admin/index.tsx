@@ -850,7 +850,7 @@ const handleLogin = async () => {
         // No hay preguntas custom — copiar las globales (event_id = null) al evento
         const { data: globalQuestions, error: fetchError } = await supabase
           .from('event_questions')
-          .select('level, question_text, question_order, is_pinned, pinned_position')
+          .select('level, question_text, question_order, is_pinned, pinned_position, category')
           .is('event_id', null)
           .order('level', { ascending: true })
           .order('question_order', { ascending: true });
@@ -898,7 +898,22 @@ const handleLogin = async () => {
           const pinned = inLevel
             .filter((q: any) => q.is_pinned && (q.pinned_position || 1) <= cupo)
             .map((q: any) => ({ ...q, _pos: Math.max(q.pinned_position || 1, 1) }));
-          const rest = shuffleArray(inLevel.filter((q: any) => !q.is_pinned));
+          // Mix por categoría (V), espejo del admin web: se baraja por
+          // categoría y se toma en rondas de orden aleatorio para que cada
+          // evento salga con un mix parejo de temas.
+          const byCat: Record<string, any[]> = {};
+          for (const q of inLevel.filter((x: any) => !x.is_pinned)) {
+            const c = q.category || 'opinion';
+            (byCat[c] = byCat[c] || []).push(q);
+          }
+          const queues = Object.values(byCat).map((arr) => shuffleArray(arr));
+          const rest: any[] = [];
+          while (queues.some((qu) => qu.length > 0)) {
+            const ronda = shuffleArray(queues.filter((qu) => qu.length > 0));
+            for (const qu of ronda) {
+              if (qu.length > 0) rest.push(qu.shift());
+            }
+          }
           const slots: any[] = new Array(cupo).fill(null);
           for (const q of pinned.sort((a: any, b: any) => a._pos - b._pos)) {
             let idx = q._pos - 1;
@@ -919,6 +934,7 @@ const handleLogin = async () => {
           question_order: index,
           is_default: true,
           is_pinned: !!q.is_pinned,
+          category: q.category || null,
         }));
 
         const { error: insertError } = await supabase
