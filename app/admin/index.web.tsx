@@ -3886,8 +3886,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                   <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>⚠️ {s.failed_charge_count} cobro(s) fallido(s)</div>
                                 )}
                               </td>
-                              <td style={{ padding: '12px 14px', color: s.status === 'cancelled' ? '#1F2937' : '#D1D5DB', fontWeight: s.status === 'cancelled' ? 600 : 400 }}>
-                                {s.status === 'cancelled' ? fmtDate(s.updated_at) : '—'}
+                              <td style={{ padding: '12px 14px', color: s.cancellation_reason ? '#1F2937' : '#D1D5DB', fontWeight: s.cancellation_reason ? 600 : 400 }}>
+                                {s.cancellation_reason ? fmtDate(s.updated_at) : '—'}
                               </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>{fmtDate(s.start_date)}</td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
