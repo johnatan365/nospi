@@ -3854,6 +3854,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                       <tr style={{ borderBottom: '2px solid #F3E8FF', backgroundColor: '#FAF5FF' }}>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Suscriptor</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Estado</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Cancelada el</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Inicio</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Próx. cobro / Fin</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Auto-renovación</th>
@@ -3885,6 +3886,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                   <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>⚠️ {s.failed_charge_count} cobro(s) fallido(s)</div>
                                 )}
                               </td>
+                              <td style={{ padding: '12px 14px', color: s.status === 'cancelled' ? '#1F2937' : '#D1D5DB', fontWeight: s.status === 'cancelled' ? 600 : 400 }}>
+                                {s.status === 'cancelled' ? fmtDate(s.updated_at) : '—'}
+                              </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>{fmtDate(s.start_date)}</td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
                                 {s.status === 'active' ? fmtDate(s.next_charge_date) : fmtDate(s.end_date)}
@@ -3898,7 +3902,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             </tr>
                             {isOpen && (
                               <tr>
-                                <td colSpan={8} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
+                                <td colSpan={9} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
                                   {s.cancellation_reason && (
                                     <div style={{ margin: '10px 0', padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: 10, fontSize: 13, color: '#991B1B' }}>
                                       <strong>Motivo de cancelación:</strong> {s.cancellation_reason}
@@ -3985,7 +3989,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     {conv.event_name ? <Text style={{ fontSize: 10, color: '#880E4F', fontWeight: '700' }} numberOfLines={1}>📍 {conv.event_name}</Text> : null}
                     <Text style={styles.eventChatConvPreview} numberOfLines={1}>{conv.last_message || `${conv.message_count} mensajes`}</Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '700' }}>{conv.message_count}</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700' }}>
+                      {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : 'Sin mensajes'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '700' }}>{conv.message_count}</Text>
+                  </View>
                 </TouchableOpacity>
               ))
             )
