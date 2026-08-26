@@ -922,6 +922,34 @@ export default function AdminPanelScreen() {
     });
   }, []);
 
+  // Baja el archivo como blob (el enlace firmado es de otro origen, asi que el
+  // atributo download no basta) y lo guarda, o lo pasa a la hoja de compartir
+  // del navegador cuando existe.
+  const downloadChatMedia = async (url: string, filename: string, compartir: boolean) => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const nav: any = navigator;
+      if (compartir && nav?.canShare && typeof File !== 'undefined') {
+        const file = new File([blob], filename, { type: blob.type });
+        if (nav.canShare({ files: [file] })) {
+          await nav.share({ files: [file] });
+          return;
+        }
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (!/abort|cancel/i.test(msg)) window.alert('No se pudo descargar el archivo: ' + msg);
+    }
+  };
+
   // Pinta el adjunto de un mensaje dentro de la burbuja del panel.
   const renderChatMedia = (msg: AdminChatMessage) => {
     if (!msg.media_path) return null;
@@ -933,17 +961,36 @@ export default function AdminPanelScreen() {
         </Text>
       );
     }
+    const filename = (msg.media_path || '').split('/').pop() || (msg.media_kind === 'video' ? 'video.mp4' : 'foto.jpg');
+    const acciones = (
+      <View style={{ flexDirection: 'row', gap: 14, marginBottom: 6 }}>
+        <TouchableOpacity onPress={() => downloadChatMedia(url, filename, false)}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>Descargar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => downloadChatMedia(url, filename, true)}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>Compartir</Text>
+        </TouchableOpacity>
+      </View>
+    );
     if (msg.media_kind === 'video') {
-      return React.createElement('video', {
-        src: url,
-        controls: true,
-        style: { width: 220, borderRadius: 10, backgroundColor: '#000', marginBottom: 6, display: 'block' },
-      });
+      return (
+        <View>
+          {React.createElement('video', {
+            src: url,
+            controls: true,
+            style: { width: 220, borderRadius: 10, backgroundColor: '#000', marginBottom: 6, display: 'block' },
+          })}
+          {acciones}
+        </View>
+      );
     }
     return (
-      <TouchableOpacity onPress={() => setZoomedPhoto(url)} activeOpacity={0.9}>
-        <Image source={{ uri: url }} style={{ width: 220, height: 220, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" />
-      </TouchableOpacity>
+      <View>
+        <TouchableOpacity onPress={() => setZoomedPhoto(url)} activeOpacity={0.9}>
+          <Image source={{ uri: url }} style={{ width: 220, height: 220, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" />
+        </TouchableOpacity>
+        {acciones}
+      </View>
     );
   };
 
