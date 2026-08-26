@@ -27,6 +27,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as WebBrowser from 'expo-web-browser';
+import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
 
 // Prefijo para guardar el borrador (lo que se está escribiendo pero aún no se
@@ -74,6 +75,13 @@ function mediaFileInfo(asset: ImagePicker.ImagePickerAsset) {
     else mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
   }
   return { kind, ext, mime };
+}
+
+// Nombre con el que se guarda o comparte el archivo.
+function mediaFileName(path?: string | null, kind?: string | null): string {
+  const base = (path || '').split('/').pop() || '';
+  if (base) return base;
+  return kind === 'video' ? 'video-nospi.mp4' : 'foto-nospi.jpg';
 }
 
 function formatBytes(bytes?: number | null): string {
@@ -224,9 +232,13 @@ export default function ChatThreadScreen() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
+  const [zoomedFileName, setZoomedFileName] = useState<string>('foto-nospi.jpg');
   // Enlaces firmados de las fotos/videos, por ruta del archivo en el bucket.
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  // Archivo sobre el que se abrio el menu de Descargar / Compartir.
+  const [mediaActions, setMediaActions] = useState<{ url: string; kind: 'image' | 'video'; filename: string } | null>(null);
+  const [busyAction, setBusyAction] = useState<null | 'download' | 'share'>(null);
   // Adjuntos elegidos que todavia NO se han enviado: se quedan en la bandeja
   // hasta que la persona toca el boton de enviar.
   const [pendingAssets, setPendingAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -577,6 +589,72 @@ export default function ChatThreadScreen() {
   // El video no se reproduce dentro de la burbuja en móvil (haría falta una
   // librería nativa nueva y por tanto un build nuevo): se abre a pantalla
   // completa en el reproductor del sistema con el enlace firmado.
+  // Descargar y compartir. En web se baja el archivo de verdad (blob + enlace
+  // de descarga) y se comparte con la API del navegador cuando existe. En movil
+  // el archivo se baja al cache y se entrega a la hoja del sistema, que es la
+  // que ofrece "Guardar imagen/video" ademas de WhatsApp, correo, etc.
+  const handleMediaAction = async (
+    action: 'download' | 'share',
+    url: string,
+    kind: 'image' | 'video',
+    filename: string
+  ) => {
+    if (busyAction) return;
+    setBusyAction(action);
+    try {
+      if (Platform.OS === 'web') {
+        const blob = await (await fetch(url)).blob();
+        const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+        if (action === 'share' && nav?.canShare && typeof File !== 'undefined') {
+          const file = new File([blob], filename, { type: blob.type });
+          if (nav.canShare({ files: [file] })) {
+            await nav.share({ files: [file] });
+            return;
+          }
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+        return;
+      }
+
+      const target = `${FileSystem.cacheDirectory}${filename}`;
+      const { uri } = await FileSystem.downloadAsync(url, target);
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('No disponible', 'Este dispositivo no permite guardar ni compartir archivos.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        dialogTitle: action === 'download'
+          ? (kind === 'video' ? 'Guardar video' : 'Guardar foto')
+          : 'Compartir',
+        mimeType: kind === 'video' ? 'video/mp4' : 'image/jpeg',
+        UTI: kind === 'video' ? 'public.movie' : 'public.image',
+      });
+    } catch (e: any) {
+      // Si la persona cierra la hoja de compartir no es un error que valga avisar.
+      const msg = String(e?.message || '');
+      if (!/abort|cancel/i.test(msg)) {
+        Alert.alert(
+          action === 'download' ? 'No se pudo guardar' : 'No se pudo compartir',
+          msg || 'Inténtalo de nuevo.'
+        );
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const openPhoto = (url: string, filename?: string) => {
+    setZoomedFileName(filename || 'foto-nospi.jpg');
+    setZoomedPhoto(url);
+  };
+
   const openVideo = async (url: string) => {
     try {
       if (Platform.OS === 'web') {
@@ -796,23 +874,39 @@ export default function ChatThreadScreen() {
                     }
                     if (item.media_kind === 'video') {
                       if (Platform.OS === 'web') {
-                        return React.createElement('video', {
-                          src: url,
-                          controls: true,
-                          playsInline: true,
-                          style: {
-                            width: box.width,
-                            height: box.height,
-                            borderRadius: 12,
-                            backgroundColor: '#000',
-                            marginBottom: 6,
-                          },
-                        });
+                        return (
+                          <View style={{ marginBottom: 6 }}>
+                            {React.createElement('video', {
+                              src: url,
+                              controls: true,
+                              playsInline: true,
+                              style: {
+                                width: box.width,
+                                height: box.height,
+                                borderRadius: 12,
+                                backgroundColor: '#000',
+                                display: 'block',
+                              },
+                            })}
+                            <View style={styles.mediaActionsRow}>
+                              <TouchableOpacity
+                                onPress={() => handleMediaAction('download', url, 'video', mediaFileName(item.media_path, 'video'))}
+                              >
+                                <Text style={[styles.mediaActionLink, isMine && styles.mediaActionLinkMine]}>Descargar</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleMediaAction('share', url, 'video', mediaFileName(item.media_path, 'video'))}
+                              >
+                                <Text style={[styles.mediaActionLink, isMine && styles.mediaActionLinkMine]}>Compartir</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
                       }
                       return (
                         <TouchableOpacity
                           activeOpacity={0.85}
-                          onPress={() => openVideo(url)}
+                          onPress={() => setMediaActions({ url, kind: 'video', filename: mediaFileName(item.media_path, 'video') })}
                           style={[styles.mediaVideoBox, box]}
                         >
                           <View style={styles.mediaPlayCircle}>
@@ -825,7 +919,10 @@ export default function ChatThreadScreen() {
                       );
                     }
                     return (
-                      <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomedPhoto(url)}>
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => openPhoto(url, mediaFileName(item.media_path, 'image'))}
+                      >
                         <ExpoImage
                           source={{ uri: url }}
                           style={[styles.mediaImage, box]}
@@ -1011,18 +1108,79 @@ export default function ChatThreadScreen() {
         </View>
       </Modal>
 
+      <Modal visible={!!mediaActions} animationType="fade" transparent onRequestClose={() => setMediaActions(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setMediaActions(null)}>
+          <View style={styles.attachSheet}>
+            <Text style={styles.attachSheetTitle}>Video</Text>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => { const m = mediaActions; setMediaActions(null); if (m) openVideo(m.url); }}
+            >
+              <IconSymbol ios_icon_name="play.fill" android_material_icon_name="play-arrow" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Reproducir</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachOption}
+              disabled={!!busyAction}
+              onPress={() => { const m = mediaActions; setMediaActions(null); if (m) handleMediaAction('download', m.url, m.kind, m.filename); }}
+            >
+              <IconSymbol ios_icon_name="arrow.down.circle" android_material_icon_name="file-download" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Descargar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachOption}
+              disabled={!!busyAction}
+              onPress={() => { const m = mediaActions; setMediaActions(null); if (m) handleMediaAction('share', m.url, m.kind, m.filename); }}
+            >
+              <IconSymbol ios_icon_name="square.and.arrow.up" android_material_icon_name="share" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Compartir</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.attachCancel} onPress={() => setMediaActions(null)}>
+              <Text style={styles.attachCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!zoomedPhoto} animationType="fade" transparent onRequestClose={() => setZoomedPhoto(null)}>
-        <TouchableOpacity style={styles.photoViewerOverlay} activeOpacity={1} onPress={() => setZoomedPhoto(null)}>
+        <View style={styles.photoViewerOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setZoomedPhoto(null)} />
           {zoomedPhoto && (
             <ExpoImage source={{ uri: zoomedPhoto }} style={styles.photoViewerImage} contentFit="contain" cachePolicy="memory-disk" transition={0} />
           )}
+          <View style={[styles.photoViewerActions, { bottom: insets.bottom + 28 }]}>
+            <TouchableOpacity
+              style={styles.photoViewerActionButton}
+              disabled={!!busyAction}
+              onPress={() => zoomedPhoto && handleMediaAction('download', zoomedPhoto, 'image', zoomedFileName)}
+            >
+              {busyAction === 'download' ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <IconSymbol ios_icon_name="arrow.down.circle" android_material_icon_name="file-download" size={20} color="#FFFFFF" />
+              )}
+              <Text style={styles.photoViewerActionText}>Descargar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.photoViewerActionButton}
+              disabled={!!busyAction}
+              onPress={() => zoomedPhoto && handleMediaAction('share', zoomedPhoto, 'image', zoomedFileName)}
+            >
+              {busyAction === 'share' ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <IconSymbol ios_icon_name="square.and.arrow.up" android_material_icon_name="share" size={20} color="#FFFFFF" />
+              )}
+              <Text style={styles.photoViewerActionText}>Compartir</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={[styles.photoViewerClose, { top: insets.top + 12 }]}
             onPress={() => setZoomedPhoto(null)}
           >
             <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={26} color="#FFFFFF" />
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </LinearGradient>
   );
@@ -1274,6 +1432,24 @@ const styles = StyleSheet.create({
   attachOptionText: { fontSize: 15, fontWeight: '600', color: nospiColors.gray800 },
   attachCancel: { paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   attachCancelText: { fontSize: 15, fontWeight: '700', color: nospiColors.gray400 },
+  mediaActionsRow: { flexDirection: 'row', gap: 16, marginTop: 6, marginBottom: 2 },
+  mediaActionLink: { fontSize: 12, fontWeight: '700', color: '#6B21A8' },
+  mediaActionLinkMine: { color: 'rgba(255,255,255,0.9)' },
+  photoViewerActions: {
+    position: 'absolute',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  photoViewerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  photoViewerActionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   photoViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   photoViewerImage: { width: '90%', height: '75%' },
   photoViewerClose: {
