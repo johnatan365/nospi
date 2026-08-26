@@ -139,7 +139,16 @@ interface AdminChatMessage {
   sender_photo: string | null;
   content: string;
   created_at: string;
+  media_path?: string | null;
+  media_kind?: 'image' | 'video' | null;
+  media_mime?: string | null;
+  media_size?: number | null;
 }
+
+// Bucket privado de las fotos y videos del chat: el admin tiene permiso para
+// firmarlos (politica "chat media: admins pueden ver") y asi poder moderar.
+const CHAT_MEDIA_BUCKET = 'chat-media';
+const CHAT_MEDIA_TTL_SECONDS = 60 * 60;
 
 interface AdminDirectConversation {
   conversation_id: string;
@@ -872,6 +881,8 @@ export default function AdminPanelScreen() {
   const [allMatchesLoading, setAllMatchesLoading] = useState(false);
   const [activeModConvId, setActiveModConvId] = useState<string | null>(null);
   const [modMessages, setModMessages] = useState<AdminChatMessage[]>([]);
+  // Enlaces firmados de los adjuntos del chat, por ruta en el bucket.
+  const [chatMediaUrls, setChatMediaUrls] = useState<Record<string, string>>({});
   const [modMessagesLoading, setModMessagesLoading] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
 
@@ -891,13 +902,61 @@ export default function AdminPanelScreen() {
     setAllMatchesLoading(false);
   }, []);
 
+  // Pide los enlaces firmados de los adjuntos de una tanda de mensajes. Sin
+  // esto las fotos no cargan: el bucket es privado.
+  const signChatMedia = useCallback(async (msgs: AdminChatMessage[] | null) => {
+    const paths = Array.from(
+      new Set((msgs || []).map((m) => m.media_path).filter(Boolean) as string[])
+    );
+    if (paths.length === 0) return;
+    const { data, error } = await supabase.storage
+      .from(CHAT_MEDIA_BUCKET)
+      .createSignedUrls(paths, CHAT_MEDIA_TTL_SECONDS);
+    if (error) { console.error('Admin: error firmando adjuntos del chat', error); return; }
+    setChatMediaUrls((prev) => {
+      const next = { ...prev };
+      (data || []).forEach((item: any) => {
+        if (item?.path && item?.signedUrl) next[item.path] = item.signedUrl;
+      });
+      return next;
+    });
+  }, []);
+
+  // Pinta el adjunto de un mensaje dentro de la burbuja del panel.
+  const renderChatMedia = (msg: AdminChatMessage) => {
+    if (!msg.media_path) return null;
+    const url = chatMediaUrls[msg.media_path];
+    if (!url) {
+      return (
+        <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>
+          {msg.media_kind === 'video' ? '🎥 Video (cargando...)' : '📷 Foto (cargando...)'}
+        </Text>
+      );
+    }
+    if (msg.media_kind === 'video') {
+      return React.createElement('video', {
+        src: url,
+        controls: true,
+        style: { width: 220, borderRadius: 10, backgroundColor: '#000', marginBottom: 6, display: 'block' },
+      });
+    }
+    return (
+      <TouchableOpacity onPress={() => setZoomedPhoto(url)} activeOpacity={0.9}>
+        <Image source={{ uri: url }} style={{ width: 220, height: 220, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" />
+      </TouchableOpacity>
+    );
+  };
+
   const loadModMessages = useCallback(async (conversationId: string) => {
     setModMessagesLoading(true);
     const { data, error } = await supabase.rpc('admin_get_conversation_messages', { p_conversation_id: conversationId });
     if (error) { console.error('Admin: error cargando mensajes (moderación)', error); setModMessages([]); }
-    else setModMessages((data as AdminChatMessage[]) || []);
+    else {
+      setModMessages((data as AdminChatMessage[]) || []);
+      signChatMedia(data as AdminChatMessage[]);
+    }
     setModMessagesLoading(false);
-  }, []);
+  }, [signChatMedia]);
 
   useEffect(() => {
     if (activeModConvId) loadModMessages(activeModConvId);
@@ -946,9 +1005,10 @@ export default function AdminPanelScreen() {
       setEventChatMessages([]);
     } else {
       setEventChatMessages((data as AdminChatMessage[]) || []);
+      signChatMedia(data as AdminChatMessage[]);
     }
     setEventChatMessagesLoading(false);
-  }, []);
+  }, [signChatMedia]);
 
   useEffect(() => {
     if (showEventChatModal && selectedEventForConfig) {
@@ -4043,7 +4103,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     )}
                     <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
                       <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi' : msg.sender_name}</Text>
-                      <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                      {renderChatMedia(msg)}
+                      {!!(msg.content || '').trim() && (
+                        <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                      )}
                       <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>{new Date(msg.created_at).toLocaleString('es-CO')}</Text>
                     </View>
                   </View>
@@ -6686,7 +6749,10 @@ setBulkWhatsAppPending(pending);
                           )}
                           <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
                             <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi (tú)' : msg.sender_name}</Text>
-                            <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                            {renderChatMedia(msg)}
+                            {!!(msg.content || '').trim() && (
+                              <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
+                            )}
                           </View>
                         </View>
                       );
