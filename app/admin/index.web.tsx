@@ -7719,18 +7719,59 @@ setBulkWhatsAppPending(pending);
                   Escribe al menos 2 letras para buscar
                 </Text>
               ) : (() => {
-                const q = addUserSearchQuery.trim().toLowerCase();
-                const results = users
-                  .filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
-                  .slice(0, 10);
+                // Normaliza acentos y mayusculas: buscar fernandez debe encontrar Fernandez.
+                const norm = (s: any) => String(s || '')
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                  .toLowerCase().trim();
+                const q = norm(addUserSearchQuery);
+                const qDigits = q.replace(/[^0-9]/g, '');
+                // Ordena por relevancia (correo exacto primero) en vez de dejar el
+                // orden por fecha de registro, que escondia a los usuarios antiguos.
+                const allMatches = users
+                  .map((u: any) => {
+                    const name = norm(u.name);
+                    const email = norm(u.email);
+                    const phone = norm(u.phone).replace(/[^0-9]/g, '');
+                    let score = -1;
+                    if (email === q) score = 0;
+                    else if (email.startsWith(q) || name.startsWith(q)) score = 1;
+                    else if (email.includes(q) || name.includes(q)) score = 2;
+                    else if (qDigits.length >= 4 && phone.includes(qDigits)) score = 3;
+                    return { u, score, name };
+                  })
+                  .filter((r: any) => r.score >= 0);
+                // Solo se pueden agregar usuarios que terminaron el registro en la app:
+                // los perfiles incompletos no sirven para un evento.
+                const ranked = allMatches
+                  .filter((r: any) => r.u.onboarding_completed === true)
+                  .sort((a: any, b: any) => a.score - b.score || a.name.localeCompare(b.name));
+                const hiddenIncomplete = allMatches.length - ranked.length;
+                const totalMatches = ranked.length;
+                const LIMIT = 50;
+                const results = ranked.slice(0, LIMIT).map((r: any) => r.u);
+                const truncated = totalMatches > LIMIT;
                 if (results.length === 0) {
                   return (
                     <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: 20 }}>
-                      No se encontraron usuarios
+                      {hiddenIncomplete > 0
+                        ? `No se encontraron usuarios con el registro completo. (${hiddenIncomplete} coincidencia${hiddenIncomplete === 1 ? '' : 's'} con el registro sin terminar, no se pueden agregar.)`
+                        : 'No se encontraron usuarios'}
                     </Text>
                   );
                 }
-                return results.map(u => (
+                return (
+                  <>
+                    {hiddenIncomplete > 0 && (
+                      <Text style={{ fontSize: 11, color: '#6B7280', paddingHorizontal: 4, paddingBottom: 6 }}>
+                        Se ocultaron {hiddenIncomplete} perfil{hiddenIncomplete === 1 ? '' : 'es'} con el registro sin terminar.
+                      </Text>
+                    )}
+                    {truncated && (
+                      <Text style={{ fontSize: 12, color: '#B45309', backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8, marginBottom: 6 }}>
+                        Mostrando {results.length} de {totalMatches} coincidencias. Escribe mas letras (o el correo completo) para afinar.
+                      </Text>
+                    )}
+                    {results.map(u => (
                   <View
                     key={u.id}
                     style={{
@@ -7741,6 +7782,9 @@ setBulkWhatsAppPending(pending);
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#6B21A8' }}>{u.name}</Text>
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</Text>
+                      <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
+                        {u.created_at ? `Registrado ${new Date(u.created_at).toLocaleDateString('es-CO')}` : 'Sin fecha de registro'}
+                      </Text>
                     </View>
                     <TouchableOpacity
                       onPress={() => handleAddExistingUserToEvent(u.id)}
@@ -7757,7 +7801,9 @@ setBulkWhatsAppPending(pending);
                       }
                     </TouchableOpacity>
                   </View>
-                ));
+                    ))}
+                  </>
+                );
               })()}
             </ScrollView>
           </View>
