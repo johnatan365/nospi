@@ -227,7 +227,10 @@ export default function ChatThreadScreen() {
   // Enlaces firmados de las fotos/videos, por ruta del archivo en el bucket.
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | null>(null);
+  // Adjuntos elegidos que todavia NO se han enviado: se quedan en la bandeja
+  // hasta que la persona toca el boton de enviar.
+  const [pendingAssets, setPendingAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [uploading, setUploading] = useState<{ kind: 'image' | 'video'; current: number; total: number } | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   // Rutas para las que ya se pidio firma, para no volver a pedirlas en cada
   // render (y para no entrar en bucle si alguna falla).
@@ -440,55 +443,83 @@ export default function ChatThreadScreen() {
     }
   };
 
-  const sendMediaMessage = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (!user?.id || !conversationId || uploadingKind) return;
-
+  // Sube UN adjunto y crea su mensaje. El pie de foto y la respuesta citada
+  // solo van en el primero de la tanda, para no repetirlos en cada archivo.
+  const sendOneAsset = async (
+    asset: ImagePicker.ImagePickerAsset,
+    caption: string,
+    replyId: string | null
+  ) => {
+    if (!user?.id || !conversationId) return;
     const { kind, ext, mime } = mediaFileInfo(asset);
-    setUploadingKind(kind);
 
-    // El texto que hubiera escrito queda como pie de foto del mismo mensaje.
+    const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    await uploadToBucket(asset, path, mime);
+
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: caption,
+        reply_to: replyId,
+        media_path: path,
+        media_kind: kind,
+        media_mime: mime,
+        media_width: asset.width ?? null,
+        media_height: asset.height ?? null,
+        media_size: asset.fileSize ?? null,
+        media_duration: kind === 'video' && asset.duration ? asset.duration / 1000 : null,
+      })
+      .select(MESSAGE_COLUMNS)
+      .single();
+
+    if (error) throw new Error(error.message);
+    if (data) {
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  };
+
+  // Envia toda la bandeja de adjuntos, uno por uno y en orden.
+  const sendPendingAssets = async () => {
+    if (!user?.id || !conversationId || uploading || pendingAssets.length === 0) return;
+
+    const batch = pendingAssets;
     const caption = draft.trim();
     const replyId = replyingTo?.id ?? null;
 
-    try {
-      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      await uploadToBucket(asset, path, mime);
+    setPendingAssets([]);
+    setReplyingTo(null);
+    if (caption) updateDraft('');
 
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: user.id,
-          content: caption,
-          reply_to: replyId,
-          media_path: path,
-          media_kind: kind,
-          media_mime: mime,
-          media_width: asset.width ?? null,
-          media_height: asset.height ?? null,
-          media_size: asset.fileSize ?? null,
-          media_duration: kind === 'video' && asset.duration ? asset.duration / 1000 : null,
-        })
-        .select(MESSAGE_COLUMNS)
-        .single();
-
-      if (error) throw new Error(error.message);
-
-      if (data) {
-        setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
-        setReplyingTo(null);
-        if (caption) updateDraft('');
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    for (let i = 0; i < batch.length; i++) {
+      const asset = batch[i];
+      const kind: 'image' | 'video' = asset.type === 'video' ? 'video' : 'image';
+      setUploading({ kind, current: i + 1, total: batch.length });
+      try {
+        await sendOneAsset(asset, i === 0 ? caption : '', i === 0 ? replyId : null);
+      } catch (e: any) {
+        console.error('ChatThread: error subiendo media', e);
+        Alert.alert(
+          kind === 'video' ? 'No se pudo enviar el video' : 'No se pudo enviar la foto',
+          e?.message || 'Revisa tu conexión e inténtalo de nuevo.'
+        );
       }
-    } catch (e: any) {
-      console.error('ChatThread: error subiendo media', e);
-      Alert.alert(
-        kind === 'video' ? 'No se pudo enviar el video' : 'No se pudo enviar la foto',
-        e?.message || 'Revisa tu conexión e inténtalo de nuevo.'
-      );
-    } finally {
-      setUploadingKind(null);
     }
+    setUploading(null);
+  };
+
+  // Un solo boton de enviar para todo: si hay adjuntos en la bandeja los manda
+  // (con el texto como pie de foto), si no, manda el mensaje de texto normal.
+  const handleSendAll = async () => {
+    if (uploading) return;
+    if (pendingAssets.length > 0) await sendPendingAssets();
+    else await handleSend();
+  };
+
+  const removePendingAsset = (uri: string) => {
+    setPendingAssets((prev) => prev.filter((a) => a.uri !== uri));
   };
 
   const pickFromLibrary = async () => {
@@ -504,13 +535,24 @@ export default function ChatThreadScreen() {
     // reescalado. En iPhone el selector entrega la foto HEIC convertida a JPEG
     // a máxima calidad (mismo tamaño en píxeles) para que también se pueda ver
     // en Android y en la web.
+    // allowsMultipleSelection: se pueden marcar varias fotos/videos de una vez.
+    // Nada se envia aqui: los adjuntos quedan en la bandeja hasta que la
+    // persona toca el boton de enviar.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
       quality: 1,
       exif: false,
     });
-    if (!result.canceled && result.assets?.[0]) await sendMediaMessage(result.assets[0]);
+    if (!result.canceled && result.assets?.length) {
+      setPendingAssets((prev) => {
+        const known = new Set(prev.map((a) => a.uri));
+        const nuevos = result.assets.filter((a) => !known.has(a.uri));
+        return [...prev, ...nuevos].slice(0, 10);
+      });
+    }
   };
 
   const takePhoto = async () => {
@@ -526,7 +568,10 @@ export default function ChatThreadScreen() {
       quality: 1,
       exif: false,
     });
-    if (!result.canceled && result.assets?.[0]) await sendMediaMessage(result.assets[0]);
+    if (!result.canceled && result.assets?.[0]) {
+      const nuevo = result.assets[0];
+      setPendingAssets((prev) => (prev.some((a) => a.uri === nuevo.uri) ? prev : [...prev, nuevo].slice(0, 10)));
+    }
   };
 
   // El video no se reproduce dentro de la burbuja en móvil (haría falta una
@@ -833,13 +878,41 @@ export default function ChatThreadScreen() {
           </View>
         )}
 
-        {!!uploadingKind && (
+        {!!uploading && (
           <View style={styles.uploadingBar}>
             <ActivityIndicator size="small" color="#FFFFFF" />
             <Text style={styles.uploadingText}>
-              {uploadingKind === 'video'
+              {uploading.total > 1
+                ? `Enviando ${uploading.current} de ${uploading.total} en calidad original...`
+                : uploading.kind === 'video'
                 ? 'Enviando video en calidad original...'
                 : 'Enviando foto en calidad original...'}
+            </Text>
+          </View>
+        )}
+
+        {pendingAssets.length > 0 && (
+          <View style={styles.pendingBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingScroll}>
+              {pendingAssets.map((a) => (
+                <View key={a.uri} style={styles.pendingItem}>
+                  {a.type === 'video' ? (
+                    <View style={[styles.pendingThumb, styles.pendingVideoThumb]}>
+                      <IconSymbol ios_icon_name="play.fill" android_material_icon_name="play-arrow" size={20} color="#FFFFFF" />
+                    </View>
+                  ) : (
+                    <ExpoImage source={{ uri: a.uri }} style={styles.pendingThumb} contentFit="cover" transition={0} />
+                  )}
+                  <TouchableOpacity style={styles.pendingRemove} onPress={() => removePendingAsset(a.uri)}>
+                    <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={13} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+            <Text style={styles.pendingHint}>
+              {pendingAssets.length === 1
+                ? '1 adjunto listo. Toca enviar cuando quieras.'
+                : `${pendingAssets.length} adjuntos listos. Toca enviar cuando quieras.`}
             </Text>
           </View>
         )}
@@ -848,7 +921,7 @@ export default function ChatThreadScreen() {
           <TouchableOpacity
             style={styles.attachButton}
             onPress={() => setShowAttachMenu(true)}
-            disabled={!!uploadingKind}
+            disabled={!!uploading}
           >
             <IconSymbol ios_icon_name="paperclip" android_material_icon_name="attach-file" size={22} color="#FFFFFF" />
           </TouchableOpacity>
@@ -857,14 +930,17 @@ export default function ChatThreadScreen() {
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
-                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); handleSend(trimmed); } else { updateDraft(text); } }}
+                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); if (pendingAssets.length > 0) { handleSendAll(); } else { handleSend(trimmed); } } else { updateDraft(text); } }}
             multiline
             maxLength={2000}
           />
           <TouchableOpacity
-            style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
-            onPress={() => handleSend()}
-            disabled={!draft.trim() || sending}
+            style={[
+              styles.sendButton,
+              !draft.trim() && pendingAssets.length === 0 && styles.sendButtonDisabled,
+            ]}
+            onPress={handleSendAll}
+            disabled={(!draft.trim() && pendingAssets.length === 0) || sending || !!uploading}
           >
             <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -1131,6 +1207,32 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     overflow: 'hidden',
+  },
+  pendingBar: {
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  pendingScroll: { paddingHorizontal: 14, gap: 10 },
+  pendingItem: { width: 62, height: 62 },
+  pendingThumb: { width: 62, height: 62, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.2)' },
+  pendingVideoThumb: { backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' },
+  pendingRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingHint: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
   },
   uploadingBar: {
     flexDirection: 'row',
