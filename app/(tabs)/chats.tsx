@@ -8,6 +8,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
+import { Platform } from 'react-native';
+import { enableWebPush, isWebPushSupported, needsHomeScreenOnIOS, webPushPermission } from '@/lib/webPush';
 
 interface ConversationRow {
   conversation_id: string;
@@ -90,6 +92,28 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<ChatFilter>('grupos');
+
+  // Aviso para activar las notificaciones en la web. Solo aparece si el
+  // navegador las soporta y la persona todavia no ha decidido. En el telefono
+  // no se muestra: alli el permiso lo pide la app al entrar.
+  const [webPushState, setWebPushState] = useState<string>('granted');
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    setWebPushState(isWebPushSupported() ? webPushPermission() : (needsHomeScreenOnIOS() ? 'ios-home-screen' : 'unsupported'));
+  }, []);
+
+  const activarNotificaciones = async () => {
+    if (!user?.id) return;
+    const res = await enableWebPush(user.id);
+    if (res.ok) { setWebPushState('granted'); return; }
+    if (res.reason === 'denied') {
+      setWebPushState('denied');
+      window.alert('Bloqueaste las notificaciones. Para activarlas, toca el candado 🔒 al lado de la dirección y permite las notificaciones de Nospi.');
+      return;
+    }
+    if (res.reason === 'ios-home-screen') { setWebPushState('ios-home-screen'); return; }
+    window.alert('No se pudieron activar las notificaciones en este navegador.');
+  };
   const loadedOnceRef = useRef(false);
   const CHATS_CACHE_KEY = `chats_${user?.id ?? 'anon'}`;
 
@@ -286,6 +310,21 @@ export default function ChatsScreen() {
           )}
         </View>
 
+        {Platform.OS === 'web' && (webPushState === 'default' || webPushState === 'ios-home-screen') && (
+          <TouchableOpacity
+            style={styles.pushBanner}
+            activeOpacity={webPushState === 'default' ? 0.8 : 1}
+            onPress={webPushState === 'default' ? activarNotificaciones : undefined}
+          >
+            <Text style={styles.pushBannerEmoji}>🔔</Text>
+            <Text style={styles.pushBannerText}>
+              {webPushState === 'default'
+                ? 'Activa las notificaciones para enterarte cuando te escriban'
+                : 'Para recibir notificaciones aquí, agrega Nospi a tu pantalla de inicio: toca Compartir y luego "Agregar a inicio".'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {loading ? (
           renderSkeleton()
         ) : visibleConversations.length === 0 ? (
@@ -404,6 +443,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 12,
   },
+  pushBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  pushBannerEmoji: { fontSize: 19 },
+  pushBannerText: { flex: 1, fontSize: 13, color: '#FFFFFF', lineHeight: 18 },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,

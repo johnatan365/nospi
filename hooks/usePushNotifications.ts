@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
+import { syncWebPush } from '@/lib/webPush';
 
 /**
  * Pide permiso de notificaciones, obtiene el token de Expo push del dispositivo,
@@ -16,7 +17,16 @@ export function usePushNotifications(userId: string | null | undefined) {
   useEffect(() => {
     if (!userId) return;
     if (registeredForUserId.current === userId) return; // ya se registró para este usuario en esta sesión
-    if (Platform.OS === 'web') return; // push web queda fuera de alcance por ahora, solo iOS/Android
+    // En web el aviso lo entrega el service worker, no Expo. Aqui solo se
+    // reengancha en silencio si la persona YA dio permiso antes; pedirlo de
+    // golpe al abrir se ve invasivo (y Safari lo ignora si no viene de un
+    // toque). El boton para activarlo esta en la pestana de Chat.
+    if (Platform.OS === 'web') {
+      syncWebPush(userId).then((ok) => {
+        if (ok) registeredForUserId.current = userId;
+      });
+      return;
+    }
 
     let cancelled = false;
 
