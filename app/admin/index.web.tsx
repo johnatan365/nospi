@@ -1872,6 +1872,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           payment_status: att.payment_status,
           created_at: att.created_at,
           purchase_whatsapp_sent_at: att.purchase_whatsapp_sent_at,
+          // Estado de llegada, para no volver a habilitar "Confirmar llegada"
+          // si la persona ya confirmo (en el evento o desde el admin).
+          location_confirmed: att.location_confirmed,
+          checked_in_at: att.checked_in_at,
+          arrival_status: att.arrival_status,
           users: {
             id: att.user_id,
             name: att.user_name,
@@ -1920,6 +1925,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       window.alert('✅ Llegada confirmada');
       if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
       if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
+      // Refrescar tambien la pestana "En vivo": antes no se recargaba, asi que
+      // la persona confirmada desde Gestion no aparecia alli hasta recargar.
+      if (selectedEventForMonitoring === eventId) {
+        await loadEventParticipants(eventId);
+      }
     } catch (err: any) {
       window.alert('Error al confirmar llegada: ' + (err?.message || 'desconocido'));
     } finally {
@@ -7215,13 +7225,24 @@ setBulkWhatsAppPending(pending);
                       >
                         <Text style={styles.moveAttendeeButtonText}>🔄 Mover a Otro Evento</Text>
                       </TouchableOpacity>
+                      {/* Si la persona ya confirmo su llegada (en el evento o
+                          desde aqui), el boton queda deshabilitado y solo
+                          informa, para no volver a confirmar por error. */}
                       <TouchableOpacity
-                        style={[styles.moveAttendeeButton, { backgroundColor: '#DCFCE7', marginTop: 8 }]}
-                        disabled={confirmingArrivalId === attendee.id}
+                        style={[
+                          styles.moveAttendeeButton,
+                          { backgroundColor: attendee.location_confirmed ? '#F3F4F6' : '#DCFCE7', marginTop: 8 },
+                        ]}
+                        disabled={!!attendee.location_confirmed || confirmingArrivalId === attendee.id}
                         onPress={() => handleConfirmArrival(attendee.event_id, attendee.user_id, attendee.id)}
                       >
-                        <Text style={[styles.moveAttendeeButtonText, { color: '#166534' }]}>
-                          {confirmingArrivalId === attendee.id ? '⏳ Confirmando...' : '✅ Confirmar llegada'}
+                        <Text style={[
+                          styles.moveAttendeeButtonText,
+                          { color: attendee.location_confirmed ? '#6B7280' : '#166534' },
+                        ]}>
+                          {attendee.location_confirmed
+                            ? `✅ Llegada confirmada${attendee.checked_in_at ? ` · ${new Date(attendee.checked_in_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                            : confirmingArrivalId === attendee.id ? '⏳ Confirmando...' : '✅ Confirmar llegada'}
                         </Text>
                       </TouchableOpacity>
                     </View>
