@@ -904,6 +904,79 @@ export default function AdminPanelScreen() {
     return map;
   }, [users]);
 
+  // ── Canales (global y por evento) ────────────────────────────────────────
+  const [channels, setChannels] = useState<any[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [channelMessages, setChannelMessages] = useState<any[]>([]);
+  const [channelDraft, setChannelDraft] = useState('');
+  const [sendingChannel, setSendingChannel] = useState(false);
+  const [channelEventPicker, setChannelEventPicker] = useState('');
+
+  const loadChannels = useCallback(async () => {
+    setChannelsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_channels');
+      if (error) {
+        console.error('Error cargando canales:', error);
+      } else {
+        setChannels(data || []);
+      }
+    } finally {
+      setChannelsLoading(false);
+    }
+  }, []);
+
+  const loadChannelMessages = useCallback(async (conversationId: string) => {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('id, sender_id, content, created_at, is_system, media_kind')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('Error cargando mensajes del canal:', error); return; }
+    setChannelMessages(data || []);
+  }, []);
+
+  const sendChannelMessage = async () => {
+    const text = channelDraft.trim();
+    if (!text || !activeChannelId || sendingChannel) return;
+    setSendingChannel(true);
+    try {
+      const { data: sess } = await supabase.auth.getUser();
+      const { error } = await supabase.from('chat_messages').insert({
+        conversation_id: activeChannelId,
+        sender_id: sess?.user?.id,
+        content: text,
+      });
+      if (error) { window.alert('No se pudo enviar: ' + error.message); return; }
+      setChannelDraft('');
+      await loadChannelMessages(activeChannelId);
+      loadChannels();
+    } finally {
+      setSendingChannel(false);
+    }
+  };
+
+  // Interruptor: permitir o no que la gente responda en el canal.
+  const toggleChannelReplies = async (conversationId: string, open: boolean) => {
+    const { error } = await supabase.rpc('admin_set_channel_replies', {
+      p_conversation_id: conversationId,
+      p_open: open,
+    });
+    if (error) { window.alert('No se pudo cambiar: ' + error.message); return; }
+    loadChannels();
+  };
+
+  // Crea el canal global (si no existe) o el canal de avisos de un evento.
+  const createChannel = async (eventId?: string) => {
+    const fn = eventId ? 'admin_ensure_event_channel' : 'admin_ensure_global_channel';
+    const args = eventId ? { p_event_id: eventId } : {};
+    const { data, error } = await supabase.rpc(fn, args as any);
+    if (error) { window.alert('No se pudo crear el canal: ' + error.message); return; }
+    await loadChannels();
+    if (data) { setActiveChannelId(data as string); loadChannelMessages(data as string); }
+  };
+
   const loadGroupChats = useCallback(async () => {
     setGroupChatsLoading(true);
     try {
@@ -4353,6 +4426,192 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  // Render de la sub-pestana "Canales": el canal global y los de cada evento,
+  // con el interruptor de respuestas. El equipo de Nospi siempre puede escribir.
+  const renderChannels = () => {
+    const active = channels.find(c => c.conversation_id === activeChannelId);
+    const eventosSinCanal = (events || []).filter(
+      (e: any) => e.event_status !== 'closed' && !channels.some(c => c.event_id === e.id)
+    );
+    return (
+      <View style={{ padding: 4 }}>
+        {/* Crear canales */}
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          {!channels.some(c => c.kind === 'channel_global') && (
+            <TouchableOpacity
+              onPress={() => createChannel()}
+              style={{ backgroundColor: '#880E4F', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>📢 Crear canal global</Text>
+            </TouchableOpacity>
+          )}
+          <select
+            style={{
+              minWidth: 240, backgroundColor: '#F5F5F5', border: '1px solid #E0E0E0',
+              borderRadius: 10, padding: '9px 12px', fontSize: 12.5,
+            }}
+            value={channelEventPicker}
+            onChange={(e) => {
+              const id = e.target.value;
+              setChannelEventPicker('');
+              if (id) createChannel(id);
+            }}
+          >
+            <option value="">➕ Crear canal de avisos para un evento…</option>
+            {eventosSinCanal.map((e: any) => (
+              <option key={e.id} value={e.id}>{e.name || `${e.type} · ${e.city}`}</option>
+            ))}
+          </select>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 14, minHeight: 400 }}>
+          {/* Lista de canales */}
+          <View style={{ width: 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+            <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 9, paddingHorizontal: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#6b7280', letterSpacing: 0.5 }}>CANALES</Text>
+            </View>
+            <ScrollView style={{ maxHeight: 440 }}>
+              {channelsLoading ? (
+                <Text style={{ padding: 14, fontSize: 12.5, color: '#6b7280' }}>Cargando…</Text>
+              ) : channels.length === 0 ? (
+                <Text style={{ padding: 14, fontSize: 12.5, color: '#6b7280' }}>
+                  Todavía no hay canales. Crea el global para avisos generales.
+                </Text>
+              ) : channels.map(ch => {
+                const on = ch.conversation_id === activeChannelId;
+                const global = ch.kind === 'channel_global';
+                return (
+                  <TouchableOpacity
+                    key={ch.conversation_id}
+                    onPress={() => { setActiveChannelId(ch.conversation_id); loadChannelMessages(ch.conversation_id); }}
+                    style={{
+                      paddingVertical: 10, paddingHorizontal: 12,
+                      borderBottomWidth: 1, borderBottomColor: '#F0F0F2',
+                      backgroundColor: on ? '#FCE4EC' : 'transparent',
+                      borderLeftWidth: on ? 3 : 0, borderLeftColor: '#880E4F',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1f2937', flex: 1 }} numberOfLines={1}>
+                        {global ? '📢' : '📣'} {ch.title}
+                      </Text>
+                      <View style={{
+                        backgroundColor: ch.replies_open ? '#DCFCE7' : '#EDE7F6',
+                        borderRadius: 10, paddingVertical: 1, paddingHorizontal: 6,
+                      }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: ch.replies_open ? '#15803d' : '#880E4F' }}>
+                          {ch.replies_open ? '💬' : '🔒'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>
+                      {ch.last_message || 'Sin mensajes todavía'}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+                      {global ? 'Global · ' : 'Por evento · '}{ch.participants} personas
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Canal seleccionado */}
+          <View style={{ flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+            {!active ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>Selecciona un canal para escribir en él.</Text>
+              </View>
+            ) : (
+              <>
+                <View style={{
+                  backgroundColor: '#FAFAFA', paddingVertical: 10, paddingHorizontal: 13,
+                  borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+                }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937' }}>
+                    {active.kind === 'channel_global' ? '📢' : '📣'} {active.title} · {active.participants} personas
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => toggleChannelReplies(active.conversation_id, !active.replies_open)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 7,
+                      backgroundColor: active.replies_open ? '#DCFCE7' : '#F3F4F6',
+                      borderWidth: 1, borderColor: active.replies_open ? '#86efac' : '#E5E7EB',
+                      borderRadius: 20, paddingVertical: 6, paddingHorizontal: 11,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: active.replies_open ? '#166534' : '#6b7280' }}>
+                      {active.replies_open ? '💬 Respuestas abiertas' : '🔒 Solo lectura'}
+                    </Text>
+                    <View style={{
+                      width: 34, height: 19, borderRadius: 10,
+                      backgroundColor: active.replies_open ? '#15803d' : '#cbd5e1',
+                      justifyContent: 'center',
+                    }}>
+                      <View style={{
+                        width: 15, height: 15, borderRadius: 8, backgroundColor: '#fff',
+                        marginLeft: active.replies_open ? 17 : 2,
+                      }} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 320 }}>
+                  {channelMessages.length === 0 ? (
+                    <Text style={{ fontSize: 12.5, color: '#9CA3AF', textAlign: 'center', paddingVertical: 20 }}>
+                      Sin mensajes todavía. Publica el primero.
+                    </Text>
+                  ) : channelMessages.map(m => {
+                    const mine = m.sender_id === adminUserId;
+                    return (
+                      <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', marginBottom: 8 }}>
+                        <View style={{
+                          backgroundColor: mine ? '#880E4F' : '#FFFFFF',
+                          borderWidth: 1, borderColor: mine ? '#880E4F' : '#E5E7EB',
+                          borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
+                        }}>
+                          {!mine && (
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#AD1457', marginBottom: 2 }}>
+                              {usersById[m.sender_id]?.name || 'Participante'}
+                            </Text>
+                          )}
+                          <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
+                            {m.content}
+                          </Text>
+                          <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right', marginTop: 3 }}>
+                            {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+                <View style={{ flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' }}>
+                  <TextInput
+                    style={{ flex: 1, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13, fontSize: 12.5 }}
+                    placeholder="Escribe como Equipo Nospi…"
+                    value={channelDraft}
+                    onChangeText={setChannelDraft}
+                    onSubmitEditing={sendChannelMessage}
+                  />
+                  <TouchableOpacity
+                    onPress={sendChannelMessage}
+                    disabled={sendingChannel || !channelDraft.trim()}
+                    style={{ backgroundColor: '#880E4F', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, opacity: sendingChannel || !channelDraft.trim() ? 0.5 : 1 }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>
+                      {sendingChannel ? '…' : 'Enviar'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   // Render de la sub-pestana "Grupos": todos los chats de evento en un solo
   // lugar, con la conversacion a la derecha y la caja para escribir como Nospi.
   const renderGroupChats = () => {
@@ -4804,6 +5063,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'grupos' ? '#fff' : '#374151' }}>👥 Grupos ({groupChats.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          onPress={() => { setModerationTab('canales'); setActiveModConvId(null); if (channels.length === 0) loadChannels(); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'canales' ? '#880E4F' : '#f1f1f4' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'canales' ? '#fff' : '#374151' }}>📢 Canales ({channels.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={() => { setModerationTab('chats'); setActiveModConvId(null); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'chats' ? '#880E4F' : '#f1f1f4' }}
         >
@@ -4822,7 +5087,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'feedback' ? '#fff' : '#374151' }}>⭐ Evaluaciones ({feedbackRows.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadUnmatched(); loadFeedback(); }}
+          onPress={() => { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadUnmatched(); loadFeedback(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
@@ -4831,6 +5096,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
       {moderationTab === 'grupos' ? (
         <ScrollView style={{ flex: 1 }}>{renderGroupChats()}</ScrollView>
+      ) : moderationTab === 'canales' ? (
+        <ScrollView style={{ flex: 1 }}>{renderChannels()}</ScrollView>
       ) : moderationTab === 'matches' ? (
         <ScrollView style={{ flex: 1 }}>{renderMatchesOverview()}</ScrollView>
       ) : moderationTab === 'feedback' ? (
@@ -7206,7 +7473,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'moderation') { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
+                if (item.key === 'moderation') { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);

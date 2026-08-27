@@ -11,7 +11,7 @@ import { getCached, setCached } from '@/utils/cache';
 
 interface ConversationRow {
   conversation_id: string;
-  conv_type: 'event_group' | 'direct';
+  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event';
   event_id: string | null;
   event_name: string | null;
   event_type: string | null;
@@ -19,6 +19,8 @@ interface ConversationRow {
   event_status: string | null;
   other_user_id: string | null;
   other_user_name: string | null;
+  replies_open?: boolean | null;
+  channel_title?: string | null;
   other_user_photo: string | null;
   last_message: string | null;
   last_message_at: string | null;
@@ -79,7 +81,7 @@ function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel:
   return { locked: true, unlockLabel: formatBogotaTime(unlockAt) };
 }
 
-type ChatFilter = 'grupos' | 'directos';
+type ChatFilter = 'grupos' | 'directos' | 'canales';
 
 export default function ChatsScreen() {
   const { user } = useSupabase();
@@ -211,9 +213,17 @@ export default function ChatsScreen() {
 
   const groupConversations = conversations.filter((c) => c.conv_type === 'event_group');
   const directConversations = conversations.filter((c) => c.conv_type === 'direct');
+  // Canales: difusion del equipo de Nospi (global y por evento).
+  const channelConversations = conversations.filter(
+    (c) => c.conv_type === 'channel_global' || c.conv_type === 'channel_event'
+  );
+  const channelUnread = channelConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const directUnread = directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-  const visibleConversations = filter === 'grupos' ? groupConversations : directConversations;
+  const visibleConversations =
+    filter === 'grupos' ? groupConversations
+    : filter === 'canales' ? channelConversations
+    : directConversations;
 
   return (
     <LinearGradient
@@ -255,6 +265,25 @@ export default function ChatsScreen() {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Canales: avisos del equipo de Nospi. Solo se muestra el filtro si
+              la persona tiene al menos un canal con mensajes. */}
+          {channelConversations.length > 0 && (
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'canales' && styles.filterTabActive]}
+              activeOpacity={0.8}
+              onPress={() => setFilter('canales')}
+            >
+              <Text style={[styles.filterTabText, filter === 'canales' && styles.filterTabTextActive]}>
+                Canales
+              </Text>
+              {channelUnread > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{channelUnread > 9 ? '9+' : channelUnread}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {loading ? (
@@ -263,7 +292,9 @@ export default function ChatsScreen() {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>💬</Text>
             <Text style={styles.emptyTitle}>
-              {filter === 'grupos' ? 'Aún no tienes chats de grupo' : 'Aún no tienes chats 1-1'}
+              {filter === 'grupos' ? 'Aún no tienes chats de grupo'
+                : filter === 'canales' ? 'Aún no hay avisos de Nospi'
+                : 'Aún no tienes chats 1-1'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {filter === 'grupos'
@@ -285,8 +316,11 @@ export default function ChatsScreen() {
           >
             {visibleConversations.map((item) => {
               const isGroup = item.conv_type === 'event_group';
-              const title = isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
-              const photoUrl = isGroup ? null : item.other_user_photo;
+              const isChannel = item.conv_type === 'channel_global' || item.conv_type === 'channel_event';
+              const title = isChannel
+                ? (item.channel_title || 'Canal Nospi')
+                : isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
+              const photoUrl = (isGroup || isChannel) ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);
 
@@ -303,6 +337,12 @@ export default function ChatsScreen() {
                   ) : locked ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
                       <Text style={styles.avatarEmoji}>🔒</Text>
+                    </View>
+                  ) : isChannel ? (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarEmoji}>
+                        {item.conv_type === 'channel_global' ? '📢' : '📣'}
+                      </Text>
                     </View>
                   ) : isGroup ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
