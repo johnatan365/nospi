@@ -241,6 +241,9 @@ export default function ChatsScreen() {
   const channelConversations = conversations.filter(
     (c) => c.conv_type === 'channel_global' || c.conv_type === 'channel_event'
   );
+
+  // Con canales son tres pestanas y hay que apretar los textos.
+  const hayCanales = channelConversations.length > 0;
   const channelUnread = channelConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const directUnread = directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
@@ -260,13 +263,19 @@ export default function ChatsScreen() {
         <Text style={styles.title}>Chat</Text>
 
         <View style={styles.filterRow}>
+          {/* Con el tercer filtro, "Mensajes de grupo" no cabe en un tercio de
+              la pantalla y el texto se sale del recuadro. Con dos pestanas si
+              cabe, asi que se conservan los nombres largos. */}
           <TouchableOpacity
             style={[styles.filterTab, filter === 'grupos' && styles.filterTabActive]}
             activeOpacity={0.8}
             onPress={() => setFilter('grupos')}
           >
-            <Text style={[styles.filterTabText, filter === 'grupos' && styles.filterTabTextActive]}>
-              Mensajes de grupo
+            <Text
+              numberOfLines={1}
+              style={[styles.filterTabText, filter === 'grupos' && styles.filterTabTextActive]}
+            >
+              {hayCanales ? 'Grupos' : 'Mensajes de grupo'}
             </Text>
             {groupUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -280,8 +289,11 @@ export default function ChatsScreen() {
             activeOpacity={0.8}
             onPress={() => setFilter('directos')}
           >
-            <Text style={[styles.filterTabText, filter === 'directos' && styles.filterTabTextActive]}>
-              Mensajes 1-1
+            <Text
+              numberOfLines={1}
+              style={[styles.filterTabText, filter === 'directos' && styles.filterTabTextActive]}
+            >
+              {hayCanales ? 'Directos' : 'Mensajes 1-1'}
             </Text>
             {directUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -292,13 +304,16 @@ export default function ChatsScreen() {
 
           {/* Canales: avisos del equipo de Nospi. Solo se muestra el filtro si
               la persona tiene al menos un canal con mensajes. */}
-          {channelConversations.length > 0 && (
+          {hayCanales && (
             <TouchableOpacity
               style={[styles.filterTab, filter === 'canales' && styles.filterTabActive]}
               activeOpacity={0.8}
               onPress={() => setFilter('canales')}
             >
-              <Text style={[styles.filterTabText, filter === 'canales' && styles.filterTabTextActive]}>
+              <Text
+                numberOfLines={1}
+                style={[styles.filterTabText, filter === 'canales' && styles.filterTabTextActive]}
+              >
                 Canales
               </Text>
               {channelUnread > 0 && (
@@ -459,6 +474,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     marginBottom: 12,
+    gap: 8,
   },
   filterTab: {
     flexDirection: 'row',
@@ -468,12 +484,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     paddingVertical: 10,
-    marginRight: 8,
+    paddingHorizontal: 6,
+    minWidth: 0,
   },
   filterTabActive: {
     backgroundColor: '#FFFFFF',
   },
-  filterTabText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+  filterTabText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    flexShrink: 1,
+  },
   filterTabTextActive: { color: '#880E4F' },
   filterBadge: {
     backgroundColor: '#AD1457',
