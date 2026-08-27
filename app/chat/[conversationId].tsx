@@ -684,13 +684,18 @@ export default function ChatThreadScreen() {
       // evento. Ese caso NO se resuelve reintentando, asi que se explica aparte
       // en vez de mostrar el mensaje generico de "intenta de nuevo".
       const msg = String(error.message || '');
-      if (msg.includes('asistieron contigo') || (error as any).code === '42501') {
-        Alert.alert(
-          'Chat no disponible',
-          'Solo puedes escribirle por privado a personas que asistieron contigo a un evento.'
-        );
+      const bloqueadoPorAsistencia = msg.includes('asistieron contigo') || (error as any).code === '42501';
+      const titulo = bloqueadoPorAsistencia ? 'Chat no disponible' : 'No se pudo abrir el chat';
+      const detalle = bloqueadoPorAsistencia
+        ? 'Solo puedes escribirle por privado a personas que asistieron contigo a un evento.'
+        : 'Intenta de nuevo en unos segundos.';
+      // Alert.alert de React Native NO muestra nada en web: alli hay que usar
+      // window.alert, si no el usuario ve que "no pasa nada" y parece un error
+      // de la app (mismo patron que ya se usa en el resto de este archivo).
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') window.alert(`${titulo}\n\n${detalle}`);
       } else {
-        Alert.alert('No se pudo abrir el chat', 'Intenta de nuevo en unos segundos.');
+        Alert.alert(titulo, detalle);
       }
       return;
     }
