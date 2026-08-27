@@ -591,7 +591,7 @@ export default function DinamicaScreen() {
           (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
           (err) => {
             if (err.code === 1) {
-              setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
+              setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala tocando el candado 🔒 junto a la dirección del navegador → Ubicación → Permitir, y vuelve a intentarlo.');
             } else {
               setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
             }
@@ -606,7 +606,14 @@ export default function DinamicaScreen() {
       const Location = require('expo-location');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada.');
+        // Si ya negaron el permiso antes, el sistema no vuelve a preguntar: hay
+        // que indicarle a la persona como reactivarlo desde Ajustes, si no queda
+        // trabada sin poder confirmar su llegada.
+        setGpsError(
+          Platform.OS === 'ios'
+            ? 'Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala en Ajustes → Nospi → Ubicación, y vuelve a intentarlo.'
+            : 'Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala en Ajustes → Aplicaciones → Nospi → Permisos → Ubicación, y vuelve a intentarlo.'
+        );
         return null;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
