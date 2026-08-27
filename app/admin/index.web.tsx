@@ -993,6 +993,26 @@ export default function AdminPanelScreen() {
     setAllDirectConvosLoading(false);
   }, []);
 
+  // Sub-vista dentro de Matches: correspondidos vs sin corresponder.
+  const [matchesView, setMatchesView] = useState<'mutuos' | 'unilaterales'>('mutuos');
+  const [unmatched, setUnmatched] = useState<any[]>([]);
+  const [unmatchedLoading, setUnmatchedLoading] = useState(false);
+
+  const loadUnmatched = useCallback(async () => {
+    setUnmatchedLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_unmatched_affinity');
+      if (error) {
+        console.error('Error cargando afinidades sin corresponder:', error);
+        window.alert('No se pudieron cargar: ' + error.message);
+      } else {
+        setUnmatched(data || []);
+      }
+    } finally {
+      setUnmatchedLoading(false);
+    }
+  }, []);
+
   const loadAllMatches = useCallback(async () => {
     setAllMatchesLoading(true);
     const { data, error } = await supabase.rpc('admin_get_all_matches');
@@ -4204,6 +4224,134 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  // Render de la sub-pestana "Matches": correspondidos (con su chat) y las
+  // selecciones que NO fueron correspondidas. Info confidencial, solo lectura.
+  const renderMatches = () => {
+    const totalSelecciones = unmatched.length + allMatches.length * 2;
+    const tasa = totalSelecciones > 0 ? Math.round((allMatches.length * 2 / totalSelecciones) * 100) : 0;
+    return (
+      <View style={{ padding: 4 }}>
+        {/* Selector de vista */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+          <TouchableOpacity
+            onPress={() => setMatchesView('mutuos')}
+            style={{
+              paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20,
+              backgroundColor: matchesView === 'mutuos' ? '#15803d' : '#f1f1f4',
+            }}
+          >
+            <Text style={{ fontSize: 12.5, fontWeight: '700', color: matchesView === 'mutuos' ? '#fff' : '#374151' }}>
+              💚 Correspondidos ({allMatches.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setMatchesView('unilaterales'); if (unmatched.length === 0) loadUnmatched(); }}
+            style={{
+              paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20,
+              backgroundColor: matchesView === 'unilaterales' ? '#b45309' : '#f1f1f4',
+            }}
+          >
+            <Text style={{ fontSize: 12.5, fontWeight: '700', color: matchesView === 'unilaterales' ? '#fff' : '#374151' }}>
+              💔 Sin corresponder ({unmatched.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Resumen */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[
+            { v: String(totalSelecciones), l: 'Selecciones totales', c: '#1f2937' },
+            { v: String(allMatches.length), l: 'Matches formados', c: '#15803d' },
+            { v: String(unmatched.length), l: 'Sin corresponder', c: '#b45309' },
+            { v: `${tasa}%`, l: 'Tasa de correspondencia', c: tasa >= 30 ? '#15803d' : '#b45309' },
+          ].map(k => (
+            <View key={k.l} style={{ flex: 1, minWidth: 120, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 11, backgroundColor: '#FAFAFA' }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: k.c, textAlign: 'center' }}>{k.v}</Text>
+              <Text style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginTop: 3 }}>{k.l}</Text>
+            </View>
+          ))}
+        </View>
+
+        {matchesView === 'mutuos' ? (
+          allMatchesLoading ? (
+            <Text style={{ fontSize: 13, color: '#6b7280', padding: 16 }}>Cargando matches…</Text>
+          ) : allMatches.length === 0 ? (
+            <Text style={{ fontSize: 13, color: '#6b7280', padding: 16 }}>Aún no hay matches de afinidad.</Text>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 520 }}>
+                <thead><tr>
+                  {['Match', 'Evento', 'Fecha'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280' }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {allMatches.map((m: any) => (
+                    <tr key={m.match_id}>
+                      <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontWeight: 700 }}>
+                        💚 {m.user_a_name || '?'} ↔ {m.user_b_name || '?'}
+                      </td>
+                      <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB' }}>{m.event_name || 'Evento'}</td>
+                      <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', color: '#6b7280' }}>
+                        {new Date(m.created_at).toLocaleDateString('es-CO')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          unmatchedLoading ? (
+            <Text style={{ fontSize: 13, color: '#6b7280', padding: 16 }}>Cargando…</Text>
+          ) : unmatched.length === 0 ? (
+            <Text style={{ fontSize: 13, color: '#6b7280', padding: 16 }}>No hay selecciones sin corresponder.</Text>
+          ) : (
+            <>
+              <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 10, padding: 11, marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, color: '#92400E', lineHeight: 17 }}>
+                  🔒 <Text style={{ fontWeight: '700' }}>Información confidencial.</Text> Las personas no saben a quién eligieron los demás: la app solo avisa cuando el interés es mutuo. Úsalo para entender el negocio, no lo compartas.
+                </Text>
+              </View>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 620 }}>
+                  <thead><tr>
+                    {['Eligió a', 'Evento', 'Fecha', 'Estado'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280' }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {unmatched.map((u: any, i: number) => (
+                      <tr key={`${u.rater_id}-${u.liked_id}-${i}`}>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB' }}>
+                          <Text style={{ fontWeight: '700', fontSize: 13 }}>{u.rater_name || '?'}</Text>
+                          <Text style={{ color: '#6b7280', fontSize: 12 }}> → {u.liked_name || '?'}</Text>
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB' }}>{u.event_name}</td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', color: '#6b7280' }}>
+                          {u.created_at ? new Date(u.created_at).toLocaleDateString('es-CO') : ''}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB' }}>
+                          <span style={{
+                            fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                            backgroundColor: u.liked_ya_evaluo ? '#FEE2E2' : '#F3F4F6',
+                            color: u.liked_ya_evaluo ? '#b91c1c' : '#6b7280',
+                          }}>
+                            {u.liked_ya_evaluo ? 'No correspondió' : 'Aún no evalúa'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )
+        )}
+      </View>
+    );
+  };
+
   // Render de la sub-pestana "Grupos": todos los chats de evento en un solo
   // lugar, con la conversacion a la derecha y la caja para escribir como Nospi.
   const renderGroupChats = () => {
@@ -4661,7 +4809,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'chats' ? '#fff' : '#374151' }}>💬 Chats privados ({allDirectConvos.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { setModerationTab('matches'); setActiveModConvId(null); }}
+          onPress={() => { setModerationTab('matches'); setActiveModConvId(null); if (unmatched.length === 0) loadUnmatched(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'matches' ? '#880E4F' : '#f1f1f4' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'matches' ? '#fff' : '#374151' }}>💘 Matches ({allMatches.length})</Text>
@@ -4673,7 +4821,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'feedback' ? '#fff' : '#374151' }}>⭐ Evaluaciones ({feedbackRows.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }}
+          onPress={() => { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadUnmatched(); loadFeedback(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
@@ -4682,6 +4830,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
       {moderationTab === 'grupos' ? (
         <ScrollView style={{ flex: 1 }}>{renderGroupChats()}</ScrollView>
+      ) : moderationTab === 'matches' ? (
+        <ScrollView style={{ flex: 1 }}>{renderMatches()}</ScrollView>
       ) : moderationTab === 'feedback' ? (
         <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
       ) : (
