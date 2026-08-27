@@ -10,6 +10,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { compressProfilePhoto } from '@/lib/imageCompress';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
@@ -475,7 +476,11 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      await uploadPhoto(result.assets[0].uri);
+      // Se reduce a 1080 px antes de subir: la app nunca muestra mas que eso,
+      // y asi la foto pesa ~200 KB en vez de 1 MB. Ademas carga mas rapido
+      // para quien la ve.
+      const comprimida = await compressProfilePhoto(result.assets[0].uri);
+      await uploadPhoto(comprimida.uri);
     }
   };
 
@@ -485,10 +490,8 @@ export default function ProfileScreen() {
       
       
       // On web, blob URIs don't have file extensions - default to jpg
-      let fileExt = 'jpg';
-      if (Platform.OS !== 'web') {
-        fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      }
+      // compressProfilePhoto siempre devuelve JPEG, en las tres plataformas.
+      const fileExt = 'jpg';
       
       const timestamp = Date.now();
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;

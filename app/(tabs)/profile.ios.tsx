@@ -11,6 +11,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { compressProfilePhoto } from '@/lib/imageCompress';
 import Slider from '@react-native-community/slider';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
@@ -469,13 +470,16 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
-      base64: true,
     });
 
     if (!result.canceled && result.assets && result.assets[0]) {
       const asset = result.assets[0];
-      
-      await uploadPhoto(asset.uri, asset.base64 || null);
+      // Se reduce a 1080 px antes de subir: la app nunca muestra mas que eso,
+      // y asi la foto pesa ~200 KB en vez de 1 MB.
+      // Se pasa base64 en null a proposito: el base64 del selector es de la
+      // foto ORIGINAL, asi que subirlo anularia la compresion.
+      const comprimida = await compressProfilePhoto(asset.uri);
+      await uploadPhoto(comprimida.uri, null);
     }
   };
 

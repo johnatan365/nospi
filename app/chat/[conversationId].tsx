@@ -60,12 +60,24 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
 const MESSAGE_COLUMNS =
-  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by';
+  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by, media_expired';
+
+// Tope por archivo, igual al que tiene el bucket. Se comprueba tambien aqui
+// para poder explicarlo con palabras en vez de soltar el error crudo de Storage.
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+// Las fotos y videos se borran solos al mes; las notas de voz se quedan.
+const MEDIA_RETENTION_DAYS = 30;
 
 // Ancho maximo de una foto/video dentro de la burbuja. La altura se calcula
 // con la proporcion real del archivo para que no se vea deformado.
 const MEDIA_MAX_WIDTH = 210;
 const MEDIA_MAX_HEIGHT = 320;
+
+// "12,4 MB" a partir de los bytes, para poder decirle cuanto pesa de mas.
+function formatMB(bytes?: number | null): string {
+  return `${((bytes ?? 0) / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function mediaBoxSize(width?: number | null, height?: number | null) {
   if (!width || !height || width <= 0 || height <= 0) {
@@ -120,6 +132,8 @@ interface Message {
   media_duration?: number | null;
   // Si viene, el mensaje es una encuesta y se dibuja como tarjeta votable.
   poll_id?: string | null;
+  // Su foto o video ya se borro por antiguedad (30 dias).
+  media_expired?: boolean | null;
   // Mensaje fijado: se muestra en la banda de arriba del chat.
   pinned_at?: string | null;
   pinned_by?: string | null;
@@ -179,6 +193,9 @@ function formatBogotaTime(date: Date): string {
 // Texto corto que representa un mensaje cuando se cita o se responde. Un
 // mensaje solo de foto/video no tiene texto, asi que se muestra la etiqueta.
 function messagePreviewText(m: Message): string {
+  if (m.media_expired) {
+    return m.media_kind === 'video' ? '🎥 Video no disponible' : '📷 Foto no disponible';
+  }
   const label = m.media_kind === 'video' ? '🎥 Video'
     : m.media_kind === 'image' ? '📷 Foto'
     : m.media_kind === 'audio' ? '🎤 Nota de voz'
@@ -750,6 +767,9 @@ export default function ChatThreadScreen() {
     const pending = Array.from(
       new Set(
         messages
+          // Los caducados ya no tienen archivo detras: pedir su enlace seria
+          // una peticion condenada a fallar en cada carga del chat.
+          .filter((m) => !m.media_expired)
           .map((m) => m.media_path)
           .filter((path): path is string => !!path && !signRequestedRef.current.has(path))
       )
@@ -1217,11 +1237,27 @@ export default function ChatThreadScreen() {
       exif: false,
     });
     if (!result.canceled && result.assets?.length) {
-      setPendingAssets((prev) => {
-        const known = new Set(prev.map((a) => a.uri));
-        const nuevos = result.assets.filter((a) => !known.has(a.uri));
-        return [...prev, ...nuevos].slice(0, 10);
-      });
+      // Se filtran los que pasan del tope ANTES de meterlos en la bandeja, para
+      // explicarlo con palabras en vez de que Storage suelte un error crudo al
+      // enviar. Sobre todo pasa con videos largos.
+      const pesados = result.assets.filter((a) => (a.fileSize ?? 0) > MAX_UPLOAD_BYTES);
+      const validos = result.assets.filter((a) => (a.fileSize ?? 0) <= MAX_UPLOAD_BYTES);
+
+      if (pesados.length > 0) {
+        const msg = pesados.length === 1
+          ? `Ese archivo pesa ${formatMB(pesados[0].fileSize)} y el máximo son 25 MB. Si es un video, graba uno más corto o recórtalo antes de enviarlo.`
+          : `${pesados.length} archivos pasan de 25 MB y no se pueden enviar. Si son videos, recórtalos antes.`;
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Archivo muy pesado', msg);
+      }
+
+      if (validos.length > 0) {
+        setPendingAssets((prev) => {
+          const known = new Set(prev.map((a) => a.uri));
+          const nuevos = validos.filter((a) => !known.has(a.uri));
+          return [...prev, ...nuevos].slice(0, 10);
+        });
+      }
     }
   };
 
@@ -1632,6 +1668,19 @@ export default function ChatThreadScreen() {
                       </Text>
                     </View>
                   )}
+                  {item.media_expired && (
+                    <View style={styles.expiredMedia}>
+                      <Text style={styles.expiredMediaIcon}>
+                        {item.media_kind === 'video' ? '🎥' : '📷'}
+                      </Text>
+                      <Text style={[styles.expiredMediaText, isMine && styles.expiredMediaTextMine]}>
+                        {item.media_kind === 'video' ? 'Video' : 'Foto'} no disponible{'\n'}
+                        <Text style={styles.expiredMediaHint}>
+                          Se eliminó a los {MEDIA_RETENTION_DAYS} días
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
                   {!!item.media_path && item.media_kind === 'audio' && (
                     <VoiceNote
                       uri={signedUrls[item.media_path as string] || null}
@@ -1916,7 +1965,10 @@ export default function ChatThreadScreen() {
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowAttachMenu(false)}>
           <View style={styles.attachSheet}>
             <Text style={styles.attachSheetTitle}>Enviar archivo</Text>
-            <Text style={styles.attachSheetHint}>Se envía en su calidad original, sin reducir la resolución.</Text>
+            <Text style={styles.attachSheetHint}>
+              Se envía en su calidad original, sin reducir la resolución. Máximo 25 MB por archivo.
+              {'\n'}Las fotos y videos se eliminan a los {MEDIA_RETENTION_DAYS} días: descárgalos antes si los quieres guardar.
+            </Text>
             <TouchableOpacity style={styles.attachOption} onPress={pickFromLibrary}>
               <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={22} color={nospiColors.purpleDark} />
               <Text style={styles.attachOptionText}>Foto o video de la galería</Text>
@@ -2236,6 +2288,18 @@ const styles = StyleSheet.create({
 
   // ── Encuestas dentro del chat ──────────────────────────────────────────
   // ── Menciones ──────────────────────────────────────────────────────────
+  // Foto o video que ya se borro por antiguedad.
+  expiredMedia: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 11,
+    marginBottom: 5, minWidth: 175,
+  },
+  expiredMediaIcon: { fontSize: 17, opacity: 0.5 },
+  expiredMediaText: { fontSize: 12.5, color: '#6b5560', lineHeight: 17 },
+  expiredMediaTextMine: { color: 'rgba(255,255,255,0.85)' },
+  expiredMediaHint: { fontSize: 11, opacity: 0.75 },
+
   // ── Notas de voz ───────────────────────────────────────────────────────
   voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 9, minWidth: 172, paddingVertical: 2 },
   voiceButton: {
