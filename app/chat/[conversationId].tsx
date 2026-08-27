@@ -253,7 +253,11 @@ function SwipeToReply({ children, onReply }: { children: React.ReactNode; onRepl
   ).current;
 
   return (
-    <View style={{ position: 'relative', justifyContent: 'center' }}>
+    // flexShrink + maxWidth:'100%' para que este contenedor NO crezca mas alla
+    // del ancho disponible: si crece, el maxWidth porcentual de la burbuja se
+    // calcula sobre un contenedor sin limite y los mensajes largos se salen de
+    // la pantalla. alignItems hereda el lado (izquierda/derecha) del mensaje.
+    <View style={{ position: 'relative', justifyContent: 'center', flexShrink: 1, maxWidth: '78%' }}>
       <Animated.View
         pointerEvents="none"
         style={{
@@ -264,7 +268,10 @@ function SwipeToReply({ children, onReply }: { children: React.ReactNode; onRepl
       >
         <Text style={{ fontSize: 18 }}>↩︎</Text>
       </Animated.View>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }], flexShrink: 1, maxWidth: '100%' }}
+        {...panResponder.panHandlers}
+      >
         {children}
       </Animated.View>
     </View>
@@ -1350,7 +1357,7 @@ const styles = StyleSheet.create({
   headerEventIcon: { width: 20, height: 20, tintColor: '#880E4F' },
   headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
   messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
-  messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end' },
+  messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', width: '100%' },
   messageRowMine: { justifyContent: 'flex-end' },
   messageRowTheirs: { justifyContent: 'flex-start' },
   messageAvatar: { width: 26, height: 26, borderRadius: 13, marginRight: 6 },
@@ -1367,7 +1374,7 @@ const styles = StyleSheet.create({
   quoteNameMine: { color: 'rgba(255,255,255,0.95)' },
   quoteText: { fontSize: 12.5, color: '#6a6a70' },
   quoteTextMine: { color: 'rgba(255,255,255,0.8)' },
-  bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  bubble: { maxWidth: '100%', flexShrink: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
