@@ -4153,12 +4153,41 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       : null;
 
     // Eventos disponibles en el filtro (con su numero de evaluaciones)
-    const eventos: { id: string; name: string; date: string; count: number }[] = [];
+    const eventos: { id: string; name: string; date: string; count: number; location: string | null }[] = [];
     for (const r of feedbackRows) {
       const found = eventos.find(e => e.id === r.event_id);
       if (found) found.count++;
-      else eventos.push({ id: r.event_id, name: r.event_name, date: r.event_date, count: 1 });
+      else eventos.push({ id: r.event_id, name: r.event_name, date: r.event_date, count: 1, location: r.location_name || null });
     }
+
+    // Ranking de lugares: agrupa las evaluaciones por sitio (no por evento) para
+    // saber a cuales conviene volver. Un lugar con pocas evaluaciones se marca
+    // como "pocos datos" para no sacar conclusiones de una sola opinion.
+    const MIN_CONFIABLE = 5;
+    const lugares: { name: string; eventIds: Set<string>; rows: any[] }[] = [];
+    for (const r of feedbackRows) {
+      const nombre = r.location_name || 'Sin lugar registrado';
+      let l = lugares.find(x => x.name === nombre);
+      if (!l) { l = { name: nombre, eventIds: new Set(), rows: [] }; lugares.push(l); }
+      l.eventIds.add(r.event_id);
+      l.rows.push(r);
+    }
+    const rankingLugares = lugares.map(l => {
+      const prom = (k: string) => {
+        const v = l.rows.map(r => r[k]).filter((x: any) => typeof x === 'number');
+        return v.length ? v.reduce((p: number, c: number) => p + c, 0) / v.length : null;
+      };
+      const vs = l.rows.filter(r => r.volveria);
+      return {
+        name: l.name,
+        eventos: l.eventIds.size,
+        personas: l.rows.length,
+        lugar: prom('lugar'),
+        comida: prom('comida'),
+        volveria: vs.length ? Math.round((vs.filter(r => r.volveria === 'si').length / vs.length) * 100) : null,
+        confiable: l.rows.length >= MIN_CONFIABLE,
+      };
+    }).sort((a, b) => (b.lugar ?? -1) - (a.lugar ?? -1));
 
     // Motivos de baja calificacion, contados (todas las categorias)
     const motivoCount: Record<string, number> = {};
@@ -4187,6 +4216,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const rows = filtered.map(r => ({
         Evento: r.event_name,
         Fecha: r.event_date ? new Date(r.event_date).toLocaleDateString('es-CO') : '',
+        Lugar: r.location_name || '',
         Persona: r.user_name,
         Correo: r.user_email,
         Dinamica: r.dinamica ?? '',
@@ -4258,6 +4288,48 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               {filtered.length} evaluacion{filtered.length === 1 ? '' : 'es'} · escala de 1 a 3
             </Text>
 
+            {/* Ranking de lugares (solo en "Todos"): a que sitios conviene volver */}
+            {feedbackEventFilter === 'all' && rankingLugares.length > 0 && (
+              <>
+                <Text style={styles.sectionSubtitle}>🏆 RANKING DE LUGARES</Text>
+                <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+                    <thead>
+                      <tr>
+                        {['Lugar', 'Eventos', 'Personas', '📍 Lugar', '🍽️ Comida', 'Volvería'].map(h => (
+                          <th key={h} style={{ textAlign: h === 'Lugar' ? 'left' : 'center', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rankingLugares.map((l, idx) => (
+                        <tr key={l.name}>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB' }}>
+                            <Text style={{ fontWeight: '700', fontSize: 13 }}>
+                              {idx === 0 && l.confiable ? '🥇 ' : ''}{l.name}
+                            </Text>
+                            {!l.confiable && (
+                              <Text style={{ fontSize: 10.5, color: '#b45309', fontWeight: '700' }}>
+                                ⚠️ Pocos datos — {l.personas} evaluación{l.personas === 1 ? '' : 'es'}
+                              </Text>
+                            )}
+                          </td>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700 }}>{l.eventos}</td>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700 }}>{l.personas}</td>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, fontSize: 15, color: l.confiable ? color(l.lugar) : '#9CA3AF' }}>{fmt(l.lugar)}</td>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: l.confiable ? color(l.comida) : '#9CA3AF' }}>{fmt(l.comida)}</td>
+                          <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: l.volveria !== null && l.volveria >= 70 ? '#15803d' : '#b45309' }}>{l.volveria === null ? '—' : `${l.volveria}%`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Text style={{ fontSize: 11.5, color: '#6b7280', marginBottom: 4 }}>
+                  Ordenado por puntaje del lugar. Los marcados con ⚠️ tienen menos de 5 evaluaciones: tómalos con cautela.
+                </Text>
+              </>
+            )}
+
             {/* Comparativa por evento (solo en "Todos") */}
             {feedbackEventFilter === 'all' && (
               <>
@@ -4266,8 +4338,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 620 }}>
                     <thead>
                       <tr>
-                        {['Evento', 'Personas', 'Dinámica', 'Lugar', 'Comida', 'Grupo', 'Volvería'].map(h => (
-                          <th key={h} style={{ textAlign: h === 'Evento' ? 'left' : 'center', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280', whiteSpace: 'nowrap' }}>{h}</th>
+                        {['Evento', 'Lugar', 'Personas', 'Dinámica', '📍 Lugar', 'Comida', 'Grupo', 'Volvería'].map(h => (
+                          <th key={h} style={{ textAlign: (h === 'Evento' || h === 'Lugar') ? 'left' : 'center', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -4283,6 +4355,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                         return (
                           <tr key={ev.id} style={{ cursor: 'pointer' }} onClick={() => setFeedbackEventFilter(ev.id)}>
                             <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontWeight: 700 }}>{ev.name}</td>
+                            <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 12, color: ev.location ? '#374151' : '#9CA3AF' }}>{ev.location || '—'}</td>
                             <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700 }}>{rs.length}</td>
                             {['dinamica', 'lugar', 'comida', 'grupo'].map(k => (
                               <td key={k} style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: color(a(k)) }}>{fmt(a(k))}</td>
