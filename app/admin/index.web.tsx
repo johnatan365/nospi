@@ -1894,20 +1894,33 @@ const handleLogin = async () => {
     }
   };
 
-  const handleAddExistingUserToEvent = async (userId: string) => {
+  // tipo distingue como entra la persona, y eso cambia dos cosas importantes:
+  //   'directo'  -> te pago por fuera de la app. Queda registrado como venta real,
+  //                 asi que cuenta en ingresos, LTV y recompra. Si cancela, recibe
+  //                 su saldo de vuelta porque si hubo plata.
+  //   'cortesia' -> entra gratis (invitado, amigo, relleno de cupo). No cuenta como
+  //                 venta, y si cancela NO recibe saldo virtual: sin esto la app le
+  //                 devolveria el precio del evento por plata que nunca pago.
+  const handleAddExistingUserToEvent = async (userId: string, tipo: 'directo' | 'cortesia') => {
     if (!selectedEventForConfig) return;
+    const mensaje = tipo === 'cortesia'
+      ? '¿Confirmas que esta persona entra por CORTESÍA?\n\nNo se registra como venta y, si cancela, no se le genera saldo virtual.'
+      : '¿Confirmas que esta persona TE PAGÓ DIRECTO (transferencia o link)?\n\nSe registra como una venta real y, si cancela, se le devuelve el saldo.';
+    if (!window.confirm(mensaje)) return;
     setAddingUserId(userId);
     setAddUserError(null);
     setAddUserSuccess(null);
     try {
       const { data, error } = await supabase.functions.invoke('admin-add-user-to-event', {
-        body: { userId, eventId: selectedEventForConfig.id },
+        body: { userId, eventId: selectedEventForConfig.id, tipo },
       });
       if (error || data?.error) {
         setAddUserError(data?.error || error?.message || 'Error al agregar el usuario');
         return;
       }
-      setAddUserSuccess(`${data.userName} fue agregado al evento correctamente.`);
+      setAddUserSuccess(
+        `${data.userName} fue agregado al evento ${tipo === 'cortesia' ? 'por cortesía (no cuenta como venta)' : 'como pago directo (registrado como venta)'}.`
+      );
       setAddUserSearchQuery('');
       await loadDashboardData();
     } catch (e: any) {
@@ -9301,20 +9314,36 @@ setBulkWhatsAppPending(pending);
                         {u.created_at ? `Registrado ${new Date(u.created_at).toLocaleDateString('es-CO')}` : 'Sin fecha de registro'}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleAddExistingUserToEvent(u.id)}
-                      disabled={addingUserId === u.id}
-                      style={{
-                        backgroundColor: nospiColors.purpleDark, borderRadius: 20,
-                        paddingVertical: 6, paddingHorizontal: 14,
-                        opacity: addingUserId === u.id ? 0.6 : 1,
-                      }}
-                    >
-                      {addingUserId === u.id
-                        ? <ActivityIndicator size="small" color="white" />
-                        : <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>Agregar</Text>
-                      }
-                    </TouchableOpacity>
+                    {addingUserId === u.id ? (
+                      <View style={{ paddingVertical: 6, paddingHorizontal: 14 }}>
+                        <ActivityIndicator size="small" color={nospiColors.purpleDark} />
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => handleAddExistingUserToEvent(u.id, 'directo')}
+                          disabled={!!addingUserId}
+                          style={{
+                            backgroundColor: nospiColors.purpleDark, borderRadius: 20,
+                            paddingVertical: 6, paddingHorizontal: 12,
+                            opacity: addingUserId ? 0.5 : 1,
+                          }}
+                        >
+                          <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>Pagó directo</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleAddExistingUserToEvent(u.id, 'cortesia')}
+                          disabled={!!addingUserId}
+                          style={{
+                            backgroundColor: '#F59E0B', borderRadius: 20,
+                            paddingVertical: 6, paddingHorizontal: 12,
+                            opacity: addingUserId ? 0.5 : 1,
+                          }}
+                        >
+                          <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>Cortesía</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                     ))}
                   </>
