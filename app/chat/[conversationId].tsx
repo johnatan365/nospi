@@ -16,6 +16,7 @@ import {
   Linking,
   Animated,
   PanResponder,
+  Dimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -225,6 +226,10 @@ function renderMessageContent(text: string, mine: boolean) {
 // Los 6 emojis de reaccion rapida, iguales a los de WhatsApp.
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
+// Alto de pantalla, para decidir si el menu de acciones se abre hacia arriba o
+// hacia abajo del mensaje presionado.
+const SCREEN_H = Dimensions.get('window').height;
+
 function SwipeToReply({ children, onReply }: { children: React.ReactNode; onReply: () => void }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const activated = useRef(false);
@@ -299,6 +304,10 @@ export default function ChatThreadScreen() {
   // Antes "responder" solo existia como gesto oculto de mantener presionado,
   // asi que mucha gente no sabia que se podia.
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+  // Posicion en pantalla de la burbuja presionada, para abrir el menu JUNTO a
+  // ella (como WhatsApp) en vez de pegado al fondo de la pantalla.
+  const [actionAnchor, setActionAnchor] = useState<{ y: number; height: number; isMine: boolean } | null>(null);
+  const bubbleRefs = useRef<Record<string, any>>({});
 
   // Reacciones con emoji por mensaje. Se guardan en chat_message_reactions
   // (una por persona y mensaje) y llegan en tiempo real a todos.
@@ -1017,8 +1026,22 @@ export default function ChatThreadScreen() {
                 )}
                 <SwipeToReply onReply={() => setReplyingTo(item)}>
                 <TouchableOpacity
+                  ref={(el) => { bubbleRefs.current[item.id] = el; }}
                   activeOpacity={0.9}
-                  onLongPress={() => setActionMsg(item)}
+                  onLongPress={() => {
+                    // Medimos donde quedo la burbuja en pantalla para abrir el
+                    // menu justo ahi, en vez de al fondo.
+                    const node: any = bubbleRefs.current[item.id];
+                    if (node?.measureInWindow) {
+                      node.measureInWindow((_x: number, y: number, _w: number, h: number) => {
+                        setActionAnchor({ y, height: h, isMine });
+                        setActionMsg(item);
+                      });
+                    } else {
+                      setActionAnchor(null);
+                      setActionMsg(item);
+                    }
+                  }}
                   delayLongPress={250}
                   style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
                 >
@@ -1305,8 +1328,26 @@ export default function ChatThreadScreen() {
 
       {/* Acciones al mantener presionado un mensaje. Sin boton Cancelar: se
           cierra tocando fuera del menu. */}
-      <Modal visible={!!actionMsg} animationType="fade" transparent onRequestClose={() => setActionMsg(null)}>
-        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setActionMsg(null)}>
+      <Modal visible={!!actionMsg} animationType="fade" transparent onRequestClose={() => { setActionMsg(null); setActionAnchor(null); }}>
+        <TouchableOpacity
+          style={styles.actionOverlay}
+          activeOpacity={1}
+          onPress={() => { setActionMsg(null); setActionAnchor(null); }}
+        >
+          {/* El menu se ancla JUNTO al mensaje presionado (como WhatsApp).
+              Si la burbuja esta muy abajo, se abre hacia arriba para que no se
+              salga de la pantalla. */}
+          <View
+            style={[
+              styles.actionAnchored,
+              actionAnchor
+                ? (actionAnchor.y > SCREEN_H * 0.55
+                    ? { bottom: SCREEN_H - actionAnchor.y + 8 }
+                    : { top: actionAnchor.y + actionAnchor.height + 8 })
+                : { bottom: 40 },
+              actionAnchor?.isMine ? { right: 12, alignItems: 'flex-end' } : { left: 12, alignItems: 'flex-start' },
+            ]}
+          >
           {/* Barra de reacciones rapidas, los mismos 6 emojis de WhatsApp. */}
           <View style={styles.reactionBar}>
             {QUICK_REACTIONS.map((emo) => {
@@ -1317,17 +1358,17 @@ export default function ChatThreadScreen() {
                 <TouchableOpacity
                   key={emo}
                   style={[styles.reactionBarBtn, mine && styles.reactionBarBtnActive]}
-                  onPress={() => { const m = actionMsg; setActionMsg(null); if (m) toggleReaction(m.id, emo); }}
+                  onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); if (m) toggleReaction(m.id, emo); }}
                 >
                   <Text style={styles.reactionBarEmoji}>{emo}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-          <View style={styles.attachSheet}>
+          <View style={styles.actionSheetCompact}>
             <TouchableOpacity
               style={styles.attachOption}
-              onPress={() => { const m = actionMsg; setActionMsg(null); if (m) setReplyingTo(m); }}
+              onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); if (m) setReplyingTo(m); }}
             >
               <Text style={{ fontSize: 20, width: 22, textAlign: 'center' }}>↩︎</Text>
               <Text style={styles.attachOptionText}>Responder</Text>
@@ -1335,12 +1376,13 @@ export default function ChatThreadScreen() {
             {!!(actionMsg?.content || '').trim() && (
               <TouchableOpacity
                 style={styles.attachOption}
-                onPress={() => { const m = actionMsg; setActionMsg(null); copyMessageText(m); }}
+                onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); copyMessageText(m); }}
               >
                 <IconSymbol ios_icon_name="doc.on.doc" android_material_icon_name="content-copy" size={22} color={nospiColors.purpleDark} />
                 <Text style={styles.attachOptionText}>Copiar</Text>
               </TouchableOpacity>
             )}
+          </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1485,9 +1527,21 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '100%', flexShrink: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
 
   // ── Reacciones con emoji ──────────────────────────────────────────────────
+  actionOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  actionAnchored: { position: 'absolute', maxWidth: 300 },
+  actionSheetCompact: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 4,
+    minWidth: 168,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+  },
   reactionBar: {
     flexDirection: 'row',
-    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 28,
     paddingHorizontal: 8,
