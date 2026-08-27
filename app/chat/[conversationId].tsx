@@ -30,13 +30,15 @@ import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import {
   useAudioRecorder,
-  useAudioRecorderState,
   useAudioPlayer,
   useAudioPlayerStatus,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
-  RecordingPresets,
+  IOSOutputFormat,
+  AudioQuality,
+  type RecordingOptions,
 } from 'expo-audio';
+import { WebVoiceRecorder } from '@/lib/voiceRecorder';
 import * as FileSystem from 'expo-file-system';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
@@ -342,6 +344,28 @@ function SwipeToReply({ children, onReply }: { children: React.ReactNode; onRepl
   );
 }
 
+// Ajustes de grabacion pensados para VOZ, no para musica: mono y 32 kbps.
+// El preset de alta calidad de la libreria graba en estereo a 128 kbps, que
+// pesa cuatro veces mas y no se oye mejor hablando.
+const VOICE_RECORDING: RecordingOptions = {
+  extension: '.m4a',
+  sampleRate: 24000,
+  numberOfChannels: 1,
+  bitRate: 32000,
+  android: { outputFormat: 'mpeg4', audioEncoder: 'aac' },
+  ios: {
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.LOW,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: { mimeType: 'audio/webm', bitsPerSecond: 32000 },
+};
+
+// Velocidades de reproduccion, como en WhatsApp.
+const PLAYBACK_RATES = [1, 1.5, 2] as const;
+
 // Formatea segundos como 0:07 / 1:23, igual que WhatsApp.
 function formatDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds || 0));
@@ -360,6 +384,9 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
   const playing = !!status?.playing;
   const pct = total > 0 ? Math.min(100, (current / total) * 100) : 0;
 
+  const [rateIndex, setRateIndex] = useState(0);
+  const rate = PLAYBACK_RATES[rateIndex];
+
   const toggle = () => {
     if (!uri) return;
     if (playing) {
@@ -370,6 +397,27 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
       player.play();
     }
   };
+
+  // La velocidad se reaplica en cada cambio y tambien al empezar a sonar: si
+  // se fija con el audio en pausa, algunos navegadores la olvidan.
+  const cycleRate = () => {
+    const next = (rateIndex + 1) % PLAYBACK_RATES.length;
+    setRateIndex(next);
+    try {
+      player.setPlaybackRate(PLAYBACK_RATES[next], 'high');
+    } catch {
+      // Si no se puede cambiar, se sigue oyendo a velocidad normal.
+    }
+  };
+
+  useEffect(() => {
+    if (!playing) return;
+    try {
+      player.setPlaybackRate(rate, 'high');
+    } catch {
+      // sin soporte de velocidad: se ignora
+    }
+  }, [playing, rate]);
 
   return (
     <View style={styles.voiceRow}>
@@ -389,9 +437,20 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
         <View style={[styles.voiceTrack, mine && styles.voiceTrackMine]}>
           <View style={[styles.voiceFill, mine && styles.voiceFillMine, { width: `${pct}%` }]} />
         </View>
-        <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]}>
-          {formatDuration(playing || current > 0 ? current : total)}
-        </Text>
+        <View style={styles.voiceFooter}>
+          <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]}>
+            {formatDuration(playing || current > 0 ? current : total)}
+          </Text>
+          <TouchableOpacity
+            onPress={cycleRate}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.voiceRate, mine && styles.voiceRateMine, rate === 1 && styles.voiceRateOff]}
+          >
+            <Text style={[styles.voiceRateText, mine && styles.voiceRateTextMine]}>
+              {rate === 1 ? '1x' : `${rate}x`}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -929,62 +988,130 @@ export default function ChatThreadScreen() {
   // ── Notas de voz ───────────────────────────────────────────────────────
   // Se toca el microfono para empezar y se toca enviar para mandarla; es mas
   // fiable que "mantener presionado" cuando el dedo se resbala o la pantalla
-  // pierde el foco, y funciona igual en web que en el telefono.
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 250);
+  // pierde el foco.
+  //
+  // En WEB se usa una grabadora propia (lib/voiceRecorder): la de expo-audio
+  // perdia el audio a veces y subia archivos vacios. En el TELEFONO se sigue
+  // usando expo-audio, que graba a archivo y no tiene ese problema.
+  const isWeb = Platform.OS === 'web';
+  const recorder = useAudioRecorder(VOICE_RECORDING);
+  const webRecorderRef = useRef<WebVoiceRecorder | null>(null);
   const [recording, setRecording] = useState(false);
   const [sendingVoice, setSendingVoice] = useState(false);
+  const [recordingMs, setRecordingMs] = useState(0);
+
+  // Cronometro de la grabacion, igual en las dos plataformas.
+  useEffect(() => {
+    if (!recording) return;
+    const started = Date.now();
+    setRecordingMs(0);
+    const id = setInterval(() => setRecordingMs(Date.now() - started), 200);
+    return () => clearInterval(id);
+  }, [recording]);
+
+  // Si se sale del chat en plena grabacion, hay que soltar el microfono.
+  useEffect(() => {
+    return () => {
+      webRecorderRef.current?.cancel();
+      webRecorderRef.current = null;
+    };
+  }, []);
+
+  const avisar = (msg: string) => {
+    if (Platform.OS === 'web') window.alert(msg);
+    else Alert.alert('Nota de voz', msg);
+  };
 
   const startRecording = async () => {
     if (recording || sendingVoice) return;
     const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) {
-      const msg = Platform.OS === 'ios'
-        ? 'Debes permitir el acceso al micrófono. Actívalo en Ajustes → Nospi → Micrófono.'
-        : 'Debes permitir el acceso al micrófono para grabar notas de voz.';
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Micrófono', msg);
+      avisar(
+        Platform.OS === 'ios'
+          ? 'Debes permitir el acceso al micrófono. Actívalo en Ajustes → Nospi → Micrófono.'
+          : 'Debes permitir el acceso al micrófono para grabar notas de voz.'
+      );
       return;
     }
     try {
-      // En iOS hay que habilitar la grabacion explicitamente, si no el audio
-      // sale en silencio o directamente falla.
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
+      if (isWeb) {
+        const rec = new WebVoiceRecorder();
+        await rec.start();
+        webRecorderRef.current = rec;
+      } else {
+        // En iOS hay que habilitar la grabacion explicitamente, si no el audio
+        // sale en silencio o directamente falla.
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+      }
       setRecording(true);
     } catch (e) {
       console.error('startRecording error:', e);
-      const msg = 'No se pudo iniciar la grabación.';
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Micrófono', msg);
+      avisar('No se pudo iniciar la grabación.');
     }
   };
 
   const cancelRecording = async () => {
     if (!recording) return;
     setRecording(false);
+    if (isWeb) {
+      webRecorderRef.current?.cancel();
+      webRecorderRef.current = null;
+      return;
+    }
     try { await recorder.stop(); } catch { /* nada que guardar */ }
     setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
   };
 
   const sendRecording = async () => {
     if (!recording || sendingVoice || !user?.id || !conversationId) return;
-    const statusNow = recorder.getStatus();
-    const seconds = (statusNow?.durationMillis || recorderState.durationMillis || 0) / 1000;
     setRecording(false);
     setSendingVoice(true);
     try {
-      await recorder.stop();
-      const uri = recorder.uri;
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-      if (!uri) throw new Error('La grabación quedó vacía.');
+      let seconds = 0;
+      let mime = '';
+      let ext = '';
+      let payload: Blob | { uri: string } | null = null;
+
+      if (isWeb) {
+        const rec = webRecorderRef.current;
+        webRecorderRef.current = null;
+        const result = rec ? await rec.stop() : null;
+        if (!result) { avisar('La grabación quedó vacía. Vuelve a intentarlo.'); return; }
+        seconds = result.durationSeconds;
+        mime = result.mime;
+        ext = result.extension;
+        payload = result.blob;
+      } else {
+        const statusNow = recorder.getStatus();
+        seconds = (statusNow?.durationMillis || recordingMs) / 1000;
+        await recorder.stop();
+        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+        if (!recorder.uri) { avisar('La grabación quedó vacía. Vuelve a intentarlo.'); return; }
+        mime = 'audio/m4a';
+        ext = 'm4a';
+        payload = { uri: recorder.uri };
+      }
+
       if (seconds < 0.7) return; // toque accidental: no se manda nada
 
-      const ext = Platform.OS === 'web' ? 'webm' : 'm4a';
-      const mime = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
       const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-      // Se reutiliza la subida de fotos/videos: solo necesita {uri}.
-      await uploadToBucket({ uri } as ImagePicker.ImagePickerAsset, path, mime);
+      if (payload instanceof Blob) {
+        // Red de seguridad: antes se subieron notas de 5 bytes que aparecian en
+        // el chat pero no sonaban. Mejor avisar que mandar algo mudo.
+        if (payload.size < 1024) {
+          avisar('La grabación no se guardó bien. Vuelve a intentarlo.');
+          return;
+        }
+        const { error: upError } = await supabase.storage
+          .from(MEDIA_BUCKET)
+          .upload(path, payload, { contentType: mime, cacheControl: '3600', upsert: false });
+        if (upError) throw new Error(upError.message);
+      } else {
+        await uploadToBucket(payload as ImagePicker.ImagePickerAsset, path, mime);
+      }
 
       const replyId = replyingTo?.id ?? null;
       const { data, error } = await supabase
@@ -1010,8 +1137,7 @@ export default function ChatThreadScreen() {
       }
     } catch (e: any) {
       console.error('sendRecording error:', e);
-      const msg = 'No se pudo enviar la nota de voz. ' + (e?.message || '');
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Nota de voz', msg);
+      avisar('No se pudo enviar la nota de voz. ' + (e?.message || ''));
     } finally {
       setSendingVoice(false);
     }
@@ -1727,7 +1853,7 @@ export default function ChatThreadScreen() {
             <View style={styles.recordingBox}>
               <View style={styles.recordingDot} />
               <Text style={styles.recordingTime}>
-                {formatDuration((recorderState.durationMillis || 0) / 1000)}
+                {formatDuration(recordingMs / 1000)}
               </Text>
               <Text style={styles.recordingHint}>Grabando… toca ➤ para enviar</Text>
             </View>
@@ -2114,7 +2240,16 @@ const styles = StyleSheet.create({
   voiceTrackMine: { backgroundColor: 'rgba(255,255,255,0.3)' },
   voiceFill: { height: 4, backgroundColor: nospiColors.purpleDark },
   voiceFillMine: { backgroundColor: '#FFFFFF' },
-  voiceTime: { fontSize: 11, color: '#6b5560', marginTop: 4 },
+  voiceFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  voiceTime: { fontSize: 11, color: '#6b5560' },
+  voiceRate: {
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9,
+    backgroundColor: 'rgba(136,14,79,0.12)',
+  },
+  voiceRateMine: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  voiceRateOff: { opacity: 0.55 },
+  voiceRateText: { fontSize: 10.5, fontWeight: '700', color: nospiColors.purpleDark },
+  voiceRateTextMine: { color: '#FFFFFF' },
   voiceTimeMine: { color: 'rgba(255,255,255,0.75)' },
 
   // Barra que sustituye a la caja de texto mientras se graba.
