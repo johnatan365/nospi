@@ -1544,6 +1544,35 @@ const handleLogin = async () => {
     }
   };
 
+  // Al entrar a "En vivo" (pestana Abiertos), preseleccionar automaticamente el
+  // evento abierto MAS PROXIMO, para no tener que elegirlo a mano cada vez.
+  // Prioriza los de hoy en adelante (el mas cercano primero); si no hay ninguno
+  // futuro, cae al mas reciente. No pisa una seleccion que ya hayas hecho.
+  useEffect(() => {
+    if (currentView !== 'realtime') return;
+    if (realtimeEventTab !== 'abiertos') return;
+    if (selectedEventForMonitoring) return;
+    if (!events || events.length === 0) return;
+
+    const abiertos = events.filter(e => e.event_status !== 'closed' && e.date);
+    if (abiertos.length === 0) return;
+
+    const ahora = Date.now();
+    // Copias antes de ordenar: .sort() muta el array y no queremos alterar
+    // el orden del listado de eventos que usa el resto del admin.
+    const futuros = [...abiertos]
+      .filter(e => new Date(e.date).getTime() >= ahora - 12 * 60 * 60 * 1000)
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const pasados = [...abiertos]
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const elegido = futuros[0] || pasados[0];
+    if (elegido) {
+      setSelectedEventForMonitoring(elegido.id);
+      loadEventParticipants(elegido.id);
+    }
+  }, [currentView, realtimeEventTab, events, selectedEventForMonitoring]);
+
   // Recarga TODO el admin sin tener que cerrar y volver a abrir la app
   // (necesario cuando esta instalada en el celular desde Safari). Ademas de
   // los datos del dashboard, refresca la vista que este abierta.
