@@ -53,7 +53,13 @@ export class WebVoiceRecorder {
     return this.recorder?.state === 'recording';
   }
 
-  /** Pide el microfono y empieza. Lanza si no hay permiso. */
+  /**
+   * Pide el microfono y empieza.
+   * OJO: esta es la UNICA peticion de microfono en web. Antes se pedia tambien
+   * por fuera (para el permiso) y quedaban DOS capturas abiertas; iOS solo
+   * permite una activa, asi que la segunda grababa en silencio.
+   * Lanza 'denied' si la persona no da permiso.
+   */
   async start(): Promise<void> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('Este navegador no permite grabar audio.');
@@ -62,14 +68,14 @@ export class WebVoiceRecorder {
       throw new Error('Este navegador no permite grabar audio.');
     }
 
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        // Limpian la voz y de paso reducen el tamano del archivo.
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
+    try {
+      this.stream = await this.askForMic();
+    } catch (e: any) {
+      if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') {
+        throw new Error('denied');
+      }
+      throw e;
+    }
 
     this.mimeType = pickMimeType();
     this.chunks = [];
@@ -83,8 +89,21 @@ export class WebVoiceRecorder {
       if (e.data && e.data.size > 0) this.chunks.push(e.data);
     };
 
-    this.recorder.start();
+    // El timeslice es CLAVE en Safari de iPhone: sin el, a veces entrega un
+    // blob vacio al detener. Pidiendo un trozo por segundo, siempre hay datos.
+    this.recorder.start(1000);
     this.startedAt = Date.now();
+  }
+
+  private askForMic(): Promise<MediaStream> {
+    return navigator.mediaDevices.getUserMedia({
+      audio: {
+        // Limpian la voz y de paso reducen el tamano del archivo.
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
   }
 
   /** Milisegundos grabados hasta ahora. */
@@ -106,6 +125,8 @@ export class WebVoiceRecorder {
     await new Promise<void>((resolve) => {
       rec.onstop = () => resolve();
       try {
+        // Fuerza la entrega del ultimo trozo pendiente antes de cerrar.
+        if (rec.state === 'recording') rec.requestData();
         rec.stop();
       } catch {
         resolve();

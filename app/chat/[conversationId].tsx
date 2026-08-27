@@ -1024,21 +1024,24 @@ export default function ChatThreadScreen() {
 
   const startRecording = async () => {
     if (recording || sendingVoice) return;
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      avisar(
-        Platform.OS === 'ios'
-          ? 'Debes permitir el acceso al micrófono. Actívalo en Ajustes → Nospi → Micrófono.'
-          : 'Debes permitir el acceso al micrófono para grabar notas de voz.'
-      );
-      return;
-    }
     try {
       if (isWeb) {
+        // En web NO se pide el permiso por separado: la propia grabadora abre
+        // el microfono. Pedirlo aparte dejaba DOS capturas abiertas y en el
+        // iPhone, que solo admite una, la grabacion salia muda.
         const rec = new WebVoiceRecorder();
         await rec.start();
         webRecorderRef.current = rec;
       } else {
+        const perm = await requestRecordingPermissionsAsync();
+        if (!perm.granted) {
+          avisar(
+            Platform.OS === 'ios'
+              ? 'Debes permitir el acceso al micrófono. Actívalo en Ajustes → Nospi → Micrófono.'
+              : 'Debes permitir el acceso al micrófono para grabar notas de voz.'
+          );
+          return;
+        }
         // En iOS hay que habilitar la grabacion explicitamente, si no el audio
         // sale en silencio o directamente falla.
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -1046,9 +1049,14 @@ export default function ChatThreadScreen() {
         recorder.record();
       }
       setRecording(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error('startRecording error:', e);
-      avisar('No se pudo iniciar la grabación.');
+      webRecorderRef.current = null;
+      avisar(
+        e?.message === 'denied'
+          ? 'Debes permitir el acceso al micrófono. En Safari toca "aA" en la barra de direcciones → Ajustes del sitio web → Micrófono → Permitir.'
+          : 'No se pudo iniciar la grabación.'
+      );
     }
   };
 
