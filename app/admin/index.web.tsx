@@ -846,6 +846,13 @@ export default function AdminPanelScreen() {
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
 
+  // Refresco manual del admin: al estar instalado como app desde Safari no hay
+  // barra del navegador ni boton de recargar, asi que hace falta uno propio.
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
+
+  const [realtimeEventTab, setRealtimeEventTab] = useState<'abiertos' | 'cerrados'>('abiertos');
+
   // Participantes por evento
   const [selectedParticipantEventId, setSelectedParticipantEventId] = useState<string>('');
   const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
@@ -1534,6 +1541,24 @@ const handleLogin = async () => {
       window.alert('Error inesperado al cargar datos: ' + String(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Recarga TODO el admin sin tener que cerrar y volver a abrir la app
+  // (necesario cuando esta instalada en el celular desde Safari). Ademas de
+  // los datos del dashboard, refresca la vista que este abierta.
+  const handleRefreshAll = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadDashboardData();
+      if (currentView === 'questions') { try { await loadQuestions(); } catch (_e) {} }
+      if (selectedEventForMonitoring) { try { await loadEventParticipants(selectedEventForMonitoring); } catch (_e) {} }
+      setLastRefreshAt(new Date());
+    } catch (e) {
+      console.error('handleRefreshAll error:', e);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -6000,6 +6025,33 @@ setBulkWhatsAppPending(pending);
         </View>
 
         <View style={styles.eventSelector}>
+          {/* Pestanas: eventos abiertos (publicados/borrador) vs cerrados, para
+              poder consultar quien confirmo asistencia en eventos ya pasados. */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            {([
+              { key: 'abiertos' as const, label: '🟢 Abiertos', count: events.filter(e => e.event_status !== 'closed').length },
+              { key: 'cerrados' as const, label: '🔒 Cerrados', count: events.filter(e => e.event_status === 'closed').length },
+            ]).map(tab => {
+              const active = realtimeEventTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  onPress={() => { setRealtimeEventTab(tab.key); setSelectedEventForMonitoring(null); }}
+                  style={{
+                    flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
+                    backgroundColor: active ? '#AD1457' : '#F3F4F6',
+                    borderWidth: 1, borderColor: active ? '#AD1457' : '#E5E7EB',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#FFFFFF' : '#6B7280' }}>
+                    {tab.label} ({tab.count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <Text style={styles.inputLabel}>Seleccionar Evento:</Text>
           <select
             style={{
@@ -6022,11 +6074,19 @@ setBulkWhatsAppPending(pending);
             }}
           >
             <option value="">-- Selecciona un evento --</option>
-            {events.filter(e => e.event_status === 'published').map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name || `${event.type} - ${event.city}`} - {event.date}
-              </option>
-            ))}
+            {events
+              .filter(e => realtimeEventTab === 'abiertos'
+                ? e.event_status !== 'closed'
+                : e.event_status === 'closed')
+              // Cerrados: el mas reciente primero (los de hoy/ayer arriba).
+              .sort((a: any, b: any) => realtimeEventTab === 'cerrados'
+                ? new Date(b.date).getTime() - new Date(a.date).getTime()
+                : new Date(a.date).getTime() - new Date(b.date).getTime())
+              .map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name || `${event.type} - ${event.city}`} - {event.date}
+                </option>
+              ))}
           </select>
         </View>
 
@@ -6422,6 +6482,23 @@ setBulkWhatsAppPending(pending);
             </button>
           ))}
         </div>
+        <button
+          onClick={handleRefreshAll}
+          disabled={refreshing}
+          style={{
+            margin: '0 12px 8px', padding: '10px 14px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.10)', border: 'none', color: '#fff',
+            fontSize: 13, fontWeight: 600, cursor: refreshing ? 'default' : 'pointer',
+            textAlign: 'left', opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? '⏳ Actualizando...' : '🔄 Actualizar datos'}
+        </button>
+        {lastRefreshAt && !refreshing && (
+          <div style={{ margin: '0 12px 8px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+            Actualizado {lastRefreshAt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        )}
                 <button
           onClick={handleLogout}
           style={{
@@ -6442,7 +6519,18 @@ setBulkWhatsAppPending(pending);
             {sidebarOpen ? '✕' : '☰'}
           </button>
           <span className="nospi-mobile-title">NOSPI Admin</span>
-          <div style={{ width: 40 }} />
+          <button
+            onClick={handleRefreshAll}
+            disabled={refreshing}
+            title={lastRefreshAt ? `Ultima actualizacion: ${lastRefreshAt.toLocaleTimeString('es-CO')}` : 'Actualizar datos'}
+            style={{
+              width: 40, height: 40, borderRadius: 10, border: 'none',
+              background: 'transparent', color: '#fff', fontSize: 20,
+              cursor: refreshing ? 'default' : 'pointer', opacity: refreshing ? 0.5 : 1,
+            }}
+          >
+            {refreshing ? '⏳' : '🔄'}
+          </button>
         </div>
         <div className="nospi-content">
           <div className="nospi-content-inner">
@@ -6499,7 +6587,12 @@ setBulkWhatsAppPending(pending);
                     }}
                   >
                     <Text style={styles.configActionButtonText}>
-                      👥 Ver Asistentes ({appointments.filter(a => a.event_id === selectedEventForConfig.id).length})
+                      {/* Asistentes REALES (confirmadas + las que ya asistieron),
+                          sin contar las canceladas; los cancelados van aparte. */}
+                      👥 Ver Asistentes ({appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status !== 'cancelada').length})
+                      {appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length > 0
+                        ? ` · ${appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length} cancelada${appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length === 1 ? '' : 's'}`
+                        : ''}
                     </Text>
                   </TouchableOpacity>
 
