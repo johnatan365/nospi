@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -216,6 +218,59 @@ function renderMessageContent(text: string, mine: boolean) {
   });
 }
 
+// Envuelve cada mensaje para permitir DESLIZAR hacia la derecha y responder,
+// igual que WhatsApp. Al arrastrar aparece una flecha ↩︎ y, si se pasa del
+// umbral, se activa el responder al soltar. En web el arrastre con mouse es
+// incomodo, asi que alli la via principal sigue siendo mantener presionado.
+function SwipeToReply({ children, onReply }: { children: React.ReactNode; onReply: () => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const activated = useRef(false);
+  const THRESHOLD = 55;
+  const MAX = 80;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Solo capturamos gestos claramente horizontales hacia la derecha, para
+      // no robarle el scroll vertical a la lista de mensajes.
+      onMoveShouldSetPanResponder: (_e, g) =>
+        g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.8,
+      onPanResponderMove: (_e, g) => {
+        if (g.dx < 0) return;
+        translateX.setValue(Math.min(g.dx, MAX));
+        activated.current = g.dx >= THRESHOLD;
+      },
+      onPanResponderRelease: () => {
+        const fire = activated.current;
+        activated.current = false;
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+        if (fire) onReply();
+      },
+      onPanResponderTerminate: () => {
+        activated.current = false;
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ position: 'relative', justifyContent: 'center' }}>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', left: 10, opacity: translateX.interpolate({
+            inputRange: [0, THRESHOLD], outputRange: [0, 1], extrapolate: 'clamp',
+          }),
+        }}
+      >
+        <Text style={{ fontSize: 18 }}>↩︎</Text>
+      </Animated.View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function ChatThreadScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const { user } = useSupabase();
@@ -229,6 +284,30 @@ export default function ChatThreadScreen() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+  // Menu de acciones al mantener presionado un mensaje (Responder / Copiar).
+  // Antes "responder" solo existia como gesto oculto de mantener presionado,
+  // asi que mucha gente no sabia que se podia.
+  const [actionMsg, setActionMsg] = useState<Message | null>(null);
+
+  const copyMessageText = useCallback(async (m: Message | null) => {
+    const txt = (m?.content || '').trim();
+    if (!txt) return;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(txt);
+        }
+      } else {
+        // Clipboard nativo de React Native (no requiere instalar dependencias
+        // nuevas ni recompilar con un modulo adicional).
+        const { Clipboard } = require('react-native');
+        Clipboard.setString(txt);
+      }
+    } catch (e) {
+      console.error('copyMessageText error:', e);
+    }
+  }, []);
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
@@ -863,9 +942,10 @@ export default function ChatThreadScreen() {
                     <Text style={{ fontSize: 14 }}>📣</Text>
                   </View>
                 )}
+                <SwipeToReply onReply={() => setReplyingTo(item)}>
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  onLongPress={() => setReplyingTo(item)}
+                  onLongPress={() => setActionMsg(item)}
                   delayLongPress={250}
                   style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
                 >
@@ -958,6 +1038,7 @@ export default function ChatThreadScreen() {
                     {formatBogotaTime(new Date(item.created_at))}
                   </Text>
                 </TouchableOpacity>
+                </SwipeToReply>
               </View>
             );
           }}
@@ -1122,6 +1203,31 @@ export default function ChatThreadScreen() {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* Acciones al mantener presionado un mensaje. Sin boton Cancelar: se
+          cierra tocando fuera del menu. */}
+      <Modal visible={!!actionMsg} animationType="fade" transparent onRequestClose={() => setActionMsg(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setActionMsg(null)}>
+          <View style={styles.attachSheet}>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => { const m = actionMsg; setActionMsg(null); if (m) setReplyingTo(m); }}
+            >
+              <Text style={{ fontSize: 20, width: 22, textAlign: 'center' }}>↩︎</Text>
+              <Text style={styles.attachOptionText}>Responder</Text>
+            </TouchableOpacity>
+            {!!(actionMsg?.content || '').trim() && (
+              <TouchableOpacity
+                style={styles.attachOption}
+                onPress={() => { const m = actionMsg; setActionMsg(null); copyMessageText(m); }}
+              >
+                <IconSymbol ios_icon_name="doc.on.doc" android_material_icon_name="content-copy" size={22} color={nospiColors.purpleDark} />
+                <Text style={styles.attachOptionText}>Copiar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={!!mediaActions} animationType="fade" transparent onRequestClose={() => setMediaActions(null)}>
