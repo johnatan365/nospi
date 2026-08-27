@@ -680,7 +680,18 @@ export default function ChatThreadScreen() {
 
     if (error) {
       console.error('ChatThread: error starting direct chat', error);
-      Alert.alert('No se pudo abrir el chat', 'Intenta de nuevo en unos segundos.');
+      // El chat privado exige que ambos hayan confirmado su llegada a un mismo
+      // evento. Ese caso NO se resuelve reintentando, asi que se explica aparte
+      // en vez de mostrar el mensaje generico de "intenta de nuevo".
+      const msg = String(error.message || '');
+      if (msg.includes('asistieron contigo') || (error as any).code === '42501') {
+        Alert.alert(
+          'Chat no disponible',
+          'Solo puedes escribirle por privado a personas que asistieron contigo a un evento.'
+        );
+      } else {
+        Alert.alert('No se pudo abrir el chat', 'Intenta de nuevo en unos segundos.');
+      }
       return;
     }
 
