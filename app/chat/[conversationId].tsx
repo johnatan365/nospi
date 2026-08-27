@@ -968,7 +968,8 @@ export default function ChatThreadScreen() {
 
   const sendRecording = async () => {
     if (!recording || sendingVoice || !user?.id || !conversationId) return;
-    const seconds = recorderState.durationMillis ? recorderState.durationMillis / 1000 : 0;
+    const statusNow = recorder.getStatus();
+    const seconds = (statusNow?.durationMillis || recorderState.durationMillis || 0) / 1000;
     setRecording(false);
     setSendingVoice(true);
     try {
