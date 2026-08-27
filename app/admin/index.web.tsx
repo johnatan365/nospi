@@ -4224,9 +4224,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
-  // Render de la sub-pestana "Matches": correspondidos (con su chat) y las
+  // Render de la sub-pestana "Matches" de Comunicacion: correspondidos y las
   // selecciones que NO fueron correspondidas. Info confidencial, solo lectura.
-  const renderMatches = () => {
+  // (Nombre distinto de renderMatches, que es la vista antigua por evento.)
+  const renderMatchesOverview = () => {
     const totalSelecciones = unmatched.length + allMatches.length * 2;
     const tasa = totalSelecciones > 0 ? Math.round((allMatches.length * 2 / totalSelecciones) * 100) : 0;
     return (
@@ -4831,7 +4832,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       {moderationTab === 'grupos' ? (
         <ScrollView style={{ flex: 1 }}>{renderGroupChats()}</ScrollView>
       ) : moderationTab === 'matches' ? (
-        <ScrollView style={{ flex: 1 }}>{renderMatches()}</ScrollView>
+        <ScrollView style={{ flex: 1 }}>{renderMatchesOverview()}</ScrollView>
       ) : moderationTab === 'feedback' ? (
         <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
       ) : (
