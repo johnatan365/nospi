@@ -881,7 +881,30 @@ export default function AdminPanelScreen() {
   const [eventChatSending, setEventChatSending] = useState(false);
 
   // ── Moderación: visor global de chats privados y matches (solo admin)
-  const [moderationTab, setModerationTab] = useState<'chats' | 'matches'>('chats');
+  const [moderationTab, setModerationTab] = useState<'chats' | 'matches' | 'feedback'>('chats');
+
+  // Evaluaciones de fin de dinamica (event_feedback): que opino la gente del
+  // evento y de la app. Antes no se veian en ninguna parte del admin.
+  const [feedbackRows, setFeedbackRows] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackEventFilter, setFeedbackEventFilter] = useState<string>('all');
+
+  const loadFeedback = async () => {
+    setFeedbackLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_event_feedback_report');
+      if (error) {
+        console.error('Error cargando evaluaciones:', error);
+        window.alert('No se pudieron cargar las evaluaciones: ' + error.message);
+      } else {
+        setFeedbackRows(data || []);
+      }
+    } catch (e: any) {
+      console.error('loadFeedback error:', e);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
   const [allDirectConvos, setAllDirectConvos] = useState<AdminDirectConversation[]>([]);
   const [allDirectConvosLoading, setAllDirectConvosLoading] = useState(false);
   const [allMatches, setAllMatches] = useState<AdminMatch[]>([]);
@@ -4112,6 +4135,255 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  // Render de la sub-pestana "Evaluaciones": promedios, comparativa por evento,
+  // motivos de baja calificacion y detalle por persona (segun el filtro).
+  const renderFeedback = () => {
+    const filtered = feedbackEventFilter === 'all'
+      ? feedbackRows
+      : feedbackRows.filter(r => r.event_id === feedbackEventFilter);
+
+    const avg = (key: string) => {
+      const vals = filtered.map(r => r[key]).filter((v: any) => typeof v === 'number');
+      if (vals.length === 0) return null;
+      return vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
+    };
+    const volverias = filtered.filter(r => r.volveria);
+    const pctSi = volverias.length > 0
+      ? Math.round((volverias.filter(r => r.volveria === 'si').length / volverias.length) * 100)
+      : null;
+
+    // Eventos disponibles en el filtro (con su numero de evaluaciones)
+    const eventos: { id: string; name: string; date: string; count: number }[] = [];
+    for (const r of feedbackRows) {
+      const found = eventos.find(e => e.id === r.event_id);
+      if (found) found.count++;
+      else eventos.push({ id: r.event_id, name: r.event_name, date: r.event_date, count: 1 });
+    }
+
+    // Motivos de baja calificacion, contados (todas las categorias)
+    const motivoCount: Record<string, number> = {};
+    for (const r of filtered) {
+      for (const campo of ['motivos_dinamica', 'motivos_lugar', 'motivos_comida', 'motivos_grupo']) {
+        for (const m of (r[campo] || [])) {
+          if (!m) continue;
+          motivoCount[m] = (motivoCount[m] || 0) + 1;
+        }
+      }
+    }
+    const motivos = Object.entries(motivoCount).sort((a, b) => b[1] - a[1]);
+
+    const color = (v: number | null) => v === null ? '#9CA3AF' : v >= 2.5 ? '#15803d' : v >= 2 ? '#b45309' : '#b91c1c';
+    const fmt = (v: number | null) => v === null ? '—' : v.toFixed(2);
+
+    const kpis = [
+      { label: 'Volvería a usar Nospi', value: pctSi === null ? '—' : `${pctSi}%`, pct: pctSi ?? 0, col: pctSi !== null && pctSi >= 70 ? '#15803d' : '#b45309' },
+      { label: 'Lugar', value: fmt(avg('lugar')), pct: ((avg('lugar') ?? 0) / 3) * 100, col: color(avg('lugar')) },
+      { label: 'Grupo', value: fmt(avg('grupo')), pct: ((avg('grupo') ?? 0) / 3) * 100, col: color(avg('grupo')) },
+      { label: 'Comida', value: fmt(avg('comida')), pct: ((avg('comida') ?? 0) / 3) * 100, col: color(avg('comida')) },
+      { label: 'Dinámica', value: fmt(avg('dinamica')), pct: ((avg('dinamica') ?? 0) / 3) * 100, col: color(avg('dinamica')) },
+    ];
+
+    const exportFeedbackExcel = () => {
+      const rows = filtered.map(r => ({
+        Evento: r.event_name,
+        Fecha: r.event_date ? new Date(r.event_date).toLocaleDateString('es-CO') : '',
+        Persona: r.user_name,
+        Correo: r.user_email,
+        Dinamica: r.dinamica ?? '',
+        Lugar: r.lugar ?? '',
+        Comida: r.comida ?? '',
+        Grupo: r.grupo ?? '',
+        Volveria: r.volveria === 'si' ? 'Sí' : r.volveria === 'no' ? 'No' : '',
+        'Motivos dinámica': (r.motivos_dinamica || []).join(', '),
+        'Motivos lugar': (r.motivos_lugar || []).join(', '),
+        'Motivos comida': (r.motivos_comida || []).join(', '),
+        'Motivos grupo': (r.motivos_grupo || []).join(', '),
+        'Comentario dinámica': r.comentario_dinamica || '',
+        'Comentario general': r.comentario_general || '',
+      }));
+      if (rows.length === 0) { window.alert('No hay evaluaciones para exportar'); return; }
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
+      XLSX.writeFile(wb, `evaluaciones_nospi_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
+    return (
+      <View style={{ padding: 4 }}>
+        {/* Filtro por evento + exportar */}
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#6b7280' }}>Evento:</Text>
+          <select
+            style={{
+              flex: 1, minWidth: 230, backgroundColor: '#F5F5F5', border: '1px solid #E0E0E0',
+              borderRadius: 10, padding: '9px 12px', fontSize: 13.5, fontWeight: 700,
+            }}
+            value={feedbackEventFilter}
+            onChange={(e) => setFeedbackEventFilter(e.target.value)}
+          >
+            <option value="all">📊 Todos los eventos — {feedbackRows.length} evaluaciones</option>
+            {eventos.map(ev => (
+              <option key={ev.id} value={ev.id}>{ev.name} — {ev.count} evaluacion{ev.count === 1 ? '' : 'es'}</option>
+            ))}
+          </select>
+          <TouchableOpacity
+            onPress={exportFeedbackExcel}
+            style={{ backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+          >
+            <Text style={{ color: '#166534', fontSize: 12.5, fontWeight: '700' }}>📥 Excel</Text>
+          </TouchableOpacity>
+        </View>
+
+        {feedbackLoading ? (
+          <Text style={{ color: '#6b7280', fontSize: 13, padding: 20 }}>Cargando evaluaciones…</Text>
+        ) : feedbackRows.length === 0 ? (
+          <Text style={{ color: '#6b7280', fontSize: 13, padding: 20 }}>
+            Todavía no hay evaluaciones. Aparecen cuando la gente completa la encuesta al final de la dinámica.
+          </Text>
+        ) : (
+          <>
+            {/* Indicadores */}
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+              {kpis.map(k => (
+                <View key={k.label} style={{ flex: 1, minWidth: 120, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 11, backgroundColor: '#FAFAFA' }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: k.col, textAlign: 'center' }}>{k.value}</Text>
+                  <Text style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginTop: 3 }}>{k.label}</Text>
+                  <View style={{ height: 5, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 7, overflow: 'hidden' }}>
+                    <View style={{ width: `${Math.max(0, Math.min(100, k.pct))}%`, height: '100%', backgroundColor: k.col }} />
+                  </View>
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontSize: 11.5, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
+              {filtered.length} evaluacion{filtered.length === 1 ? '' : 'es'} · escala de 1 a 3
+            </Text>
+
+            {/* Comparativa por evento (solo en "Todos") */}
+            {feedbackEventFilter === 'all' && (
+              <>
+                <Text style={styles.sectionSubtitle}>COMPARATIVA POR EVENTO</Text>
+                <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 620 }}>
+                    <thead>
+                      <tr>
+                        {['Evento', 'Personas', 'Dinámica', 'Lugar', 'Comida', 'Grupo', 'Volvería'].map(h => (
+                          <th key={h} style={{ textAlign: h === 'Evento' ? 'left' : 'center', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eventos.map(ev => {
+                        const rs = feedbackRows.filter(r => r.event_id === ev.id);
+                        const a = (k: string) => {
+                          const v = rs.map(r => r[k]).filter((x: any) => typeof x === 'number');
+                          return v.length ? v.reduce((p: number, c: number) => p + c, 0) / v.length : null;
+                        };
+                        const vs = rs.filter(r => r.volveria);
+                        const pct = vs.length ? Math.round((vs.filter(r => r.volveria === 'si').length / vs.length) * 100) : null;
+                        return (
+                          <tr key={ev.id} style={{ cursor: 'pointer' }} onClick={() => setFeedbackEventFilter(ev.id)}>
+                            <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontWeight: 700 }}>{ev.name}</td>
+                            <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700 }}>{rs.length}</td>
+                            {['dinamica', 'lugar', 'comida', 'grupo'].map(k => (
+                              <td key={k} style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: color(a(k)) }}>{fmt(a(k))}</td>
+                            ))}
+                            <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: pct !== null && pct >= 70 ? '#15803d' : '#b45309' }}>{pct === null ? '—' : `${pct}%`}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {/* Motivos de baja calificacion */}
+            {motivos.length > 0 && (
+              <>
+                <Text style={styles.sectionSubtitle}>MOTIVOS DE BAJA CALIFICACIÓN</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {motivos.map(([m, c]) => (
+                    <View key={m} style={{ backgroundColor: '#FEE2E2', borderRadius: 20, paddingVertical: 3, paddingHorizontal: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#b91c1c' }}>{m} · {c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* Detalle por persona */}
+            <Text style={styles.sectionSubtitle}>QUIÉN OPINÓ QUÉ · {filtered.length} PERSONA{filtered.length === 1 ? '' : 'S'}</Text>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
+                <thead>
+                  <tr>
+                    {['Persona', 'Dinámica', 'Lugar', 'Comida', 'Grupo', 'Volvería', 'Motivos y comentarios'].map(h => (
+                      <th key={h} style={{ textAlign: ['Persona', 'Motivos y comentarios'].includes(h) ? 'left' : 'center', padding: '9px 10px', borderBottom: '1px solid #E5E7EB', fontSize: 11, textTransform: 'uppercase', color: '#6b7280', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r, i) => {
+                    const sc = (v: number | null) => v === null ? '#9CA3AF' : v === 3 ? '#15803d' : v === 2 ? '#b45309' : '#b91c1c';
+                    const todosMotivos = [
+                      ...(r.motivos_dinamica || []).map((m: string) => ({ m, cat: 'Dinámica' })),
+                      ...(r.motivos_lugar || []).map((m: string) => ({ m, cat: 'Lugar' })),
+                      ...(r.motivos_comida || []).map((m: string) => ({ m, cat: 'Comida' })),
+                      ...(r.motivos_grupo || []).map((m: string) => ({ m, cat: 'Grupo' })),
+                    ].filter(x => x.m);
+                    const sinNada = todosMotivos.length === 0 && !r.comentario_dinamica && !r.comentario_general && !r.volveria_motivo;
+                    return (
+                      <tr key={`${r.event_id}-${r.user_id}-${i}`}>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', verticalAlign: 'top' }}>
+                          <Text style={{ fontWeight: '700', fontSize: 13 }}>{r.user_name}</Text>
+                          {feedbackEventFilter === 'all' && (
+                            <Text style={{ fontSize: 11, color: '#6b7280' }}>{r.event_name}</Text>
+                          )}
+                        </td>
+                        {[r.dinamica, r.lugar, r.comida, r.grupo].map((v, idx) => (
+                          <td key={idx} style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 700, color: sc(v), verticalAlign: 'top' }}>{v ?? '—'}</td>
+                        ))}
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', textAlign: 'center', verticalAlign: 'top' }}>
+                          {r.volveria ? (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20, backgroundColor: r.volveria === 'si' ? '#DCFCE7' : '#FEE2E2', color: r.volveria === 'si' ? '#15803d' : '#b91c1c' }}>
+                              {r.volveria === 'si' ? 'Sí' : 'No'}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', verticalAlign: 'top' }}>
+                          {sinNada ? <Text style={{ color: '#9CA3AF', fontSize: 12 }}>—</Text> : (
+                            <>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                                {todosMotivos.map((x, k) => (
+                                  <View key={k} style={{ backgroundColor: '#FEE2E2', borderRadius: 20, paddingVertical: 2, paddingHorizontal: 8 }}>
+                                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#b91c1c' }}>{x.cat}: {x.m}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                              {!!r.comentario_dinamica && (
+                                <Text style={{ fontSize: 12, color: '#4b5563', fontStyle: 'italic', marginTop: 4, lineHeight: 17 }}>💬 "{r.comentario_dinamica}"</Text>
+                              )}
+                              {!!r.comentario_general && (
+                                <Text style={{ fontSize: 12, color: '#4b5563', fontStyle: 'italic', marginTop: 4, lineHeight: 17 }}>💬 "{r.comentario_general}"</Text>
+                              )}
+                              {!!r.volveria_motivo && (
+                                <Text style={{ fontSize: 12, color: '#b91c1c', fontStyle: 'italic', marginTop: 4, lineHeight: 17 }}>⚠️ No volvería: "{r.volveria_motivo}"</Text>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </View>
+    );
+  };
+
   const renderModeration = () => (
     <View style={{ flex: 1 }}>
       <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginBottom: 4 }}>🛡️ Chats & Matches</Text>
@@ -4133,13 +4405,22 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'matches' ? '#fff' : '#374151' }}>💘 Matches ({allMatches.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { loadAllDirectConversations(); loadAllMatches(); }}
+          onPress={() => { setModerationTab('feedback'); setActiveModConvId(null); if (feedbackRows.length === 0) loadFeedback(); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'feedback' ? '#880E4F' : '#f1f1f4' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'feedback' ? '#fff' : '#374151' }}>⭐ Evaluaciones ({feedbackRows.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
         </TouchableOpacity>
       </View>
 
+      {moderationTab === 'feedback' ? (
+        <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
+      ) : (
       <View style={styles.eventChatBody}>
         <ScrollView style={styles.eventChatConvList}>
           {moderationTab === 'chats' ? (
@@ -4228,6 +4509,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ color: '#9ca3af', fontSize: 11, padding: 8, textAlign: 'center' }}>Modo lectura — moderación. No se envían mensajes desde aquí.</Text>
         </View>
       </View>
+      )}
     </View>
   );
 
@@ -6509,7 +6791,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'moderation') { loadAllDirectConversations(); loadAllMatches(); }
+                if (item.key === 'moderation') { loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
@@ -8516,6 +8798,14 @@ const styles = StyleSheet.create({
     maxWidth: 800,
     maxHeight: '85%',
     overflow: 'hidden',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6b7280',
+    letterSpacing: 0.5,
+    marginTop: 18,
+    marginBottom: 9,
   },
   eventChatBody: {
     flexDirection: 'row',
