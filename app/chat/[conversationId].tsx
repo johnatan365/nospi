@@ -49,7 +49,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
 const MESSAGE_COLUMNS =
-  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration';
+  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id';
 
 // Ancho maximo de una foto/video dentro de la burbuja. La altura se calcula
 // con la proporcion real del archivo para que no se vea deformado.
@@ -107,6 +107,8 @@ interface Message {
   media_height?: number | null;
   media_size?: number | null;
   media_duration?: number | null;
+  // Si viene, el mensaje es una encuesta y se dibuja como tarjeta votable.
+  poll_id?: string | null;
 }
 
 interface Participant {
@@ -116,12 +118,15 @@ interface Participant {
 }
 
 interface ConversationMeta {
-  conv_type: 'event_group' | 'direct';
+  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event';
   event_name: string | null;
   event_type: string | null;
   event_date: string | null;
   other_user_name: string | null;
   other_user_photo: string | null;
+  // Solo en canales: si la gente puede responder, y el nombre del canal.
+  replies_open?: boolean | null;
+  channel_title?: string | null;
 }
 
 function eventEmoji(eventType: string | null | undefined): string {
@@ -286,6 +291,110 @@ function SwipeToReply({ children, onReply }: { children: React.ReactNode; onRepl
   );
 }
 
+// Tarjeta de encuesta dentro del chat. Se puede responder aunque el canal este
+// en solo lectura: la unica condicion es pertenecer a la conversacion y que la
+// encuesta siga abierta. Antes de votar solo se ve la pregunta; los resultados
+// aparecen despues de responder (o si ya esta cerrada), para no sesgar el voto.
+function PollCard({ pollId }: { pollId: string }) {
+  const [data, setData] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data: r, error } = await supabase.rpc('get_poll_results', { p_poll_id: pollId });
+    if (!error && r) setData(r);
+  }, [pollId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const vote = async (optionIndex: number | null, rating: number | null) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const { data: r, error } = await supabase.rpc('vote_poll', {
+        p_poll_id: pollId,
+        p_option_index: optionIndex,
+        p_rating: rating,
+      });
+      if (error) {
+        const msg = 'No se pudo registrar tu respuesta. ' + (error.message || '');
+        if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Encuesta', msg);
+        return;
+      }
+      if (r) setData(r);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!data) {
+    return <Text style={styles.pollLoading}>Cargando encuesta…</Text>;
+  }
+
+  const isRating = data.kind === 'rating';
+  const counts: Record<string, number> = data.counts || {};
+  const total: number = data.total || 0;
+  const answered = isRating ? data.my_rating != null : data.my_option != null;
+  const showResults = answered || data.closed;
+
+  return (
+    <View style={styles.pollCard}>
+      <Text style={styles.pollQuestion}>{isRating ? '⭐' : '📊'} {data.question}</Text>
+
+      {isRating ? (
+        <View style={styles.pollStarsRow}>
+          {[1, 2, 3, 4, 5].map((star) => {
+            const on = (data.my_rating || 0) >= star;
+            return (
+              <TouchableOpacity
+                key={star}
+                onPress={() => vote(null, star)}
+                disabled={data.closed || saving}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              >
+                <Text style={[styles.pollStar, on && styles.pollStarOn, data.closed && styles.pollStarDisabled]}>
+                  {on ? '★' : '☆'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : (
+        <View>
+          {(data.options || []).map((opt: string, i: number) => {
+            const mine = data.my_option === i;
+            const n = counts[String(i)] || 0;
+            const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+            return (
+              <TouchableOpacity
+                key={i}
+                onPress={() => vote(i, null)}
+                disabled={data.closed || saving}
+                activeOpacity={0.75}
+                style={[styles.pollOption, mine && styles.pollOptionMine]}
+              >
+                {showResults && <View style={[styles.pollOptionFill, { width: `${pct}%` }]} />}
+                <Text style={[styles.pollOptionText, mine && styles.pollOptionTextMine]} numberOfLines={3}>
+                  {mine ? '● ' : '○ '}{opt}
+                </Text>
+                {showResults && <Text style={styles.pollOptionPct}>{pct}%</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={styles.pollFooter}>
+        {isRating && showResults && data.average != null
+          ? `Promedio ${Number(data.average).toFixed(1)} · `
+          : ''}
+        {total} {total === 1 ? 'respuesta' : 'respuestas'}
+        {data.anonymous ? ' · anónima' : ''}
+        {data.closed ? ' · cerrada' : answered ? ' · puedes cambiar tu respuesta' : ''}
+      </Text>
+    </View>
+  );
+}
+
 export default function ChatThreadScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const { user } = useSupabase();
@@ -398,6 +507,14 @@ export default function ChatThreadScreen() {
     return acc;
   }, {});
 
+  // El equipo de Nospi puede escribir en un canal aunque este cerrado.
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    supabase.rpc('is_admin').then(({ data }) => { if (alive) setIsAdminUser(!!data); });
+    return () => { alive = false; };
+  }, [user?.id]);
+
   const loadEverything = useCallback(async () => {
     if (!conversationId || !user?.id) return;
 
@@ -427,6 +544,8 @@ export default function ChatThreadScreen() {
         event_date: thisConv.event_date,
         other_user_name: thisConv.other_user_name,
         other_user_photo: thisConv.other_user_photo,
+        replies_open: thisConv.replies_open,
+        channel_title: thisConv.channel_title,
       });
     }
 
@@ -884,15 +1003,21 @@ export default function ChatThreadScreen() {
   };
 
   const isGroup = meta?.conv_type === 'event_group';
+  // Un canal es de difusion: escribe el equipo de Nospi y, si esta abierto,
+  // tambien responde la gente. Las encuestas se responden siempre.
+  const isChannel = meta?.conv_type === 'channel_global' || meta?.conv_type === 'channel_event';
+  const channelReadOnly = isChannel && !meta?.replies_open && !isAdminUser;
   // Para chats directos, "el otro" participante sirve de respaldo: cuando la
   // conversacion aun no tiene mensajes no aparece en get_my_conversations, asi
   // que meta llega null y el nombre/foto hay que sacarlos de los participantes
   // (get_conversation_participants si los trae, con o sin mensajes).
-  const otherParticipant = !isGroup ? participants.find((p) => p.user_id !== user?.id) : undefined;
-  const headerTitle = isGroup
+  const otherParticipant = !isGroup && !isChannel ? participants.find((p) => p.user_id !== user?.id) : undefined;
+  const headerTitle = isChannel
+    ? meta?.channel_title || 'Canal de Nospi'
+    : isGroup
     ? meta?.event_name || 'Chat del evento'
     : meta?.other_user_name || otherParticipant?.name || 'Chat';
-  const otherUserPhoto = !isGroup
+  const otherUserPhoto = !isGroup && !isChannel
     ? meta?.other_user_photo || otherParticipant?.profile_photo_url || null
     : null;
 
@@ -951,7 +1076,11 @@ export default function ChatThreadScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            {isGroup ? (
+            {isChannel ? (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={{ fontSize: 16 }}>{meta?.conv_type === 'channel_global' ? '📢' : '📣'}</Text>
+              </View>
+            ) : isGroup ? (
               <View style={styles.headerAvatarPlaceholder}>
                 <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
               </View>
@@ -995,7 +1124,7 @@ export default function ChatThreadScreen() {
             const sender = participantsById[item.sender_id];
             const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Alguien';
             const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
-            const showSenderInfo = isGroup && !isMine;
+            const showSenderInfo = (isGroup || isChannel) && !isMine;
 
             // Si este mensaje responde a otro, buscamos el original para citarlo.
             const repliedMsg = item.reply_to ? messages.find((m) => m.id === item.reply_to) : undefined;
@@ -1125,7 +1254,9 @@ export default function ChatThreadScreen() {
                       </TouchableOpacity>
                     );
                   })()}
-                  {!!(item.content || '').trim() && (
+                  {item.poll_id ? (
+                    <PollCard pollId={item.poll_id} />
+                  ) : !!(item.content || '').trim() && (
                     <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
                       {renderMessageContent(item.content, isMine)}
                     </Text>
@@ -1166,7 +1297,9 @@ export default function ChatThreadScreen() {
           ListEmptyComponent={
             <View style={styles.emptyMessages}>
               <Text style={styles.emptyMessagesText}>
-                {isGroup
+                {isChannel
+                  ? 'Aquí verás los avisos de Nospi 📢'
+                  : isGroup
                   ? 'Sé el primero en saludar al grupo 👋'
                   : 'Escribe el primer mensaje para romper el hielo 👋'}
               </Text>
@@ -1232,6 +1365,15 @@ export default function ChatThreadScreen() {
           </View>
         )}
 
+        {channelReadOnly ? (
+          // Canal en solo lectura: no se escribe, pero las encuestas de arriba
+          // si se pueden responder.
+          <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
+            <Text style={styles.channelLockedText}>
+              🔒 Solo el equipo de Nospi publica en este canal
+            </Text>
+          </View>
+        ) : (
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
           <TouchableOpacity
             style={styles.attachButton}
@@ -1260,6 +1402,7 @@ export default function ChatThreadScreen() {
             <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       <Modal visible={showAttachMenu} animationType="fade" transparent onRequestClose={() => setShowAttachMenu(false)}>
@@ -1574,6 +1717,52 @@ const styles = StyleSheet.create({
   reactionChipMine: { borderColor: '#AD1457', backgroundColor: '#FCE4EC' },
   reactionChipEmoji: { fontSize: 13 },
   reactionChipCount: { fontSize: 11, fontWeight: '700', color: '#6b5560' },
+
+  // ── Encuestas dentro del chat ──────────────────────────────────────────
+  pollLoading: { fontSize: 13, color: 'rgba(255,255,255,0.7)', paddingVertical: 6 },
+  pollCard: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 12,
+    padding: 11,
+    minWidth: 220,
+    marginBottom: 4,
+  },
+  pollQuestion: { fontSize: 14, fontWeight: '700', color: '#1a0d14', marginBottom: 9, lineHeight: 19 },
+  pollOption: {
+    borderWidth: 1,
+    borderColor: '#E6DDE2',
+    borderRadius: 9,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    marginBottom: 6,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  pollOptionMine: { borderColor: nospiColors.purpleDark, borderWidth: 1.5 },
+  pollOptionFill: {
+    position: 'absolute',
+    left: 0, top: 0, bottom: 0,
+    backgroundColor: '#FCE4EC',
+  },
+  pollOptionText: { fontSize: 13.5, color: '#1a0d14', flex: 1 },
+  pollOptionTextMine: { fontWeight: '700', color: nospiColors.purpleDark },
+  pollOptionPct: { fontSize: 12, fontWeight: '700', color: '#6b5560', marginLeft: 8 },
+  pollStarsRow: { flexDirection: 'row', gap: 4, marginBottom: 4 },
+  pollStar: { fontSize: 31, color: '#CBD5E1', lineHeight: 36 },
+  pollStarOn: { color: '#F59E0B' },
+  pollStarDisabled: { opacity: 0.6 },
+  pollFooter: { fontSize: 11, color: '#6b5560', marginTop: 5 },
+
+  // Canal en solo lectura: sustituye a la barra de escribir.
+  channelLockedBar: {
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  channelLockedText: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },

@@ -927,14 +927,18 @@ export default function AdminPanelScreen() {
     }
   }, []);
 
+  // loadPollResults se define mas abajo; el ref evita el orden de declaracion.
+  const loadPollResultsRef = useRef<((msgs: any[]) => void) | null>(null);
+
   const loadChannelMessages = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, sender_id, content, created_at, is_system, media_kind')
+      .select('id, sender_id, content, created_at, is_system, media_kind, poll_id')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
     if (error) { console.error('Error cargando mensajes del canal:', error); return; }
     setChannelMessages(data || []);
+    loadPollResultsRef.current?.(data || []);
   }, []);
 
   const sendChannelMessage = async () => {
@@ -975,6 +979,76 @@ export default function AdminPanelScreen() {
     if (error) { window.alert('No se pudo crear el canal: ' + error.message); return; }
     await loadChannels();
     if (data) { setActiveChannelId(data as string); loadChannelMessages(data as string); }
+  };
+
+  // ── Encuestas y calificaciones dentro de un canal ────────────────────────
+  // Se responden aunque el canal este en solo lectura: lo unico que se exige
+  // es pertenecer a la conversacion.
+  const [pollResults, setPollResults] = useState<Record<string, any>>({});
+  const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [pollKind, setPollKind] = useState<'choice' | 'rating'>('choice');
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollAnonymous, setPollAnonymous] = useState(false);
+  const [pollSaving, setPollSaving] = useState(false);
+  const [pollVotersOpen, setPollVotersOpen] = useState<string | null>(null);
+
+  // Carga (o recarga) los resultados de las encuestas que aparecen en un hilo.
+  const loadPollResults = useCallback(async (msgs: any[]) => {
+    const ids = Array.from(new Set((msgs || []).map(m => m.poll_id).filter(Boolean)));
+    if (ids.length === 0) return;
+    const settled = await Promise.all(
+      ids.map(id => supabase.rpc('get_poll_results', { p_poll_id: id }))
+    );
+    setPollResults(prev => {
+      const next = { ...prev };
+      settled.forEach((r, i) => { if (!r.error && r.data) next[ids[i] as string] = r.data; });
+      return next;
+    });
+  }, []);
+
+  loadPollResultsRef.current = loadPollResults;
+
+  const resetPollForm = () => {
+    setPollKind('choice');
+    setPollQuestion('');
+    setPollOptions(['', '']);
+    setPollAnonymous(false);
+  };
+
+  const createPoll = async () => {
+    if (!activeChannelId || pollSaving) return;
+    const question = pollQuestion.trim();
+    if (!question) { window.alert('Escribe la pregunta.'); return; }
+    const opts = pollOptions.map(o => o.trim()).filter(Boolean);
+    if (pollKind === 'choice' && opts.length < 2) {
+      window.alert('Una encuesta de opciones necesita al menos 2 opciones.');
+      return;
+    }
+    setPollSaving(true);
+    try {
+      const { error } = await supabase.rpc('admin_create_poll', {
+        p_conversation_id: activeChannelId,
+        p_kind: pollKind,
+        p_question: question,
+        p_options: pollKind === 'choice' ? opts : [],
+        p_anonymous: pollAnonymous,
+      });
+      if (error) { window.alert('No se pudo publicar: ' + error.message); return; }
+      setPollModalOpen(false);
+      resetPollForm();
+      await loadChannelMessages(activeChannelId);
+      loadChannels();
+    } finally {
+      setPollSaving(false);
+    }
+  };
+
+  const setPollClosed = async (pollId: string, closed: boolean) => {
+    const { error } = await supabase.rpc('admin_set_poll_closed', { p_poll_id: pollId, p_closed: closed });
+    if (error) { window.alert('No se pudo cambiar: ' + error.message); return; }
+    const { data } = await supabase.rpc('get_poll_results', { p_poll_id: pollId });
+    if (data) setPollResults(prev => ({ ...prev, [pollId]: data }));
   };
 
   const loadGroupChats = useCallback(async () => {
@@ -4428,6 +4502,114 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
   // Render de la sub-pestana "Canales": el canal global y los de cada evento,
   // con el interruptor de respuestas. El equipo de Nospi siempre puede escribir.
+  // Tarjeta de una encuesta dentro del hilo: la pregunta, los resultados en
+  // vivo y los controles para cerrarla o ver quien respondio.
+  const renderPollCard = (pollId: string, _mine: boolean) => {
+    const r = pollResults[pollId];
+    if (!r) {
+      return <Text style={{ fontSize: 12, color: '#E1BEE7' }}>Cargando encuesta…</Text>;
+    }
+    const counts: Record<string, number> = r.counts || {};
+    const total: number = r.total || 0;
+    const isRating = r.kind === 'rating';
+    const voters: any[] | null = r.voters || null;
+    const showVoters = pollVotersOpen === pollId;
+
+    return (
+      <View style={{ backgroundColor: '#FFFFFF', borderRadius: 11, padding: 11, minWidth: 260 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937', flex: 1 }}>
+            {isRating ? '⭐' : '📊'} {r.question}
+          </Text>
+          <View style={{
+            backgroundColor: r.closed ? '#F3F4F6' : '#DCFCE7', borderRadius: 10,
+            paddingVertical: 1, paddingHorizontal: 6,
+          }}>
+            <Text style={{ fontSize: 9.5, fontWeight: '800', color: r.closed ? '#6b7280' : '#15803d' }}>
+              {r.closed ? 'Cerrada' : 'Abierta'}
+            </Text>
+          </View>
+        </View>
+
+        {isRating ? (
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#880E4F' }}>
+              {r.average != null ? `${Number(r.average).toFixed(2)} / 5` : 'Sin respuestas'}
+            </Text>
+            {[5, 4, 3, 2, 1].map(star => {
+              const n = counts[String(star)] || 0;
+              const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+              return (
+                <View key={star} style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, width: 34, color: '#6b7280' }}>{'★'.repeat(star)}</Text>
+                  <View style={{ flex: 1, height: 7, backgroundColor: '#F1F1F4', borderRadius: 4, overflow: 'hidden' }}>
+                    <View style={{ width: `${pct}%`, height: 7, backgroundColor: '#F59E0B' }} />
+                  </View>
+                  <Text style={{ fontSize: 10.5, width: 46, color: '#6b7280', textAlign: 'right' }}>{n} · {pct}%</Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View>
+            {(r.options || []).map((opt: string, i: number) => {
+              const n = counts[String(i)] || 0;
+              const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+              return (
+                <View key={i} style={{ marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 11.5, color: '#1f2937', flex: 1 }} numberOfLines={2}>{opt}</Text>
+                    <Text style={{ fontSize: 10.5, color: '#6b7280', marginLeft: 8 }}>{n} · {pct}%</Text>
+                  </View>
+                  <View style={{ height: 7, backgroundColor: '#F1F1F4', borderRadius: 4, overflow: 'hidden' }}>
+                    <View style={{ width: `${pct}%`, height: 7, backgroundColor: '#880E4F' }} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+          <Text style={{ fontSize: 10.5, color: '#6b7280' }}>
+            {total} {total === 1 ? 'respuesta' : 'respuestas'}{r.anonymous ? ' · anónima' : ''}
+          </Text>
+          <TouchableOpacity onPress={() => setPollClosed(pollId, !r.closed)}>
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#880E4F' }}>
+              {r.closed ? 'Reabrir' : 'Cerrar'}
+            </Text>
+          </TouchableOpacity>
+          {!r.anonymous && total > 0 && (
+            <TouchableOpacity onPress={() => setPollVotersOpen(showVoters ? null : pollId)}>
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#880E4F' }}>
+                {showVoters ? 'Ocultar quién respondió' : 'Ver quién respondió'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={async () => {
+            const { data } = await supabase.rpc('get_poll_results', { p_poll_id: pollId });
+            if (data) setPollResults(prev => ({ ...prev, [pollId]: data }));
+          }}>
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#6b7280' }}>↻ Actualizar</Text>
+          </TouchableOpacity>
+        </View>
+
+        {showVoters && (
+          <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#F0F0F2', paddingTop: 7 }}>
+            {(voters || []).map((v: any) => (
+              <View key={v.user_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, color: '#1f2937' }}>{v.name}</Text>
+                <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                  {isRating ? `${'★'.repeat(v.rating || 0)}` : (r.options || [])[v.option_index]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderChannels = () => {
     const active = channels.find(c => c.conversation_id === activeChannelId);
     const eventosSinCanal = (events || []).filter(
@@ -4532,6 +4714,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937' }}>
                     {active.kind === 'channel_global' ? '📢' : '📣'} {active.title} · {active.participants} personas
                   </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <TouchableOpacity
+                    onPress={() => { resetPollForm(); setPollModalOpen(true); }}
+                    style={{
+                      backgroundColor: '#F3E5F5', borderWidth: 1, borderColor: '#CE93D8',
+                      borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#6A1B9A' }}>📊 Crear encuesta</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => toggleChannelReplies(active.conversation_id, !active.replies_open)}
                     style={{
@@ -4555,6 +4747,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                       }} />
                     </View>
                   </TouchableOpacity>
+                  </View>
                 </View>
                 <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 320 }}>
                   {channelMessages.length === 0 ? (
@@ -4564,7 +4757,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   ) : channelMessages.map(m => {
                     const mine = m.sender_id === adminUserId;
                     return (
-                      <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', marginBottom: 8 }}>
+                      <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: m.poll_id ? '92%' : '78%', minWidth: m.poll_id ? 280 : undefined, marginBottom: 8 }}>
                         <View style={{
                           backgroundColor: mine ? '#880E4F' : '#FFFFFF',
                           borderWidth: 1, borderColor: mine ? '#880E4F' : '#E5E7EB',
@@ -4575,9 +4768,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               {usersById[m.sender_id]?.name || 'Participante'}
                             </Text>
                           )}
-                          <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
-                            {m.content}
-                          </Text>
+                          {m.poll_id ? renderPollCard(m.poll_id, mine) : (
+                            <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
+                              {m.content}
+                            </Text>
+                          )}
                           <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right', marginTop: 3 }}>
                             {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </Text>
@@ -4608,6 +4803,106 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             )}
           </View>
         </View>
+
+        {/* Crear encuesta o calificacion */}
+        <Modal visible={pollModalOpen} transparent animationType="fade" onRequestClose={() => setPollModalOpen(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, width: '100%', maxWidth: 460 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#1f2937', marginBottom: 3 }}>Nueva encuesta</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
+                Se publica en el canal y se puede responder aunque esté en solo lectura.
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                {([['choice', '📊 Opciones'], ['rating', '⭐ Calificación 1-5']] as const).map(([k, label]) => (
+                  <TouchableOpacity
+                    key={k}
+                    onPress={() => setPollKind(k as 'choice' | 'rating')}
+                    style={{
+                      flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10,
+                      backgroundColor: pollKind === k ? '#880E4F' : '#F3F4F6',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: pollKind === k ? '#FFFFFF' : '#374151' }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 5 }}>Pregunta</Text>
+              <TextInput
+                style={{ backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, padding: 10, fontSize: 13, marginBottom: 14 }}
+                placeholder={pollKind === 'rating' ? '¿Cómo te pareció el evento?' : '¿Qué plan prefieres para el próximo evento?'}
+                value={pollQuestion}
+                onChangeText={setPollQuestion}
+                maxLength={300}
+              />
+
+              {pollKind === 'choice' && (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 5 }}>Opciones</Text>
+                  {pollOptions.map((opt, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+                      <TextInput
+                        style={{ flex: 1, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, padding: 9, fontSize: 12.5 }}
+                        placeholder={`Opción ${i + 1}`}
+                        value={opt}
+                        onChangeText={(t) => setPollOptions(prev => prev.map((o, j) => (j === i ? t : o)))}
+                        maxLength={120}
+                      />
+                      {pollOptions.length > 2 && (
+                        <TouchableOpacity onPress={() => setPollOptions(prev => prev.filter((_, j) => j !== i))}>
+                          <Text style={{ fontSize: 15, color: '#9CA3AF' }}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                  {pollOptions.length < 8 && (
+                    <TouchableOpacity onPress={() => setPollOptions(prev => [...prev, ''])}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#880E4F' }}>＋ Agregar opción</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setPollAnonymous(v => !v)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 18 }}
+              >
+                <View style={{
+                  width: 19, height: 19, borderRadius: 5, borderWidth: 2,
+                  borderColor: pollAnonymous ? '#880E4F' : '#CBD5E1',
+                  backgroundColor: pollAnonymous ? '#880E4F' : 'transparent',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {pollAnonymous && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+                </View>
+                <Text style={{ fontSize: 12.5, color: '#374151', flex: 1 }}>
+                  Anónima — verás los totales, pero no quién respondió qué.
+                </Text>
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', gap: 9, justifyContent: 'flex-end' }}>
+                <TouchableOpacity
+                  onPress={() => setPollModalOpen(false)}
+                  style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#F3F4F6' }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#374151' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={createPoll}
+                  disabled={pollSaving}
+                  style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: '#880E4F', opacity: pollSaving ? 0.6 : 1 }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#FFFFFF' }}>
+                    {pollSaving ? 'Publicando…' : 'Publicar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   };
