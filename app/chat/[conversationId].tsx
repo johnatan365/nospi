@@ -222,6 +222,9 @@ function renderMessageContent(text: string, mine: boolean) {
 // igual que WhatsApp. Al arrastrar aparece una flecha ↩︎ y, si se pasa del
 // umbral, se activa el responder al soltar. En web el arrastre con mouse es
 // incomodo, asi que alli la via principal sigue siendo mantener presionado.
+// Los 6 emojis de reaccion rapida, iguales a los de WhatsApp.
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
 function SwipeToReply({ children, onReply }: { children: React.ReactNode; onReply: () => void }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const activated = useRef(false);
@@ -296,6 +299,53 @@ export default function ChatThreadScreen() {
   // Antes "responder" solo existia como gesto oculto de mantener presionado,
   // asi que mucha gente no sabia que se podia.
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+
+  // Reacciones con emoji por mensaje. Se guardan en chat_message_reactions
+  // (una por persona y mensaje) y llegan en tiempo real a todos.
+  const [reactions, setReactions] = useState<Record<string, { emoji: string; user_id: string }[]>>({});
+
+  const loadReactions = useCallback(async () => {
+    if (!conversationId) return;
+    const { data, error } = await supabase
+      .from('chat_message_reactions')
+      .select('message_id, emoji, user_id')
+      .eq('conversation_id', conversationId);
+    if (error) { console.error('loadReactions:', error.message); return; }
+    const map: Record<string, { emoji: string; user_id: string }[]> = {};
+    for (const r of data || []) {
+      (map[r.message_id] ||= []).push({ emoji: r.emoji, user_id: r.user_id });
+    }
+    setReactions(map);
+  }, [conversationId]);
+
+  // Toca un emoji: si ya tenia ese mismo, lo quita; si tenia otro, lo cambia.
+  const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!user?.id || !conversationId) return;
+    const mine = (reactions[messageId] || []).find(r => r.user_id === user.id);
+
+    // Actualizacion optimista para que se sienta inmediato.
+    setReactions(prev => {
+      const list = (prev[messageId] || []).filter(r => r.user_id !== user.id);
+      if (!mine || mine.emoji !== emoji) list.push({ emoji, user_id: user.id });
+      return { ...prev, [messageId]: list };
+    });
+
+    try {
+      if (mine && mine.emoji === emoji) {
+        await supabase.from('chat_message_reactions')
+          .delete().eq('message_id', messageId).eq('user_id', user.id);
+      } else {
+        await supabase.from('chat_message_reactions')
+          .upsert(
+            { message_id: messageId, conversation_id: conversationId, user_id: user.id, emoji },
+            { onConflict: 'message_id,user_id' }
+          );
+      }
+    } catch (e) {
+      console.error('toggleReaction:', e);
+      loadReactions(); // si falla, volvemos al estado real
+    }
+  }, [user, conversationId, reactions, loadReactions]);
 
   const copyMessageText = useCallback(async (m: Message | null) => {
     const txt = (m?.content || '').trim();
@@ -462,12 +512,27 @@ export default function ChatThreadScreen() {
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
         }
       )
+      // Reacciones en tiempo real: cualquier cambio (poner, cambiar o quitar)
+      // refresca el mapa para todos los que tengan el chat abierto.
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_message_reactions',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => { loadReactions(); }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, loadReactions]);
+
+  // Carga inicial de las reacciones al abrir el chat.
+  useEffect(() => { loadReactions(); }, [loadReactions]);
 
     const handleSend = async (overrideContent?: string) => {
     const content = (overrideContent ?? draft).trim();
@@ -934,6 +999,7 @@ export default function ChatThreadScreen() {
               : null;
 
             return (
+              <>
               <View style={[styles.messageRow, isMine ? styles.messageRowMine : styles.messageRowTheirs]}>
                 {showSenderInfo && !isSystem && (
                   <ChatAvatar
@@ -1047,6 +1113,31 @@ export default function ChatThreadScreen() {
                 </TouchableOpacity>
                 </SwipeToReply>
               </View>
+              {/* Reacciones agrupadas por emoji con su contador. Van fuera de
+                  la fila del mensaje para no alterar el ancho de la burbuja. */}
+              {(() => {
+                const list = reactions[item.id] || [];
+                if (list.length === 0) return null;
+                const byEmoji: Record<string, number> = {};
+                for (const r of list) byEmoji[r.emoji] = (byEmoji[r.emoji] || 0) + 1;
+                const mine = list.find(r => r.user_id === user?.id)?.emoji;
+                return (
+                  <View style={[styles.reactionChips, isMine ? styles.reactionChipsMine : styles.reactionChipsTheirs]}>
+                    {Object.entries(byEmoji).map(([emo, count]) => (
+                      <TouchableOpacity
+                        key={emo}
+                        style={[styles.reactionChip, mine === emo && styles.reactionChipMine]}
+                        onPress={() => toggleReaction(item.id, emo)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.reactionChipEmoji}>{emo}</Text>
+                        {count > 1 && <Text style={styles.reactionChipCount}>{count}</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })()}
+              </>
             );
           }}
           ListEmptyComponent={
@@ -1216,6 +1307,23 @@ export default function ChatThreadScreen() {
           cierra tocando fuera del menu. */}
       <Modal visible={!!actionMsg} animationType="fade" transparent onRequestClose={() => setActionMsg(null)}>
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setActionMsg(null)}>
+          {/* Barra de reacciones rapidas, los mismos 6 emojis de WhatsApp. */}
+          <View style={styles.reactionBar}>
+            {QUICK_REACTIONS.map((emo) => {
+              const mine = actionMsg
+                ? (reactions[actionMsg.id] || []).find(r => r.user_id === user?.id)?.emoji === emo
+                : false;
+              return (
+                <TouchableOpacity
+                  key={emo}
+                  style={[styles.reactionBarBtn, mine && styles.reactionBarBtnActive]}
+                  onPress={() => { const m = actionMsg; setActionMsg(null); if (m) toggleReaction(m.id, emo); }}
+                >
+                  <Text style={styles.reactionBarEmoji}>{emo}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <View style={styles.attachSheet}>
             <TouchableOpacity
               style={styles.attachOption}
@@ -1375,6 +1483,43 @@ const styles = StyleSheet.create({
   quoteText: { fontSize: 12.5, color: '#6a6a70' },
   quoteTextMine: { color: 'rgba(255,255,255,0.8)' },
   bubble: { maxWidth: '100%', flexShrink: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+
+  // ── Reacciones con emoji ──────────────────────────────────────────────────
+  reactionBar: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    marginBottom: 10,
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  reactionBarBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20 },
+  reactionBarBtnActive: { backgroundColor: '#FCE4EC' },
+  reactionBarEmoji: { fontSize: 26 },
+  reactionChips: { flexDirection: 'row', gap: 4, marginTop: -6, marginBottom: 8 },
+  reactionChipsMine: { justifyContent: 'flex-end', paddingRight: 4 },
+  reactionChipsTheirs: { justifyContent: 'flex-start', paddingLeft: 32 },
+  reactionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  reactionChipMine: { borderColor: '#AD1457', backgroundColor: '#FCE4EC' },
+  reactionChipEmoji: { fontSize: 13 },
+  reactionChipCount: { fontSize: 11, fontWeight: '700', color: '#6b5560' },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
