@@ -881,7 +881,76 @@ export default function AdminPanelScreen() {
   const [eventChatSending, setEventChatSending] = useState(false);
 
   // ── Moderación: visor global de chats privados y matches (solo admin)
-  const [moderationTab, setModerationTab] = useState<'chats' | 'matches' | 'feedback'>('chats');
+  const [moderationTab, setModerationTab] = useState<'grupos' | 'canales' | 'chats' | 'matches' | 'feedback'>('grupos');
+
+  // Chats grupales de todos los eventos, en un solo lugar. Antes solo se podian
+  // ver entrando evento por evento desde Gestion de eventos.
+  const [groupChats, setGroupChats] = useState<any[]>([]);
+  const [groupChatsLoading, setGroupChatsLoading] = useState(false);
+  const [activeGroupChatId, setActiveGroupChatId] = useState<string | null>(null);
+  const [groupChatMessages, setGroupChatMessages] = useState<any[]>([]);
+  const [groupChatDraft, setGroupChatDraft] = useState('');
+  const [sendingGroupChat, setSendingGroupChat] = useState(false);
+
+  // Id del admin logueado (para pintar sus mensajes a la derecha) y un indice
+  // de usuarios por id (para mostrar el nombre de quien escribio).
+  const [adminUserId, setAdminUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAdminUserId(data?.user?.id ?? null));
+  }, []);
+  const usersById = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const u of users || []) map[u.id] = u;
+    return map;
+  }, [users]);
+
+  const loadGroupChats = useCallback(async () => {
+    setGroupChatsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_all_group_chats');
+      if (error) {
+        console.error('Error cargando chats grupales:', error);
+        window.alert('No se pudieron cargar los chats grupales: ' + error.message);
+      } else {
+        setGroupChats(data || []);
+      }
+    } finally {
+      setGroupChatsLoading(false);
+    }
+  }, []);
+
+  const loadGroupChatMessages = useCallback(async (conversationId: string) => {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('id, sender_id, content, created_at, is_system, media_kind')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('Error cargando mensajes:', error); return; }
+    setGroupChatMessages(data || []);
+  }, []);
+
+  const sendGroupChatMessage = async () => {
+    const text = groupChatDraft.trim();
+    if (!text || !activeGroupChatId || sendingGroupChat) return;
+    setSendingGroupChat(true);
+    try {
+      const { data: sess } = await supabase.auth.getUser();
+      const { error } = await supabase.from('chat_messages').insert({
+        conversation_id: activeGroupChatId,
+        sender_id: sess?.user?.id,
+        content: text,
+      });
+      if (error) {
+        window.alert('No se pudo enviar: ' + error.message);
+        return;
+      }
+      setGroupChatDraft('');
+      await loadGroupChatMessages(activeGroupChatId);
+      loadGroupChats();
+    } finally {
+      setSendingGroupChat(false);
+    }
+  };
 
   // Evaluaciones de fin de dinamica (event_feedback): que opino la gente del
   // evento y de la app. Antes no se veian en ninguna parte del admin.
@@ -4135,6 +4204,120 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  // Render de la sub-pestana "Grupos": todos los chats de evento en un solo
+  // lugar, con la conversacion a la derecha y la caja para escribir como Nospi.
+  const renderGroupChats = () => {
+    const active = groupChats.find(g => g.conversation_id === activeGroupChatId);
+    return (
+      <View style={{ flexDirection: 'row', gap: 14, flex: 1, minHeight: 420 }}>
+        {/* Lista de chats */}
+        <View style={{ width: 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+          <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 9, paddingHorizontal: 12 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#6b7280', letterSpacing: 0.5 }}>CHAT DE CADA EVENTO</Text>
+          </View>
+          <ScrollView style={{ maxHeight: 460 }}>
+            {groupChatsLoading ? (
+              <Text style={{ padding: 14, fontSize: 12.5, color: '#6b7280' }}>Cargando…</Text>
+            ) : groupChats.length === 0 ? (
+              <Text style={{ padding: 14, fontSize: 12.5, color: '#6b7280' }}>No hay chats de evento todavía.</Text>
+            ) : groupChats.map(g => {
+              const on = g.conversation_id === activeGroupChatId;
+              const emoji = g.event_type === 'bar' ? '🍸' : g.event_type === 'caminata' ? '🚶'
+                : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : '🍽️';
+              return (
+                <TouchableOpacity
+                  key={g.conversation_id}
+                  onPress={() => { setActiveGroupChatId(g.conversation_id); loadGroupChatMessages(g.conversation_id); }}
+                  style={{
+                    paddingVertical: 10, paddingHorizontal: 12,
+                    borderBottomWidth: 1, borderBottomColor: '#F0F0F2',
+                    backgroundColor: on ? '#FCE4EC' : 'transparent',
+                    borderLeftWidth: on ? 3 : 0, borderLeftColor: '#880E4F',
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1f2937' }} numberOfLines={1}>
+                    {emoji} {g.event_name}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>
+                    {g.last_message || 'Sin mensajes todavía'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+                    {g.participants} inscritos · {g.messages} mensajes
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Conversacion */}
+        <View style={{ flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+          {!active ? (
+            <View style={{ padding: 30, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>Selecciona un evento para ver su chat y escribir.</Text>
+            </View>
+          ) : (
+            <>
+              <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 10, paddingHorizontal: 13, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937' }}>
+                  {active.event_name} · {active.participants} inscritos
+                </Text>
+              </View>
+              <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 340 }}>
+                {groupChatMessages.length === 0 ? (
+                  <Text style={{ fontSize: 12.5, color: '#9CA3AF', textAlign: 'center', paddingVertical: 20 }}>
+                    Sin mensajes todavía. Sé el primero en escribir.
+                  </Text>
+                ) : groupChatMessages.map(m => {
+                  const mine = m.sender_id === adminUserId;
+                  return (
+                    <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', marginBottom: 8 }}>
+                      <View style={{
+                        backgroundColor: mine ? '#880E4F' : '#FFFFFF',
+                        borderWidth: 1, borderColor: mine ? '#880E4F' : '#E5E7EB',
+                        borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
+                      }}>
+                        {!mine && (
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#AD1457', marginBottom: 2 }}>
+                            {usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante')}
+                          </Text>
+                        )}
+                        <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
+                          {m.media_kind ? `📎 ${m.media_kind}${m.content ? ' · ' + m.content : ''}` : m.content}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right', marginTop: 3 }}>
+                          {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <View style={{ flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' }}>
+                <TextInput
+                  style={{ flex: 1, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13, fontSize: 12.5 }}
+                  placeholder="Escribe como Equipo Nospi…"
+                  value={groupChatDraft}
+                  onChangeText={setGroupChatDraft}
+                  onSubmitEditing={sendGroupChatMessage}
+                />
+                <TouchableOpacity
+                  onPress={sendGroupChatMessage}
+                  disabled={sendingGroupChat || !groupChatDraft.trim()}
+                  style={{ backgroundColor: '#880E4F', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, opacity: sendingGroupChat || !groupChatDraft.trim() ? 0.5 : 1 }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>
+                    {sendingGroupChat ? '…' : 'Enviar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   // Render de la sub-pestana "Evaluaciones": promedios, comparativa por evento,
   // motivos de baja calificacion y detalle por persona (segun el filtro).
   const renderFeedback = () => {
@@ -4459,12 +4642,18 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
   const renderModeration = () => (
     <View style={{ flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginBottom: 4 }}>🛡️ Chats & Matches</Text>
+      <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginBottom: 4 }}>💬 Comunicación</Text>
       <Text style={{ color: '#6b7280', fontSize: 13, marginBottom: 14 }}>
-        Modera la comunidad: aquí ves todas las conversaciones privadas entre personas y los matches de afinidad. Modo lectura.
+        Escribe en los chats de grupo y modera la comunidad. Los chats privados y los matches son de solo lectura.
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <TouchableOpacity
+          onPress={() => { setModerationTab('grupos'); setActiveModConvId(null); if (groupChats.length === 0) loadGroupChats(); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'grupos' ? '#880E4F' : '#f1f1f4' }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'grupos' ? '#fff' : '#374151' }}>👥 Grupos ({groupChats.length})</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => { setModerationTab('chats'); setActiveModConvId(null); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'chats' ? '#880E4F' : '#f1f1f4' }}
@@ -4484,14 +4673,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'feedback' ? '#fff' : '#374151' }}>⭐ Evaluaciones ({feedbackRows.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }}
+          onPress={() => { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
         </TouchableOpacity>
       </View>
 
-      {moderationTab === 'feedback' ? (
+      {moderationTab === 'grupos' ? (
+        <ScrollView style={{ flex: 1 }}>{renderGroupChats()}</ScrollView>
+      ) : moderationTab === 'feedback' ? (
         <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
       ) : (
       <View style={styles.eventChatBody}>
@@ -6737,7 +6928,7 @@ setBulkWhatsAppPending(pending);
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
     { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' }, { key: 'origen', icon: '🎯', label: 'Origen' },
     { key: 'no-shows',     icon: '🚫', label: 'No-shows' },
-    { key: 'moderation',   icon: '🛡️', label: 'Chats & Matches' },
+    { key: 'moderation',   icon: '💬', label: 'Comunicación' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
 
@@ -6864,7 +7055,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'moderation') { loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
+                if (item.key === 'moderation') { loadGroupChats(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
