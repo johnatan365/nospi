@@ -28,7 +28,8 @@
             ]
           }
         ],
-        "NSPhotoLibraryUsageDescription": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas."
+        "NSPhotoLibraryUsageDescription": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas.",
+        "NSMicrophoneUsageDescription": "Nospi usa el micrófono solo para grabar las notas de voz que tú decidas enviar en el chat."
       },
       "splash": {
         "image": "./assets/splash-blank.png",
@@ -59,7 +60,9 @@
         "FOREGROUND_SERVICE",
         "POST_NOTIFICATIONS",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -135,6 +138,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Nospi necesita acceso a tu galería de fotos para que puedas seleccionar y actualizar tu foto de perfil. Solo se accede a las fotos que tú elijas."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Nospi usa el micrófono solo para grabar las notas de voz que tú decidas enviar en el chat."
         }
       ]
     ],

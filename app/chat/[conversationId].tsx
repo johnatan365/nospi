@@ -28,6 +28,15 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  RecordingPresets,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
@@ -49,7 +58,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
 const MESSAGE_COLUMNS =
-  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id';
+  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by';
 
 // Ancho maximo de una foto/video dentro de la burbuja. La altura se calcula
 // con la proporcion real del archivo para que no se vea deformado.
@@ -101,7 +110,7 @@ interface Message {
   created_at: string;
   reply_to?: string | null;
   media_path?: string | null;
-  media_kind?: 'image' | 'video' | null;
+  media_kind?: 'image' | 'video' | 'audio' | null;
   media_mime?: string | null;
   media_width?: number | null;
   media_height?: number | null;
@@ -109,6 +118,9 @@ interface Message {
   media_duration?: number | null;
   // Si viene, el mensaje es una encuesta y se dibuja como tarjeta votable.
   poll_id?: string | null;
+  // Mensaje fijado: se muestra en la banda de arriba del chat.
+  pinned_at?: string | null;
+  pinned_by?: string | null;
 }
 
 interface Participant {
@@ -165,7 +177,10 @@ function formatBogotaTime(date: Date): string {
 // Texto corto que representa un mensaje cuando se cita o se responde. Un
 // mensaje solo de foto/video no tiene texto, asi que se muestra la etiqueta.
 function messagePreviewText(m: Message): string {
-  const label = m.media_kind === 'video' ? '🎥 Video' : m.media_kind === 'image' ? '📷 Foto' : '';
+  const label = m.media_kind === 'video' ? '🎥 Video'
+    : m.media_kind === 'image' ? '📷 Foto'
+    : m.media_kind === 'audio' ? '🎤 Nota de voz'
+    : '';
   const text = (m.content || '').trim();
   if (label && text) return `${label} ${text}`;
   return label || text;
@@ -203,7 +218,27 @@ const URL_RE = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
 
 // Convierte el texto de un mensaje en <Text> normal + <Text> tocables para los
 // links. Se abren con Linking.openURL (navegador / app correspondiente).
-function renderMessageContent(text: string, mine: boolean) {
+// Compara sin tildes ni mayusculas, para que "@jose" encuentre a "José".
+function normalizeText(t: string) {
+  return (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Escapa un nombre para poder meterlo dentro de una expresion regular.
+function escapeRe(t: string) {
+  return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Arma la expresion que reconoce las menciones de este chat a partir de los
+// nombres reales de los participantes (los nombres traen espacios, por eso no
+// sirve un simple \S+). Los mas largos van primero para que "Ana Maria" gane
+// sobre "Ana".
+function mentionRegex(names: string[]): RegExp | null {
+  const clean = names.filter(Boolean).sort((a, b) => b.length - a.length).map(escapeRe);
+  if (clean.length === 0) return null;
+  return new RegExp(`(@(?:${clean.join('|')}|todos))`, 'gi');
+}
+
+function renderMessageContent(text: string, mine: boolean, mentions?: RegExp | null) {
   if (!text) return null;
   const parts = text.split(URL_RE);
   return parts.map((part, i) => {
@@ -219,6 +254,22 @@ function renderMessageContent(text: string, mine: boolean) {
           {part}
         </Text>
       );
+    }
+    if (mentions) {
+      // El split conserva los grupos capturados, asi que las menciones quedan
+      // en las posiciones impares del arreglo.
+      const chunks = part.split(mentions);
+      if (chunks.length > 1) {
+        return (
+          <Text key={i}>
+            {chunks.map((c, j) =>
+              j % 2 === 1
+                ? <Text key={j} style={[styles.mentionText, mine && styles.mentionTextMine]}>{c}</Text>
+                : <Text key={j}>{c}</Text>
+            )}
+          </Text>
+        );
+      }
     }
     return <Text key={i}>{part}</Text>;
   });
@@ -287,6 +338,61 @@ function SwipeToReply({ children, onReply }: { children: React.ReactNode; onRepl
       >
         {children}
       </Animated.View>
+    </View>
+  );
+}
+
+// Formatea segundos como 0:07 / 1:23, igual que WhatsApp.
+function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// Burbuja de nota de voz: boton de reproducir, barra de progreso y duracion.
+// La URL llega firmada (el bucket es privado), asi que puede tardar un momento
+// en estar lista; mientras tanto se muestra el boton deshabilitado.
+function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: number | null; mine: boolean }) {
+  const player = useAudioPlayer(uri ? { uri } : null);
+  const status = useAudioPlayerStatus(player);
+
+  const total = status?.duration || duration || 0;
+  const current = status?.currentTime || 0;
+  const playing = !!status?.playing;
+  const pct = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+
+  const toggle = () => {
+    if (!uri) return;
+    if (playing) {
+      player.pause();
+    } else {
+      // Al terminar, la posicion queda al final: se rebobina antes de repetir.
+      if (total > 0 && current >= total - 0.15) player.seekTo(0);
+      player.play();
+    }
+  };
+
+  return (
+    <View style={styles.voiceRow}>
+      <TouchableOpacity onPress={toggle} disabled={!uri} style={styles.voiceButton} activeOpacity={0.7}>
+        {!uri ? (
+          <ActivityIndicator size="small" color={mine ? '#FFFFFF' : nospiColors.purpleDark} />
+        ) : (
+          <IconSymbol
+            ios_icon_name={playing ? 'pause.fill' : 'play.fill'}
+            android_material_icon_name={playing ? 'pause' : 'play-arrow'}
+            size={19}
+            color={mine ? '#FFFFFF' : nospiColors.purpleDark}
+          />
+        )}
+      </TouchableOpacity>
+      <View style={styles.voiceBody}>
+        <View style={[styles.voiceTrack, mine && styles.voiceTrackMine]}>
+          <View style={[styles.voiceFill, mine && styles.voiceFillMine, { width: `${pct}%` }]} />
+        </View>
+        <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]}>
+          {formatDuration(playing || current > 0 ? current : total)}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -465,6 +571,27 @@ export default function ChatThreadScreen() {
     }
   }, [user, conversationId, reactions, loadReactions]);
 
+  // Fijar / quitar de fijados. Cualquiera del chat puede, pero lo que fija el
+  // equipo de Nospi solo lo quita el equipo (regla del servidor).
+  const togglePinned = useCallback(async (m: Message | null) => {
+    if (!m) return;
+    const willPin = !m.pinned_at;
+    const { error } = await supabase.rpc('set_message_pinned', {
+      p_message_id: m.id,
+      p_pinned: willPin,
+    });
+    if (error) {
+      const msg = error.message?.includes('equipo de Nospi')
+        ? 'Este mensaje lo fijó el equipo de Nospi, así que solo ellos pueden quitarlo.'
+        : 'No se pudo ' + (willPin ? 'fijar' : 'quitar de fijados') + ' el mensaje.';
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Mensajes fijados', msg);
+      return;
+    }
+    setMessages(prev => prev.map(x => x.id === m.id
+      ? { ...x, pinned_at: willPin ? new Date().toISOString() : null, pinned_by: willPin ? (user?.id ?? null) : null }
+      : x));
+  }, [user?.id]);
+
   const copyMessageText = useCallback(async (m: Message | null) => {
     const txt = (m?.content || '').trim();
     if (!txt) return;
@@ -611,6 +738,8 @@ export default function ChatThreadScreen() {
   // Actualiza el borrador en pantalla y lo persiste (o lo borra si queda vacío).
   const updateDraft = useCallback((text: string) => {
     setDraft(text);
+    const m = text.match(/@([^\s@]{0,25})$/);
+    setMentionQuery(m ? m[1] : null);
     if (!conversationId) return;
     if (text) AsyncStorage.setItem(DRAFT_KEY(conversationId), text).catch(() => {});
     else AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
@@ -638,6 +767,21 @@ export default function ChatThreadScreen() {
           setMessages((prev) => (prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
           await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      )
+      // Un mensaje puede cambiar despues de enviado: al fijarlo o quitarlo de
+      // fijados. Sin esto, la banda de arriba solo se actualizaria al recargar.
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const upd = payload.new as Message;
+          setMessages((prev) => prev.map((m) => (m.id === upd.id ? { ...m, ...upd } : m)));
         }
       )
       // Reacciones en tiempo real: cualquier cambio (poner, cambiar o quitar)
@@ -671,6 +815,15 @@ export default function ChatThreadScreen() {
 
     const replyId = replyingTo?.id ?? null;
 
+    // Los mencionados van DENTRO del mensaje para que la notificacion, que se
+    // dispara al insertarlo, ya sepa a quien avisarle distinto.
+    const norm = normalizeText(content);
+    const mentionAll = /@todos\b/i.test(content);
+    const mentionIds = participants
+      .filter((pp) => pp.user_id !== user.id)
+      .filter((pp) => mentionAll || norm.includes('@' + normalizeText(pp.name)))
+      .map((pp) => pp.user_id);
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
@@ -678,6 +831,7 @@ export default function ChatThreadScreen() {
         sender_id: user.id,
         content,
         reply_to: replyId,
+        mentions: mentionIds,
       })
       .select(MESSAGE_COLUMNS)
       .single();
@@ -769,6 +923,96 @@ export default function ChatThreadScreen() {
     if (data) {
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  };
+
+  // ── Notas de voz ───────────────────────────────────────────────────────
+  // Se toca el microfono para empezar y se toca enviar para mandarla; es mas
+  // fiable que "mantener presionado" cuando el dedo se resbala o la pantalla
+  // pierde el foco, y funciona igual en web que en el telefono.
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder, 250);
+  const [recording, setRecording] = useState(false);
+  const [sendingVoice, setSendingVoice] = useState(false);
+
+  const startRecording = async () => {
+    if (recording || sendingVoice) return;
+    const perm = await requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      const msg = Platform.OS === 'ios'
+        ? 'Debes permitir el acceso al micrófono. Actívalo en Ajustes → Nospi → Micrófono.'
+        : 'Debes permitir el acceso al micrófono para grabar notas de voz.';
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Micrófono', msg);
+      return;
+    }
+    try {
+      // En iOS hay que habilitar la grabacion explicitamente, si no el audio
+      // sale en silencio o directamente falla.
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setRecording(true);
+    } catch (e) {
+      console.error('startRecording error:', e);
+      const msg = 'No se pudo iniciar la grabación.';
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Micrófono', msg);
+    }
+  };
+
+  const cancelRecording = async () => {
+    if (!recording) return;
+    setRecording(false);
+    try { await recorder.stop(); } catch { /* nada que guardar */ }
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+  };
+
+  const sendRecording = async () => {
+    if (!recording || sendingVoice || !user?.id || !conversationId) return;
+    const seconds = recorderState.durationMillis ? recorderState.durationMillis / 1000 : 0;
+    setRecording(false);
+    setSendingVoice(true);
+    try {
+      await recorder.stop();
+      const uri = recorder.uri;
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      if (!uri) throw new Error('La grabación quedó vacía.');
+      if (seconds < 0.7) return; // toque accidental: no se manda nada
+
+      const ext = Platform.OS === 'web' ? 'webm' : 'm4a';
+      const mime = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
+      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+      // Se reutiliza la subida de fotos/videos: solo necesita {uri}.
+      await uploadToBucket({ uri } as ImagePicker.ImagePickerAsset, path, mime);
+
+      const replyId = replyingTo?.id ?? null;
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: '',
+          reply_to: replyId,
+          media_path: path,
+          media_kind: 'audio',
+          media_mime: mime,
+          media_duration: seconds,
+        })
+        .select(MESSAGE_COLUMNS)
+        .single();
+
+      if (error) throw new Error(error.message);
+      if (data) {
+        setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+        setReplyingTo(null);
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    } catch (e: any) {
+      console.error('sendRecording error:', e);
+      const msg = 'No se pudo enviar la nota de voz. ' + (e?.message || '');
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Nota de voz', msg);
+    } finally {
+      setSendingVoice(false);
     }
   };
 
@@ -1002,6 +1246,48 @@ export default function ChatThreadScreen() {
     }
   };
 
+  // ── Menciones ──────────────────────────────────────────────────────────
+  // Al escribir "@" se ofrecen los participantes del chat. Se busca solo al
+  // final del texto, que es como se menciona en la practica.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+
+  const mentionCandidates = participants.filter((p) => p.user_id !== user?.id);
+  const mentionRe = mentionRegex(mentionCandidates.map((p) => p.name));
+
+  const mentionSuggestions = mentionQuery === null ? [] : (() => {
+    const q = normalizeText(mentionQuery);
+    const list = mentionCandidates.filter((p) => !q || normalizeText(p.name).startsWith(q));
+    return list.slice(0, 6);
+  })();
+
+  // Reemplaza el "@loQueIbaEscribiendo" del final por el nombre completo.
+  const applyMention = (name: string) => {
+    const next = draft.replace(/@([^\s@]*)$/, `@${name} `);
+    updateDraft(next);
+    setMentionQuery(null);
+  };
+
+  // Mensajes fijados, del mas reciente al mas antiguo. Si hay varios, la banda
+  // muestra uno y se va rotando al tocarla (como WhatsApp).
+  const pinnedMessages = messages
+    .filter((m) => !!m.pinned_at)
+    .sort((x, y) => (y.pinned_at || '').localeCompare(x.pinned_at || ''));
+  const [pinnedIndex, setPinnedIndex] = useState(0);
+  const activePinned = pinnedMessages.length > 0
+    ? pinnedMessages[pinnedIndex % pinnedMessages.length]
+    : null;
+
+  // Lleva la lista hasta el mensaje fijado que se toco.
+  const scrollToMessage = (messageId: string) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    try {
+      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+    } catch {
+      // Si la fila aun no esta medida, scrollToIndex falla; no es critico.
+    }
+  };
+
   const isGroup = meta?.conv_type === 'event_group';
   // Un canal es de difusion: escribe el equipo de Nospi y, si esta abierto,
   // tambien responde la gente. Las encuestas se responden siempre.
@@ -1112,6 +1398,34 @@ export default function ChatThreadScreen() {
           </TouchableOpacity>
         )}
 
+        {activePinned && (
+          <TouchableOpacity
+            style={styles.pinnedBar}
+            activeOpacity={0.8}
+            onPress={() => {
+              scrollToMessage(activePinned.id);
+              if (pinnedMessages.length > 1) setPinnedIndex((i) => (i + 1) % pinnedMessages.length);
+            }}
+          >
+            <Text style={styles.pinnedIcon}>📌</Text>
+            <View style={styles.pinnedTextBox}>
+              <Text style={styles.pinnedLabel}>
+                Mensaje fijado
+                {pinnedMessages.length > 1 ? ` ${(pinnedIndex % pinnedMessages.length) + 1} de ${pinnedMessages.length}` : ''}
+              </Text>
+              <Text style={styles.pinnedPreview} numberOfLines={1}>
+                {messagePreviewText(activePinned) || 'Mensaje'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => togglePinned(activePinned)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.pinnedRemove}>✕</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        )}
+
         <FlatList
           ref={listRef}
           data={messages}
@@ -1183,7 +1497,14 @@ export default function ChatThreadScreen() {
                       </Text>
                     </View>
                   )}
-                  {!!item.media_path && (() => {
+                  {!!item.media_path && item.media_kind === 'audio' && (
+                    <VoiceNote
+                      uri={signedUrls[item.media_path as string] || null}
+                      duration={item.media_duration}
+                      mine={isMine}
+                    />
+                  )}
+                  {!!item.media_path && item.media_kind !== 'audio' && (() => {
                     const url = signedUrls[item.media_path as string];
                     const box = mediaBoxSize(item.media_width, item.media_height);
                     if (!url) {
@@ -1258,7 +1579,7 @@ export default function ChatThreadScreen() {
                     <PollCard pollId={item.poll_id} />
                   ) : !!(item.content || '').trim() && (
                     <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
-                      {renderMessageContent(item.content, isMine)}
+                      {renderMessageContent(item.content, isMine, mentionRe)}
                     </Text>
                   )}
                   <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
@@ -1306,6 +1627,30 @@ export default function ChatThreadScreen() {
             </View>
           }
         />
+
+        {mentionSuggestions.length > 0 && (
+          <View style={styles.mentionBar}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 190 }}>
+              {mentionSuggestions.map((p) => (
+                <TouchableOpacity
+                  key={p.user_id}
+                  style={styles.mentionRow}
+                  onPress={() => applyMention(p.name)}
+                  activeOpacity={0.7}
+                >
+                  <ChatAvatar uri={p.profile_photo_url} name={p.name} size={28} marginRight={9} />
+                  <Text style={styles.mentionName}>{p.name}</Text>
+                </TouchableOpacity>
+              ))}
+              {isGroup && (
+                <TouchableOpacity style={styles.mentionRow} onPress={() => applyMention('todos')} activeOpacity={0.7}>
+                  <View style={styles.mentionAllIcon}><Text style={{ fontSize: 14 }}>📣</Text></View>
+                  <Text style={styles.mentionName}>todos <Text style={styles.mentionHint}>· avisar a todo el grupo</Text></Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </View>
+        )}
 
         {replyingTo && (
           <View style={styles.replyPreview}>
@@ -1373,6 +1718,22 @@ export default function ChatThreadScreen() {
               🔒 Solo el equipo de Nospi publica en este canal
             </Text>
           </View>
+        ) : recording ? (
+          <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+            <TouchableOpacity style={styles.attachButton} onPress={cancelRecording}>
+              <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={22} color="#FF8A9B" />
+            </TouchableOpacity>
+            <View style={styles.recordingBox}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingTime}>
+                {formatDuration((recorderState.durationMillis || 0) / 1000)}
+              </Text>
+              <Text style={styles.recordingHint}>Grabando… toca ➤ para enviar</Text>
+            </View>
+            <TouchableOpacity style={styles.sendButton} onPress={sendRecording}>
+              <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         ) : (
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
           <TouchableOpacity
@@ -1391,16 +1752,27 @@ export default function ChatThreadScreen() {
             multiline
             maxLength={2000}
           />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !draft.trim() && pendingAssets.length === 0 && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendAll}
-            disabled={(!draft.trim() && pendingAssets.length === 0) || sending || !!uploading}
-          >
-            <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          {!draft.trim() && pendingAssets.length === 0 ? (
+            <TouchableOpacity
+              style={styles.sendButton}
+              onPress={startRecording}
+              disabled={sendingVoice || !!uploading}
+            >
+              {sendingVoice ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <IconSymbol ios_icon_name="mic.fill" android_material_icon_name="mic" size={20} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.sendButton}
+              onPress={handleSendAll}
+              disabled={sending || !!uploading}
+            >
+              <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
         </View>
         )}
       </KeyboardAvoidingView>
@@ -1525,6 +1897,15 @@ export default function ChatThreadScreen() {
                 <Text style={styles.attachOptionText}>Copiar</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); togglePinned(m); }}
+            >
+              <Text style={{ fontSize: 19, width: 22, textAlign: 'center' }}>📌</Text>
+              <Text style={styles.attachOptionText}>
+                {actionMsg?.pinned_at ? 'Quitar de fijados' : 'Fijar mensaje'}
+              </Text>
+            </TouchableOpacity>
           </View>
           </View>
         </TouchableOpacity>
@@ -1719,6 +2100,63 @@ const styles = StyleSheet.create({
   reactionChipCount: { fontSize: 11, fontWeight: '700', color: '#6b5560' },
 
   // ── Encuestas dentro del chat ──────────────────────────────────────────
+  // ── Menciones ──────────────────────────────────────────────────────────
+  // ── Notas de voz ───────────────────────────────────────────────────────
+  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 9, minWidth: 172, paddingVertical: 2 },
+  voiceButton: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  voiceBody: { flex: 1, minWidth: 96 },
+  voiceTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.15)', overflow: 'hidden' },
+  voiceTrackMine: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  voiceFill: { height: 4, backgroundColor: nospiColors.purpleDark },
+  voiceFillMine: { backgroundColor: '#FFFFFF' },
+  voiceTime: { fontSize: 11, color: '#6b5560', marginTop: 4 },
+  voiceTimeMine: { color: 'rgba(255,255,255,0.75)' },
+
+  // Barra que sustituye a la caja de texto mientras se graba.
+  recordingBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  recordingDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF5A6E' },
+  recordingTime: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', minWidth: 40 },
+  recordingHint: { fontSize: 11.5, color: 'rgba(255,255,255,0.6)', flexShrink: 1 },
+
+  mentionText: { fontWeight: '700', color: nospiColors.purpleDark },
+  mentionTextMine: { color: '#FFD9EC' },
+  mentionBar: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+  },
+  mentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  mentionName: { fontSize: 14, color: '#FFFFFF', fontWeight: '600' },
+  mentionHint: { fontSize: 11.5, color: 'rgba(255,255,255,0.6)', fontWeight: '400' },
+  mentionAllIcon: {
+    width: 28, height: 28, borderRadius: 14, marginRight: 9,
+    backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center',
+  },
+
+  // ── Banda de mensaje fijado ────────────────────────────────────────────
+  pinnedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  pinnedIcon: { fontSize: 15 },
+  pinnedTextBox: { flex: 1, minWidth: 0 },
+  pinnedLabel: { fontSize: 10.5, fontWeight: '700', color: '#F8BBD0', marginBottom: 1 },
+  pinnedPreview: { fontSize: 12.5, color: 'rgba(255,255,255,0.9)' },
+  pinnedRemove: { fontSize: 15, color: 'rgba(255,255,255,0.65)', paddingHorizontal: 4 },
+
   pollLoading: { fontSize: 13, color: 'rgba(255,255,255,0.7)', paddingVertical: 6 },
   pollCard: {
     backgroundColor: 'rgba(255,255,255,0.96)',
