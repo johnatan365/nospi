@@ -404,6 +404,18 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
   const [rateIndex, setRateIndex] = useState(0);
   const rate = PLAYBACK_RATES[rateIndex];
 
+  // Una nota vieja en WebM no se puede oir en iPhone (iOS no soporta ese
+  // formato). Se detecta que el archivo llego pero el reproductor no lo cargo,
+  // para poder decirlo en vez de que el boton no haga nada.
+  const [noSePuede, setNoSePuede] = useState(false);
+  useEffect(() => {
+    if (!uri) return;
+    const t = setTimeout(() => {
+      if (status && status.isLoaded === false) setNoSePuede(true);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [uri, status?.isLoaded]);
+
   const toggle = () => {
     if (!uri) return;
     if (playing) {
@@ -458,6 +470,11 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
           <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]}>
             {formatDuration(playing || current > 0 ? current : total)}
           </Text>
+          {noSePuede && (
+            <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]} numberOfLines={1}>
+              No se puede reproducir aquí
+            </Text>
+          )}
           <TouchableOpacity
             onPress={cycleRate}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1029,6 +1046,14 @@ export default function ChatThreadScreen() {
     return () => clearInterval(id);
   }, [recording]);
 
+  // En iPhone, si no se configura la sesion de audio, el interruptor lateral de
+  // silencio deja las notas de voz mudas aunque el archivo este perfecto. Se
+  // configura al abrir el chat, no solo al grabar.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+  }, []);
+
   // Si se sale del chat en plena grabacion, hay que soltar el microfono.
   useEffect(() => {
     return () => {
@@ -1117,7 +1142,9 @@ export default function ChatThreadScreen() {
         await recorder.stop();
         setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
         if (!recorder.uri) { avisar('La grabación quedó vacía. Vuelve a intentarlo.'); return; }
-        mime = 'audio/m4a';
+        // audio/mp4 es el tipo estandar; 'audio/m4a' no lo es y algunos
+        // reproductores lo rechazan.
+        mime = 'audio/mp4';
         ext = 'm4a';
         payload = { uri: recorder.uri };
       }

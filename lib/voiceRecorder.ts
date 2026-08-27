@@ -13,13 +13,17 @@
 // 32 kbps mono alcanza de sobra para voz y pesa ~4 veces menos que 128 kbps.
 export const VOICE_BITS_PER_SECOND = 32000;
 
-// Se prefiere opus (mejor voz por kilobyte); si el navegador no lo tiene, se
-// deja que el elija.
+// MP4/AAC va PRIMERO aunque opus comprima mejor: iOS no puede reproducir WebM
+// de ninguna forma (AVFoundation no lo soporta), asi que una nota grabada en
+// Chrome quedaba muda para todos los del iPhone. AAC suena en iOS, Android y
+// en todos los navegadores. WebM queda de respaldo para Firefox, que no graba
+// MP4; esas notas se oiran en web y Android, pero no en iPhone.
 const PREFERRED_MIME_TYPES = [
+  'audio/mp4;codecs=mp4a.40.2',
+  'audio/mp4',
   'audio/webm;codecs=opus',
   'audio/webm',
   'audio/ogg;codecs=opus',
-  'audio/mp4',
 ];
 
 function pickMimeType(): string | undefined {
