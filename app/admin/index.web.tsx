@@ -1459,6 +1459,7 @@ export default function AdminPanelScreen() {
         },
         (payload) => {
           loadEventParticipants(selectedEventForMonitoring);
+          loadMonitoringAttendees(selectedEventForMonitoring);
         }
       )
       .subscribe((status) => {
@@ -1829,6 +1830,7 @@ const handleLogin = async () => {
     if (elegido) {
       setSelectedEventForMonitoring(elegido.id);
       loadEventParticipants(elegido.id);
+      loadMonitoringAttendees(elegido.id);
     }
   }, [currentView, realtimeEventTab, events, selectedEventForMonitoring]);
 
@@ -1841,7 +1843,10 @@ const handleLogin = async () => {
     try {
       await loadDashboardData();
       if (currentView === 'questions') { try { await loadQuestions(); } catch (_e) {} }
-      if (selectedEventForMonitoring) { try { await loadEventParticipants(selectedEventForMonitoring); } catch (_e) {} }
+      if (selectedEventForMonitoring) {
+        try { await loadEventParticipants(selectedEventForMonitoring); } catch (_e) {}
+        try { await loadMonitoringAttendees(selectedEventForMonitoring); } catch (_e) {}
+      }
       setLastRefreshAt(new Date());
     } catch (e) {
       console.error('handleRefreshAll error:', e);
@@ -2079,6 +2084,58 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     } catch (e) { console.error('Error marcando WhatsApp enviado:', e); }
   };
 
+  // Inscritos del evento que se esta monitoreando en "En vivo". Se traen con
+  // el mismo RPC que usa Gestion de eventos, porque event_participants solo
+  // guarda a quien YA confirmo llegada y aqui hace falta tambien el total
+  // inscrito para poder decir cuantos faltan.
+  const [monitoringAttendees, setMonitoringAttendees] = useState<any[]>([]);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
+
+  const loadMonitoringAttendees = useCallback(async (eventId: string) => {
+    setMonitoringLoading(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('get_event_attendees_for_admin', { p_event_id: eventId });
+      if (error) {
+        console.error('Error cargando inscritos del evento monitoreado:', error);
+        setMonitoringAttendees([]);
+        return;
+      }
+      setMonitoringAttendees(data || []);
+    } finally {
+      setMonitoringLoading(false);
+    }
+  }, []);
+
+  // Cuenta por genero: cuantos confirmaron llegada y cuantos faltan.
+  // Se considera confirmado quien tiene arrival_status distinto de 'pending'
+  // (lo pone tanto el GPS del asistente como el boton del admin) o fecha de
+  // check-in. Los cancelados no cuentan como inscritos.
+  const resumenAsistencia = useMemo(() => {
+    const vacio = { confirmados: 0, inscritos: 0 };
+    const acc: Record<string, { confirmados: number; inscritos: number }> = {
+      hombre: { ...vacio }, mujer: { ...vacio }, otro: { ...vacio },
+    };
+
+    for (const a of monitoringAttendees) {
+      if (a.status === 'cancelada') continue;
+      const g = a.user_gender === 'hombre' ? 'hombre' : a.user_gender === 'mujer' ? 'mujer' : 'otro';
+      acc[g].inscritos += 1;
+      const llego = !!a.checked_in_at || (a.arrival_status && a.arrival_status !== 'pending');
+      if (llego) acc[g].confirmados += 1;
+    }
+
+    return {
+      hombre: acc.hombre,
+      mujer: acc.mujer,
+      otro: acc.otro,
+      total: {
+        confirmados: acc.hombre.confirmados + acc.mujer.confirmados + acc.otro.confirmados,
+        inscritos: acc.hombre.inscritos + acc.mujer.inscritos + acc.otro.inscritos,
+      },
+    };
+  }, [monitoringAttendees]);
+
   const loadEventParticipants = async (eventId: string) => {
     try {
       
@@ -2201,6 +2258,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       // la persona confirmada desde Gestion no aparecia alli hasta recargar.
       if (selectedEventForMonitoring === eventId) {
         await loadEventParticipants(eventId);
+        await loadMonitoringAttendees(eventId);
       }
     } catch (err: any) {
       window.alert('Error al confirmar llegada: ' + (err?.message || 'desconocido'));
@@ -7381,6 +7439,9 @@ setBulkWhatsAppPending(pending);
               setSelectedEventForMonitoring(eventId);
               if (eventId) {
                 loadEventParticipants(eventId);
+                loadMonitoringAttendees(eventId);
+              } else {
+                setMonitoringAttendees([]);
               }
             }}
           >
@@ -7400,6 +7461,78 @@ setBulkWhatsAppPending(pending);
               ))}
           </select>
         </View>
+
+        {/* Resumen de asistencia por genero: cuantos confirmaron llegada y
+            cuantos faltan. Lo importante en vivo es saber si falta un genero,
+            no solo el total. */}
+        {selectedEventForMonitoring && resumenAsistencia.total.inscritos > 0 && (() => {
+          const filas: { icono: string; etiqueta: string; listos: string; datos: { confirmados: number; inscritos: number } }[] = [
+            { icono: '👨', etiqueta: 'Hombres', listos: 'Todos confirmados', datos: resumenAsistencia.hombre },
+            { icono: '👩', etiqueta: 'Mujeres', listos: 'Todas confirmadas', datos: resumenAsistencia.mujer },
+          ];
+          if (resumenAsistencia.otro.inscritos > 0) {
+            filas.push({ icono: '🧑', etiqueta: 'Otros', listos: 'Todos confirmados', datos: resumenAsistencia.otro });
+          }
+          const t = resumenAsistencia.total;
+          const faltanTotal = t.inscritos - t.confirmados;
+
+          return (
+            <View style={{
+              backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, marginBottom: 16,
+              borderWidth: 1, borderColor: '#E5E7EB',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
+                  Asistencia confirmada
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: faltanTotal === 0 ? '#15803d' : '#B45309' }}>
+                  {t.confirmados} de {t.inscritos}
+                  {faltanTotal > 0 ? ` · faltan ${faltanTotal}` : ' · todos llegaron 🎉'}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                {filas.map(f => {
+                  const faltan = f.datos.inscritos - f.datos.confirmados;
+                  const pct = f.datos.inscritos > 0
+                    ? Math.round((f.datos.confirmados / f.datos.inscritos) * 100)
+                    : 0;
+                  const completo = f.datos.inscritos > 0 && faltan === 0;
+                  return (
+                    <View key={f.etiqueta} style={{
+                      flex: 1, minWidth: 150,
+                      backgroundColor: completo ? '#F0FDF4' : '#FAFAFA',
+                      borderWidth: 1, borderColor: completo ? '#BBF7D0' : '#EEEEEE',
+                      borderRadius: 12, padding: 12,
+                    }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#6B7280', marginBottom: 6 }}>
+                        {f.icono} {f.etiqueta}
+                      </Text>
+                      <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937' }}>
+                        {f.datos.confirmados}
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#9CA3AF' }}> / {f.datos.inscritos}</Text>
+                      </Text>
+                      <View style={{ height: 6, backgroundColor: '#F1F1F4', borderRadius: 3, overflow: 'hidden', marginTop: 8 }}>
+                        <View style={{ width: `${pct}%`, height: 6, backgroundColor: completo ? '#16A34A' : '#AD1457' }} />
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: faltan > 0 ? '#B45309' : '#15803d', marginTop: 6, fontWeight: '600' }}>
+                        {f.datos.inscritos === 0
+                          ? 'Sin inscritos'
+                          : faltan > 0
+                          ? `Faltan ${faltan} por confirmar`
+                          : f.listos}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {monitoringLoading && (
+                <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 10 }}>Actualizando…</Text>
+              )}
+            </View>
+          );
+        })()}
 
         {selectedEventForMonitoring && (
           <View style={styles.participantsContainer}>
