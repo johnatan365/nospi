@@ -55,7 +55,23 @@ const NOSPI_SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000099';
 // a los participantes de la conversacion (politica en storage.objects) y que
 // caduca. Ruta de cada archivo: <conversation_id>/<sender_id>/<archivo>.
 const MEDIA_BUCKET = 'chat-media';
-const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hora
+// Antes duraba 1 hora, y como el enlace de una foto solo se pedia UNA vez por
+// pantalla, al pasar esa hora las fotos dejaban de cargarse: justo lo que pasa
+// si dejas el chat abierto durante un evento.
+//
+// Ademas, la duracion larga es lo que permite REUTILIZAR el mismo enlace entre
+// sesiones. Como la cache de imagenes guarda por direccion, y cada firma nueva
+// generaba una direccion distinta, la cache no servia de nada y cada foto se
+// volvia a descargar entera cada vez que se abria el chat.
+const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 dias
+
+// Se vuelve a firmar cuando le queda menos de un dia, para que nunca caduque
+// mientras alguien la esta mirando.
+const SIGNED_URL_RENEW_BEFORE_MS = 24 * 60 * 60 * 1000;
+
+// Los enlaces se guardan en el telefono para reutilizarlos en la proxima
+// sesion; asi la direccion no cambia y la cache de imagenes por fin acierta.
+const SIGNED_URL_CACHE_KEY = 'nospi_chat_signed_urls_v1';
 
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
@@ -780,7 +796,66 @@ export default function ChatThreadScreen() {
   // Pide enlaces firmados para las fotos/videos que todavia no tienen uno.
   // El bucket es privado, asi que sin esto la imagen no carga. La firma la
   // autoriza la politica de storage: solo si eres participante del chat.
+  //
+  // Los enlaces se guardan en el telefono y se reutilizan mientras sigan
+  // vigentes. Esto es lo que hace que la cache de imagenes funcione: si en cada
+  // sesion se firmara de nuevo, la direccion cambiaria y la foto se volveria a
+  // descargar entera cada vez.
+
+  // Hasta que no se lea la cache no se firma nada: si se firmara antes, se
+  // pedirian enlaces nuevos en cada arranque y la cache no serviria para nada.
+  const [cacheLeida, setCacheLeida] = useState(false);
+
+  // Cuantas veces se ha reintentado firmar cada archivo. Sin este tope, una
+  // foto que falle siempre (borrada del bucket, por ejemplo) entraria en un
+  // bucle de firmar -> fallar -> firmar.
+  const reintentosFirmaRef = useRef<Record<string, number>>({});
+  const MAX_REINTENTOS_FIRMA = 2;
+
+  // Lee del disco los enlaces que aun sirven, antes de pedir nada.
   useEffect(() => {
+    let vivo = true;
+    AsyncStorage.getItem(SIGNED_URL_CACHE_KEY)
+      .then((raw) => {
+        if (!vivo || !raw) return;
+        const guardado: Record<string, { url: string; exp: number }> = JSON.parse(raw);
+        const ahora = Date.now();
+        const utiles: Record<string, string> = {};
+        for (const [path, v] of Object.entries(guardado)) {
+          if (v?.url && v.exp - ahora > SIGNED_URL_RENEW_BEFORE_MS) {
+            utiles[path] = v.url;
+            signRequestedRef.current.add(path);
+          }
+        }
+        if (Object.keys(utiles).length > 0) {
+          setSignedUrls((prev) => ({ ...utiles, ...prev }));
+        }
+      })
+      .catch(() => { /* si la cache esta corrupta, se vuelve a firmar y ya */ })
+      .finally(() => { if (vivo) setCacheLeida(true); });
+    return () => { vivo = false; };
+  }, []);
+
+  // Guarda en disco lo que se vaya firmando, descartando lo ya vencido para
+  // que el archivo no crezca sin control.
+  const guardarEnCache = useCallback((nuevos: Record<string, string>) => {
+    const exp = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
+    AsyncStorage.getItem(SIGNED_URL_CACHE_KEY)
+      .then((raw) => {
+        const previo: Record<string, { url: string; exp: number }> = raw ? JSON.parse(raw) : {};
+        const ahora = Date.now();
+        const salida: Record<string, { url: string; exp: number }> = {};
+        for (const [path, v] of Object.entries(previo)) {
+          if (v?.exp > ahora) salida[path] = v;
+        }
+        for (const [path, url] of Object.entries(nuevos)) salida[path] = { url, exp };
+        return AsyncStorage.setItem(SIGNED_URL_CACHE_KEY, JSON.stringify(salida));
+      })
+      .catch(() => { /* no poder guardar la cache no debe romper el chat */ });
+  }, []);
+
+  useEffect(() => {
+    if (!cacheLeida) return;
     const pending = Array.from(
       new Set(
         messages
@@ -806,20 +881,35 @@ export default function ChatThreadScreen() {
           pending.forEach((path) => signRequestedRef.current.delete(path));
           return;
         }
-        setSignedUrls((prev) => {
-          const next = { ...prev };
-          (data || []).forEach((item: any) => {
-            if (item?.path && item?.signedUrl) next[item.path] = item.signedUrl;
-          });
-          return next;
+        const nuevos: Record<string, string> = {};
+        (data || []).forEach((item: any) => {
+          if (item?.path && item?.signedUrl) nuevos[item.path] = item.signedUrl;
         });
+        if (Object.keys(nuevos).length === 0) return;
+        setSignedUrls((prev) => ({ ...prev, ...nuevos }));
+        guardarEnCache(nuevos);
       })
       .catch(() => {
         pending.forEach((path) => signRequestedRef.current.delete(path));
       });
 
     return () => { active = false; };
-  }, [messages]);
+  }, [messages, guardarEnCache, cacheLeida]);
+
+  // Si una foto falla al cargarse (enlace vencido, o revocado), se pide uno
+  // nuevo en vez de dejar el hueco. Antes esto no ocurria nunca: la ruta
+  // quedaba marcada como "ya pedida" para siempre.
+  const volverAFirmar = useCallback((path: string) => {
+    const hechos = reintentosFirmaRef.current[path] || 0;
+    if (hechos >= MAX_REINTENTOS_FIRMA) return; // el archivo no esta, no insistir
+    reintentosFirmaRef.current[path] = hechos + 1;
+    signRequestedRef.current.delete(path);
+    setSignedUrls((prev) => {
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+  }, []);
 
   // Recupera el borrador guardado al entrar (o volver) al chat.
   useEffect(() => {
@@ -1782,6 +1872,9 @@ export default function ChatThreadScreen() {
                           contentFit="cover"
                           cachePolicy="memory-disk"
                           transition={120}
+                          // Si el enlace ya no sirve, se pide uno nuevo en vez
+                          // de dejar el hueco en blanco.
+                          onError={() => volverAFirmar(item.media_path as string)}
                         />
                       </TouchableOpacity>
                     );
