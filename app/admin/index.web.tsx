@@ -2084,6 +2084,154 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     } catch (e) { console.error('Error marcando WhatsApp enviado:', e); }
   };
 
+  // ── Edades por genero ──────────────────────────────────────────────────
+  // Sirve en Gestion de eventos (para decidir si el grupo encaja antes del
+  // evento) y en En vivo (para ver que edades ya estan dentro).
+
+  // Se considera que alguien "tiene con quien" si hay al menos una persona del
+  // otro genero dentro de este margen. Cinco anos es lo que en la practica
+  // separa una mesa que fluye de una en la que alguien queda descolgado.
+  const MARGEN_EDAD = 5;
+
+  type PersonaEdad = { gender?: string | null; age?: number | null };
+
+  const analizarEdades = (personas: PersonaEdad[]) => {
+    const norm = (g?: string | null) => (g === 'hombre' ? 'hombre' : g === 'mujer' ? 'mujer' : 'otro');
+    const edades: Record<string, number[]> = { hombre: [], mujer: [], otro: [] };
+
+    for (const p of personas) {
+      const edad = Number(p.age);
+      if (!Number.isFinite(edad) || edad <= 0) continue;
+      edades[norm(p.gender)].push(edad);
+    }
+    (Object.keys(edades) as string[]).forEach(k => edades[k].sort((x, y) => x - y));
+
+    const promedio = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a2, b) => a2 + b, 0) / xs.length) : null);
+
+    // Quien no tiene a nadie del otro genero a menos de MARGEN_EDAD anos.
+    const sinPareja = (propias: number[], otras: number[]) =>
+      otras.length === 0
+        ? []
+        : propias.filter(e => !otras.some(o => Math.abs(o - e) <= MARGEN_EDAD));
+
+    const solosH = sinPareja(edades.hombre, edades.mujer);
+    const solosM = sinPareja(edades.mujer, edades.hombre);
+    const todas = [...edades.hombre, ...edades.mujer];
+
+    return {
+      hombre: edades.hombre,
+      mujer: edades.mujer,
+      otro: edades.otro,
+      promH: promedio(edades.hombre),
+      promM: promedio(edades.mujer),
+      solosH: new Set(solosH),
+      solosM: new Set(solosM),
+      totalSolos: solosH.length + solosM.length,
+      min: todas.length ? Math.min(...todas) : null,
+      max: todas.length ? Math.max(...todas) : null,
+      hayAmbos: edades.hombre.length > 0 && edades.mujer.length > 0,
+    };
+  };
+
+  // Frase de abajo: dice en una linea que hay que hacer.
+  const avisoEdades = (an: ReturnType<typeof analizarEdades>) => {
+    if (!an.hayAmbos) {
+      const falta = an.hombre.length === 0 ? 'hombres' : 'mujeres';
+      return { tono: 'warn' as const, texto: `Todavía no hay ${falta} inscritos.` };
+    }
+    if (an.totalSolos === 0) {
+      return { tono: 'ok' as const, texto: `Todos entre ${an.min} y ${an.max}. Este grupo encaja.` };
+    }
+    // Cuando el desajuste es de un solo lado se puede decir hacia donde buscar.
+    const soloUnLado = an.solosH.size === 0 || an.solosM.size === 0;
+    const n = an.totalSolos;
+    const quienes = an.solosM.size === 0
+      ? (n === 1 ? 'hombre' : 'hombres')
+      : an.solosH.size === 0
+      ? (n === 1 ? 'mujer' : 'mujeres')
+      : 'personas';
+
+    let detalle = '';
+    if (soloUnLado) {
+      const descolgadas = Array.from(an.solosM.size > 0 ? an.solosM : an.solosH).sort((x, y) => x - y);
+      const otros = an.solosM.size > 0 ? an.hombre : an.mujer;
+      const etiquetaOtros = an.solosM.size > 0 ? 'Los hombres' : 'Las mujeres';
+      const pron = an.solosM.size > 0 ? 'ellas siguen' : 'ellos siguen';
+      if (descolgadas[0] > Math.max(...otros)) {
+        detalle = ` ${etiquetaOtros} llegan hasta ${Math.max(...otros)} y ${pron} de ${descolgadas[0]} a ${descolgadas[descolgadas.length - 1]}.`;
+      }
+    }
+    return {
+      tono: 'warn' as const,
+      texto: `${n} ${quienes} sin pareja de edad.${detalle}`,
+    };
+  };
+
+  // Fila de burbujas de un genero. El borde punteado marca a quien queda fuera
+  // del rango del otro genero: sin eso hay que comparar dos listas de numeros
+  // en la cabeza, que era justo el punto debil de mostrarlas sueltas.
+  const renderFilaEdades = (
+    icono: string, etiqueta: string, edades: number[], solos: Set<number>,
+    prom: number | null, color: string, fondo: string,
+  ) => (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+      <Text style={{ width: 74, flexShrink: 0, fontSize: 12.5, fontWeight: '700', color: '#6B7280', paddingTop: 2 }}>
+        {icono} {etiqueta}
+      </Text>
+      <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+        {edades.length === 0 ? (
+          <Text style={{ fontSize: 12.5, color: '#9CA3AF', paddingTop: 2 }}>Ninguno</Text>
+        ) : edades.map((e, i) => (
+          <View
+            key={`${e}-${i}`}
+            style={{
+              backgroundColor: fondo, borderRadius: 20, paddingVertical: 1, paddingHorizontal: 7,
+              borderWidth: solos.has(e) ? 1.5 : 0,
+              borderColor: '#B45309', borderStyle: 'dashed',
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color }}>{e}</Text>
+          </View>
+        ))}
+      </View>
+      {prom !== null && (
+        <Text style={{ flexShrink: 0, fontSize: 11.5, color: '#9CA3AF', paddingTop: 3 }}>prom. {prom}</Text>
+      )}
+    </View>
+  );
+
+  // Bloque completo, tal cual va en Gestion de eventos.
+  const renderResumenEdades = (personas: PersonaEdad[]) => {
+    const an = analizarEdades(personas);
+    if (an.hombre.length === 0 && an.mujer.length === 0) return null;
+    const aviso = avisoEdades(an);
+
+    return (
+      <View style={{
+        backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#EEEEEE',
+        borderRadius: 12, padding: 13, gap: 8, marginTop: 10,
+      }}>
+        {renderFilaEdades('👨', 'Hombres', an.hombre, an.solosH, an.promH, '#1D6FD0', '#E4EEFB')}
+        {renderFilaEdades('👩', 'Mujeres', an.mujer, an.solosM, an.promM, '#C2185B', '#FBE4EE')}
+        {an.otro.length > 0 &&
+          renderFilaEdades('🧑', 'Otros', an.otro, new Set<number>(), null, '#6B7280', '#F3F4F6')}
+        <View style={{
+          flexDirection: 'row', gap: 7, alignItems: 'flex-start',
+          backgroundColor: aviso.tono === 'ok' ? '#E8F6EC' : '#FDF1E3',
+          borderRadius: 9, paddingVertical: 8, paddingHorizontal: 10,
+        }}>
+          <Text style={{ fontSize: 12.5 }}>{aviso.tono === 'ok' ? '✓' : '⚠'}</Text>
+          <Text style={{
+            flex: 1, fontSize: 12.5, lineHeight: 17,
+            color: aviso.tono === 'ok' ? '#15803D' : '#B45309', fontWeight: '600',
+          }}>
+            {aviso.texto}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   // Inscritos del evento que se esta monitoreando en "En vivo". Se traen con
   // el mismo RPC que usa Gestion de eventos, porque event_participants solo
   // guarda a quien YA confirmo llegada y aqui hace falta tambien el total
@@ -2112,9 +2260,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // (lo pone tanto el GPS del asistente como el boton del admin) o fecha de
   // check-in. Los cancelados no cuentan como inscritos.
   const resumenAsistencia = useMemo(() => {
-    const vacio = { confirmados: 0, inscritos: 0 };
-    const acc: Record<string, { confirmados: number; inscritos: number }> = {
-      hombre: { ...vacio }, mujer: { ...vacio }, otro: { ...vacio },
+    const vacio = { confirmados: 0, inscritos: 0 };  // las edades se anaden aparte
+    const acc: Record<string, { confirmados: number; inscritos: number; edades: number[] }> = {
+      hombre: { ...vacio, edades: [] }, mujer: { ...vacio, edades: [] }, otro: { ...vacio, edades: [] },
     };
 
     for (const a of monitoringAttendees) {
@@ -2122,8 +2270,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const g = a.user_gender === 'hombre' ? 'hombre' : a.user_gender === 'mujer' ? 'mujer' : 'otro';
       acc[g].inscritos += 1;
       const llego = !!a.checked_in_at || (a.arrival_status && a.arrival_status !== 'pending');
-      if (llego) acc[g].confirmados += 1;
+      if (llego) {
+        acc[g].confirmados += 1;
+        // Edades de quien YA esta dentro: en vivo eso importa mas que el total.
+        const edad = Number(a.user_age);
+        if (Number.isFinite(edad) && edad > 0) acc[g].edades.push(edad);
+      }
     }
+    (Object.keys(acc) as string[]).forEach(k => acc[k].edades.sort((x, y) => x - y));
 
     return {
       hombre: acc.hombre,
@@ -7466,7 +7620,7 @@ setBulkWhatsAppPending(pending);
             cuantos faltan. Lo importante en vivo es saber si falta un genero,
             no solo el total. */}
         {selectedEventForMonitoring && resumenAsistencia.total.inscritos > 0 && (() => {
-          const filas: { icono: string; etiqueta: string; listos: string; datos: { confirmados: number; inscritos: number } }[] = [
+          const filas: { icono: string; etiqueta: string; listos: string; datos: { confirmados: number; inscritos: number; edades: number[] } }[] = [
             { icono: '👨', etiqueta: 'Hombres', listos: 'Todos confirmados', datos: resumenAsistencia.hombre },
             { icono: '👩', etiqueta: 'Mujeres', listos: 'Todas confirmadas', datos: resumenAsistencia.mujer },
           ];
@@ -7522,6 +7676,11 @@ setBulkWhatsAppPending(pending);
                           ? `Faltan ${faltan} por confirmar`
                           : f.listos}
                       </Text>
+                      {f.datos.edades.length > 0 && (
+                        <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 3 }}>
+                          Aquí: {f.datos.edades.join(' · ')}
+                        </Text>
+                      )}
                     </View>
                   );
                 })}
@@ -8496,6 +8655,13 @@ setBulkWhatsAppPending(pending);
                 <Text style={styles.eventInfoTitle}>{selectedEventForAttendees.name || `${selectedEventForAttendees.type} - ${selectedEventForAttendees.city}`}</Text>
                 <Text style={styles.eventInfoDetail}>Fecha: {selectedEventForAttendees.date} a las {formatTimeAmPm(selectedEventForAttendees.time)}</Text>
                 <Text style={styles.eventInfoDetail}>Total registrados: {eventAttendees.length}</Text>
+                {/* Edades por genero: para ver de un vistazo si el grupo encaja
+                    antes de armarlo. Los cancelados no cuentan. */}
+                {renderResumenEdades(
+                  eventAttendees
+                    .filter((a: any) => a.status !== 'cancelada')
+                    .map((a: any) => ({ gender: a.users?.gender, age: a.users?.age }))
+                )}
               </View>
             )}
 
