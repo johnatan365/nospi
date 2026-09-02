@@ -822,6 +822,28 @@ export default function AdminPanelScreen() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<'divertido' | 'sensual' | 'atrevido'>('divertido');
+
+  // ── Ranking de preguntas ───────────────────────────────────────────────
+  // Cuarta pestana junto a los niveles: la evidencia queda a un clic de donde
+  // se podan las preguntas, en vez de en otro sitio del menu.
+  const [showRanking, setShowRanking] = useState(false);
+  const [ranking, setRanking] = useState<any[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [rankOrden, setRankOrden] = useState<'combinado' | 'mejor' | 'peor' | 'mas' | 'menos' | 'mesas'>('combinado');
+  const [rankNivel, setRankNivel] = useState('');
+  const [rankSoloSolidas, setRankSoloSolidas] = useState(true);
+
+  const loadRanking = useCallback(async () => {
+    setRankingLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_question_ranking');
+      if (error) { console.error('Error cargando el ranking:', error); setRanking([]); return; }
+      setRanking(data || []);
+    } finally {
+      setRankingLoading(false);
+    }
+  }, []);
+
   const [newQuestionText, setNewQuestionText] = useState('');
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   // Buscador (R): filtra en los 3 niveles a la vez sobre allQuestions.
@@ -3857,6 +3879,176 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  // Ranking de preguntas: cruza los votos 👍/👎 con los segundos de conversacion
+  // y las veces jugada. El puntaje y el veredicto los calcula el servidor
+  // (admin_get_question_ranking), para que la formula viva en un solo sitio.
+  const renderRanking = () => {
+    const NIVEL_META: Record<string, [string, string, string]> = {
+      divertido: ['Divertido', '#E0F2FE', '#075985'],
+      sensual:   ['Coqueto',   '#EDE7F6', '#5E35B1'],
+      atrevido:  ['Atrevido',  '#FFEDD5', '#9A3412'],
+    };
+    const VEREDICTO_META: Record<string, [string, string, string]> = {
+      dejar:    ['Dejar',    '#E8F6EC', '#15803D'],
+      eliminar: ['Eliminar', '#FBEDE8', '#B4442C'],
+      observar: ['Observar', '#FBF3E2', '#9A6B18'],
+      sin_datos:['Sin datos','#F3F4F6', '#9CA3AF'],
+    };
+
+    let lista = ranking.filter(r => !rankNivel || r.level === rankNivel);
+    if (rankSoloSolidas) {
+      lista = lista.filter(r => r.veredicto !== 'sin_datos');
+    }
+    const maxSeg = Math.max(1, ...ranking.map(r => r.avg_seconds || 0));
+
+    const orden: Record<string, (a: any, b: any) => number> = {
+      combinado: (a, b) => b.puntaje - a.puntaje,
+      mejor: (a, b) => (b.up - b.down) - (a.up - a.down) || b.puntaje - a.puntaje,
+      peor:  (a, b) => (a.up - a.down) - (b.up - b.down) || a.puntaje - b.puntaje,
+      mas:   (a, b) => b.avg_seconds - a.avg_seconds,
+      menos: (a, b) => a.avg_seconds - b.avg_seconds,
+      mesas: (a, b) => b.mesas - a.mesas,
+    };
+    lista = [...lista].sort(orden[rankOrden]);
+
+    const conteo = (v: string) => ranking.filter(r => r.veredicto === v).length;
+
+    return (
+      <View style={{ marginBottom: 16 }}>
+        {/* Resumen arriba: cuantas hay de cada veredicto */}
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          {(['dejar', 'observar', 'eliminar', 'sin_datos'] as const).map(v => {
+            const [label, bg, color] = VEREDICTO_META[v];
+            return (
+              <View key={v} style={{ backgroundColor: bg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 13, minWidth: 92 }}>
+                <Text style={{ fontSize: 19, fontWeight: '800', color }}>{conteo(v)}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color }}>{label}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Controles */}
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <select
+            style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E7EB', borderRadius: 9, padding: '7px 10px', fontSize: 12.5 }}
+            value={rankOrden}
+            onChange={(e) => setRankOrden(e.target.value as any)}
+          >
+            <option value="combinado">⭐ Puntaje combinado</option>
+            <option value="mejor">Mejor valoradas</option>
+            <option value="peor">Peor valoradas</option>
+            <option value="mas">Más conversación</option>
+            <option value="menos">Menos conversación</option>
+            <option value="mesas">Más jugadas</option>
+          </select>
+          <select
+            style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E7EB', borderRadius: 9, padding: '7px 10px', fontSize: 12.5 }}
+            value={rankNivel}
+            onChange={(e) => setRankNivel(e.target.value)}
+          >
+            <option value="">Todos los niveles</option>
+            <option value="divertido">Divertido</option>
+            <option value="sensual">Coqueto</option>
+            <option value="atrevido">Atrevido</option>
+          </select>
+          <TouchableOpacity
+            onPress={() => setRankSoloSolidas(v => !v)}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 7,
+              backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#E5E7EB',
+              borderRadius: 9, paddingVertical: 7, paddingHorizontal: 10,
+            }}
+          >
+            <View style={{
+              width: 16, height: 16, borderRadius: 4, borderWidth: 2,
+              borderColor: rankSoloSolidas ? '#880E4F' : '#CBD5E1',
+              backgroundColor: rankSoloSolidas ? '#880E4F' : 'transparent',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              {rankSoloSolidas && <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>✓</Text>}
+            </View>
+            <Text style={{ fontSize: 12.5, color: '#374151' }}>Solo con evidencia suficiente</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={loadRanking} style={{ paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F3F4F6' }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>↻ Actualizar</Text>
+          </TouchableOpacity>
+          <Text style={{ marginLeft: 'auto', fontSize: 12, color: '#9CA3AF' }}>
+            {lista.length} {lista.length === 1 ? 'pregunta' : 'preguntas'}
+          </Text>
+        </View>
+
+        {rankingLoading ? (
+          <View style={{ padding: 30, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#880E4F" />
+          </View>
+        ) : lista.length === 0 ? (
+          <Text style={{ padding: 26, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            Nada con esos filtros.
+          </Text>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {lista.map((r, i) => {
+              const [vLabel, vBg, vColor] = VEREDICTO_META[r.veredicto] || VEREDICTO_META.sin_datos;
+              const [nLabel, nBg, nColor] = NIVEL_META[r.level] || ['Sin nivel', '#F3F4F6', '#9CA3AF'];
+              const pct = Math.max(2, Math.round((r.avg_seconds / maxSeg) * 100));
+              const lento = r.avg_seconds > 0 && r.avg_seconds < 30;
+              return (
+                <View
+                  key={r.question_text + i}
+                  style={{
+                    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 11,
+                    borderLeftWidth: 3, borderLeftColor: vColor,
+                    padding: 11, backgroundColor: '#FFFFFF', gap: 8,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: 9, alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF', width: 20, paddingTop: 2 }}>{i + 1}</Text>
+                    <Text style={{ flex: 1, fontSize: 13.5, color: '#1f2937', lineHeight: 19 }}>{r.question_text}</Text>
+                    <View style={{ backgroundColor: nBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 7, marginTop: 2 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: nColor }}>{nLabel}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 13, alignItems: 'center', flexWrap: 'wrap', paddingLeft: 29 }}>
+                    <Text style={{ fontSize: 12 }}>
+                      {r.up + r.down > 0
+                        ? <><Text style={{ color: '#15803D', fontWeight: '700' }}>👍 {r.up}</Text>
+                            <Text style={{ color: '#B4442C', fontWeight: '700' }}>  👎 {r.down}</Text></>
+                        : <Text style={{ color: '#9CA3AF' }}>sin votos</Text>}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                      <Text style={{ color: '#1f2937', fontWeight: '700' }}>{r.mesas}</Text> mesas
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 110 }}>
+                      <View style={{ flex: 1, height: 6, backgroundColor: '#EFE7EB', borderRadius: 3, overflow: 'hidden', minWidth: 50 }}>
+                        <View style={{ width: `${pct}%`, height: 6, backgroundColor: lento ? '#B4442C' : '#B03A6E' }} />
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                        <Text style={{ color: '#1f2937', fontWeight: '700' }}>{r.avg_seconds}</Text>s
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#880E4F', minWidth: 24, textAlign: 'right' }}>
+                      {r.puntaje}
+                    </Text>
+                    <View style={{ backgroundColor: vBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: vColor }}>{vLabel}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 12, lineHeight: 17 }}>
+          El puntaje cruza el voto, los segundos de conversación y las veces jugada. Las mesas
+          cuentan como confianza, no como calidad: una pregunta con pocas mesas ve su puntaje
+          atenuado hasta que acumule evidencia.
+        </Text>
+      </View>
+    );
+  };
+
   const renderQuestions = () => {
     const searching = questionSearch.trim().length > 0;
     const searchNorm = normalizeQuestionText(questionSearch.trim());
@@ -4045,7 +4237,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         <View style={styles.levelSelector}>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'divertido' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('divertido'); setQuestions(allQuestions.filter((q) => q.level === 'divertido')); }}
+            onPress={() => { setShowRanking(false); setSelectedLevel('divertido'); setQuestions(allQuestions.filter((q) => q.level === 'divertido')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'divertido' && styles.levelButtonTextActive]}>
               😄 Divertido
@@ -4053,7 +4245,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'sensual' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('sensual'); setQuestions(allQuestions.filter((q) => q.level === 'sensual')); }}
+            onPress={() => { setShowRanking(false); setSelectedLevel('sensual'); setQuestions(allQuestions.filter((q) => q.level === 'sensual')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'sensual' && styles.levelButtonTextActive]}>
               😘 Coqueto
@@ -4061,14 +4253,27 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.levelButton, selectedLevel === 'atrevido' && styles.levelButtonActive]}
-            onPress={() => { setSelectedLevel('atrevido'); setQuestions(allQuestions.filter((q) => q.level === 'atrevido')); }}
+            onPress={() => { setShowRanking(false); setSelectedLevel('atrevido'); setQuestions(allQuestions.filter((q) => q.level === 'atrevido')); }}
           >
             <Text style={[styles.levelButtonText, selectedLevel === 'atrevido' && styles.levelButtonTextActive]}>
               🔥 Atrevido
             </Text>
           </TouchableOpacity>
+          {/* Ranking: no es un nivel, es otra forma de mirar el mismo banco. */}
+          <TouchableOpacity
+            style={[styles.levelButton, showRanking && styles.levelButtonActive]}
+            onPress={() => { setShowRanking(true); if (ranking.length === 0) loadRanking(); }}
+          >
+            <Text style={[styles.levelButtonText, showRanking && styles.levelButtonTextActive]}>
+              📊 Ranking
+            </Text>
+          </TouchableOpacity>
         </View>
 
+        {showRanking && renderRanking()}
+
+        {!showRanking && (
+        <>
         {/* Filtro por categoría temática (⚔️💭📖🎯): combinable con el nivel y el buscador. */}
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           <TouchableOpacity
@@ -4235,6 +4440,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           }
           return <View>{filtered.map((q, i) => questionRow(q, i, 'level'))}</View>;
         })()}
+        </>
+        )}
       </View>
     );
   };
