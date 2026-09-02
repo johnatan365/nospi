@@ -3879,6 +3879,42 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  // Eliminar desde el ranking. Se busca por TEXTO porque el ranking agrupa por
+  // texto: la misma pregunta vive como fila del banco y como copia en cada
+  // evento. Los eventos CERRADOS no se tocan — ahi es historial de lo que se
+  // jugo de verdad, y borrarlo falsearia las estadisticas de este ranking.
+  const eliminarDelRanking = async (r: any) => {
+    const ok = window.confirm(
+      `¿Eliminar esta pregunta?\n\n"${r.question_text}"\n\n` +
+      `Se quita del banco global y de los eventos abiertos, así que deja de salir. ` +
+      `Los eventos ya cerrados no se tocan.`
+    );
+    if (!ok) return;
+
+    const { data, error } = await supabase.rpc('admin_delete_question_by_text', {
+      p_question_text: r.question_text,
+    });
+    if (error) {
+      window.alert('No se pudo eliminar: ' + error.message);
+      return;
+    }
+
+    const res: any = data || {};
+    if (res.estaba_fijada) {
+      window.alert('Ojo: esa pregunta estaba FIJADA. Ya no saldrá al abrir la dinámica.');
+    }
+
+    // Se quita de la lista al instante y se recargan las dos vistas.
+    setRanking(prev => prev.filter(x => x.question_text !== r.question_text));
+    loadQuestions();
+
+    const enEventos = res.eventos_abiertos || 0;
+    window.alert(
+      'Pregunta eliminada.' +
+      (enEventos > 0 ? ` También se quitó de ${enEventos} evento${enEventos === 1 ? '' : 's'} abierto${enEventos === 1 ? '' : 's'}.` : '')
+    );
+  };
+
   // Ranking de preguntas: cruza los votos 👍/👎 con los segundos de conversacion
   // y las veces jugada. El puntaje y el veredicto los calcula el servidor
   // (admin_get_question_ranking), para que la formula viva en un solo sitio.
@@ -4030,9 +4066,24 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#880E4F', minWidth: 24, textAlign: 'right' }}>
                       {r.puntaje}
                     </Text>
-                    <View style={{ backgroundColor: vBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: vColor }}>{vLabel}</Text>
-                    </View>
+                    {r.veredicto === 'eliminar' ? (
+                      // El veredicto "Eliminar" es ademas el boton que la borra.
+                      <TouchableOpacity
+                        onPress={() => eliminarDelRanking(r)}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 4,
+                          backgroundColor: vBg, borderWidth: 1, borderColor: vColor,
+                          borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5 }}>🗑️</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: vColor }}>Eliminar</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={{ backgroundColor: vBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: vColor }}>{vLabel}</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
