@@ -9567,10 +9567,14 @@ setBulkWhatsAppPending(pending);
                     return { u, score, name };
                   })
                   .filter((r: any) => r.score >= 0);
-                // Solo se pueden agregar usuarios que terminaron el registro en la app:
-                // los perfiles incompletos no sirven para un evento.
+                // Se puede agregar a cualquiera que tenga los datos que el evento
+                // realmente necesita para armar las mesas: genero y edad.
+                // OJO: `onboarding_completed` solo lo marca el registro DENTRO de la
+                // app (app/onboarding/register.tsx). Quien entro por la web queda en
+                // false aunque tenga el perfil completo, asi que filtrar por ese flag
+                // escondia ~3 de cada 4 usuarios reales del buscador.
                 const ranked = allMatches
-                  .filter((r: any) => r.u.onboarding_completed === true)
+                  .filter((r: any) => r.u.gender && r.u.age)
                   .sort((a: any, b: any) => a.score - b.score || a.name.localeCompare(b.name));
                 const hiddenIncomplete = allMatches.length - ranked.length;
                 const totalMatches = ranked.length;
@@ -9581,7 +9585,7 @@ setBulkWhatsAppPending(pending);
                   return (
                     <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: 20 }}>
                       {hiddenIncomplete > 0
-                        ? `No se encontraron usuarios con el registro completo. (${hiddenIncomplete} coincidencia${hiddenIncomplete === 1 ? '' : 's'} con el registro sin terminar, no se pueden agregar.)`
+                        ? `No se encontraron usuarios con genero y edad registrados. (${hiddenIncomplete} coincidencia${hiddenIncomplete === 1 ? '' : 's'} sin esos datos, no se pueden agregar.)`
                         : 'No se encontraron usuarios'}
                     </Text>
                   );
@@ -9590,7 +9594,7 @@ setBulkWhatsAppPending(pending);
                   <>
                     {hiddenIncomplete > 0 && (
                       <Text style={{ fontSize: 11, color: '#6B7280', paddingHorizontal: 4, paddingBottom: 6 }}>
-                        Se ocultaron {hiddenIncomplete} perfil{hiddenIncomplete === 1 ? '' : 'es'} con el registro sin terminar.
+                        Se ocultaron {hiddenIncomplete} perfil{hiddenIncomplete === 1 ? '' : 'es'} sin genero o edad.
                       </Text>
                     )}
                     {truncated && (
@@ -9611,6 +9615,7 @@ setBulkWhatsAppPending(pending);
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</Text>
                       <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
                         {u.created_at ? `Registrado ${new Date(u.created_at).toLocaleDateString('es-CO')}` : 'Sin fecha de registro'}
+                        {u.onboarding_completed === true ? '' : ' \u00b7 registro sin terminar'}
                       </Text>
                     </View>
                     {addingUserId === u.id ? (
