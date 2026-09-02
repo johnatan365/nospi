@@ -3935,7 +3935,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     if (rankSoloSolidas) {
       lista = lista.filter(r => r.veredicto !== 'sin_datos');
     }
-    const maxSeg = Math.max(1, ...ranking.map(r => r.avg_seconds || 0));
+    // La barra mide el tiempo POR PERSONA, que es lo que usa el puntaje: con
+    // mas gente en la mesa cada pregunta dura mas, y sin dividir una mesa de 15
+    // le ganaria a una de 6 solo por ser grande.
+    const maxSeg = Math.max(1, ...ranking.map(r => Number(r.seg_por_persona) || 0));
 
     const orden: Record<string, (a: any, b: any) => number> = {
       combinado: (a, b) => b.puntaje - a.puntaje,
@@ -4027,8 +4030,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             {lista.map((r, i) => {
               const [vLabel, vBg, vColor] = VEREDICTO_META[r.veredicto] || VEREDICTO_META.sin_datos;
               const [nLabel, nBg, nColor] = NIVEL_META[r.level] || ['Sin nivel', '#F3F4F6', '#9CA3AF'];
-              const pct = Math.max(2, Math.round((r.avg_seconds / maxSeg) * 100));
-              const lento = r.avg_seconds > 0 && r.avg_seconds < 30;
+              const porPersona = Number(r.seg_por_persona) || 0;
+              const pct = Math.max(2, Math.round((porPersona / maxSeg) * 100));
+              const lento = porPersona > 0 && porPersona < 6;
               return (
                 <View
                   key={r.question_text + i}
@@ -4061,6 +4065,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                       </View>
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>
                         <Text style={{ color: '#1f2937', fontWeight: '700' }}>{r.avg_seconds}</Text>s
+                        {porPersona > 0 && (
+                          <Text style={{ color: '#9CA3AF' }}> · {porPersona} c/u</Text>
+                        )}
                       </Text>
                     </View>
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#880E4F', minWidth: 24, textAlign: 'right' }}>
@@ -4092,9 +4099,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         )}
 
         <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 12, lineHeight: 17 }}>
-          El puntaje cruza el voto, los segundos de conversación y las veces jugada. Las mesas
-          cuentan como confianza, no como calidad: una pregunta con pocas mesas ve su puntaje
-          atenuado hasta que acumule evidencia.
+          El puntaje cruza el voto, la conversación y las veces jugada. El tiempo se mide
+          <Text style={{ fontWeight: '700' }}> por persona</Text> («c/u»), porque con más gente
+          en la mesa cada pregunta dura más. Las mesas cuentan como confianza, no como calidad:
+          una pregunta con pocas mesas ve su puntaje atenuado hasta que acumule evidencia.
+          {'\n'}Los eventos de prueba (sin ningún inscrito) quedan fuera de los cálculos.
         </Text>
       </View>
     );
