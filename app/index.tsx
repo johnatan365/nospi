@@ -11,24 +11,55 @@ import * as SplashScreen from 'expo-splash-screen';
 // Atribucion de canal. El script de public/index.html guarda en localStorage
 // de donde llego el visitante en su PRIMERA visita (utm_source, ttclid/fbclid,
 // referrer). Aca lo leemos al crear el perfil para saber que canal trajo a cada
-// usuario. Solo aplica en web: en nativo no hay landing con parametros.
+// usuario.
+//
+// IMPORTANTE: esta funcion nunca debe devolver {}. Si lo hace, el usuario queda
+// con utm_source NULL y desaparece del panel de Origen. Medido el 2 de
+// septiembre de 2026: de 692 registros desde el 18 de agosto, 342 (49%) estaban
+// en NULL — el 100% de los de iOS y Android, mas un 34% de los de web. Por eso
+// cada rama de abajo retorna una etiqueta explicita.
+function atribucionVacia(fuente: string) {
+  return {
+    utm_source: fuente,
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    click_id: null,
+    referrer: null,
+    first_landing_at: new Date().toISOString(),
+  };
+}
+
 function leerAtribucion() {
-  if (Platform.OS !== 'web') return {};
+  // En nativo no hay landing con parametros, asi que el script de
+  // public/index.html nunca corre. Se etiqueta por tienda para al menos saber
+  // que la persona entro por la app y no perderla en NULL.
+  if (Platform.OS !== 'web') {
+    return {
+      ...atribucionVacia(Platform.OS === 'ios' ? 'app_ios' : 'app_android'),
+      utm_medium: 'app',
+    };
+  }
   try {
     const raw = localStorage.getItem('nospi_attr');
-    if (!raw) return {};
+    // El script de la landing SIEMPRE escribe algo (minimo 'directo'), asi que
+    // si el blob no esta es que no corrio: navegadores internos de Instagram o
+    // WhatsApp con storage particionado, modo privado, o storage limpiado entre
+    // la visita y el registro. Se marca 'sin_captura' y no 'directo' para poder
+    // separar "sabemos que llego directo" de "perdimos el dato".
+    if (!raw) return atribucionVacia('sin_captura');
     const a = JSON.parse(raw);
     return {
-      utm_source: a.utm_source || null,
+      utm_source: a.utm_source || 'sin_captura',
       utm_medium: a.utm_medium || null,
       utm_campaign: a.utm_campaign || null,
       utm_content: a.utm_content || null,
       click_id: a.click_id || null,
       referrer: a.referrer || null,
-      first_landing_at: a.first_landing_at || null,
+      first_landing_at: a.first_landing_at || new Date().toISOString(),
     };
   } catch (e) {
-    return {};
+    return atribucionVacia('sin_captura');
   }
 }
 
