@@ -3118,20 +3118,65 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handleRevealLocation = async (eventId: string) => {
-    const confirmed = window.confirm('¿Revelar la ubicación de este evento?');
-    if (!confirmed) return;
-
-    try {
-      const { data: eventData, error: fetchError } = await supabase
+    // Se leen los datos ANTES de confirmar: no tiene sentido preguntar si al
+    // final no se va a poder revelar.
+    let eventData: any;
+    {
+      const { data, error: fetchError } = await supabase
         .from('events')
         .select('*')
         .eq('id', eventId)
         .single();
 
-      if (fetchError || !eventData) {
+      if (fetchError || !data) {
         window.alert('Error al obtener datos del evento');
         return;
       }
+      eventData = data;
+    }
+
+    // Revelar dispara los correos y WhatsApps con el lugar. Si falta un dato,
+    // esos mensajes salen cojos y no hay forma de recogerlos, asi que se
+    // bloquea antes en vez de avisar despues.
+    const lleno = (v: any) => typeof v === 'string' && v.trim().length > 0;
+    const faltantes: string[] = [];
+    if (!lleno(eventData.location_name)) faltantes.push('Nombre del lugar');
+    if (!lleno(eventData.location_address)) faltantes.push('Dirección del lugar');
+    if (!lleno(eventData.gps_link)) faltantes.push('Link del computador (para el GPS)');
+    if (!lleno(eventData.maps_link)) faltantes.push('Link para mostrar');
+
+    if (faltantes.length > 0) {
+      window.alert(
+        'No se puede revelar la ubicación todavía.\n\n' +
+        'Falta por llenar:\n' + faltantes.map(f => '  • ' + f).join('\n') +
+        '\n\nRevelar envía el correo y el WhatsApp con el lugar, y esos mensajes ya no se pueden recoger. ' +
+        'Completa los datos en Editar evento y vuelve a intentarlo.'
+      );
+      return;
+    }
+
+    // El link del GPS puede estar puesto pero sin coordenadas utilizables (si
+    // se pego el link corto del celular en vez del largo del computador). Sin
+    // coordenadas, el "confirmar llegada" del asistente no funciona.
+    if (eventData.latitude == null || eventData.longitude == null) {
+      window.alert(
+        'No se puede revelar la ubicación todavía.\n\n' +
+        'El link del GPS está puesto, pero no se le pudieron sacar las coordenadas. ' +
+        'Sin ellas, los asistentes no van a poder confirmar su llegada.\n\n' +
+        'Abre el lugar en Google Maps DESDE EL COMPUTADOR y pega la dirección larga ' +
+        '(la que lleva @ seguido de dos números).'
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '¿Revelar la ubicación de este evento?\n\n' +
+      eventData.location_name + '\n' + eventData.location_address + '\n\n' +
+      'Se les enviará el correo y el WhatsApp con el lugar a los asistentes confirmados.'
+    );
+    if (!confirmed) return;
+
+    try {
 
       // Build full location string for the app's `location` column
       const fullLocation = [eventData.location_name, eventData.location_address]
