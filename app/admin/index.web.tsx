@@ -627,6 +627,10 @@ export default function AdminPanelScreen() {
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
   const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
+  const [configSubPrice3m, setConfigSubPrice3m] = useState('');
+  const [configSubPrice6m, setConfigSubPrice6m] = useState('');
+  // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
+  const [configPuerta2, setConfigPuerta2] = useState(false);
   const [configMinAppVersion, setConfigMinAppVersion] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
@@ -1550,6 +1554,9 @@ export default function AdminPanelScreen() {
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
       if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
+      if (row.key === 'subscription_price_3m') setConfigSubPrice3m(row.value);
+      if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
+      if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
     }
   };
@@ -1564,6 +1571,9 @@ export default function AdminPanelScreen() {
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
         { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
+        { key: 'subscription_price_3m', value: configSubPrice3m },
+        { key: 'subscription_price_6m', value: configSubPrice6m },
+        { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
         { key: 'min_app_version', value: configMinAppVersion.trim() },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
@@ -6533,6 +6543,80 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   {configTestPaymentEnabled ? 'El botón 🧪 aparece en la pantalla de pago' : 'Los usuarios no ven el botón de prueba'}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* ── PLANES DE 3 Y 6 MESES ── */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #10B981' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              💚 Planes de 3 y 6 meses
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
+              Precio TOTAL del plan, no el mensual. Sin puntos ni comas.
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', marginBottom: 6 }}>3 meses</div>
+            <input
+              value={configSubPrice3m}
+              onChange={(e) => setConfigSubPrice3m(e.target.value.replace(/\D/g, ''))}
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '2px solid #A7F3D0', fontSize: 18, fontWeight: 700, color: '#065F46', boxSizing: 'border-box' }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6, marginBottom: 16 }}>
+              {configSubPrice3m ? `$ ${Number(configSubPrice3m).toLocaleString('es-CO')} COP · equivale a $ ${Math.round(Number(configSubPrice3m) / 3).toLocaleString('es-CO')} al mes` : ''}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', marginBottom: 6 }}>6 meses</div>
+            <input
+              value={configSubPrice6m}
+              onChange={(e) => setConfigSubPrice6m(e.target.value.replace(/\D/g, ''))}
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '2px solid #A7F3D0', fontSize: 18, fontWeight: 700, color: '#065F46', boxSizing: 'border-box' }}
+            />
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
+              {configSubPrice6m ? `$ ${Number(configSubPrice6m).toLocaleString('es-CO')} COP · equivale a $ ${Math.round(Number(configSubPrice6m) / 6).toLocaleString('es-CO')} al mes` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
+              Cambiar esto NO afecta a quien ya se suscribió: cada suscripción guarda el precio que aceptó y se renueva con ese.
+            </div>
+          </div>
+
+          {/* ── PRUEBA: SOLO SUSCRIPCIÓN (PUERTA 2) ── */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${configPuerta2 ? '#7C3AED' : '#9CA3AF'}` }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: configPuerta2 ? '#5B21B6' : '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              🚪 Prueba: solo suscripción
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
+              A quien llegue por el link de la campaña de prueba se le oculta el pago por evento y solo ve los planes. A todos los demás no les cambia nada.
+            </div>
+            <div
+              onClick={() => setConfigPuerta2(!configPuerta2)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
+                backgroundColor: configPuerta2 ? '#EDE9FE' : '#F3F4F6',
+                borderRadius: 12, padding: '14px 18px',
+                border: `2px solid ${configPuerta2 ? '#7C3AED' : '#E5E7EB'}`,
+                transition: 'all 0.2s', userSelect: 'none',
+              }}
+            >
+              <div style={{
+                width: 52, height: 28, borderRadius: 14, position: 'relative', flexShrink: 0,
+                backgroundColor: configPuerta2 ? '#7C3AED' : '#D1D5DB',
+                transition: 'background 0.2s',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 3, left: configPuerta2 ? 27 : 3,
+                  width: 22, height: 22, borderRadius: '50%', backgroundColor: 'white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: configPuerta2 ? '#5B21B6' : '#6B7280' }}>
+                  {configPuerta2 ? '✅ Prueba corriendo' : '⛔ Prueba apagada'}
+                </div>
+                <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                  {configPuerta2 ? 'Quien entró por el link no ve el pago por evento' : 'Todos ven la app igual, aunque tengan el link'}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
+              Este es el botón de emergencia: apagarlo devuelve todo a la normalidad al instante, sin publicar código. Ojo que la marca se pone al REGISTRARSE — una cuenta que ya existía no cambia aunque abra el link.
             </div>
           </div>
 
