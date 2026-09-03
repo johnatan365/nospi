@@ -81,8 +81,29 @@
       (function () {
         try {
           var K = 'nospi_attr';
-          if (localStorage.getItem(K)) return;
           var p = new URLSearchParams(window.location.search);
+          // PUERTA 2: se calcula ANTES del corte de abajo. Ver PUERTA-2.md.
+          var soloSub = (p.get('plan') === 'sub') || /\/suscribete\b/.test(location.pathname);
+          var existente = localStorage.getItem(K);
+          if (existente) {
+            // Ya hay atribucion de la PRIMERA visita y no se toca: de eso
+            // depende saber que canal trajo a cada usuario.
+            //
+            // Pero la marca de la puerta 2 SI se agrega, porque puede llegar
+            // en una visita posterior. Sin esto la prueba solo alcanzaba a
+            // quien nunca habia entrado a Nospi — casi nadie — y el resultado
+            // habria salido sesgado sin que se notara.
+            if (soloSub) {
+              try {
+                var prev = JSON.parse(existente);
+                if (prev.solo_suscripcion !== true) {
+                  prev.solo_suscripcion = true;
+                  localStorage.setItem(K, JSON.stringify(prev));
+                }
+              } catch (e) {}
+            }
+            return;
+          }
           var ref = document.referrer || '';
 // Los redirects de login (Apple, Google, Supabase) dejan su propio dominio
 // como referrer y se contaban como 'referido'. No son un canal: se ignoran
@@ -103,10 +124,6 @@ for (var z = 0; z < AUTH.length; z++) { if (ref.indexOf(AUTH[z]) > -1) { ref = '
             else if (ref && ref.indexOf(location.hostname) === -1) { src = 'referido'; }
             else { src = 'directo'; }
           }
-          // PUERTA 2: prueba de solo-suscripcion. Se marca si la persona llego por
-          // nospi.co/suscribete o con ?plan=sub. Se guarda aqui, en la PRIMERA
-          // visita, porque el registro puede ocurrir dias despues.
-          var soloSub = (p.get('plan') === 'sub') || /\/suscribete\b/.test(location.pathname);
           localStorage.setItem(K, JSON.stringify({
             solo_suscripcion: soloSub,
             utm_source: src,
