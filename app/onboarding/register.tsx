@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { leerAtribucion } from '@/utils/atribucion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { completeOnboardingSession } from '@/utils/onboardingTracker';
 import * as WebBrowser from 'expo-web-browser';
@@ -433,6 +434,10 @@ export default function RegisterScreen() {
           },
           registered_from: Platform.OS,
           onboarding_completed: true,
+          // ESTA es la ruta real del registro con correo y contrasena. Sin la
+          // atribucion aca, todo registro por correo quedaba con utm_source
+          // NULL y sin la marca de la puerta 2. Ver utils/atribucion.ts.
+          ...leerAtribucion(),
         });
 
       if (profileError) {
