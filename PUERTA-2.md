@@ -99,8 +99,44 @@ LEFT JOIN (
 ) p ON p.user_id = u.id
 WHERE u.created_at > '2026-09-03'
   AND u.email NOT IN ('nospisocial@gmail.com','johnatan365@hotmail.com','equipo@nospi.co')
+  -- Solo web. Ver "La fuga por la app" abajo: sin esta linea el resultado sale
+  -- diluido y no se nota por que.
+  AND u.registered_from = 'web'
 GROUP BY 1;
 ```
+
+### La fuga por la app
+
+La marca de la puerta 2 vive en el `localStorage` del **navegador**. La app nativa
+es otro contenedor y no lo comparte. Si la persona entra por el anuncio y en vez de
+seguir en web **instala la app**, llega sin la marca, `leerAtribucion()` devuelve
+`solo_suscripcion: false`, y **ve el pago por evento**. Es decir: se pasa sola al
+grupo de control.
+
+Medido el 3 de septiembre de 2026, sobre 14 días:
+
+| Origen | Registros | % | Sin atribución |
+|---|---|---|---|
+| Web | 450 | 75,8% | 137 |
+| Android | 75 | 12,6% | 75 (todos) |
+| iOS | 69 | 11,6% | 69 (todos) |
+
+Uno de cada cuatro registros entra por app, y **ninguno** trae atribución, porque
+los builds publicados en las tiendas son anteriores a `utils/atribucion.ts`.
+
+Lo que importa entender: la fuga **solo va en una dirección**. Manda gente de la
+puerta 2 al control, nunca al revés. Así que sesga *en contra* de encontrar un
+efecto. Si la puerta 2 gana midiendo solo web, el resultado es más sólido de lo que
+aparenta, no más frágil.
+
+Mitigación puesta el 3 de septiembre: en `nospi-landing/tiktok-pixel.js`, a quien
+entra con `?plan=sub` no se le muestran las insignias de App Store y Google Play.
+No cierra el hueco (puede buscar la app por su cuenta), pero le quita el empujón.
+
+El arreglo de verdad sería *deep linking* diferido, para que el parámetro sobreviva
+a la instalación. En Android sale gratis con el Install Referrer de Play; en iOS
+prácticamente exige un SDK pago (Branch, AppsFlyer). **No vale la pena para la
+prueba** — solo si la puerta 2 gana y se quiere escalar.
 
 Umbral de rentabilidad: la suscripción cuesta 1,99 veces el tiquete, así que la
 puerta 2 gana si convierte a **más del 50%** de la tasa de la puerta normal.
