@@ -288,6 +288,9 @@ export default function SubscriptionPlansScreen() {
     ? eventPrice
     : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
   const subscriptionPriceCOP = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
+  // El plan de 6 meses es el que deja el menor costo mensual; se anuncia como
+  // gancho aunque el detalle de los 3 planes viva en subscription-membership.
+  const precioMensualMasBajo = Math.round(precioDesdeConfig(appConfig.subscription_price_6m, 125900) / 6);
   const breakEvenEventsCOP = priceCOP > 0 ? Math.ceil(subscriptionPriceCOP / priceCOP) : 0;
 
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
@@ -1861,7 +1864,7 @@ export default function SubscriptionPlansScreen() {
 
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 20, marginBottom: 14, position: 'relative' }}
-              onPress={() => router.push('/subscription-membership?startCardForm=1')}
+              onPress={() => router.push('/subscription-membership')}
               activeOpacity={0.85}
             >
               <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
@@ -1874,7 +1877,10 @@ export default function SubscriptionPlansScreen() {
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
                 {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
               </Text>
-              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+              <Text style={{ fontSize: 13, color: nospiColors.purpleMid, fontWeight: '700', marginBottom: 12 }}>
+                {`o desde $${precioMensualMasBajo.toLocaleString('es-CO')} al mes con los planes de 3 y 6 meses`}
+              </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>

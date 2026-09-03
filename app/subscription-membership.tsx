@@ -131,6 +131,20 @@ export default function SubscriptionMembershipScreen() {
   const subscriptionPrice = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
   const eventPrice = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
 
+  // Planes de 1, 3 y 6 meses. El precio de cada uno sale de app_config; los
+  // respaldos son los mismos que usan las edge functions de cobro, para que la
+  // pantalla nunca muestre un precio distinto al que se va a cobrar.
+  const PLANES = [
+    { clave: '1_month' as const,  meses: 1, etiqueta: '1 mes',   precio: subscriptionPrice },
+    { clave: '3_months' as const, meses: 3, etiqueta: '3 meses', precio: precioDesdeConfig(appConfig.subscription_price_3m, 74900) },
+    { clave: '6_months' as const, meses: 6, etiqueta: '6 meses', precio: precioDesdeConfig(appConfig.subscription_price_6m, 125900) },
+  ];
+  const PLAN_RECOMENDADO = '3_months';
+  const [planSeleccionado, setPlanSeleccionado] = useState<string>(PLAN_RECOMENDADO);
+  const planActual = PLANES.find((p) => p.clave === planSeleccionado) || PLANES[0];
+  // Ahorro contra pagar ese mismo numero de meses sueltos.
+  const ahorroDelPlan = (p: typeof PLANES[number]) => p.meses * subscriptionPrice - p.precio;
+
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
   const [showCardForm, setShowCardForm] = useState(startCardForm === '1');
@@ -330,7 +344,7 @@ export default function SubscriptionMembershipScreen() {
           personalDataToken,
           userId: currentUser.id,
           userEmail: currentUser.email || '',
-          planType: '1_month',
+          planType: planSeleccionado,
           redirectUrl: 'https://app.nospi.co/payment-callback',
         }),
       });
@@ -389,7 +403,7 @@ export default function SubscriptionMembershipScreen() {
                 userId: currentUser.id,
                 userEmail: currentUser.email || '',
                 paymentSourceId: paymentSourceId || '',
-                planType: '1_month',
+                planType: planSeleccionado,
               }),
             });
             const data = await res.json();
@@ -706,8 +720,42 @@ export default function SubscriptionMembershipScreen() {
                     <Ionicons name="ribbon-outline" size={20} color={nospiColors.purpleMid} />
                     <Text style={styles.planName}>Suscripción mensual Nospi</Text>
                   </View>
-                  <Text style={styles.planPrice}>${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text></Text>
-                  <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+                  <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos. Escoge por cuánto tiempo.</Text>
+
+                  {PLANES.map((p) => {
+                    const activo = p.clave === planSeleccionado;
+                    const ahorro = ahorroDelPlan(p);
+                    const porMes = Math.round(p.precio / p.meses);
+                    return (
+                      <TouchableOpacity
+                        key={p.clave}
+                        style={[styles.planOpcion, activo && styles.planOpcionActiva]}
+                        onPress={() => setPlanSeleccionado(p.clave)}
+                        activeOpacity={0.8}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: activo }}
+                        accessibilityLabel={`Plan de ${p.etiqueta}, $${p.precio.toLocaleString('es-CO')} pesos`}
+                      >
+                        {p.clave === PLAN_RECOMENDADO && (
+                          <View style={styles.planOpcionBadge}><Text style={styles.planOpcionBadgeText}>MÁS ELEGIDO</Text></View>
+                        )}
+                        <View style={styles.planOpcionIzq}>
+                          <Text style={[styles.planOpcionNombre, activo && styles.planOpcionNombreActivo]}>{p.etiqueta}</Text>
+                          <Text style={[styles.planOpcionPorMes, activo && styles.planOpcionPorMesActivo]}>
+                            ${porMes.toLocaleString('es-CO')} al mes
+                          </Text>
+                        </View>
+                        <View style={styles.planOpcionDer}>
+                          <Text style={[styles.planOpcionPrecio, activo && styles.planOpcionPrecioActivo]}>
+                            ${p.precio.toLocaleString('es-CO')}
+                          </Text>
+                          {ahorro > 0 && (
+                            <Text style={styles.planOpcionAhorro}>Ahorras ${ahorro.toLocaleString('es-CO')}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
 
                   <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Acceso sin límite a todos los eventos del mes</Text></View>
                   <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada evento por separado</Text></View>
@@ -719,7 +767,7 @@ export default function SubscriptionMembershipScreen() {
 
               {startCardForm === '1' && (
                 <Text style={[styles.planPrice, { marginBottom: 14 }]}>
-                  ${subscriptionPrice.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP / mes</Text>
+                  ${planActual.precio.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP · {planActual.etiqueta}</Text>
                 </Text>
               )}
 
@@ -771,13 +819,15 @@ export default function SubscriptionMembershipScreen() {
                   >
                     {processing
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={styles.subscribeButtonText}>Pagar ${subscriptionPrice.toLocaleString('es-CO')} y activar</Text>}
+                      : <Text style={styles.subscribeButtonText}>Pagar ${planActual.precio.toLocaleString('es-CO')} y activar</Text>}
                   </TouchableOpacity>
                 </KeyboardAvoidingView>
               )}
             </View>
 
-            <Text style={styles.footnote}>Renovación automática mensual. Cancela cuando quieras desde tu perfil.</Text>
+            <Text style={styles.footnote}>
+              Se renueva cada {planActual.meses === 1 ? 'mes' : `${planActual.meses} meses`} automáticamente. Puedes cancelar la renovación cuando quieras desde tu perfil. Los planes pagados no son reembolsables.
+            </Text>
           </>
         )}
       </ScrollView>
@@ -929,6 +979,20 @@ const styles = StyleSheet.create({
   introSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)', textAlign: 'center', marginBottom: 24 },
   planCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 },
   planCardFeatured: { backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 2, borderColor: nospiColors.purpleMid, position: 'relative' },
+  // --- Selector de planes (1 / 3 / 6 meses) ---
+  planOpcion: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: nospiColors.gray200, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 9, backgroundColor: '#fff', position: 'relative' },
+  planOpcionActiva: { borderWidth: 2, borderColor: nospiColors.purpleMid, backgroundColor: nospiColors.purplePale },
+  planOpcionBadge: { position: 'absolute', top: -9, left: 12, backgroundColor: nospiColors.purpleMid, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20 },
+  planOpcionBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
+  planOpcionIzq: { flex: 1, minWidth: 0 },
+  planOpcionDer: { alignItems: 'flex-end' },
+  planOpcionNombre: { fontSize: 15, fontWeight: '700', color: nospiColors.gray900 },
+  planOpcionNombreActivo: { color: nospiColors.purpleDark },
+  planOpcionPorMes: { fontSize: 12, color: nospiColors.gray500, marginTop: 2 },
+  planOpcionPorMesActivo: { color: nospiColors.purpleMid },
+  planOpcionPrecio: { fontSize: 17, fontWeight: '700', color: nospiColors.gray900 },
+  planOpcionPrecioActivo: { color: nospiColors.purpleDark },
+  planOpcionAhorro: { fontSize: 12, color: nospiColors.success, marginTop: 2, fontWeight: '600' },
   badge: { position: 'absolute', top: -12, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark },
   planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 4 },

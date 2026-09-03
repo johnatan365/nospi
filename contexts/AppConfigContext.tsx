@@ -7,9 +7,15 @@ interface AppConfigContextValue {
   refreshConfig: () => Promise<void>;
 }
 
+// Debe coincidir con DEFAULTS de utils/appConfig.ts. event_price decia 30000
+// cuando el precio real es 15000: mientras cargaba la config, la app mostraba
+// el doble.
 const DEFAULT_CONFIG: AppConfig = {
-  event_price: '30000',
+  event_price: '15000',
   subscription_price: '29900',
+  subscription_price_3m: '74900',
+  subscription_price_6m: '125900',
+  prueba_solo_suscripcion: 'false',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',

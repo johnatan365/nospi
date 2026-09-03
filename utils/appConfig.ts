@@ -2,16 +2,25 @@ import { supabase } from '@/lib/supabase';
 
 export interface AppConfig {
   event_price: string;
-  subscription_price: string;
+  subscription_price: string;        // plan de 1 mes
+  subscription_price_3m: string;     // plan de 3 meses
+  subscription_price_6m: string;     // plan de 6 meses
+  prueba_solo_suscripcion: string;   // 'true' | 'false' — interruptor de la prueba de solo-suscripcion
   support_email: string;
   support_whatsapp: string;
   test_payment_enabled: string; // 'true' | 'false'
   min_app_version: string; // ej '1.0.16' — versión mínima obligatoria (fail-open si '0.0.0')
 }
 
+// Valores de respaldo mientras carga app_config o si la consulta falla.
+// event_price decia 30000 y el precio real es 15000 desde hace tiempo: durante
+// el instante de carga la app mostraba el doble del precio.
 const DEFAULTS: AppConfig = {
-  event_price: '30000',
+  event_price: '15000',
   subscription_price: '29900',
+  subscription_price_3m: '74900',
+  subscription_price_6m: '125900',
+  prueba_solo_suscripcion: 'false',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',
@@ -46,6 +55,9 @@ export async function getAppConfig(): Promise<AppConfig> {
     for (const row of data) {
       if (row.key === 'event_price') config.event_price = row.value;
       if (row.key === 'subscription_price') config.subscription_price = row.value;
+      if (row.key === 'subscription_price_3m') config.subscription_price_3m = row.value;
+      if (row.key === 'subscription_price_6m') config.subscription_price_6m = row.value;
+      if (row.key === 'prueba_solo_suscripcion') config.prueba_solo_suscripcion = row.value;
       if (row.key === 'support_email') config.support_email = row.value;
       if (row.key === 'support_whatsapp') config.support_whatsapp = row.value;
       if (row.key === 'test_payment_enabled') config.test_payment_enabled = row.value;
