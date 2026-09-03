@@ -4059,7 +4059,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
         {ev && (
           <View style={{ flexDirection: 'row', gap: 9, flexWrap: 'wrap' }}>
-            {renderKpi(mmss(ev.total_seconds), 'duró la dinámica')}
+            {(() => {
+              const grabadas = filas.length;
+              const esperadas = filas.reduce((acc: any, f: any) => {
+                acc[f.level] = f.preguntas_del_nivel || 0; return acc;
+              }, {} as Record<string, number>);
+              const totalEsperadas = Object.values(esperadas).reduce((a: number, b: any) => a + b, 0) as number;
+              const incompleto = totalEsperadas > grabadas;
+              return renderKpi(
+                (incompleto ? '+' : '') + mmss(ev.total_seconds),
+                incompleto ? `duró al menos (faltan ${totalEsperadas - grabadas})` : 'duró la dinámica',
+                incompleto ? '#9A6B18' : undefined,
+              );
+            })()}
             {renderKpi(String(ev.personas), 'personas confirmadas')}
             {renderKpi(`${up} / ${down}`, '👍 y 👎 esa noche')}
             {renderKpi(
@@ -4084,11 +4096,25 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 nivelActual = f.level;
                 const [nom, color] = NIVEL_COLOR[f.level] || [f.level, '#6B7280'];
                 const sub = filas.filter(x => x.level === f.level).reduce((t, x) => t + x.seconds, 0);
+                const grabadas = filas.filter(x => x.level === f.level).length;
+                const esperadas = f.preguntas_del_nivel || 0;
+                const faltan = Math.max(0, esperadas - grabadas);
                 bloques.push(
-                  <View key={`lvl-${f.level}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: i === 0 ? 0 : 10, marginBottom: 4 }}>
+                  <View key={`lvl-${f.level}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: i === 0 ? 0 : 10, marginBottom: 4, flexWrap: 'wrap' }}>
                     <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color, textTransform: 'uppercase' }}>{nom}</Text>
-                    <View style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.3 }} />
-                    <Text style={{ fontSize: 11.5, color: '#6B7280', fontWeight: '600' }}>{mmss(sub)}</Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.3, minWidth: 20 }} />
+                    {faltan > 0 && (
+                      // Sin este aviso, el subtotal se lee como si fuera la
+                      // duracion real del nivel, y no lo es.
+                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#9A6B18',
+                                     backgroundColor: '#FBF3E2', borderRadius: 999,
+                                     paddingVertical: 2, paddingHorizontal: 7 }}>
+                        falta el tiempo de {faltan} de {esperadas}
+                      </Text>
+                    )}
+                    <Text style={{ fontSize: 11.5, color: faltan > 0 ? '#9A6B18' : '#6B7280', fontWeight: '600' }}>
+                      {faltan > 0 ? '+' : ''}{mmss(sub)}
+                    </Text>
                   </View>
                 );
               }
