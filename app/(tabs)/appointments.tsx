@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { FALLBACK_EVENT_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
@@ -319,7 +320,7 @@ export default function AppointmentsScreen() {
       }
 
       if (isWithinRefundWindow) {
-        const refundAmount = appointmentToCancel.amount_paid_cop != null ? appointmentToCancel.amount_paid_cop : (parseInt(appConfig.event_price, 10) || 30000);
+        const refundAmount = appointmentToCancel.amount_paid_cop != null ? appointmentToCancel.amount_paid_cop : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
         const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
           user_id_param: user?.id,
           amount_param: refundAmount,
@@ -769,7 +770,7 @@ export default function AppointmentsScreen() {
                 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
                 const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
 
-                const eventPriceNum = parseInt(appConfig.event_price, 10) || 30000;
+                const eventPriceNum = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
                 const refundMessage = isWithinRefundWindow
                   ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${eventPriceNum.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
                   : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';

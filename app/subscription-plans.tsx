@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -283,8 +284,10 @@ export default function SubscriptionPlansScreen() {
     }
   }, [pseBanks]);
 
-  const priceCOP = (eventPrice !== null && eventPrice !== undefined) ? eventPrice : (parseInt(appConfig.event_price, 10) || 30000);
-  const subscriptionPriceCOP = parseInt(appConfig.subscription_price, 10) || 29900;
+  const priceCOP = (eventPrice !== null && eventPrice !== undefined)
+    ? eventPrice
+    : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
+  const subscriptionPriceCOP = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
   const breakEvenEventsCOP = priceCOP > 0 ? Math.ceil(subscriptionPriceCOP / priceCOP) : 0;
 
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).

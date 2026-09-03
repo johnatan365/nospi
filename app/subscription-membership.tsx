@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -127,8 +128,8 @@ export default function SubscriptionMembershipScreen() {
   const { user, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
   const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
-  const subscriptionPrice = parseInt(appConfig.subscription_price, 10) || 29900;
-  const eventPrice = parseInt(appConfig.event_price, 10) || 15000;
+  const subscriptionPrice = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
+  const eventPrice = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
 
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
