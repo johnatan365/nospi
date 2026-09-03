@@ -833,6 +833,55 @@ export default function AdminPanelScreen() {
   const [rankNivel, setRankNivel] = useState('');
   const [rankSoloSolidas, setRankSoloSolidas] = useState(true);
 
+  // Sub-vistas del ranking: el resumen de siempre, el detalle de una noche, y
+  // el historial de una pregunta mesa por mesa.
+  const [rankVista, setRankVista] = useState<'resumen' | 'evento' | 'pregunta'>('resumen');
+  const [eventosDinamica, setEventosDinamica] = useState<any[]>([]);
+  const [eventoDetalleId, setEventoDetalleId] = useState<string>('');
+  const [eventoDetalle, setEventoDetalle] = useState<any[]>([]);
+  const [preguntaHistorialTexto, setPreguntaHistorialTexto] = useState<string>('');
+  const [preguntaHistorial, setPreguntaHistorial] = useState<any[]>([]);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+
+  const loadEventosDinamica = useCallback(async () => {
+    const { data, error } = await supabase.rpc('admin_get_events_with_dynamic');
+    if (error) { console.error('Error cargando eventos con dinámica:', error); return; }
+    setEventosDinamica(data || []);
+    if ((data || []).length > 0) {
+      setEventoDetalleId(prev => prev || data[0].event_id);
+    }
+  }, []);
+
+  // Cuando llega la lista de eventos se elige el mas reciente; aqui se carga
+  // su detalle, para que la vista no salga vacia esperando un clic.
+  useEffect(() => {
+    if (rankVista !== 'evento' || !eventoDetalleId) return;
+    loadEventoDetalleRef.current?.(eventoDetalleId);
+  }, [rankVista, eventoDetalleId]);
+
+  const loadEventoDetalleRef = useRef<((id: string) => void) | null>(null);
+
+  const loadEventoDetalle = useCallback(async (eventId: string) => {
+    if (!eventId) return;
+    setDetalleCargando(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_event_dynamic_detail', { p_event_id: eventId });
+      if (error) { console.error('Error cargando el detalle del evento:', error); setEventoDetalle([]); return; }
+      setEventoDetalle(data || []);
+    } finally { setDetalleCargando(false); }
+  }, []);
+  loadEventoDetalleRef.current = loadEventoDetalle;
+
+  const loadPreguntaHistorial = useCallback(async (texto: string) => {
+    if (!texto) return;
+    setDetalleCargando(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_question_by_event', { p_question_text: texto });
+      if (error) { console.error('Error cargando el historial de la pregunta:', error); setPreguntaHistorial([]); return; }
+      setPreguntaHistorial(data || []);
+    } finally { setDetalleCargando(false); }
+  }, []);
+
   const loadRanking = useCallback(async () => {
     setRankingLoading(true);
     try {
@@ -3915,6 +3964,243 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
+  // ── Detalle de la dinamica ─────────────────────────────────────────────
+  const NIVEL_COLOR: Record<string, [string, string]> = {
+    divertido: ['Divertido', '#075985'],
+    sensual:   ['Coqueto',   '#5E35B1'],
+    atrevido:  ['Atrevido',  '#9A3412'],
+  };
+  const mmss = (seg: number) => `${Math.floor(seg / 60)}:${String(Math.round(seg % 60)).padStart(2, '0')}`;
+
+  // Detecta donde el grupo dejo de jugar: a partir de ahi TODAS las preguntas
+  // restantes duran menos de 20 s. Con menos de 4 seguidas no se marca, para no
+  // confundirlo con un par de preguntas flojas. Sin esto, las preguntas de la
+  // cola quedarian castigadas por una noche en que nadie las jugo.
+  const puntoDeAbandono = (filas: any[]) => {
+    let corte = filas.length;
+    for (let i = filas.length - 1; i >= 0; i--) {
+      if (filas[i].seconds < 20) corte = i; else break;
+    }
+    return (filas.length - corte) >= 4 ? corte : -1;
+  };
+
+  const renderVotos = (up: number, down: number) => (
+    <Text style={{ fontSize: 11.5, width: 54, textAlign: 'right' }}>
+      {up === 0 && down === 0
+        ? <Text style={{ color: '#9CA3AF' }}>—</Text>
+        : <>
+            {up > 0 && <Text style={{ color: '#15803D', fontWeight: '700' }}>👍{up} </Text>}
+            {down > 0 && <Text style={{ color: '#B4442C', fontWeight: '700' }}>👎{down}</Text>}
+          </>}
+    </Text>
+  );
+
+  const renderKpi = (n: string, l: string, color?: string) => (
+    <View key={l} style={{ backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#E5E7EB',
+                           borderRadius: 11, paddingVertical: 10, paddingHorizontal: 13, minWidth: 108 }}>
+      <Text style={{ fontSize: 19, fontWeight: '800', color: color || '#1f2937' }}>{n}</Text>
+      <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{l}</Text>
+    </View>
+  );
+
+  // Fila de una pregunta, con su barra de tiempo por persona.
+  const filaTiempo = (
+    key: string, izquierda: React.ReactNode, seg: number, porPersona: number,
+    up: number, down: number, maxPP: number, tono: 'top' | 'low' | '' , apagada: boolean,
+  ) => (
+    <View key={key} style={{
+      flexDirection: 'row', alignItems: 'center', gap: 9,
+      paddingVertical: 7, paddingHorizontal: 9, borderRadius: 9,
+      backgroundColor: '#FAFAFA', marginBottom: 4, opacity: apagada ? 0.55 : 1,
+    }}>
+      <View style={{ flex: 1, minWidth: 0 }}>{izquierda}</View>
+      {renderVotos(up, down)}
+      <View style={{ width: 168, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+        <View style={{ flex: 1, height: 7, backgroundColor: '#EFE7EB', borderRadius: 4, overflow: 'hidden' }}>
+          <View style={{
+            width: `${Math.max(2, Math.round(Math.min(porPersona / maxPP, 1) * 100))}%`, height: 7,
+            backgroundColor: tono === 'top' ? '#15803D' : tono === 'low' ? '#B4442C' : '#B03A6E',
+            borderRadius: 4,
+          }} />
+        </View>
+        <Text style={{ fontSize: 11.5, color: '#6B7280', minWidth: 74 }}>
+          <Text style={{ color: '#1f2937', fontWeight: '700' }}>{mmss(seg)}</Text> · {porPersona} c/u
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Vista "Por evento": la noche completa, pregunta por pregunta.
+  const renderDetalleEvento = () => {
+    const ev = eventosDinamica.find(e => e.event_id === eventoDetalleId);
+    const filas = eventoDetalle;
+    const corte = puntoDeAbandono(filas);
+    const vivas = corte === -1 ? filas : filas.slice(0, corte);
+    const pps = vivas.map(f => Number(f.seg_por_persona) || 0);
+    const maxPP = Math.max(0.1, ...pps);
+    const mejor = Math.max(...pps, 0), peor = Math.min(...pps, Infinity);
+    const up = filas.reduce((t, f) => t + f.up, 0);
+    const down = filas.reduce((t, f) => t + f.down, 0);
+
+    let nivelActual: string | null = null;
+
+    return (
+      <View style={{ gap: 12 }}>
+        <select
+          style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E7EB', borderRadius: 9,
+                   padding: '7px 10px', fontSize: 12.5, maxWidth: 340 }}
+          value={eventoDetalleId}
+          onChange={(e) => { setEventoDetalleId(e.target.value); loadEventoDetalle(e.target.value); }}
+        >
+          {eventosDinamica.map(e => (
+            <option key={e.event_id} value={e.event_id}>{e.nombre} · {e.fecha}</option>
+          ))}
+        </select>
+
+        {ev && (
+          <View style={{ flexDirection: 'row', gap: 9, flexWrap: 'wrap' }}>
+            {renderKpi(mmss(ev.total_seconds), 'duró la dinámica')}
+            {renderKpi(String(ev.personas), 'personas confirmadas')}
+            {renderKpi(`${up} / ${down}`, '👍 y 👎 esa noche')}
+            {renderKpi(
+              ev.dinamica ? Number(ev.dinamica).toFixed(2) : '—',
+              ev.respondieron > 0 ? `calificaron la dinámica (${ev.respondieron})` : 'sin evaluación',
+              ev.dinamica == null ? '#9CA3AF' : Number(ev.dinamica) < 2.2 ? '#B4442C' : Number(ev.dinamica) > 2.6 ? '#15803D' : undefined,
+            )}
+          </View>
+        )}
+
+        {detalleCargando ? (
+          <ActivityIndicator size="large" color="#880E4F" />
+        ) : filas.length === 0 ? (
+          <Text style={{ padding: 26, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            Este evento no tiene datos de la dinámica.
+          </Text>
+        ) : (
+          <View>
+            {filas.map((f, i) => {
+              const bloques: React.ReactNode[] = [];
+              if (f.level !== nivelActual) {
+                nivelActual = f.level;
+                const [nom, color] = NIVEL_COLOR[f.level] || [f.level, '#6B7280'];
+                const sub = filas.filter(x => x.level === f.level).reduce((t, x) => t + x.seconds, 0);
+                bloques.push(
+                  <View key={`lvl-${f.level}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: i === 0 ? 0 : 10, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color, textTransform: 'uppercase' }}>{nom}</Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.3 }} />
+                    <Text style={{ fontSize: 11.5, color: '#6B7280', fontWeight: '600' }}>{mmss(sub)}</Text>
+                  </View>
+                );
+              }
+              if (i === corte) {
+                bloques.push(
+                  <View key="corte" style={{ flexDirection: 'row', gap: 9, alignItems: 'center',
+                        backgroundColor: '#FBF3E2', borderRadius: 9, paddingVertical: 8, paddingHorizontal: 11, marginBottom: 5 }}>
+                    <Text style={{ fontSize: 13 }}>⚠</Text>
+                    <Text style={{ flex: 1, fontSize: 12, color: '#9A6B18', fontWeight: '600', lineHeight: 17 }}>
+                      Aquí el grupo dejó de jugar — las {filas.length - corte} preguntas siguientes
+                      se pasaron en menos de 20 segundos
+                    </Text>
+                  </View>
+                );
+              }
+              const pp = Number(f.seg_por_persona) || 0;
+              const apagada = corte !== -1 && i >= corte;
+              const tono = apagada ? 'low' : pp === mejor ? 'top' : pp === peor ? 'low' : '';
+              bloques.push(filaTiempo(
+                `q-${i}`,
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Text style={{ fontSize: 11, color: '#9CA3AF', width: 15 }}>{f.orden}</Text>
+                  <Text style={{ flex: 1, fontSize: 12.5, color: '#1f2937', lineHeight: 17 }}>{f.question_text}</Text>
+                </View>,
+                f.seconds, pp, f.up, f.down, maxPP, tono as any, apagada,
+              ));
+              return bloques;
+            })}
+          </View>
+        )}
+
+        <Text style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 17 }}>
+          «c/u» son segundos por persona confirmada. En verde la pregunta que más conversación
+          generó esa noche; en rojo la que menos. Los votos son los de ESE evento, no el acumulado.
+        </Text>
+      </View>
+    );
+  };
+
+  // Vista "Por pregunta": la misma pregunta, mesa por mesa.
+  const renderHistorialPregunta = () => {
+    const filas = preguntaHistorial;
+    const pps = filas.map(f => Number(f.seg_por_persona) || 0);
+    const maxPP = Math.max(0.1, ...pps);
+    const media = pps.length ? pps.reduce((a, b) => a + b, 0) / pps.length : 0;
+    const up = filas.reduce((t, f) => t + f.up, 0);
+    const down = filas.reduce((t, f) => t + f.down, 0);
+    const conDatos = ranking.filter(r => r.mesas > 0);
+
+    return (
+      <View style={{ gap: 12 }}>
+        <select
+          style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E7EB', borderRadius: 9,
+                   padding: '7px 10px', fontSize: 12.5, width: '100%' }}
+          value={preguntaHistorialTexto}
+          onChange={(e) => { setPreguntaHistorialTexto(e.target.value); loadPreguntaHistorial(e.target.value); }}
+        >
+          <option value="">— Elige una pregunta —</option>
+          {conDatos.map((r, i) => (
+            <option key={i} value={r.question_text}>
+              {r.question_text.length > 90 ? r.question_text.slice(0, 90) + '…' : r.question_text} ({r.mesas} mesas)
+            </option>
+          ))}
+        </select>
+
+        {filas.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 9, flexWrap: 'wrap' }}>
+            {renderKpi(String(filas.length), 'mesas donde se jugó')}
+            {renderKpi(media.toFixed(1), 'segundos por persona')}
+            {renderKpi(`${up} / ${down}`, '👍 y 👎 en total')}
+            {renderKpi(
+              `${mmss(Math.max(...filas.map(f => f.seconds)))} – ${mmss(Math.min(...filas.map(f => f.seconds)))}`,
+              'de su mejor a su peor noche',
+            )}
+          </View>
+        )}
+
+        {detalleCargando ? (
+          <ActivityIndicator size="large" color="#880E4F" />
+        ) : !preguntaHistorialTexto ? (
+          <Text style={{ padding: 26, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            Elige una pregunta para ver cómo le fue en cada mesa.
+          </Text>
+        ) : filas.length === 0 ? (
+          <Text style={{ padding: 26, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            Esta pregunta no se ha jugado en ningún evento cerrado.
+          </Text>
+        ) : (
+          <View>
+            {filas.map((f, i) => {
+              const pp = Number(f.seg_por_persona) || 0;
+              const tono = pp === Math.max(...pps) ? 'top' : pp === Math.min(...pps) ? 'low' : '';
+              return filaTiempo(
+                `h-${i}`,
+                <Text style={{ fontSize: 12.5, color: '#1f2937' }}>
+                  <Text style={{ fontWeight: '700' }}>{f.nombre}</Text>
+                  <Text style={{ color: '#9CA3AF' }}>  ·  {f.personas} personas</Text>
+                </Text>,
+                f.seconds, pp, f.up, f.down, maxPP, tono as any, false,
+              );
+            })}
+          </View>
+        )}
+
+        <Text style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 17 }}>
+          La misma pregunta rinde muy distinto según el grupo, y los votos tampoco coinciden entre
+          mesas. Por eso el ranking usa el promedio por persona y no el bruto.
+        </Text>
+      </View>
+    );
+  };
+
   // Ranking de preguntas: cruza los votos 👍/👎 con los segundos de conversacion
   // y las veces jugada. El puntaje y el veredicto los calcula el servidor
   // (admin_get_question_ranking), para que la formula viva en un solo sitio.
@@ -3954,6 +4240,44 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
     return (
       <View style={{ marginBottom: 16 }}>
+        {/* Tres formas de mirar los mismos datos: el ranking del banco, una
+            noche concreta, o el historial de una pregunta. */}
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 14,
+                       paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F2' }}>
+          {([
+            ['resumen', 'Resumen'],
+            ['evento', '🗓️ Por evento'],
+            ['pregunta', '❓ Por pregunta'],
+          ] as const).map(([k, label]) => {
+            const on = rankVista === k;
+            return (
+              <TouchableOpacity
+                key={k}
+                onPress={() => {
+                  setRankVista(k as any);
+                  if (k === 'evento') {
+                    if (eventosDinamica.length === 0) loadEventosDinamica();
+                    else if (eventoDetalleId && eventoDetalle.length === 0) loadEventoDetalle(eventoDetalleId);
+                  }
+                }}
+                style={{
+                  borderWidth: 1, borderColor: on ? '#1f2937' : '#E5E7EB',
+                  backgroundColor: on ? '#1f2937' : '#FAFAFA',
+                  borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: on ? '#FFFFFF' : '#6B7280' }}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {rankVista === 'evento' && renderDetalleEvento()}
+        {rankVista === 'pregunta' && renderHistorialPregunta()}
+        {rankVista === 'resumen' && (
+        <>
         {/* Resumen arriba: cuantas hay de cada veredicto */}
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
           {(['dejar', 'observar', 'eliminar', 'sin_datos'] as const).map(v => {
@@ -4103,8 +4427,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700' }}> por persona</Text> («c/u»), porque con más gente
           en la mesa cada pregunta dura más. Las mesas cuentan como confianza, no como calidad:
           una pregunta con pocas mesas ve su puntaje atenuado hasta que acumule evidencia.
-          {'\n'}Los eventos de prueba (sin ningún inscrito) quedan fuera de los cálculos.
+          {'\n'}Solo cuentan los eventos cerrados: los de prueba se borran, nunca se cierran.
         </Text>
+        </>
+        )}
       </View>
     );
   };
@@ -4322,7 +4648,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           {/* Ranking: no es un nivel, es otra forma de mirar el mismo banco. */}
           <TouchableOpacity
             style={[styles.levelButton, showRanking && styles.levelButtonActive]}
-            onPress={() => { setShowRanking(true); if (ranking.length === 0) loadRanking(); }}
+            onPress={() => {
+              setShowRanking(true);
+              if (ranking.length === 0) loadRanking();
+              if (eventosDinamica.length === 0) loadEventosDinamica();
+            }}
           >
             <Text style={[styles.levelButtonText, showRanking && styles.levelButtonTextActive]}>
               📊 Ranking
