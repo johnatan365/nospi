@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { leerAtribucion } from '@/utils/atribucion';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
@@ -270,6 +271,9 @@ export default function ProfileScreen() {
           compatibility_percentage: 95,
           notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
           registered_from: Platform.OS,
+          // Sin esto el perfil de rescate quedaba con utm_source NULL y sin la
+          // marca de la puerta 2. Ver utils/atribucion.ts.
+          ...leerAtribucion(),
         };
 
         const { error: insertError } = await supabase.from('users').insert(defaultProfile);
