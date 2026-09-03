@@ -103,7 +103,12 @@ for (var z = 0; z < AUTH.length; z++) { if (ref.indexOf(AUTH[z]) > -1) { ref = '
             else if (ref && ref.indexOf(location.hostname) === -1) { src = 'referido'; }
             else { src = 'directo'; }
           }
+          // PUERTA 2: prueba de solo-suscripcion. Se marca si la persona llego por
+          // nospi.co/suscribete o con ?plan=sub. Se guarda aqui, en la PRIMERA
+          // visita, porque el registro puede ocurrir dias despues.
+          var soloSub = (p.get('plan') === 'sub') || /\/suscribete\b/.test(location.pathname);
           localStorage.setItem(K, JSON.stringify({
+            solo_suscripcion: soloSub,
             utm_source: src,
             utm_medium: p.get('utm_medium') || (clickId ? 'cpc' : ''),
             utm_campaign: p.get('utm_campaign') || '',

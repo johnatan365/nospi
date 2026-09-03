@@ -21,6 +21,7 @@ import * as SplashScreen from 'expo-splash-screen';
 function atribucionVacia(fuente: string) {
   return {
     utm_source: fuente,
+    solo_suscripcion: false,
     utm_medium: null,
     utm_campaign: null,
     utm_content: null,
@@ -51,6 +52,8 @@ function leerAtribucion() {
     const a = JSON.parse(raw);
     return {
       utm_source: a.utm_source || 'sin_captura',
+      // PUERTA 2: marca de que entro por nospi.co/suscribete. Ver PUERTA-2.md.
+      solo_suscripcion: a.solo_suscripcion === true,
       utm_medium: a.utm_medium || null,
       utm_campaign: a.utm_campaign || null,
       utm_content: a.utm_content || null,

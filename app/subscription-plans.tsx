@@ -217,6 +217,14 @@ export default function SubscriptionPlansScreen() {
   const [virtualBalance, setVirtualBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
+  // PUERTA 2 (prueba de solo-suscripcion). Si el usuario entro por
+  // nospi.co/suscribete se le marca users.solo_suscripcion y aqui se le oculta
+  // la compra por evento. Requiere ADEMAS que app_config.prueba_solo_suscripcion
+  // este en 'true': ese es el interruptor de apagado sin publicar codigo.
+  // Ver PUERTA-2.md en la raiz del repo para como quitar todo esto.
+  const [soloSuscripcionUsuario, setSoloSuscripcionUsuario] = useState(false);
+  const pruebaEncendida = appConfig.prueba_solo_suscripcion === 'true';
+  const ocultarPagoPorEvento = pruebaEncendida && soloSuscripcionUsuario;
 
   // Suscripción: si el usuario tiene una suscripción activa, se confirma la
   // asistencia gratis sin pasar por ningún método de pago.
@@ -302,9 +310,10 @@ export default function SubscriptionPlansScreen() {
   const fetchVirtualBalance = useCallback(async () => {
     try {
       setLoadingBalance(true);
-      const { data } = await supabase.from('users').select('virtual_balance, email, name').eq('id', user?.id).single();
+      const { data } = await supabase.from('users').select('virtual_balance, email, name, solo_suscripcion').eq('id', user?.id).single();
       setVirtualBalance(data?.virtual_balance || 0);
       if (data) setUserProfile({ email: data.email || '', name: data.name || '' });
+      if (data) setSoloSuscripcionUsuario(!!data.solo_suscripcion);
     } catch { setVirtualBalance(0); }
     finally { setLoadingBalance(false); }
   }, [user?.id]);
@@ -1844,9 +1853,10 @@ export default function SubscriptionPlansScreen() {
 
         {!showEventMethods ? (
           <>
-            <Text style={styles.title}>¿Cómo quieres ir?</Text>
+            <Text style={styles.title}>{ocultarPagoPorEvento ? 'Asegura tu cupo' : '¿Cómo quieres ir?'}</Text>
             <Text style={styles.subtitle}>Confirma tu asistencia</Text>
 
+            {!ocultarPagoPorEvento && (
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 14 }}
               onPress={() => setShowEventMethods(true)}
@@ -1861,6 +1871,7 @@ export default function SubscriptionPlansScreen() {
               </Text>
               <Text style={{ fontSize: 13, color: '#6B7280' }}>Pagas cada vez que vengas a un evento.</Text>
             </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: nospiColors.purpleMid, padding: 20, marginBottom: 14, position: 'relative' }}

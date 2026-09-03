@@ -5,6 +5,11 @@
       "has": [{ "type": "host", "value": "admin.nospi.co" }],
       "destination": "https://app.nospi.co/admin/$1",
       "permanent": false
+    },
+    {
+      "source": "/suscribete",
+      "destination": "/?plan=sub",
+      "permanent": false
     }
   ],
   "rewrites": [
