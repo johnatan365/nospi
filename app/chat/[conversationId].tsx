@@ -251,6 +251,56 @@ function ChatAvatar({
 // Detecta URLs (http/https o que empiecen por www.) para poder abrirlas al tocar.
 const URL_RE = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
 
+// Detecta numeros de celular colombianos escritos como los escribe la gente:
+// 3001234567, 300 123 4567, 300-1234567, +57 300 123 4567. Tambien fijos con
+// el formato nuevo de 10 digitos (604...).
+//
+// Se exige la forma completa de 10 digitos empezando en 3 o en 60 justamente
+// para NO marcar lo que no es un telefono: precios ($29.900), horas (7:30),
+// fechas (12/09/2026) y anios quedan por fuera porque no llegan a esa forma.
+// El (?!\d) del final evita comerse los primeros 10 digitos de un numero mas
+// largo; que no venga pegado a un digito por la izquierda se valida aparte, en
+// splitPhones, porque el lookbehind no es confiable en Hermes.
+const PHONE_RE = /(?:\+?57[\s-]?)?(?:3\d{2}|60\d)[\s-]?\d{3}[\s-]?\d{4}(?!\d)/g;
+
+// Deja el numero en el formato que piden wa.me y tel:, siempre con indicativo.
+function phoneDigits(raw: string): string {
+  const d = (raw || '').replace(/\D/g, '');
+  if (d.length === 10) return `57${d}`;
+  return d;
+}
+
+// Como se ve el numero al mostrarlo en el menu: +57 300 123 4567.
+function phonePretty(raw: string): string {
+  const d = phoneDigits(raw);
+  if (d.length === 12 && d.startsWith('57')) {
+    const n = d.slice(2);
+    return `+57 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+  }
+  return raw;
+}
+
+// Parte un trozo de texto en pedazos, separando los telefonos del resto.
+// Se usa exec() y no split() porque hace falta saber en que posicion quedo cada
+// coincidencia para poder mirar el caracter anterior.
+function splitPhones(part: string): { text: string; phone: boolean }[] {
+  const out: { text: string; phone: boolean }[] = [];
+  let last = 0;
+  PHONE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = PHONE_RE.exec(part)) !== null) {
+    const start = m.index;
+    // Si viene pegado a otro digito no es un telefono, es un pedazo de un
+    // numero mas largo (una cedula, un codigo). Se deja como texto normal.
+    if (start > 0 && /\d/.test(part[start - 1])) continue;
+    if (start > last) out.push({ text: part.slice(last, start), phone: false });
+    out.push({ text: m[0], phone: true });
+    last = start + m[0].length;
+  }
+  if (last < part.length) out.push({ text: part.slice(last), phone: false });
+  return out;
+}
+
 // Convierte el texto de un mensaje en <Text> normal + <Text> tocables para los
 // links. Se abren con Linking.openURL (navegador / app correspondiente).
 // Compara sin tildes ni mayusculas, para que "@jose" encuentre a "José".
@@ -273,8 +323,35 @@ function mentionRegex(names: string[]): RegExp | null {
   return new RegExp(`(@(?:${clean.join('|')}|todos))`, 'gi');
 }
 
-function renderMessageContent(text: string, mine: boolean, mentions?: RegExp | null) {
+function renderMessageContent(
+  text: string,
+  mine: boolean,
+  mentions?: RegExp | null,
+  onPhone?: (raw: string) => void,
+) {
   if (!text) return null;
+
+  // Menciones dentro de un trozo que ya se sabe que no es link ni telefono.
+  const withMentions = (part: string, key: string | number) => {
+    if (mentions) {
+      // El split conserva los grupos capturados, asi que las menciones quedan
+      // en las posiciones impares del arreglo.
+      const chunks = part.split(mentions);
+      if (chunks.length > 1) {
+        return (
+          <Text key={key}>
+            {chunks.map((c, j) =>
+              j % 2 === 1
+                ? <Text key={j} style={[styles.mentionText, mine && styles.mentionTextMine]}>{c}</Text>
+                : <Text key={j}>{c}</Text>
+            )}
+          </Text>
+        );
+      }
+    }
+    return <Text key={key}>{part}</Text>;
+  };
+
   const parts = text.split(URL_RE);
   return parts.map((part, i) => {
     if (!part) return null;
@@ -290,23 +367,30 @@ function renderMessageContent(text: string, mine: boolean, mentions?: RegExp | n
         </Text>
       );
     }
-    if (mentions) {
-      // El split conserva los grupos capturados, asi que las menciones quedan
-      // en las posiciones impares del arreglo.
-      const chunks = part.split(mentions);
-      if (chunks.length > 1) {
-        return (
-          <Text key={i}>
-            {chunks.map((c, j) =>
-              j % 2 === 1
-                ? <Text key={j} style={[styles.mentionText, mine && styles.mentionTextMine]}>{c}</Text>
-                : <Text key={j}>{c}</Text>
-            )}
-          </Text>
-        );
-      }
+    // Los telefonos se buscan solo aca, sobre el texto que ya se sabe que no es
+    // un link: asi un numero que viva dentro de una URL no se vuelve tocable.
+    const pedazos = splitPhones(part);
+    if (pedazos.some((p) => p.phone)) {
+      return (
+        <Text key={i}>
+          {pedazos.map((p, j) =>
+            p.phone ? (
+              <Text
+                key={j}
+                style={[styles.linkText, mine && styles.linkTextMine]}
+                onPress={() => onPhone?.(p.text)}
+              >
+                {p.text}
+              </Text>
+            ) : (
+              withMentions(p.text, j)
+            )
+          )}
+        </Text>
+      );
     }
-    return <Text key={i}>{part}</Text>;
+
+    return withMentions(part, i);
   });
 }
 
@@ -719,6 +803,83 @@ export default function ChatThreadScreen() {
       console.error('copyMessageText error:', e);
     }
   }, []);
+  // Numero tocado en un mensaje. Guarda tambien de quien era el mensaje, para
+  // poder proponer ese nombre al guardar el contacto.
+  const [phoneMenu, setPhoneMenu] = useState<{ raw: string; from: string } | null>(null);
+
+  // Copiar un texto suelto (no el de un mensaje). Mismo camino que
+  // copyMessageText: sin dependencias nuevas.
+  const copyPlainText = useCallback(async (txt: string) => {
+    if (!txt) return;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(txt);
+        }
+      } else {
+        const { Clipboard } = require('react-native');
+        Clipboard.setString(txt);
+      }
+    } catch (e) {
+      console.error('copyPlainText error:', e);
+    }
+  }, []);
+
+  // Guardar en contactos. Se hace con una tarjeta .vcf y no con `tel:` porque
+  // en iOS `tel:` LLAMA de una, no abre el marcador para editar: el atajo que
+  // sirve en Android alli seria una llamada sin querer. El .vcf en cambio abre
+  // la pantalla de contacto nuevo, ya llena, en los dos sistemas.
+  const savePhoneToContacts = useCallback(async (raw: string, name: string) => {
+    const numero = `+${phoneDigits(raw)}`;
+    const nombre = (name || 'Contacto Nospi').trim();
+    const vcard = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `N:;${nombre};;;`,
+      `FN:${nombre}`,
+      `TEL;TYPE=CELL:${numero}`,
+      'NOTE:Contacto conocido en Nospi',
+      'END:VCARD',
+    ].join('\r\n');
+    // Las tildes se quitan SOLO del nombre del archivo (que se ve en la hoja de
+    // compartir); dentro de la tarjeta el nombre va completo y bien escrito.
+    const slug = normalizeText(nombre).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const filename = `${slug || 'contacto'}.vcf`;
+    try {
+      if (Platform.OS === 'web') {
+        const blob = new Blob([vcard], { type: 'text/vcard' });
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+        return;
+      }
+      const target = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(target, vcard);
+      if (!(await Sharing.isAvailableAsync())) {
+        // Sin hoja de compartir no hay como entregar el .vcf: al menos que el
+        // numero quede copiado y la persona lo pegue en Contactos.
+        copyPlainText(numero);
+        Alert.alert('Número copiado', 'Este dispositivo no permite abrir la tarjeta de contacto, así que copiamos el número.');
+        return;
+      }
+      await Sharing.shareAsync(target, {
+        dialogTitle: 'Guardar contacto',
+        mimeType: 'text/vcard',
+        UTI: 'public.vcard',
+      });
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (!/abort|cancel/i.test(msg)) {
+        Alert.alert('No se pudo guardar', msg || 'Inténtalo de nuevo.');
+      }
+    }
+  }, [copyPlainText]);
+
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
@@ -1883,7 +2044,9 @@ export default function ChatThreadScreen() {
                     <PollCard pollId={item.poll_id} />
                   ) : !!(item.content || '').trim() && (
                     <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
-                      {renderMessageContent(item.content, isMine, mentionRe)}
+                      {renderMessageContent(item.content, isMine, mentionRe, (raw) =>
+                        setPhoneMenu({ raw, from: isMine ? '' : senderName })
+                      )}
                     </Text>
                   )}
                   <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
@@ -2246,6 +2409,64 @@ export default function ChatThreadScreen() {
               <Text style={styles.attachOptionText}>Compartir</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.attachCancel} onPress={() => setMediaActions(null)}>
+              <Text style={styles.attachCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Menu de un numero de celular tocado en un mensaje. Mismo formato que
+          el de video, para que no se sienta una pantalla ajena. */}
+      <Modal visible={!!phoneMenu} animationType="fade" transparent onRequestClose={() => setPhoneMenu(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setPhoneMenu(null)}>
+          <View style={styles.attachSheet}>
+            <Text style={styles.attachSheetTitle}>{phoneMenu ? phonePretty(phoneMenu.raw) : ''}</Text>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => {
+                const p = phoneMenu; setPhoneMenu(null);
+                if (p) savePhoneToContacts(p.raw, p.from);
+              }}
+            >
+              <IconSymbol ios_icon_name="person.crop.circle.badge.plus" android_material_icon_name="person-add" size={22} color={nospiColors.purpleDark} />
+              {/* Se dice a nombre de quien va a quedar. Si no se dijera, alguien
+                  podria guardar el numero del restaurante bajo el nombre de
+                  quien lo compartio sin darse cuenta. */}
+              <Text style={styles.attachOptionText}>
+                {phoneMenu?.from ? `Guardar como ${phoneMenu.from}` : 'Guardar en contactos'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => {
+                const p = phoneMenu; setPhoneMenu(null);
+                if (p) Linking.openURL(`https://wa.me/${phoneDigits(p.raw)}`).catch(() => {});
+              }}
+            >
+              <IconSymbol ios_icon_name="message.fill" android_material_icon_name="chat" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Escribir por WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => {
+                const p = phoneMenu; setPhoneMenu(null);
+                if (p) Linking.openURL(`tel:+${phoneDigits(p.raw)}`).catch(() => {});
+              }}
+            >
+              <IconSymbol ios_icon_name="phone.fill" android_material_icon_name="call" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Llamar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachOption}
+              onPress={() => {
+                const p = phoneMenu; setPhoneMenu(null);
+                if (p) copyPlainText(`+${phoneDigits(p.raw)}`);
+              }}
+            >
+              <IconSymbol ios_icon_name="doc.on.doc" android_material_icon_name="content-copy" size={22} color={nospiColors.purpleDark} />
+              <Text style={styles.attachOptionText}>Copiar número</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.attachCancel} onPress={() => setPhoneMenu(null)}>
               <Text style={styles.attachCancelText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
