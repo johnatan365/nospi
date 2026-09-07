@@ -5076,6 +5076,30 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     expired: '#9CA3AF',
   };
 
+  // Planes de suscripcion. Los precios NO se leen de aca: cada fila trae el
+  // precio que esa persona pago de verdad (subscriptions.price se congela al
+  // suscribirse), asi que si manana se cambia el precio en Configuracion, el
+  // admin sigue mostrando lo que cada quien pago, no el precio nuevo.
+  const PLAN_LABEL: Record<string, string> = {
+    '1_month': 'Mensual',
+    '3_months': '3 meses',
+    '6_months': '6 meses',
+  };
+  const PLAN_COLOR: Record<string, string> = {
+    '1_month': '#6B7280',
+    '3_months': '#7C3AED',
+    '6_months': '#BE185D',
+  };
+  const PLAN_MONTHS: Record<string, number> = {
+    '1_month': 1,
+    '3_months': 3,
+    '6_months': 6,
+  };
+  const fmtCOP = (v: any) => {
+    const n = Number(v || 0);
+    return '$' + Math.round(n).toLocaleString('es-CO');
+  };
+
   const renderSubscriptions = () => {
     const now = Date.now();
     const soonThreshold = now + 7 * 24 * 60 * 60 * 1000;
@@ -5186,6 +5210,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     <thead>
                       <tr style={{ borderBottom: '2px solid #F3E8FF', backgroundColor: '#FAF5FF' }}>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Suscriptor</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Plan / Pagó</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Estado</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Cancelada el</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Inicio</th>
@@ -5212,6 +5237,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                 <div style={{ fontSize: 12, color: '#9CA3AF' }}>{s.user_email}{s.user_phone ? ` · ${s.user_phone}` : ''}</div>
                               </td>
                               <td style={{ padding: '12px 14px' }}>
+                                <span style={{ backgroundColor: `${PLAN_COLOR[s.plan_type] || '#6B7280'}1A`, color: PLAN_COLOR[s.plan_type] || '#6B7280', padding: '4px 10px', borderRadius: 8, fontWeight: 700, fontSize: 12 }}>
+                                  {PLAN_LABEL[s.plan_type] || s.plan_type || '—'}
+                                </span>
+                                <div style={{ fontWeight: 700, color: '#1F2937', marginTop: 4 }}>{fmtCOP(s.price)}</div>
+                                {/* El precio por mes deja ver de una el descuento real de los planes
+                                    largos, sin tener que hacer la division mentalmente. */}
+                                {PLAN_MONTHS[s.plan_type] > 1 && (
+                                  <div style={{ fontSize: 11, color: '#9CA3AF' }}>
+                                    {fmtCOP(Number(s.price || 0) / PLAN_MONTHS[s.plan_type])} / mes
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
                                 <span style={{ backgroundColor: `${statusColor}1A`, color: statusColor, padding: '4px 10px', borderRadius: 8, fontWeight: 700, fontSize: 12 }}>
                                   {SUBSCRIPTION_STATUS_LABEL[s.status] || s.status}
                                 </span>
@@ -5235,7 +5273,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             </tr>
                             {isOpen && (
                               <tr>
-                                <td colSpan={9} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
+                                <td colSpan={10} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
                                   {s.cancellation_reason && (
                                     <div style={{ margin: '10px 0', padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: 10, fontSize: 13, color: '#991B1B' }}>
                                       <strong>Motivo de cancelación:</strong> {s.cancellation_reason}

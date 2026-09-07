@@ -444,8 +444,18 @@ export default function SubscriptionMembershipScreen() {
             type: 'subscribed',
             userEmail: currentUser.email,
             userName: currentUser.user_metadata?.name || '',
-            price: subscriptionPrice,
-            nextChargeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            // OJO: va el precio del plan que la persona REALMENTE eligio, no el
+            // mensual. Antes iba `subscriptionPrice` fijo, asi que a quien
+            // compraba 3 meses por $59.000 le llegaba un correo diciendo
+            // "$29.900 COP/mes" y con el proximo cobro a 30 dias.
+            price: planActual.precio,
+            planType: planSeleccionado,
+            planMonths: planActual.meses,
+            nextChargeDate: (() => {
+              const d = new Date();
+              d.setMonth(d.getMonth() + planActual.meses);
+              return d.toISOString();
+            })(),
           }),
         }).catch(() => {});
       } catch {}
@@ -556,7 +566,10 @@ export default function SubscriptionMembershipScreen() {
             type: 'reactivated',
             userEmail: currentUser.email,
             userName: currentUser.user_metadata?.name || '',
-            price: subscriptionPrice,
+            // Al reactivar hay que usar lo que esa persona tiene contratado, que
+            // esta congelado en la fila de subscriptions, no el precio de hoy.
+            price: subscription.price ?? subscriptionPrice,
+            planType: subscription.plan_type || '1_month',
             nextChargeDate: subscription.next_charge_date || subscription.end_date,
           }),
         }).catch(() => {});
