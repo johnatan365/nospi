@@ -5114,15 +5114,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const now = Date.now();
     const soonThreshold = now + 7 * 24 * 60 * 60 * 1000;
 
-    const activeSubs = subscriptions.filter((s) => s.status === 'active');
-    const cancelledSubs = subscriptions.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
-    const expiredSubs = subscriptions.filter((s) => s.status === 'expired');
+    // Las cuentas del equipo y las de prueba salen de TODOS los contadores:
+    // fueron pruebas de que el cobro funcionara, no clientes. Siguen
+    // apareciendo en la tabla de abajo, marcadas, para poder revisarlas.
+    const realSubs = subscriptions.filter((s) => !s.is_internal);
+
+    const activeSubs = realSubs.filter((s) => s.status === 'active');
+    const cancelledSubs = realSubs.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
+    const expiredSubs = realSubs.filter((s) => s.status === 'expired');
     // MRR: solo cuentan las suscripciones que VAN A RENOVAR (auto_renew).
     // Las activas con renovacion cancelada estan terminando su mes pagado y
     // no generan ingreso el mes entrante: contarlas inflaba el numero.
     const mrr = activeSubs.filter((s) => s.auto_renew).reduce((sum, s) => sum + Number(s.price || 0), 0);
     const renewingSoon = activeSubs.filter((s) => s.auto_renew && s.next_charge_date && new Date(s.next_charge_date).getTime() <= soonThreshold);
-    const withFailedCharges = subscriptions.filter((s) => Number(s.failed_charge_count || 0) > 0);
+    const withFailedCharges = realSubs.filter((s) => Number(s.failed_charge_count || 0) > 0);
 
     const q = subscriptionSearchQuery.trim().toLowerCase();
     const filtered = subscriptions.filter((s) => {
@@ -5149,7 +5154,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     // fechas: no son cobros leidos de Wompi. Vale la pena decirlo en vez de
     // presentar un numero estimado como si fuera exacto.
     const hayEstimados = Number(rev?.total_estimado || 0) > 0;
-    const notaEstimado = hayEstimados ? 'incluye histórico reconstruido' : undefined;
+    const internasFuera = Number(rev?.total_internas || 0);
+    const notaEstimado = [
+      hayEstimados ? 'incluye histórico reconstruido' : null,
+      internasFuera > 0 ? `sin $ ${internasFuera.toLocaleString('es-CO')} de cuentas de prueba` : null,
+    ].filter(Boolean).join(' · ') || undefined;
 
     const summaryCards: { label: string; value: string; color: string; sub?: string }[] = [
       { label: 'Suscriptores activos', value: String(activeSubs.length), color: '#059669' },
@@ -5281,6 +5290,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                   {s.is_returning && (
                                     <span style={{ marginLeft: 8, backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: 8, fontWeight: 700, fontSize: 11 }}>
                                       ↩︎ volvió
+                                    </span>
+                                  )}
+                                  {/* Sigue en la lista para poder revisarla, pero no suma en
+                                      ninguna estadistica. Sin la marca, verla aca y no verla en
+                                      los totales parece un error de cuentas. */}
+                                  {s.is_internal && (
+                                    <span style={{ marginLeft: 8, backgroundColor: '#E5E7EB', color: '#4B5563', padding: '2px 8px', borderRadius: 8, fontWeight: 700, fontSize: 11 }}>
+                                      🧪 prueba · no cuenta
                                     </span>
                                   )}
                                 </div>

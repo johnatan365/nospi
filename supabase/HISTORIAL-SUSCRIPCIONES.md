@@ -76,6 +76,23 @@ Dos condiciones que no son obvias:
   siempre sin que nadie les cobre nunca. Es el caso de las suscripciones pagadas por **PSE**:
   PSE no deja token para recobrar, así que quien se suscribe por ahí no se puede renovar solo.
 
+## Cuentas internas (`users.is_internal`)
+
+Marca para cuentas del equipo o de prueba. **Se excluyen de todas las estadísticas de negocio**
+—recaudo, MRR, retención, contadores— pero siguen apareciendo en la tabla del admin con la
+etiqueta `🧪 prueba · no cuenta`, para poder revisarlas y desmarcarlas.
+
+Se hizo como columna y no como una lista de correos escrita dentro de cada consulta, porque van
+a seguir apareciendo cuentas de prueba y hay que poder excluirlas sin volver a tocar código.
+Para marcar una nueva:
+
+```sql
+UPDATE public.users SET is_internal = true WHERE email = 'correo@ejemplo.com';
+```
+
+No afecta el funcionamiento de la app para esa persona: sigue pudiendo reservar, pagar y entrar
+a eventos igual que antes.
+
 ## Pendiente, no hecho
 
 - **PSE no sirve para suscripciones** y hoy se puede elegir. Era 1 de 32 al 7 de septiembre, pero
