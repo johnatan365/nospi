@@ -56,9 +56,30 @@ transacción, un rechazo posterior sobre esa misma transacción se perdería.
 no mover nada de lo que ya mostraba: `renewals_count`, `first_subscribed_at`, `is_returning`,
 `total_charged`.
 
+## Cierre de las vencidas
+
+`auto_expire_past_subscriptions()`, con cron diario (`auto-expire-past-subscriptions-daily`,
+5:25 a.m.), pasa a `expired` las que ya vencieron y que nadie va a volver a cobrar.
+
+Antes se quedaban en `active` para siempre. El acceso sí se cortaba bien —
+`has_active_subscription()` valida `end_date > now()` — pero el contador de suscriptores activos
+y el MRR estaban inflados: **al 7 de septiembre eran 6 de 31**, y ese número inflado llevó a leer
+la retención mensual como 85% cuando iba en **46%** (6 de 13 renovaron).
+
+Dos condiciones que no son obvias:
+
+- **No se tocan las de `auto_renew = true` con tarjeta guardada**, aunque hayan pasado su fecha.
+  Ahí manda la función de cobro, que reintenta y después de 3 fallos marca `expired` ella misma.
+  Cerrarlas por debajo sería cortarle el proceso a medias.
+- **Sí se cierran las que no tienen `wompi_payment_source_id`**, aunque digan `auto_renew = true`.
+  El cron las salta (`skipped: sin payment_source_id`), así que si no, quedarían activas para
+  siempre sin que nadie les cobre nunca. Es el caso de las suscripciones pagadas por **PSE**:
+  PSE no deja token para recobrar, así que quien se suscribe por ahí no se puede renovar solo.
+
 ## Pendiente, no hecho
 
-Las suscripciones vencidas **se quedan en `status = 'active'` para siempre**. Nadie las cierra
-cuando pasa `end_date` con `auto_renew = false`. El acceso sí se corta bien —
-`has_active_subscription()` valida `end_date > now()` — pero el contador de "suscriptores
-activos" y el MRR del admin quedan inflados. Al 7 de septiembre eran 6 de 31.
+- **PSE no sirve para suscripciones** y hoy se puede elegir. Era 1 de 32 al 7 de septiembre, pero
+  toda persona que entre por ahí se cae al mes siguiente sin que nadie se entere.
+- **Nadie avisa antes de que alguien se vaya.** De los que cancelaron, los dos que dijeron "no lo
+  uso lo suficiente" habían ido a **un solo evento** en todo el mes. Se ve venir con semanas de
+  anticipación y no hay alerta.
