@@ -8,6 +8,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { formatTimeAmPm } from '@/utils/formatTime';
+import { toqueFuerte, aviso } from '@/lib/haptics';
 
 interface Event {
   id: string;
@@ -181,6 +182,10 @@ export default function EventDetailsScreen() {
   const handleConfirm = async () => {
     if (requiresWaiver(event?.type) && !waiverAccepted) return;
 
+    // Reservar es LA accion de la app: el golpecito va aqui, al tocar, no al
+    // final del proceso de pago, para que se sienta que el boton respondio.
+    toqueFuerte();
+
     // Bloqueo por suspensión de reservas (amonestaciones por no confirmar
     // asistencia). Se revisa antes de cualquier pago.
     try {
@@ -193,6 +198,7 @@ export default function EventDetailsScreen() {
       if (until && until.getTime() > Date.now()) {
         const untilText = until.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
         const msg = `Tu cuenta está suspendida para reservar nuevos eventos hasta el ${untilText} porque no se confirmó tu asistencia a eventos anteriores. Puedes seguir usando la app con normalidad. Si crees que es un error, escríbenos a soporte para revisar tu caso.`;
+        aviso();
         if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Reservas suspendidas', msg); }
         return;
       }

@@ -57,7 +57,17 @@ export default function TabLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: 'none',
+          // Antes estaba en 'none' y las pantallas aparecian de golpe, que es
+          // de las cosas que mas hacen sentir basica una app.
+          //
+          // Se usa fundido y NO deslizamiento: estas cinco son pestanas
+          // hermanas, no una dentro de otra. Deslizar sugiere que entras un
+          // nivel mas adentro, y aqui eso seria mentira.
+          //
+          // 180 ms es el punto donde se percibe suave sin sentirse lento;
+          // por encima de ~250 ms empieza a estorbar al ir y volver rapido.
+          animation: 'fade',
+          animationDuration: 180,
         }}
       >
         <Stack.Screen key="events" name="events" />

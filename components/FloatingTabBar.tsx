@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from './IconSymbol';
 import { nospiColors } from '@/constants/Colors';
+import { toque } from '@/lib/haptics';
 
 export interface TabBarItem {
   name: string;
@@ -24,7 +25,9 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const insets = useSafeAreaInsets();
 
   const handleTabPress = (route: string) => {
-    console.log('Tab pressed:', route);
+    // El golpecito va ANTES de navegar: asi se siente al instante y no
+    // despues de que la pantalla nueva termine de montarse.
+    toque();
     router.push(route as any);
   };
 

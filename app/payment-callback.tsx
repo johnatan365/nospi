@@ -5,6 +5,7 @@ import { nospiColors } from '@/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { exito } from '@/lib/haptics';
 
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 
@@ -190,6 +191,10 @@ async function confirmAppointmentInSupabase(
   }
 
   
+  // Momento exacto en que la reserva queda confirmada: es la mejor noticia que
+  // da la app, y hasta ahora llegaba en silencio absoluto.
+  exito();
+
   await AsyncStorage.setItem('should_check_notification_prompt', 'true');
   return true;
 }

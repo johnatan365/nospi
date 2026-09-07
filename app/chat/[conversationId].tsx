@@ -24,6 +24,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nospiColors } from '@/constants/Colors';
+import { toque, toqueFuerte, error as hapticoError } from '@/lib/haptics';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -153,6 +154,9 @@ interface Message {
   // Mensaje fijado: se muestra en la banda de arriba del chat.
   pinned_at?: string | null;
   pinned_by?: string | null;
+  // SOLO EN LA APP, nunca viene de la base: el mensaje ya se pinto pero el
+  // servidor aun no lo confirma. Se dibuja con un relojito.
+  pending?: boolean;
 }
 
 interface Participant {
@@ -321,6 +325,25 @@ function mentionRegex(names: string[]): RegExp | null {
   const clean = names.filter(Boolean).sort((a, b) => b.length - a.length).map(escapeRe);
   if (clean.length === 0) return null;
   return new RegExp(`(@(?:${clean.join('|')}|todos))`, 'gi');
+}
+
+// Mete el mensaje REAL en la lista quitando el provisional que lo representaba.
+//
+// Hace falta porque el mensaje llega por DOS caminos que compiten: la respuesta
+// del insert y el aviso de tiempo real. Sin esto, segun cual gane, el mensaje
+// se veria dos veces.
+//
+// - Si ya esta por id, no se vuelve a meter.
+// - Si viene por tiempo real (sin tempId) se busca el provisional propio con el
+//   mismo texto, que es justamente el que este mensaje viene a confirmar.
+function fusionarMensajeReal(prev: Message[], real: Message, tempId?: string | null): Message[] {
+  const yaEsta = prev.some((m) => m.id === real.id);
+  const sinProvisional = prev.filter((m) => {
+    if (!m.pending) return true;
+    if (tempId) return m.id !== tempId;
+    return !(m.sender_id === real.sender_id && m.content === real.content);
+  });
+  return yaEsta ? sinProvisional : [...sinProvisional, real];
 }
 
 function renderMessageContent(
@@ -608,6 +631,7 @@ function PollCard({ pollId }: { pollId: string }) {
   const vote = async (optionIndex: number | null, rating: number | null) => {
     if (saving) return;
     setSaving(true);
+    toqueFuerte();
     try {
       const { data: r, error } = await supabase.rpc('vote_poll', {
         p_poll_id: pollId,
@@ -741,6 +765,7 @@ export default function ChatThreadScreen() {
     const mine = (reactions[messageId] || []).find(r => r.user_id === user.id);
 
     // Actualizacion optimista para que se sienta inmediato.
+    toque();
     setReactions(prev => {
       const list = (prev[messageId] || []).filter(r => r.user_id !== user.id);
       if (!mine || mine.emoji !== emoji) list.push({ emoji, user_id: user.id });
@@ -767,6 +792,7 @@ export default function ChatThreadScreen() {
   // Fijar / quitar de fijados. Cualquiera del chat puede, pero lo que fija el
   // equipo de Nospi solo lo quita el equipo (regla del servidor).
   const togglePinned = useCallback(async (m: Message | null) => {
+    toque();
     if (!m) return;
     const willPin = !m.pinned_at;
     const { error } = await supabase.rpc('set_message_pinned', {
@@ -1111,7 +1137,7 @@ export default function ChatThreadScreen() {
         },
         async (payload) => {
           const newMsg = payload.new as Message;
-          setMessages((prev) => (prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+          setMessages((prev) => fusionarMensajeReal(prev, newMsg));
           await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
         }
@@ -1161,6 +1187,7 @@ export default function ChatThreadScreen() {
     setDraft('');
 
     const replyId = replyingTo?.id ?? null;
+    const respuestaPrevia = replyingTo;
 
     // Los mencionados van DENTRO del mensaje para que la notificacion, que se
     // dispara al insertarlo, ya sepa a quien avisarle distinto.
@@ -1170,6 +1197,27 @@ export default function ChatThreadScreen() {
       .filter((pp) => pp.user_id !== user.id)
       .filter((pp) => mentionAll || norm.includes('@' + normalizeText(pp.name)))
       .map((pp) => pp.user_id);
+
+    // El mensaje se pinta YA, sin esperar al servidor.
+    //
+    // Antes se esperaba la respuesta de Supabase para mostrarlo, asi que al
+    // enviar quedaba un hueco de varios cientos de milisegundos -- mas si la
+    // senal es mala -- en el que parecia que no habia pasado nada. Es la
+    // interaccion mas usada del chat, y era la que mas lo hacia sentir lento.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const provisional: Message = {
+      id: tempId,
+      conversation_id: conversationId,
+      sender_id: user.id,
+      content,
+      created_at: new Date().toISOString(),
+      reply_to: replyId,
+      pending: true,
+    };
+    setMessages((prev) => [...prev, provisional]);
+    setReplyingTo(null);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    toqueFuerte();
 
     const { data, error } = await supabase
       .from('chat_messages')
@@ -1185,12 +1233,15 @@ export default function ChatThreadScreen() {
 
     if (error) {
       console.error('ChatThread: error sending message', error);
+      // Se retira el provisional y se devuelve TODO como estaba -- texto y
+      // respuesta citada -- para poder reintentar sin perder nada.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setReplyingTo(respuestaPrevia);
       updateDraft(content); // se restaura y se vuelve a guardar el borrador
+      hapticoError();
     } else if (data) {
-      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
-      setReplyingTo(null);
+      setMessages((prev) => fusionarMensajeReal(prev, data as Message, tempId));
       if (conversationId) AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
   };
@@ -1320,6 +1371,7 @@ export default function ChatThreadScreen() {
 
   const startRecording = async () => {
     if (recording || sendingVoice) return;
+    toqueFuerte();
     try {
       if (isWeb) {
         // En web NO se pide el permiso por separado: la propia grabadora abre
@@ -2050,7 +2102,10 @@ export default function ChatThreadScreen() {
                     </Text>
                   )}
                   <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
-                    {formatBogotaTime(new Date(item.created_at))}
+                    {/* Mientras el servidor no confirma se muestra un reloj en
+                        lugar de la hora, como en WhatsApp: asi se entiende que
+                        ya salio y que aun va en camino. */}
+                    {item.pending ? '🕐' : formatBogotaTime(new Date(item.created_at))}
                   </Text>
                 </TouchableOpacity>
                 </SwipeToReply>
