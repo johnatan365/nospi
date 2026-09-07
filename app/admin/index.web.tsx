@@ -5216,6 +5216,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Inicio</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Próx. cobro / Fin</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Auto-renovación</th>
+                        <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Renovaciones</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Último cobro</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}>Eventos</th>
                         <th style={{ textAlign: 'left', padding: '12px 14px', color: '#6B21A8' }}></th>
@@ -5233,7 +5234,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               onClick={() => setExpandedSubscriptionId(isOpen ? null : s.id)}
                             >
                               <td style={{ padding: '12px 14px' }}>
-                                <div style={{ fontWeight: 700, color: '#1F2937' }}>{s.user_name || '—'}</div>
+                                <div style={{ fontWeight: 700, color: '#1F2937' }}>
+                                  {s.user_name || '—'}
+                                  {/* Sin esta marca, quien cancela y vuelve meses despues es
+                                      indistinguible de un suscriptor nuevo: la compra pisa la fila
+                                      vieja y start_date arranca de cero. */}
+                                  {s.is_returning && (
+                                    <span style={{ marginLeft: 8, backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: 8, fontWeight: 700, fontSize: 11 }}>
+                                      ↩︎ volvió
+                                    </span>
+                                  )}
+                                </div>
                                 <div style={{ fontSize: 12, color: '#9CA3AF' }}>{s.user_email}{s.user_phone ? ` · ${s.user_phone}` : ''}</div>
                               </td>
                               <td style={{ padding: '12px 14px' }}>
@@ -5260,11 +5271,33 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               <td style={{ padding: '12px 14px', color: s.cancellation_reason ? '#1F2937' : '#D1D5DB', fontWeight: s.cancellation_reason ? 600 : 400 }}>
                                 {s.cancellation_reason ? fmtDate(s.updated_at) : '—'}
                               </td>
-                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>{fmtDate(s.start_date)}</td>
+                              <td style={{ padding: '12px 14px', color: '#4B5563' }}>
+                                {fmtDate(s.start_date)}
+                                {/* start_date es el inicio del ciclo ACTUAL. Para quien volvio, la
+                                    fecha que importa es la primera vez que se suscribio. */}
+                                {s.is_returning && s.first_subscribed_at && (
+                                  <div style={{ fontSize: 11, color: '#9CA3AF' }}>desde {fmtDate(s.first_subscribed_at)}</div>
+                                )}
+                              </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
                                 {s.status === 'active' ? fmtDate(s.next_charge_date) : fmtDate(s.end_date)}
                               </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.auto_renew ? '✅ Sí' : '❌ No'}</td>
+                              {/* Sale de subscription_charges, no de esta fila. `subscriptions`
+                                  guarda una sola fila por persona y la sobrescribe en cada cobro,
+                                  asi que por si sola no sabe cuantas veces se renovo. */}
+                              <td style={{ padding: '12px 14px' }}>
+                                {Number(s.renewals_count || 0) > 0 ? (
+                                  <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '4px 10px', borderRadius: 8, fontWeight: 700, fontSize: 12 }}>
+                                    🔁 {s.renewals_count}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#D1D5DB' }}>—</span>
+                                )}
+                                {Number(s.total_charged || 0) > 0 && (
+                                  <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{fmtCOP(s.total_charged)} en total</div>
+                                )}
+                              </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.last_charge_status || '—'}</td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
                                 {s.events_attended} asistidos{Number(s.events_cancelled) > 0 ? ` · ${s.events_cancelled} cancelados` : ''}
@@ -5273,7 +5306,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             </tr>
                             {isOpen && (
                               <tr>
-                                <td colSpan={10} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
+                                <td colSpan={11} style={{ padding: '0 14px 18px 14px', backgroundColor: '#FAFAFA' }}>
                                   {s.cancellation_reason && (
                                     <div style={{ margin: '10px 0', padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: 10, fontSize: 13, color: '#991B1B' }}>
                                       <strong>Motivo de cancelación:</strong> {s.cancellation_reason}
