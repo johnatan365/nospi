@@ -52,6 +52,19 @@ citas quedan en estado `anterior`, no `confirmada`, así que la rama normal del 
 y hay que insertar a mano; y quien canceló o no apareció no tiene por qué quedar en el grupo de
 una mesa donde no estuvo.
 
+## Orden de la lista de chats
+
+`get_my_conversations()` ordenaba poniendo primero las conversaciones **con** mensajes y las
+vacías de últimas. El efecto perverso: un grupo recién creado —que por definición no tiene
+mensajes— quedaba enterrado debajo de todos los viejos, justo cuando más falta hace que se vea.
+El chat de la "Mesa Nospi Azul" quedó en la posición **15 de 15** y parecía no existir.
+
+Ahora el orden es `coalesce(último_mensaje, fecha_del_evento) desc`: la última señal de vida de
+cada conversación. Un grupo nuevo de un evento reciente o próximo queda arriba.
+
+Los chats directos y los canales no se ven afectados: solo aparecen en la lista cuando ya tienen
+mensajes, así que para ellos el criterio sigue siendo el último mensaje.
+
 ## El chat privado ya estaba bien
 
 `get_or_create_direct_chat` exige, para un chat **nuevo**, que las dos personas hayan estado en
