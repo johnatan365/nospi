@@ -58,7 +58,12 @@ export default function TabLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: 'none',
+          // Mismo criterio que el layout compartido: fundido corto, no
+          // deslizamiento, porque las cinco pestanas son hermanas.
+          // OJO: iPhone usa ESTE archivo, no app/(tabs)/_layout.tsx. Si se
+          // cambia la transicion alli, hay que cambiarla aqui tambien.
+          animation: 'fade',
+          animationDuration: 180,
         }}
       >
         <Stack.Screen key="events" name="events" />
