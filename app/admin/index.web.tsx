@@ -674,6 +674,7 @@ export default function AdminPanelScreen() {
   // Suscripciones mensuales (para la pestaña "Suscripciones" del admin)
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [subscriptionEvents, setSubscriptionEvents] = useState<any[]>([]);
+  const [subscriptionRevenue, setSubscriptionRevenue] = useState<any>(null);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false);
   const [expandedSubscriptionId, setExpandedSubscriptionId] = useState<string | null>(null);
@@ -3417,9 +3418,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     if (subscriptionsLoaded && !force) return;
     setSubscriptionsLoading(true);
     try {
-      const [subsRes, eventsRes] = await Promise.all([
+      const [subsRes, eventsRes, revenueRes] = await Promise.all([
         supabase.rpc('get_all_subscriptions_for_admin'),
         supabase.rpc('get_subscription_events_for_admin'),
+        // Los totales de plata NO se pueden sumar desde la lista de arriba:
+        // subscriptions guarda una sola fila por persona con el precio del
+        // ciclo actual. Salen de subscription_charges, que es el historial.
+        supabase.rpc('get_subscription_revenue_for_admin'),
       ]);
       if (subsRes.error) {
         console.error('Error loading subscriptions:', subsRes.error);
@@ -3431,6 +3436,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         console.error('Error loading subscription events:', eventsRes.error);
       } else {
         setSubscriptionEvents(eventsRes.data || []);
+      }
+      if (revenueRes.error) {
+        console.error('Error loading subscription revenue:', revenueRes.error);
+      } else {
+        setSubscriptionRevenue((revenueRes.data || [])[0] || null);
       }
       setSubscriptionsLoaded(true);
     } catch (error) {
@@ -5127,10 +5137,38 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
+    // Plata recaudada. Viene de subscription_charges (el historial), no de la
+    // lista de suscripciones: esa guarda una fila por persona con el precio del
+    // ciclo actual, asi que sumarla daria el valor de un mes y no el acumulado.
+    const rev = subscriptionRevenue;
+    const totalRecaudado = Number(rev?.total_recaudado || 0);
+    const totalRenovaciones = Number(rev?.total_renovaciones || 0);
+    const cobrosRenovacion = Number(rev?.cobros_renovacion || 0);
+    const personasQueRenovaron = Number(rev?.personas_con_renovacion || 0);
+    // Parte del historial se reconstruyo al crear la tabla, deduciendola de las
+    // fechas: no son cobros leidos de Wompi. Vale la pena decirlo en vez de
+    // presentar un numero estimado como si fuera exacto.
+    const hayEstimados = Number(rev?.total_estimado || 0) > 0;
+    const notaEstimado = hayEstimados ? 'incluye histórico reconstruido' : undefined;
+
     const summaryCards: { label: string; value: string; color: string; sub?: string }[] = [
       { label: 'Suscriptores activos', value: String(activeSubs.length), color: '#059669' },
       { label: 'Cancelados / vencidos', value: String(cancelledSubs.length + expiredSubs.length), color: '#EF4444' },
       { label: 'Ingreso mensual estimado (MRR)', value: `$ ${mrr.toLocaleString('es-CO')} COP`, color: '#6B21A8' },
+      {
+        label: 'Recaudado en suscripciones',
+        value: `$ ${totalRecaudado.toLocaleString('es-CO')} COP`,
+        color: '#0F766E',
+        sub: notaEstimado,
+      },
+      {
+        label: 'Recaudado en renovaciones',
+        value: `$ ${totalRenovaciones.toLocaleString('es-CO')} COP`,
+        color: '#047857',
+        // Sin la primera compra de cada persona. Es la plata que llega sin
+        // volver a gastar en publicidad, que es lo que hace rentable el modelo.
+        sub: `${cobrosRenovacion} cobro${cobrosRenovacion === 1 ? '' : 's'} · ${personasQueRenovaron} persona${personasQueRenovaron === 1 ? '' : 's'}`,
+      },
       { label: 'Renuevan en 7 días', value: String(renewingSoon.length), color: '#D97706' },
       { label: 'Con fallos de cobro', value: String(withFailedCharges.length), color: '#DC2626' },
     ];
@@ -5166,6 +5204,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 <div key={c.label} style={{ backgroundColor: 'white', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${c.color}` }}>
                   <div style={{ fontSize: 12, color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>{c.label}</div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{c.value}</div>
+                  {c.sub && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{c.sub}</div>}
                 </div>
               ))}
             </div>
