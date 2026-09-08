@@ -31,11 +31,6 @@ interface Event {
   location_address: string | null;
   maps_link: string | null;
   price: number | null;
-  // Mesa en armado: primero se completa el grupo, despues se confirma cual
-  // viernes. Mientras fecha_por_confirmar sea true, `date` NO es la fecha real
-  // (esta a 5 anios para que no salgan recordatorios) y no debe mostrarse.
-  es_mesa_armada?: boolean;
-  fecha_por_confirmar?: boolean;
 }
 
 const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -108,7 +103,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price, es_mesa_armada, fecha_por_confirmar')
+        .select('id, name, city, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
       supabase
@@ -240,7 +235,6 @@ export default function EventsScreen() {
                 {sectionEvents.map((event) => {
                   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
-                  const esMesaEnArmado = !!event.es_mesa_armada && !!event.fecha_por_confirmar;
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
 
                   return (
@@ -272,40 +266,18 @@ export default function EventsScreen() {
                       <View style={styles.eventCardBody}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
-                          {esMesaEnArmado && (
-                            <View style={styles.armadoBadge}>
-                              <Text style={styles.armadoBadgeText}>En armado</Text>
-                            </View>
-                          )}
                           {event.price === 0 && (
                             <View style={styles.freeBadge}>
                               <Text style={styles.freeBadgeText}>Gratis</Text>
                             </View>
                           )}
                         </View>
-                        {/* En una Mesa en armado la fecha real esta a 5 anios
-                            (ver la migracion mesa_armada): es un tope para que
-                            no salgan recordatorios de un evento sin fecha.
-                            Mostrarla seria absurdo, asi que en su lugar va lo
-                            que la persona si necesita saber. */}
-                        {esMesaEnArmado ? (
-                          <Text style={[styles.eventMetaCompact, styles.eventMetaArmado]} numberOfLines={1}>
-                            Te decimos cuál viernes • {formatTimeAmPm(event.time)} • {event.city}
-                          </Text>
-                        ) : (
-                          <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                            {compactDate} • {formatTimeAmPm(event.time)} • {event.city}
-                          </Text>
-                        )}
+                        <Text style={styles.eventMetaCompact} numberOfLines={1}>
+                          {compactDate} • {formatTimeAmPm(event.time)} • {event.city}
+                        </Text>
                         {hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
                             {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
-                          </Text>
-                        ) : esMesaEnArmado ? (
-                          // "se revelará un día antes" no significa nada cuando
-                          // todavía no hay día. Se dice lo que sí falta.
-                          <Text style={styles.locationPlaceholderCompact}>
-                            Se confirma cuando el grupo esté completo
                           </Text>
                         ) : (
                           <Text style={styles.locationPlaceholderCompact}>Ubicación se revelará un día antes</Text>
@@ -395,24 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#880E4F',
-  },
-  // "En armado" va en el morado de la marca y no en verde: no es un premio
-  // como "Gratis", es el estado en el que esta la mesa.
-  armadoBadge: {
-    backgroundColor: 'rgba(136,14,79,0.10)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  armadoBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#880E4F',
-  },
-  eventMetaArmado: {
-    color: '#880E4F',
-    fontWeight: '600',
   },
   freeBadge: {
     backgroundColor: '#D1FAE5',
