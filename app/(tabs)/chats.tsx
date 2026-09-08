@@ -472,7 +472,10 @@ export default function ChatsScreen() {
 
                   <View style={styles.rowContent}>
                     <View style={styles.rowHeader}>
-                      <Text style={[styles.rowTitle, hasUnread && styles.rowTitleUnread, locked && styles.rowTitleLocked]} numberOfLines={1}>
+                      {/* Dos lineas: "Comunidad Nospi Medellin" y varios
+                          nombres de evento no caben en una sola en pantallas
+                          angostas, y se cortaban a la mitad. */}
+                      <Text style={[styles.rowTitle, hasUnread && styles.rowTitleUnread, locked && styles.rowTitleLocked]} numberOfLines={2}>
                         {title}
                       </Text>
                       {/* Una solicitud no es un chat mas: hay que decidir algo.
@@ -508,7 +511,14 @@ export default function ChatsScreen() {
                             // por el estado, que es lo que de verdad quiere
                             // saber: si ya le respondieron o no.
                             ? 'Esperando que acepte tu solicitud'
-                            : item.last_message || 'Sin mensajes todavía'}
+                            : item.last_message
+                            ? item.last_message
+                            // Mientras la comunidad este callada, la fila dice
+                            // que es en vez de "Sin mensajes todavia", que no
+                            // explica nada de un grupo que la persona no pidio.
+                            : isComunidad
+                            ? 'Quienes ya vinieron a un evento de Nospi'
+                            : 'Sin mensajes todavía'}
                         </Text>
                         {hasUnread && (
                           <View style={styles.unreadBadge}>

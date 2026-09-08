@@ -2643,7 +2643,14 @@ export default function ChatThreadScreen() {
       {/* Ficha de una persona de la mesa. Se abre al tocar su foto. */}
       <Modal visible={!!perfilVisto} animationType="slide" transparent onRequestClose={() => setPerfilVisto(null)}>
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setPerfilVisto(null)}>
-          <TouchableOpacity style={styles.perfilSheet} activeOpacity={1} onPress={() => {}}>
+          {/* El paddingBottom incluye insets.bottom: sin eso, en Android el
+              boton "Cerrar" queda pegado a la barra de navegacion del sistema y
+              casi no hay donde tocarlo. */}
+          <TouchableOpacity
+            style={[styles.perfilSheet, { paddingBottom: insets.bottom + 24 }]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
             {perfilVisto?.profile_photo_url ? (
               // La foto se puede ampliar desde aca, pero por un visor propio
               // sin Descargar ni Compartir: es la foto de otra persona.
@@ -3159,7 +3166,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 22,
     paddingTop: 24,
     paddingHorizontal: 22,
-    paddingBottom: 18,
     alignItems: 'center',
   },
   perfilFoto: { width: 108, height: 108, borderRadius: 54, marginBottom: 14, backgroundColor: '#F3F4F6' },
