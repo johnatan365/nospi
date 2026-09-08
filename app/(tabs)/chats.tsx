@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -28,7 +28,8 @@ interface ConversationRow {
   last_message_at: string | null;
   unread_count: number;
   // Solo para type='direct'. 'pendiente' = solicitud sin responder.
-  estado?: 'pendiente' | 'aceptada' | 'ignorada' | null;
+  // 'bloqueada' solo aparece en la comunidad, para quien aun no ha asistido.
+  estado?: 'pendiente' | 'aceptada' | 'ignorada' | 'bloqueada' | null;
   solicitada_por?: string | null;
 }
 
@@ -80,6 +81,12 @@ function formatBogotaTime(date: Date): string {
 }
 
 function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel: string | null } {
+  // La comunidad se le muestra bloqueada a quien todavia no ha asistido: es
+  // para que vea que existe, no para que entre. La llave es venir a un evento,
+  // no comprarlo — se puede pagar y no aparecer, y en ese caso sigue cerrada.
+  if (item.conv_type === 'community' && item.estado === 'bloqueada') {
+    return { locked: true, unlockLabel: null };
+  }
   if (item.conv_type !== 'event_group' || !item.event_date) return { locked: false, unlockLabel: null };
   const unlockAt = new Date(new Date(item.event_date).getTime() - CHAT_UNLOCK_MINUTES_BEFORE * 60 * 1000);
   if (Date.now() >= unlockAt.getTime()) return { locked: false, unlockLabel: null };
@@ -411,14 +418,25 @@ export default function ChatsScreen() {
               const photoUrl = (isGroup || isChannel || isComunidad) ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);
+              const esComunidadBloqueada = isComunidad && item.estado === 'bloqueada';
 
               return (
                 <TouchableOpacity
                   key={item.conversation_id}
                   style={[styles.row, locked && styles.rowLocked]}
-                  activeOpacity={locked ? 1 : 0.7}
-                  onPress={() => { if (!locked) openConversation(item); }}
-                  disabled={locked}
+                  activeOpacity={locked && !esComunidadBloqueada ? 1 : 0.7}
+                  onPress={() => {
+                    if (esComunidadBloqueada) {
+                      // Tocar algo y que no pase nada se siente roto. Se explica
+                      // por que esta cerrado y como se abre.
+                      const msg = 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente.';
+                      if (Platform.OS === 'web') window.alert(msg);
+                      else Alert.alert('Comunidad Nospi Medellín', msg);
+                      return;
+                    }
+                    if (!locked) openConversation(item);
+                  }}
+                  disabled={locked && !esComunidadBloqueada}
                 >
                   {photoUrl ? (
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />
@@ -461,8 +479,12 @@ export default function ChatsScreen() {
                       {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>}
                     </View>
                     {locked ? (
-                      <Text style={styles.rowLockedText} numberOfLines={1}>
-                        Se habilita a las {unlockLabel}
+                      <Text style={styles.rowLockedText} numberOfLines={2}>
+                        {unlockLabel
+                          ? `Se habilita a las ${unlockLabel}`
+                          // Dice ASISTIR, no comprar: comprar y no aparecer no
+                          // abre la puerta, y es justo lo que no hay que premiar.
+                          : 'Entras cuando vengas a tu primer evento'}
                       </Text>
                     ) : (
                       <View style={styles.rowFooter}>
