@@ -217,12 +217,21 @@ export default function EventDetailsScreen() {
         .eq('event_id', id)
         .maybeSingle();
 
-      if (existingAppointment) {
-        if (existingAppointment.status === 'confirmada' || existingAppointment.payment_status === 'completed') {
-          setConfirming(false);
-          router.replace('/(tabs)/appointments');
-          return;
-        }
+      // Quien decide si YA esta inscrito es `status`, no `payment_status`.
+      //
+      // Antes esto tambien salia por payment_status === 'completed', y ahi
+      // estaba el bug: al cancelar, la cita queda en 'cancelada' pero conserva
+      // 'completed' porque esa persona SI pago en su momento. Con esa condicion
+      // se le mandaba a "mis citas" y no podia volver a inscribirse nunca al
+      // evento que habia cancelado. Eran 44 citas en esa situacion.
+      //
+      // Si vuelve a entrar, el flujo de pago sigue igual: subscription-plans y
+      // payment-callback ya detectan la fila existente y la actualizan en vez
+      // de insertar otra (hay un unico sobre user_id + event_id).
+      if (existingAppointment && existingAppointment.status === 'confirmada') {
+        setConfirming(false);
+        router.replace('/(tabs)/appointments');
+        return;
       }
 
       const eventId = Array.isArray(id) ? id[0] : id as string;
