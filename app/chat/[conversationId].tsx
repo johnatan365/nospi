@@ -877,6 +877,14 @@ export default function ChatThreadScreen() {
   // imagen mas grande": la ficha responde eso y ademas no deja bajar la foto.
   const [perfilVisto, setPerfilVisto] = useState<Participant | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+  // Ficha que se quiere abrir DESDE la lista de participantes.
+  //
+  // En iOS no se pueden presentar dos <Modal> a la vez: el segundo no aparece,
+  // y si la persona insiste, las presentaciones se encolan y la pantalla se
+  // congela. Como la lista de participantes ya es un modal, la ficha no se
+  // abre de una: se guarda aca, se cierra la lista, y solo cuando esa se
+  // cerro de verdad se muestra la ficha.
+  const [perfilPendiente, setPerfilPendiente] = useState<Participant | null>(null);
 
   // Numero tocado en un mensaje. Guarda tambien de quien era el mensaje, para
   // poder proponer ese nombre al guardar el contacto.
@@ -956,6 +964,20 @@ export default function ChatThreadScreen() {
   }, [copyPlainText]);
 
   const [showParticipants, setShowParticipants] = useState(false);
+
+  // Abre la ficha SOLO cuando la lista de participantes ya se cerro. En iOS dos
+  // <Modal> a la vez no funcionan: el segundo no aparece y, si la persona
+  // insiste, las presentaciones se encolan y la pantalla se congela.
+  // Va aqui abajo y no junto a perfilPendiente porque necesita showParticipants,
+  // que se declara en esta linea: usarlo antes rompia en tiempo de ejecucion.
+  useEffect(() => {
+    if (!perfilPendiente || showParticipants) return;
+    const t = setTimeout(() => {
+      setPerfilVisto(perfilPendiente);
+      setPerfilPendiente(null);
+    }, Platform.OS === 'ios' ? 420 : 80);
+    return () => clearTimeout(t);
+  }, [perfilPendiente, showParticipants]);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
   // Candado de re-entrada. Va aparte del estado de arriba (que solo pinta el
   // spinner) para que un fallo no pueda dejar el boton muerto: este se limpia
@@ -2544,11 +2566,12 @@ export default function ChatThreadScreen() {
                     // abre la ficha, y el "Escribir por privado" vive adentro:
                     // tocar a una persona muestra quien es, no le manda un
                     // mensaje sin querer.
-                    onPress={() => setPerfilVisto(p)}
-                    disabled={!!startingChatWith}
+                    // Se cierra la lista y la ficha se abre despues (ver
+                    // perfilPendiente): dos modales a la vez no funcionan en iOS.
+                    onPress={() => { setPerfilPendiente(p); setShowParticipants(false); }}
                   >
                     {p.profile_photo_url ? (
-                      <TouchableOpacity onPress={() => setPerfilVisto(p)} activeOpacity={0.8}>
+                      <TouchableOpacity onPress={() => { setPerfilPendiente(p); setShowParticipants(false); }} activeOpacity={0.8}>
                         <ExpoImage source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} cachePolicy="memory-disk" transition={0} />
                       </TouchableOpacity>
                     ) : (
@@ -2674,8 +2697,19 @@ export default function ChatThreadScreen() {
       </Modal>
 
       {/* Ficha de una persona de la mesa. Se abre al tocar su foto. */}
-      <Modal visible={!!perfilVisto} animationType="slide" transparent onRequestClose={() => setPerfilVisto(null)}>
-        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setPerfilVisto(null)}>
+      {/* Al cerrar la ficha tambien se limpia la foto ampliada: si no, al
+          volver a abrir otra ficha aparecia la foto de la anterior encima. */}
+      <Modal
+        visible={!!perfilVisto}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setFotoAmpliada(null); setPerfilVisto(null); }}
+      >
+        <TouchableOpacity
+          style={styles.attachOverlay}
+          activeOpacity={1}
+          onPress={() => { setFotoAmpliada(null); setPerfilVisto(null); }}
+        >
           {/* El paddingBottom incluye insets.bottom: sin eso, en Android el
               boton "Cerrar" queda pegado a la barra de navegacion del sistema y
               casi no hay donde tocarlo. */}
@@ -2743,19 +2777,31 @@ export default function ChatThreadScreen() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.attachCancel} onPress={() => setPerfilVisto(null)}>
+            <TouchableOpacity style={styles.attachCancel} onPress={() => { setFotoAmpliada(null); setPerfilVisto(null); }}>
               <Text style={styles.attachCancelText}>Cerrar</Text>
             </TouchableOpacity>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
-      {/* Foto de perfil ampliada. Visor propio, SIN descargar ni compartir: es
-          la cara de otra persona, no un archivo del chat. */}
-      <Modal visible={!!fotoAmpliada} animationType="fade" transparent onRequestClose={() => setFotoAmpliada(null)}>
-        <TouchableOpacity style={styles.photoViewerOverlay} activeOpacity={1} onPress={() => setFotoAmpliada(null)}>
+          {/* La foto ampliada se dibuja DENTRO de este mismo modal, como una
+              capa encima, y no como un <Modal> aparte. Asi se evita de raiz el
+              problema de iOS con dos modales simultaneos, y ademas al cerrarla
+              se vuelve a la ficha en vez de salirse a la conversacion.
+              Sin Descargar ni Compartir: es la cara de otra persona. */}
           {!!fotoAmpliada && (
-            <ExpoImage source={{ uri: fotoAmpliada }} style={styles.perfilFotoGrande} contentFit="contain" transition={120} />
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setFotoAmpliada(null)}
+            >
+              <View style={styles.photoViewerOverlay}>
+                <ExpoImage
+                  source={{ uri: fotoAmpliada }}
+                  style={styles.perfilFotoGrande}
+                  contentFit="contain"
+                  transition={120}
+                />
+              </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       </Modal>
