@@ -1905,7 +1905,15 @@ export default function ChatThreadScreen() {
                 onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
               />
             )}
-            <Text style={styles.headerTitle} numberOfLines={1}>
+            {/* En el privado, el titulo ES el nombre de la otra persona, asi
+                que tambien abre su ficha. En grupos y canales es el nombre del
+                evento y no hay ficha que abrir. */}
+            <Text
+              style={styles.headerTitle}
+              numberOfLines={1}
+              onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
+              suppressHighlighting={!otherParticipant}
+            >
               {headerTitle}
             </Text>
           </View>
@@ -2017,7 +2025,18 @@ export default function ChatThreadScreen() {
                   delayLongPress={250}
                   style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
                 >
-                  {showSenderInfo && <Text style={styles.senderName}>{senderName}</Text>}
+                  {/* El nombre abre la ficha igual que la foto: la gente toca
+                      lo que esta leyendo, y en un mensaje lo que se lee es el
+                      nombre, no el avatar de 26px. */}
+                  {showSenderInfo && (
+                    <Text
+                      style={styles.senderName}
+                      onPress={sender ? () => setPerfilVisto(sender) : undefined}
+                      suppressHighlighting={!sender}
+                    >
+                      {senderName}
+                    </Text>
+                  )}
                   {repliedMsg && (
                     <View style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}>
                       <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
@@ -2369,7 +2388,11 @@ export default function ChatThreadScreen() {
                   <TouchableOpacity
                     key={p.user_id}
                     style={styles.participantRow}
-                    onPress={() => handleStartDirectChat(p.user_id)}
+                    // Antes la fila entera abria un chat privado de una. Ahora
+                    // abre la ficha, y el "Escribir por privado" vive adentro:
+                    // tocar a una persona muestra quien es, no le manda un
+                    // mensaje sin querer.
+                    onPress={() => setPerfilVisto(p)}
                     disabled={!!startingChatWith}
                   >
                     {p.profile_photo_url ? (
