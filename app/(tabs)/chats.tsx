@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshCon
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -451,8 +452,18 @@ export default function ChatsScreen() {
                       <Text style={styles.avatarEmoji}>🔒</Text>
                     </View>
                   ) : isComunidad ? (
-                    <View style={[styles.avatar, styles.avatarComunidad]}>
-                      <Text style={styles.avatarEmoji}>🌆</Text>
+                    // Silueta monocroma teñida del mismo morado que los iconos
+                    // de evento, en vez de un emoji a color. Se escogio "grupo
+                    // de personas" porque el set sigue una regla: cada icono
+                    // muestra la ACTIVIDAD (la taza, los bolos, la caminata), y
+                    // la actividad de la comunidad son las personas.
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <IconSymbol
+                        ios_icon_name="person.3.fill"
+                        android_material_icon_name="groups"
+                        size={30}
+                        color="#880E4F"
+                      />
                     </View>
                   ) : isChannel ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>

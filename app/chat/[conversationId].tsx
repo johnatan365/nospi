@@ -1995,8 +1995,15 @@ export default function ChatThreadScreen() {
                 <Text style={{ fontSize: 16 }}>{meta?.conv_type === 'channel_global' ? '📢' : '📣'}</Text>
               </View>
             ) : isComunidad ? (
+              // Mismo icono que en la lista de chats: si el encabezado muestra
+              // otra cosa, parece que se entro a una conversacion distinta.
               <View style={styles.headerAvatarPlaceholder}>
-                <Text style={{ fontSize: 16 }}>🌆</Text>
+                <IconSymbol
+                  ios_icon_name="person.3.fill"
+                  android_material_icon_name="groups"
+                  size={18}
+                  color="#FFFFFF"
+                />
               </View>
             ) : isGroup ? (
               <View style={styles.headerAvatarPlaceholder}>
