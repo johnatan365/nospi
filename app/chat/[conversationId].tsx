@@ -2027,15 +2027,22 @@ export default function ChatThreadScreen() {
                 >
                   {/* El nombre abre la ficha igual que la foto: la gente toca
                       lo que esta leyendo, y en un mensaje lo que se lee es el
-                      nombre, no el avatar de 26px. */}
+                      nombre, no el avatar de 26px.
+                      Va envuelto en su propio TouchableOpacity y NO como
+                      <Text onPress>: este nombre vive DENTRO de la burbuja,
+                      que ya es un TouchableOpacity (el del menu al mantener
+                      presionado). El onPress de un Text no le gana a ese padre
+                      —por eso la foto si abria la ficha y el nombre no: la foto
+                      esta afuera de la burbuja—. Un tocable anidado si gana el
+                      responder. */}
                   {showSenderInfo && (
-                    <Text
-                      style={styles.senderName}
-                      onPress={sender ? () => setPerfilVisto(sender) : undefined}
-                      suppressHighlighting={!sender}
-                    >
-                      {senderName}
-                    </Text>
+                    sender ? (
+                      <TouchableOpacity onPress={() => setPerfilVisto(sender)} activeOpacity={0.6}>
+                        <Text style={styles.senderName}>{senderName}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.senderName}>{senderName}</Text>
+                    )
                   )}
                   {repliedMsg && (
                     <View style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}>
