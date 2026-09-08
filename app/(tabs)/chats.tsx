@@ -410,6 +410,12 @@ export default function ChatsScreen() {
               const esSolicitud = item.conv_type === 'direct'
                 && item.estado === 'pendiente'
                 && item.solicitada_por !== user?.id;
+              // Solicitud que YO envie y todavia no me responden. Sin esta
+              // marca, quien la mando ve un chat normal y no entiende por que
+              // no puede seguir escribiendo.
+              const solicitudEnviada = item.conv_type === 'direct'
+                && item.estado === 'pendiente'
+                && item.solicitada_por === user?.id;
               const title = isComunidad
                 ? (item.channel_title || 'Comunidad Nospi')
                 : isChannel
@@ -476,6 +482,11 @@ export default function ChatsScreen() {
                           <Text style={styles.solicitudChipText}>Solicitud</Text>
                         </View>
                       )}
+                      {solicitudEnviada && (
+                        <View style={styles.solicitudEnviadaChip}>
+                          <Text style={styles.solicitudEnviadaChipText}>Enviada</Text>
+                        </View>
+                      )}
                       {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>}
                     </View>
                     {locked ? (
@@ -492,7 +503,12 @@ export default function ChatsScreen() {
                           style={[styles.rowLastMessage, hasUnread && styles.rowLastMessageUnread]}
                           numberOfLines={1}
                         >
-                          {item.last_message || 'Sin mensajes todavía'}
+                          {solicitudEnviada
+                            // Se reemplaza el ultimo mensaje —que es el suyo—
+                            // por el estado, que es lo que de verdad quiere
+                            // saber: si ya le respondieron o no.
+                            ? 'Esperando que acepte tu solicitud'
+                            : item.last_message || 'Sin mensajes todavía'}
                         </Text>
                         {hasUnread && (
                           <View style={styles.unreadBadge}>
@@ -633,6 +649,16 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   solicitudChipText: { fontSize: 10, fontWeight: '800', color: '#B45309' },
+  // Mas apagado que el de "Solicitud": aca no hay nada que decidir, solo que
+  // esperar. No deberia competir por la atencion.
+  solicitudEnviadaChip: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  solicitudEnviadaChipText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
   avatarEventIcon: { width: 32, height: 32, tintColor: '#880E4F' },
   rowContent: { flex: 1, marginLeft: 12 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },

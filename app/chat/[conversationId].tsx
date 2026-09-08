@@ -2385,9 +2385,17 @@ export default function ChatThreadScreen() {
             </View>
           </View>
         ) : solicitudEnviadaPorMi ? (
+          // Quien envio tiene que entender tres cosas: que fue una solicitud,
+          // que el otro SI va a leer su mensaje (por eso se manda uno solo), y
+          // que hasta que no le acepten no puede escribir mas. Sin esto parece
+          // que la app se rompio.
           <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
             <Text style={styles.channelLockedText}>
-              Enviaste tu solicitud. Podrás seguir escribiendo cuando la acepten.
+              ✓ Solicitud enviada
+            </Text>
+            <Text style={styles.solicitudEnviadaSub}>
+              {(meta?.other_user_name || 'Esta persona')} va a leer tu mensaje y decide si quieren
+              conversar. Hasta que acepte no puedes escribir más.
             </Text>
           </View>
         ) : channelReadOnly ? (
@@ -3125,6 +3133,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
+  },
+  solicitudEnviadaSub: {
+    fontSize: 12, color: 'rgba(255,255,255,0.75)', textAlign: 'center',
+    marginTop: 4, lineHeight: 17, paddingHorizontal: 8,
   },
   solicitudTitulo: { fontSize: 16, fontWeight: '800', color: '#1F2937', textAlign: 'center' },
   solicitudSub: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 4, lineHeight: 18 },
