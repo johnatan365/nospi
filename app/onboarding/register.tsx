@@ -364,7 +364,11 @@ export default function RegisterScreen() {
       const city = cityData || 'Medellín';
       const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
       const photo = photoData || null;
-      const compatibility = compatibilityData ? parseInt(compatibilityData) : 95;
+      // Este campo dejo de ser un porcentaje inventado (siempre 95-99) y ahora
+      // guarda el CONTEO real de personas compatibles por edad. Por eso el
+      // valor por defecto ya no es 95: seria inventar "95 personas". Si no se
+      // pudo contar, queda en 0 y se sabe que no hay dato.
+      const compatibility = compatibilityData ? parseInt(compatibilityData) : 0;
 
       const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
 

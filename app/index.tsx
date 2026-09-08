@@ -183,7 +183,10 @@ export default function Index() {
                   profile_photo_url: d['onboarding_photo'] || null,
                   interests,
                   personality_traits: personality,
-                  compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 95,
+                  // Ya no es un porcentaje, es el conteo real de personas
+                  // compatibles por edad (ver compatibility.tsx). Sin dato va
+                  // 0, no 95: 95 seria inventar de nuevo.
+                  compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 0,
                   notification_preferences: {
                     whatsapp: false,
                     email: true,

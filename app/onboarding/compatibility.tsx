@@ -6,27 +6,62 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
+import { supabase } from '@/lib/supabase';
 
 
 export default function CompatibilityScreen() {
   const router = useRouter();
   const [spinValue] = useState(new Animated.Value(0));
   const [scaleValue] = useState(new Animated.Value(1));
-  const [percentage, setPercentage] = useState(0);
+  // null = todavia no se sabe, o la consulta fallo. Nunca se rellena con un
+  // numero inventado: si no hay dato, la pantalla no muestra cifra.
+  const [compatibles, setCompatibles] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
 
   const navigateToNext = useCallback(async () => {
-    console.log('User compatibility:', percentage);
-    
     await trackOnboardingStep('compatibility');
-    await AsyncStorage.setItem('onboarding_compatibility', percentage.toString());
-    
+    // users.compatibility_percentage guardaba el porcentaje inventado. Ahora
+    // guarda el conteo real de personas compatibles por edad, que sirve para
+    // medir con que expectativa entro cada quien.
+    if (compatibles !== null) {
+      await AsyncStorage.setItem('onboarding_compatibility', compatibles.toString());
+    }
     router.push('/onboarding/phone');
-  }, [percentage, router]);
+  }, [compatibles, router]);
 
   useEffect(() => {
-    const randomPercentage = Math.floor(Math.random() * 5) + 95;
-    
+    // Antes esta linea era `Math.floor(Math.random() * 5) + 95`: un numero
+    // inventado entre 95 y 99 que se presentaba como el resultado de un
+    // analisis. A cada persona que entraba a Nospi se le prometia, en el
+    // momento de registrarse, "5 personas 97% compatibles contigo". Despues
+    // llegaba a una mesa donde las edades no le cuadraban, y la decepcion no
+    // nacia en la mesa: nacia aqui.
+    //
+    // Ahora se cuenta de verdad, con la MISMA regla con la que se arman las
+    // mesas: compatibilidad mutua por edad. El numero que se muestra es el
+    // universo real del que despues sale su grupo.
+    let vivo = true;
+    (async () => {
+      try {
+        const edadTxt = await AsyncStorage.getItem('onboarding_age');
+        const rangoTxt = await AsyncStorage.getItem('onboarding_age_range');
+        const edad = edadTxt ? parseInt(edadTxt, 10) : null;
+        const rango = rangoTxt ? JSON.parse(rangoTxt) : null;
+
+        if (edad && rango?.min != null && rango?.max != null) {
+          const { data, error } = await supabase.rpc('contar_personas_compatibles_por_edad', {
+            p_edad: edad,
+            p_rango_min: rango.min,
+            p_rango_max: rango.max,
+          });
+          if (!error && vivo) setCompatibles(typeof data === 'number' ? data : null);
+        }
+      } catch (e) {
+        // Si falla, la pantalla no inventa nada: muestra el mensaje neutro.
+        console.error('compatibility: no se pudo contar', e);
+      }
+    })();
+
     // Continuous rotation animation
     const spinAnimation = Animated.loop(
       Animated.timing(spinValue, {
@@ -58,11 +93,11 @@ export default function CompatibilityScreen() {
     setTimeout(() => {
       spinAnimation.stop();
       pulseAnimation.stop();
-      setPercentage(randomPercentage);
       setShowResult(true);
     }, 3000);
 
     return () => {
+      vivo = false;
       spinAnimation.stop();
       pulseAnimation.stop();
     };
@@ -73,10 +108,24 @@ export default function CompatibilityScreen() {
     outputRange: ['0deg', '360deg'],
   });
 
-  const percentageText = percentage.toString();
-  const line1 = 'Se encontraron 5 personas con un';
-  const line2 = `${percentageText}% compatibles contigo y listas`;
-  const line3 = 'para el encuentro.';
+  // Tres desenlaces posibles, y los tres dicen la verdad.
+  //
+  // El caso de CERO es el que mas vale: es la persona que hoy se registraba,
+  // pagaba, iba a una cena y no encontraba a nadie con quien conversar. Antes
+  // se le decia "97% compatible". Ahora se le avisa ANTES de pagar y se le
+  // ofrece la salida, que es ampliar el rango.
+  const sinDato = compatibles === null;
+  const cero = compatibles === 0;
+  const pocos = compatibles !== null && compatibles > 0 && compatibles < 40;
+
+  const titular = sinDato ? '¡Bienvenido!' : cero ? 'Ampliemos un poco tu rango' : '¡Excelente noticia!';
+  const mensaje = sinDato
+    ? 'Ya puedes reservar tu lugar en el próximo encuentro.'
+    : cero
+      ? 'Con el rango de edad que elegiste todavía no hay nadie en Nospi con quien coincidas. Si lo amplías unos años, se abre bastante.'
+      : pocos
+        ? `Hay ${compatibles} personas en Nospi con edades que encajan con la tuya. Si amplías tu rango, aparecen más.`
+        : `Hay ${compatibles} personas en Nospi con edades que encajan con la tuya y con las que podrías compartir mesa.`;
 
   return (
     <LinearGradient
@@ -89,7 +138,7 @@ export default function CompatibilityScreen() {
         <View style={styles.content}>
           {!showResult ? (
             <React.Fragment>
-              <Text style={styles.title}>Analizando tu compatibilidad con otros usuarios</Text>
+              <Text style={styles.title}>Buscando personas con edades afines a la tuya</Text>
               
               <View style={styles.loaderContainer}>
                 <Animated.View
@@ -106,31 +155,47 @@ export default function CompatibilityScreen() {
                 </Animated.View>
               </View>
 
-              <Text style={styles.loadingText}>Buscando coincidencias perfectas...</Text>
+              {/* "coincidencias perfectas" prometia de nuevo un resultado.
+                  Ahora la pantalla describe lo que de verdad esta haciendo. */}
+              <Text style={styles.loadingText}>Revisando quién encaja con tu rango...</Text>
             </React.Fragment>
           ) : (
             <React.Fragment>
-              <View style={styles.resultCircle}>
-                <Text style={styles.percentageText}>{percentageText}</Text>
-                <Text style={styles.percentageSymbol}>%</Text>
-              </View>
-              
-              <View style={styles.checkmarkContainer}>
-                <View style={styles.checkmarkCircle}>
-                  <Text style={styles.checkmark}>✓</Text>
+              {!sinDato && (
+                <View style={styles.resultCircle}>
+                  <Text style={styles.percentageText}>{compatibles}</Text>
                 </View>
-              </View>
-              
-              <Text style={styles.celebrationText}>¡Excelente noticia!</Text>
-              
+              )}
+
+              {!cero && (
+                <View style={styles.checkmarkContainer}>
+                  <View style={styles.checkmarkCircle}>
+                    <Text style={styles.checkmark}>✓</Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.celebrationText}>{titular}</Text>
+
               <View style={styles.messageContainer}>
-                <Text style={styles.messageText}>{line1}</Text>
-                <Text style={styles.messageText}>{line2}</Text>
-                <Text style={styles.messageText}>{line3}</Text>
+                <Text style={styles.messageText}>{mensaje}</Text>
               </View>
-              
+
+              {/* Si no tiene con quien, el camino natural no es seguir pagando:
+                  es devolverse a ampliar el rango. Se deja seguir igual, porque
+                  bloquearlo seria decidir por la persona. */}
+              {(cero || pocos) && (
+                <TouchableOpacity
+                  style={styles.ajustarButton}
+                  onPress={() => router.replace('/onboarding/age-range')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.ajustarButtonText}>Ajustar mi rango de edad</Text>
+                </TouchableOpacity>
+              )}
+
               <Text style={styles.ctaText}>Inscríbete para programar el encuentro</Text>
-              
+
               <TouchableOpacity
                 style={styles.inscribeButton}
                 onPress={navigateToNext}
@@ -225,11 +290,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  // Antes aqui iba un porcentaje de 2 digitos. Ahora puede ser un conteo de
+  // hasta 4, asi que el tamano baja para que no se salga del circulo.
   percentageText: {
-    fontSize: 72,
+    fontSize: 52,
     fontWeight: 'bold',
     color: '#880E4F',
-    lineHeight: 72,
+    lineHeight: 58,
   },
   percentageSymbol: {
     fontSize: 32,
@@ -297,5 +364,19 @@ const styles = StyleSheet.create({
     color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
+  },
+  // Secundario a proposito: es una salida util, no la accion principal.
+  ajustarButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
+    marginBottom: 20,
+  },
+  ajustarButtonText: {
+    color: nospiColors.white,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
