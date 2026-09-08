@@ -957,6 +957,10 @@ export default function ChatThreadScreen() {
 
   const [showParticipants, setShowParticipants] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
+  // Candado de re-entrada. Va aparte del estado de arriba (que solo pinta el
+  // spinner) para que un fallo no pueda dejar el boton muerto: este se limpia
+  // en un finally, pase lo que pase.
+  const startingRef = useRef(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [zoomedFileName, setZoomedFileName] = useState<string>('foto-nospi.jpg');
   // Enlaces firmados de las fotos/videos, por ruta del archivo en el bucket.
@@ -1743,14 +1747,32 @@ export default function ChatThreadScreen() {
   };
 
   const handleStartDirectChat = async (otherUserId: string) => {
-    if (!otherUserId || otherUserId === user?.id || startingChatWith) return;
+    if (!otherUserId || otherUserId === user?.id) return;
+    // El candado va en un ref y NO en el estado. Antes el guardia era
+    // `startingChatWith`, que ademas deja el boton disabled: si el RPC LANZABA
+    // (sin try/catch no habia quien lo limpiara), esa variable se quedaba
+    // puesta para siempre y el boton moria en silencio — ni abria el chat, ni
+    // llamaba al servidor, ni avisaba nada. El ref se limpia siempre en el
+    // finally, incluso si algo explota.
+    if (startingRef.current) return;
+    startingRef.current = true;
     setStartingChatWith(otherUserId);
 
-    const { data, error } = await supabase.rpc('get_or_create_direct_chat', {
-      p_other_user_id: otherUserId,
-    });
+    let data: any = null;
+    let error: any = null;
+    try {
+      const res = await supabase.rpc('get_or_create_direct_chat', {
+        p_other_user_id: otherUserId,
+      });
+      data = res.data;
+      error = res.error;
+    } catch (e: any) {
+      error = e;
+    } finally {
+      startingRef.current = false;
+      setStartingChatWith(null);
+    }
 
-    setStartingChatWith(null);
     setShowParticipants(false);
 
     if (error) {
@@ -1777,6 +1799,17 @@ export default function ChatThreadScreen() {
 
     if (data) {
       router.push(`/chat/${data}` as any);
+      return;
+    }
+
+    // Ni error ni conversacion: no puede quedarse callado. "No pasa nada" es la
+    // peor respuesta posible — el usuario vuelve a tocar y vuelve a no pasar
+    // nada, sin ninguna pista de por que.
+    const aviso = 'No pudimos abrir el chat. Vuelve a intentarlo.';
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.alert(aviso);
+    } else {
+      Alert.alert('Chat privado', aviso);
     }
   };
 
