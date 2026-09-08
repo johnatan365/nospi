@@ -1750,9 +1750,15 @@ export default function ChatThreadScreen() {
     // Marcar leído NO debe bloquear la navegación (antes se hacía await y si el
     // RPC se demoraba, la flecha "no respondía"). Se dispara en segundo plano.
     if (conversationId) {
+      // El builder de supabase-js es un PromiseLike, no una Promise completa:
+      // no tiene .catch(). El manejo del error va como segundo argumento de
+      // .then(), que es lo que PromiseLike si expone. Con .catch() el error se
+      // perdia en silencio y ademas TypeScript lo marcaba.
       supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId })
-        .then(() => {})
-        .catch((err) => console.error('ChatThread: error marking conversation read', err));
+        .then(
+          () => {},
+          (err: unknown) => console.error('ChatThread: error marking conversation read', err),
+        );
     }
     // Si no hay pantalla anterior en la pila (se entró por notificación, deep
     // link o desde el pop-up de match con router.push), router.back() no hace
