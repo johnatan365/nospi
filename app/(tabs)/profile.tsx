@@ -5,6 +5,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import {
+  MOSTRAR_INTERESADO_EN,
+  ANCHO_MINIMO_RANGO_EDAD,
+  ETIQUETA_RANGO_EDAD,
+  AYUDA_RANGO_EDAD,
+} from '@/constants/Preferencias';
 import { leerAtribucion } from '@/utils/atribucion';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -673,14 +679,21 @@ export default function ProfileScreen() {
     });
   };
 
+  // El rango no puede quedar más angosto que ANCHO_MINIMO_RANGO_EDAD: se empuja
+  // el otro extremo en vez de bloquear el slider, que se siente roto.
+  // El que se topa es el manejador que la persona ARRASTRA, no el otro: si se
+  // dejara correr el arrastrado y se empujara al otro contra el borde, el rango
+  // se cerraría a 1 año justo en los extremos.
   const handleMinAgeChange = (value: number) => {
-    const newMin = Math.round(value);
-    if (newMin < editAgeRangeMax) setEditAgeRangeMin(newMin);
+    const newMin = Math.min(Math.max(Math.round(value), 18), 60 - ANCHO_MINIMO_RANGO_EDAD);
+    setEditAgeRangeMin(newMin);
+    setEditAgeRangeMax((prev) => Math.max(prev, newMin + ANCHO_MINIMO_RANGO_EDAD));
   };
 
   const handleMaxAgeChange = (value: number) => {
-    const newMax = Math.round(value);
-    if (newMax > editAgeRangeMin) setEditAgeRangeMax(newMax);
+    const newMax = Math.max(Math.min(Math.round(value), 60), 18 + ANCHO_MINIMO_RANGO_EDAD);
+    setEditAgeRangeMax(newMax);
+    setEditAgeRangeMin((prev) => Math.min(prev, newMax - ANCHO_MINIMO_RANGO_EDAD));
   };
 
   const handleChangePassword = async () => {
@@ -895,14 +908,16 @@ export default function ProfileScreen() {
             <Text style={styles.infoLabel}>Género</Text>
             <Text style={styles.infoValue}>{genderText}</Text>
           </View>
+          {MOSTRAR_INTERESADO_EN && (
+            <View style={styles.infoRow}>
+              <Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Interesado en</Text>
+              <Text style={styles.infoValue}>{interestedInText}</Text>
+            </View>
+          )}
           <View style={styles.infoRow}>
-            <Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Interesado en</Text>
-            <Text style={styles.infoValue}>{interestedInText}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="options-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Rango de edad</Text>
+            <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={styles.infoLabel}>{ETIQUETA_RANGO_EDAD}</Text>
             <Text style={styles.infoValue}>{ageRangeText}</Text>
           </View>
           <View style={styles.infoRow}>
@@ -1070,22 +1085,27 @@ export default function ProfileScreen() {
                 <Text style={styles.pickerButtonText}>{editCity}</Text>
               </TouchableOpacity>
 
-              <Text style={styles.inputLabel}>Interesado en</Text>
-              <View style={styles.optionsRow}>
-                {(['hombres', 'mujeres', 'ambos'] as const).map(opt => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[styles.optionButton, editInterestedIn === opt && styles.optionButtonActive]}
-                    onPress={() => setEditInterestedIn(opt)}
-                  >
-                    <Text style={[styles.optionButtonText, editInterestedIn === opt && styles.optionButtonTextActive]}>
-                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {MOSTRAR_INTERESADO_EN && (
+                <>
+                  <Text style={styles.inputLabel}>Interesado en</Text>
+                  <View style={styles.optionsRow}>
+                    {(['hombres', 'mujeres', 'ambos'] as const).map(opt => (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[styles.optionButton, editInterestedIn === opt && styles.optionButtonActive]}
+                        onPress={() => setEditInterestedIn(opt)}
+                      >
+                        <Text style={[styles.optionButtonText, editInterestedIn === opt && styles.optionButtonTextActive]}>
+                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
 
-              <Text style={styles.inputLabel}>Rango de edad: {editAgeRangeText}</Text>
+              <Text style={styles.inputLabel}>{ETIQUETA_RANGO_EDAD}: {editAgeRangeText}</Text>
+              <Text style={styles.inputHelp}>{AYUDA_RANGO_EDAD}</Text>
               <View style={styles.ageSliderSection}>
                 <View style={styles.ageSliderRow}>
                   <Text style={styles.ageSliderLabel}>Mínimo</Text>
@@ -1483,6 +1503,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#880E4F', marginBottom: 8 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
+  inputHelp: { fontSize: 12, color: '#6B7280', marginTop: -4, marginBottom: 10, lineHeight: 16 },
   modalInput: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: '#333', marginBottom: 8 },
   pickerButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8 },
   pickerButtonText: { fontSize: 16, color: '#333' },

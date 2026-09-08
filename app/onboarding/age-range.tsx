@@ -7,6 +7,7 @@ import { nospiColors } from '@/constants/Colors';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
+import { ANCHO_MINIMO_RANGO_EDAD, AYUDA_RANGO_EDAD } from '@/constants/Preferencias';
 
 
 export default function AgeRangeScreen() {
@@ -22,18 +23,21 @@ export default function AgeRangeScreen() {
     router.push('/onboarding/location');
   };
 
+  // El rango no puede quedar mas angosto que ANCHO_MINIMO_RANGO_EDAD: en una
+  // mesa de 6 personas un rango de 2 o 3 anios es imposible de cumplir. En vez
+  // de bloquear el slider, se empuja el otro extremo.
+  // El que se topa es el manejador que la persona esta arrastrando, no el otro.
+  // Si se dejara correr el arrastrado y se empujara al otro contra el borde, el
+  // rango se cerraria a 1 anio justo en los extremos — que es exactamente lo
+  // que este minimo existe para impedir.
   const handleMinChange = (value: number) => {
-    const newMin = Math.round(value);
-    if (newMin < ageRange.max) {
-      setAgeRange({ ...ageRange, min: newMin });
-    }
+    const newMin = Math.min(Math.max(Math.round(value), 18), 60 - ANCHO_MINIMO_RANGO_EDAD);
+    setAgeRange({ min: newMin, max: Math.max(ageRange.max, newMin + ANCHO_MINIMO_RANGO_EDAD) });
   };
 
   const handleMaxChange = (value: number) => {
-    const newMax = Math.round(value);
-    if (newMax > ageRange.min) {
-      setAgeRange({ ...ageRange, max: newMax });
-    }
+    const newMax = Math.max(Math.min(Math.round(value), 60), 18 + ANCHO_MINIMO_RANGO_EDAD);
+    setAgeRange({ max: newMax, min: Math.min(ageRange.min, newMax - ANCHO_MINIMO_RANGO_EDAD) });
   };
 
   const minAgeText = ageRange.min.toString();
@@ -49,7 +53,13 @@ export default function AgeRangeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>¿Qué rango de edad te gustaría conocer en los encuentros grupales?</Text>
+          {/* La pregunta anterior era "¿Qué rango de edad te gustaría CONOCER?".
+              Eso se lee como un filtro de emparejamiento, y por eso el 18% de la
+              base se excluia a si misma del rango que pedia (alguien de 45
+              pidiendo 28-35). Nospi no empareja: arma mesas. La pregunta ahora
+              describe lo que de verdad se hace con el dato. */}
+          <Text style={styles.title}>¿Con qué edades te sientes cómodo compartiendo mesa?</Text>
+          <Text style={styles.subtitle}>{AYUDA_RANGO_EDAD}</Text>
           
           <View style={styles.rangeDisplay}>
             <Text style={styles.rangeText}>{rangeText}</Text>
@@ -124,8 +134,16 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 40,
+    marginBottom: 12,
     textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 32,
+    textAlign: 'center',
+    lineHeight: 21,
   },
   rangeDisplay: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

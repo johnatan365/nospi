@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
+import { MOSTRAR_INTERESADO_EN } from '@/constants/Preferencias';
 
 
 const GENDERS = [
@@ -23,7 +24,10 @@ export default function GenderScreen() {
     await trackOnboardingStep('gender');
     await AsyncStorage.setItem('onboarding_gender', gender);
     
-    router.push('/onboarding/interested-in');
+    // Con MOSTRAR_INTERESADO_EN apagado se salta ese paso y se va derecho al
+    // rango de edad. El registro guarda 'ambos' por defecto (ver register.tsx),
+    // asi que la columna users.interested_in no queda vacia.
+    router.push(MOSTRAR_INTERESADO_EN ? '/onboarding/interested-in' : '/onboarding/age-range');
   };
 
   return (
