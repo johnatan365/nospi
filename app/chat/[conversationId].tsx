@@ -163,6 +163,12 @@ interface Participant {
   user_id: string;
   name: string;
   profile_photo_url: string | null;
+  // Los trae get_conversation_participants para la ficha que se abre al tocar
+  // una foto. Deliberadamente NO viene el rango de edad que la persona pidio:
+  // mostrarlo reconstruiria la lectura de app de citas y expone una
+  // preferencia privada.
+  edad?: number | null;
+  interests?: string[] | null;
 }
 
 interface ConversationMeta {
@@ -829,6 +835,17 @@ export default function ChatThreadScreen() {
       console.error('copyMessageText error:', e);
     }
   }, []);
+  // Persona cuya ficha se esta viendo. Se abre al tocar su foto en un mensaje o
+  // en la lista de participantes.
+  //
+  // Antes tocar una foto abria el visor de imagenes, el mismo de las fotos que
+  // se mandan por el chat — con botones de Descargar y Compartir. O sea que
+  // cualquiera podia bajarse la foto de perfil de otro asistente y reenviarla.
+  // Tocar la cara de alguien pregunta "quien es este", no "muestrame esta
+  // imagen mas grande": la ficha responde eso y ademas no deja bajar la foto.
+  const [perfilVisto, setPerfilVisto] = useState<Participant | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+
   // Numero tocado en un mensaje. Guarda tambien de quien era el mensaje, para
   // poder proponer ese nombre al guardar el contacto.
   const [phoneMenu, setPhoneMenu] = useState<{ raw: string; from: string } | null>(null);
@@ -1877,7 +1894,9 @@ export default function ChatThreadScreen() {
                 name={headerTitle}
                 size={30}
                 marginRight={8}
-                onPress={otherUserPhoto ? () => setZoomedPhoto(otherUserPhoto) : undefined}
+                // En el privado, tocar la foto del otro tambien abre su ficha,
+                // no el visor con Descargar y Compartir.
+                onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
               />
             )}
             <Text style={styles.headerTitle} numberOfLines={1}>
@@ -1960,7 +1979,10 @@ export default function ChatThreadScreen() {
                     name={senderName}
                     size={26}
                     marginRight={6}
-                    onPress={senderPhoto ? () => setZoomedPhoto(senderPhoto) : undefined}
+                    // Abre la ficha, no el visor de fotos. Funciona aunque la
+                    // persona no tenga foto: el nombre y la edad son lo que se
+                    // quiere ver.
+                    onPress={sender ? () => setPerfilVisto(sender) : undefined}
                   />
                 )}
                 {showSenderInfo && isSystem && (
@@ -2345,7 +2367,7 @@ export default function ChatThreadScreen() {
                     disabled={!!startingChatWith}
                   >
                     {p.profile_photo_url ? (
-                      <TouchableOpacity onPress={() => setZoomedPhoto(p.profile_photo_url)} activeOpacity={0.8}>
+                      <TouchableOpacity onPress={() => setPerfilVisto(p)} activeOpacity={0.8}>
                         <ExpoImage source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} cachePolicy="memory-disk" transition={0} />
                       </TouchableOpacity>
                     ) : (
@@ -2467,6 +2489,80 @@ export default function ChatThreadScreen() {
               <Text style={styles.attachCancelText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Ficha de una persona de la mesa. Se abre al tocar su foto. */}
+      <Modal visible={!!perfilVisto} animationType="slide" transparent onRequestClose={() => setPerfilVisto(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setPerfilVisto(null)}>
+          <TouchableOpacity style={styles.perfilSheet} activeOpacity={1} onPress={() => {}}>
+            {perfilVisto?.profile_photo_url ? (
+              // La foto se puede ampliar desde aca, pero por un visor propio
+              // sin Descargar ni Compartir: es la foto de otra persona.
+              <TouchableOpacity onPress={() => setFotoAmpliada(perfilVisto.profile_photo_url)} activeOpacity={0.85}>
+                <ExpoImage
+                  source={{ uri: perfilVisto.profile_photo_url }}
+                  style={styles.perfilFoto}
+                  cachePolicy="memory-disk"
+                  transition={120}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.perfilFoto, styles.perfilFotoPlaceholder]}>
+                <Text style={{ fontSize: 44 }}>👤</Text>
+              </View>
+            )}
+
+            <Text style={styles.perfilNombre}>{perfilVisto?.name || 'Alguien'}</Text>
+            {typeof perfilVisto?.edad === 'number' && (
+              <Text style={styles.perfilEdad}>{perfilVisto.edad} años</Text>
+            )}
+
+            {!!perfilVisto?.interests?.length && (
+              <View style={styles.perfilChips}>
+                {perfilVisto.interests.map((it) => (
+                  <View key={it} style={styles.perfilChip}>
+                    <Text style={styles.perfilChipText}>{it}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Escribir por privado: solo tiene sentido con OTRA persona, y la
+                RPC ya valida que ambos hayan asistido al mismo evento. */}
+            {perfilVisto && perfilVisto.user_id !== user?.id && (
+              <TouchableOpacity
+                style={styles.perfilBoton}
+                disabled={!!startingChatWith}
+                onPress={() => {
+                  const otro = perfilVisto.user_id;
+                  setPerfilVisto(null);
+                  handleStartDirectChat(otro);
+                }}
+                activeOpacity={0.85}
+              >
+                {startingChatWith === perfilVisto.user_id ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.perfilBotonText}>Escribir por privado</Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.attachCancel} onPress={() => setPerfilVisto(null)}>
+              <Text style={styles.attachCancelText}>Cerrar</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Foto de perfil ampliada. Visor propio, SIN descargar ni compartir: es
+          la cara de otra persona, no un archivo del chat. */}
+      <Modal visible={!!fotoAmpliada} animationType="fade" transparent onRequestClose={() => setFotoAmpliada(null)}>
+        <TouchableOpacity style={styles.photoViewerOverlay} activeOpacity={1} onPress={() => setFotoAmpliada(null)}>
+          {!!fotoAmpliada && (
+            <ExpoImage source={{ uri: fotoAmpliada }} style={styles.perfilFotoGrande} contentFit="contain" transition={120} />
+          )}
         </TouchableOpacity>
       </Modal>
 
@@ -2882,6 +2978,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: nospiColors.gray100,
   },
+  // Ficha de una persona de la mesa.
+  perfilSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 24,
+    paddingHorizontal: 22,
+    paddingBottom: 18,
+    alignItems: 'center',
+  },
+  perfilFoto: { width: 108, height: 108, borderRadius: 54, marginBottom: 14, backgroundColor: '#F3F4F6' },
+  perfilFotoPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  perfilFotoGrande: { width: '90%', height: '70%' },
+  perfilNombre: { fontSize: 21, fontWeight: '800', color: '#1F2937', textAlign: 'center' },
+  perfilEdad: { fontSize: 15, color: '#6B7280', marginTop: 2 },
+  perfilChips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
+  perfilChip: { backgroundColor: '#FCE7F3', borderRadius: 14, paddingVertical: 6, paddingHorizontal: 12 },
+  perfilChipText: { fontSize: 13, color: '#9D174D', fontWeight: '600' },
+  perfilBoton: {
+    marginTop: 20,
+    alignSelf: 'stretch',
+    backgroundColor: '#AD1457',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  perfilBotonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
   participantAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
   participantAvatarPlaceholder: {
     backgroundColor: nospiColors.gray100,
