@@ -172,7 +172,10 @@ interface Participant {
 }
 
 interface ConversationMeta {
-  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event';
+  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
+  // Solo en directos: 'pendiente' mientras la solicitud no se responda.
+  estado?: 'pendiente' | 'aceptada' | 'ignorada' | null;
+  solicitada_por?: string | null;
   event_name: string | null;
   event_type: string | null;
   event_date: string | null;
@@ -835,6 +838,35 @@ export default function ChatThreadScreen() {
       console.error('copyMessageText error:', e);
     }
   }, []);
+  const [respondiendoSolicitud, setRespondiendoSolicitud] = useState(false);
+
+  // Aceptar o ignorar una solicitud de mensaje.
+  //
+  // Al ignorar se sale del chat: para quien recibio, esa conversacion deja de
+  // existir. Para quien la envio sigue ahi sin respuesta — nunca se le avisa
+  // que fue descartada, porque decirle "te rechazaron" no le sirve a nadie.
+  const responderSolicitud = useCallback(async (aceptar: boolean) => {
+    if (!conversationId || respondiendoSolicitud) return;
+    setRespondiendoSolicitud(true);
+    try {
+      const { error } = await supabase.rpc(
+        aceptar ? 'aceptar_solicitud_chat' : 'ignorar_solicitud_chat',
+        { p_conversation_id: conversationId },
+      );
+      if (error) throw error;
+      if (aceptar) {
+        setMeta((m) => (m ? { ...m, estado: 'aceptada' } : m));
+      } else {
+        router.back();
+      }
+    } catch (e: any) {
+      const msg = e?.message || 'Inténtalo de nuevo.';
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('No se pudo', msg);
+    } finally {
+      setRespondiendoSolicitud(false);
+    }
+  }, [conversationId, respondiendoSolicitud, router]);
+
   // Persona cuya ficha se esta viendo. Se abre al tocar su foto en un mensaje o
   // en la lista de participantes.
   //
@@ -986,6 +1018,8 @@ export default function ChatThreadScreen() {
         other_user_photo: thisConv.other_user_photo,
         replies_open: thisConv.replies_open,
         channel_title: thisConv.channel_title,
+        estado: thisConv.estado,
+        solicitada_por: thisConv.solicitada_por,
       });
     }
 
@@ -1817,6 +1851,12 @@ export default function ChatThreadScreen() {
   // tambien responde la gente. Las encuestas se responden siempre.
   const isChannel = meta?.conv_type === 'channel_global' || meta?.conv_type === 'channel_event';
   const channelReadOnly = isChannel && !meta?.replies_open && !isAdminUser;
+
+  // Una solicitud sin responder. Se distingue quien la envio: a quien la
+  // recibio se le muestran los botones; a quien la envio, que espere.
+  const esSolicitudPendiente = meta?.conv_type === 'direct' && meta?.estado === 'pendiente';
+  const solicitudParaMi = esSolicitudPendiente && meta?.solicitada_por !== user?.id;
+  const solicitudEnviadaPorMi = esSolicitudPendiente && meta?.solicitada_por === user?.id;
   // Para chats directos, "el otro" participante sirve de respaldo: cuando la
   // conversacion aun no tiene mensajes no aparece en get_my_conversations, asi
   // que meta llega null y el nombre/foto hay que sacarlos de los participantes
@@ -2286,7 +2326,45 @@ export default function ChatThreadScreen() {
           </View>
         )}
 
-        {channelReadOnly ? (
+        {solicitudParaMi ? (
+          // Solicitud que me llego: hay que decidir antes de conversar. El campo
+          // de escribir no aparece — la base tampoco dejaria enviar, y mostrar
+          // un campo que no funciona es peor que no mostrarlo.
+          <View style={[styles.solicitudBar, { paddingBottom: insets.bottom + 10 }]}>
+            <Text style={styles.solicitudTitulo}>
+              {meta?.other_user_name || 'Esta persona'} quiere escribirte
+            </Text>
+            <Text style={styles.solicitudSub}>
+              No se han cruzado en un evento todavía. Si aceptas, podrán conversar.
+            </Text>
+            <View style={styles.solicitudBotones}>
+              <TouchableOpacity
+                style={styles.solicitudIgnorar}
+                disabled={respondiendoSolicitud}
+                onPress={() => responderSolicitud(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.solicitudIgnorarText}>Ignorar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.solicitudAceptar}
+                disabled={respondiendoSolicitud}
+                onPress={() => responderSolicitud(true)}
+                activeOpacity={0.85}
+              >
+                {respondiendoSolicitud
+                  ? <ActivityIndicator size="small" color="#FFFFFF" />
+                  : <Text style={styles.solicitudAceptarText}>Aceptar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : solicitudEnviadaPorMi ? (
+          <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
+            <Text style={styles.channelLockedText}>
+              Enviaste tu solicitud. Podrás seguir escribiendo cuando la acepten.
+            </Text>
+          </View>
+        ) : channelReadOnly ? (
           // Canal en solo lectura: no se escribe, pero las encuestas de arriba
           // si se pueden responder.
           <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
@@ -3014,6 +3092,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: nospiColors.gray100,
   },
+  // Barra de solicitud de mensaje.
+  solicitudBar: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 16,
+    paddingHorizontal: 18,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  solicitudTitulo: { fontSize: 16, fontWeight: '800', color: '#1F2937', textAlign: 'center' },
+  solicitudSub: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 4, lineHeight: 18 },
+  solicitudBotones: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  solicitudIgnorar: {
+    flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#E5E7EB',
+  },
+  solicitudIgnorarText: { color: '#6B7280', fontSize: 15, fontWeight: '700' },
+  solicitudAceptar: {
+    flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: 'center',
+    justifyContent: 'center', backgroundColor: '#AD1457', minHeight: 46,
+  },
+  solicitudAceptarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
   // Ficha de una persona de la mesa.
   perfilSheet: {
     backgroundColor: '#FFFFFF',

@@ -13,7 +13,7 @@ import { enableWebPush, isWebPushSupported, needsHomeScreenOnIOS, webPushPermiss
 
 interface ConversationRow {
   conversation_id: string;
-  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event';
+  conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
   event_id: string | null;
   event_name: string | null;
   event_type: string | null;
@@ -27,6 +27,9 @@ interface ConversationRow {
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number;
+  // Solo para type='direct'. 'pendiente' = solicitud sin responder.
+  estado?: 'pendiente' | 'aceptada' | 'ignorada' | null;
+  solicitada_por?: string | null;
 }
 
 function timeAgo(iso: string | null): string {
@@ -235,8 +238,27 @@ export default function ChatsScreen() {
     router.push(`/chat/${item.conversation_id}` as any);
   };
 
-  const groupConversations = conversations.filter((c) => c.conv_type === 'event_group');
-  const directConversations = conversations.filter((c) => c.conv_type === 'direct');
+  // La comunidad va FIJADA arriba de los grupos. No es capricho: nace con cero
+  // mensajes, y el orden de la lista manda al fondo lo que no tiene actividad
+  // (fue el bug de la "Mesa Nospi Azul", que quedo en la posicion 15 de 15 y
+  // parecia no existir). Ademas es el unico chat permanente: los de eventos van
+  // y vienen, este se queda, y algo que siempre esta en el mismo lugar es lo
+  // que crea el habito.
+  const comunidad = conversations.filter((c) => c.conv_type === 'community');
+  const groupConversations = [
+    ...comunidad,
+    ...conversations.filter((c) => c.conv_type === 'event_group'),
+  ];
+
+  // Solicitudes: chats pendientes que me enviaron A MI. Los que YO envie no son
+  // solicitudes que deba responder, asi que se quedan entre los directos
+  // esperando respuesta.
+  const solicitudes = conversations.filter(
+    (c) => c.conv_type === 'direct' && c.estado === 'pendiente' && c.solicitada_por !== user?.id
+  );
+  const directConversations = conversations.filter(
+    (c) => c.conv_type === 'direct' && !(c.estado === 'pendiente' && c.solicitada_por !== user?.id)
+  );
   // Canales: difusion del equipo de Nospi (global y por evento).
   const channelConversations = conversations.filter(
     (c) => c.conv_type === 'channel_global' || c.conv_type === 'channel_event'
@@ -246,11 +268,16 @@ export default function ChatsScreen() {
   const hayCanales = channelConversations.length > 0;
   const channelUnread = channelConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-  const directUnread = directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+  // Cada solicitud sin responder cuenta como pendiente en la pestana, aunque
+  // su mensaje ya se haya visto: es algo que exige una decision, no una lectura.
+  const directUnread =
+    directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0) + solicitudes.length;
+  // Las solicitudes van de primeras entre los directos: es lo que hay que
+  // responder, y enterrarlas seria como no tenerlas.
   const visibleConversations =
     filter === 'grupos' ? groupConversations
     : filter === 'canales' ? channelConversations
-    : directConversations;
+    : [...solicitudes, ...directConversations];
 
   return (
     <LinearGradient
@@ -370,11 +397,18 @@ export default function ChatsScreen() {
           >
             {visibleConversations.map((item) => {
               const isGroup = item.conv_type === 'event_group';
+              const isComunidad = item.conv_type === 'community';
               const isChannel = item.conv_type === 'channel_global' || item.conv_type === 'channel_event';
-              const title = isChannel
+              // Solicitud que me llego a MI y no he respondido.
+              const esSolicitud = item.conv_type === 'direct'
+                && item.estado === 'pendiente'
+                && item.solicitada_por !== user?.id;
+              const title = isComunidad
+                ? (item.channel_title || 'Comunidad Nospi')
+                : isChannel
                 ? (item.channel_title || 'Canal Nospi')
                 : isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
-              const photoUrl = (isGroup || isChannel) ? null : item.other_user_photo;
+              const photoUrl = (isGroup || isChannel || isComunidad) ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);
 
@@ -391,6 +425,10 @@ export default function ChatsScreen() {
                   ) : locked ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
                       <Text style={styles.avatarEmoji}>🔒</Text>
+                    </View>
+                  ) : isComunidad ? (
+                    <View style={[styles.avatar, styles.avatarComunidad]}>
+                      <Text style={styles.avatarEmoji}>🌆</Text>
                     </View>
                   ) : isChannel ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
@@ -413,6 +451,13 @@ export default function ChatsScreen() {
                       <Text style={[styles.rowTitle, hasUnread && styles.rowTitleUnread, locked && styles.rowTitleLocked]} numberOfLines={1}>
                         {title}
                       </Text>
+                      {/* Una solicitud no es un chat mas: hay que decidir algo.
+                          La etiqueta lo dice antes de abrirlo. */}
+                      {esSolicitud && (
+                        <View style={styles.solicitudChip}>
+                          <Text style={styles.solicitudChipText}>Solicitud</Text>
+                        </View>
+                      )}
                       {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>}
                     </View>
                     {locked ? (
@@ -549,6 +594,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarEmoji: { fontSize: 24 },
+  // La comunidad se ve distinta a los chats de evento a proposito: es
+  // permanente y no pertenece a ninguna cena en particular.
+  avatarComunidad: {
+    backgroundColor: 'rgba(173,20,87,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  solicitudChip: {
+    backgroundColor: 'rgba(217,119,6,0.18)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  solicitudChipText: { fontSize: 10, fontWeight: '800', color: '#B45309' },
   avatarEventIcon: { width: 32, height: 32, tintColor: '#880E4F' },
   rowContent: { flex: 1, marginLeft: 12 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
