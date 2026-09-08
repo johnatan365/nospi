@@ -1847,6 +1847,13 @@ export default function ChatThreadScreen() {
   };
 
   const isGroup = meta?.conv_type === 'event_group';
+  // La comunidad es un chat de muchos, como un grupo de evento, pero no tiene
+  // evento detras. Sin distinguirla aqui caia al camino de "chat directo" y el
+  // encabezado mostraba a la primera participante de la lista como si fuera la
+  // otra persona de una conversacion 1-a-1.
+  const isComunidad = meta?.conv_type === 'community';
+  // Para todo lo que signifique "esto NO es una conversacion de dos".
+  const esGrupal = isGroup || isComunidad;
   // Un canal es de difusion: escribe el equipo de Nospi y, si esta abierto,
   // tambien responde la gente. Las encuestas se responden siempre.
   const isChannel = meta?.conv_type === 'channel_global' || meta?.conv_type === 'channel_event';
@@ -1861,13 +1868,15 @@ export default function ChatThreadScreen() {
   // conversacion aun no tiene mensajes no aparece en get_my_conversations, asi
   // que meta llega null y el nombre/foto hay que sacarlos de los participantes
   // (get_conversation_participants si los trae, con o sin mensajes).
-  const otherParticipant = !isGroup && !isChannel ? participants.find((p) => p.user_id !== user?.id) : undefined;
+  const otherParticipant = !esGrupal && !isChannel ? participants.find((p) => p.user_id !== user?.id) : undefined;
   const headerTitle = isChannel
     ? meta?.channel_title || 'Canal de Nospi'
+    : isComunidad
+    ? meta?.channel_title || 'Comunidad Nospi'
     : isGroup
     ? meta?.event_name || 'Chat del evento'
     : meta?.other_user_name || otherParticipant?.name || 'Chat';
-  const otherUserPhoto = !isGroup && !isChannel
+  const otherUserPhoto = !esGrupal && !isChannel
     ? meta?.other_user_photo || otherParticipant?.profile_photo_url || null
     : null;
 
@@ -1930,6 +1939,10 @@ export default function ChatThreadScreen() {
               <View style={styles.headerAvatarPlaceholder}>
                 <Text style={{ fontSize: 16 }}>{meta?.conv_type === 'channel_global' ? '📢' : '📣'}</Text>
               </View>
+            ) : isComunidad ? (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={{ fontSize: 16 }}>🌆</Text>
+              </View>
             ) : isGroup ? (
               <View style={styles.headerAvatarPlaceholder}>
                 <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
@@ -1958,7 +1971,7 @@ export default function ChatThreadScreen() {
             </Text>
           </View>
 
-          {isGroup ? (
+          {esGrupal ? (
             <TouchableOpacity onPress={() => setShowParticipants(true)} style={styles.headerActionButton}>
               <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={22} color="#FFFFFF" />
             </TouchableOpacity>
@@ -1966,9 +1979,16 @@ export default function ChatThreadScreen() {
             <View style={styles.headerActionButton} />
           )}
         </View>
-        {isGroup && (
+        {esGrupal && (
           <TouchableOpacity style={styles.directChatBanner} onPress={() => setShowParticipants(true)} activeOpacity={0.8}>
-            <Text style={styles.directChatBannerText}>💬 Toca aquí para escribirle en privado a alguien del grupo</Text>
+            <Text style={styles.directChatBannerText}>
+              {isComunidad
+                // En la comunidad la mayoria NO ha coincidido en un evento, asi
+                // que escribirle a alguien pasa casi siempre por una solicitud.
+                // Decirlo aqui evita la sorpresa de "¿por que no puedo escribir?".
+                ? '💬 Toca aquí para ver quién está y enviar una solicitud'
+                : '💬 Toca aquí para escribirle en privado a alguien del grupo'}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -2012,7 +2032,9 @@ export default function ChatThreadScreen() {
             const sender = participantsById[item.sender_id];
             const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Alguien';
             const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
-            const showSenderInfo = (isGroup || isChannel) && !isMine;
+            // En la comunidad tambien se muestra quien escribe: son 129
+            // personas que en su mayoria no se conocen entre si.
+            const showSenderInfo = (esGrupal || isChannel) && !isMine;
 
             // Si este mensaje responde a otro, buscamos el original para citarlo.
             const repliedMsg = item.reply_to ? messages.find((m) => m.id === item.reply_to) : undefined;
@@ -2236,7 +2258,7 @@ export default function ChatThreadScreen() {
               <Text style={styles.emptyMessagesText}>
                 {isChannel
                   ? 'Aquí verás los avisos de Nospi 📢'
-                  : isGroup
+                  : esGrupal
                   ? 'Sé el primero en saludar al grupo 👋'
                   : 'Escribe el primer mensaje para romper el hielo 👋'}
               </Text>
@@ -2258,6 +2280,10 @@ export default function ChatThreadScreen() {
                   <Text style={styles.mentionName}>{p.name}</Text>
                 </TouchableOpacity>
               ))}
+              {/* "@todos" NO va en la comunidad: son 129 personas y una
+                  mencion asi le suena el telefono a todo el mundo. En una mesa
+                  de 6 tiene sentido; en un grupo grande es una molestia que
+                  cualquiera puede disparar. */}
               {isGroup && (
                 <TouchableOpacity style={styles.mentionRow} onPress={() => applyMention('todos')} activeOpacity={0.7}>
                   <View style={styles.mentionAllIcon}><Text style={{ fontSize: 14 }}>📣</Text></View>
