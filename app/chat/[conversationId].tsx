@@ -2691,8 +2691,14 @@ export default function ChatThreadScreen() {
                 disabled={!!startingChatWith}
                 onPress={() => {
                   const otro = perfilVisto.user_id;
+                  // Se cierran los DOS modales antes de tocar la navegacion.
+                  // La ficha suele abrirse encima del modal de participantes, y
+                  // en iOS un router.push mientras un Modal se esta cerrando se
+                  // pierde: la conversacion se creaba en la base pero la
+                  // pantalla no se abria, y parecia que el boton no hacia nada.
                   setPerfilVisto(null);
-                  handleStartDirectChat(otro);
+                  setShowParticipants(false);
+                  setTimeout(() => handleStartDirectChat(otro), 350);
                 }}
                 activeOpacity={0.85}
               >
