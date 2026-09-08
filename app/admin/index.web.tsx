@@ -2524,11 +2524,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     try {
       setMovingAttendee(true);
 
-      // Update the appointment to point to the new event
-      const { error } = await supabase
-        .from('appointments')
-        .update({ event_id: targetEventId, updated_at: new Date().toISOString() })
-        .eq('id', selectedAttendeeToMove.id);
+      // Antes esto hacia un update directo de event_id, y fallaba con "Error al
+      // mover asistente" siempre que la persona YA hubiera tenido una cita en el
+      // evento de destino, aunque estuviera cancelada: hay un indice unico sobre
+      // (user_id, event_id). Ese era el caso de quien cancela un evento, se pasa
+      // a otro y despues quiere devolverse.
+      //
+      // La funcion de la base resuelve ese choque reactivando la cita del
+      // destino, y ademas conserva el pago original y no crea saldo virtual ni
+      // un cobro nuevo — cosas que un update pelado no hacia.
+      const { error } = await supabase.rpc('admin_mover_cita', {
+        p_appointment_id: selectedAttendeeToMove.id,
+        p_evento_destino: targetEventId,
+      });
 
       if (error) {
         console.error('Error moving attendee:', error);
