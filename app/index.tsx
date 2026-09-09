@@ -1,3 +1,4 @@
+import { agePreferenceFields } from '@/utils/agePreferences';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useRef } from 'react';
@@ -18,7 +19,7 @@ async function readOnboardingData() {
   } else {
     const keys = [
       'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
-      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range',
+      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range', 'onboarding_age_fallback', 'onboarding_age_confirmed_at',
       'onboarding_country', 'onboarding_city', 'onboarding_phone',
       'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
       'onboarding_compatibility',
@@ -37,7 +38,7 @@ async function clearOnboardingData() {
   } else {
     await AsyncStorage.multiRemove([
       'onboarding_name', 'onboarding_birthdate', 'onboarding_age',
-      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range',
+      'onboarding_gender', 'onboarding_interested_in', 'onboarding_age_range', 'onboarding_age_fallback', 'onboarding_age_confirmed_at',
       'onboarding_country', 'onboarding_city', 'onboarding_phone',
       'onboarding_photo', 'onboarding_interests', 'onboarding_personality',
       'onboarding_compatibility', 'oauth_flow_type',
@@ -177,6 +178,7 @@ export default function Index() {
                   interested_in: d['onboarding_interested_in'] || 'ambos',
                   age_range_min: ageRange.min,
                   age_range_max: ageRange.max,
+                  ...agePreferenceFields(d['onboarding_age_fallback'], d['onboarding_age_confirmed_at']),
                   country: d['onboarding_country'] || 'Colombia',
                   city: d['onboarding_city'] || 'Medellín',
                   phone: phoneInfo.phoneNumber || null,

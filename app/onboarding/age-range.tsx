@@ -1,43 +1,63 @@
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
-import { ANCHO_MINIMO_RANGO_EDAD, AYUDA_RANGO_EDAD } from '@/constants/Preferencias';
+import { AYUDA_RANGO_EDAD } from '@/constants/Preferencias';
+import { moveAgeBound, validAgeRange } from '@/utils/agePreferences';
 
 
 export default function AgeRangeScreen() {
   const router = useRouter();
   const [ageRange, setAgeRange] = useState({ min: 18, max: 35 });
 
+  const [reviewed, setReviewed] = useState(false);
+  const [age, setAge] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useFocusEffect(React.useCallback(() => {
+    let active = true;
+    setReviewed(false);
+    setReady(false);
+    AsyncStorage.multiGet(['onboarding_age_range', 'onboarding_age']).then(pairs => {
+      if (!active) return;
+      const stored = pairs[0][1] ? JSON.parse(pairs[0][1]) : null;
+      if (validAgeRange(stored)) setAgeRange(stored);
+      const storedAge = pairs[1][1] ? Number(pairs[1][1]) : NaN;
+      setAge(Number.isInteger(storedAge) && storedAge >= 18 ? storedAge : null);
+      setReady(true);
+    }).catch(() => { if (active) setError('No pudimos cargar tus preferencias. Vuelve a intentarlo.'); });
+    return () => { active = false; };
+  }, []));
+
   const handleContinue = async () => {
+    if (!reviewed || !ready || saving) return;
+    setSaving(true);
+    setError('');
+    try {
     console.log('User selected age range:', ageRange.min, '-', ageRange.max);
     
     await trackOnboardingStep('age_range');
     await AsyncStorage.setItem('onboarding_age_range', JSON.stringify({ min: ageRange.min, max: ageRange.max }));
     
-    router.push('/onboarding/location');
+    await AsyncStorage.multiRemove(['onboarding_age_fallback', 'onboarding_age_confirmed_at']);
+    router.push('/onboarding/age-fallback');
+    } catch { setError('No pudimos guardar tu rango. Intenta de nuevo.'); }
+    finally { setSaving(false); }
   };
 
-  // El rango no puede quedar mas angosto que ANCHO_MINIMO_RANGO_EDAD: en una
-  // mesa de 6 personas un rango de 2 o 3 anios es imposible de cumplir. En vez
-  // de bloquear el slider, se empuja el otro extremo.
-  // El que se topa es el manejador que la persona esta arrastrando, no el otro.
-  // Si se dejara correr el arrastrado y se empujara al otro contra el borde, el
-  // rango se cerraria a 1 anio justo en los extremos — que es exactamente lo
-  // que este minimo existe para impedir.
   const handleMinChange = (value: number) => {
-    const newMin = Math.min(Math.max(Math.round(value), 18), 60 - ANCHO_MINIMO_RANGO_EDAD);
-    setAgeRange({ min: newMin, max: Math.max(ageRange.max, newMin + ANCHO_MINIMO_RANGO_EDAD) });
+    setAgeRange(prev => moveAgeBound(prev, 'min', value));
+    setReviewed(false);
   };
-
   const handleMaxChange = (value: number) => {
-    const newMax = Math.max(Math.min(Math.round(value), 60), 18 + ANCHO_MINIMO_RANGO_EDAD);
-    setAgeRange({ max: newMax, min: Math.min(ageRange.min, newMax - ANCHO_MINIMO_RANGO_EDAD) });
+    setAgeRange(prev => moveAgeBound(prev, 'max', value));
+    setReviewed(false);
   };
 
   const minAgeText = ageRange.min.toString();
@@ -51,7 +71,7 @@ export default function AgeRangeScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
           {/* La pregunta anterior era "¿Qué rango de edad te gustaría CONOCER?".
               Eso se lee como un filtro de emparejamiento, y por eso el 18% de la
@@ -62,6 +82,7 @@ export default function AgeRangeScreen() {
           <Text style={styles.subtitle}>{AYUDA_RANGO_EDAD}</Text>
           
           <View style={styles.rangeDisplay}>
+            <Text style={{ color: '#880E4F', textAlign: 'center', marginBottom: 8 }}>Quiero compartir mesa con personas de</Text>
             <Text style={styles.rangeText}>{rangeText}</Text>
           </View>
 
@@ -74,7 +95,9 @@ export default function AgeRangeScreen() {
               <Slider
                 style={styles.slider}
                 minimumValue={18}
-                maximumValue={59}
+                maximumValue={50}
+                disabled={!ready || saving}
+                accessibilityLabel="Edad mínima"
                 step={1}
                 value={ageRange.min}
                 onValueChange={handleMinChange}
@@ -91,7 +114,9 @@ export default function AgeRangeScreen() {
               </View>
               <Slider
                 style={styles.slider}
-                minimumValue={19}
+                minimumValue={28}
+                disabled={!ready || saving}
+                accessibilityLabel="Edad máxima"
                 maximumValue={60}
                 step={1}
                 value={ageRange.max}
@@ -103,25 +128,45 @@ export default function AgeRangeScreen() {
             </View>
           </View>
 
+          <Text style={styles.help}>Elige un intervalo de al menos 10 años; por ejemplo, de 30 a 40.</Text>
+          {age !== null && (age < ageRange.min || age > ageRange.max) && (
+            <Text accessibilityLiveRegion="polite" style={styles.warning}>
+              Tienes {age} años y elegiste compartir con personas de {ageRange.min} a {ageRange.max}. ¿Ese rango refleja tu preferencia? Puedes mantenerlo si es lo que buscas.
+            </Text>
+          )}
+          <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: reviewed }}
+            accessibilityLabel="Revisé las edades y este es el rango que prefiero."
+            disabled={!ready || saving} onPress={() => setReviewed(!reviewed)} style={styles.review}>
+            <Text style={styles.reviewMark}>{reviewed ? '☑' : '☐'}</Text>
+            <Text style={styles.reviewText}>Revisé las edades y este es el rango que prefiero.</Text>
+          </TouchableOpacity>
+          {!!error && <Text accessibilityRole="alert" style={styles.help}>{error}</Text>}
           <TouchableOpacity
-            style={styles.continueButton}
+            accessibilityRole="button"
+            disabled={!reviewed || !ready || saving}
+            style={[styles.continueButton, (!reviewed || !ready || saving) && { opacity: 0.4 }]}
             onPress={handleContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>{saving ? 'Guardando…' : 'Confirmar y continuar'}</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  help: { color: '#F4D9E6', fontSize: 13, lineHeight: 20, marginBottom: 12 },
+  warning: { color: '#624319', backgroundColor: '#FFF2D9', padding: 14, borderRadius: 12, lineHeight: 21, marginBottom: 14 },
+  review: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#FFFFFF80' },
+  reviewMark: { color: '#FFF', fontSize: 23 },
+  reviewText: { flex: 1, color: '#FFF', fontSize: 15, lineHeight: 23 },
   gradient: {
     flex: 1,
   },
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
@@ -141,7 +186,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#FFFFFF',
     opacity: 0.8,
-    marginBottom: 32,
+    marginBottom: 18,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -151,7 +196,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 20,
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
     borderWidth: 2,
     borderColor: 'rgba(240, 98, 146, 0.50)',
   },
@@ -161,7 +206,7 @@ const styles = StyleSheet.create({
     color: '#880E4F',
   },
   sliderSection: {
-    marginBottom: 32,
+    marginBottom: 18,
   },
   sliderRow: {
     marginBottom: 24,

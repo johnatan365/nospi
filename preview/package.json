@@ -1,0 +1,14 @@
+{
+  "name": "nospi-preferencias-local-preview",
+  "private": true,
+  "scripts": {
+    "start": "node serve.cjs",
+    "test": "node test.cjs",
+    "test:browser": "node browser-test.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "@electric-sql/pglite": "0.3.7",
+    "playwright": "1.62.1"
+  }
+}

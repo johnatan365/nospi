@@ -1,3 +1,5 @@
+import { AgeFallbackChoices, AGE_FALLBACK_LABELS } from '@/components/AgeFallbackChoices';
+import { AgeFallback, parseAgeFallback, agePreferenceFields, validAgeRange } from '@/utils/agePreferences';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -39,6 +41,8 @@ interface UserProfile {
   interested_in: string;
   age_range_min: number;
   age_range_max: number;
+  age_range_fallback?: AgeFallback | null;
+  age_range_confirmed_at?: string | null;
   country: string;
   city: string;
   phone: string;
@@ -157,6 +161,8 @@ export default function ProfileScreen() {
   const [editInterestedIn, setEditInterestedIn] = useState('');
   const [editAgeRangeMin, setEditAgeRangeMin] = useState(18);
   const [editAgeRangeMax, setEditAgeRangeMax] = useState(60);
+  const [editAgeFallback, setEditAgeFallback] = useState<AgeFallback | null>(null);
+  const [ageReviewed, setAgeReviewed] = useState(false);
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
@@ -200,6 +206,8 @@ export default function ProfileScreen() {
     setEditInterestedIn(profileData.interested_in || 'ambos');
     setEditAgeRangeMin(profileData.age_range_min || 18);
     setEditAgeRangeMax(profileData.age_range_max || 60);
+    setEditAgeFallback(parseAgeFallback(profileData.age_range_fallback));
+    setAgeReviewed(false);
     setEditInterests(profileData.interests || []);
     setEditPersonality(profileData.personality_traits || []);
     // Parse phone into country + number
@@ -577,6 +585,15 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
+    const preferenceChanged = editAgeRangeMin !== profile?.age_range_min || editAgeRangeMax !== profile?.age_range_max
+      || editAgeFallback !== (profile?.age_range_fallback ?? null);
+    if (preferenceChanged && (!ageReviewed || !editAgeFallback || !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax }))) {
+      Alert.alert('Revisa tus preferencias', 'Confirma tu rango y elige qué prefieres si no se completa el grupo.');
+      return;
+    }
+    const preferenceFields = preferenceChanged
+      ? agePreferenceFields(editAgeFallback, new Date().toISOString()) : {};
+
     if (!editName.trim() || !editPhoneNumber.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
@@ -603,6 +620,7 @@ export default function ProfileScreen() {
           city: editCity,
           interested_in: editInterestedIn,
           age_range_min: editAgeRangeMin,
+          ...preferenceFields,
           age_range_max: editAgeRangeMax,
           interests: editInterests,
           personality_traits: editPersonality,
@@ -627,6 +645,7 @@ export default function ProfileScreen() {
           ...prev,
           name: editName, phone: combinedPhone, country: editCountry, city: editCity,
           interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
+          ...preferenceFields,
           age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
         };
         cacheRef.current = { data: updated, timestamp: Date.now() };
@@ -686,12 +705,14 @@ export default function ProfileScreen() {
   // se cerraría a 1 año justo en los extremos.
   const handleMinAgeChange = (value: number) => {
     const newMin = Math.min(Math.max(Math.round(value), 18), 60 - ANCHO_MINIMO_RANGO_EDAD);
+    setAgeReviewed(false);
     setEditAgeRangeMin(newMin);
     setEditAgeRangeMax((prev) => Math.max(prev, newMin + ANCHO_MINIMO_RANGO_EDAD));
   };
 
   const handleMaxAgeChange = (value: number) => {
     const newMax = Math.max(Math.min(Math.round(value), 60), 18 + ANCHO_MINIMO_RANGO_EDAD);
+    setAgeReviewed(false);
     setEditAgeRangeMax(newMax);
     setEditAgeRangeMin((prev) => Math.min(prev, newMax - ANCHO_MINIMO_RANGO_EDAD));
   };
@@ -919,6 +940,7 @@ export default function ProfileScreen() {
             <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
             <Text style={styles.infoLabel}>{ETIQUETA_RANGO_EDAD}</Text>
             <Text style={styles.infoValue}>{ageRangeText}</Text>
+            <Text style={styles.infoValue}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Preferencia de aplazamiento sin definir'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} />
@@ -1118,6 +1140,13 @@ export default function ProfileScreen() {
                 </View>
                 <Slider style={styles.ageSlider} minimumValue={19} maximumValue={60} step={1} value={editAgeRangeMax} onValueChange={handleMaxAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
               </View>
+
+              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageReviewed }}
+                onPress={() => setAgeReviewed(!ageReviewed)} style={{ paddingVertical: 16 }}>
+                <Text style={{ color: '#880E4F', fontSize: 15 }}>{ageReviewed ? '☑' : '☐'} Revisé las edades y este es el rango que prefiero.</Text>
+              </TouchableOpacity>
+              <Text style={styles.inputLabel}>Si no completamos un grupo de tu rango, ¿qué prefieres?</Text>
+              <AgeFallbackChoices light value={editAgeFallback} onChange={setEditAgeFallback} />
 
               <Text style={styles.inputLabel}>Intereses</Text>
               <View style={styles.tagsEditContainer}>
