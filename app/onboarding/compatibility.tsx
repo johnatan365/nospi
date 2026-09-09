@@ -116,7 +116,7 @@ export default function CompatibilityScreen() {
     ? 'No pudimos consultar las coincidencias por edad en este momento. Puedes continuar con tu registro.'
     : cero
       ? 'Por ahora no encontramos coincidencias por edad en la comunidad con el rango que elegiste.'
-      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? 'persona con quien coincides' : 'personas con quienes coincides'} por edad.`;
+      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? 'persona con quien coincides' : 'personas con quienes coincides'} según el rango de edad que elegiste.`;
 
   return (
     <LinearGradient
