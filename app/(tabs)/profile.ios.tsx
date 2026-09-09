@@ -901,8 +901,15 @@ export default function ProfileScreen() {
           {MOSTRAR_INTERESADO_EN && (
             <View style={styles.infoRow}><Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Interesado en</Text><Text style={styles.infoValue}>{interestedInText}</Text></View>
           )}
-          <View style={styles.infoRow}><Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>{ETIQUETA_RANGO_EDAD}</Text><Text style={styles.infoValue}>{ageRangeText}</Text>
-            <Text style={styles.infoValue}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Preferencia de aplazamiento sin definir'}</Text></View>
+          <View style={styles.agePreferencesBlock}>
+            <View style={styles.agePreferencesHeading}>
+              <Ionicons name="restaurant-outline" size={18} color="#880E4F" />
+              <Text style={styles.agePreferencesLabel}>Rango de edad preferido</Text>
+            </View>
+            <Text style={styles.agePreferencesRange}>{ageRangeText}</Text>
+            <Text style={styles.agePreferencesHelp}>Si no se completa mi mesa dentro de ese rango:</Text>
+            <Text style={styles.agePreferencesChoice}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Aún no has elegido tu preferencia.'}</Text>
+          </View>
           <View style={styles.infoRow}><Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Ubicación</Text><Text style={styles.infoValue}>{locationText}</Text></View>
         </View>
 
@@ -1417,6 +1424,12 @@ const styles = StyleSheet.create({
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12 },
   sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  agePreferencesBlock: { alignSelf: 'stretch', backgroundColor: '#F8EDF3', borderRadius: 14, padding: 16, marginTop: 4, marginBottom: 16 },
+  agePreferencesHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  agePreferencesLabel: { flex: 1, color: '#72113E', fontSize: 14, fontWeight: '600' },
+  agePreferencesRange: { color: '#880E4F', fontSize: 24, fontWeight: '700', marginTop: 10, marginBottom: 12 },
+  agePreferencesHelp: { color: '#666', fontSize: 13, lineHeight: 19 },
+  agePreferencesChoice: { color: '#1c1c1e', fontSize: 14, lineHeight: 21, fontWeight: '600', marginTop: 4 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   infoIcon: { width: 20, textAlign: 'center' },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
