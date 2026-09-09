@@ -86,6 +86,29 @@ interface User {
   utm_campaign?: string | null;
   utm_medium?: string | null;
   click_id?: string | null;
+  age_range_fallback?: string | null;
+  age_range_confirmed_at?: string | null;
+  /** Etiqueta ya calculada de la columna "Si no hay afines". */
+  _afines?: string;
+}
+
+// Momento en que se publico la pregunta "si no completamos tu mesa dentro del
+// rango que elegiste, prefieres asistir igual o aplazar la reserva".
+const PREGUNTA_AFINES_DESDE = new Date('2026-09-09T03:32:55Z');
+
+// Etiqueta de la columna "Si no hay afines".
+//
+// Quien se registro ANTES de esa fecha nunca vio la pregunta, asi que se deja
+// en blanco en vez de marcarlo como indeciso: serian 2.551 filas diciendo "sin
+// responder" que taparian las respuestas de verdad.
+//
+// Si HAY respuesta se muestra siempre, aunque la persona sea antigua: se puede
+// contestar tambien desde el perfil, y de hecho ya hay quien lo hizo.
+function etiquetaAfines(respuesta: any, createdAt: string | null): string {
+  if (respuesta === 'attend') return 'Asiste igual';
+  if (respuesta === 'postpone') return 'Aplaza';
+  if (createdAt && new Date(createdAt) >= PREGUNTA_AFINES_DESDE) return 'Sin responder';
+  return '';
 }
 
 interface Appointment {
@@ -1759,10 +1782,14 @@ const handleLogin = async () => {
       } else {
         const datesMap: Record<string, string> = {};
         (usersDates || []).forEach((u: any) => { datesMap[u.id] = u.created_at; });
-        const merged = (usersData || []).map((u: any) => ({
-          ...u,
-          created_at: u.created_at || datesMap[u.id] || null,
-        }));
+        const merged = (usersData || []).map((u: any) => {
+          const createdAt = u.created_at || datesMap[u.id] || null;
+          return {
+            ...u,
+            created_at: createdAt,
+            _afines: etiquetaAfines(u.age_range_fallback, createdAt),
+          };
+        });
         setUsers(merged);
         setTotalUsers(merged.length);
       }
@@ -7876,7 +7903,9 @@ setBulkWhatsAppPending(pending);
       { label: 'Teléfono', key: 'phone', w: 130 }, { label: 'Ciudad', key: 'city', w: 100 },
       { label: 'País', key: 'country', w: 90 }, { label: 'Género', key: 'gender', w: 80 },
       { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
-      { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Calificación', key: '_rating', w: 110 },
+      { label: 'Rango edad', key: 'age_range_min', w: 100 },
+      { label: 'Si no hay afines', key: '_afines', w: 130 },
+      { label: 'Calificación', key: '_rating', w: 110 },
       { label: 'Plataforma', key: 'registered_from', w: 100 },
       { label: 'Origen', key: 'utm_source', w: 110 },
       { label: 'Reservas', key: '_reservas', w: 95 },
@@ -7999,7 +8028,7 @@ setBulkWhatsAppPending(pending);
             </thead>
             <tbody>
               {sortedUsers.length === 0 ? (
-                <tr><td colSpan={16} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{userSearchQuery.trim() ? `Sin resultados para "${userSearchQuery.trim()}"` : activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
+                <tr><td colSpan={20} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{userSearchQuery.trim() ? `Sin resultados para "${userSearchQuery.trim()}"` : activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
               ) : sortedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
@@ -8030,6 +8059,18 @@ setBulkWhatsAppPending(pending);
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{user.age || '—'}</td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {user._afines === 'Asiste igual' ? (
+                        <span style={{ backgroundColor: '#D1FAE5', color: '#047857', fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap' }}>Asiste igual</span>
+                      ) : user._afines === 'Aplaza' ? (
+                        <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap' }}>Aplaza</span>
+                      ) : user._afines === 'Sin responder' ? (
+                        <span style={{ backgroundColor: '#F3F4F6', color: '#6B7280', fontSize: 12, fontWeight: 600, padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap' }}>Sin responder</span>
+                      ) : (
+                        // Se registro antes de que la pregunta existiera.
+                        <span style={{ color: '#D1D5DB' }}>—</span>
+                      )}
+                    </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
                       {uRating ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
