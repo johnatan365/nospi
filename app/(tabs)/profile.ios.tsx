@@ -160,7 +160,6 @@ export default function ProfileScreen() {
   const [editAgeRangeMin, setEditAgeRangeMin] = useState(18);
   const [editAgeRangeMax, setEditAgeRangeMax] = useState(60);
   const [editAgeFallback, setEditAgeFallback] = useState<AgeFallback | null>(null);
-  const [ageReviewed, setAgeReviewed] = useState(false);
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
@@ -204,7 +203,6 @@ export default function ProfileScreen() {
     setEditAgeRangeMin(profileData.age_range_min || 18);
     setEditAgeRangeMax(profileData.age_range_max || 60);
     setEditAgeFallback(parseAgeFallback(profileData.age_range_fallback));
-    setAgeReviewed(false);
     setEditInterests(profileData.interests || []);
     setEditPersonality(profileData.personality_traits || []);
     // Parse phone into country + number
@@ -581,8 +579,8 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     const preferenceChanged = editAgeRangeMin !== profile?.age_range_min || editAgeRangeMax !== profile?.age_range_max
       || editAgeFallback !== (profile?.age_range_fallback ?? null);
-    if (preferenceChanged && (!ageReviewed || !editAgeFallback || !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax }))) {
-      Alert.alert('Revisa tus preferencias', 'Confirma tu rango y elige qué prefieres si no se completa el grupo.');
+    if (preferenceChanged && (!editAgeFallback || !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax }))) {
+      Alert.alert('Revisa tus preferencias', 'Elige un rango válido y qué prefieres si no se completa el grupo.');
       return;
     }
     const preferenceFields = preferenceChanged
@@ -692,14 +690,12 @@ export default function ProfileScreen() {
     // manejador que la persona ARRASTRA — si se dejara correr y se empujara al
     // otro contra el borde, el rango se cerraría a 1 año en los extremos.
     const newMin = Math.min(Math.max(Math.round(value), 18), 60 - ANCHO_MINIMO_RANGO_EDAD);
-    setAgeReviewed(false);
     setEditAgeRangeMin(newMin);
     setEditAgeRangeMax((prev) => Math.max(prev, newMin + ANCHO_MINIMO_RANGO_EDAD));
   };
 
   const handleMaxAgeChange = (value: number) => {
     const newMax = Math.max(Math.min(Math.round(value), 60), 18 + ANCHO_MINIMO_RANGO_EDAD);
-    setAgeReviewed(false);
     setEditAgeRangeMax(newMax);
     setEditAgeRangeMin((prev) => Math.min(prev, newMax - ANCHO_MINIMO_RANGO_EDAD));
   };
@@ -901,14 +897,15 @@ export default function ProfileScreen() {
           {MOSTRAR_INTERESADO_EN && (
             <View style={styles.infoRow}><Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Interesado en</Text><Text style={styles.infoValue}>{interestedInText}</Text></View>
           )}
-          <View style={styles.agePreferencesBlock}>
-            <View style={styles.agePreferencesHeading}>
-              <Ionicons name="restaurant-outline" size={18} color="#880E4F" />
-              <Text style={styles.agePreferencesLabel}>Rango de edad preferido</Text>
-            </View>
-            <Text style={styles.agePreferencesRange}>{ageRangeText}</Text>
-            <Text style={styles.agePreferencesHelp}>Si no se completa mi mesa dentro de ese rango:</Text>
-            <Text style={styles.agePreferencesChoice}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Aún no has elegido tu preferencia.'}</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={[styles.infoLabel, { flex: 1 }]}>Rango de edad preferido</Text>
+            <Text style={[styles.infoValue, { flex: 0, flexShrink: 0 }]}>{ageRangeText}</Text>
+          </View>
+          <View style={[styles.infoRow, { alignItems: 'flex-start' }]}>
+            <Ionicons name="calendar-outline" size={18} color="#880E4F" style={styles.infoIcon} />
+            <Text style={[styles.infoLabel, { flex: 1 }]}>Si no se completa mi mesa</Text>
+            <Text style={[styles.infoValue, { lineHeight: 20 }]}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Sin definir'}</Text>
           </View>
           <View style={styles.infoRow}><Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Ubicación</Text><Text style={styles.infoValue}>{locationText}</Text></View>
         </View>
@@ -1184,10 +1181,6 @@ export default function ProfileScreen() {
                 <View style={styles.ageSliderRow}><Text style={styles.ageSliderLabel}>Máximo</Text><Text style={styles.ageSliderValue}>{editMaxAgeText}</Text></View>
                 <Slider style={styles.ageSlider} minimumValue={19} maximumValue={60} step={1} value={editAgeRangeMax} onValueChange={handleMaxAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
               </View>
-              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageReviewed }}
-                onPress={() => setAgeReviewed(!ageReviewed)} style={{ paddingVertical: 16 }}>
-                <Text style={{ color: '#880E4F', fontSize: 15 }}>{ageReviewed ? '☑' : '☐'} Revisé las edades y este es el rango que prefiero.</Text>
-              </TouchableOpacity>
               <Text style={styles.inputLabel}>Si no completamos un grupo de tu rango, ¿qué prefieres?</Text>
               <AgeFallbackChoices light value={editAgeFallback} onChange={setEditAgeFallback} />
 
@@ -1424,12 +1417,6 @@ const styles = StyleSheet.create({
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12 },
   sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
-  agePreferencesBlock: { alignSelf: 'stretch', backgroundColor: '#F8EDF3', borderRadius: 14, padding: 16, marginTop: 4, marginBottom: 16 },
-  agePreferencesHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  agePreferencesLabel: { flex: 1, color: '#72113E', fontSize: 14, fontWeight: '600' },
-  agePreferencesRange: { color: '#880E4F', fontSize: 24, fontWeight: '700', marginTop: 10, marginBottom: 12 },
-  agePreferencesHelp: { color: '#666', fontSize: 13, lineHeight: 19 },
-  agePreferencesChoice: { color: '#1c1c1e', fontSize: 14, lineHeight: 21, fontWeight: '600', marginTop: 4 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   infoIcon: { width: 20, textAlign: 'center' },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
