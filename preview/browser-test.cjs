@@ -30,7 +30,7 @@ const { chromium } = require(process.env.NOSPI_PLAYWRIGHT || (fs.existsSync(path
       await next.click();
       const save = page.getByRole('button', { name: 'Guardar y continuar', exact: true });
       await save.waitFor(); assert.equal(await save.isDisabled(), true);
-      const preference = width === 360 ? 'Prefiero que aplacen mi asistencia.' : 'Prefiero ir al evento de todas formas.';
+      const preference = width === 360 ? 'Pasar mi reserva a otra fecha.' : 'Asistir de todas formas.';
       await page.getByRole('radio', { name: preference, exact: true }).click();
       await page.screenshot({ path: path.join(__dirname, `reports/decision-${width}.png`), fullPage: true });
       await save.click();

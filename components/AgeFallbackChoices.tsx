@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AgeFallback } from '@/utils/agePreferences';
 
 export const AGE_FALLBACK_LABELS = {
-  attend: 'Prefiero ir al evento de todas formas.',
-  postpone: 'Prefiero que aplacen mi asistencia.',
+  attend: 'Asistir de todas formas.',
+  postpone: 'Pasar mi reserva a otra fecha.',
 };
 
 export function AgeFallbackChoices({ value, onChange, light = false }: {
@@ -23,8 +23,8 @@ export function AgeFallbackChoices({ value, onChange, light = false }: {
       <View style={styles.copy}>
         <Text style={[styles.title, (light || value === choice) && styles.dark]}>{AGE_FALLBACK_LABELS[choice]}</Text>
         <Text style={[styles.description, (light || value === choice) && styles.dark]}>
-          {choice === 'attend' ? 'Acepto compartir con personas fuera del rango que elegí.'
-            : 'Acepto pasar mi reserva a otro evento. Nospi me avisará con al menos un día de anticipación y coordinaremos la nueva fecha.'}
+          {choice === 'attend' ? 'Estoy abierto a compartir con personas de otras edades.'
+            : 'Avísenme al menos un día antes y coordinemos el próximo evento.'}
         </Text>
       </View>
     </TouchableOpacity>)}

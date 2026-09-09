@@ -39,7 +39,7 @@ export default function AgeFallbackScreen() {
   return <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={{ flex: 1 }}>
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Si no completamos un grupo de tu rango, ¿qué prefieres?</Text>
+        <Text style={styles.title}>¿Qué prefieres si en un evento no logramos completar tu mesa dentro del rango elegido?</Text>
         {range && <Text style={styles.help}>Tu rango elegido: {range.min} a {range.max} años.</Text>}
         <AgeFallbackChoices value={choice} onChange={setChoice} />
         {!!error && <Text accessibilityRole="alert" style={styles.help}>{error}</Text>}

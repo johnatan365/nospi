@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -108,24 +108,15 @@ export default function CompatibilityScreen() {
     outputRange: ['0deg', '360deg'],
   });
 
-  // Tres desenlaces posibles, y los tres dicen la verdad.
-  //
-  // El caso de CERO es el que mas vale: es la persona que hoy se registraba,
-  // pagaba, iba a una cena y no encontraba a nadie con quien conversar. Antes
-  // se le decia "97% compatible". Ahora se le avisa ANTES de pagar y se le
-  // ofrece la salida, que es ampliar el rango.
+  // Community matches are not registrations for a particular event.
   const sinDato = compatibles === null;
   const cero = compatibles === 0;
-  const pocos = compatibles !== null && compatibles > 0 && compatibles < 40;
-
-  const titular = sinDato ? '¡Bienvenido!' : cero ? 'Ampliemos un poco tu rango' : '¡Excelente noticia!';
+  const titular = sinDato ? 'Tu comunidad Nospi' : cero ? 'Tus coincidencias por edad' : 'Hay personas con quienes coincides por edad';
   const mensaje = sinDato
-    ? 'Ya puedes reservar tu lugar en el próximo encuentro.'
+    ? 'No pudimos consultar las coincidencias por edad en este momento. Puedes continuar con tu registro.'
     : cero
-      ? 'Con el rango de edad que elegiste todavía no hay nadie en Nospi con quien coincidas. Si lo amplías unos años, se abre bastante.'
-      : pocos
-        ? `Hay ${compatibles} personas en Nospi con edades que encajan con la tuya. Si amplías tu rango, aparecen más.`
-        : `Hay ${compatibles} personas en Nospi con edades que encajan con la tuya y con las que podrías compartir mesa.`;
+      ? 'Por ahora no encontramos coincidencias por edad en la comunidad con el rango que elegiste.'
+      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? 'persona con quien coincides' : 'personas con quienes coincides'} por edad.`;
 
   return (
     <LinearGradient
@@ -134,11 +125,11 @@ export default function CompatibilityScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
           {!showResult ? (
             <React.Fragment>
-              <Text style={styles.title}>Buscando personas con edades afines a la tuya</Text>
+              <Text style={styles.title}>Explorando coincidencias en la comunidad Nospi…</Text>
               
               <View style={styles.loaderContainer}>
                 <Animated.View
@@ -157,21 +148,15 @@ export default function CompatibilityScreen() {
 
               {/* "coincidencias perfectas" prometia de nuevo un resultado.
                   Ahora la pantalla describe lo que de verdad esta haciendo. */}
-              <Text style={styles.loadingText}>Revisando quién encaja con tu rango...</Text>
+              <Text style={styles.loadingText}>Revisando coincidencias por edad</Text>
             </React.Fragment>
           ) : (
             <React.Fragment>
+              <Text style={styles.ctaText}>COMUNIDAD NOSPI</Text>
               {!sinDato && (
                 <View style={styles.resultCircle}>
                   <Text style={styles.percentageText}>{compatibles}</Text>
-                </View>
-              )}
-
-              {!cero && (
-                <View style={styles.checkmarkContainer}>
-                  <View style={styles.checkmarkCircle}>
-                    <Text style={styles.checkmark}>✓</Text>
-                  </View>
+                  <Text style={{ color: '#880E4F', fontSize: 16 }}>{compatibles === 1 ? 'persona' : 'personas'}</Text>
                 </View>
               )}
 
@@ -181,32 +166,19 @@ export default function CompatibilityScreen() {
                 <Text style={styles.messageText}>{mensaje}</Text>
               </View>
 
-              {/* Si no tiene con quien, el camino natural no es seguir pagando:
-                  es devolverse a ampliar el rango. Se deja seguir igual, porque
-                  bloquearlo seria decidir por la persona. */}
-              {(cero || pocos) && (
-                <TouchableOpacity
-                  style={styles.ajustarButton}
-                  onPress={() => router.replace('/onboarding/age-range')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.ajustarButtonText}>Ajustar mi rango de edad</Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={styles.ctaText}>Inscríbete para programar el encuentro</Text>
+              <Text style={styles.ctaText}>Las personas que conocerás dependerán de quiénes se inscriban en cada evento.</Text>
 
               <TouchableOpacity
                 style={styles.inscribeButton}
                 onPress={navigateToNext}
                 activeOpacity={0.8}
               >
-                <Text style={styles.inscribeButtonText}>Inscribirme ahora</Text>
+                <Text style={styles.inscribeButtonText}>Continuar</Text>
               </TouchableOpacity>
             </React.Fragment>
           )}
         </View>
-      </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -216,7 +188,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
