@@ -828,7 +828,7 @@ export default function ProfileScreen() {
 
   const genderText = profile.gender === 'hombre' ? 'Hombre' : profile.gender === 'mujer' ? 'Mujer' : 'No binario';
   const interestedInText = profile.interested_in === 'hombres' ? 'Hombres' : profile.interested_in === 'mujeres' ? 'Mujeres' : 'Ambos';
-  const ageRangeText = `${profile.age_range_min} - ${profile.age_range_max} años`;
+  const ageRangeText = `${profile.age_range_min}–${profile.age_range_max} años`;
   const locationText = `${profile.city}, ${profile.country}`;
   const availableCities = CITIES_BY_COUNTRY[editCountry] || [];
   const editAgeRangeText = `${editAgeRangeMin} - ${editAgeRangeMax} años`;
@@ -900,12 +900,7 @@ export default function ProfileScreen() {
           <View style={styles.infoRow}>
             <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
             <Text style={[styles.infoLabel, { flex: 1 }]}>Rango de edad preferido</Text>
-            <Text style={[styles.infoValue, { flex: 0, flexShrink: 0 }]}>{ageRangeText}</Text>
-          </View>
-          <View style={[styles.infoRow, { alignItems: 'flex-start' }]}>
-            <Ionicons name="calendar-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={[styles.infoLabel, { flex: 1 }]}>Si no se completa mi mesa</Text>
-            <Text style={[styles.infoValue, { lineHeight: 20 }]}>{profile.age_range_fallback ? AGE_FALLBACK_LABELS[profile.age_range_fallback] : 'Sin definir'}</Text>
+            <Text numberOfLines={1} style={styles.ageRangeValue}>{ageRangeText}</Text>
           </View>
           <View style={styles.infoRow}><Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Ubicación</Text><Text style={styles.infoValue}>{locationText}</Text></View>
         </View>
@@ -1417,6 +1412,7 @@ const styles = StyleSheet.create({
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#880E4F', marginBottom: 12 },
   sectionSubtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  ageRangeValue: { width: 104, flexGrow: 0, flexShrink: 0, fontSize: 14, color: '#1c1c1e', fontWeight: '700', textAlign: 'right' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   infoIcon: { width: 20, textAlign: 'center' },
   infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
