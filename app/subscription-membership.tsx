@@ -502,7 +502,14 @@ export default function SubscriptionMembershipScreen() {
     setCancelling(true);
     const { error } = await supabase
       .from('subscriptions')
-      .update({ auto_renew: false, cancellation_reason: reason })
+      // cancelled_at se escribe AQUI, en el momento real. No sirve deducirla
+      // luego de updated_at: esa la pisa el cron de cobros cada 6 horas.
+      .update({
+        auto_renew: false,
+        cancellation_reason: reason,
+        cancelled_at: new Date().toISOString(),
+        cancelled_at_reconstruido: false,
+      })
       .eq('id', subscription.id);
     setCancelling(false);
 
@@ -544,7 +551,14 @@ export default function SubscriptionMembershipScreen() {
     setReactivating(true);
     const { error } = await supabase
       .from('subscriptions')
-      .update({ auto_renew: true, cancellation_reason: null })
+      // Al reactivar se limpia tambien la fecha: la cancelacion se deshizo, y
+      // dejarla puesta haria que el admin siguiera mostrandola como cancelada.
+      .update({
+        auto_renew: true,
+        cancellation_reason: null,
+        cancelled_at: null,
+        cancelled_at_reconstruido: false,
+      })
       .eq('id', subscription.id);
     setReactivating(false);
 

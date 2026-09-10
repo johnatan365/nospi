@@ -5392,7 +5392,26 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                 )}
                               </td>
                               <td style={{ padding: '12px 14px', color: s.cancellation_reason ? '#1F2937' : '#D1D5DB', fontWeight: s.cancellation_reason ? 600 : 400 }}>
-                                {s.cancellation_reason ? fmtDate(s.updated_at) : '—'}
+                                {/* Antes se mostraba updated_at, que es la ultima
+                                    vez que se toco la fila por CUALQUIER motivo: el
+                                    relleno del 7 de septiembre y el cron de cobros
+                                    (cada 6 h) la pisaban, y 8 de 12 fechas estaban
+                                    mal. Ahora se usa cancelled_at, y cuando no hay
+                                    dato se dice que no lo hay en vez de inventarlo. */}
+                                {!s.cancellation_reason ? '—' : s.cancelled_at ? (
+                                  <>
+                                    {fmtDate(s.cancelled_at)}
+                                    {s.cancelled_at_reconstruido && (
+                                      <Text style={{ color: '#9CA3AF', fontSize: 11, fontWeight: '400' }}>
+                                        {'\n'}aproximada
+                                      </Text>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '400' }}>
+                                    sin registro
+                                  </Text>
+                                )}
                               </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
                                 {fmtDate(s.start_date)}
