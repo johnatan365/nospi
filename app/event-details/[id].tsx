@@ -16,7 +16,7 @@ interface Event {
   city: string;
   description: string;
   type: string;
-  date: string;
+  date: string | null;
   time: string;
   location_name: string;
   location_address: string;
@@ -150,7 +150,8 @@ export default function EventDetailsScreen() {
     }
   }, [paymentSuccess, checkEnrollment]);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Fecha sin definir';
     const date = new Date(dateString);
     // event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota
     // = sabado 00:00 UTC). Sin timeZone explicito, toLocaleDateString usa la
@@ -352,7 +353,7 @@ export default function EventDetailsScreen() {
 
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>🕐 Hora</Text>
-              <Text style={styles.infoValue}>{formatTimeAmPm(event.time)}</Text>
+              <Text style={styles.infoValue}>{event.date ? formatTimeAmPm(event.time) : 'Por definir'}</Text>
             </View>
 
             <View style={styles.infoItem}>

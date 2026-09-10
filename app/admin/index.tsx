@@ -711,7 +711,10 @@ const handleLogin = async () => {
     }
   };
 
+  const [dateToBeDefined, setDateToBeDefined] = useState(false);
+
   const openCreateEventModal = () => {
+    setDateToBeDefined(false);
     setEditingEventId(null);
     setEventForm({
       name: '',
@@ -739,6 +742,7 @@ const handleLogin = async () => {
   };
 
   const openEditEventModal = async (event: Event) => {
+    setDateToBeDefined(!event.date);
     setEditingEventId(event.id);
     
     let dateValue = '';
@@ -960,7 +964,7 @@ const handleLogin = async () => {
         return;
       }
 
-      if (!eventForm.date || !eventForm.time) {
+      if (!dateToBeDefined && (!eventForm.date || !eventForm.time)) {
         window.alert('Debes seleccionar fecha y hora válidas antes de guardar el evento.');
         return;
       }
@@ -968,12 +972,12 @@ const handleLogin = async () => {
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       const combinedDate = new Date(combinedDateString);
 
-      if (isNaN(combinedDate.getTime())) {
+      if (!dateToBeDefined && isNaN(combinedDate.getTime())) {
         window.alert('Fecha u hora inválida.');
         return;
       }
 
-      const isoDate = combinedDate.toISOString();
+      const isoDate = dateToBeDefined ? null : combinedDate.toISOString();
 
       // FIX: Map 'restaurant' to 'restaurante' to match database constraint
       const eventData = {
@@ -982,7 +986,7 @@ const handleLogin = async () => {
         description: eventForm.description,
         type: eventForm.type === 'restaurant' ? 'restaurante' : eventForm.type,
         date: isoDate,
-        time: eventForm.time,
+        time: dateToBeDefined ? 'Por definir' : eventForm.time,
         location: eventForm.is_location_revealed && eventForm.location_name 
           ? eventForm.location_name 
           : 'Se revelará próximamente',
@@ -2133,7 +2137,7 @@ const handleLogin = async () => {
               </View>
               <View style={styles.compactInfoRow}>
                 <Text style={styles.compactInfoText}>📍 {event.city}</Text>
-                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : event.date}</Text>
+                <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : (event.date || 'Fecha sin definir')}</Text>
                 <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>
               <View style={styles.compactInfoRow}>
@@ -2529,7 +2533,7 @@ const handleLogin = async () => {
             <option value="">— Selecciona un evento —</option>
             {events.map(ev => (
               <option key={ev.id} value={ev.id}>
-                {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : ev.date} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
+                {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : (ev.date || 'Fecha sin definir')} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
               </option>
             ))}
           </select>
@@ -3296,9 +3300,15 @@ if (checkingSession) {
                 <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option><option value="bolos">Bolos</option>
               </select>
 
-              <Text style={styles.inputLabel}>Fecha *</Text>
+              <Text style={styles.inputLabel}>Fecha</Text>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, color: '#333' }}>
+                <input type="checkbox" checked={dateToBeDefined} onChange={(e) => setDateToBeDefined(e.target.checked)} />
+                Fecha sin definir
+              </label>
+              {dateToBeDefined && <Text style={{ color: '#666', marginBottom: 16 }}>Al publicarlo, las personas verán “Fecha sin definir” y podrán comprar su cupo.</Text>}
               <input
                 type="date"
+                disabled={dateToBeDefined}
                 style={{
                   backgroundColor: '#F5F5F5',
                   border: '1px solid #E0E0E0',
@@ -3315,6 +3325,7 @@ if (checkingSession) {
               <Text style={styles.inputLabel}>Hora *</Text>
               <input
                 type="time"
+                disabled={dateToBeDefined}
                 style={{
                   backgroundColor: '#F5F5F5',
                   border: '1px solid #E0E0E0',

@@ -300,7 +300,7 @@ export default function AppointmentsScreen() {
         : new Date(appointmentToCancel.event.date);
 
       const now = new Date();
-      const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
+      const timeDifferenceMs = appointmentToCancel.event.date ? eventStartTime.getTime() - now.getTime() : Number.POSITIVE_INFINITY;
       const twentyFourHoursMs = 24 * 60 * 60 * 1000;
       // Las citas por suscripcion nunca generan saldo virtual: no hubo un
       // cobro individual de ese evento que reembolsar, solo se libera el cupo.
@@ -508,7 +508,7 @@ export default function AppointmentsScreen() {
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
-              const eventTime = formatTimeAmPm(appointment.event.time) || '';
+              const eventTime = appointment.event.date ? formatTimeAmPm(appointment.event.time) || '' : 'Hora por definir';
 
               const locationRevealed = appointment.event.is_location_revealed || false;
               const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
@@ -524,7 +524,7 @@ export default function AppointmentsScreen() {
                 ? appointment.event.maps_link
                 : null;
 
-              const dateText = eventDate ? formatDate(eventDate) : 'Fecha no disponible';
+              const dateText = eventDate ? formatDate(eventDate) : 'Fecha sin definir';
               const statusColor = getStatusColor(appointment.status);
               const statusText = getStatusText(appointment.status);
               const isConfirmed = appointment.status === 'confirmada';
@@ -766,7 +766,7 @@ export default function AppointmentsScreen() {
                   ? new Date(appointmentToCancel.event.start_time)
                   : new Date(appointmentToCancel.event.date);
                 const now = new Date();
-                const timeDifferenceMs = eventStartTime.getTime() - now.getTime();
+                const timeDifferenceMs = appointmentToCancel.event.date ? eventStartTime.getTime() - now.getTime() : Number.POSITIVE_INFINITY;
                 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
                 const isWithinRefundWindow = timeDifferenceMs > twentyFourHoursMs;
 

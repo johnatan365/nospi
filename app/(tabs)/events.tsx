@@ -18,7 +18,7 @@ interface Event {
   city: string;
   description: string;
   type: string;
-  date: string;
+  date: string | null;
   time: string;
   max_participants: number;
   event_status: 'draft' | 'published' | 'closed';
@@ -35,7 +35,7 @@ interface Event {
 
 const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const WEEK_SECTION_ORDER = ['Esta semana', 'La próxima semana', 'En 2 semanas', 'Más adelante'];
+const WEEK_SECTION_ORDER = ['Esta semana', 'La próxima semana', 'En 2 semanas', 'Más adelante', 'Fecha sin definir'];
 
 // event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota =
 // sabado 00:00 UTC). Si calculamos dia/fecha con los metodos locales de Date
@@ -68,7 +68,8 @@ const getMonday = (input: Date): Date => {
   return date;
 };
 
-const getWeekSection = (dateString: string): string => {
+const getWeekSection = (dateString: string | null): string => {
+  if (!dateString) return 'Fecha sin definir';
   const eventMonday = getMonday(new Date(dateString));
   const todayMonday = getMonday(new Date());
   const diffWeeks = Math.round((eventMonday.getTime() - todayMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
@@ -78,7 +79,8 @@ const getWeekSection = (dateString: string): string => {
   return 'Más adelante';
 };
 
-const formatCompactDate = (dateString: string) => {
+const formatCompactDate = (dateString: string | null) => {
+  if (!dateString) return 'Fecha sin definir';
   const { year, month, day } = getBogotaYMD(dateString);
   const utcDate = bogotaYMDToUTCDate(year, month, day);
   return `${WEEKDAY_ABBR[utcDate.getUTCDay()]} ${day} ${MONTH_ABBR[month - 1]}`;
@@ -273,7 +275,7 @@ export default function EventsScreen() {
                           )}
                         </View>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                          {compactDate} • {formatTimeAmPm(event.time)} • {event.city}
+                          {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {event.city}
                         </Text>
                         {hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
