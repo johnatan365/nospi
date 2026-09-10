@@ -871,6 +871,7 @@ export default function AdminPanelScreen() {
   const [detalleCierre, setDetalleCierre] = useState<{
     primer_ingreso: string | null; fin_dinamica: string | null;
     ultima_presencia: string | null; reportaron: number; total: number;
+    fin_exacto: boolean;
   } | null>(null);
   const [preguntaHistorialTexto, setPreguntaHistorialTexto] = useState<string>('');
   const [preguntaHistorial, setPreguntaHistorial] = useState<any[]>([]);
@@ -971,7 +972,7 @@ export default function AdminPanelScreen() {
   const [presencia, setPresencia] = useState<Record<string, { checked_in_at: string | null; last_seen_at: string | null }>>({});
 
   // Cierre del evento que se monitorea: a que hora acabo la dinamica.
-  const [cierreVivo, setCierreVivo] = useState<{ fin_dinamica: string | null } | null>(null);
+  const [cierreVivo, setCierreVivo] = useState<{ fin_dinamica: string | null; fin_exacto: boolean } | null>(null);
 
   // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
@@ -4331,7 +4332,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <View style={{ marginTop: 10, backgroundColor: '#F7F3F5', borderRadius: 10, padding: 13, gap: 4 }}>
               <Text style={{ fontSize: 14, color: '#1f2937' }}>
                 {c.primer_ingreso ? `Primer ingreso ${hm(c.primer_ingreso)} · ` : ''}
-                {c.fin_dinamica ? `la dinámica terminó ${hm(c.fin_dinamica)} · ` : ''}
+                {c.fin_dinamica ? `la dinámica terminó ${hm(c.fin_dinamica)}${c.fin_exacto ? '' : ' (aprox.)'} · ` : ''}
                 <Text style={{ fontWeight: '700' }}>se quedaron al menos hasta las {hm(c.ultima_presencia)}</Text>
                 {extraMin !== null && extraMin > 0 ? ` — ${extraMin} min más` : ''}
               </Text>
@@ -8721,6 +8722,12 @@ setBulkWhatsAppPending(pending);
                       {new Date(fin).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                     </Text>
                     {hace >= 1 ? ` · hace ${hace < 60 ? `${hace} min` : `${Math.floor(hace / 60)} h ${hace % 60} min`}` : ''}
+                    {/* Los eventos anteriores al disparador no tienen la hora
+                        real: se estima con la ultima pregunta y se queda entre
+                        1 y 5 min corta. Se dice, en vez de darla por buena. */}
+                    {cierreVivo?.fin_exacto === false && (
+                      <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '400' }}> (aproximada)</Text>
+                    )}
                   </Text>
                 );
               })()}
