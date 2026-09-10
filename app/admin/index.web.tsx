@@ -944,6 +944,38 @@ export default function AdminPanelScreen() {
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
+  // Estado de la dinamica del evento que se esta monitoreando: en que pregunta
+  // van ahora mismo. Se consulta aparte de `events` porque esa lista se carga
+  // una sola vez y esto cambia solo mientras la mesa juega.
+  const [dinamicaViva, setDinamicaViva] = useState<{
+    game_phase: string | null;
+    current_question_index: number | null;
+    current_question_level: string | null;
+    current_question: string | null;
+    current_question_started_at: string | null;
+  } | null>(null);
+
+  // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
+  // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
+  // el admin; obligar a recargar seria justo lo contrario de "en vivo".
+  useEffect(() => {
+    if (currentView !== 'realtime' || !selectedEventForMonitoring) {
+      setDinamicaViva(null);
+      return;
+    }
+    let vivo = true;
+    const leer = async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('game_phase, current_question_index, current_question_level, current_question, current_question_started_at')
+        .eq('id', selectedEventForMonitoring)
+        .maybeSingle();
+      if (vivo && data) setDinamicaViva(data as any);
+    };
+    leer();
+    const id = setInterval(leer, 10000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [currentView, selectedEventForMonitoring]);
 
   // Refresco manual del admin: al estar instalado como app desde Safari no hay
   // barra del navegador ni boton de recargar, asi que hace falta uno propio.
@@ -8543,6 +8575,60 @@ setBulkWhatsAppPending(pending);
               ))}
           </select>
         </View>
+
+        {/* En que pregunta va la mesa AHORA. Va encima de la asistencia porque
+            durante el evento es el dato que se mira de reojo cada rato. */}
+        {selectedEventForMonitoring && dinamicaViva && (() => {
+          // El nivel del medio se llama 'sensual' por dentro desde siempre;
+          // hacia afuera siempre se dice "Coqueto".
+          const NIVELES: Record<string, string> = {
+            divertido: 'Divertido', sensual: 'Coqueto', atrevido: 'Atrevido',
+          };
+          const FASES: Record<string, { texto: string; color: string }> = {
+            intro: { texto: 'Aún no empiezan', color: '#9CA3AF' },
+            ready: { texto: 'Listos para empezar', color: '#3B82F6' },
+            rules: { texto: 'Explicando las reglas', color: '#3B82F6' },
+            questions: { texto: 'En preguntas', color: '#10B981' },
+            question_active: { texto: 'En preguntas', color: '#10B981' },
+            level_transition: { texto: 'Cambiando de nivel', color: '#F59E0B' },
+            closing_intro: { texto: 'Cerrando', color: '#F59E0B' },
+            free_phase: { texto: 'Charla libre', color: '#8B5CF6' },
+            finished: { texto: 'Terminó', color: '#6B7280' },
+          };
+          const d = dinamicaViva;
+          const fase = (d.game_phase && FASES[d.game_phase]) || { texto: d.game_phase || 'Sin empezar', color: '#9CA3AF' };
+          const nivel = d.current_question_level ? (NIVELES[d.current_question_level] || d.current_question_level) : null;
+          let llevan: string | null = null;
+          if (d.current_question_started_at) {
+            const min = Math.floor((Date.now() - new Date(d.current_question_started_at).getTime()) / 60000);
+            llevan = min < 1 ? 'menos de un minuto' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+          }
+          return (
+            <View style={{
+              backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, marginBottom: 16,
+              borderWidth: 1, borderColor: '#E5E7EB',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>Dinámica</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF', backgroundColor: fase.color, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 }}>
+                  {fase.texto}
+                </Text>
+              </View>
+              {d.current_question ? (
+                <View style={{ backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12, borderLeftWidth: 3, borderLeftColor: '#880E4F' }}>
+                  <Text style={{ color: '#880E4F', fontSize: 11, fontWeight: '800', letterSpacing: 0.4 }}>
+                    PREGUNTA {(d.current_question_index ?? 0) + 1}{nivel ? ` · ${nivel.toUpperCase()}` : ''}
+                  </Text>
+                  <Text style={{ color: '#1f2937', fontSize: 15, marginTop: 4, lineHeight: 21 }}>{d.current_question}</Text>
+                  {!!llevan && <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 6 }}>Llevan {llevan} en esta</Text>}
+                </View>
+              ) : (
+                <Text style={{ color: '#6B7280', fontSize: 13 }}>Todavía no hay ninguna pregunta en curso.</Text>
+              )}
+              <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 10 }}>Se actualiza solo cada 10 segundos.</Text>
+            </View>
+          );
+        })()}
 
         {/* Resumen de asistencia por genero: cuantos confirmaron llegada y
             cuantos faltan. Lo importante en vivo es saber si falta un genero,
