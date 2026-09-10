@@ -970,6 +970,9 @@ export default function AdminPanelScreen() {
   // contar. Nunca dice de mas.
   const [presencia, setPresencia] = useState<Record<string, { checked_in_at: string | null; last_seen_at: string | null }>>({});
 
+  // Cierre del evento que se monitorea: a que hora acabo la dinamica.
+  const [cierreVivo, setCierreVivo] = useState<{ fin_dinamica: string | null } | null>(null);
+
   // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
   // el admin; obligar a recargar seria justo lo contrario de "en vivo".
@@ -977,6 +980,7 @@ export default function AdminPanelScreen() {
     if (currentView !== 'realtime' || !selectedEventForMonitoring) {
       setDinamicaViva(null);
       setPresencia({});
+      setCierreVivo(null);
       return;
     }
     let vivo = true;
@@ -996,6 +1000,11 @@ export default function AdminPanelScreen() {
         (pres as any[]).forEach(r => { mapa[r.user_id] = r; });
         setPresencia(mapa);
       }
+
+      const { data: cierre } = await supabase.rpc('admin_get_cierre_evento', {
+        p_event_id: selectedEventForMonitoring,
+      });
+      if (vivo) setCierreVivo((cierre as any[])?.[0] || null);
     };
     leer();
     const id = setInterval(leer, 10000);
@@ -8696,6 +8705,25 @@ setBulkWhatsAppPending(pending);
               ) : (
                 <Text style={{ color: '#6B7280', fontSize: 13 }}>Todavía no hay ninguna pregunta en curso.</Text>
               )}
+              {/* Hora en que se acabaron las preguntas.
+                  Solo se muestra cuando la mesa YA paso de las preguntas: hasta
+                  entonces fin_dinamica es la ultima pregunta registrada, no un
+                  final, y llamarlo "termino" seria mentir. */}
+              {(() => {
+                const acabo = ['closing_intro', 'finished', 'free_phase'].includes(d.game_phase || '');
+                const fin = cierreVivo?.fin_dinamica;
+                if (!acabo || !fin) return null;
+                const hace = Math.round((Date.now() - new Date(fin).getTime()) / 60000);
+                return (
+                  <Text style={{ color: '#1f2937', fontSize: 13, marginTop: 10 }}>
+                    Las preguntas terminaron a las{' '}
+                    <Text style={{ fontWeight: '700' }}>
+                      {new Date(fin).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                    </Text>
+                    {hace >= 1 ? ` · hace ${hace < 60 ? `${hace} min` : `${Math.floor(hace / 60)} h ${hace % 60} min`}` : ''}
+                  </Text>
+                );
+              })()}
               <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 10 }}>Se actualiza solo cada 10 segundos.</Text>
             </View>
           );
