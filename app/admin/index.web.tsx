@@ -869,9 +869,10 @@ export default function AdminPanelScreen() {
   const [eventoDetalle, setEventoDetalle] = useState<any[]>([]);
   // Como termino la noche del evento que se esta viendo en "Por evento".
   const [detalleCierre, setDetalleCierre] = useState<{
-    primer_ingreso: string | null; fin_dinamica: string | null;
+    primer_ingreso: string | null;
+    inicio_dinamica: string | null; inicio_exacto: boolean;
+    fin_dinamica: string | null; fin_exacto: boolean; preguntas: number;
     ultima_presencia: string | null; reportaron: number; total: number;
-    fin_exacto: boolean;
   } | null>(null);
   const [preguntaHistorialTexto, setPreguntaHistorialTexto] = useState<string>('');
   const [preguntaHistorial, setPreguntaHistorial] = useState<any[]>([]);
@@ -952,6 +953,14 @@ export default function AdminPanelScreen() {
 
   // Realtime monitoring
   const [selectedEventForMonitoring, setSelectedEventForMonitoring] = useState<string | null>(null);
+  // "2 h 42 min", "48 min". Se usa en los dos sitios donde se muestra cuanto
+  // duro la dinamica.
+  const duracionLarga = (desde: string, hasta: string): string | null => {
+    const min = Math.round((new Date(hasta).getTime() - new Date(desde).getTime()) / 60000);
+    if (!Number.isFinite(min) || min <= 0) return null;
+    return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+  };
+
   // Estado de la dinamica del evento que se esta monitoreando: en que pregunta
   // van ahora mismo. Se consulta aparte de `events` porque esa lista se carga
   // una sola vez y esto cambia solo mientras la mesa juega.
@@ -972,7 +981,10 @@ export default function AdminPanelScreen() {
   const [presencia, setPresencia] = useState<Record<string, { checked_in_at: string | null; last_seen_at: string | null }>>({});
 
   // Cierre del evento que se monitorea: a que hora acabo la dinamica.
-  const [cierreVivo, setCierreVivo] = useState<{ fin_dinamica: string | null; fin_exacto: boolean } | null>(null);
+  const [cierreVivo, setCierreVivo] = useState<{
+    inicio_dinamica: string | null; inicio_exacto: boolean;
+    fin_dinamica: string | null; fin_exacto: boolean; preguntas: number;
+  } | null>(null);
 
   // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
@@ -4318,29 +4330,87 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           generó esa noche; en rojo la que menos. Los votos son los de ESE evento, no el acumulado.
         </Text>
 
-        {/* Cierre de la noche: hasta que hora siguieron en el sitio.
-            Es un PISO -- la app solo reporta con la pantalla abierta -- por eso
-            dice "al menos hasta" y nunca "terminó a las". */}
+        {/* Cierre de la noche, en dos medidas SEPARADAS porque miden cosas
+            distintas y tienen fiabilidad distinta:
+              - la dinamica: de la primera pregunta a la ultima
+              - el GPS: hasta cuando se vio a alguien en el sitio (un PISO) */}
         {(() => {
           const c = detalleCierre;
-          if (!c?.ultima_presencia) return null;
+          // Basta con tener una de las dos. Si se exigiera la presencia, la
+          // duracion no se veria en ningun evento pasado: el GPS empieza a
+          // reportar desde el primer evento tras el build.
+          if (!c || (!c.ultima_presencia && !(c.inicio_dinamica && c.fin_dinamica))) return null;
           const hm = (t: string) => new Date(t).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-          const extraMin = c.fin_dinamica
+          const extraMin = c.fin_dinamica && c.ultima_presencia
             ? Math.round((new Date(c.ultima_presencia).getTime() - new Date(c.fin_dinamica).getTime()) / 60000)
             : null;
+          const durDin = c.inicio_dinamica && c.fin_dinamica ? duracionLarga(c.inicio_dinamica, c.fin_dinamica) : null;
+          const aproxDin = !c.inicio_exacto || !c.fin_exacto;
+
+          const Fila = ({ etiqueta, children }: { etiqueta: string; children: any }) => (
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8', width: 150 }}>{etiqueta}</Text>
+              <View style={{ flex: 1, minWidth: 220 }}>{children}</View>
+            </View>
+          );
+
           return (
-            <View style={{ marginTop: 10, backgroundColor: '#F7F3F5', borderRadius: 10, padding: 13, gap: 4 }}>
-              <Text style={{ fontSize: 14, color: '#1f2937' }}>
-                {c.primer_ingreso ? `Primer ingreso ${hm(c.primer_ingreso)} · ` : ''}
-                {c.fin_dinamica ? `la dinámica terminó ${hm(c.fin_dinamica)}${c.fin_exacto ? '' : ' (aprox.)'} · ` : ''}
-                <Text style={{ fontWeight: '700' }}>se quedaron al menos hasta las {hm(c.ultima_presencia)}</Text>
-                {extraMin !== null && extraMin > 0 ? ` — ${extraMin} min más` : ''}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6B7280' }}>
-                {c.reportaron} de {c.total} reportaron ubicación. Es un mínimo: solo cuenta mientras
-                tengan la app abierta, así que si guardan el celular y siguen conversando, este
-                número se queda corto — nunca se pasa.
-              </Text>
+            <View style={{ marginTop: 10, backgroundColor: '#F7F3F5', borderRadius: 10, padding: 14, gap: 9 }}>
+              {!!c.primer_ingreso && (
+                <Fila etiqueta="PRIMER INGRESO">
+                  <Text style={{ fontSize: 14, color: '#1f2937' }}>{hm(c.primer_ingreso)}</Text>
+                </Fila>
+              )}
+
+              {!!durDin && (
+                <Fila etiqueta="DURACIÓN DINÁMICA">
+                  <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                    <Text style={{ fontWeight: '700' }}>{durDin}</Text>
+                    {'  '}{hm(c.inicio_dinamica!)} a {hm(c.fin_dinamica!)}
+                    {c.preguntas ? ` · ${c.preguntas} preguntas` : ''}
+                    {aproxDin ? <Text style={{ color: '#9CA3AF' }}> · aprox.</Text> : null}
+                  </Text>
+                </Fila>
+              )}
+
+              {c.ultima_presencia ? (
+                <Fila etiqueta="DURACIÓN SEGÚN GPS">
+                  <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                    {/* Del primer ingreso a la ultima senal: la noche entera,
+                        no solo las preguntas. Va en paralelo a la duracion de
+                        la dinamica para poder compararlas de un vistazo. */}
+                    {(() => {
+                      const desde = c.primer_ingreso || c.inicio_dinamica;
+                      const d = desde ? duracionLarga(desde, c.ultima_presencia!) : null;
+                      return d ? (
+                        <>
+                          <Text style={{ fontWeight: '700' }}>{d}</Text>
+                          {'  '}{hm(desde!)} a {hm(c.ultima_presencia!)}
+                        </>
+                      ) : (
+                        <Text style={{ fontWeight: '700' }}>hasta las {hm(c.ultima_presencia!)}</Text>
+                      );
+                    })()}
+                    <Text style={{ color: '#9CA3AF' }}> · como mínimo</Text>
+                  </Text>
+                  {extraMin !== null && extraMin > 0 && (
+                    <Text style={{ fontSize: 13, color: '#1f2937', marginTop: 2 }}>
+                      Se quedaron <Text style={{ fontWeight: '700' }}>{extraMin} min</Text> después de la última pregunta.
+                    </Text>
+                  )}
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                    {c.reportaron} de {c.total} reportaron ubicación. Es un mínimo: solo cuenta
+                    mientras tengan la app abierta, así que si guardan el celular y siguen
+                    conversando se queda corto — nunca se pasa.
+                  </Text>
+                </Fila>
+              ) : (
+                <Fila etiqueta="DURACIÓN SEGÚN GPS">
+                  <Text style={{ fontSize: 13, color: '#9CA3AF' }}>
+                    Sin datos. Empieza a registrarse desde el primer evento tras la próxima versión de la app.
+                  </Text>
+                </Fila>
+              )}
             </View>
           );
         })()}
@@ -8733,6 +8803,18 @@ setBulkWhatsAppPending(pending);
                     {cierreVivo?.fin_exacto === false && (
                       <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '400' }}> (aproximada)</Text>
                     )}
+                    {(() => {
+                      const ini = cierreVivo?.inicio_dinamica;
+                      if (!ini) return null;
+                      const dur = duracionLarga(ini, fin);
+                      if (!dur) return null;
+                      return (
+                        <Text>
+                          {'\n'}Duración dinámica: <Text style={{ fontWeight: '700' }}>{dur}</Text>
+                          {cierreVivo?.preguntas ? ` · ${cierreVivo.preguntas} preguntas` : ''}
+                        </Text>
+                      );
+                    })()}
                   </Text>
                 );
               })()}
