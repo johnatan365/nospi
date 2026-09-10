@@ -982,8 +982,10 @@ export default function AdminPanelScreen() {
 
   // Cierre del evento que se monitorea: a que hora acabo la dinamica.
   const [cierreVivo, setCierreVivo] = useState<{
+    primer_ingreso: string | null;
     inicio_dinamica: string | null; inicio_exacto: boolean;
     fin_dinamica: string | null; fin_exacto: boolean; preguntas: number;
+    ultima_presencia: string | null; reportaron: number; total: number;
   } | null>(null);
 
   // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
@@ -8812,6 +8814,31 @@ setBulkWhatsAppPending(pending);
                         <Text>
                           {'\n'}Duración dinámica: <Text style={{ fontWeight: '700' }}>{dur}</Text>
                           {cierreVivo?.preguntas ? ` · ${cierreVivo.preguntas} preguntas` : ''}
+                        </Text>
+                      );
+                    })()}
+                    {/* Duracion segun GPS: la noche entera, del primer ingreso a
+                        la ultima senal. Se muestra siempre -- tambien cuando no
+                        hay datos -- para que se sepa por que falta en vez de
+                        parecer que la seccion se rompio. */}
+                    {(() => {
+                      const c = cierreVivo;
+                      if (!c) return null;
+                      const desde = c.primer_ingreso || c.inicio_dinamica;
+                      if (c.ultima_presencia && desde) {
+                        const d = duracionLarga(desde, c.ultima_presencia);
+                        if (d) {
+                          return (
+                            <Text>
+                              {'\n'}Duración según GPS: <Text style={{ fontWeight: '700' }}>{d}</Text>
+                              <Text style={{ color: '#9CA3AF' }}> · como mínimo ({c.reportaron} de {c.total})</Text>
+                            </Text>
+                          );
+                        }
+                      }
+                      return (
+                        <Text style={{ color: '#9CA3AF' }}>
+                          {'\n'}Duración según GPS: sin datos — empieza a registrarse tras la próxima versión de la app.
                         </Text>
                       );
                     })()}
