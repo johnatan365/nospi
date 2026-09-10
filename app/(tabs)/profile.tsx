@@ -146,6 +146,15 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Solo los administradores ven la entrada a Supervision. Es una comodidad de
+  // la interfaz, no la seguridad: quien mande la ruta a mano igual choca con el
+  // is_admin() de las funciones de la base, que es donde de verdad se decide.
+  const [esAdmin, setEsAdmin] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    supabase.rpc('is_admin').then(({ data }) => { if (vivo) setEsAdmin(!!data); });
+    return () => { vivo = false; };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -995,6 +1004,19 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
+
+        {esAdmin && (
+          <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/supervision')} activeOpacity={0.8}>
+            <View style={styles.menuIconCircle}>
+              <Ionicons name="eye-outline" size={20} color="#880E4F" />
+            </View>
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Supervisión en vivo</Text>
+              <Text style={styles.menuSub}>Dinámica y chats de las mesas de hoy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
           <View style={styles.menuIconCircle}>
