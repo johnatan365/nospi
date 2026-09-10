@@ -8721,7 +8721,12 @@ setBulkWhatsAppPending(pending);
                     <Text style={{ fontWeight: '700' }}>
                       {new Date(fin).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                     </Text>
-                    {hace >= 1 ? ` · hace ${hace < 60 ? `${hace} min` : `${Math.floor(hace / 60)} h ${hace % 60} min`}` : ''}
+                    {/* El "hace" solo sirve mientras el evento esta pasando:
+                        saber que acabaron hace 12 min dice algo, que acabaron
+                        hace 432 h no dice nada. Se corta a las 6 horas. */}
+                    {hace >= 1 && hace < 360
+                      ? ` · hace ${hace < 60 ? `${hace} min` : `${Math.floor(hace / 60)} h ${hace % 60} min`}`
+                      : ''}
                     {/* Los eventos anteriores al disparador no tienen la hora
                         real: se estima con la ultima pregunta y se queda entre
                         1 y 5 min corta. Se dice, en vez de darla por buena. */}
