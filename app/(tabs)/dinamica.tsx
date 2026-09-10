@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Image, Linking, AppState } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -623,6 +623,57 @@ export default function DinamicaScreen() {
       return null;
     }
   }, []);
+
+  // Cada cuanto se vuelve a mirar si la persona sigue en el sitio. Cinco
+  // minutos da una precision de +-5 min, que sobra para saber cuanto se
+  // quedaron, y apenas gasta bateria.
+  const PRESENCIA_CADA_MS = 5 * 60 * 1000;
+
+  // Deja constancia de hasta que hora siguio cada quien EN EL LUGAR.
+  //
+  // Por que hace falta: ya se sabe a que hora llegan y cuando termina la
+  // dinamica, pero no cuanto se quedan conversando despues, que es justo lo
+  // que distingue un evento que funciono de uno que no.
+  //
+  // Reutiliza el permiso de ubicacion que la persona ya dio al confirmar su
+  // llegada. NO se pide permiso de segundo plano a proposito: Google lo revisa
+  // aparte y puede bloquear la actualizacion de la app entera.
+  //
+  // Es un PISO, no la hora de salida: solo cuenta con la app abierta. Si
+  // guardan el telefono y siguen hablando, deja de contar. El error va siempre
+  // hacia abajo, nunca dice de mas.
+  useEffect(() => {
+    const ev = appointment?.event;
+    if (!appointment?.location_confirmed || !ev?.id) return;
+    // Sin verificacion de GPS no hay coordenadas contra que comparar, y pedir
+    // la ubicacion para nada solo molestaria.
+    if (ev.require_gps_verification === false) return;
+    if (ev.latitude == null || ev.longitude == null) return;
+    // Una vez terminado, ya no tiene sentido seguir mirando.
+    if (gamePhase === 'finished') return;
+
+    let vivo = true;
+    const reportar = async () => {
+      // Con la app en segundo plano el permiso "mientras se usa" no da
+      // ubicacion; se salta el intento en vez de fallar.
+      if (AppState.currentState !== 'active') return;
+      try {
+        const pos = await getCurrentGpsPosition();
+        if (!vivo || !pos) return;
+        await supabase.rpc('registrar_presencia', {
+          p_event_id: ev.id,
+          p_lat: pos.latitude,
+          p_lng: pos.longitude,
+        });
+      } catch {
+        // Que falle una lectura no debe romper nada de la dinamica.
+      }
+    };
+
+    reportar();
+    const id = setInterval(reportar, PRESENCIA_CADA_MS);
+    return () => { vivo = false; clearInterval(id); };
+  }, [appointment?.location_confirmed, appointment?.event?.id, appointment?.event?.require_gps_verification, appointment?.event?.latitude, appointment?.event?.longitude, gamePhase, getCurrentGpsPosition]);
 
   // Confirma la llegada solo si el GPS del dispositivo coincide con el del
   // evento dentro del radio permitido (por defecto 150 metros). Si el admin

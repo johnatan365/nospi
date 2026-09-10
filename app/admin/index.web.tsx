@@ -867,6 +867,11 @@ export default function AdminPanelScreen() {
   const [eventosDinamica, setEventosDinamica] = useState<any[]>([]);
   const [eventoDetalleId, setEventoDetalleId] = useState<string>('');
   const [eventoDetalle, setEventoDetalle] = useState<any[]>([]);
+  // Como termino la noche del evento que se esta viendo en "Por evento".
+  const [detalleCierre, setDetalleCierre] = useState<{
+    primer_ingreso: string | null; fin_dinamica: string | null;
+    ultima_presencia: string | null; reportaron: number; total: number;
+  } | null>(null);
   const [preguntaHistorialTexto, setPreguntaHistorialTexto] = useState<string>('');
   const [preguntaHistorial, setPreguntaHistorial] = useState<any[]>([]);
   const [detalleCargando, setDetalleCargando] = useState(false);
@@ -896,6 +901,8 @@ export default function AdminPanelScreen() {
       const { data, error } = await supabase.rpc('admin_get_event_dynamic_detail', { p_event_id: eventId });
       if (error) { console.error('Error cargando el detalle del evento:', error); setEventoDetalle([]); return; }
       setEventoDetalle(data || []);
+      const { data: cierre } = await supabase.rpc('admin_get_cierre_evento', { p_event_id: eventId });
+      setDetalleCierre((cierre as any[])?.[0] || null);
     } finally { setDetalleCargando(false); }
   }, []);
   loadEventoDetalleRef.current = loadEventoDetalle;
@@ -950,10 +957,18 @@ export default function AdminPanelScreen() {
   const [dinamicaViva, setDinamicaViva] = useState<{
     game_phase: string | null;
     current_question_index: number | null;
-    current_question_level: string | null;
+    // OJO: la buena es current_level. events tiene tambien
+    // current_question_level, que NO la escribe nadie (esta NULL en los 31
+    // eventos jugados). Por eso el nivel salia vacio.
+    current_level: string | null;
     current_question: string | null;
     current_question_started_at: string | null;
   } | null>(null);
+
+  // Hasta que hora se vio a cada persona EN EL SITIO. Es un PISO: la app solo
+  // reporta con la pantalla abierta, asi que si guardan el telefono deja de
+  // contar. Nunca dice de mas.
+  const [presencia, setPresencia] = useState<Record<string, { checked_in_at: string | null; last_seen_at: string | null }>>({});
 
   // Se refresca sola cada 10 s mientras se esta mirando "En Vivo" con un evento
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
@@ -961,16 +976,26 @@ export default function AdminPanelScreen() {
   useEffect(() => {
     if (currentView !== 'realtime' || !selectedEventForMonitoring) {
       setDinamicaViva(null);
+      setPresencia({});
       return;
     }
     let vivo = true;
     const leer = async () => {
       const { data } = await supabase
         .from('events')
-        .select('game_phase, current_question_index, current_question_level, current_question, current_question_started_at')
+        .select('game_phase, current_question_index, current_level, current_question, current_question_started_at')
         .eq('id', selectedEventForMonitoring)
         .maybeSingle();
       if (vivo && data) setDinamicaViva(data as any);
+
+      const { data: pres } = await supabase.rpc('admin_get_presencia', {
+        p_event_id: selectedEventForMonitoring,
+      });
+      if (vivo && pres) {
+        const mapa: Record<string, any> = {};
+        (pres as any[]).forEach(r => { mapa[r.user_id] = r; });
+        setPresencia(mapa);
+      }
     };
     leer();
     const id = setInterval(leer, 10000);
@@ -4282,6 +4307,33 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           «c/u» son segundos por persona confirmada. En verde la pregunta que más conversación
           generó esa noche; en rojo la que menos. Los votos son los de ESE evento, no el acumulado.
         </Text>
+
+        {/* Cierre de la noche: hasta que hora siguieron en el sitio.
+            Es un PISO -- la app solo reporta con la pantalla abierta -- por eso
+            dice "al menos hasta" y nunca "terminó a las". */}
+        {(() => {
+          const c = detalleCierre;
+          if (!c?.ultima_presencia) return null;
+          const hm = (t: string) => new Date(t).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+          const extraMin = c.fin_dinamica
+            ? Math.round((new Date(c.ultima_presencia).getTime() - new Date(c.fin_dinamica).getTime()) / 60000)
+            : null;
+          return (
+            <View style={{ marginTop: 10, backgroundColor: '#F7F3F5', borderRadius: 10, padding: 13, gap: 4 }}>
+              <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                {c.primer_ingreso ? `Primer ingreso ${hm(c.primer_ingreso)} · ` : ''}
+                {c.fin_dinamica ? `la dinámica terminó ${hm(c.fin_dinamica)} · ` : ''}
+                <Text style={{ fontWeight: '700' }}>se quedaron al menos hasta las {hm(c.ultima_presencia)}</Text>
+                {extraMin !== null && extraMin > 0 ? ` — ${extraMin} min más` : ''}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                {c.reportaron} de {c.total} reportaron ubicación. Es un mínimo: solo cuenta mientras
+                tengan la app abierta, así que si guardan el celular y siguen conversando, este
+                número se queda corto — nunca se pasa.
+              </Text>
+            </View>
+          );
+        })()}
       </View>
     );
   };
@@ -8616,7 +8668,7 @@ setBulkWhatsAppPending(pending);
           };
           const d = dinamicaViva;
           const fase = (d.game_phase && FASES[d.game_phase]) || { texto: d.game_phase || 'Sin empezar', color: '#9CA3AF' };
-          const nivel = d.current_question_level ? (NIVELES[d.current_question_level] || d.current_question_level) : null;
+          const nivel = d.current_level ? (NIVELES[d.current_level] || d.current_level) : null;
           let llevan: string | null = null;
           if (d.current_question_started_at) {
             const min = Math.floor((Date.now() - new Date(d.current_question_started_at).getTime()) / 60000);
@@ -8731,9 +8783,36 @@ setBulkWhatsAppPending(pending);
             <Text style={styles.participantsTitle}>
               Participantes Confirmados ({eventParticipants.length})
             </Text>
+            {/* Cuantos siguen en el sitio ahora mismo. Solo aparece cuando hay
+                al menos un reporte: antes del primero no habria nada que decir
+                y un "0 en el sitio" seria enganoso. */}
+            {(() => {
+              const marcas = Object.values(presencia).map(p => p.last_seen_at).filter(Boolean) as string[];
+              if (marcas.length === 0) return null;
+              const dentro = marcas.filter(v => (Date.now() - new Date(v).getTime()) / 60000 <= 12).length;
+              const fuera = marcas.length - dentro;
+              const ultima = marcas.map(v => new Date(v).getTime()).sort((a, b) => b - a)[0];
+              return (
+                <Text style={{ fontSize: 13, color: '#4B5563', marginTop: 2, marginBottom: 8 }}>
+                  <Text style={{ fontWeight: '700', color: '#047857' }}>{dentro}</Text> siguen en el sitio
+                  {fuera > 0 ? ` · ${fuera} ya se fueron` : ''}
+                  {' · última señal '}
+                  {new Date(ultima).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                </Text>
+              );
+            })()}
             {eventParticipants.map((participant, index) => {
               const checkInStatus = participant.is_presented ? '✅ Presente' : '⏳ Pendiente';
               const checkInColor = participant.is_presented ? '#10B981' : '#F59E0B';
+              // Hasta que hora se le vio en el sitio. Se considera "sigue ahi"
+              // si reporto en los ultimos 12 minutos: la app avisa cada 5, asi
+              // que dos fallos seguidos todavia no significan que se fue.
+              const visto = presencia[participant.user_id]?.last_seen_at || null;
+              const vistoMin = visto ? (Date.now() - new Date(visto).getTime()) / 60000 : null;
+              const sigueAhi = vistoMin !== null && vistoMin <= 12;
+              const vistoHora = visto
+                ? new Date(visto).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+                : null;
               
               return (
                 <View key={participant.id} style={styles.participantItem}>
@@ -8743,6 +8822,11 @@ setBulkWhatsAppPending(pending);
                     <View style={[styles.statusBadge, { backgroundColor: checkInColor }]}>
                       <Text style={styles.statusBadgeText}>{checkInStatus}</Text>
                     </View>
+                    {!!vistoHora && (
+                      <Text style={{ fontSize: 12, color: sigueAhi ? '#047857' : '#9CA3AF', marginLeft: 8, fontWeight: sigueAhi ? '700' : '400' }}>
+                        {sigueAhi ? `en el sitio · ${vistoHora}` : `visto por última vez ${vistoHora}`}
+                      </Text>
+                    )}
                   </View>
                   {participant.users && (
                     <>

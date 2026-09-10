@@ -49,7 +49,9 @@ interface MensajeSup {
 }
 
 // El nombre interno del nivel del medio sigue siendo 'sensual'; hacia afuera
-// siempre se dice "Coqueto".
+// siempre se dice "Coqueto". El valor llega de events.current_level, que es la
+// que escribe la app; hay otra columna current_question_level que no escribe
+// nadie y por eso salia vacio.
 const NIVELES: Record<string, string> = {
   divertido: 'Divertido',
   sensual: 'Coqueto',
