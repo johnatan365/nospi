@@ -1099,6 +1099,19 @@ export default function AdminPanelScreen() {
   const [channelDraft, setChannelDraft] = useState('');
   const [sendingChannel, setSendingChannel] = useState(false);
   const [channelEventPicker, setChannelEventPicker] = useState('');
+  // Quién vio cada mensaje del canal. "Visto" = abrió el chat después de que
+  // se publicó el mensaje (la app guarda last_read_at por persona y chat).
+  const [readersModal, setReadersModal] = useState<{ messageId: string; content: string; rows: any[] } | null>(null);
+  const [readersLoading, setReadersLoading] = useState(false);
+
+  const abrirVistos = async (messageId: string, content: string) => {
+    setReadersLoading(true);
+    setReadersModal({ messageId, content, rows: [] });
+    const { data, error } = await supabase.rpc('admin_get_message_readers', { p_message_id: messageId });
+    setReadersLoading(false);
+    if (error) { window.alert('No se pudo cargar quién lo vio: ' + error.message); setReadersModal(null); return; }
+    setReadersModal({ messageId, content, rows: (data as any[]) || [] });
+  };
 
   const loadChannels = useCallback(async () => {
     setChannelsLoading(true);
@@ -6086,9 +6099,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               {m.content}
                             </Text>
                           )}
-                          <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right', marginTop: 3 }}>
-                            {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 3 }}>
+                            {mine && (
+                              <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
+                                <Text style={{ fontSize: 9.5, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>👁 Ver quién lo vio</Text>
+                              </TouchableOpacity>
+                            )}
+                            <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right' }}>
+                              {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                          </View>
                         </View>
                       </View>
                     );
@@ -6211,6 +6231,55 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#FFFFFF' }}>
                     {pollSaving ? 'Publicando…' : 'Publicar'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Quién vio el mensaje */}
+        <Modal visible={!!readersModal} transparent animationType="fade" onRequestClose={() => setReadersModal(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '85%', overflow: 'hidden' }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>👁 Quién vio el mensaje</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }} numberOfLines={2}>
+                  “{readersModal?.content || ''}”
+                </Text>
+                {!readersLoading && !!readersModal && (
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#6B21A8', marginTop: 8 }}>
+                    {readersModal.rows.filter((r: any) => r.visto).length} de {readersModal.rows.length} lo vieron
+                  </Text>
+                )}
+                <Text style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 6, lineHeight: 14 }}>
+                  “Visto” = abrió el chat después de que se publicó el mensaje. La app no lleva acuse de recibo por mensaje.
+                </Text>
+              </View>
+
+              <ScrollView style={{ maxHeight: 380 }}>
+                {readersLoading ? (
+                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Cargando…</Text>
+                ) : (readersModal?.rows || []).length === 0 ? (
+                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Sin participantes.</Text>
+                ) : (readersModal?.rows || []).map((r: any) => (
+                  <View key={r.user_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                    <Text style={{ fontSize: 15 }}>{r.visto ? '✅' : '⬜'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: r.visto ? '#1f2937' : '#9CA3AF' }} numberOfLines={1}>{r.name || 'Sin nombre'}</Text>
+                      <Text style={{ fontSize: 11, color: '#9CA3AF' }} numberOfLines={1}>{r.phone || r.email || ''}</Text>
+                    </View>
+                    <Text style={{ fontSize: 10.5, color: '#9CA3AF' }}>
+                      {r.visto && r.last_read_at
+                        ? new Date(r.last_read_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : 'Sin abrir'}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+
+              <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', alignItems: 'flex-end' }}>
+                <TouchableOpacity onPress={() => setReadersModal(null)} style={{ backgroundColor: '#880E4F', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18 }}>
+                  <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Cerrar</Text>
                 </TouchableOpacity>
               </View>
             </View>
