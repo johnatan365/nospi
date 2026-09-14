@@ -67,13 +67,23 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "autoVerify": true,
+          "autoVerify": false,
           "data": [
             {
               "scheme": "nospi",
               "host": "auth",
               "pathPrefix": "/callback"
-            },
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
             {
               "scheme": "https",
               "host": "wjdiraurfbawotlcndmk.supabase.co",
