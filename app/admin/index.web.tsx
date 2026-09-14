@@ -6671,7 +6671,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'grupos' ? '#fff' : '#374151' }}>👥 Grupos ({groupChats.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { setModerationTab('canales'); setActiveModConvId(null); if (channels.length === 0) loadChannels(); }}
+          onPress={() => { setModerationTab('canales'); setActiveModConvId(null); loadChannels(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'canales' ? '#880E4F' : '#f1f1f4' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'canales' ? '#fff' : '#374151' }}>📢 Canales ({channels.length})</Text>
