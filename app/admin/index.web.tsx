@@ -559,6 +559,13 @@ export default function AdminPanelScreen() {
   const [userSortAsc, setUserSortAsc] = useState(true);
   const [userColFilters, setUserColFilters] = useState<Record<string, Set<string>>>({});
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  // La tabla de usuarios se pagina: pintar 2.700 filas de golpe son ~55.000
+  // celdas y deja el navegador pegado varios segundos.
+  const [usersPage, setUsersPage] = useState(1);
+  // Usuarios, citas y calificaciones ya no bloquean la pantalla: se cargan
+  // despues de pintar el panel. Esta bandera es solo para avisarlo en la UI.
+  const [heavyLoading, setHeavyLoading] = useState(false);
+  const [usersLoadError, setUsersLoadError] = useState<string | null>(null);
 
   // Participants table: sort + per-column filters
   const [partSortCol, setPartSortCol] = useState<string>('');
@@ -1609,9 +1616,11 @@ export default function AdminPanelScreen() {
             return;
           }
           if (eventsReloadTimer.current) clearTimeout(eventsReloadTimer.current);
-                      eventsReloadTimer.current = setTimeout(() => {
-                                      loadDashboardData();
-                      }, 4000);
+          // Solo se recargan los eventos. Antes esto disparaba un
+          // loadDashboardData() completo (~2,9 MB) por cambiar una sola fila.
+          eventsReloadTimer.current = setTimeout(() => {
+            reloadEventsOnly();
+          }, 4000);
         }
       )
       .subscribe((status) => {
@@ -1791,37 +1800,58 @@ const handleLogin = async () => {
     await supabase.auth.signOut({ scope: 'local' });
   };
 
-  const loadDashboardData = async () => {
+  // Al cambiar la búsqueda, los filtros o el orden, volver a la primera página
+  // (si no, te quedas mirando una página que ya no existe).
+  useEffect(() => { setUsersPage(1); }, [userSearchQuery, userColFilters, userSortCol, userSortAsc]);
+
+  // Usuarios, citas, calificaciones y actividad por plataforma: es lo mas
+  // pesado del panel (los usuarios solos son ~1,4 MB de JSON). Ya NO se espera
+  // para pintar la pantalla; se carga aparte y el panel se va llenando.
+  const loadHeavyAdminData = async (eventsList: any[]) => {
+    setHeavyLoading(true);
     try {
-      setLoading(true);
-
-      // ── Datos ESENCIALES: se cargan en PARALELO (antes iban una tras otra en
-      // serie, lo que sumaba varios segundos). Con Promise.all el tiempo total
-      // pasa a ser el de la consulta más lenta, no la suma de todas.
-      const eventsP = supabase.from('events').select('*').order('date', { ascending: true });
-
       // Las RPC de admin devuelven una TABLE y Supabase (PostgREST) corta la
-      // respuesta a 1.000 filas por defecto. Con más de 1.000 usuarios eso hacía
-      // que el panel mostrara solo los primeros 1.000 (no era un tope de registro,
-      // solo de la consulta). Paginamos de a 1.000 con .range() hasta traer todo.
+      // respuesta a 1.000 filas por defecto. Paginamos de a 1.000 con .range()
+      // hasta traer todo.
       //
       // La función valida auth.uid() contra la tabla admins (SECURITY DEFINER). Si
       // el token del navegador venció justo al cargar, Supabase puede responder
       // "not authorized" aunque sí seas admin — refrescamos la sesión una vez y
       // reintentamos esa página para evitar el falso error.
       const RPC_PAGE_SIZE = 1000;
+      const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
       const rpcAllForAdmin = async (fnName: string) => {
         let from = 0;
         const all: any[] = [];
         while (true) {
-          let { data, error } = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
-          if (error && error.message?.includes('not authorized')) {
-            console.warn(`${fnName}: not authorized, refrescando sesión y reintentando…`);
-            await supabase.auth.refreshSession();
-            const retry = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
-            data = retry.data;
-            error = retry.error;
+          let data: any = null;
+          let error: any = null;
+
+          // Hasta 3 intentos por página. En celular con mala señal la petición
+          // se cae con "TypeError: Load failed" y antes eso tumbaba toda la
+          // carga de usuarios; ahora se reintenta con una espera creciente.
+          for (let intento = 1; intento <= 3; intento++) {
+            const res = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+            data = res.data;
+            error = res.error;
+
+            if (error?.message?.includes('not authorized')) {
+              console.warn(`${fnName}: not authorized, refrescando sesión y reintentando…`);
+              await supabase.auth.refreshSession();
+              const retry = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+              data = retry.data;
+              error = retry.error;
+            }
+
+            if (!error) break;
+
+            const esDeRed = /load failed|failed to fetch|network|timeout|abort/i.test(error.message || '');
+            if (!esDeRed || intento === 3) break;
+            console.warn(`${fnName}: fallo de red (intento ${intento}/3), reintentando…`, error.message);
+            await espera(intento * 1500);
           }
+
           if (error) return { data: all.length ? all : null, error };
           all.push(...(data || []));
           if (!data || data.length < RPC_PAGE_SIZE) break;
@@ -1830,47 +1860,33 @@ const handleLogin = async () => {
         return { data: all, error: null };
       };
 
-      const usersP = rpcAllForAdmin('get_all_users_for_admin');
-      const createdDatesP = rpcAllForAdmin('get_user_created_dates');
-      const ratingsP = supabase.from('event_ratings').select('rated_user_id, rating');
-      const platformP = supabase.from('user_platform_activity').select('user_id, platform, last_seen_at, first_seen_at');
-      const appointmentsP = rpcAllForAdmin('get_all_appointments_for_admin');
-
       const [
-        { data: eventsData, error: eventsError },
         { data: usersData, error: usersError },
-        { data: usersDates },
         { data: allRatings },
         { data: platformActivityData },
         { data: appointmentsRawData, error: appointmentsError },
-      ] = await Promise.all([eventsP, usersP, createdDatesP, ratingsP, platformP, appointmentsP]);
+      ] = await Promise.all([
+        rpcAllForAdmin('get_all_users_for_admin'),
+        supabase.from('event_ratings').select('rated_user_id, rating'),
+        supabase.from('user_platform_activity').select('user_id, platform, last_seen_at, first_seen_at'),
+        rpcAllForAdmin('get_all_appointments_for_admin_v2'),
+      ]);
 
-      // Events
-      if (eventsError) {
-        console.error('Error loading events:', eventsError);
-        window.alert('Error al cargar eventos: ' + eventsError.message);
-      } else {
-        setEvents(eventsData || []);
-        setTotalEvents(eventsData?.length || 0);
-        const activeCount = eventsData?.filter(e => e.event_status === 'published').length || 0;
-        setActiveEvents(activeCount);
-      }
-
-      // Users (+ fechas de registro, que la RPC principal puede no devolver)
+      // Usuarios. Ya no hace falta la consulta extra de fechas de registro:
+      // public.users.created_at está lleno en todas las filas, así que
+      // get_user_created_dates era 250 KB y 3 viajes al servidor de más.
       if (usersError) {
         console.error('Error loading users:', usersError);
-        window.alert('No se pudieron cargar los usuarios: ' + usersError.message);
+        // Sin alert modal: el panel ya está pintado y usable (eventos, en vivo,
+        // configuración). Se avisa en la pestaña de Usuarios y basta con darle
+        // al botón de refrescar.
+        setUsersLoadError(usersError.message || 'Error de conexión');
       } else {
-        const datesMap: Record<string, string> = {};
-        (usersDates || []).forEach((u: any) => { datesMap[u.id] = u.created_at; });
-        const merged = (usersData || []).map((u: any) => {
-          const createdAt = u.created_at || datesMap[u.id] || null;
-          return {
-            ...u,
-            created_at: createdAt,
-            _afines: etiquetaAfines(u.age_range_fallback, createdAt),
-          };
-        });
+        setUsersLoadError(null);
+        const merged = (usersData || []).map((u: any) => ({
+          ...u,
+          _afines: etiquetaAfines(u.age_range_fallback, u.created_at),
+        }));
         setUsers(merged);
         setTotalUsers(merged.length);
       }
@@ -1900,63 +1916,106 @@ const handleLogin = async () => {
         setUserPlatformActivity(activityMap);
       }
 
-      // Appointments
+      // Citas. La RPC v2 solo trae las columnas de la cita; los datos del
+      // usuario y del evento se arman aquí con lo que ya está en memoria (antes
+      // el servidor los repetía en cada fila: 926 KB en vez de 211 KB).
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
-        
-        // Transform the flat data structure into the nested structure expected by the UI
-        const transformedAppointments = appointmentsRawData?.map((apt: any) => ({
-          id: apt.id,
-          user_id: apt.user_id,
-          event_id: apt.event_id,
-          status: apt.status,
-          payment_status: apt.payment_status,
-          created_at: apt.created_at,
-          purchase_whatsapp_sent_at: apt.purchase_whatsapp_sent_at,
-          reminder_48h_sent_at: apt.reminder_48h_sent_at,
-          sameday_reminder_sent_at: apt.sameday_reminder_sent_at,
-          users: {
-            id: apt.user_id,
-            name: apt.user_name,
-            email: apt.user_email,
-            phone: apt.user_phone,
-            city: apt.user_city,
-            country: apt.user_country,
-            interested_in: apt.user_interested_in,
-            gender: apt.user_gender,
-            age: apt.user_age,
-          },
-          events: {
-            id: apt.event_id,
-            name: apt.event_name,
-            city: apt.event_city,
-            type: apt.event_type,
-            date: apt.event_date,
-            time: apt.event_time,
-            location: '',
-            location_name: '',
-            location_address: '',
-            maps_link: '',
-            require_gps_verification: true,
-            is_location_revealed: false,
-            address: null,
-            start_time: null,
-            max_participants: 0,
-            current_participants: 0,
-            status: '',
-            event_status: 'published' as 'draft' | 'published' | 'closed',
-            description: '',
-          },
-        })) || [];
-        
+        const usersById = new Map<string, any>((usersData || []).map((u: any) => [u.id, u]));
+        const eventsById = new Map<string, any>((eventsList || []).map((e: any) => [e.id, e]));
+        const transformedAppointments = (appointmentsRawData || []).map((apt: any) => {
+          const u = usersById.get(apt.user_id);
+          const e = eventsById.get(apt.event_id);
+          return {
+            id: apt.id,
+            user_id: apt.user_id,
+            event_id: apt.event_id,
+            status: apt.status,
+            payment_status: apt.payment_status,
+            created_at: apt.created_at,
+            purchase_whatsapp_sent_at: apt.purchase_whatsapp_sent_at,
+            reminder_48h_sent_at: apt.reminder_48h_sent_at,
+            sameday_reminder_sent_at: apt.sameday_reminder_sent_at,
+            users: {
+              id: apt.user_id,
+              name: u?.name || '',
+              email: u?.email || '',
+              phone: u?.phone || '',
+              city: u?.city || '',
+              country: u?.country || '',
+              interested_in: u?.interested_in || '',
+              gender: u?.gender || '',
+              age: u?.age ?? null,
+            },
+            events: {
+              id: apt.event_id,
+              name: e?.name || '',
+              city: e?.city || '',
+              type: e?.type || '',
+              date: e?.date || null,
+              time: e?.time || '',
+              location: e?.location || '',
+              location_name: e?.location_name || '',
+              location_address: e?.location_address || '',
+              maps_link: e?.maps_link || '',
+              require_gps_verification: e?.require_gps_verification ?? true,
+              is_location_revealed: e?.is_location_revealed ?? false,
+              address: e?.address ?? null,
+              start_time: e?.start_time ?? null,
+              max_participants: e?.max_participants ?? 0,
+              current_participants: e?.current_participants ?? 0,
+              status: e?.status || '',
+              event_status: (e?.event_status || 'published') as 'draft' | 'published' | 'closed',
+              description: e?.description || '',
+            },
+          };
+        });
+
         setAppointments(transformedAppointments);
         setTotalAppointments(transformedAppointments.length);
       }
+    } catch (e) {
+      console.error('Error cargando datos pesados del admin', e);
+    } finally {
+      setHeavyLoading(false);
+    }
+  };
 
-      // Ya tenemos lo esencial (eventos, usuarios, citas): liberamos la pantalla
-      // para que el admin sea usable de inmediato.
+  // Solo los eventos. Se usa cuando llega un cambio por realtime: antes eso
+  // recargaba el panel entero (otros ~2,9 MB) por cambiar una sola fila.
+  const reloadEventsOnly = async () => {
+    const { data, error } = await supabase.from('events').select('*').order('date', { ascending: true });
+    if (error) { console.error('Error recargando eventos:', error); return; }
+    setEvents(data || []);
+    setTotalEvents(data?.length || 0);
+    setActiveEvents((data || []).filter((e: any) => e.event_status === 'published').length);
+  };
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // ── PASO 1: lo único que se espera para pintar el panel son los eventos.
+      // Antes también se esperaban los 2.700 usuarios y las 544 citas, con la
+      // pantalla bloqueada hasta que llegara el último pedazo.
+      const eventsP = supabase.from('events').select('*').order('date', { ascending: true });
+      const { data: eventsData, error: eventsError } = await eventsP;
+
+      if (eventsError) {
+        console.error('Error loading events:', eventsError);
+        window.alert('Error al cargar eventos: ' + eventsError.message);
+      } else {
+        setEvents(eventsData || []);
+        setTotalEvents(eventsData?.length || 0);
+        setActiveEvents((eventsData || []).filter((e: any) => e.event_status === 'published').length);
+      }
+
+      // El panel ya es usable: se libera la pantalla aquí, no al final.
       setLoading(false);
+
+      // ── PASO 2: usuarios, citas, calificaciones y actividad, en segundo plano.
+      void loadHeavyAdminData(eventsData || []);
 
       // ── Datos SECUNDARIOS (reconciliación / stats): se cargan en SEGUNDO
       // PLANO, sin bloquear la carga inicial. Solo se usan en las pestañas de
@@ -8088,6 +8147,13 @@ setBulkWhatsAppPending(pending);
       : users;
     const sortedUsers = applySort(applyColFilters(searchedUsers, userColFilters), userSortCol, userSortAsc);
     const activeFilters = Object.values(userColFilters).filter((v: any) => v && v.size > 0).length;
+    // Paginación: pintar las ~2.700 filas de golpe son unas 55.000 celdas y el
+    // navegador se queda pegado varios segundos al abrir esta pestaña.
+    const USERS_PER_PAGE = 100;
+    const totalUserPages = Math.max(1, Math.ceil(sortedUsers.length / USERS_PER_PAGE));
+    const currentUserPage = Math.min(Math.max(1, usersPage), totalUserPages);
+    const pageOffset = (currentUserPage - 1) * USERS_PER_PAGE;
+    const pagedUsers = sortedUsers.slice(pageOffset, pageOffset + USERS_PER_PAGE);
     const cols: { label: string; key: string; w?: number }[] = [
       { label: 'Nombre', key: 'name', w: 130 }, { label: 'Registro', key: 'created_at', w: 150 },
       { label: 'Email', key: 'email', w: 170 },
@@ -8165,7 +8231,12 @@ setBulkWhatsAppPending(pending);
         </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{(activeFilters > 0 || userSearchQuery.trim()) ? ` de ${users.length}` : ''})</Text>
+            <Text style={styles.sectionTitle}>Usuarios Registrados ({sortedUsers.length}{(activeFilters > 0 || userSearchQuery.trim()) ? ` de ${users.length}` : ''}){heavyLoading ? ' · cargando…' : ''}</Text>
+            {!!usersLoadError && (
+              <span style={{ background: '#FEE2E2', color: '#B91C1C', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>
+                No se pudieron cargar los usuarios ({usersLoadError}). Toca refrescar para reintentar.
+              </span>
+            )}
             <input
               type="text"
               value={userSearchQuery}
@@ -8220,7 +8291,7 @@ setBulkWhatsAppPending(pending);
             <tbody>
               {sortedUsers.length === 0 ? (
                 <tr><td colSpan={20} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 40 }}>{userSearchQuery.trim() ? `Sin resultados para "${userSearchQuery.trim()}"` : activeFilters > 0 ? 'Sin resultados para los filtros aplicados' : 'No hay usuarios registrados'}</td></tr>
-              ) : sortedUsers.map((user: any, i: number) => {
+              ) : pagedUsers.map((user: any, i: number) => {
                 const gender = user.gender === 'hombre' ? 'Hombre' : user.gender === 'mujer' ? 'Mujer' : '—';
                 const interest = user.interested_in === 'hombres' ? 'Hombres' : user.interested_in === 'mujeres' ? 'Mujeres' : user.interested_in === 'ambos' ? 'Ambos' : '—';
                 const ageRange = `${user.age_range_min || 18} – ${user.age_range_max || 99}`;
@@ -8237,7 +8308,7 @@ setBulkWhatsAppPending(pending);
                 const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
                 return (
                   <tr key={user.id} style={row}>
-                    <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
+                    <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{pageOffset + i + 1}</td>
                     <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{user.name}</td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                     <td style={cellStyle}>{user.email}</td>
@@ -8416,6 +8487,42 @@ setBulkWhatsAppPending(pending);
             </tbody>
           </table>
         </HorizontalScrollSync>
+
+        {totalUserPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setUsersPage(1)}
+              disabled={currentUserPage === 1}
+              style={{ background: currentUserPage === 1 ? '#F3F4F6' : '#EDE9FE', color: currentUserPage === 1 ? '#9CA3AF' : '#6B21A8', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: currentUserPage === 1 ? 'default' : 'pointer' }}
+            >
+              « Primera
+            </button>
+            <button
+              onClick={() => setUsersPage(currentUserPage - 1)}
+              disabled={currentUserPage === 1}
+              style={{ background: currentUserPage === 1 ? '#F3F4F6' : '#EDE9FE', color: currentUserPage === 1 ? '#9CA3AF' : '#6B21A8', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: currentUserPage === 1 ? 'default' : 'pointer' }}
+            >
+              ‹ Anterior
+            </button>
+            <span style={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>
+              Página {currentUserPage} de {totalUserPages} · mostrando {pageOffset + 1}–{Math.min(pageOffset + USERS_PER_PAGE, sortedUsers.length)} de {sortedUsers.length}
+            </span>
+            <button
+              onClick={() => setUsersPage(currentUserPage + 1)}
+              disabled={currentUserPage === totalUserPages}
+              style={{ background: currentUserPage === totalUserPages ? '#F3F4F6' : '#EDE9FE', color: currentUserPage === totalUserPages ? '#9CA3AF' : '#6B21A8', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: currentUserPage === totalUserPages ? 'default' : 'pointer' }}
+            >
+              Siguiente ›
+            </button>
+            <button
+              onClick={() => setUsersPage(totalUserPages)}
+              disabled={currentUserPage === totalUserPages}
+              style={{ background: currentUserPage === totalUserPages ? '#F3F4F6' : '#EDE9FE', color: currentUserPage === totalUserPages ? '#9CA3AF' : '#6B21A8', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: currentUserPage === totalUserPages ? 'default' : 'pointer' }}
+            >
+              Última »
+            </button>
+          </div>
+        )}
       </View>
     );
   };
