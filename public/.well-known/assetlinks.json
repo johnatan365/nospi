@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.nospi.mobile",
+      "sha256_cert_fingerprints": [
+        "E9:EA:DB:12:38:CA:FE:82:17:6E:45:5B:20:56:C4:F9:0B:30:3F:84:25:FB:45:E4:E1:5B:43:7E:12:FD:DF:56",
+        "77:BA:6A:8E:29:53:D5:4A:D5:6B:20:3A:CD:4F:4B:78:7B:0C:BB:1F:7F:AF:74:A1:72:E4:BD:D6:A0:3B:E1:A0"
+      ]
+    }
+  }
+]
