@@ -2654,7 +2654,7 @@ export default function ChatThreadScreen() {
           </View>
           <View style={styles.actionSheetCompact}>
             <TouchableOpacity
-              style={styles.attachOption}
+              style={styles.actionSheetRow}
               onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); if (m) setReplyingTo(m); }}
             >
               <Text style={{ fontSize: 20, width: 22, textAlign: 'center' }}>↩︎</Text>
@@ -2662,7 +2662,7 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
             {!!(actionMsg?.content || '').trim() && (
               <TouchableOpacity
-                style={styles.attachOption}
+                style={styles.actionSheetRow}
                 onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); copyMessageText(m); }}
               >
                 <IconSymbol ios_icon_name="doc.on.doc" android_material_icon_name="content-copy" size={22} color={nospiColors.purpleDark} />
@@ -2670,7 +2670,7 @@ export default function ChatThreadScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={styles.attachOption}
+              style={[styles.actionSheetRow, styles.actionSheetRowLast]}
               onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); togglePinned(m); }}
             >
               <Text style={{ fontSize: 19, width: 22, textAlign: 'center' }}>📌</Text>
@@ -2993,11 +2993,25 @@ const styles = StyleSheet.create({
   // ── Reacciones con emoji ──────────────────────────────────────────────────
   actionOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   actionAnchored: { position: 'absolute', maxWidth: 300 },
+  // Filas del menu de "Responder / Copiar / Fijar". Antes usaban attachOption,
+  // que no trae padding horizontal: su contenedor (la hoja de adjuntar) ya lo
+  // pone. Aca el contenedor no lo tiene, y los iconos quedaban pegados al borde.
+  actionSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: nospiColors.gray100,
+  },
+  // La ultima fila no lleva linea: quedaba justo encima de la esquina redondeada.
+  actionSheetRowLast: { borderBottomWidth: 0 },
   actionSheetCompact: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 4,
-    minWidth: 168,
+    minWidth: 176,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.22,
