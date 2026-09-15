@@ -23,6 +23,7 @@ jobs:
         with:
           cmdline-tools-version: '12.0'
           accept-android-sdk-licenses: false
+          packages: ''
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses || true
       - name: Install dependencies
