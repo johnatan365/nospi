@@ -11,6 +11,44 @@ import { syncWebPush } from '@/lib/webPush';
  * Base reutilizada para: recordatorios de eventos, promos/broadcast del admin,
  * y (más adelante) notificaciones de chat.
  */
+/**
+ * Guarda el token de Expo push del dispositivo para este usuario. Se asume que
+ * el permiso YA fue concedido. Se exporta aparte porque el aviso de la pestana
+ * de Chat tambien necesita registrar el token justo despues de que la persona
+ * acepta, sin esperar a que la app se reinicie.
+ */
+export async function registerPushToken(userId: string): Promise<boolean> {
+  try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    const token = tokenResponse.data;
+    if (!token) return false;
+
+    const { error } = await supabase
+      .from('push_tokens')
+      .upsert(
+        {
+          user_id: userId,
+          token,
+          platform: Platform.OS,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'token' }
+      );
+
+    if (error) {
+      console.warn('No se pudo guardar el push token:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error registrando push token:', err);
+    return false;
+  }
+}
+
 export function usePushNotifications(userId: string | null | undefined) {
   const registeredForUserId = useRef<string | null>(null);
 
@@ -44,30 +82,9 @@ export function usePushNotifications(userId: string | null | undefined) {
           return; // el usuario no dio permiso, no insistimos aquí
         }
 
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-        const tokenResponse = await Notifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined
-        );
-        const token = tokenResponse.data;
-
-        if (cancelled || !token) return;
-
-        const { error } = await supabase
-          .from('push_tokens')
-          .upsert(
-            {
-              user_id: userId,
-              token,
-              platform: Platform.OS,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'token' }
-          );
-
-        if (error) {
-          console.warn('No se pudo guardar el push token:', error.message);
-          return;
-        }
+        if (cancelled) return;
+        const ok = await registerPushToken(userId);
+        if (cancelled || !ok) return;
 
         registeredForUserId.current = userId;
       } catch (err) {
