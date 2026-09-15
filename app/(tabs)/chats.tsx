@@ -11,6 +11,9 @@ import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { Platform } from 'react-native';
 import { enableWebPush, isWebPushSupported, needsHomeScreenOnIOS, webPushPermission } from '@/lib/webPush';
+import * as Notifications from 'expo-notifications';
+import { Linking } from 'react-native';
+import { registerPushToken } from '@/hooks/usePushNotifications';
 
 interface ConversationRow {
   conversation_id: string;
@@ -112,6 +115,55 @@ export default function ChatsScreen() {
     if (Platform.OS !== 'web') return;
     setWebPushState(isWebPushSupported() ? webPushPermission() : (needsHomeScreenOnIOS() ? 'ios-home-screen' : 'unsupported'));
   }, []);
+
+  // Lo mismo pero en el celular. La app pide el permiso una sola vez al entrar
+  // y si la persona dice que no, nunca vuelve a preguntar: queda sin recibir
+  // NADA (ni recordatorios de evento ni mensajes) sin enterarse. Este aviso lo
+  // hace visible y reversible. Si ya lo negó, iOS y Android no dejan volver a
+  // preguntar desde la app, así que se le manda a los ajustes del sistema.
+  const [nativePushState, setNativePushState] = useState<'granted' | 'ask' | 'blocked'>('granted');
+
+  const revisarPushNativo = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      const perm = await Notifications.getPermissionsAsync();
+      if (perm.granted) {
+        setNativePushState('granted');
+        if (user?.id) registerPushToken(user.id);
+        return;
+      }
+      setNativePushState(perm.canAskAgain ? 'ask' : 'blocked');
+    } catch {
+      setNativePushState('granted'); // ante la duda, no molestar con el aviso
+    }
+  }, [user?.id]);
+
+  useEffect(() => { revisarPushNativo(); }, [revisarPushNativo]);
+
+  const activarNotificacionesNativas = async () => {
+    if (nativePushState === 'blocked') {
+      Alert.alert(
+        'Activa las notificaciones',
+        'Las tienes bloqueadas para Nospi. Te llevamos a los ajustes del teléfono para prenderlas.',
+        [
+          { text: 'Ahora no', style: 'cancel' },
+          { text: 'Ir a ajustes', onPress: () => Linking.openSettings().catch(() => {}) },
+        ]
+      );
+      return;
+    }
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === 'granted') {
+        setNativePushState('granted');
+        if (user?.id) await registerPushToken(user.id);
+      } else {
+        setNativePushState('blocked');
+      }
+    } catch {
+      setNativePushState('blocked');
+    }
+  };
 
   const activarNotificaciones = async () => {
     if (!user?.id) return;
@@ -359,6 +411,17 @@ export default function ChatsScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {Platform.OS !== 'web' && nativePushState !== 'granted' && (
+          <TouchableOpacity style={styles.pushBanner} activeOpacity={0.8} onPress={activarNotificacionesNativas}>
+            <Text style={styles.pushBannerEmoji}>🔔</Text>
+            <Text style={styles.pushBannerText}>
+              {nativePushState === 'ask'
+                ? 'Activa las notificaciones para enterarte de los planes y cuando te escriban'
+                : 'Tienes las notificaciones apagadas: no te llegan los planes ni los mensajes. Toca para prenderlas.'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {Platform.OS === 'web' && (webPushState === 'default' || webPushState === 'ios-home-screen') && (
           <TouchableOpacity
