@@ -363,6 +363,20 @@ function renderMessageContent(
 ) {
   if (!text) return null;
 
+  // ATAJO para el caso comun: si el mensaje no trae link, ni telefono, ni
+  // mencion, se devuelve como texto PLANO. Antes hasta estos mensajes salian
+  // envueltos en <Text> anidados y, con el lineHeight fijo de messageText, iOS
+  // medita mal la altura y se comia la ULTIMA LINEA: el mensaje aparecia
+  // cortado aunque en la base de datos estuviera completo.
+  // Ojo con los regex: URL_RE y PHONE_RE son globales (/g) y .test() guarda
+  // lastIndex entre llamadas, por eso aca se usan copias sin la bandera g.
+  const tieneLink = /(https?:\/\/|www\.)/i.test(text);
+  const tieneTelefono = new RegExp(PHONE_RE.source).test(text);
+  const tieneMencion = mentions
+    ? new RegExp(mentions.source, mentions.flags.replace(/g/g, '')).test(text)
+    : false;
+  if (!tieneLink && !tieneTelefono && !tieneMencion) return text;
+
   // Menciones dentro de un trozo que ya se sabe que no es link ni telefono.
   const withMentions = (part: string, key: string | number) => {
     if (mentions) {
