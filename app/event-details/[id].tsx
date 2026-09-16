@@ -578,10 +578,14 @@ const styles = StyleSheet.create({
     fontSize: 60,
     marginBottom: 12,
   },
+  // Negro (#111827, el mismo "casi negro" que ya usa la paleta) en vez del
+  // vinotinto de la marca: aprobado despues de compararlos lado a lado. El
+  // nombre pesa mas que la fecha y se lee mejor; la marca ya esta en el fondo
+  // de la pantalla, no hace falta repetirla dentro de cada tarjeta blanca.
   eventName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: nospiColors.purpleDark,
+    color: '#111827',
     marginBottom: 6,
     textAlign: 'center',
   },
