@@ -589,20 +589,34 @@ export default function AppointmentsScreen() {
 
               return (
                 <View key={appointment.id} style={styles.appointmentCard}>
+                  {/* El estado va en su propio renglon, arriba a la derecha.
+                      Antes iba dentro del mismo renglon del nombre y le robaba
+                      casi la mitad del ancho: con un nombre largo como "Cena con
+                      personas de tu edad" quedaban cuatro renglones y Android
+                      hasta partia las palabras por la mitad ("con pe / rsonas").
+                      Sacandolo de ahi, el nombre se queda con todo el ancho. */}
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.statusText}>{statusText}</Text>
+                    </View>
+                  </View>
+
                   <View style={styles.appointmentHeader}>
+                    {/* Los iconos bajaron de 103x88 a 72x62. A tamano completo se
+                        comian un tercio de la tarjeta y empujaban el titulo. */}
                     {eventType === 'caminata' ? (
-                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'bar' ? (
-                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'restaurante' ? (
-                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'cafe' ? (
-                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 103, height: 88, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'bolos' ? (
-                      // Caja del mismo tamano que los demas iconos (103x88) para no
+                      // Caja del mismo tamano que los demas iconos (72x62) para no
                       // desalinear la tarjeta; el icono va ~35% mas grande adentro.
-                      <View style={{ width: 103, height: 88, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 139, height: 119, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 97, height: 84, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       </View>
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
@@ -610,9 +624,6 @@ export default function AppointmentsScreen() {
                     <View style={styles.appointmentHeaderText}>
                       <Text style={styles.appointmentName}>{eventName}</Text>
                       <Text style={styles.appointmentCity}>{eventCity}</Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                      <Text style={styles.statusText}>{statusText}</Text>
                     </View>
                   </View>
 
@@ -979,11 +990,21 @@ const styles = StyleSheet.create({
   },
   appointmentHeaderText: {
     flex: 1,
+    // minWidth 0 es lo que permite que el texto se encoja dentro de una fila.
+    // Sin esto un titulo largo empuja la fila y se parte donde le toque.
+    minWidth: 0,
+  },
+  // Renglon del estado (Confirmada / Cancelada), pegado a la derecha.
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
   },
   appointmentName: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
+    lineHeight: 25,
   },
   appointmentCity: {
     fontSize: 14,
