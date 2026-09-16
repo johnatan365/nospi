@@ -726,6 +726,13 @@ export default function AdminPanelScreen() {
 
   // Edit user modal
   const [showEditUserModal, setShowEditUserModal] = useState(false);
+  // Borrado definitivo de una persona desde la pestana de Usuarios. Se pide
+  // escribir el correo a mano: es la unica accion del panel que no tiene vuelta
+  // atras, y un clic por equivocacion borraria a alguien de verdad.
+  const [borrarUsuario, setBorrarUsuario] = useState<any | null>(null);
+  const [borrarConfirma, setBorrarConfirma] = useState('');
+  const [borrando, setBorrando] = useState(false);
+  const [borrarError, setBorrarError] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserForm, setEditUserForm] = useState<Record<string, any>>({});
   const [savingUserEdit, setSavingUserEdit] = useState(false);
@@ -2126,6 +2133,37 @@ const handleLogin = async () => {
     setEditUserForm(form);
     setUserEditError(null);
     setShowEditUserModal(true);
+  };
+
+  // Borra a una persona igual que si ella misma hubiera tocado "Eliminar
+  // cuenta" en su perfil: se usa la MISMA funcion del servidor, para que las
+  // dos formas de borrar no se puedan desviar una de la otra con el tiempo.
+  const confirmarBorrarUsuario = async () => {
+    if (!borrarUsuario || borrando) return;
+    setBorrando(true);
+    setBorrarError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user-account', {
+        body: { user_id: borrarUsuario.id },
+      });
+      if (error || data?.error) {
+        setBorrarError(data?.error || error?.message || 'No se pudo borrar la cuenta.');
+        return;
+      }
+      const resumen = [
+        `${data?.mensajes_borrados ?? 0} mensajes`,
+        `${data?.eventos_borrados ?? 0} eventos`,
+        `${(data?.fotos_perfil_borradas ?? 0) + (data?.archivos_chat_borrados ?? 0)} archivos`,
+      ].join(' · ');
+      setBorrarUsuario(null);
+      setBorrarConfirma('');
+      window.alert(`Listo. Se borro la cuenta de ${data?.nombre || 'esa persona'}.\n\n${resumen}\n\nEl intento de pago se conservo sin dueno para que te cuadren las cuentas.`);
+      await loadDashboardData();
+    } catch (e: any) {
+      setBorrarError(e?.message || 'Error inesperado al borrar.');
+    } finally {
+      setBorrando(false);
+    }
   };
 
   const handleSaveUserEdit = async () => {
@@ -8239,6 +8277,7 @@ setBulkWhatsAppPending(pending);
       { label: 'Editar', key: '_edit', w: 90 },
       { label: 'WhatsApp', key: '_whatsapp', w: 100 },
       { label: 'Declinados', key: '_declinado', w: 110 },
+      { label: 'Eliminar', key: '_borrar', w: 100 },
     ];
     return (
       <View style={styles.listContainer}>
@@ -8549,6 +8588,19 @@ setBulkWhatsAppPending(pending);
                           </a>
                         );
                       })()}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      <button
+                        onClick={() => { setBorrarUsuario(user); setBorrarConfirma(''); setBorrarError(null); }}
+                        title="Borra la cuenta por completo, igual que si la persona la borrara desde su perfil"
+                        style={{
+                          backgroundColor: '#FEE2E2', color: '#B91C1C', border: 'none',
+                          borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🗑 Eliminar
+                      </button>
                     </td>
                   </tr>
                 );
@@ -10789,6 +10841,71 @@ setBulkWhatsAppPending(pending);
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Borrar usuario definitivamente */}
+      <Modal visible={!!borrarUsuario} transparent animationType="fade" onRequestClose={() => setBorrarUsuario(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 480, overflow: 'hidden' }}>
+            <View style={{ padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#B91C1C' }}>🗑 Eliminar cuenta</Text>
+              <Text style={{ fontSize: 13, color: '#374151', marginTop: 10, lineHeight: 19 }}>
+                Vas a borrar la cuenta de <Text style={{ fontWeight: '800' }}>{borrarUsuario?.name || 'esta persona'}</Text>, igual que si ella misma la borrara desde su perfil.
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#6B7280', marginTop: 10, lineHeight: 18 }}>
+                Se va el perfil, la foto, sus mensajes y fotos del chat, sus eventos, sus matches, su suscripción y sus notificaciones. Solo queda el registro del pago, sin ningún dato de la persona, para que te cuadren las cuentas.
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#B91C1C', fontWeight: '700', marginTop: 10 }}>
+                Esto no se puede deshacer.
+              </Text>
+            </View>
+
+            <View style={{ padding: 18 }}>
+              <Text style={{ fontSize: 12.5, color: '#374151', marginBottom: 8 }}>
+                Para confirmar, escribe el correo: <Text style={{ fontWeight: '800' }}>{borrarUsuario?.email || ''}</Text>
+              </Text>
+              <input
+                type="text"
+                value={borrarConfirma}
+                onChange={(e) => setBorrarConfirma(e.target.value)}
+                placeholder={borrarUsuario?.email || ''}
+                autoComplete="off"
+                style={{
+                  width: '100%', border: '2px solid #E5E7EB', borderRadius: 10,
+                  padding: '10px 12px', fontSize: 14, color: '#1F2937', outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {!!borrarError && (
+                <Text style={{ fontSize: 12.5, color: '#B91C1C', marginTop: 10 }}>{borrarError}</Text>
+              )}
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
+              <TouchableOpacity
+                onPress={() => { setBorrarUsuario(null); setBorrarConfirma(''); setBorrarError(null); }}
+                disabled={borrando}
+                style={{ backgroundColor: '#F3F4F6', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+              >
+                <Text style={{ color: '#374151', fontSize: 13, fontWeight: '700' }}>Cancelar</Text>
+              </TouchableOpacity>
+              {/* El boton solo se habilita cuando el correo coincide exacto (sin
+                  importar mayusculas ni espacios sobrantes). */}
+              <TouchableOpacity
+                onPress={confirmarBorrarUsuario}
+                disabled={borrando || borrarConfirma.trim().toLowerCase() !== String(borrarUsuario?.email || '').trim().toLowerCase()}
+                style={{
+                  backgroundColor: (borrando || borrarConfirma.trim().toLowerCase() !== String(borrarUsuario?.email || '').trim().toLowerCase()) ? '#FCA5A5' : '#DC2626',
+                  borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18,
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                  {borrando ? 'Borrando…' : 'Sí, eliminar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
