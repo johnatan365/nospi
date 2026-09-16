@@ -30,6 +30,13 @@ import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import {
+  tenorBuscar,
+  tenorTendencias,
+  tenorRegistrarEnvio,
+  tenorConfigurado,
+  type TenorGif,
+} from '@/lib/tenor';
+import {
   useAudioRecorder,
   useAudioPlayer,
   useAudioPlayerStatus,
@@ -1009,6 +1016,22 @@ export default function ChatThreadScreen() {
   // hasta que la persona toca el boton de enviar.
   const [pendingAssets, setPendingAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [uploading, setUploading] = useState<{ kind: 'image' | 'video'; current: number; total: number } | null>(null);
+  // ── Selector de GIFs ──────────────────────────────────────────────────
+  // Los GIFs vienen de Tenor, que es el mismo catalogo que usa WhatsApp, para
+  // que la gente encuentre lo que ya esta acostumbrada a encontrar alla.
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifResults, setGifResults] = useState<TenorGif[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  const [gifError, setGifError] = useState<string | null>(null);
+  // Los ultimos que ESTA persona mando por Nospi. Es lo mas parecido a los
+  // "favoritos" de WhatsApp que se puede tener: los de alla son privados de esa
+  // app y no hay forma de leerlos desde afuera, asi que aca la lista se arma
+  // sola con el uso.
+  const [gifRecientes, setGifRecientes] = useState<TenorGif[]>([]);
+  // Id del GIF que se esta subiendo, para poner el girador solo en ese.
+  const [gifEnviando, setGifEnviando] = useState<string | null>(null);
+
   const listRef = useRef<FlatList<Message>>(null);
   // Rutas para las que ya se pidio firma, para no volver a pedirlas en cada
   // render (y para no entrar en bucle si alguna falla).
@@ -1631,6 +1654,145 @@ export default function ChatThreadScreen() {
 
   const removePendingAsset = (uri: string) => {
     setPendingAssets((prev) => prev.filter((a) => a.uri !== uri));
+  };
+
+  // ── GIFs ───────────────────────────────────────────────────────────────
+  // Clave donde se guardan los ultimos GIFs usados. Va por dispositivo y no por
+  // conversacion: si alguien usa siempre el mismo GIF de "jajaja", lo quiere a
+  // la mano en TODOS sus chats, no solo en el que lo estreno.
+  const GIF_RECIENTES_KEY = 'chat_gifs_recientes';
+  const GIF_RECIENTES_MAX = 24;
+
+  const guardarGifReciente = async (gif: TenorGif) => {
+    try {
+      const sinRepetir = [gif, ...gifRecientes.filter((g) => g.id !== gif.id)].slice(0, GIF_RECIENTES_MAX);
+      setGifRecientes(sinRepetir);
+      await AsyncStorage.setItem(GIF_RECIENTES_KEY, JSON.stringify(sinRepetir));
+    } catch {
+      // Que no se pueda guardar el historial no es motivo para tumbar el envio.
+    }
+  };
+
+  const abrirGifs = async () => {
+    setShowAttachMenu(false);
+    setShowGifPicker(true);
+    setGifQuery('');
+    setGifError(null);
+    try {
+      const guardados = await AsyncStorage.getItem(GIF_RECIENTES_KEY);
+      if (guardados) {
+        const parsed = JSON.parse(guardados);
+        if (Array.isArray(parsed)) setGifRecientes(parsed);
+      }
+    } catch {
+      // historial ilegible: se arranca en limpio
+    }
+  };
+
+  // Busqueda con freno: se espera a que la persona deje de escribir antes de
+  // pedirle nada a Tenor. Sin esto se dispararia una peticion por cada letra.
+  useEffect(() => {
+    if (!showGifPicker) return;
+    if (!tenorConfigurado()) {
+      setGifError('El buscador de GIFs todavía no está configurado.');
+      setGifResults([]);
+      return;
+    }
+    let vivo = true;
+    const consulta = gifQuery.trim();
+    setGifLoading(true);
+    setGifError(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = consulta ? await tenorBuscar(consulta) : await tenorTendencias();
+        if (!vivo) return;
+        setGifResults(res);
+        if (res.length === 0 && consulta) setGifError(`No encontramos GIFs de "${consulta}".`);
+      } catch {
+        if (!vivo) return;
+        setGifResults([]);
+        setGifError('No se pudieron cargar los GIFs. Revisa tu conexión.');
+      } finally {
+        if (vivo) setGifLoading(false);
+      }
+    }, consulta ? 350 : 0);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [showGifPicker, gifQuery]);
+
+  // Se baja el GIF de Tenor y se sube al bucket del chat como un adjunto mas.
+  // Se hace asi, y no guardando el enlace de Tenor, porque de esta forma el GIF
+  // hereda TODO lo que ya existe: enlace firmado, vista en el admin, descargar,
+  // compartir y el aviso push. Y ademas sigue estando aunque Tenor mueva o
+  // borre ese archivo.
+  const enviarGif = async (gif: TenorGif) => {
+    if (!user?.id || !conversationId || gifEnviando || uploading) return;
+    if (gif.fullSize > MAX_UPLOAD_BYTES) {
+      avisar('Ese GIF pesa demasiado. Prueba con otro.');
+      return;
+    }
+
+    const caption = draft.trim();
+    const replyId = replyingTo?.id ?? null;
+    const consulta = gifQuery;
+    setGifEnviando(gif.id);
+
+    try {
+      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.gif`;
+
+      if (Platform.OS === 'web') {
+        const blob = await (await fetch(gif.fullUrl)).blob();
+        const { error: upErr } = await supabase.storage
+          .from(MEDIA_BUCKET)
+          .upload(path, blob, { contentType: 'image/gif', cacheControl: '3600', upsert: false });
+        if (upErr) throw new Error(upErr.message);
+      } else {
+        const temporal = `${FileSystem.cacheDirectory}gif-${Date.now()}.gif`;
+        const bajado = await FileSystem.downloadAsync(gif.fullUrl, temporal);
+        if (bajado.status >= 400) throw new Error('No se pudo descargar el GIF.');
+        await uploadToBucket({ uri: bajado.uri } as ImagePicker.ImagePickerAsset, path, 'image/gif');
+        FileSystem.deleteAsync(bajado.uri, { idempotent: true }).catch(() => {});
+      }
+
+      const { data, error: insErr } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: caption,
+          reply_to: replyId,
+          media_path: path,
+          media_kind: 'image',
+          media_mime: 'image/gif',
+          media_width: gif.previewWidth || null,
+          media_height: gif.previewHeight || null,
+          media_size: gif.fullSize || null,
+        })
+        .select(MESSAGE_COLUMNS)
+        .single();
+
+      if (insErr) throw new Error(insErr.message);
+      if (data) {
+        setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+
+      // Tenor pide que se le avise cual GIF se termino mandando; ademas, con eso
+      // sus resultados se van acomodando a lo que la gente de aca usa.
+      tenorRegistrarEnvio(gif.id, consulta);
+      await guardarGifReciente(gif);
+
+      setShowGifPicker(false);
+      setReplyingTo(null);
+      if (caption) updateDraft('');
+    } catch (e: any) {
+      console.error('enviarGif error:', e);
+      avisar('No se pudo enviar el GIF. ' + (e?.message || ''));
+    } finally {
+      setGifEnviando(null);
+    }
   };
 
   const pickFromLibrary = async () => {
@@ -2553,6 +2715,14 @@ export default function ChatThreadScreen() {
               <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={22} color={nospiColors.purpleDark} />
               <Text style={styles.attachOptionText}>Foto o video de la galería</Text>
             </TouchableOpacity>
+            {/* Sin llave de Tenor no hay buscador, y mas vale no mostrar un
+                boton que al tocarlo no hace nada. */}
+            {tenorConfigurado() && (
+              <TouchableOpacity style={styles.attachOption} onPress={abrirGifs}>
+                <IconSymbol ios_icon_name="face.smiling" android_material_icon_name="gif" size={22} color={nospiColors.purpleDark} />
+                <Text style={styles.attachOptionText}>Buscar un GIF</Text>
+              </TouchableOpacity>
+            )}
             {Platform.OS !== 'web' && (
               <TouchableOpacity style={styles.attachOption} onPress={takePhoto}>
                 <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={22} color={nospiColors.purpleDark} />
@@ -2564,6 +2734,107 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Buscador de GIFs. Ocupa casi toda la pantalla a proposito: una grilla
+          de GIFs en una hoja bajita se vuelve imposible de mirar. */}
+      <Modal visible={showGifPicker} animationType="slide" transparent onRequestClose={() => setShowGifPicker(false)}>
+        <View style={styles.gifOverlay}>
+          <View style={[styles.gifSheet, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={styles.gifHeader}>
+              <Text style={styles.attachSheetTitle}>Enviar un GIF</Text>
+              <TouchableOpacity onPress={() => setShowGifPicker(false)} hitSlop={10}>
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={22} color={nospiColors.gray400} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.gifSearchBox}>
+              <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={18} color={nospiColors.gray400} />
+              <TextInput
+                style={styles.gifSearchInput}
+                placeholder="Buscar: jajaja, abrazo, gracias, bailando..."
+                placeholderTextColor={nospiColors.gray400}
+                value={gifQuery}
+                onChangeText={setGifQuery}
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {gifQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setGifQuery('')} hitSlop={10}>
+                  <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={18} color={nospiColors.gray400} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Los recientes solo estorban cuando la persona ya esta buscando
+                otra cosa, asi que se esconden al escribir. */}
+            {gifRecientes.length > 0 && gifQuery.trim().length === 0 && (
+              <View style={styles.gifRecentBlock}>
+                <Text style={styles.gifSectionTitle}>Los que más usas</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifRecentRow}>
+                  {gifRecientes.map((g) => (
+                    <TouchableOpacity
+                      key={`rec-${g.id}`}
+                      onPress={() => enviarGif(g)}
+                      disabled={!!gifEnviando}
+                      activeOpacity={0.7}
+                    >
+                      <ExpoImage source={{ uri: g.previewUrl }} style={styles.gifRecentThumb} contentFit="cover" transition={0} />
+                      {gifEnviando === g.id && (
+                        <View style={styles.gifBusy}>
+                          <ActivityIndicator color="#FFFFFF" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {gifLoading && gifResults.length === 0 ? (
+              <View style={styles.gifEmpty}>
+                <ActivityIndicator color={nospiColors.purpleDark} />
+              </View>
+            ) : gifError && gifResults.length === 0 ? (
+              <View style={styles.gifEmpty}>
+                <Text style={styles.gifEmptyText}>{gifError}</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={gifResults}
+                keyExtractor={(g) => g.id}
+                numColumns={2}
+                columnWrapperStyle={styles.gifGridRow}
+                contentContainerStyle={styles.gifGrid}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.gifCell}
+                    onPress={() => enviarGif(item)}
+                    disabled={!!gifEnviando}
+                    activeOpacity={0.7}
+                  >
+                    <ExpoImage
+                      source={{ uri: item.previewUrl }}
+                      style={styles.gifCellImage}
+                      contentFit="cover"
+                      transition={0}
+                      accessibilityLabel={item.description}
+                    />
+                    {gifEnviando === item.id && (
+                      <View style={styles.gifBusy}>
+                        <ActivityIndicator color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+
+            <Text style={styles.gifFooter}>GIFs vía Tenor</Text>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={showParticipants} animationType="slide" transparent onRequestClose={() => setShowParticipants(false)}>
@@ -3415,6 +3686,51 @@ const styles = StyleSheet.create({
     borderBottomColor: nospiColors.gray100,
   },
   attachOptionText: { fontSize: 15, fontWeight: '600', color: nospiColors.gray800 },
+  // ── Buscador de GIFs ───────────────────────────────────────────────────
+  gifOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  gifSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    // Casi toda la pantalla: una grilla de GIFs en una hoja bajita no se deja
+    // mirar, toca desplazarse por todo.
+    height: '82%',
+  },
+  gifHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gifSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: nospiColors.gray100,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+    marginTop: 12,
+  },
+  gifSearchInput: { flex: 1, fontSize: 15, color: nospiColors.gray800 },
+  gifRecentBlock: { marginTop: 14 },
+  gifSectionTitle: { fontSize: 12, fontWeight: '800', color: nospiColors.gray400, marginBottom: 8 },
+  gifRecentRow: { gap: 8, paddingRight: 8 },
+  gifRecentThumb: { width: 76, height: 76, borderRadius: 10, backgroundColor: nospiColors.gray100 },
+  gifGrid: { paddingTop: 14, paddingBottom: 8 },
+  gifGridRow: { gap: 8, marginBottom: 8 },
+  gifCell: { flex: 1, aspectRatio: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: nospiColors.gray100 },
+  gifCellImage: { width: '100%', height: '100%' },
+  // Tapa el GIF mientras se sube, para que quede claro cual se toco y para que
+  // un segundo toque no mande el mismo dos veces.
+  gifBusy: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  gifEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  gifEmptyText: { fontSize: 14, color: nospiColors.gray400, textAlign: 'center' },
+  // Tenor pide que se diga de donde salen los GIFs.
+  gifFooter: { fontSize: 11, color: nospiColors.gray400, textAlign: 'center', paddingTop: 6 },
   attachCancel: { paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   attachCancelText: { fontSize: 15, fontWeight: '700', color: nospiColors.gray400 },
   mediaActionsRow: { flexDirection: 'row', gap: 16, marginTop: 6, marginBottom: 2 },
