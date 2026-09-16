@@ -4033,16 +4033,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
-  // Sacar a alguien de un evento. Hay DOS caminos a proposito:
+  // Sacar a alguien de un evento. Hay TRES caminos, y el que decide es una
+  // persona mirando el caso, no el reloj:
   //
-  //   devolverSaldo = true  -> cancelacion a tiempo. Recupera en saldo virtual
-  //                            lo que pago y le llega su correo de cancelacion.
-  //   devolverSaldo = false -> la persona pidio salirse cuando ya habian pasado
-  //                            las 24 horas, asi que no tiene derecho a saldo.
-  //                            Sale y ya: sin saldo, sin correo y sin
-  //                            amonestacion (cancelar tarde por la via normal SI
-  //                            deja falta, y a la segunda suspende la cuenta —
-  //                            seria injusto por un favor que pidio).
+  //   'saldo'     -> canceló a tiempo. Recupera en saldo virtual lo que pagó y
+  //                  le llega su correo de cancelación.
+  //   'silencio'  -> pidió salirse tarde pero con un motivo que aceptas. Sale y
+  //                  ya: sin saldo, sin correo y SIN falta.
+  //   'amonestar' -> pidió salirse tarde y sin motivo que valga. Sin saldo y con
+  //                  la falta de siempre: correo + push y la escalera de
+  //                  castigos (1a aviso, 2a 15 dias sin reservar, 3a 60 dias).
   //
   // Antes esto era un "delete" de la cita: la persona perdia cupo y plata, no se
   // enteraba de nada, y se borraba el registro de cuanto habia pagado (ese dato
@@ -4053,17 +4053,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const handleSacarAsistente = async (
     attendeeId: string,
     attendeeName: string,
-    devolverSaldo: boolean,
+    modo: 'saldo' | 'silencio' | 'amonestar',
   ) => {
-    const mensaje = devolverSaldo
-      ? `¿Sacar a ${attendeeName} del evento y DEVOLVERLE el saldo?\n\nRecupera en saldo lo que pagó y recibe el correo de cancelación.`
-      : `¿Sacar a ${attendeeName} del evento SIN saldo y SIN avisarle?\n\nNo se le devuelve nada, no recibe ningún correo y no le queda amonestación.\n\nEs el caso de quien pide salirse cuando ya pasó el plazo de las 24 horas.`;
+    const mensaje =
+      modo === 'saldo'
+        ? `¿Sacar a ${attendeeName} del evento y DEVOLVERLE el saldo?\n\nRecupera en saldo lo que pagó y recibe el correo de cancelación.`
+        : modo === 'silencio'
+        ? `¿Sacar a ${attendeeName} del evento SIN saldo y SIN avisarle?\n\nNo se le devuelve nada, no recibe ningún correo y no le queda falta.\n\nEs para quien pide salirse tarde pero con un motivo que aceptas.`
+        : `¿Sacar a ${attendeeName} y AMONESTARLO?\n\nNo se le devuelve saldo y se le registra una falta: le llega el correo y la notificación, y si ya tenía una falta activa la cuenta le queda suspendida para reservar (2a vez 15 días, 3a 60).\n\nEs para quien cancela tarde sin un motivo que valga.`;
     if (!window.confirm(mensaje)) return;
 
     try {
-      const { data, error } = await supabase.rpc('admin_sacar_del_evento', {
+      const { data, error } = await supabase.rpc('admin_sacar_del_evento_modo', {
         p_appointment_id: attendeeId,
-        p_devolver_saldo: devolverSaldo,
+        p_modo: modo,
       });
 
       if (error) {
@@ -4082,6 +4085,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       } else if ((data as any)?.sin_saldo_que_devolver) {
         window.alert(
           `${attendeeName} salió del evento.\n\nNo había saldo que devolver (suscripción, cortesía o gratis), así que salió en silencio.`
+        );
+      } else if ((data as any)?.modo === 'amonestar') {
+        window.alert(
+          `${attendeeName} salió del evento.\n\nSin saldo y con la falta registrada: le llega el correo y la notificación.`
         );
       } else {
         window.alert(`${attendeeName} salió del evento.\n\nSin saldo y sin avisarle.`);
@@ -10265,15 +10272,21 @@ setBulkWhatsAppPending(pending);
                         <Text style={styles.attendeeName}>{attendee.users.name}</Text>
                         <TouchableOpacity
                           style={styles.sacarConSaldoButton}
-                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, true)}
+                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, 'saldo')}
                         >
                           <Text style={styles.sacarButtonText}>💸 Sacar y devolver</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.sacarSinSaldoButton}
-                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, false)}
+                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, 'silencio')}
                         >
                           <Text style={styles.sacarButtonText}>🔇 Sacar sin avisar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.sacarAmonestarButton}
+                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, 'amonestar')}
+                        >
+                          <Text style={styles.sacarButtonText}>⚠️ Sacar y amonestar</Text>
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
@@ -12401,6 +12414,18 @@ realtimeInfo: {
     height: 30,
     borderRadius: 15,
     backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  // Naranja, entre el verde de "devolver" y el rojo de "sin avisar": es el
+  // unico que le deja una falta a la persona, asi que no puede parecerse a los
+  // otros dos.
+  sacarAmonestarButton: {
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FEF3C7',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
