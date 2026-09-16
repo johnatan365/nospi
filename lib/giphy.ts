@@ -24,10 +24,21 @@ import Constants from 'expo-constants';
 // Llave PUBLICA de cliente: GIPHY esta disenado asi, la app la manda en cada
 // peticion y no hay forma de esconderla. Se lee de app.json igual que las de
 // Supabase.
-const GIPHY_KEY =
-  (Constants.expoConfig?.extra as any)?.giphyApiKey ||
+//
+// Se buscan VARIOS sitios a proposito. 'expoConfig' es el moderno, pero segun
+// la plataforma y la version de Expo la misma configuracion aparece bajo
+// 'manifest' o anidada en 'manifest2'. Leer solo uno funciona en el celular y
+// deja la llave vacia en la web (o al reves), y el sintoma es de los que cuesta
+// encontrar: la funcion simplemente no aparece, sin ningun error.
+const C = Constants as any;
+const GIPHY_KEY: string = String(
+  C?.expoConfig?.extra?.giphyApiKey ||
+  C?.manifest?.extra?.giphyApiKey ||
+  C?.manifest2?.extra?.expoClient?.extra?.giphyApiKey ||
+  C?.manifestExtra?.giphyApiKey ||
   process.env.EXPO_PUBLIC_GIPHY_API_KEY ||
-  '';
+  ''
+).trim();
 const GIPHY_BASE = 'https://api.giphy.com/v1/gifs';
 
 // Clasificacion de contenido. El chat de Nospi es grupal y con gente que apenas
@@ -65,10 +76,11 @@ export class GiphySinCupo extends Error {
   }
 }
 
-// Una llave de GIPHY son 32 caracteres alfanumericos. Se comprueba el largo
-// para que un texto de relleno olvidado en app.json cuente como "sin
-// configurar" y el boton de GIF ni siquiera aparezca, en vez de aparecer y
-// fallar al tocarlo.
+// Sirve para EXPLICAR, no para esconder. El boton de GIF se muestra siempre:
+// si la llave falta, quien lo toque ve un mensaje que lo dice. Antes este
+// chequeo decidia si el boton existia, y cuando fallo por lo de arriba el
+// boton se esfumo sin dejar rastro ni error. Un boton que explica que le falta
+// algo es mil veces mas facil de arreglar que un boton que no esta.
 export function giphyConfigurado(): boolean {
   return /^[A-Za-z0-9]{20,}$/.test(GIPHY_KEY);
 }
