@@ -93,15 +93,6 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Las fotos y videos se borran solos al mes; las notas de voz se quedan.
 const MEDIA_RETENTION_DAYS = 30;
 
-// Los cuadros del menu de adjuntar van con el degradado de la marca en vez de
-// un color distinto cada uno. Cuatro colores sueltos (rosado, azul, celeste,
-// naranja) se veian como pegatinas de otra app; con el degradado de Nospi la
-// hoja se lee como parte de la misma pantalla. Son los mismos tonos del fondo
-// del chat, en el sentido diagonal para que el cuadro no quede plano.
-const TILE_GRADIENT = ['#AD1457', '#F06292'] as const;
-const TILE_START = { x: 0, y: 0 } as const;
-const TILE_END = { x: 1, y: 1 } as const;
-
 // Ancho maximo de una foto/video dentro de la burbuja. La altura se calcula
 // con la proporcion real del archivo para que no se vea deformado.
 const MEDIA_MAX_WIDTH = 210;
@@ -2822,30 +2813,30 @@ export default function ChatThreadScreen() {
 
             <View style={styles.attachGrid}>
               <TouchableOpacity style={styles.attachTile} onPress={takePhoto} activeOpacity={0.7}>
-                <LinearGradient colors={TILE_GRADIENT} start={TILE_START} end={TILE_END} style={styles.attachTileBox}>
-                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#FFFFFF" />
-                </LinearGradient>
+                <View style={[styles.attachTileBox, { backgroundColor: '#FFE9EE' }]}>
+                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#F0325B" />
+                </View>
                 <Text style={styles.attachTileText}>Cámara</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={pickFromLibrary} activeOpacity={0.7}>
-                <LinearGradient colors={TILE_GRADIENT} start={TILE_START} end={TILE_END} style={styles.attachTileBox}>
-                  <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={28} color="#FFFFFF" />
-                </LinearGradient>
+                <View style={[styles.attachTileBox, { backgroundColor: '#E5EEFF' }]}>
+                  <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={28} color="#2563EB" />
+                </View>
                 <Text style={styles.attachTileText}>Fotos y videos</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={abrirGifs} activeOpacity={0.7}>
-                <LinearGradient colors={TILE_GRADIENT} start={TILE_START} end={TILE_END} style={styles.attachTileBox}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#DFF7F9' }]}>
                   <Text style={styles.attachTileGif}>GIF</Text>
-                </LinearGradient>
+                </View>
                 <Text style={styles.attachTileText}>GIF</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={abrirEncuesta} activeOpacity={0.7}>
-                <LinearGradient colors={TILE_GRADIENT} start={TILE_START} end={TILE_END} style={styles.attachTileBox}>
-                  <IconSymbol ios_icon_name="chart.pie.fill" android_material_icon_name="pie-chart" size={28} color="#FFFFFF" />
-                </LinearGradient>
+                <View style={[styles.attachTileBox, { backgroundColor: '#FFF1DC' }]}>
+                  <IconSymbol ios_icon_name="chart.pie.fill" android_material_icon_name="pie-chart" size={28} color="#F59E0B" />
+                </View>
                 <Text style={styles.attachTileText}>Crear encuesta</Text>
               </TouchableOpacity>
             </View>
@@ -3911,9 +3902,8 @@ const styles = StyleSheet.create({
   attachTileBox: {
     width: 62, height: 62, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden',
   },
-  attachTileGif: { fontSize: 19, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 },
+  attachTileGif: { fontSize: 19, fontWeight: '900', color: '#0FB5C9', letterSpacing: 0.5 },
   attachTileText: {
     fontSize: 11.5, fontWeight: '600', color: nospiColors.gray800,
     textAlign: 'center', paddingHorizontal: 2,
