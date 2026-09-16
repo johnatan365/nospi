@@ -93,11 +93,16 @@ function pick(im: any, ...nombres: string[]) {
 function normalize(raw: any): Gif | null {
   const im = raw?.images;
   // La miniatura va downsampled a proposito: son 200px de ancho y bastantes
-  // menos cuadros, o sea una fraccion del peso. Bajar el GIF bueno por cada
-  // casilla de la grilla se comeria los datos de la persona.
+  // menos cuadros, o sea una fraccion del peso (~70 KB medidos contra la API).
+  // Bajar el GIF bueno por cada casilla de la grilla se comeria los datos de la
+  // persona.
   const preview = pick(im, 'fixed_width_downsampled', 'fixed_width_small', 'fixed_width', 'downsized');
-  // Y el que se envia es el mediano, que GIPHY garantiza por debajo de 5 MB.
-  const full = pick(im, 'downsized_medium', 'downsized', 'fixed_width', 'original');
+  // El que se envia es 'downsized', que GIPHY garantiza por debajo de 2 MB.
+  // OJO con el orden: 'downsized_medium' NO va primero aunque suene a termino
+  // medio; midiendolo contra la API resulto pesar lo mismo que el original (4+
+  // MB). 'downsized' da entre 250 KB y 1.8 MB con 220-480px de ancho, que es
+  // justo lo que necesita una burbuja de chat.
+  const full = pick(im, 'downsized', 'fixed_width', 'downsized_medium', 'original');
   if (!preview || !full) return null;
   return {
     id: String(raw.id || full.url),
@@ -116,11 +121,14 @@ async function pedir(clave: string, path: string, params: Record<string, string>
   const guardado = cache.get(clave);
   if (guardado && Date.now() - guardado.t < CACHE_MS) return guardado.gifs;
 
+  // Sin 'bundle'. El bundle 'messaging_non_clips' suena hecho a la medida para
+  // un chat, pero recorta la respuesta a 7 formatos y entre los que quita esta
+  // 'downsized': deja solo miniaturas de 200px o el original de 4 MB, o sea
+  // GIFs borrosos o GIFs pesadisimos. Comprobado llamando a la API.
   const qs = new URLSearchParams({
     api_key: GIPHY_KEY,
     limit: String(LIMITE),
     rating: RATING,
-    bundle: 'messaging_non_clips',
     ...params,
   });
 
