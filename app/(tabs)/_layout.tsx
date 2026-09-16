@@ -1,13 +1,45 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
 
+// Rutas de las cinco pestanas, para precargarlas.
+const RUTAS_PESTANAS = [
+  '/(tabs)/events',
+  '/(tabs)/appointments',
+  '/(tabs)/dinamica',
+  '/(tabs)/chats',
+  '/(tabs)/profile',
+];
+
 export default function TabLayout() {
   const { loading: supabaseLoading } = useSupabase();
   const unreadChats = useUnreadChatCount();
+  const router = useRouter();
+
+  // Precarga de las otras pestanas.
+  //
+  // En la web cada pantalla viaja en su propio archivo de codigo y se baja la
+  // PRIMERA vez que se toca esa pestana. Por eso el primer salto a cada
+  // pestana se veia en blanco un instante (el segundo ya no). Aca se bajan las
+  // cinco calladamente un rato despues de abrir la app, cuando ya no compiten
+  // con lo que la persona esta mirando, y asi el primer salto tambien es
+  // instantaneo. En el celular esto no baja nada (el codigo ya viene dentro de
+  // la app); solo deja las pantallas listas.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      for (const ruta of RUTAS_PESTANAS) {
+        try {
+          router.prefetch(ruta as any);
+        } catch {
+          // Si una falla, no pasa nada: esa pestana se carga al tocarla, como antes.
+        }
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [router]);
 
   // Show a spinner while Supabase session is being established.
   // This prevents the OAuth flicker: tabs render only once the session is ready.
