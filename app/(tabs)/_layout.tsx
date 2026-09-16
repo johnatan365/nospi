@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
@@ -54,28 +54,38 @@ export default function TabLayout() {
   ];
         return (
     <>
-      <Stack
+      <Tabs
         screenOptions={{
           headerShown: false,
-          // Antes estaba en 'none' y las pantallas aparecian de golpe, que es
-          // de las cosas que mas hacen sentir basica una app.
+          // SIN animacion, a proposito.
           //
-          // Se usa fundido y NO deslizamiento: estas cinco son pestanas
-          // hermanas, no una dentro de otra. Deslizar sugiere que entras un
-          // nivel mas adentro, y aqui eso seria mentira.
+          // Antes esto era un Stack con animation: 'fade'. Dos problemas: se
+          // veia el parpadeo del fundido en cada toque, y cada pestana se
+          // MONTABA DE CERO al entrar, asi que ademas del fundido aparecian los
+          // esqueletos grises mientras volvia a cargar lo mismo de siempre.
           //
-          // 180 ms es el punto donde se percibe suave sin sentirse lento;
-          // por encima de ~250 ms empieza a estorbar al ir y volver rapido.
-          animation: 'fade',
-          animationDuration: 180,
+          // Ahora es un navegador de pestanas de verdad: las cinco pantallas se
+          // quedan vivas y cambiar de pestana solo muestra la que ya estaba
+          // armada. Es lo que hace Instagram: instantaneo, sin fundido, y al
+          // volver te encuentras la lista donde la dejaste.
+          //
+          // Los datos NO se quedan viejos: las cinco pantallas ya refrescan con
+          // useFocusEffect, que se dispara cada vez que la pestana toma el
+          // foco. La primera vez que se abre una pestana si se monta (y ahi si
+          // carga), pero una sola vez por sesion.
+          animation: 'none',
+          // La barra de abajo la dibuja FloatingTabBar, que va flotando encima
+          // del contenido. La barra propia del navegador se esconde para que no
+          // reserve espacio ni se vean las dos.
+          tabBarStyle: { display: 'none' },
         }}
       >
-        <Stack.Screen key="events" name="events" />
-        <Stack.Screen key="appointments" name="appointments" />
-        <Stack.Screen key="dinamica" name="dinamica" />
-          <Stack.Screen key="chats" name="chats" />
-        <Stack.Screen key="profile" name="profile" />
-      </Stack>
+        <Tabs.Screen key="events" name="events" />
+        <Tabs.Screen key="appointments" name="appointments" />
+        <Tabs.Screen key="dinamica" name="dinamica" />
+        <Tabs.Screen key="chats" name="chats" />
+        <Tabs.Screen key="profile" name="profile" />
+      </Tabs>
       <FloatingTabBar tabs={tabs} />
     </>
   );
