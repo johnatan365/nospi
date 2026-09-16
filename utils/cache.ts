@@ -46,6 +46,29 @@ export async function getCached<T>(key: string): Promise<T | null> {
   }
 }
 
+/**
+ * Igual que getCached, pero devuelve la ENTRADA completa en vez del dato.
+ *
+ * Por que hace falta: getCached devuelve null tanto si no hay nada guardado
+ * como si lo guardado ES null. Para la pantalla de Dinamica eso importaba
+ * mucho: a quien no tiene ningun evento confirmado se le guarda null, asi que
+ * su cache nunca contaba como cache y CADA vez tenia que esperar a la red
+ * (revisar sesion + consultar) antes de poder decirle "no tienes eventos".
+ * Con esto, "guardado y es null" se pinta al instante.
+ */
+export async function getCachedEntry<T>(key: string): Promise<{ data: T; timestamp: number } | null> {
+  try {
+    const storageKey = await getStorageKey(key);
+    const raw = await AsyncStorage.getItem(storageKey);
+    if (!raw) return null;
+    const entry: CacheEntry<T> = JSON.parse(raw);
+    return { data: entry.data, timestamp: entry.timestamp };
+  } catch (err) {
+    console.warn(`[cache] getCachedEntry error for key="${key}":`, err);
+    return null;
+  }
+}
+
 export async function setCached<T>(key: string, data: T): Promise<void> {
   try {
     const storageKey = await getStorageKey(key);
