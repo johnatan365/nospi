@@ -26,9 +26,14 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
 
   const handleTabPress = (route: string) => {
     // El golpecito va ANTES de navegar: asi se siente al instante y no
-    // despues de que la pantalla nueva termine de montarse.
+    // despues de que la pantalla nueva termine de montarse. (Hoy no vibra:
+    // esta apagado en lib/haptics.ts.)
     toque();
-    router.push(route as any);
+    // navigate y NO push: push agrega una pantalla encima cada vez, asi que ir
+    // y volver entre pestanas iba apilando copias (y en la web llenaba el
+    // historial del navegador, donde el boton "atras" tocaba apretarlo diez
+    // veces). navigate va a la pestana que ya existe y la deja como estaba.
+    router.navigate(route as any);
   };
 
   return (
