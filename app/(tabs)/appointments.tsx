@@ -902,10 +902,14 @@ const styles = StyleSheet.create({
   compactInfo: {
     flex: 1,
   },
+  // Negro (#111827, el mismo "casi negro" que ya usa la paleta) en vez del
+  // vinotinto de la marca: aprobado despues de compararlos lado a lado. El
+  // nombre pesa mas que la fecha y se lee mejor; la marca ya esta en el fondo
+  // de la pantalla, no hace falta repetirla dentro de cada tarjeta blanca.
   compactName: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: '#111827',
   },
   compactMeta: {
     fontSize: 12,
@@ -979,7 +983,7 @@ const styles = StyleSheet.create({
   appointmentName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#880E4F',
+    color: '#111827',
   },
   appointmentCity: {
     fontSize: 14,
