@@ -373,16 +373,61 @@ export default function RegisterScreen() {
       // pudo contar, queda en 0 y se sabe que no hay dato.
       const compatibility = compatibilityData ? parseInt(compatibilityData) : 0;
 
+      // La cuenta de acceso se crea AQUI, y el perfil unas lineas mas abajo.
+      // Entre esos dos pasos se puede caer todo: el celular ya esta usado por
+      // otra persona, se va el internet, la persona cierra la app. Cuando eso
+      // pasaba, quedaba una cuenta de acceso sin perfil: invisible en el panel,
+      // imposible de borrar, y con el correo ocupado para siempre. La persona
+      // volvia a intentar, le salia "ya existe una cuenta con ese correo" y no
+      // tenia por donde salir. Habia 82 personas atrapadas asi.
+      //
+      // Ahora, si el correo ya tiene cuenta de acceso, se intenta entrar con la
+      // contrasena que la persona acaba de escribir y se mira si tiene perfil:
+      //   - con perfil  -> es un usuario normal, que inicie sesion.
+      //   - sin perfil  -> es un registro a medias suyo: se retoma aqui mismo y
+      //                    el perfil se crea con lo que acaba de llenar.
       const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
 
-      if (authError) {
+      // Supabase a veces NO devuelve error con un correo ya registrado (lo hace
+      // para que nadie pueda averiguar quien tiene cuenta): devuelve un usuario
+      // con la lista de identidades vacia. Los dos casos son lo mismo.
+      const correoYaExiste =
+        (!!authError && /already registered|already been registered|user already exists/i.test(authError.message)) ||
+        (!authError && !!authData?.user && Array.isArray(authData.user.identities) && authData.user.identities.length === 0);
+
+      let userId: string;
+
+      if (correoYaExiste) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (signInError || !signInData?.user) {
+          setError('Ya existe una cuenta con ese correo. Inicia sesión con tu contraseña; si no la recuerdas, puedes recuperarla.');
+          setShowGoToLogin(true);
+          return;
+        }
+
+        const { data: perfilExistente } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', signInData.user.id)
+          .maybeSingle();
+
+        if (perfilExistente) {
+          setError('Ya tienes una cuenta con ese correo y está lista para usarse. Inicia sesión.');
+          setShowGoToLogin(true);
+          return;
+        }
+
+        // Registro a medias: se sigue con esta misma cuenta.
+        userId = signInData.user.id;
+      } else if (authError) {
         setError(friendlyAuthError(authError.message));
         return;
-      }
-
-      if (!authData.user) {
+      } else if (!authData.user) {
         setError('Error al crear la cuenta');
         return;
+      } else {
+        userId = authData.user.id;
       }
 
       // Upload photo to Supabase Storage if provided
@@ -394,8 +439,8 @@ export default function RegisterScreen() {
             fileExt = photo.split('.').pop()?.toLowerCase() || 'jpg';
           }
           const timestamp = Date.now();
-          const fileName = `${authData.user.id}-${timestamp}.${fileExt}`;
-          const filePath = `${authData.user.id}/${fileName}`;
+          const fileName = `${userId}-${timestamp}.${fileExt}`;
+          const filePath = `${userId}/${fileName}`;
 
           const response = await fetch(photo);
           const blob = await response.blob();
@@ -417,7 +462,7 @@ export default function RegisterScreen() {
       const { error: profileError } = await supabase
         .from('users')
         .insert({
-          id: authData.user.id,
+          id: userId,
           email,
           name,
           birthdate,
@@ -450,7 +495,11 @@ export default function RegisterScreen() {
 
       if (profileError) {
         if (profileError.message.includes('users_phone_key') || profileError.message.includes('duplicate key')) {
-          setError('Este número de celular ya está registrado. Por favor usa otro número o inicia sesión con tu cuenta existente.');
+          // Ya no es un callejon sin salida: la cuenta de acceso quedo creada,
+          // asi que si la persona vuelve atras, corrige el celular y toca
+          // Registrarse otra vez, el flujo de arriba la reconoce y termina de
+          // crearle el perfil con el numero nuevo.
+          setError('Ese número de celular ya está registrado con otra cuenta. Vuelve atrás, cámbialo y toca Registrarse de nuevo. Si la cuenta es tuya, inicia sesión.');
           setShowGoToLogin(true);
         } else if (profileError.message.includes('users_email_key') || profileError.message.includes('email')) {
           setError('Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.');
