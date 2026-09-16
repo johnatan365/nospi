@@ -30,12 +30,12 @@ import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  tenorBuscar,
-  tenorTendencias,
-  tenorRegistrarEnvio,
-  tenorConfigurado,
-  type TenorGif,
-} from '@/lib/tenor';
+  gifsBuscar,
+  gifsTendencia,
+  giphyConfigurado,
+  GiphySinCupo,
+  type Gif,
+} from '@/lib/giphy';
 import {
   useAudioRecorder,
   useAudioPlayer,
@@ -1017,20 +1017,27 @@ export default function ChatThreadScreen() {
   const [pendingAssets, setPendingAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [uploading, setUploading] = useState<{ kind: 'image' | 'video'; current: number; total: number } | null>(null);
   // ── Selector de GIFs ──────────────────────────────────────────────────
-  // Los GIFs vienen de Tenor, que es el mismo catalogo que usa WhatsApp, para
-  // que la gente encuentre lo que ya esta acostumbrada a encontrar alla.
+  // Los GIFs vienen de GIPHY. Antes venian de Tenor, que era el catalogo de
+  // WhatsApp, pero Google cerro esa API en junio de 2026. Ver lib/giphy.ts.
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifQuery, setGifQuery] = useState('');
-  const [gifResults, setGifResults] = useState<TenorGif[]>([]);
+  const [gifResults, setGifResults] = useState<Gif[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
   // Los ultimos que ESTA persona mando por Nospi. Es lo mas parecido a los
   // "favoritos" de WhatsApp que se puede tener: los de alla son privados de esa
   // app y no hay forma de leerlos desde afuera, asi que aca la lista se arma
   // sola con el uso.
-  const [gifRecientes, setGifRecientes] = useState<TenorGif[]>([]);
+  const [gifRecientes, setGifRecientes] = useState<Gif[]>([]);
   // Id del GIF que se esta subiendo, para poner el girador solo en ese.
   const [gifEnviando, setGifEnviando] = useState<string | null>(null);
+
+  // ── Crear encuesta ────────────────────────────────────────────────────
+  const [showPollForm, setShowPollForm] = useState(false);
+  const [pollPregunta, setPollPregunta] = useState('');
+  const [pollOpciones, setPollOpciones] = useState<string[]>(['', '']);
+  const [pollEnviando, setPollEnviando] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
 
   const listRef = useRef<FlatList<Message>>(null);
   // Rutas para las que ya se pidio firma, para no volver a pedirlas en cada
@@ -1663,7 +1670,7 @@ export default function ChatThreadScreen() {
   const GIF_RECIENTES_KEY = 'chat_gifs_recientes';
   const GIF_RECIENTES_MAX = 24;
 
-  const guardarGifReciente = async (gif: TenorGif) => {
+  const guardarGifReciente = async (gif: Gif) => {
     try {
       const sinRepetir = [gif, ...gifRecientes.filter((g) => g.id !== gif.id)].slice(0, GIF_RECIENTES_MAX);
       setGifRecientes(sinRepetir);
@@ -1690,10 +1697,11 @@ export default function ChatThreadScreen() {
   };
 
   // Busqueda con freno: se espera a que la persona deje de escribir antes de
-  // pedirle nada a Tenor. Sin esto se dispararia una peticion por cada letra.
+  // pedirle nada a GIPHY. Sin esto se gastaria una peticion por cada letra, y el
+  // cupo gratis son 100 por hora para toda la app.
   useEffect(() => {
     if (!showGifPicker) return;
-    if (!tenorConfigurado()) {
+    if (!giphyConfigurado()) {
       setGifError('El buscador de GIFs todavía no está configurado.');
       setGifResults([]);
       return;
@@ -1704,30 +1712,37 @@ export default function ChatThreadScreen() {
     setGifError(null);
     const t = setTimeout(async () => {
       try {
-        const res = consulta ? await tenorBuscar(consulta) : await tenorTendencias();
+        const res = consulta ? await gifsBuscar(consulta) : await gifsTendencia();
         if (!vivo) return;
         setGifResults(res);
         if (res.length === 0 && consulta) setGifError(`No encontramos GIFs de "${consulta}".`);
-      } catch {
+      } catch (e: any) {
         if (!vivo) return;
         setGifResults([]);
-        setGifError('No se pudieron cargar los GIFs. Revisa tu conexión.');
+        // El cupo gratis de GIPHY es de 100 busquedas por hora para toda la
+        // app. Cuando se llena conviene decir la verdad en cristiano, no
+        // "error 429", y sobre todo no dejar la pantalla en blanco.
+        setGifError(
+          e instanceof GiphySinCupo
+            ? 'Hoy se buscaron muchos GIFs en Nospi. Inténtalo en un rato.'
+            : 'No se pudieron cargar los GIFs. Revisa tu conexión.'
+        );
       } finally {
         if (vivo) setGifLoading(false);
       }
-    }, consulta ? 350 : 0);
+    }, consulta ? 400 : 0);
     return () => {
       vivo = false;
       clearTimeout(t);
     };
   }, [showGifPicker, gifQuery]);
 
-  // Se baja el GIF de Tenor y se sube al bucket del chat como un adjunto mas.
-  // Se hace asi, y no guardando el enlace de Tenor, porque de esta forma el GIF
+  // Se baja el GIF de GIPHY y se sube al bucket del chat como un adjunto mas.
+  // Se hace asi, y no guardando el enlace de GIPHY, porque de esta forma el GIF
   // hereda TODO lo que ya existe: enlace firmado, vista en el admin, descargar,
-  // compartir y el aviso push. Y ademas sigue estando aunque Tenor mueva o
-  // borre ese archivo.
-  const enviarGif = async (gif: TenorGif) => {
+  // compartir y el aviso push. Y ademas sigue estando aunque GIPHY mueva o
+  // borre ese archivo, o aunque un dia cierre como cerro Tenor.
+  const enviarGif = async (gif: Gif) => {
     if (!user?.id || !conversationId || gifEnviando || uploading) return;
     if (gif.fullSize > MAX_UPLOAD_BYTES) {
       avisar('Ese GIF pesa demasiado. Prueba con otro.');
@@ -1736,7 +1751,6 @@ export default function ChatThreadScreen() {
 
     const caption = draft.trim();
     const replyId = replyingTo?.id ?? null;
-    const consulta = gifQuery;
     setGifEnviando(gif.id);
 
     try {
@@ -1779,9 +1793,6 @@ export default function ChatThreadScreen() {
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
       }
 
-      // Tenor pide que se le avise cual GIF se termino mandando; ademas, con eso
-      // sus resultados se van acomodando a lo que la gente de aca usa.
-      tenorRegistrarEnvio(gif.id, consulta);
       await guardarGifReciente(gif);
 
       setShowGifPicker(false);
@@ -1792,6 +1803,60 @@ export default function ChatThreadScreen() {
       avisar('No se pudo enviar el GIF. ' + (e?.message || ''));
     } finally {
       setGifEnviando(null);
+    }
+  };
+
+  // ── Crear encuesta ─────────────────────────────────────────────────────
+  // La regla de permiso vive en la base (funcion crear_encuesta): si puedes
+  // escribir en esta conversacion, puedes lanzar una encuesta en ella. Aca solo
+  // se arma el formulario y se muestran los errores que devuelva.
+  const abrirEncuesta = () => {
+    setShowAttachMenu(false);
+    setPollPregunta('');
+    setPollOpciones(['', '']);
+    setPollError(null);
+    setShowPollForm(true);
+  };
+
+  const cambiarOpcion = (i: number, txt: string) => {
+    setPollOpciones((prev) => prev.map((o, j) => (j === i ? txt : o)));
+  };
+
+  // Hasta 5: mas opciones no caben en la tarjeta del chat sin volverse ilegibles.
+  const agregarOpcion = () => {
+    setPollOpciones((prev) => (prev.length >= 5 ? prev : [...prev, '']));
+  };
+
+  const quitarOpcion = (i: number) => {
+    setPollOpciones((prev) => (prev.length <= 2 ? prev : prev.filter((_, j) => j !== i)));
+  };
+
+  const pollListo =
+    pollPregunta.trim().length >= 3 &&
+    pollOpciones.filter((o) => o.trim().length > 0).length >= 2;
+
+  const enviarEncuesta = async () => {
+    if (!conversationId || pollEnviando || !pollListo) return;
+    setPollEnviando(true);
+    setPollError(null);
+    try {
+      const { error } = await supabase.rpc('crear_encuesta', {
+        p_conversation_id: conversationId,
+        p_question: pollPregunta.trim(),
+        p_options: pollOpciones.map((o) => o.trim()).filter((o) => o.length > 0),
+      });
+      if (error) {
+        setPollError(error.message);
+        return;
+      }
+      setShowPollForm(false);
+      // La encuesta llega por realtime como un mensaje mas; no hay que
+      // insertarla a mano en la lista.
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 300);
+    } catch (e: any) {
+      setPollError(e?.message || 'No se pudo crear la encuesta.');
+    } finally {
+      setPollEnviando(false);
     }
   };
 
@@ -2666,9 +2731,23 @@ export default function ChatThreadScreen() {
             style={styles.attachButton}
             onPress={() => setShowAttachMenu(true)}
             disabled={!!uploading}
+            accessibilityLabel="Adjuntar"
           >
-            <IconSymbol ios_icon_name="paperclip" android_material_icon_name="attach-file" size={22} color="#FFFFFF" />
+            <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
+          {/* Atajo directo al buscador de GIFs. Va escrito y no con un icono
+              porque "GIF" ya ES la palabra que la gente reconoce; dibujarlo
+              obligaria a inventar un simbolo que nadie entiende de una. */}
+          {giphyConfigurado() && (
+            <TouchableOpacity
+              style={styles.gifShortcut}
+              onPress={abrirGifs}
+              disabled={!!uploading}
+              accessibilityLabel="Buscar un GIF"
+            >
+              <Text style={styles.gifShortcutText}>GIF</Text>
+            </TouchableOpacity>
+          )}
           <TextInput
             style={styles.textInput}
             placeholder="Escribe un mensaje..."
@@ -2703,36 +2782,59 @@ export default function ChatThreadScreen() {
         )}
       </KeyboardAvoidingView>
 
+      {/* Menu de adjuntar: cuadricula de cuadros grandes en vez de una lista de
+          renglones. Un cuadro de 64px con el icono a color se reconoce de un
+          vistazo y se acierta con el dedo sin mirar; un renglon de texto toca
+          leerlo. */}
       <Modal visible={showAttachMenu} animationType="fade" transparent onRequestClose={() => setShowAttachMenu(false)}>
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowAttachMenu(false)}>
-          <View style={styles.attachSheet}>
-            <Text style={styles.attachSheetTitle}>Enviar archivo</Text>
+          {/* activeOpacity + onPress vacio: sin esto, tocar dentro de la hoja
+              cuenta como tocar el fondo y la cierra. */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={[styles.attachSheet, { paddingBottom: insets.bottom + 18 }]}
+          >
+            <View style={styles.sheetGrabber} />
+
+            <View style={styles.attachGrid}>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity style={styles.attachTile} onPress={takePhoto} activeOpacity={0.7}>
+                  <View style={[styles.attachTileBox, { backgroundColor: '#FFE9EE' }]}>
+                    <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#F0325B" />
+                  </View>
+                  <Text style={styles.attachTileText}>Cámara</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.attachTile} onPress={pickFromLibrary} activeOpacity={0.7}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#E5EEFF' }]}>
+                  <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={28} color="#2563EB" />
+                </View>
+                <Text style={styles.attachTileText}>Fotos y videos</Text>
+              </TouchableOpacity>
+
+              {giphyConfigurado() && (
+                <TouchableOpacity style={styles.attachTile} onPress={abrirGifs} activeOpacity={0.7}>
+                  <View style={[styles.attachTileBox, { backgroundColor: '#DFF7F9' }]}>
+                    <Text style={styles.attachTileGif}>GIF</Text>
+                  </View>
+                  <Text style={styles.attachTileText}>GIF</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.attachTile} onPress={abrirEncuesta} activeOpacity={0.7}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#FFF1DC' }]}>
+                  <IconSymbol ios_icon_name="chart.pie.fill" android_material_icon_name="pie-chart" size={28} color="#F59E0B" />
+                </View>
+                <Text style={styles.attachTileText}>Crear encuesta</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.attachSheetHint}>
-              Se envía en su calidad original, sin reducir la resolución. Máximo 25 MB por archivo.
-              {'\n'}Las fotos y videos se eliminan a los {MEDIA_RETENTION_DAYS} días: descárgalos antes si los quieres guardar.
+              Las fotos y videos van en su calidad original, sin reducir la resolución. Máximo 25 MB por archivo, y se eliminan a los {MEDIA_RETENTION_DAYS} días.
             </Text>
-            <TouchableOpacity style={styles.attachOption} onPress={pickFromLibrary}>
-              <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={22} color={nospiColors.purpleDark} />
-              <Text style={styles.attachOptionText}>Foto o video de la galería</Text>
-            </TouchableOpacity>
-            {/* Sin llave de Tenor no hay buscador, y mas vale no mostrar un
-                boton que al tocarlo no hace nada. */}
-            {tenorConfigurado() && (
-              <TouchableOpacity style={styles.attachOption} onPress={abrirGifs}>
-                <IconSymbol ios_icon_name="face.smiling" android_material_icon_name="gif" size={22} color={nospiColors.purpleDark} />
-                <Text style={styles.attachOptionText}>Buscar un GIF</Text>
-              </TouchableOpacity>
-            )}
-            {Platform.OS !== 'web' && (
-              <TouchableOpacity style={styles.attachOption} onPress={takePhoto}>
-                <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={22} color={nospiColors.purpleDark} />
-                <Text style={styles.attachOptionText}>Tomar foto o grabar video</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.attachCancel} onPress={() => setShowAttachMenu(false)}>
-              <Text style={styles.attachCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -2752,17 +2854,21 @@ export default function ChatThreadScreen() {
               <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={18} color={nospiColors.gray400} />
               <TextInput
                 style={styles.gifSearchInput}
-                placeholder="Buscar: jajaja, abrazo, gracias, bailando..."
+                placeholder="Buscar GIFs: jajaja, abrazo, gracias…"
                 placeholderTextColor={nospiColors.gray400}
                 value={gifQuery}
                 onChangeText={setGifQuery}
                 autoCorrect={false}
                 returnKeyType="search"
               />
-              {gifQuery.length > 0 && (
+              {gifQuery.length > 0 ? (
                 <TouchableOpacity onPress={() => setGifQuery('')} hitSlop={10}>
                   <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={18} color={nospiColors.gray400} />
                 </TouchableOpacity>
+              ) : (
+                /* GIPHY exige dar credito visible a cambio de la llave gratis.
+                   No lo quites. */
+                <Text style={styles.gifBrand}>GIPHY</Text>
               )}
             </View>
 
@@ -2832,9 +2938,84 @@ export default function ChatThreadScreen() {
               />
             )}
 
-            <Text style={styles.gifFooter}>GIFs vía Tenor</Text>
+            <Text style={styles.gifFooter}>Powered by GIPHY</Text>
           </View>
         </View>
+      </Modal>
+
+      {/* Crear encuesta. Quien puede escribir en la conversacion puede lanzarla;
+          esa regla la decide la base, no esta pantalla. */}
+      <Modal visible={showPollForm} animationType="slide" transparent onRequestClose={() => setShowPollForm(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.gifOverlay}
+        >
+          <View style={[styles.pollSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetGrabber} />
+            <View style={styles.gifHeader}>
+              <Text style={styles.attachSheetTitle}>Crear encuesta</Text>
+              <TouchableOpacity onPress={() => setShowPollForm(false)} hitSlop={10}>
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={22} color={nospiColors.gray400} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.pollLabel}>Pregunta</Text>
+              <TextInput
+                style={styles.pollInput}
+                placeholder="¿A qué hora nos vemos?"
+                placeholderTextColor={nospiColors.gray400}
+                value={pollPregunta}
+                onChangeText={setPollPregunta}
+                maxLength={200}
+                multiline
+              />
+
+              <Text style={styles.pollLabel}>Opciones</Text>
+              {pollOpciones.map((op, i) => (
+                <View key={`op-${i}`} style={styles.pollOptionRow}>
+                  <TextInput
+                    style={[styles.pollInput, styles.pollInputOption]}
+                    placeholder={`Opción ${i + 1}`}
+                    placeholderTextColor={nospiColors.gray400}
+                    value={op}
+                    onChangeText={(t) => cambiarOpcion(i, t)}
+                    maxLength={80}
+                  />
+                  {/* Con dos opciones no se puede quitar ninguna: una encuesta
+                      de una sola opcion no es una encuesta. */}
+                  {pollOpciones.length > 2 && (
+                    <TouchableOpacity onPress={() => quitarOpcion(i)} hitSlop={8} style={styles.pollRemove}>
+                      <IconSymbol ios_icon_name="minus.circle.fill" android_material_icon_name="remove-circle" size={22} color={nospiColors.gray400} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+
+              {pollOpciones.length < 5 && (
+                <TouchableOpacity onPress={agregarOpcion} style={styles.pollAdd} activeOpacity={0.7}>
+                  <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color={nospiColors.purpleDark} />
+                  <Text style={styles.pollAddText}>Agregar opción</Text>
+                </TouchableOpacity>
+              )}
+
+              {!!pollError && <Text style={styles.pollError}>{pollError}</Text>}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.pollSend, !pollListo && styles.pollSendOff]}
+              onPress={enviarEncuesta}
+              disabled={!pollListo || pollEnviando}
+              activeOpacity={0.8}
+            >
+              {pollEnviando ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.pollSendText}>Publicar encuesta</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showParticipants} animationType="slide" transparent onRequestClose={() => setShowParticipants(false)}>
@@ -3669,14 +3850,45 @@ const styles = StyleSheet.create({
   attachOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   attachSheet: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 28,
+    paddingTop: 10,
+  },
+  // La barrita gris de arriba: sin ella la hoja no se lee como algo que se
+  // arrastra o se cierra, sobre todo en Android.
+  sheetGrabber: {
+    width: 38, height: 4, borderRadius: 2,
+    backgroundColor: nospiColors.gray100,
+    alignSelf: 'center', marginBottom: 16,
+  },
+  // ── Cuadricula del menu de adjuntar ────────────────────────────────────
+  // Se reparte en filas de 4 con flexWrap. basis 25% menos el hueco: asi los
+  // cuadros quedan del mismo ancho aunque sean 3 o 4, sin numeros magicos.
+  attachGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 18 },
+  attachTile: { width: '25%', alignItems: 'center', gap: 8 },
+  attachTileBox: {
+    width: 62, height: 62, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  attachTileGif: { fontSize: 19, fontWeight: '900', color: '#0FB5C9', letterSpacing: 0.5 },
+  attachTileText: {
+    fontSize: 11.5, fontWeight: '600', color: nospiColors.gray800,
+    textAlign: 'center', paddingHorizontal: 2,
+  },
+  // Atajo "GIF" de la barra de escribir.
+  gifShortcut: {
+    height: 42, paddingHorizontal: 10, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center', marginRight: 6,
+  },
+  gifShortcutText: {
+    fontSize: 13, fontWeight: '900', color: 'rgba(255,255,255,0.85)', letterSpacing: 0.6,
   },
   attachSheetTitle: { fontSize: 17, fontWeight: '800', color: nospiColors.gray800 },
-  attachSheetHint: { fontSize: 13, color: nospiColors.gray400, marginTop: 4, marginBottom: 10 },
+  attachSheetHint: {
+    fontSize: 11.5, color: nospiColors.gray400, lineHeight: 16,
+    marginTop: 20, textAlign: 'center',
+  },
   attachOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3729,8 +3941,41 @@ const styles = StyleSheet.create({
   },
   gifEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   gifEmptyText: { fontSize: 14, color: nospiColors.gray400, textAlign: 'center' },
-  // Tenor pide que se diga de donde salen los GIFs.
+  // GIPHY pide que se diga de donde salen los GIFs. Es condicion de la llave.
   gifFooter: { fontSize: 11, color: nospiColors.gray400, textAlign: 'center', paddingTop: 6 },
+  // El credito a GIPHY dentro de la barra de busqueda. Va discreto pero legible:
+  // es una condicion de la llave gratis, no un adorno.
+  gifBrand: { fontSize: 10, fontWeight: '900', color: nospiColors.gray400, letterSpacing: 0.8 },
+  // ── Crear encuesta ─────────────────────────────────────────────────────
+  pollSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    paddingHorizontal: 20, paddingTop: 10,
+    maxHeight: '88%',
+  },
+  pollLabel: {
+    fontSize: 11, fontWeight: '800', color: nospiColors.gray400,
+    letterSpacing: 0.4, marginTop: 16, marginBottom: 8,
+  },
+  pollInput: {
+    backgroundColor: nospiColors.gray100, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: nospiColors.gray800,
+  },
+  pollInputOption: { flex: 1 },
+  pollOptionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  pollRemove: { padding: 2 },
+  pollAdd: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+  pollAddText: { fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark },
+  pollError: { fontSize: 13, color: '#DC2626', marginTop: 10 },
+  pollSend: {
+    backgroundColor: nospiColors.purpleDark, borderRadius: 14,
+    paddingVertical: 15, alignItems: 'center', marginTop: 16,
+  },
+  // Apagado mientras falte la pregunta o una segunda opcion: mas claro que
+  // dejarlo encendido y responder con un error al tocarlo.
+  pollSendOff: { opacity: 0.4 },
+  pollSendText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   attachCancel: { paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   attachCancelText: { fontSize: 15, fontWeight: '700', color: nospiColors.gray400 },
   mediaActionsRow: { flexDirection: 'row', gap: 16, marginTop: 6, marginBottom: 2 },
