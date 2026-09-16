@@ -20,6 +20,7 @@
 // muestra; no lo quites, es parte de las condiciones de la llave gratis.
 
 import Constants from 'expo-constants';
+import appJson from '@/app.json';
 
 // Llave PUBLICA de cliente: GIPHY esta disenado asi, la app la manda en cada
 // peticion y no hay forma de esconderla. Se lee de app.json igual que las de
@@ -30,12 +31,23 @@ import Constants from 'expo-constants';
 // 'manifest' o anidada en 'manifest2'. Leer solo uno funciona en el celular y
 // deja la llave vacia en la web (o al reves), y el sintoma es de los que cuesta
 // encontrar: la funcion simplemente no aparece, sin ningun error.
+//
+// Y se lee TAMBIEN de app.json directamente, que es lo que al final salvo el
+// dia. Comprobado en la web publicada: expo-constants no lee app.json cuando
+// la app corre, sino una copia que se congela al compilar; el build de Vercel
+// reuso una copia vieja (de antes de que existiera esta llave) y entrego un
+// extra con supabaseUrl y supabaseAnonKey pero SIN giphyApiKey. Por eso
+// Supabase funcionaba y el buscador de GIFs decia "no esta configurado".
+// Importar app.json no pesa nada extra (la pantalla de bienvenida y el perfil
+// ya lo importan) y no depende de ningun cache de compilacion.
 const C = Constants as any;
+const A = appJson as any;
 const GIPHY_KEY: string = String(
   C?.expoConfig?.extra?.giphyApiKey ||
   C?.manifest?.extra?.giphyApiKey ||
   C?.manifest2?.extra?.expoClient?.extra?.giphyApiKey ||
   C?.manifestExtra?.giphyApiKey ||
+  A?.expo?.extra?.giphyApiKey ||
   process.env.EXPO_PUBLIC_GIPHY_API_KEY ||
   ''
 ).trim();
