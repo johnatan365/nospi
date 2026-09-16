@@ -2220,8 +2220,14 @@ export default function ChatThreadScreen() {
   return (
     <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient}>
       <Stack.Screen options={{ headerShown: false }} />
+      {/* En la web el chat ocupaba TODO el ancho del navegador: en una pantalla
+          de escritorio el "+" quedaba pegado al borde izquierdo, el cuadro de
+          "Escribe un mensaje..." se estiraba como una franja de lado a lado y
+          las burbujas quedaban perdidas en el medio. En el celular no se nota
+          porque la pantalla ya es angosta. Aca se limita todo el chat a una
+          columna centrada, como hacen WhatsApp Web y Telegram Web. */}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={[{ flex: 1 }, styles.chatColumn]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
@@ -2737,17 +2743,19 @@ export default function ChatThreadScreen() {
           </TouchableOpacity>
           {/* Atajo directo al buscador de GIFs. Va escrito y no con un icono
               porque "GIF" ya ES la palabra que la gente reconoce; dibujarlo
-              obligaria a inventar un simbolo que nadie entiende de una. */}
-          {giphyConfigurado() && (
-            <TouchableOpacity
-              style={styles.gifShortcut}
-              onPress={abrirGifs}
-              disabled={!!uploading}
-              accessibilityLabel="Buscar un GIF"
-            >
-              <Text style={styles.gifShortcutText}>GIF</Text>
-            </TouchableOpacity>
-          )}
+              obligaria a inventar un simbolo que nadie entiende de una.
+              Se muestra SIEMPRE: si faltara la llave, el buscador lo dice con
+              palabras. Antes esto se escondia solo cuando la llave no se leia,
+              y el dia que la lectura fallo el boton desaparecio sin dejar ni un
+              error que seguir. */}
+          <TouchableOpacity
+            style={styles.gifShortcut}
+            onPress={abrirGifs}
+            disabled={!!uploading}
+            accessibilityLabel="Buscar un GIF"
+          >
+            <Text style={styles.gifShortcutText}>GIF</Text>
+          </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             placeholder="Escribe un mensaje..."
@@ -2798,14 +2806,12 @@ export default function ChatThreadScreen() {
             <View style={styles.sheetGrabber} />
 
             <View style={styles.attachGrid}>
-              {Platform.OS !== 'web' && (
-                <TouchableOpacity style={styles.attachTile} onPress={takePhoto} activeOpacity={0.7}>
-                  <View style={[styles.attachTileBox, { backgroundColor: '#FFE9EE' }]}>
-                    <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#F0325B" />
-                  </View>
-                  <Text style={styles.attachTileText}>Cámara</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={styles.attachTile} onPress={takePhoto} activeOpacity={0.7}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#FFE9EE' }]}>
+                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#F0325B" />
+                </View>
+                <Text style={styles.attachTileText}>Cámara</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={pickFromLibrary} activeOpacity={0.7}>
                 <View style={[styles.attachTileBox, { backgroundColor: '#E5EEFF' }]}>
@@ -2814,14 +2820,12 @@ export default function ChatThreadScreen() {
                 <Text style={styles.attachTileText}>Fotos y videos</Text>
               </TouchableOpacity>
 
-              {giphyConfigurado() && (
-                <TouchableOpacity style={styles.attachTile} onPress={abrirGifs} activeOpacity={0.7}>
-                  <View style={[styles.attachTileBox, { backgroundColor: '#DFF7F9' }]}>
-                    <Text style={styles.attachTileGif}>GIF</Text>
-                  </View>
-                  <Text style={styles.attachTileText}>GIF</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={styles.attachTile} onPress={abrirGifs} activeOpacity={0.7}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#DFF7F9' }]}>
+                  <Text style={styles.attachTileGif}>GIF</Text>
+                </View>
+                <Text style={styles.attachTileText}>GIF</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={abrirEncuesta} activeOpacity={0.7}>
                 <View style={[styles.attachTileBox, { backgroundColor: '#FFF1DC' }]}>
@@ -3383,6 +3387,20 @@ export default function ChatThreadScreen() {
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
+  // Solo aplica en la web (en el celular queda un objeto vacio y no cambia
+  // nada). Los bordes laterales tenues le dan a la columna un limite visible,
+  // para que no parezca contenido flotando en el centro de la pantalla.
+  chatColumn:
+    Platform.OS === 'web'
+      ? {
+          width: '100%',
+          maxWidth: 860,
+          alignSelf: 'center',
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: 'rgba(255,255,255,0.08)',
+        }
+      : {},
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   lockedContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   lockedEmoji: { fontSize: 48, marginBottom: 16 },
