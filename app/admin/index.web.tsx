@@ -4033,33 +4033,66 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
-  const handleDeleteAttendee = async (attendeeId: string, attendeeName: string) => {
-    const confirmed = window.confirm(`¿Estás seguro de que quieres eliminar a ${attendeeName} de este evento?`);
-    if (!confirmed) return;
+  // Sacar a alguien de un evento. Hay DOS caminos a proposito:
+  //
+  //   devolverSaldo = true  -> cancelacion a tiempo. Recupera en saldo virtual
+  //                            lo que pago y le llega su correo de cancelacion.
+  //   devolverSaldo = false -> la persona pidio salirse cuando ya habian pasado
+  //                            las 24 horas, asi que no tiene derecho a saldo.
+  //                            Sale y ya: sin saldo, sin correo y sin
+  //                            amonestacion (cancelar tarde por la via normal SI
+  //                            deja falta, y a la segunda suspende la cuenta —
+  //                            seria injusto por un favor que pidio).
+  //
+  // Antes esto era un "delete" de la cita: la persona perdia cupo y plata, no se
+  // enteraba de nada, y se borraba el registro de cuanto habia pagado (ese dato
+  // vive en la misma fila). Ahora la cita queda como 'cancelada': el cupo se
+  // libera igual, desaparece de esta lista, y el historial de la venta se
+  // conserva. Todo lo decide la funcion admin_sacar_del_evento en la base, para
+  // que el saldo y el aviso no dependan de que la pantalla haga bien su parte.
+  const handleSacarAsistente = async (
+    attendeeId: string,
+    attendeeName: string,
+    devolverSaldo: boolean,
+  ) => {
+    const mensaje = devolverSaldo
+      ? `¿Sacar a ${attendeeName} del evento y DEVOLVERLE el saldo?\n\nRecupera en saldo lo que pagó y recibe el correo de cancelación.`
+      : `¿Sacar a ${attendeeName} del evento SIN saldo y SIN avisarle?\n\nNo se le devuelve nada, no recibe ningún correo y no le queda amonestación.\n\nEs el caso de quien pide salirse cuando ya pasó el plazo de las 24 horas.`;
+    if (!window.confirm(mensaje)) return;
 
     try {
-      
-      // Delete from appointments table
-      const { error } = await supabase
-        .from('appointments')
-        .delete()
-        .eq('id', attendeeId);
+      const { data, error } = await supabase.rpc('admin_sacar_del_evento', {
+        p_appointment_id: attendeeId,
+        p_devolver_saldo: devolverSaldo,
+      });
 
       if (error) {
-        console.error('Error deleting attendee:', error);
-        window.alert('Error al eliminar asistente: ' + error.message);
+        console.error('Error al sacar del evento:', error);
+        window.alert('Error al sacar del evento: ' + error.message);
         return;
       }
 
-      window.alert('Asistente eliminado exitosamente');
-      
-      // Reload attendees list
+      const monto = Number((data as any)?.monto || 0);
+      if ((data as any)?.ya_estaba_cancelada) {
+        window.alert(`${attendeeName} ya estaba fuera del evento.`);
+      } else if ((data as any)?.con_saldo) {
+        window.alert(
+          `${attendeeName} salió del evento.\n\nSe le abonaron $${monto.toLocaleString('es-CO')} de saldo y se le avisó por correo.`
+        );
+      } else if ((data as any)?.sin_saldo_que_devolver) {
+        window.alert(
+          `${attendeeName} salió del evento.\n\nNo había saldo que devolver (suscripción, cortesía o gratis), así que salió en silencio.`
+        );
+      } else {
+        window.alert(`${attendeeName} salió del evento.\n\nSin saldo y sin avisarle.`);
+      }
+
       if (selectedEventForAttendees) {
         handleViewAttendees(selectedEventForAttendees);
       }
     } catch (error) {
-      console.error('Failed to delete attendee:', error);
-      window.alert('Error inesperado al eliminar asistente');
+      console.error('Failed to remove attendee:', error);
+      window.alert('Error inesperado al sacar del evento');
     }
   };
 
@@ -10231,10 +10264,16 @@ setBulkWhatsAppPending(pending);
                         <Text style={styles.attendeeNumber}>#{index + 1}</Text>
                         <Text style={styles.attendeeName}>{attendee.users.name}</Text>
                         <TouchableOpacity
-                          style={styles.deleteAttendeeButton}
-                          onPress={() => handleDeleteAttendee(attendee.id, attendee.users.name)}
+                          style={styles.sacarConSaldoButton}
+                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, true)}
                         >
-                          <Text style={styles.deleteAttendeeButtonText}>🗑️</Text>
+                          <Text style={styles.sacarButtonText}>💸 Sacar y devolver</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.sacarSinSaldoButton}
+                          onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, false)}
+                        >
+                          <Text style={styles.sacarButtonText}>🔇 Sacar sin avisar</Text>
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.attendeeDetail}>📧 {attendee.users.email}</Text>
@@ -12053,6 +12092,10 @@ realtimeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    // Con dos botones al lado del nombre, en pantallas angostas hay que dejar
+    // que bajen de renglon en vez de aplastar el nombre.
+    flexWrap: 'wrap',
+    rowGap: 6,
   },
   attendeeNumber: {
     fontSize: 16,
@@ -12340,6 +12383,32 @@ realtimeInfo: {
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  // Dos botones en vez de uno: sacar con saldo (verde, es la salida amable) y
+  // sacar en silencio (rojo, no devuelve nada). Van con texto y no con un
+  // iconito porque confundirlos le cuesta plata a alguien.
+  sacarConSaldoButton: {
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  sacarSinSaldoButton: {
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  sacarButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
   },
   deleteAttendeeButtonText: {
     fontSize: 16,
