@@ -11,7 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
-import { getCached, setCached, clearCached } from '@/utils/cache';
+import { getCached, getCachedEntry, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
 // Clave legacy (global, compartida entre cuentas). Se conserva solo para
@@ -351,10 +351,15 @@ export default function DinamicaScreen() {
       setLoading(false);
     } else {
       // 2. Try AsyncStorage for cross-session persistence
-      const persisted = await getCached<Appointment | null>(CACHE_KEY);
-      if (persisted !== null) {
+      // getCachedEntry y no getCached: quien NO tiene evento confirmado tiene
+      // guardado un null, y con getCached eso se confundia con "no hay nada
+      // guardado". Resultado: esas personas esperaban la red entera cada vez
+      // que abrian Dinamica solo para que les dijera lo que ya se sabia.
+      const entrada = await getCachedEntry<Appointment | null>(CACHE_KEY);
+      if (entrada !== null) {
+        const persisted = entrada.data;
 
-        cacheRef.current = { data: persisted, timestamp: Date.now() };
+        cacheRef.current = { data: persisted, timestamp: entrada.timestamp };
         applyAppointmentData(persisted);
         setLoading(false);
       }
@@ -992,6 +997,31 @@ export default function DinamicaScreen() {
     };
   }, [appointmentEventId, appointmentId, user]);
 
+  // Esta pantalla ya no espera a que la toquen para empezar a cargar.
+  //
+  // Las cinco pestanas se precargan al abrir la app, asi que esta se monta de
+  // una vez aunque la persona este mirando Eventos. Cargando aqui, para cuando
+  // toque "Dinamica" la tarjeta ya esta puesta, en vez de arrancar a cargar
+  // justo en ese momento (que es lo que se sentia como "se demora un poco").
+  //
+  // El candado de 3 segundos evita que montarse y recibir el foco enseguida
+  // dispare la misma consulta dos veces.
+  const ultimaCargaRef = useRef(0);
+  const cargarSiHaceFalta = useCallback(() => {
+    if (Date.now() - ultimaCargaRef.current < 3000) return;
+    ultimaCargaRef.current = Date.now();
+    loadAppointment();
+  }, [loadAppointment]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    cargarSiHaceFalta();
+  }, [authLoading, user?.id, cargarSiHaceFalta]);
+
   useFocusEffect(
     useCallback(() => {
       // Todavía resolviendo la sesión (refresh reciente, red lenta) — esperar
@@ -1003,8 +1033,8 @@ export default function DinamicaScreen() {
         setLoading(false);
         return;
       }
-      loadAppointment();
-    }, [user?.id, authLoading, loadAppointment])
+      cargarSiHaceFalta();
+    }, [user?.id, authLoading, cargarSiHaceFalta])
   );
 
   useEffect(() => {
