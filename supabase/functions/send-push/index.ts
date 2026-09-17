@@ -157,6 +157,12 @@ Deno.serve(async (req: Request) => {
         body: message,
         data,
         sound: "default",
+        // Prioridad alta + contenido disponible: ademas de mostrar la
+        // notificacion, despierta la app unos segundos en segundo plano para
+        // que marque el mensaje como "entregado" (el doble check de WhatsApp)
+        // sin que el usuario tenga que abrir nada.
+        priority: "high",
+        _contentAvailable: true,
       }));
 
       for (const batch of chunk(messages, 100)) {
