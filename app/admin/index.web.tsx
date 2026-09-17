@@ -197,6 +197,27 @@ type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions'
 // ── Tabla ancha con barra de scroll horizontal duplicada arriba, sincronizada
 // con la de abajo — evita tener que bajar hasta el final de la tabla para
 // poder desplazarse lateralmente.
+// Links de las tiendas. Van en el texto del mensaje porque WhatsApp enviado a
+// mano (wa.me) no admite botones. Si algun dia existe nospi.co/app —un solo
+// link que detecta el dispositivo— se reemplazan las dos lineas por una.
+const TIENDA_ANDROID = 'https://play.google.com/store/apps/details?id=app.nospi.mobile';
+const TIENDA_IPHONE = 'https://apps.apple.com/co/app/nospi/id6761556688';
+
+// Bloque que recomienda instalar la app. El gancho es la dinamica, que es lo
+// unico que de verdad se hace mejor desde la app: no se obliga a nadie, se
+// recomienda en el momento en que tiene sentido.
+const BLOQUE_INSTALAR_VISPERA = [
+  `📲 Mañana en la mesa hacen la dinámica desde el celular. Te recomiendo instalar la app hoy: abre de una y te avisa cuando arranca.`,
+  `🤖 Android: ${TIENDA_ANDROID}`,
+  `🍎 iPhone: ${TIENDA_IPHONE}`,
+].join('\n');
+
+const BLOQUE_INSTALAR_MISMO_DIA = [
+  `📲 ¿Aún sin la app? Instálala antes de salir:`,
+  `🤖 ${TIENDA_ANDROID}`,
+  `🍎 ${TIENDA_IPHONE}`,
+].join('\n');
+
 // Arma el link de WhatsApp con el saludo predeterminado de Nospi, personalizado
 // con el primer nombre de la persona y, si se conoce, la fecha/hora del evento.
 function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
@@ -205,22 +226,25 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
 
   let eventBlock = '';
   if (eventName && eventDate) {
-    const formattedDate = new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const formattedDate = new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
     const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-      eventBlock = `\n\n*${eventName.trim()}*\n📅 ${formattedDate}${timePart}`;
+    eventBlock = ` *${eventName.trim()}*.\n📅 ${formattedDate}${timePart}`;
+  } else if (eventName) {
+    eventBlock = ` *${eventName.trim()}*.`;
+  } else {
+    eventBlock = ' tu evento.';
   }
 
   const message = [
     `¡Hola ${firstName}! 👋`,
     ``,
-    `Te escribimos desde Nospi confirmando que ya estás dentro.${eventBlock}`,
+    `Quedaste dentro de${eventBlock}`,
+    `📍 El lugar te lo mandamos un día antes.`,
     ``,
-    `📍 El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`,
+    `Cancelas gratis desde la app hasta 24 h antes y conservas tu saldo. Con menos de 24 h o si no llegas, pierdes el saldo y te queda una falta — y con faltas se suspende la cuenta para reservar.`,
+    `📋 https://app.nospi.co/politica-asistencia`,
     ``,
-    `ℹ️ Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación y te devolvemos tu saldo para que lo uses en otro evento. Si lo haces con menos de 24 horas o no asistes, no alcanzamos a devolverte el saldo y tu cuenta podría quedar suspendida para reservar por un tiempo.`,
-    `📋 Consulta la política de asistencia: https://nospi.co/#politica`,
-    ``,
-    `¡Nos pillamos pronto! 😎`,
+    `¡Nos pillamos! 😎`,
     `_Equipo Nospi_`,
     ].join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
@@ -243,32 +267,31 @@ function buildEventReminderWhatsAppLink(
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
-  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
       const eventLabel = (eventName || 'evento').trim();
-  const dateLine = eventDate ? `📅 ${formattedDate}${timePart}` : '';
+  const dateLine = eventDate ? `📅 ${formattedDate}${timePart}` : (eventTime ? `🕖${timePart}` : '');
 
   let locationBlock: string;
   if (isLocationRevealed && locationName) {
-    const addressPart = locationAddress ? ` (${locationAddress})` : '';
+    const addressPart = locationAddress ? ` — ${locationAddress}` : '';
     const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
     locationBlock = `📍 ${locationName}${addressPart}${mapsLine}`;
   } else {
-    locationBlock = `📍 El lugar se revelará un día antes del evento — ¡prepárate para la sorpresa!`;
+    locationBlock = `📍 El lugar te lo mandamos hoy mismo.`;
   }
 
   const message = [
     `¡Hola ${firstName}! 👋`,
     ``,
-    `Te recordamos tu evento:`,
-    ``,
-    `*${eventLabel}*`,
+    `Mañana es *${eventLabel}*.`,
     dateLine,
     locationBlock,
     ``,
-    `ℹ️ Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación y te devolvemos tu saldo para que lo uses en otro evento. Si lo haces con menos de 24 horas o no asistes, no alcanzamos a devolverte el saldo y tu cuenta podría quedar suspendida para reservar por un tiempo.`,
-    `📋 Consulta la política de asistencia: https://nospi.co/#politica`,
+    BLOQUE_INSTALAR_VISPERA,
+    ``,
+    `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
     ``,
     `¡Nos pillamos! 😄`,
     `_Equipo Nospi_`,
@@ -290,29 +313,20 @@ function buildSameDayWhatsAppLink(
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
-  const addressPart = locationAddress ? ` (${locationAddress})` : '';
+  const addressPart = locationAddress ? ` — ${locationAddress}` : '';
   const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
 
   const message = [
     `¡Hola ${firstName}! 👋`,
     ``,
-          `*Hoy es tu ${(eventName || 'evento').trim()}* 🍽️`,
-    `📅${timePart || ' hoy'}`,
+    `*Hoy es ${(eventName || 'tu evento').trim()}*${timePart ? `,${timePart}` : '.'}`,
     `📍 ${locationName || 'el lugar acordado'}${addressPart}${mapsLine}`,
     ``,
-    `*Al llegar:* dile al personal que vienes de Nospi, te indican la mesa correspondiente.`,
+    `Al llegar di que vienes de Nospi y te indican la mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.`,
     ``,
-    `⏰ Llega puntual: el evento arranca con una dinámica para romper el hielo.`,
+    `Ya en la mesa abres la Dinámica y confirmas tu llegada: si no confirmas cuenta como falta, y con faltas se suspende la cuenta para reservar. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
     ``,
-    `✅ *Muy importante:* ya en la mesa, abre la Dinámica en la app y *confirma tu asistencia*. Con eso queda registrada tu llegada y pueden iniciar la dinámica:`,
-    `https://app.nospi.co/(tabs)/dinamica`,
-    ``,
-    `💡 Antes de arrancar, elijan a alguien que se encargue de iniciar la dinámica y leer las preguntas en voz alta.`,
-    ``,
-    `💘 Ojo que lo bueno es al final: eliges con quién hiciste clic y *nadie se entera a quién elegiste* 🙈 Solo si es mutuo se abre un *chat privado* entre ustedes 👀 Además calificas cómo te pareció todo 🙌`,
-    ``,
-    `ℹ️ *Si no confirmas tu asistencia en la app, puede figurar como falta y tu cuenta podría ser suspendida para reservar.* ¿Tienes algún problema para confirmar o entrar? Escríbenos y lo solucionamos — no suspendemos a nadie por un fallo técnico.`,
-    `📋 Consulta la política de asistencia: https://nospi.co/#politica`,
+    BLOQUE_INSTALAR_MISMO_DIA,
     ``,
     `¡Hoy Nospi! 🎉`,
     ].join('\n');
@@ -326,7 +340,7 @@ function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventNam
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
   const formattedDate = eventDate
-  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
