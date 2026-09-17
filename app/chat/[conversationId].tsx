@@ -766,6 +766,67 @@ export default function ChatThreadScreen() {
   // Antes "responder" solo existia como gesto oculto de mantener presionado,
   // asi que mucha gente no sabia que se podia.
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+
+  // ── Checks de WhatsApp ────────────────────────────────────────────────────
+  //
+  //   ✓        se envio (esta en el servidor)
+  //   ✓✓ gris  le llego a TODOS los demas (abrieron la app despues)
+  //   ✓✓ azul  TODOS abrieron este chat despues del mensaje
+  //
+  // En grupos la regla es la misma que en WhatsApp: azul solo cuando lo leyeron
+  // todos. En un grupo de 150 eso casi nunca pasa, y por eso existe "Info del
+  // mensaje", que si dice uno por uno quien lo leyo.
+  //
+  // Se pide un RESUMEN (dos fechas) y no la lista de participantes: para pintar
+  // dos palitos no vale la pena traerse 149 filas cada 20 segundos. Si el que va
+  // mas atrasado leyo hasta las 8:03, todo lo anterior a las 8:03 lo leyeron
+  // todos. La lista completa solo se baja al abrir "Info del mensaje".
+  const [estadoResumen, setEstadoResumen] = useState<{ leidoHasta: number; entregadoHasta: number } | null>(null);
+  const [infoMensaje, setInfoMensaje] = useState<{ ms: number; filas: any[] } | null>(null);
+  const [infoCargando, setInfoCargando] = useState(false);
+
+  const cargarEstadoResumen = useCallback(async () => {
+    if (!conversationId) return;
+    const { data, error } = await supabase.rpc('estado_conversacion_resumen', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return;
+    const fila: any = Array.isArray(data) ? data[0] : data;
+    if (!fila) return;
+    setEstadoResumen({
+      leidoHasta: fila.leido_hasta ? new Date(fila.leido_hasta).getTime() : 0,
+      entregadoHasta: fila.entregado_hasta ? new Date(fila.entregado_hasta).getTime() : 0,
+    });
+  }, [conversationId]);
+
+  // Cada 20 segundos mientras el chat este abierto. No va por realtime a
+  // proposito: avisar a todo el mundo cada vez que alguien abre un chat seria
+  // un chorro de eventos para dibujar dos palitos.
+  useEffect(() => {
+    cargarEstadoResumen();
+    const t = setInterval(cargarEstadoResumen, 20000);
+    return () => clearInterval(t);
+  }, [cargarEstadoResumen]);
+
+  const checksDe = useCallback((m: any): 'enviando' | 'enviado' | 'entregado' | 'leido' => {
+    if (m?.pending) return 'enviando';
+    const t = new Date(m.created_at).getTime();
+    if (estadoResumen && estadoResumen.leidoHasta >= t) return 'leido';
+    if (estadoResumen && estadoResumen.entregadoHasta >= t) return 'entregado';
+    return 'enviado';
+  }, [estadoResumen]);
+
+  const abrirInfoMensaje = useCallback(async (m: any) => {
+    if (!conversationId || !m) return;
+    setInfoCargando(true);
+    setInfoMensaje({ ms: new Date(m.created_at).getTime(), filas: [] });
+    const { data, error } = await supabase.rpc('estado_conversacion', {
+      p_conversation_id: conversationId,
+    });
+    setInfoCargando(false);
+    if (error) { setInfoMensaje(null); return; }
+    setInfoMensaje({ ms: new Date(m.created_at).getTime(), filas: (data as any[]) || [] });
+  }, [conversationId]);
   // Posicion en pantalla de la burbuja presionada, para abrir el menu JUNTO a
   // ella (como WhatsApp) en vez de pegado al fondo de la pantalla.
   const [actionAnchor, setActionAnchor] = useState<{ y: number; height: number; isMine: boolean } | null>(null);
@@ -2526,12 +2587,24 @@ export default function ChatThreadScreen() {
                       )}
                     </Text>
                   )}
-                  <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
-                    {/* Mientras el servidor no confirma se muestra un reloj en
-                        lugar de la hora, como en WhatsApp: asi se entiende que
-                        ya salio y que aun va en camino. */}
-                    {item.pending ? '🕐' : formatBogotaTime(new Date(item.created_at))}
-                  </Text>
+                  <View style={styles.timeRow}>
+                    <Text style={[styles.messageTime, isMine && styles.messageTimeMine]}>
+                      {/* Mientras el servidor no confirma se muestra un reloj en
+                          lugar de la hora, como en WhatsApp: asi se entiende que
+                          ya salio y que aun va en camino. */}
+                      {item.pending ? '🕐' : formatBogotaTime(new Date(item.created_at))}
+                    </Text>
+                    {/* Los checks solo en lo propio: en el mensaje de otro no
+                        significan nada para quien lo lee. */}
+                    {isMine && !item.pending && (() => {
+                      const e = checksDe(item);
+                      return (
+                        <Text style={[styles.checks, e === 'leido' && styles.checksLeido]}>
+                          {e === 'enviado' ? '✓' : '✓✓'}
+                        </Text>
+                      );
+                    })()}
+                  </View>
                 </TouchableOpacity>
                 </SwipeToReply>
               </View>
@@ -3131,6 +3204,15 @@ export default function ChatThreadScreen() {
                 <Text style={styles.attachOptionText}>Copiar</Text>
               </TouchableOpacity>
             )}
+            {actionMsg?.sender_id === user?.id && (
+              <TouchableOpacity
+                style={styles.actionSheetRow}
+                onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); abrirInfoMensaje(m); }}
+              >
+                <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>👁</Text>
+                <Text style={styles.attachOptionText}>Info del mensaje</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.actionSheetRow, styles.actionSheetRowLast]}
               onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); togglePinned(m); }}
@@ -3142,6 +3224,60 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           </View>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Info del mensaje: lo que en WhatsApp sale al mantener presionado un
+          mensaje propio. Aqui importa mas que en WhatsApp porque los grupos son
+          de 150 personas y el doble check azul (todos leyeron) practicamente
+          nunca se va a prender: lo util es ver cuantos y quienes. */}
+      <Modal visible={!!infoMensaje} animationType="fade" transparent onRequestClose={() => setInfoMensaje(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setInfoMensaje(null)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.attachSheet, { paddingBottom: insets.bottom + 18, maxHeight: '75%' }]}>
+            <View style={styles.sheetGrabber} />
+            <Text style={styles.attachSheetTitle}>Info del mensaje</Text>
+
+            {infoCargando ? (
+              <ActivityIndicator size="small" color={nospiColors.purpleDark} style={{ marginVertical: 24 }} />
+            ) : (() => {
+              const ms = infoMensaje?.ms || 0;
+              const filas = infoMensaje?.filas || [];
+              const enMs = (v: any) => (v ? new Date(v).getTime() : 0);
+              const leyeron = filas.filter(f => enMs(f.last_read_at) >= ms);
+              const recibieron = filas.filter(f => enMs(f.last_read_at) < ms && enMs(f.last_delivered_at) >= ms);
+              const pendientes = filas.filter(f => enMs(f.last_read_at) < ms && enMs(f.last_delivered_at) < ms);
+              const cuando = (v: any) => (v ? formatBogotaTime(new Date(v)) : '');
+
+              const seccion = (titulo: string, icono: string, gente: any[], conHora: boolean) => (
+                gente.length === 0 ? null : (
+                  <View key={titulo} style={{ marginTop: 14 }}>
+                    <Text style={styles.infoSeccionTitulo}>{icono} {titulo} · {gente.length}</Text>
+                    {gente.map((f: any) => (
+                      <View key={f.user_id} style={styles.infoFila}>
+                        <Text style={styles.infoNombre} numberOfLines={1}>{f.name || 'Alguien'}</Text>
+                        {conHora ? <Text style={styles.infoHora}>{cuando(f.last_read_at)}</Text> : null}
+                      </View>
+                    ))}
+                  </View>
+                )
+              );
+
+              if (filas.length === 0) {
+                return <Text style={styles.infoVacio}>Todavía no hay nadie más en esta conversación.</Text>;
+              }
+
+              return (
+                <ScrollView style={{ maxHeight: 420 }}>
+                  {seccion('Leído por', '✓✓', leyeron, true)}
+                  {seccion('Le llegó, sin abrir', '✓✓', recibieron, false)}
+                  {seccion('Todavía no le llega', '✓', pendientes, false)}
+                  <Text style={styles.attachSheetHint}>
+                    "Le llegó" quiere decir que abrió la app después de tu mensaje. "Leído" es que abrió este chat.
+                  </Text>
+                </ScrollView>
+              );
+            })()}
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -3659,8 +3795,23 @@ const styles = StyleSheet.create({
   messageTextMine: { color: '#FFFFFF' },
   linkText: { color: '#0a58ca', textDecorationLine: 'underline' },
   linkTextMine: { color: '#dce9ff', textDecorationLine: 'underline' },
-  messageTime: { fontSize: 10, color: 'rgba(42,42,46,0.45)', marginTop: 3, alignSelf: 'flex-end' },
+  messageTime: { fontSize: 10, color: 'rgba(42,42,46,0.45)', alignSelf: 'flex-end' },
   messageTimeMine: { color: 'rgba(255,255,255,0.65)' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', marginTop: 3 },
+  infoSeccionTitulo: { fontSize: 12.5, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 6 },
+  infoFila: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', gap: 10,
+  },
+  infoNombre: { fontSize: 14, color: nospiColors.gray800, flex: 1 },
+  infoHora: { fontSize: 11.5, color: nospiColors.gray400 },
+  infoVacio: { fontSize: 13, color: nospiColors.gray400, textAlign: 'center', paddingVertical: 22 },
+  // letterSpacing negativo para que los dos palitos se peguen como en WhatsApp
+  // en vez de parecer dos marcas sueltas.
+  checks: { fontSize: 11, color: 'rgba(255,255,255,0.65)', letterSpacing: -2.5 },
+  // Azul claro y no el azul de WhatsApp: sobre el vinotinto de la burbuja
+  // propia, el azul oscuro se pierde.
+  checksLeido: { color: '#7FD3FF' },
   emptyMessages: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 40 },
   emptyMessagesText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' },
   replyPreview: {
