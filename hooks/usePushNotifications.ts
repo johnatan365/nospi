@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 import { syncWebPush } from '@/lib/webPush';
+import { registrarEntregaEnSegundoPlano } from '@/lib/entregaEnSegundoPlano';
 
 /**
  * Pide permiso de notificaciones, obtiene el token de Expo push del dispositivo,
@@ -65,6 +66,8 @@ export function usePushNotifications(userId: string | null | undefined) {
     const sub = Notifications.addNotificationReceivedListener(() => {
       supabase.rpc('marcar_entregado').then(() => {}, () => {});
     });
+    // Y con la app cerrada lo hace la tarea de segundo plano.
+    registrarEntregaEnSegundoPlano();
     return () => sub.remove();
   }, [userId]);
 
