@@ -52,6 +52,22 @@ export async function registerPushToken(userId: string): Promise<boolean> {
 export function usePushNotifications(userId: string | null | undefined) {
   const registeredForUserId = useRef<string | null>(null);
 
+  // Doble check gris: cuando entra una notificacion con la app abierta, ya
+  // sabemos que el mensaje llego a este telefono. Se marca recibido en el acto,
+  // sin esperar a que la persona entre al chat.
+  //
+  // Lo que ESTO no cubre: la app cerrada del todo. Ahi el aviso lo pinta el
+  // sistema operativo sin ejecutar codigo nuestro (Android puede despertarla
+  // con un modulo extra; iOS no lo garantiza nunca). En ese caso el doble check
+  // aparece cuando la persona vuelve a abrir la app.
+  useEffect(() => {
+    if (!userId || Platform.OS === 'web') return;
+    const sub = Notifications.addNotificationReceivedListener(() => {
+      supabase.rpc('marcar_entregado').then(() => {}, () => {});
+    });
+    return () => sub.remove();
+  }, [userId]);
+
   useEffect(() => {
     if (!userId) return;
     if (registeredForUserId.current === userId) return; // ya se registró para este usuario en esta sesión
