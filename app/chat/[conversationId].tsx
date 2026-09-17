@@ -90,6 +90,14 @@ const MESSAGE_COLUMNS =
 // para poder explicarlo con palabras en vez de soltar el error crudo de Storage.
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+// media_path guarda normalmente una ruta dentro del bucket privado, que hay que
+// firmar para poder mostrarla. Hay dos excepciones que se usan tal cual:
+//   - los GIFs, que guardan el enlace publico de GIPHY;
+//   - la foto que se esta subiendo, que mientras tanto se muestra desde el
+//     archivo del propio telefono (file://, blob:, content://).
+const esEnlaceDirecto = (path?: string | null) =>
+  !!path && /^(https?|file|blob|data|content):/.test(path);
+
 // Las fotos y videos se borran solos al mes; las notas de voz se quedan.
 const MEDIA_RETENTION_DAYS = 30;
 
@@ -897,9 +905,13 @@ export default function ChatThreadScreen() {
       if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Mensajes fijados', msg);
       return;
     }
-    setMessages(prev => prev.map(x => x.id === m.id
-      ? { ...x, pinned_at: willPin ? new Date().toISOString() : null, pinned_by: willPin ? (user?.id ?? null) : null }
-      : x));
+    const actualizado = { ...m, pinned_at: willPin ? new Date().toISOString() : null, pinned_by: willPin ? (user?.id ?? null) : null };
+    setMessages(prev => prev.map(x => x.id === m.id ? { ...x, ...actualizado } : x));
+    // El mensaje puede no estar en la pagina cargada (se fijo hace meses), asi
+    // que la lista aparte se actualiza sola.
+    setFijados(prev => willPin
+      ? [actualizado, ...prev.filter(x => x.id !== m.id)]
+      : prev.filter(x => x.id !== m.id));
   }, [user?.id]);
 
   const copyMessageText = useCallback(async (m: Message | null) => {
@@ -1100,6 +1112,18 @@ export default function ChatThreadScreen() {
   const [pollEnviando, setPollEnviando] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
 
+  // Cuantos mensajes se traen de una. 50 llena mas de una pantalla en cualquier
+  // telefono, asi que la conversacion se ve completa de entrada.
+  const PAGINA = 50;
+  const [hayAnteriores, setHayAnteriores] = useState(false);
+  const [cargandoAnteriores, setCargandoAnteriores] = useState(false);
+  // Mensajes fijados, que pueden ser mas viejos que la pagina cargada.
+  const [fijados, setFijados] = useState<Message[]>([]);
+  // Al traer mensajes viejos la lista crece por ARRIBA, y el salto automatico
+  // al final mandaria a la persona de vuelta abajo justo cuando queria leer lo
+  // de antes. Esta bandera lo salta una vez.
+  const pegandoArribaRef = useRef(false);
+
   const listRef = useRef<FlatList<Message>>(null);
   // Rutas para las que ya se pidio firma, para no volver a pedirlas en cada
   // render (y para no entrar en bucle si alguna falla).
@@ -1121,21 +1145,44 @@ export default function ChatThreadScreen() {
   const loadEverything = useCallback(async () => {
     if (!conversationId || !user?.id) return;
 
-    const [{ data: msgs, error: msgsError }, { data: parts, error: partsError }, { data: convs }] =
+    const [{ data: msgs, error: msgsError }, { data: parts, error: partsError }, { data: convs }, { data: fijadosData }] =
       await Promise.all([
+        // Solo la ultima pagina, no la conversacion entera.
+        //
+        // Antes esto pedia TODOS los mensajes desde el primer dia y la pantalla
+        // no pintaba nada hasta que llegaran: en un grupo con meses de historia
+        // eran miles de filas y varios segundos de espera cada vez que se
+        // abria el chat. Se piden los ultimos PAGINA (uno de mas, para saber si
+        // hay anteriores) y lo viejo se trae a demanda con el boton de arriba.
         supabase
           .from('chat_messages')
           .select(MESSAGE_COLUMNS)
           .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true }),
+          .order('created_at', { ascending: false })
+          .limit(PAGINA + 1),
         supabase.rpc('get_conversation_participants', { p_conversation_id: conversationId }),
         supabase.rpc('get_my_conversations'),
+        // Los fijados van aparte justamente porque pueden ser mas viejos que la
+        // pagina cargada; si dependieran de la lista, la banda de arriba se
+        // vaciaria al paginar.
+        supabase
+          .from('chat_messages')
+          .select(MESSAGE_COLUMNS)
+          .eq('conversation_id', conversationId)
+          .not('pinned_at', 'is', null)
+          .order('pinned_at', { ascending: false })
+          .limit(20),
       ]);
 
     if (msgsError) console.error('ChatThread: error loading messages', msgsError);
     if (partsError) console.error('ChatThread: error loading participants', partsError);
 
-    setMessages((msgs as Message[]) || []);
+    const lote = ((msgs as Message[]) || []);
+    const hay = lote.length > PAGINA;
+    const visibles = (hay ? lote.slice(0, PAGINA) : lote).slice().reverse();
+    setMessages(visibles);
+    setHayAnteriores(hay);
+    setFijados((fijadosData as Message[]) || []);
     setParticipants((parts as Participant[]) || []);
 
     const thisConv = (convs || []).find((c: any) => c.conversation_id === conversationId);
@@ -1161,6 +1208,34 @@ export default function ChatThreadScreen() {
   useEffect(() => {
     loadEverything();
   }, [loadEverything]);
+
+  const cargarAnteriores = useCallback(async () => {
+    if (!conversationId || cargandoAnteriores) return;
+    const masViejo = messages.find((m) => !m.pending);
+    if (!masViejo) return;
+    setCargandoAnteriores(true);
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select(MESSAGE_COLUMNS)
+        .eq('conversation_id', conversationId)
+        .lt('created_at', masViejo.created_at)
+        .order('created_at', { ascending: false })
+        .limit(PAGINA + 1);
+      if (error) return;
+      const lote = (data as Message[]) || [];
+      const hay = lote.length > PAGINA;
+      const nuevos = (hay ? lote.slice(0, PAGINA) : lote).slice().reverse();
+      pegandoArribaRef.current = true;
+      setMessages((prev) => {
+        const yaEstan = new Set(prev.map((m) => m.id));
+        return [...nuevos.filter((m) => !yaEstan.has(m.id)), ...prev];
+      });
+      setHayAnteriores(hay);
+    } finally {
+      setCargandoAnteriores(false);
+    }
+  }, [conversationId, messages, cargandoAnteriores]);
 
   // Pide enlaces firmados para las fotos/videos que todavia no tienen uno.
   // El bucket es privado, asi que sin esto la imagen no carga. La firma la
@@ -1232,7 +1307,7 @@ export default function ChatThreadScreen() {
           // una peticion condenada a fallar en cada carga del chat.
           .filter((m) => !m.media_expired)
           .map((m) => m.media_path)
-          .filter((path): path is string => !!path && !signRequestedRef.current.has(path))
+          .filter((path): path is string => !!path && !esEnlaceDirecto(path) && !signRequestedRef.current.has(path))
       )
     );
     if (pending.length === 0) return;
@@ -1479,7 +1554,39 @@ export default function ChatThreadScreen() {
     const { kind, ext, mime } = mediaFileInfo(asset);
 
     const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    await uploadToBucket(asset, path, mime);
+
+    // La foto se ve YA, mientras se sube.
+    //
+    // Antes la burbuja no aparecia hasta que el archivo terminaba de subir: con
+    // una foto pesada y datos moviles eso son varios segundos mirando una
+    // pantalla que no reacciona, y la sensacion es que la app se colgo. Ahora
+    // se pinta al instante usando el archivo que ya esta en el telefono
+    // (asset.uri) y se sube por detras; al terminar, el provisional se cambia
+    // por el de verdad. Si falla la subida, se quita y se avisa.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const provisional: Message = {
+      id: tempId,
+      conversation_id: conversationId,
+      sender_id: user.id,
+      content: caption,
+      created_at: new Date().toISOString(),
+      reply_to: replyId,
+      media_path: asset.uri,
+      media_kind: kind,
+      media_mime: mime,
+      media_width: asset.width ?? null,
+      media_height: asset.height ?? null,
+      pending: true,
+    } as Message;
+    setMessages((prev) => [...prev, provisional]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+
+    try {
+      await uploadToBucket(asset, path, mime);
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      throw e;
+    }
 
     const { data, error } = await supabase
       .from('chat_messages')
@@ -1499,9 +1606,12 @@ export default function ChatThreadScreen() {
       .select(MESSAGE_COLUMNS)
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      throw new Error(error.message);
+    }
     if (data) {
-      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      setMessages((prev) => fusionarMensajeReal(prev, data as Message, tempId));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
@@ -1815,21 +1925,16 @@ export default function ChatThreadScreen() {
     setGifEnviando(gif.id);
 
     try {
-      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.gif`;
-
-      if (Platform.OS === 'web') {
-        const blob = await (await fetch(gif.fullUrl)).blob();
-        const { error: upErr } = await supabase.storage
-          .from(MEDIA_BUCKET)
-          .upload(path, blob, { contentType: 'image/gif', cacheControl: '3600', upsert: false });
-        if (upErr) throw new Error(upErr.message);
-      } else {
-        const temporal = `${FileSystem.cacheDirectory}gif-${Date.now()}.gif`;
-        const bajado = await FileSystem.downloadAsync(gif.fullUrl, temporal);
-        if (bajado.status >= 400) throw new Error('No se pudo descargar el GIF.');
-        await uploadToBucket({ uri: bajado.uri } as ImagePicker.ImagePickerAsset, path, 'image/gif');
-        FileSystem.deleteAsync(bajado.uri, { idempotent: true }).catch(() => {});
-      }
+      // El GIF NO se copia a nuestro Storage: se guarda el enlace de GIPHY tal
+      // cual. Antes el telefono lo bajaba entero (hasta 2 MB) y lo volvia a
+      // subir antes de que el mensaje apareciera — el mismo archivo viajando
+      // dos veces por los datos de la persona, que es lo que se sentia lento.
+      // GIPHY sirve esos enlaces desde su propia red y para siempre.
+      //
+      // Aguas con esto: media_path deja de ser siempre una ruta del bucket y
+      // puede ser una URL. Todo lo que lo use tiene que mirar si empieza por
+      // http (firmar enlaces, la limpieza mensual del servidor).
+      const path = gif.fullUrl;
 
       const { data, error: insErr } = await supabase
         .from('chat_messages')
@@ -2184,9 +2289,19 @@ export default function ChatThreadScreen() {
 
   // Mensajes fijados, del mas reciente al mas antiguo. Si hay varios, la banda
   // muestra uno y se va rotando al tocarla (como WhatsApp).
-  const pinnedMessages = messages
-    .filter((m) => !!m.pinned_at)
-    .sort((x, y) => (y.pinned_at || '').localeCompare(x.pinned_at || ''));
+  const pinnedMessages = (() => {
+    const porId = new Map<string, Message>();
+    // Primero los traidos aparte y despues los de la lista: si un mensaje esta
+    // en las dos, gana el de la lista, que es el que refleja lo que la persona
+    // acaba de fijar o desfijar sin esperar al servidor.
+    for (const m of fijados) if (m.pinned_at) porId.set(m.id, m);
+    for (const m of messages) {
+      if (m.pinned_at) porId.set(m.id, m);
+      else porId.delete(m.id);
+    }
+    return Array.from(porId.values())
+      .sort((x, y) => (y.pinned_at || '').localeCompare(x.pinned_at || ''));
+  })();
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const activePinned = pinnedMessages.length > 0
     ? pinnedMessages[pinnedIndex % pinnedMessages.length]
@@ -2395,7 +2510,21 @@ export default function ChatThreadScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesContainer}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => {
+            if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
+            listRef.current?.scrollToEnd({ animated: false });
+          }}
+          ListHeaderComponent={hayAnteriores ? (
+            <TouchableOpacity
+              onPress={cargarAnteriores}
+              disabled={cargandoAnteriores}
+              style={styles.verAnteriores}
+            >
+              <Text style={styles.verAnterioresTexto}>
+                {cargandoAnteriores ? 'Cargando…' : '↑ Ver mensajes anteriores'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           renderItem={({ item }) => {
             const isMine = item.sender_id === user?.id;
             const isSystem = item.sender_id === NOSPI_SYSTEM_USER_ID;
@@ -2499,13 +2628,15 @@ export default function ChatThreadScreen() {
                   )}
                   {!!item.media_path && item.media_kind === 'audio' && (
                     <VoiceNote
-                      uri={signedUrls[item.media_path as string] || null}
+                      uri={esEnlaceDirecto(item.media_path) ? (item.media_path as string) : (signedUrls[item.media_path as string] || null)}
                       duration={item.media_duration}
                       mine={isMine}
                     />
                   )}
                   {!!item.media_path && item.media_kind !== 'audio' && (() => {
-                    const url = signedUrls[item.media_path as string];
+                    const url = esEnlaceDirecto(item.media_path)
+                      ? (item.media_path as string)
+                      : signedUrls[item.media_path as string];
                     const box = mediaBoxSize(item.media_width, item.media_height);
                     if (!url) {
                       return (
@@ -2573,7 +2704,7 @@ export default function ChatThreadScreen() {
                           transition={120}
                           // Si el enlace ya no sirve, se pide uno nuevo en vez
                           // de dejar el hueco en blanco.
-                          onError={() => volverAFirmar(item.media_path as string)}
+                          onError={() => { if (!esEnlaceDirecto(item.media_path)) volverAFirmar(item.media_path as string); }}
                         />
                       </TouchableOpacity>
                     );
@@ -3798,6 +3929,12 @@ const styles = StyleSheet.create({
   messageTime: { fontSize: 10, color: 'rgba(42,42,46,0.45)', alignSelf: 'flex-end' },
   messageTimeMine: { color: 'rgba(255,255,255,0.65)' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', marginTop: 3 },
+  verAnteriores: {
+    alignSelf: 'center', marginBottom: 10,
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  verAnterioresTexto: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
   infoSeccionTitulo: { fontSize: 12.5, fontWeight: '800', color: nospiColors.purpleDark, marginBottom: 6 },
   infoFila: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
