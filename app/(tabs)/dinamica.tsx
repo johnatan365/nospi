@@ -1409,7 +1409,7 @@ export default function DinamicaScreen() {
             </View>
           </View>
 
-          <TouchableOpacity onPress={() => Linking.openURL('https://nospi.co/#politica')} style={styles.policyLinkWrap}>
+          <TouchableOpacity onPress={() => router.push('/politica-asistencia')} style={styles.policyLinkWrap}>
             <Text style={styles.policyLinkText}>📋 Ver la política de asistencia</Text>
           </TouchableOpacity>
         </ScrollView>
