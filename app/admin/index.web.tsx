@@ -549,6 +549,13 @@ export default function AdminPanelScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  // Los paneles de chat (canales, grupos, privados) estaban armados como en un
+  // computador: lista fija de 220-260px a la izquierda y la conversacion a la
+  // derecha. En un celular eso deja la conversacion en ~100px de ancho y el
+  // texto sale una letra por renglon, ilegible. Debajo de 900px se cambia a una
+  // cosa a la vez: primero la lista, y al tocar una conversacion, esa
+  // conversacion a pantalla completa con un boton para volver.
+  const chatAngosto = width < 900;
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Password visibility
@@ -6050,9 +6057,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </select>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 14, minHeight: 400 }}>
-          {/* Lista de canales */}
-          <View style={{ width: 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+        <View style={{ flexDirection: chatAngosto ? 'column' : 'row', gap: 14, minHeight: 400 }}>
+          {/* Lista de canales. En pantalla angosta se esconde cuando ya hay uno
+              abierto: no caben los dos al tiempo. */}
+          {!(chatAngosto && active) && (
+          <View style={{ width: chatAngosto ? '100%' : 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
             <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 9, paddingHorizontal: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#6b7280', letterSpacing: 0.5 }}>CANALES</Text>
             </View>
@@ -6101,9 +6110,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               })}
             </ScrollView>
           </View>
+          )}
 
           {/* Canal seleccionado */}
-          <View style={{ flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+          {!(chatAngosto && !active) && (
+          <View style={{ flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+            {chatAngosto && active && (
+              <TouchableOpacity
+                onPress={() => setActiveChannelId(null)}
+                style={{ paddingVertical: 10, paddingHorizontal: 13, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista de canales</Text>
+              </TouchableOpacity>
+            )}
             {!active ? (
               <View style={{ padding: 30, alignItems: 'center' }}>
                 <Text style={{ fontSize: 13, color: '#6b7280' }}>Selecciona un canal para escribir en él.</Text>
@@ -6178,11 +6197,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             </Text>
                           )}
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 3 }}>
-                            {mine && (
-                              <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
-                                <Text style={{ fontSize: 9.5, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>👁 Ver quién lo vio</Text>
-                              </TouchableOpacity>
-                            )}
+                            <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
+                              <Text style={{ fontSize: 9.5, fontWeight: '700', color: mine ? 'rgba(255,255,255,0.85)' : '#880E4F' }}>👁 Ver quién lo vio</Text>
+                            </TouchableOpacity>
                             <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right' }}>
                               {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </Text>
@@ -6213,6 +6230,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               </>
             )}
           </View>
+          )}
         </View>
 
         {/* Crear encuesta o calificacion */}
@@ -6315,54 +6333,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </View>
         </Modal>
 
-        {/* Quién vio el mensaje */}
-        <Modal visible={!!readersModal} transparent animationType="fade" onRequestClose={() => setReadersModal(null)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '85%', overflow: 'hidden' }}>
-              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>👁 Quién vio el mensaje</Text>
-                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }} numberOfLines={2}>
-                  “{readersModal?.content || ''}”
-                </Text>
-                {!readersLoading && !!readersModal && (
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#6B21A8', marginTop: 8 }}>
-                    {readersModal.rows.filter((r: any) => r.visto).length} de {readersModal.rows.length} lo vieron
-                  </Text>
-                )}
-                <Text style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 6, lineHeight: 14 }}>
-                  “Visto” = abrió el chat después de que se publicó el mensaje. La app no lleva acuse de recibo por mensaje.
-                </Text>
-              </View>
-
-              <ScrollView style={{ maxHeight: 380 }}>
-                {readersLoading ? (
-                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Cargando…</Text>
-                ) : (readersModal?.rows || []).length === 0 ? (
-                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Sin participantes.</Text>
-                ) : (readersModal?.rows || []).map((r: any) => (
-                  <View key={r.user_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                    <Text style={{ fontSize: 15 }}>{r.visto ? '✅' : '⬜'}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: r.visto ? '#1f2937' : '#9CA3AF' }} numberOfLines={1}>{r.name || 'Sin nombre'}</Text>
-                      <Text style={{ fontSize: 11, color: '#9CA3AF' }} numberOfLines={1}>{r.phone || r.email || ''}</Text>
-                    </View>
-                    <Text style={{ fontSize: 10.5, color: '#9CA3AF' }}>
-                      {r.visto && r.last_read_at
-                        ? new Date(r.last_read_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-                        : 'Sin abrir'}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-
-              <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', alignItems: 'flex-end' }}>
-                <TouchableOpacity onPress={() => setReadersModal(null)} style={{ backgroundColor: '#880E4F', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18 }}>
-                  <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Cerrar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </View>
     );
   };
@@ -6372,9 +6342,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const renderGroupChats = () => {
     const active = groupChats.find(g => g.conversation_id === activeGroupChatId);
     return (
-      <View style={{ flexDirection: 'row', gap: 14, flex: 1, minHeight: 420 }}>
-        {/* Lista de chats */}
-        <View style={{ width: 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+      <View style={{ flexDirection: chatAngosto ? 'column' : 'row', gap: 14, flex: 1, minHeight: 420 }}>
+        {/* Lista de chats. En celular desaparece al abrir uno: no caben los dos. */}
+        {!(chatAngosto && active) && (
+        <View style={{ width: chatAngosto ? '100%' : 260, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
           <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 9, paddingHorizontal: 12 }}>
             <Text style={{ fontSize: 11, fontWeight: '800', color: '#6b7280', letterSpacing: 0.5 }}>CHAT DE CADA EVENTO</Text>
           </View>
@@ -6412,9 +6383,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             })}
           </ScrollView>
         </View>
+        )}
 
         {/* Conversacion */}
-        <View style={{ flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+        {!(chatAngosto && !active) && (
+        <View style={{ flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+          {chatAngosto && active && (
+            <TouchableOpacity
+              onPress={() => setActiveGroupChatId(null)}
+              style={{ paddingVertical: 10, paddingHorizontal: 13, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
+            >
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista de eventos</Text>
+            </TouchableOpacity>
+          )}
           {!active ? (
             <View style={{ padding: 30, alignItems: 'center' }}>
               <Text style={{ fontSize: 13, color: '#6b7280' }}>Selecciona un evento para ver su chat y escribir.</Text>
@@ -6448,9 +6429,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                         <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
                           {m.media_kind ? `📎 ${m.media_kind}${m.content ? ' · ' + m.content : ''}` : m.content}
                         </Text>
-                        <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right', marginTop: 3 }}>
-                          {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                          <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
+                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: mine ? 'rgba(255,255,255,0.85)' : '#880E4F' }}>👁 Ver quién lo vio</Text>
+                          </TouchableOpacity>
+                          <Text style={{ fontSize: 9, color: mine ? 'rgba(255,255,255,0.6)' : '#9CA3AF', textAlign: 'right' }}>
+                            {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   );
@@ -6477,6 +6463,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </>
           )}
         </View>
+        )}
       </View>
     );
   };
@@ -6858,8 +6845,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       ) : moderationTab === 'feedback' ? (
         <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
       ) : (
-      <View style={styles.eventChatBody}>
-        <ScrollView style={styles.eventChatConvList}>
+      <View style={[styles.eventChatBody, chatAngosto && styles.eventChatBodyAngosto]}>
+        {!(chatAngosto && activeModConvId) && (
+        <ScrollView style={[styles.eventChatConvList, chatAngosto && styles.eventChatConvListAngosta]}>
           {moderationTab === 'chats' ? (
             allDirectConvosLoading ? (
               <Text style={styles.eventChatEmptyText}>Cargando chats…</Text>
@@ -6910,7 +6898,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           )}
         </ScrollView>
 
-        <View style={styles.eventChatThread}>
+        )}
+        {!(chatAngosto && !activeModConvId) && (
+        <View style={[styles.eventChatThread, chatAngosto && styles.eventChatThreadAngosto]}>
+          {chatAngosto && !!activeModConvId && (
+            <TouchableOpacity
+              onPress={() => setActiveModConvId(null)}
+              style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
+            >
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
+            </TouchableOpacity>
+          )}
           <ScrollView style={styles.eventChatMessagesScroll}>
             {!activeModConvId ? (
               <Text style={styles.eventChatEmptyText}>Selecciona una conversación para leerla</Text>
@@ -6936,7 +6934,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                       {!!(msg.content || '').trim() && (
                         <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
                       )}
-                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>{new Date(msg.created_at).toLocaleString('es-CO')}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 10, color: '#9ca3af' }}>{new Date(msg.created_at).toLocaleString('es-CO')}</Text>
+                        {/* Sirve para cualquier mensaje, no solo los del equipo:
+                            saber quien leyo lo que escribio otra persona es lo
+                            que dice si el grupo esta vivo o hablando solo. */}
+                        <TouchableOpacity onPress={() => abrirVistos(msg.id, msg.content || '')}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#880E4F' }}>👁 Ver quién lo vio</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 );
@@ -6945,6 +6951,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </ScrollView>
           <Text style={{ color: '#9ca3af', fontSize: 11, padding: 8, textAlign: 'center' }}>Modo lectura — moderación. No se envían mensajes desde aquí.</Text>
         </View>
+        )}
       </View>
       )}
     </View>
@@ -9982,8 +9989,9 @@ setBulkWhatsAppPending(pending);
               </TouchableOpacity>
             </View>
 
-            <View style={styles.eventChatBody}>
-              <ScrollView style={styles.eventChatConvList}>
+            <View style={[styles.eventChatBody, chatAngosto && styles.eventChatBodyAngosto]}>
+              {!(chatAngosto && activeEventConversationId) && (
+              <ScrollView style={[styles.eventChatConvList, chatAngosto && styles.eventChatConvListAngosta]}>
                 {eventConversationsLoading ? (
                   <Text style={styles.eventChatEmptyText}>Cargando conversaciones...</Text>
                 ) : eventConversations.length === 0 ? (
@@ -10011,8 +10019,18 @@ setBulkWhatsAppPending(pending);
                   ))
                 )}
               </ScrollView>
+              )}
 
-              <View style={styles.eventChatThread}>
+              {!(chatAngosto && !activeEventConversationId) && (
+              <View style={[styles.eventChatThread, chatAngosto && styles.eventChatThreadAngosto]}>
+                {chatAngosto && !!activeEventConversationId && (
+                  <TouchableOpacity
+                    onPress={() => setActiveEventConversationId(null)}
+                    style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
+                  >
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
+                  </TouchableOpacity>
+                )}
                 <ScrollView style={styles.eventChatMessagesScroll}>
                   {eventChatMessagesLoading ? (
                     <Text style={styles.eventChatEmptyText}>Cargando mensajes...</Text>
@@ -10036,6 +10054,12 @@ setBulkWhatsAppPending(pending);
                             {!!(msg.content || '').trim() && (
                               <Text style={styles.eventChatMsgContent}>{msg.content}</Text>
                             )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                              <Text style={{ fontSize: 10, color: '#9ca3af' }}>{new Date(msg.created_at).toLocaleString('es-CO')}</Text>
+                              <TouchableOpacity onPress={() => abrirVistos(msg.id, msg.content || '')}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#880E4F' }}>👁 Ver quién lo vio</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         </View>
                       );
@@ -10063,10 +10087,63 @@ setBulkWhatsAppPending(pending);
                   </TouchableOpacity>
                 </View>
               </View>
+              )}
             </View>
           </View>
         </View>
       </Modal>
+      {/* Quién vio el mensaje. Vive AQUI, en la raiz, y no dentro del panel
+          de canales: el mismo boton se usa ahora desde grupos, chats privados
+          y el chat del evento, y un modal que solo existe mientras se mira la
+          pestana de canales no abriria desde ninguno de los otros. */}
+        <Modal visible={!!readersModal} transparent animationType="fade" onRequestClose={() => setReadersModal(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '85%', overflow: 'hidden' }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>👁 Quién vio el mensaje</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }} numberOfLines={2}>
+                  “{readersModal?.content || ''}”
+                </Text>
+                {!readersLoading && !!readersModal && (
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#6B21A8', marginTop: 8 }}>
+                    {readersModal.rows.filter((r: any) => r.visto).length} de {readersModal.rows.length} lo vieron
+                  </Text>
+                )}
+                <Text style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 6, lineHeight: 14 }}>
+                  “Visto” = abrió el chat después de que se publicó el mensaje. La app no lleva acuse de recibo por mensaje.
+                </Text>
+              </View>
+
+              <ScrollView style={{ maxHeight: 380 }}>
+                {readersLoading ? (
+                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Cargando…</Text>
+                ) : (readersModal?.rows || []).length === 0 ? (
+                  <Text style={{ padding: 20, fontSize: 12.5, color: '#6B7280', textAlign: 'center' }}>Sin participantes.</Text>
+                ) : (readersModal?.rows || []).map((r: any) => (
+                  <View key={r.user_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                    <Text style={{ fontSize: 15 }}>{r.visto ? '✅' : '⬜'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: r.visto ? '#1f2937' : '#9CA3AF' }} numberOfLines={1}>{r.name || 'Sin nombre'}</Text>
+                      <Text style={{ fontSize: 11, color: '#9CA3AF' }} numberOfLines={1}>{r.phone || r.email || ''}</Text>
+                    </View>
+                    <Text style={{ fontSize: 10.5, color: '#9CA3AF' }}>
+                      {r.visto && r.last_read_at
+                        ? new Date(r.last_read_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : 'Sin abrir'}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+
+              <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', alignItems: 'flex-end' }}>
+                <TouchableOpacity onPress={() => setReadersModal(null)} style={{ backgroundColor: '#880E4F', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18 }}>
+                  <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Cerrar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
 {/* Lightbox — foto de perfil ampliada (chat global y por evento) */}
       <Modal visible={zoomedPhoto !== null} transparent animationType="fade" onRequestClose={() => setZoomedPhoto(null)}>
         <TouchableOpacity activeOpacity={1} onPress={() => setZoomedPhoto(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', alignItems: 'center', justifyContent: 'center' }}>
@@ -11745,11 +11822,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 500,
   },
+  // Version angosta (celular): una cosa a la vez, en columna y sin alto fijo.
+  eventChatBodyAngosto: {
+    flexDirection: 'column',
+    height: 'auto',
+    minHeight: 420,
+  },
   eventChatConvList: {
     width: 220,
     borderRightWidth: 1,
     borderRightColor: '#E5E7EB',
     backgroundColor: '#F9FAFB',
+  },
+  eventChatConvListAngosta: {
+    width: '100%',
+    maxHeight: 460,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  eventChatThreadAngosto: {
+    // minWidth 0 es lo que evita que el texto largo estire la fila y termine
+    // partido letra por letra; en columna ademas necesita alto propio.
+    minWidth: 0,
+    width: '100%',
+    minHeight: 420,
   },
   eventChatConvRow: {
     flexDirection: 'row',
