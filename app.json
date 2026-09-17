@@ -19,6 +19,9 @@
       "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSLocationWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento y permitirte participar en la experiencia.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Nospi necesita tu ubicación para verificar que estás en el lugar del evento.",
         "CFBundleURLTypes": [
