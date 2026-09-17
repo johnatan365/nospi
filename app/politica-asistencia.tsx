@@ -59,15 +59,20 @@ export default function PoliticaAsistenciaScreen() {
               <Text style={styles.cardTitle}>🗓️  Cancelación</Text>
               <Text style={styles.cardText}>
                 Si no vas a poder asistir, puedes <Text style={styles.bold}>cancelar desde la app con más de 24 horas</Text> de
-                anticipación y te devolvemos tu <Text style={styles.bold}>saldo</Text> para que lo uses en otro evento.
-                Si lo haces con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
-                <Text style={styles.bold}>no asistes</Text>, no alcanzamos a devolverte el saldo.
+                anticipación y te devolvemos tu <Text style={styles.bold}>saldo</Text> para que lo uses en otro evento,
+                sin ninguna consecuencia.
+              </Text>
+              <Text style={[styles.cardText, { marginTop: 10 }]}>
+                Si cancelas con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
+                <Text style={styles.bold}>no asistes</Text>, no alcanzamos a devolverte el saldo y queda{' '}
+                <Text style={styles.bold}>una falta</Text> en tu cuenta: a esa hora tu cupo ya está reservado
+                y el grupo armado.
               </Text>
             </View>
 
             {/* Niveles / suspensiones */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Si faltas sin avisar</Text>
+              <Text style={styles.cardTitle}>Cómo se cuentan las faltas</Text>
 
               <View style={[styles.level, styles.level1]}>
                 <View style={[styles.levelNum, styles.levelNum1]}>
