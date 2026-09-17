@@ -59,6 +59,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             setSession(session);
             setUser(session.user);
             setLoading(false);
+            // Arrancar la app tambien cuenta como "ya lo recibio" (ver el
+            // comentario del AppState mas abajo).
+            supabase.rpc('marcar_entregado').then(
+              () => {},
+              (err: unknown) => console.warn('SupabaseProvider: marcar_entregado (ignorado):', err),
+            );
           } else {
             // No session yet — could be a cold start or OAuth in progress.
             // We do NOT set a timeout here; instead we resolve loading=false
@@ -173,6 +179,16 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           if (refreshedSession) {
             setSession(refreshedSession);
             setUser(refreshedSession.user);
+            // Los dos checks grises del chat: "entregado" significa que la app
+            // de esta persona estuvo abierta despues de que le escribieron, que
+            // es lo unico que podemos detectar de verdad (ni iOS ni Android nos
+            // dejan correr codigo confiable cuando llega un push con la app
+            // cerrada). Aqui, cada vez que la app pasa a primer plano, se marca
+            // como recibido todo lo que le haya llegado en cualquier chat.
+            supabase.rpc('marcar_entregado').then(
+              () => {},
+              (err: unknown) => console.warn('SupabaseProvider: marcar_entregado (ignorado):', err),
+            );
           }
         } catch (err) {
           console.warn('SupabaseProvider: AppState session refresh error (ignored):', err);
