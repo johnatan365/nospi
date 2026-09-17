@@ -55,7 +55,19 @@ export function useUnreadChatCount(): number {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        () => fetchTotal()
+        () => {
+          fetchTotal();
+          // Doble check gris de quien escribio: si este aviso llego, la app de
+          // esta persona esta abierta y ya tiene el mensaje. Se marca recibido
+          // sin que tenga que entrar al chat ni volver a abrir la app.
+          //
+          // Este hook vive en la barra de pestanas, asi que corre en toda la
+          // app y no solo dentro de una conversacion.
+          supabase.rpc('marcar_entregado').then(
+            () => {},
+            () => {},
+          );
+        }
       )
       .subscribe();
 
