@@ -1127,6 +1127,64 @@ export default function AdminPanelScreen() {
     setReadersModal({ messageId, content, rows: (data as any[]) || [] });
   };
 
+  // Copiar una conversacion entera al portapapeles.
+  //
+  // Para que sirve: pegar un pedazo de chat en un correo, en un WhatsApp o
+  // guardarlo como prueba de lo que se dijo. Antes tocaba seleccionar con el
+  // mouse, y en estas listas la seleccion se rompe con cada burbuja.
+  //
+  // Sale en texto plano con fecha, hora y nombre por renglon, que es lo que se
+  // lee bien pegado en cualquier lado:
+  //   [17 sep, 07:30] Equipo Nospi: Hola a todos...
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  const copiarAlPortapapeles = useCallback(async (texto: string, etiqueta: string) => {
+    try {
+      // navigator.clipboard no existe en http ni en navegadores viejos; el
+      // textarea invisible con execCommand es el respaldo de toda la vida.
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopiado(etiqueta);
+      setTimeout(() => setCopiado(null), 2200);
+    } catch (e) {
+      window.alert('No se pudo copiar. Puede que el navegador lo esté bloqueando.');
+    }
+  }, []);
+
+  const fechaCorta = (v: any) => {
+    try {
+      return new Date(v).toLocaleString('es-CO', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+      });
+    } catch { return ''; }
+  };
+
+  // mensajes -> texto. nombreDe cambia segun el panel porque cada uno guarda el
+  // nombre en un sitio distinto (unos traen sender_name, otros hay que buscarlo
+  // en usersById).
+  const armarTextoChat = useCallback(
+    (titulo: string, mensajes: any[], nombreDe: (m: any) => string) => {
+      const cuerpo = (mensajes || []).map((m) => {
+        const adjunto = m.media_kind ? `[${m.media_kind}] ` : '';
+        const encuesta = m.poll_id ? '[encuesta] ' : '';
+        const texto = (m.content || '').trim();
+        return `[${fechaCorta(m.created_at)}] ${nombreDe(m)}: ${adjunto}${encuesta}${texto}`;
+      }).join('\n');
+      return `${titulo}\n${'─'.repeat(40)}\n${cuerpo}\n`;
+    },
+    [],
+  );
+
   const loadChannels = useCallback(async () => {
     setChannelsLoading(true);
     try {
@@ -6139,6 +6197,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <TouchableOpacity
+                    onPress={() => copiarAlPortapapeles(armarTextoChat(`${active.title} · ${active.participants} personas`, channelMessages, (m) => (m.sender_id === adminUserId ? 'Equipo Nospi' : (usersById[m.sender_id]?.name || 'Participante'))), 'canal')}
+                    style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
+                      {copiado === 'canal' ? '✅ Copiado' : '📋 Copiar chat'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     onPress={() => { resetPollForm(); setPollModalOpen(true); }}
                     style={{
                       backgroundColor: '#F3E5F5', borderWidth: 1, borderColor: '#CE93D8',
@@ -6402,10 +6468,29 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </View>
           ) : (
             <>
-              <View style={{ backgroundColor: '#FAFAFA', paddingVertical: 10, paddingHorizontal: 13, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+              <View style={{
+                backgroundColor: '#FAFAFA', paddingVertical: 10, paddingHorizontal: 13,
+                borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+              }}>
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937' }}>
                   {active.event_name} · {active.participants} inscritos
                 </Text>
+                <TouchableOpacity
+                  onPress={() => copiarAlPortapapeles(
+                    armarTextoChat(
+                      `${active.event_name} · ${active.participants} inscritos`,
+                      groupChatMessages,
+                      (m) => (m.sender_id === adminUserId ? 'Equipo Nospi' : (usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante'))),
+                    ),
+                    'grupo',
+                  )}
+                  style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
+                    {copiado === 'grupo' ? '✅ Copiado' : '📋 Copiar chat'}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 340 }}>
                 {groupChatMessages.length === 0 ? (
@@ -6901,14 +6986,30 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         )}
         {!(chatAngosto && !activeModConvId) && (
         <View style={[styles.eventChatThread, chatAngosto && styles.eventChatThreadAngosto]}>
-          {chatAngosto && !!activeModConvId && (
-            <TouchableOpacity
-              onPress={() => setActiveModConvId(null)}
-              style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
-            >
-              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
-            </TouchableOpacity>
-          )}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+            paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#F3F4F6',
+            borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+          }}>
+            {chatAngosto && !!activeModConvId ? (
+              <TouchableOpacity onPress={() => setActiveModConvId(null)}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
+              </TouchableOpacity>
+            ) : <View />}
+            {!!activeModConvId && (
+              <TouchableOpacity
+                onPress={() => copiarAlPortapapeles(
+                  armarTextoChat('Conversación', modMessages, (m) => (m.sender_id === '00000000-0000-0000-0000-000000000099' ? 'Equipo Nospi' : (m.sender_name || 'Participante'))),
+                  'mod',
+                )}
+                style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
+                  {copiado === 'mod' ? '✅ Copiado' : '📋 Copiar chat'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <ScrollView style={styles.eventChatMessagesScroll}>
             {!activeModConvId ? (
               <Text style={styles.eventChatEmptyText}>Selecciona una conversación para leerla</Text>
@@ -10023,14 +10124,34 @@ setBulkWhatsAppPending(pending);
 
               {!(chatAngosto && !activeEventConversationId) && (
               <View style={[styles.eventChatThread, chatAngosto && styles.eventChatThreadAngosto]}>
-                {chatAngosto && !!activeEventConversationId && (
-                  <TouchableOpacity
-                    onPress={() => setActiveEventConversationId(null)}
-                    style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}
-                  >
-                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+                  paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#F3F4F6',
+                  borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+                }}>
+                  {chatAngosto && !!activeEventConversationId ? (
+                    <TouchableOpacity onPress={() => setActiveEventConversationId(null)}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
+                    </TouchableOpacity>
+                  ) : <View />}
+                  {!!activeEventConversationId && (
+                    <TouchableOpacity
+                      onPress={() => copiarAlPortapapeles(
+                        armarTextoChat(
+                          `Chat de ${selectedEventForConfig?.name || 'Evento'}`,
+                          eventChatMessages,
+                          (m) => (m.sender_id === '00000000-0000-0000-0000-000000000099' ? 'Equipo Nospi' : (m.sender_name || 'Participante')),
+                        ),
+                        'evento',
+                      )}
+                      style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
+                        {copiado === 'evento' ? '✅ Copiado' : '📋 Copiar chat'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <ScrollView style={styles.eventChatMessagesScroll}>
                   {eventChatMessagesLoading ? (
                     <Text style={styles.eventChatEmptyText}>Cargando mensajes...</Text>
