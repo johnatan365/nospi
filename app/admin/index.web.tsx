@@ -1906,7 +1906,19 @@ const handleLogin = async () => {
   // Usuarios, citas, calificaciones y actividad por plataforma: es lo mas
   // pesado del panel (los usuarios solos son ~1,4 MB de JSON). Ya NO se espera
   // para pintar la pantalla; se carga aparte y el panel se va llenando.
+  // Cada carga pesada lleva un numero. Si mientras una esta en vuelo arranca
+  // otra (o el admin marca algo a mano, como el WhatsApp enviado), la vieja ya
+  // no puede pisar lo nuevo: se descarta al llegar. Sin esto, una respuesta
+  // lenta traia datos de ANTES del cambio y revivia lo que ya se habia hecho.
+  const cargaPesadaRef = useRef(0);
+
+  // WhatsApps de confirmacion que se marcaron a mano en esta sesion. Se vuelven
+  // a aplicar sobre cada carga hasta que el servidor las devuelva ya guardadas.
+  const marcasWhatsAppRef = useRef<Map<string, string>>(new Map());
+
   const loadHeavyAdminData = async (eventsList: any[]) => {
+    const miCarga = ++cargaPesadaRef.current;
+    const quedoVieja = () => cargaPesadaRef.current !== miCarga;
     setHeavyLoading(true);
     try {
       // Las RPC de admin devuelven una TABLE y Supabase (PostgREST) corta la
@@ -1970,6 +1982,10 @@ const handleLogin = async () => {
         supabase.from('user_platform_activity').select('user_id, platform, last_seen_at, first_seen_at'),
         rpcAllForAdmin('get_all_appointments_for_admin_v2'),
       ]);
+
+      // Si mientras se traian estos datos arranco otra carga, o el admin marco
+      // algo a mano, esta respuesta ya es vieja: aplicarla borraria lo nuevo.
+      if (quedoVieja()) return;
 
       // Usuarios. Ya no hace falta la consulta extra de fechas de registro:
       // public.users.created_at está lleno en todas las filas, así que
@@ -2071,13 +2087,23 @@ const handleLogin = async () => {
           };
         });
 
-        setAppointments(transformedAppointments);
-        setTotalAppointments(transformedAppointments.length);
+        // Las marcas hechas a mano hace un momento pueden no venir todavia en
+        // esta respuesta (salio antes del guardado). Se reaplican encima, y se
+        // olvidan en cuanto el servidor ya las trae.
+        const conMarcas = transformedAppointments.map((a: any) => {
+          const marca = marcasWhatsAppRef.current.get(a.id);
+          if (!marca) return a;
+          if (a.purchase_whatsapp_sent_at) { marcasWhatsAppRef.current.delete(a.id); return a; }
+          return { ...a, purchase_whatsapp_sent_at: marca };
+        });
+
+        setAppointments(conMarcas);
+        setTotalAppointments(conMarcas.length);
       }
     } catch (e) {
       console.error('Error cargando datos pesados del admin', e);
     } finally {
-      setHeavyLoading(false);
+      if (!quedoVieja()) setHeavyLoading(false);
     }
   };
 
@@ -2091,7 +2117,11 @@ const handleLogin = async () => {
     setActiveEvents((data || []).filter((e: any) => e.event_status === 'published').length);
   };
 
-  const loadDashboardData = async () => {
+  // esperarTodo = true: no devuelve el control hasta que tambien esten las
+  // citas y los usuarios. Al arrancar el panel NO se usa (se pinta rapido con
+  // los eventos y lo pesado va llegando), pero el boton de Actualizar si lo
+  // necesita: si no, dice "listo" cuando todavia no ha llegado casi nada.
+  const loadDashboardData = async (esperarTodo = false) => {
     try {
       setLoading(true);
 
@@ -2114,7 +2144,8 @@ const handleLogin = async () => {
       setLoading(false);
 
       // ── PASO 2: usuarios, citas, calificaciones y actividad, en segundo plano.
-      void loadHeavyAdminData(eventsData || []);
+      const pesados = loadHeavyAdminData(eventsData || []);
+      if (esperarTodo) await pesados;
 
       // ── Datos SECUNDARIOS (reconciliación / stats): se cargan en SEGUNDO
       // PLANO, sin bloquear la carga inicial. Solo se usan en las pestañas de
@@ -2189,7 +2220,7 @@ const handleLogin = async () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await loadDashboardData();
+      await loadDashboardData(true);
       if (currentView === 'questions') { try { await loadQuestions(); } catch (_e) {} }
       if (selectedEventForMonitoring) {
         try { await loadEventParticipants(selectedEventForMonitoring); } catch (_e) {}
@@ -2457,10 +2488,24 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // a esta cita puntual — así el botón masivo no se lo vuelve a mandar.
   const markPurchaseWhatsAppSent = async (appointmentId: string) => {
     const sentAt = new Date().toISOString();
+    // Cualquier carga de citas que venga en camino trae datos de ANTES de esta
+    // marca. Se apunta aqui para volver a aplicarla cuando esa carga llegue, y
+    // que la persona no reaparezca en la lista de pendientes.
+    marcasWhatsAppRef.current.set(appointmentId, sentAt);
     setAppointments(prev => prev.map(a => a.id === appointmentId ? { ...a, purchase_whatsapp_sent_at: sentAt } : a));
-    try {
-      await supabase.from('appointments').update({ purchase_whatsapp_sent_at: sentAt }).eq('id', appointmentId);
-    } catch (e) { console.error('Error marcando WhatsApp enviado:', e); }
+    // Supabase no lanza excepcion cuando la base rechaza: el error viene en la
+    // respuesta. Antes el try/catch no se enteraba de nada y la pantalla decia
+    // "enviado" aunque no se hubiera guardado.
+    const { error } = await supabase
+      .from('appointments')
+      .update({ purchase_whatsapp_sent_at: sentAt })
+      .eq('id', appointmentId);
+    if (error) {
+      console.error('Error marcando WhatsApp enviado:', error);
+      marcasWhatsAppRef.current.delete(appointmentId);
+      setAppointments(prev => prev.map(a => a.id === appointmentId ? { ...a, purchase_whatsapp_sent_at: null } : a));
+      window.alert('No se pudo guardar que ya le mandaste el WhatsApp: ' + error.message + '\nDale otra vez a Enviar para que quede registrado.');
+    }
   };
 
   // ── Edades por genero ──────────────────────────────────────────────────
