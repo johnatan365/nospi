@@ -44,11 +44,17 @@ function errorMessage(err: unknown): string {
 
 // Todas las llamadas a Meta pasan por aca para que el token nunca se arme a
 // mano en cada sitio y para que un error de Meta llegue siempre igual.
+// El token de usuario del sistema NO sirve para los bordes de la Pagina: Meta
+// responde "A Page access token is required for this call for the new Pages
+// experience". El de Pagina se deriva de /me/accounts y es el que se usa para
+// todo, menos para esa primera llamada.
+let tokenPagina: string | null = null;
+
 async function graph(
   path: string,
-  opciones: { metodo?: string; params?: Record<string, string>; body?: Record<string, unknown> } = {},
+  opciones: { metodo?: string; params?: Record<string, string>; body?: Record<string, unknown>; token?: string } = {},
 ): Promise<any> {
-  const { metodo = "GET", params = {}, body } = opciones;
+  const { metodo = "GET", params = {}, body, token } = opciones;
   const url = new URL(`${GRAPH}/${path.replace(/^\//, "")}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   // El token va en el header, no en el query string: asi no queda escrito en
@@ -56,7 +62,7 @@ async function graph(
   const res = await fetch(url.toString(), {
     method: metodo,
     headers: {
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${token ?? tokenPagina ?? TOKEN}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -72,14 +78,24 @@ async function graph(
   return datos;
 }
 
-// El token es de Pagina, asi que /me ya es la Pagina. De ahi cuelga la cuenta
-// de Instagram vinculada, que es la que manda para todo lo de IG.
+// Con un token de usuario del sistema, /me es el usuario del sistema, NO la
+// Pagina (pedirle instagram_business_account falla con "nonexisting field").
+// La Pagina sale de /me/accounts, y de ahi tambien su propio access_token, que
+// es el que exige Meta para los bordes de Pagina.
 let identidadCache: Identidad | null = null;
 async function identidad(): Promise<Identidad> {
   if (identidadCache) return identidadCache;
-  const p = await graph("me", {
-    params: { fields: "id,name,instagram_business_account{id,username}" },
+  const res = await graph("me/accounts", {
+    params: { fields: "id,name,access_token,instagram_business_account{id,username}" },
+    token: TOKEN,
   });
+  const p = (res.data ?? [])[0];
+  if (!p) {
+    throw new Error(
+      "El token no da acceso a ninguna Pagina. Revisa que el usuario del sistema tenga la Pagina asignada.",
+    );
+  }
+  tokenPagina = p.access_token ?? null;
   identidadCache = {
     pageId: p.id,
     pageName: p.name,
@@ -286,10 +302,10 @@ async function diagnostico() {
   }
 
   const id = await identidad();
-  resultado.pagina = { id: id.pageId, nombre: id.pageName };
+  resultado.pagina = { id: id.pageId, nombre: id.pageName, token_de_pagina: tokenPagina ? "derivado ok" : "NO se pudo derivar" };
   resultado.instagram = id.igId ? { id: id.igId, usuario: id.igUsername } : "sin cuenta vinculada";
 
-  const permisos = await graph("me/permissions").catch((e) => ({ data: [], _error: errorMessage(e) }));
+  const permisos = await graph("me/permissions", { token: TOKEN }).catch((e) => ({ data: [], _error: errorMessage(e) }));
   resultado.permisos_concedidos = ((permisos as any).data ?? [])
     .filter((p: any) => p.status === "granted")
     .map((p: any) => p.permission);
@@ -320,7 +336,7 @@ async function diagnostico() {
   // Un token de corta duracion se vence en horas y deja todo tirado sin aviso.
   // Mejor saberlo aca que a mitad de una tanda de respuestas.
   try {
-    const info = await graph("debug_token", { params: { input_token: TOKEN } });
+    const info = await graph("debug_token", { params: { input_token: TOKEN }, token: TOKEN });
     const d = info.data ?? {};
     resultado.token = {
       tipo: d.type,

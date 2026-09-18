@@ -33,9 +33,17 @@ Cualquier cadena larga al azar. Es lo que deja llamar la funcion desde
 
 ### 2. `META_PAGE_TOKEN`
 
-Un token de Pagina de Meta. **Conviene el de usuario del sistema**, porque no
-se vence; el del Explorador de la Graph API caduca y deja todo tirado sin
-aviso.
+El token del **usuario del sistema** de Meta, porque no se vence; el del
+Explorador de la Graph API caduca y deja todo tirado sin aviso.
+
+**Ojo con el nombre**: aunque la variable se llame `META_PAGE_TOKEN`, lo que va
+ahi es el token del usuario del sistema, NO uno de Pagina. El de Pagina lo
+deriva la funcion sola por `/me/accounts`. Esto no es un detalle cosmetico:
+con el token del usuario del sistema, `/me` devuelve al usuario del sistema y
+no a la Pagina (pedirle `instagram_business_account` falla con *nonexisting
+field*), y los bordes de Pagina de Facebook rechazan ese token con *"A Page
+access token is required for this call for the new Pages experience"*.
+Instagram si funciona con cualquiera de los dos.
 
 En `business.facebook.com` -> Configuracion del negocio:
 
@@ -52,6 +60,10 @@ En `business.facebook.com` -> Configuracion del negocio:
    | `pages_read_user_content` | leer los comentarios de la gente |
    | `pages_manage_engagement` | responder, ocultar, eliminar, dar like |
    | `pages_messaging` | DMs y respuestas privadas |
+
+   Si `pages_messaging` no aparece en la lista, es que la app no tiene el caso
+   de uso de mensajeria configurado. Se puede seguir sin el: los comentarios
+   funcionan igual y solo quedan fuera los DMs.
    | `instagram_basic` | ver la cuenta de IG |
    | `instagram_manage_comments` | comentarios de IG |
    | `instagram_manage_messages` | DMs de IG |
