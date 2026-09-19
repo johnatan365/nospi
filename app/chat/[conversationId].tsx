@@ -2590,7 +2590,10 @@ export default function ChatThreadScreen() {
             const isMine = item.sender_id === user?.id;
             const isSystem = item.sender_id === NOSPI_SYSTEM_USER_ID;
             const sender = participantsById[item.sender_id];
-            const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Alguien';
+            // Antes del evento no se resuelve el nombre a proposito: en esa ventana
+            // no se puede ver quien va. 'Un participante' en vez de 'Alguien',
+            // que sonaba a error.
+            const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Un participante';
             const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
             // En la comunidad tambien se muestra quien escribe: son 129
             // personas que en su mayoria no se conocen entre si.
