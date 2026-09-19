@@ -299,6 +299,15 @@ function buildEventReminderWhatsAppLink(
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+// Cuando un evento se divide en mesas, el nombre lleva "Mesa N" y al llegar al
+// establecimiento hay que pedir esa mesa concreta, no solo "Nospi": si los dos
+// grupos dicen lo mismo, el mesero no sabe a cual sentar a quien. Si el evento
+// no esta dividido no hay match y el texto queda igual que siempre.
+function marcaDeLlegada(eventName?: string): string {
+  const m = /\bmesa\s*(\d+)\b/i.exec(eventName || '');
+  return m ? `Nospi Mesa ${m[1]}` : 'Nospi';
+}
+
 // Arma el link de WhatsApp para el recordatorio del MISMO DÍA del evento —
 // en bloques separados para que no se vea como un bloque de texto pesado.
 function buildSameDayWhatsAppLink(
@@ -322,7 +331,7 @@ function buildSameDayWhatsAppLink(
     `*Hoy es ${(eventName || 'tu evento').trim()}*${timePart ? `,${timePart}` : '.'}`,
     `📍 ${locationName || 'el lugar acordado'}${addressPart}${mapsLine}`,
     ``,
-    `Al llegar di que vienes de Nospi y te indican la mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.`,
+    `Al llegar di que vienes de *${marcaDeLlegada(eventName)}* y te indican tu mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.`,
     ``,
     `Ya en la mesa abres la Dinámica y confirmas tu llegada: si no confirmas cuenta como falta, y con faltas se suspende la cuenta para reservar. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
     ``,
