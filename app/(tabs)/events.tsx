@@ -255,7 +255,13 @@ export default function EventsScreen() {
                       ) : event.type === 'cafe' ? (
                         <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'virtual' ? (
-                        <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        // El icono de videollamada es ancho y bajo, asi que dentro del
+                        // recuadro estandar se ve mas chico que los demas aunque mida lo
+                        // mismo. Mismo truco que bolos: caja del tamano normal para no
+                        // mover el layout, con el icono ~29% mas grande centrado adentro.
+                        <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 80, height: 68, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        </View>
                       ) : event.type === 'bolos' ? (
                         // El icono de bolos se ve chico dentro del recuadro estandar de
                         // 62x53, asi que lo renderizamos ~35% mas grande pero centrado en

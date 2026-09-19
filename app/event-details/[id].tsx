@@ -390,7 +390,10 @@ export default function EventDetailsScreen() {
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
             {event.type === 'virtual' ? (
-              <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              // Mismo agrandado que en la lista de eventos (ver events.tsx).
+              <View style={{ width: 156, height: 132, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 201, height: 170, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              </View>
             ) : event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'bar' ? (
@@ -609,7 +612,9 @@ export default function EventDetailsScreen() {
                 style={styles.ticketTop}
               >
                 {event?.type === 'virtual' ? (
-                  <Image source={require('@/assets/images/icon-videollamada.png')} style={styles.ticketIcon} resizeMode="contain" />
+                  <View style={{ width: 58, height: 50, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }}>
+                    <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 75, height: 64, tintColor: '#ffffff' }} resizeMode="contain" />
+                  </View>
                 ) : event?.type === 'caminata' ? (
                   <Image source={require('@/assets/images/icon-caminata.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'bar' ? (

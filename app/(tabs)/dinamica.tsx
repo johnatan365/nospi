@@ -1656,7 +1656,10 @@ export default function DinamicaScreen() {
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
             {appointment.event.type === 'virtual' ? (
-              <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              // Mismo agrandado que en la lista de eventos (ver events.tsx).
+              <View style={{ width: 84, height: 70, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 108, height: 90, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              </View>
             ) : appointment.event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'bar' ? (
