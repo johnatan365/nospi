@@ -1616,6 +1616,16 @@ export default function AdminPanelScreen() {
     setRetenidos((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  // Tercera salida, ademas de publicar y eliminar: el mensaje sale de la
+  // bandeja y queda oculto para el grupo, pero su autor lo sigue viendo igual
+  // que siempre. No pide confirmacion porque se deshace desde el menu del
+  // mensaje dentro del chat, a diferencia de eliminar.
+  const ocultarRetenido = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('admin_ocultar_retenido', { p_id: id });
+    if (error) { window.alert('No se pudo ocultar: ' + error.message); return; }
+    setRetenidos((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
   const eliminarRetenido = useCallback(async (id: string, autor: string) => {
     if (!window.confirm(`¿Eliminar definitivamente el mensaje de ${autor}?`)) return;
     const { error } = await supabase.rpc('admin_delete_message', { p_id: id });
@@ -6855,7 +6865,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     <View style={{ padding: 14 }}>
       <Text style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
         Estos mensajes no los ve nadie del grupo. Su autor sí los ve, como si se hubieran publicado.
-        Al aprobar, el mensaje queda con su fecha y hora originales.
+        Al publicar, el mensaje queda con su fecha y hora originales. Ocultar al grupo lo deja así
+        para siempre y lo saca de esta lista.
       </Text>
 
       {retenidosCargando ? (
@@ -6900,6 +6911,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#fff' }}>✓ Publicar al grupo</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => ocultarRetenido(r.id)}
+                style={{ backgroundColor: '#FEF3C7', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#92400E' }}>🙈 Ocultar al grupo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => copiarAlPortapapeles(r.contenido || '', 'retenido')}
                 style={{ backgroundColor: '#F3F4F6', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
               >
@@ -6916,7 +6933,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </View>
 
             <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 9 }}>
-              Si no haces nada, se queda retenido: solo lo ve quien lo escribió.
+              Si no haces nada, se queda retenido: solo lo ve quien lo escribió, pero la ficha sigue
+              aquí. «Ocultar al grupo» deja eso mismo como decisión tomada y la saca de la lista;
+              se puede deshacer desde el menú del mensaje, dentro del chat.
             </Text>
           </View>
         ))
