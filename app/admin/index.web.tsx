@@ -6669,7 +6669,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     // Motivos de baja calificacion, contados (todas las categorias)
     const motivoCount: Record<string, number> = {};
     for (const r of filtered) {
-      for (const campo of ['motivos_dinamica', 'motivos_lugar', 'motivos_comida', 'motivos_grupo']) {
+      for (const campo of ['motivos_dinamica', 'motivos_lugar', 'motivos_comida', 'motivos_grupo', 'motivos_videollamada']) {
         for (const m of (r[campo] || [])) {
           if (!m) continue;
           motivoCount[m] = (motivoCount[m] || 0) + 1;
@@ -6681,12 +6681,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const color = (v: number | null) => v === null ? '#9CA3AF' : v >= 2.5 ? '#15803d' : v >= 2 ? '#b45309' : '#b91c1c';
     const fmt = (v: number | null) => v === null ? '—' : v.toFixed(2);
 
+    // La videollamada solo se califica en eventos virtuales: su barra aparece
+    // unicamente cuando hay alguna, para no dejar un KPI vacio en los reportes
+    // de cenas, cafes y bolos.
+    const hayVideollamada = filtered.some((r: any) => typeof r.videollamada === 'number');
+
     const kpis = [
       { label: 'Volvería a usar Nospi', value: pctSi === null ? '—' : `${pctSi}%`, pct: pctSi ?? 0, col: pctSi !== null && pctSi >= 70 ? '#15803d' : '#b45309' },
       { label: 'Lugar', value: fmt(avg('lugar')), pct: ((avg('lugar') ?? 0) / 3) * 100, col: color(avg('lugar')) },
       { label: 'Grupo', value: fmt(avg('grupo')), pct: ((avg('grupo') ?? 0) / 3) * 100, col: color(avg('grupo')) },
       { label: 'Comida', value: fmt(avg('comida')), pct: ((avg('comida') ?? 0) / 3) * 100, col: color(avg('comida')) },
       { label: 'Dinámica', value: fmt(avg('dinamica')), pct: ((avg('dinamica') ?? 0) / 3) * 100, col: color(avg('dinamica')) },
+      ...(hayVideollamada
+        ? [{ label: '🎥 Videollamada', value: fmt(avg('videollamada')), pct: ((avg('videollamada') ?? 0) / 3) * 100, col: color(avg('videollamada')) }]
+        : []),
     ];
 
     const exportFeedbackExcel = () => {
@@ -6697,14 +6705,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         Persona: r.user_name,
         Correo: r.user_email,
         Dinamica: r.dinamica ?? '',
-        Lugar: r.lugar ?? '',
+        'Puntaje lugar': r.lugar ?? '',
         Comida: r.comida ?? '',
         Grupo: r.grupo ?? '',
+        Videollamada: r.videollamada ?? '',
         Volveria: r.volveria === 'si' ? 'Sí' : r.volveria === 'no' ? 'No' : '',
         'Motivos dinámica': (r.motivos_dinamica || []).join(', '),
         'Motivos lugar': (r.motivos_lugar || []).join(', '),
         'Motivos comida': (r.motivos_comida || []).join(', '),
         'Motivos grupo': (r.motivos_grupo || []).join(', '),
+        'Motivos videollamada': (r.motivos_videollamada || []).join(', '),
         'Comentario dinámica': r.comentario_dinamica || '',
         'Comentario general': r.comentario_general || '',
       }));

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -18,15 +18,38 @@ import { supabase } from '@/lib/supabase';
 const GRAD: [string, string, ...string[]] = ['#1a0010', '#4a0d2c', '#880E4F'];
 const VINO = '#880E4F';
 
-// Items de la calificacion. (Se pueden adaptar por tipo de evento a futuro.)
+// Items de la calificacion, POR TIPO DE EVENTO.
 // OTRA_KEY: si el usuario elige esta opcion, se abre un campo de texto libre.
 const OTRA_KEY = 'Otra';
-const ITEMS: { key: string; emo: string; label: string; reasons: string[] }[] = [
+
+type RatingItem = { key: string; emo: string; label: string; reasons: string[] };
+
+// Estos dos no dependen del tipo: el grupo y el juego existen en todos.
+const ITEM_GRUPO: RatingItem =
+  { key: 'grupo',    emo: '👥', label: 'El grupo (las personas)',    reasons: ['Poca conexión', 'Ambiente apagado', 'Muy poca gente', OTRA_KEY] };
+const ITEM_DINAMICA: RatingItem =
+  { key: 'dinamica', emo: '🎲', label: 'La dinámica (el juego)',     reasons: ['Muy larga', 'Preguntas aburridas', 'No todos participaron', 'Incómoda', OTRA_KEY] };
+
+const ITEMS_PRESENCIAL: RatingItem[] = [
   { key: 'lugar',    emo: '🏠', label: 'El lugar / ambiente',       reasons: ['Muy ruidoso', 'Incómodo', 'Mal servicio', 'Difícil de ubicar', 'Muy costoso', 'Muy lejos', OTRA_KEY] },
   { key: 'comida',   emo: '🍽️', label: 'La comida y bebida',        reasons: ['Poca cantidad', 'Calidad regular', 'Demoró', 'Pocas opciones', 'Muy cara', OTRA_KEY] },
-  { key: 'grupo',    emo: '👥', label: 'El grupo (las personas)',    reasons: ['Poca conexión', 'Ambiente apagado', 'Muy poca gente', OTRA_KEY] },
-  { key: 'dinamica', emo: '🎲', label: 'La dinámica (el juego)',     reasons: ['Muy larga', 'Preguntas aburridas', 'No todos participaron', 'Incómoda', OTRA_KEY] },
+  ITEM_GRUPO,
+  ITEM_DINAMICA,
 ];
+
+// En una videollamada no hay lugar ni comida que calificar: preguntar "¿qué tal
+// el sitio?" a alguien que estaba en su casa no solo sobra, ensucia el promedio
+// de lugares reales. Lo que las reemplaza es la llamada misma, que es donde de
+// verdad se cae un evento virtual y lo unico que nos dice si el formato sirve.
+const ITEMS_VIRTUAL: RatingItem[] = [
+  { key: 'videollamada', emo: '🎥', label: 'La videollamada', reasons: ['Se cayó la señal', 'No se escuchaba bien', 'Gente con la cámara apagada', 'Se sintió incómoda', 'Muy corta', 'Muy larga', OTRA_KEY] },
+  ITEM_GRUPO,
+  ITEM_DINAMICA,
+];
+
+function itemsForType(eventType?: string | null): RatingItem[] {
+  return eventType === 'virtual' ? ITEMS_VIRTUAL : ITEMS_PRESENCIAL;
+}
 const LEVELS = [
   { v: 1, emo: '🙁' },
   { v: 2, emo: '🙂' },
@@ -35,7 +58,7 @@ const LEVELS = [
 
 interface CatchUpParticipant { user_id: string; name: string; profile_photo_url: string | null; }
 interface Match { user_id: string; name: string; profile_photo_url: string | null; conversation_id: string | null; }
-interface Props { eventId: string; currentUserId: string; }
+interface Props { eventId: string; currentUserId: string; eventType?: string | null; }
 
 // Carrera contra un timeout: en Android, tras volver del background, un fetch
 // puede quedarse COLGADO sin resolver nunca (conexion muerta). Sin esto, cada
@@ -47,8 +70,10 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, fallback: T): Promise<T> 
   ]);
 }
 
-export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
+export default function CatchUpRatingScreen({ eventId, currentUserId, eventType }: Props) {
   const router = useRouter();
+  // Que se califica depende del tipo: en virtual no hay lugar ni comida.
+  const items = useMemo(() => itemsForType(eventType), [eventType]);
   const [loading, setLoading] = useState(true);
   const [participants, setParticipants] = useState<CatchUpParticipant[]>([]);
   const [step, setStep] = useState<'afinidad' | 'feedback' | 'done'>('afinidad');
@@ -193,7 +218,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       // (event_id, user_id, item_key, score, reasons, comment) porque PostgREST
       // exige que un upsert en lote tenga objetos con llaves idénticas.
       // Si marcaron "Otra", el texto libre va en la columna comment de ese item.
-      const fbRows: any[] = ITEMS
+      const fbRows: any[] = items
         .filter(it => scores[it.key])
         .map(it => {
           const rs = Array.from(reasons[it.key] || []);
@@ -245,7 +270,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
       setSaving(false);
       setStep('done');
     }
-  }, [saveAffinity, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId]);
+  }, [saveAffinity, scores, reasons, otraText, comment, volveria, volveriaWhy, eventId, currentUserId, items]);
 
   // Mientras la persona esta en la pantalla final ('done'), escuchar los
   // matches que se creen y refrescar la lista EN VIVO. Cubre el hueco real de
@@ -358,7 +383,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId }: Props) {
             <Text style={styles.h1}>Califica el encuentro</Text>
             <Text style={styles.help}>Tu opinión nos ayuda a mejorar para los próximos eventos 🙌</Text>
             <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
-            {ITEMS.map((it) => {
+            {items.map((it) => {
               const sc = scores[it.key];
               return (
                 <View key={it.key} style={styles.item}>
