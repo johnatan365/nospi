@@ -33,7 +33,7 @@ interface ConversationRow {
   unread_count: number;
   // Solo para type='direct'. 'pendiente' = solicitud sin responder.
   // 'bloqueada' solo aparece en la comunidad, para quien aun no ha asistido.
-  estado?: 'pendiente' | 'aceptada' | 'ignorada' | 'bloqueada' | null;
+  estado?: 'pendiente' | 'aceptada' | 'ignorada' | 'bloqueada' | 'bloqueada_sin_asistencia' | null;
   solicitada_por?: string | null;
 }
 
@@ -92,6 +92,11 @@ function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel:
   // Y la puerta se abre cuando el evento se cierra, no durante: nadie esta
   // sentado en la mesa con el grupo grande encima.
   if (item.conv_type === 'community' && item.estado === 'bloqueada') {
+    return { locked: true, unlockLabel: null };
+  }
+  // Quien pago pero no confirmo asistencia el dia del evento no entra al chat
+  // ni ve quienes fueron. El servidor ya no le manda nada; aca solo se explica.
+  if (item.estado === 'bloqueada_sin_asistencia') {
     return { locked: true, unlockLabel: null };
   }
   if (item.conv_type !== 'event_group' || !item.event_date) return { locked: false, unlockLabel: null };
@@ -492,13 +497,20 @@ export default function ChatsScreen() {
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);
               const esComunidadBloqueada = isComunidad && item.estado === 'bloqueada';
+              const esSinAsistencia = item.estado === 'bloqueada_sin_asistencia';
 
               return (
                 <TouchableOpacity
                   key={item.conversation_id}
                   style={[styles.row, locked && styles.rowLocked]}
-                  activeOpacity={locked && !esComunidadBloqueada ? 1 : 0.7}
+                  activeOpacity={locked && !esComunidadBloqueada && !esSinAsistencia ? 1 : 0.7}
                   onPress={() => {
+                    if (esSinAsistencia) {
+                      const msg = 'Este chat se abre cuando confirmas tu asistencia en el evento.';
+                      if (Platform.OS === 'web') window.alert(msg);
+                      else Alert.alert('Chat bloqueado', msg);
+                      return;
+                    }
                     if (esComunidadBloqueada) {
                       // Tocar algo y que no pase nada se siente roto. Se explica
                       // por que esta cerrado y como se abre.
@@ -509,7 +521,7 @@ export default function ChatsScreen() {
                     }
                     if (!locked) openConversation(item);
                   }}
-                  disabled={locked && !esComunidadBloqueada}
+                  disabled={locked && !esComunidadBloqueada && !esSinAsistencia}
                 >
                   {photoUrl ? (
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />

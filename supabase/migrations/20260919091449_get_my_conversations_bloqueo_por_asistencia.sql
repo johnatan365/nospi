@@ -1,0 +1,9 @@
+-- get_my_conversations pasa a devolver el chat bloqueado con estado
+-- 'bloqueada_sin_asistencia' en vez de esconderlo: la fila sigue en la lista
+-- para que la app muestre el aviso, pero sin ultimo mensaje y sin globo de no
+-- leidos, que son los dos sitios por donde se filtraria el contenido.
+--
+-- El cuerpo completo de la funcion quedo aplicado en la base; esta migracion
+-- existe para dejar constancia del cambio en el repo. Ver
+-- 20260919084050_moderacion_visibilidad_retenidos_y_borrados.sql para la
+-- version anterior de la misma funcion.

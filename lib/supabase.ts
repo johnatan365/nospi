@@ -51,6 +51,38 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Cliente dedicado UNICAMENTE a pedir el correo de "olvide mi contrasena".
+//
+// Por que existe: el cliente principal usa PKCE en movil. Con PKCE,
+// resetPasswordForEmail() guarda un code_verifier dentro del AsyncStorage de
+// la app y el link del correo vuelve como '?code=...', sin 'type=recovery'.
+// Ese code solo se puede canjear en el mismo sitio que guardo el verifier, y
+// el link nunca aterriza ahi:
+//   - Android abre la app por App Link, pero callback.tsx no reconocia el
+//     link como recuperacion porque no traia 'type=recovery'.
+//   - iOS no tiene associatedDomains, asi que abre Safari, donde el verifier
+//     no existe y el canje falla siempre.
+// En ambos casos la persona veia que el link "no hacia nada". Pedido desde la
+// web si funcionaba, porque ahi el flow ya era implicit — de ahi que el bug
+// pareciera intermitente.
+//
+// Con flowType 'implicit' el link vuelve con '#access_token=...&type=recovery',
+// que es justo lo que las dos ramas de callback.tsx ya saben manejar, y no
+// depende de ningun dato guardado en el dispositivo. Va en un cliente aparte
+// para no tocar el PKCE del login con Google/Apple, que si lo necesita.
+//
+// persistSession: false — este cliente solo manda el correo, nunca abre sesion,
+// y no debe pisar la sesion real guardada por el cliente principal.
+export const supabaseRecovery = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+    flowType: 'implicit',
+  },
+});
+
 // Expose the supabase URL and key for Edge Function calls
 (supabase as any).supabaseUrl = supabaseUrl;
 (supabase as any).supabaseKey = supabaseAnonKey;

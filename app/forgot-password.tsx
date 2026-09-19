@@ -16,7 +16,7 @@ import { useRouter, Stack } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
-import { supabase } from '@/lib/supabase';
+import { supabaseRecovery } from '@/lib/supabase';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function ForgotPasswordScreen() {
           ? `${window.location.origin}/auth/callback`
           : 'https://app.nospi.co/auth/callback';
 
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error: resetError } = await supabaseRecovery.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
       });
 

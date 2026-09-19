@@ -915,6 +915,67 @@ export default function ChatThreadScreen() {
       : prev.filter(x => x.id !== m.id));
   }, [user?.id]);
 
+  // Editar y borrar lo propio, con la misma ventana que WhatsApp: 15 minutos.
+  // Pasado ese rato el mensaje queda fijo — si no, alguien podria reescribir
+  // hoy lo que dijo la semana pasada y dejar la conversacion sin sentido.
+  const VENTANA_EDICION_MS = 15 * 60 * 1000;
+  const sePuedeEditar = useCallback((m: Message | null | undefined) => {
+    if (!m || m.sender_id !== user?.id) return false;
+    return Date.now() - new Date(m.created_at).getTime() < VENTANA_EDICION_MS;
+  }, [user?.id]);
+
+  const [editando, setEditando] = useState<Message | null>(null);
+  const [textoEdicion, setTextoEdicion] = useState('');
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
+  const avisarChat = useCallback((titulo: string, texto: string) => {
+    if (Platform.OS === 'web') window.alert(texto);
+    else Alert.alert(titulo, texto);
+  }, []);
+
+  const guardarEdicion = useCallback(async () => {
+    if (!editando) return;
+    const nuevo = textoEdicion.trim();
+    if (!nuevo) { avisarChat('Editar', 'El mensaje no puede quedar vacío.'); return; }
+    if (nuevo === (editando.content || '')) { setEditando(null); return; }
+    setGuardandoEdicion(true);
+    const { error } = await supabase.rpc('editar_mi_mensaje', {
+      p_id: editando.id,
+      p_contenido: nuevo,
+    });
+    setGuardandoEdicion(false);
+    if (error) {
+      avisarChat('Editar', error.message?.includes('15 minutos')
+        ? 'Ya pasaron los 15 minutos para editar este mensaje.'
+        : 'No se pudo editar el mensaje.');
+      return;
+    }
+    setMessages(prev => prev.map(x => x.id === editando.id ? { ...x, content: nuevo } : x));
+    setEditando(null);
+  }, [editando, textoEdicion, avisarChat]);
+
+  const eliminarMiMensaje = useCallback(async (m: Message | null) => {
+    if (!m) return;
+    const hacerlo = async () => {
+      const { error } = await supabase.rpc('borrar_mi_mensaje', { p_id: m.id });
+      if (error) {
+        avisarChat('Eliminar', error.message?.includes('15 minutos')
+          ? 'Ya pasaron los 15 minutos para eliminar este mensaje.'
+          : 'No se pudo eliminar el mensaje.');
+        return;
+      }
+      setMessages(prev => prev.filter(x => x.id !== m.id));
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('¿Eliminar este mensaje? Desaparece para todos.')) await hacerlo();
+    } else {
+      Alert.alert('Eliminar mensaje', 'Desaparece para todos. No se puede deshacer.', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: hacerlo },
+      ]);
+    }
+  }, [avisarChat]);
+
   const copyMessageText = useCallback(async (m: Message | null) => {
     const txt = (m?.content || '').trim();
     if (!txt) return;
@@ -2530,7 +2591,10 @@ export default function ChatThreadScreen() {
             const isMine = item.sender_id === user?.id;
             const isSystem = item.sender_id === NOSPI_SYSTEM_USER_ID;
             const sender = participantsById[item.sender_id];
-            const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Alguien';
+            // Antes del evento no se resuelve el nombre a proposito: en esa ventana
+            // no se puede ver quien va. 'Un participante' en vez de 'Alguien',
+            // que sonaba a error.
+            const senderName = isSystem ? 'Equipo Nospi' : sender?.name || 'Un participante';
             const senderPhoto = isSystem ? null : sender?.profile_photo_url || null;
             // En la comunidad tambien se muestra quien escribe: son 129
             // personas que en su mayoria no se conocen entre si.
@@ -2937,6 +3001,22 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           </View>
         ) : (
+        <>
+        {/* En los grupos, lo urgente no se resuelve en el chat: la gente del
+            grupo no puede hacer nada y el equipo no esta mirando el chat en
+            vivo. Por eso se apunta al WhatsApp, que es donde ya se les mando
+            la info del evento. */}
+        {(isGroup || isComunidad) && (
+          <Text
+            style={{
+              fontSize: 11, color: '#9CA3AF', textAlign: 'center',
+              paddingHorizontal: 22, paddingTop: 6, lineHeight: 15,
+            }}
+          >
+            ¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido —
+            es el mismo número por donde te llegó la info del evento, y está en tu perfil.
+          </Text>
+        )}
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
           <TouchableOpacity
             style={styles.attachButton}
@@ -2998,6 +3078,7 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           )}
         </View>
+        </>
         )}
       </KeyboardAvoidingView>
 
@@ -3005,6 +3086,46 @@ export default function ChatThreadScreen() {
           renglones. Un cuadro de 64px con el icono a color se reconoce de un
           vistazo y se acierta con el dedo sin mirar; un renglon de texto toca
           leerlo. */}
+      {/* Editar un mensaje propio. Se abre despues de cerrar el menu de
+          acciones, nunca al tiempo: en iOS dos <Modal> a la vez no funcionan. */}
+      <Modal visible={!!editando} animationType="fade" transparent onRequestClose={() => setEditando(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 22 }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#1f2937', marginBottom: 10 }}>
+              Editar mensaje
+            </Text>
+            <TextInput
+              value={textoEdicion}
+              onChangeText={setTextoEdicion}
+              multiline
+              autoFocus
+              style={{
+                backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0',
+                borderRadius: 12, padding: 12, fontSize: 15, color: '#1a1a1a',
+                minHeight: 90, maxHeight: 200, textAlignVertical: 'top',
+              }}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity onPress={() => setEditando(null)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#6b7280' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={guardarEdicion}
+                disabled={guardandoEdicion}
+                style={{
+                  backgroundColor: '#880E4F', borderRadius: 20,
+                  paddingVertical: 10, paddingHorizontal: 20, opacity: guardandoEdicion ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#fff' }}>
+                  {guardandoEdicion ? '…' : 'Guardar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showAttachMenu} animationType="fade" transparent onRequestClose={() => setShowAttachMenu(false)}>
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowAttachMenu(false)}>
           {/* activeOpacity + onPress vacio: sin esto, tocar dentro de la hoja
@@ -3346,7 +3467,7 @@ export default function ChatThreadScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.actionSheetRow, styles.actionSheetRowLast]}
+              style={styles.actionSheetRow}
               onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); togglePinned(m); }}
             >
               <Text style={{ fontSize: 19, width: 22, textAlign: 'center' }}>📌</Text>
@@ -3354,6 +3475,28 @@ export default function ChatThreadScreen() {
                 {actionMsg?.pinned_at ? 'Quitar de fijados' : 'Fijar mensaje'}
               </Text>
             </TouchableOpacity>
+            {sePuedeEditar(actionMsg) && !!(actionMsg?.content || '').trim() && (
+              <TouchableOpacity
+                style={styles.actionSheetRow}
+                onPress={() => {
+                  const m = actionMsg;
+                  setActionMsg(null); setActionAnchor(null);
+                  if (m) { setTextoEdicion(m.content || ''); setEditando(m); }
+                }}
+              >
+                <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>✏️</Text>
+                <Text style={styles.attachOptionText}>Editar</Text>
+              </TouchableOpacity>
+            )}
+            {sePuedeEditar(actionMsg) && (
+              <TouchableOpacity
+                style={[styles.actionSheetRow, styles.actionSheetRowLast]}
+                onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); eliminarMiMensaje(m); }}
+              >
+                <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>🗑</Text>
+                <Text style={[styles.attachOptionText, { color: '#B91C1C' }]}>Eliminar</Text>
+              </TouchableOpacity>
+            )}
           </View>
           </View>
         </TouchableOpacity>
