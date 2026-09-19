@@ -1097,7 +1097,7 @@ export default function AdminPanelScreen() {
   const [eventChatSending, setEventChatSending] = useState(false);
 
   // ── Moderación: visor global de chats privados y matches (solo admin)
-  const [moderationTab, setModerationTab] = useState<'grupos' | 'canales' | 'chats' | 'matches' | 'feedback'>('grupos');
+  const [moderationTab, setModerationTab] = useState<'grupos' | 'canales' | 'chats' | 'matches' | 'feedback' | 'retenidos'>('grupos');
 
   // Chats grupales de todos los eventos, en un solo lugar. Antes solo se podian
   // ver entrando evento por evento desde Gestion de eventos.
@@ -1179,8 +1179,9 @@ export default function AdminPanelScreen() {
   // Menu de UN mensaje suelto: se abre al hacer clic sobre la burbuja, en
   // cualquiera de los chats del panel (canal, grupo, moderacion, evento).
   //
-  // El "📋 Copiar chat" de arriba copia la conversacion COMPLETA, que es otra
-  // cosa: aca se copia solo el mensaje que se toco, y ademas se puede ocultar.
+  // Desde aca se copia, se oculta o se elimina el mensaje que se toco. El
+  // boton de arriba que copiaba la conversacion ENTERA se quito: no se usaba
+  // y esto es lo que hacia falta.
   const [menuMensaje, setMenuMensaje] = useState<
     { id: string; autor: string; content: string; created_at: string; hidden: boolean } | null
   >(null);
@@ -1483,6 +1484,58 @@ export default function AdminPanelScreen() {
     setEventChatMessages((prev) => marcar(prev) as AdminChatMessage[]);
     setMenuMensaje(null);
   }, [menuMensaje]);
+
+  // Eliminar borra el mensaje para TODOS, incluida la persona que lo escribio
+  // — a diferencia de ocultar, donde el autor lo sigue viendo. Por eso pide
+  // confirmacion: no hay boton para devolverlo desde el panel.
+  const [eliminando, setEliminando] = useState(false);
+  const eliminarMensaje = useCallback(async () => {
+    if (!menuMensaje) return;
+    const ok = window.confirm(
+      `¿Eliminar este mensaje de ${menuMensaje.autor}?\n\n` +
+      `"${(menuMensaje.content || '').slice(0, 140)}"\n\n` +
+      'Desaparece para todos, incluida la persona que lo escribió.',
+    );
+    if (!ok) return;
+    setEliminando(true);
+    const { error } = await supabase.rpc('admin_delete_message', { p_id: menuMensaje.id });
+    setEliminando(false);
+    if (error) { window.alert('No se pudo eliminar: ' + error.message); return; }
+    const quitar = (arr: any[]) => arr.filter((x) => x.id !== menuMensaje.id);
+    setChannelMessages((prev) => quitar(prev));
+    setModMessages((prev) => quitar(prev) as AdminChatMessage[]);
+    setEventChatMessages((prev) => quitar(prev) as AdminChatMessage[]);
+    setMenuMensaje(null);
+  }, [menuMensaje]);
+
+  // Bandeja de mensajes que el filtro retuvo y esperan tu visto bueno.
+  const [retenidos, setRetenidos] = useState<any[]>([]);
+  const [retenidosCargando, setRetenidosCargando] = useState(false);
+  const cargarRetenidos = useCallback(async () => {
+    setRetenidosCargando(true);
+    const { data, error } = await supabase.rpc('admin_mensajes_retenidos');
+    if (error) console.error('Admin: error cargando retenidos', error);
+    setRetenidos((data as any[]) || []);
+    setRetenidosCargando(false);
+  }, []);
+
+  const resolverRetenido = useCallback(async (id: string, aprobar: boolean) => {
+    const { error } = await supabase.rpc('admin_aprobar_mensaje', { p_id: id, p_aprobar: aprobar });
+    if (error) { window.alert('No se pudo: ' + error.message); return; }
+    setRetenidos((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const eliminarRetenido = useCallback(async (id: string, autor: string) => {
+    if (!window.confirm(`¿Eliminar definitivamente el mensaje de ${autor}?`)) return;
+    const { error } = await supabase.rpc('admin_delete_message', { p_id: id });
+    if (error) { window.alert('No se pudo eliminar: ' + error.message); return; }
+    setRetenidos((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  // Se cargan al entrar al panel, no al abrir la pestaña: el contador tiene
+  // que verse en el boton apenas entras, o no te enterarias de que hay algo
+  // esperando.
+  useEffect(() => { cargarRetenidos(); }, [cargarRetenidos]);
 
   const loadAllDirectConversations = useCallback(async () => {
     setAllDirectConvosLoading(true);
@@ -6322,14 +6375,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <TouchableOpacity
-                    onPress={() => copiarAlPortapapeles(armarTextoChat(`${active.title} · ${active.participants} personas`, channelMessages, (m) => (m.sender_id === adminUserId ? 'Equipo Nospi' : (usersById[m.sender_id]?.name || 'Participante'))), 'canal')}
-                    style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
-                  >
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
-                      {copiado === 'canal' ? '✅ Copiado' : '📋 Copiar chat'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
                     onPress={() => { resetPollForm(); setPollModalOpen(true); }}
                     style={{
                       backgroundColor: '#F3E5F5', borderWidth: 1, borderColor: '#CE93D8',
@@ -6607,21 +6652,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1f2937' }}>
                   {active.event_name} · {active.participants} inscritos
                 </Text>
-                <TouchableOpacity
-                  onPress={() => copiarAlPortapapeles(
-                    armarTextoChat(
-                      `${active.event_name} · ${active.participants} inscritos`,
-                      groupChatMessages,
-                      (m) => (m.sender_id === adminUserId ? 'Equipo Nospi' : (usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante'))),
-                    ),
-                    'grupo',
-                  )}
-                  style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
-                >
-                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
-                    {copiado === 'grupo' ? '✅ Copiado' : '📋 Copiar chat'}
-                  </Text>
-                </TouchableOpacity>
               </View>
               <ScrollView
                 ref={refChatGrupo}
@@ -6692,6 +6722,81 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
   // Render de la sub-pestana "Evaluaciones": promedios, comparativa por evento,
   // motivos de baja calificacion y detalle por persona (segun el filtro).
+  // Mensajes que el filtro retuvo y nadie del grupo esta viendo todavia.
+  // Quien los escribio los ve normales, como si se hubieran publicado.
+  const renderRetenidos = () => (
+    <View style={{ padding: 14 }}>
+      <Text style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
+        Estos mensajes no los ve nadie del grupo. Su autor sí los ve, como si se hubieran publicado.
+        Al aprobar, el mensaje queda con su fecha y hora originales.
+      </Text>
+
+      {retenidosCargando ? (
+        <Text style={{ fontSize: 12.5, color: '#9CA3AF' }}>Cargando…</Text>
+      ) : retenidos.length === 0 ? (
+        <Text style={{ fontSize: 13, color: '#9CA3AF', paddingVertical: 20, textAlign: 'center' }}>
+          Nada pendiente. Todo lo que se escribió pasó el filtro. ✅
+        </Text>
+      ) : (
+        retenidos.map((r) => (
+          <View
+            key={r.id}
+            style={{
+              backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FCD34D',
+              borderRadius: 14, padding: 14, marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>
+              {r.autor_nombre} · {r.conv_titulo}
+            </Text>
+            <Text style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 2 }}>
+              {fechaCorta(r.created_at)}
+              {r.edited_at ? '  ·  ✏️ editado' : ''}
+              {'  ·  se activó por: '}{r.motivo}
+            </Text>
+
+            <Text style={{ fontSize: 14, color: '#1f2937', marginTop: 9, lineHeight: 20 }}>
+              {r.contenido}
+            </Text>
+
+            {!!r.contenido_original && r.contenido_original !== r.contenido && (
+              <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 7, fontStyle: 'italic' }}>
+                Antes decía: “{r.contenido_original}”
+              </Text>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 13, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                onPress={() => resolverRetenido(r.id, true)}
+                style={{ backgroundColor: '#047857', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#fff' }}>✓ Publicar al grupo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => copiarAlPortapapeles(r.contenido || '', 'retenido')}
+                style={{ backgroundColor: '#F3F4F6', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#374151' }}>
+                  {copiado === 'retenido' ? '✅ Copiado' : '📋 Copiar'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => eliminarRetenido(r.id, r.autor_nombre)}
+                style={{ backgroundColor: '#FEE2E2', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#B91C1C' }}>🗑 Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 9 }}>
+              Si no haces nada, se queda retenido: solo lo ve quien lo escribió.
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
+
   const renderFeedback = () => {
     const filtered = feedbackEventFilter === 'all'
       ? feedbackRows
@@ -7051,7 +7156,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'feedback' ? '#fff' : '#374151' }}>⭐ Evaluaciones ({feedbackRows.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadUnmatched(); loadFeedback(); }}
+          onPress={() => { setModerationTab('retenidos'); setActiveModConvId(null); cargarRetenidos(); }}
+          style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: moderationTab === 'retenidos' ? '#B45309' : (retenidos.length > 0 ? '#FEF3C7' : '#f1f1f4') }}
+        >
+          <Text style={{ fontWeight: '700', fontSize: 13, color: moderationTab === 'retenidos' ? '#fff' : (retenidos.length > 0 ? '#B45309' : '#374151') }}>
+            🛡 Pendientes de aprobación{retenidos.length > 0 ? ` (${retenidos.length})` : ''}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadUnmatched(); loadFeedback(); cargarRetenidos(); }}
           style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#e5e7eb' }}
         >
           <Text style={{ fontWeight: '700', fontSize: 13, color: '#374151' }}>↻ Actualizar</Text>
@@ -7066,6 +7179,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         <ScrollView style={{ flex: 1 }}>{renderMatchesOverview()}</ScrollView>
       ) : moderationTab === 'feedback' ? (
         <ScrollView style={{ flex: 1 }}>{renderFeedback()}</ScrollView>
+      ) : moderationTab === 'retenidos' ? (
+        <ScrollView style={{ flex: 1 }}>{renderRetenidos()}</ScrollView>
       ) : (
       <View style={[styles.eventChatBody, chatAngosto && styles.eventChatBodyAngosto]}>
         {!(chatAngosto && activeModConvId) && (
@@ -7133,19 +7248,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
               </TouchableOpacity>
             ) : <View />}
-            {!!activeModConvId && (
-              <TouchableOpacity
-                onPress={() => copiarAlPortapapeles(
-                  armarTextoChat('Conversación', modMessages, (m) => (m.sender_id === '00000000-0000-0000-0000-000000000099' ? 'Equipo Nospi' : (m.sender_name || 'Participante'))),
-                  'mod',
-                )}
-                style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
-              >
-                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
-                  {copiado === 'mod' ? '✅ Copiado' : '📋 Copiar chat'}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
           <ScrollView
             ref={refChatMod}
@@ -10277,23 +10379,6 @@ setBulkWhatsAppPending(pending);
                       <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#880E4F' }}>← Volver a la lista</Text>
                     </TouchableOpacity>
                   ) : <View />}
-                  {!!activeEventConversationId && (
-                    <TouchableOpacity
-                      onPress={() => copiarAlPortapapeles(
-                        armarTextoChat(
-                          `Chat de ${selectedEventForConfig?.name || 'Evento'}`,
-                          eventChatMessages,
-                          (m) => (m.sender_id === '00000000-0000-0000-0000-000000000099' ? 'Equipo Nospi' : (m.sender_name || 'Participante')),
-                        ),
-                        'evento',
-                      )}
-                      style={{ backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#A5D6A7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12 }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1B5E20' }}>
-                        {copiado === 'evento' ? '✅ Copiado' : '📋 Copiar chat'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
                 <ScrollView
                   ref={refChatEvento}
@@ -10408,6 +10493,19 @@ setBulkWhatsAppPending(pending);
                   {menuMensaje?.hidden
                     ? 'Vuelve a verse en el chat para todo el mundo.'
                     : 'Quien lo escribió lo seguirá viendo igual y no se entera.'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={eliminarMensaje}
+                disabled={eliminando}
+                style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', opacity: eliminando ? 0.5 : 1 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#B91C1C' }}>
+                  {eliminando ? '…' : '🗑 Eliminar mensaje'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                  Desaparece para todos, incluida la persona que lo escribió.
                 </Text>
               </TouchableOpacity>
 
