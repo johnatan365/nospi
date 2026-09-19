@@ -1682,15 +1682,24 @@ export default function DinamicaScreen() {
               <Text style={styles.eventTime}>{formatTimeAmPm(appointment.event.time)}</Text>
             </View>
           </View>
-          {shouldShowLocationText && (
+          {/* En virtual siempre hay algo que decir. Sin esta rama la tarjeta
+              se quedaba muda al activar el acceso: locationText sale vacio
+              (no hay location_name) y shouldShowLocationText ya es false. */}
+          {esVirtual ? (
             <Text style={styles.eventLocation}>
-              {esVirtual
-                ? 'El botón para entrar aparece 15 minutos antes'
-                : 'Ubicación se revelará un día antes del evento'}
+              {locationRevealed
+                ? 'Videollamada · el botón para entrar está en el evento'
+                : 'El botón para entrar aparece 15 minutos antes'}
             </Text>
-          )}
-          {locationRevealed && locationText && (
-            <Text style={styles.eventLocation}>{locationText}</Text>
+          ) : (
+            <>
+              {shouldShowLocationText && (
+                <Text style={styles.eventLocation}>Ubicación se revelará un día antes del evento</Text>
+              )}
+              {locationRevealed && locationText && (
+                <Text style={styles.eventLocation}>{locationText}</Text>
+              )}
+            </>
           )}
         </View>
 

@@ -2492,7 +2492,7 @@ export default function ChatThreadScreen() {
               </View>
             ) : isGroup ? (
               <View style={styles.headerAvatarPlaceholder}>
-                <Image source={eventIconSource(meta?.event_type)} style={styles.headerEventIcon} resizeMode="contain" />
+                <Image source={eventIconSource(meta?.event_type)} style={meta?.event_type === 'virtual' ? styles.headerEventIconAncho : styles.headerEventIcon} resizeMode="contain" />
               </View>
             ) : (
               <ChatAvatar
@@ -3856,6 +3856,8 @@ const styles = StyleSheet.create({
   },
   headerEmoji: { fontSize: 16 },
   headerEventIcon: { width: 20, height: 20, tintColor: '#880E4F' },
+  // Mismo caso que en la lista de chats: el de videollamada va mas grande.
+  headerEventIconAncho: { width: 27, height: 27, tintColor: '#880E4F' },
   headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
   messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
   messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', width: '100%' },

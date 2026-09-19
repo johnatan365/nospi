@@ -512,7 +512,8 @@ export default function AppointmentsScreen() {
 
               const locationRevealed = appointment.event.is_location_revealed || false;
               const isAnteriorOrCancelada = appointment.status === 'anterior' || appointment.status === 'cancelada';
-              const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada;
+              const esVirtual = eventType === 'virtual';
+              const shouldShowLocationPlaceholder = !locationRevealed && !isAnteriorOrCancelada && !esVirtual;
 
               const eventLocation = locationRevealed && appointment.event.location_name
                 ? appointment.event.location_name
@@ -630,11 +631,21 @@ export default function AppointmentsScreen() {
                   <Text style={styles.appointmentDate}>{dateText}</Text>
                   <Text style={styles.appointmentTime}>{eventTime}</Text>
 
+                  {/* En videollamada no hay lugar ni direccion: solo se dice
+                      donde esta el boton, que es lo unico que hay que saber. */}
+                  {esVirtual && !isAnteriorOrCancelada && (
+                    <Text style={styles.appointmentLocation}>
+                      {locationRevealed
+                        ? 'Videollamada · entra desde el evento en la app'
+                        : 'Videollamada · el enlace se abre desde la app'}
+                    </Text>
+                  )}
+
                   {shouldShowLocationPlaceholder && (
                     <Text style={styles.appointmentLocation}>Ubicación se revelará un día antes del evento</Text>
                   )}
 
-                  {locationRevealed && (
+                  {locationRevealed && !esVirtual && (
                     <>
                       <Text style={styles.appointmentLocation}>{eventLocation}</Text>
                       {eventAddress && (

@@ -238,6 +238,7 @@ export default function EventsScreen() {
                   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
+                  const esVirtual = event.type === 'virtual';
 
                   return (
                     <TouchableOpacity
@@ -285,7 +286,11 @@ export default function EventsScreen() {
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
                           {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {event.city}
                         </Text>
-                        {hasRevealedLocation ? (
+                        {esVirtual ? (
+                          <Text style={styles.locationPlaceholderCompact} numberOfLines={1}>
+                            El enlace se abre desde la app
+                          </Text>
+                        ) : hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
                             {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
                           </Text>

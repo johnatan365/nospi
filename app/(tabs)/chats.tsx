@@ -551,7 +551,7 @@ export default function ChatsScreen() {
                     </View>
                   ) : isGroup ? (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                      <Image source={eventIconSource(item.event_type)} style={styles.avatarEventIcon} resizeMode="contain" />
+                      <Image source={eventIconSource(item.event_type)} style={item.event_type === 'virtual' ? styles.avatarEventIconAncho : styles.avatarEventIcon} resizeMode="contain" />
                     </View>
                   ) : (
                     <View style={[styles.avatar, styles.avatarPlaceholder]}>
@@ -759,6 +759,9 @@ const styles = StyleSheet.create({
   },
   solicitudEnviadaChipText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
   avatarEventIcon: { width: 32, height: 32, tintColor: '#880E4F' },
+  // El de videollamada es ancho y bajo: dentro de una caja cuadrada se encoge
+  // a lo alto. Se dibuja mas grande, como en la lista de eventos.
+  avatarEventIconAncho: { width: 42, height: 42, tintColor: '#880E4F' },
   rowContent: { flex: 1, marginLeft: 12 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   rowTitle: { fontSize: 15, fontWeight: '700', color: '#1c1c1e', flex: 1, marginRight: 8 },
