@@ -927,7 +927,7 @@ export default function ChatThreadScreen() {
   const [textoEdicion, setTextoEdicion] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
-  const avisar = useCallback((titulo: string, texto: string) => {
+  const avisarChat = useCallback((titulo: string, texto: string) => {
     if (Platform.OS === 'web') window.alert(texto);
     else Alert.alert(titulo, texto);
   }, []);
@@ -935,7 +935,7 @@ export default function ChatThreadScreen() {
   const guardarEdicion = useCallback(async () => {
     if (!editando) return;
     const nuevo = textoEdicion.trim();
-    if (!nuevo) { avisar('Editar', 'El mensaje no puede quedar vacío.'); return; }
+    if (!nuevo) { avisarChat('Editar', 'El mensaje no puede quedar vacío.'); return; }
     if (nuevo === (editando.content || '')) { setEditando(null); return; }
     setGuardandoEdicion(true);
     const { error } = await supabase.rpc('editar_mi_mensaje', {
@@ -944,21 +944,21 @@ export default function ChatThreadScreen() {
     });
     setGuardandoEdicion(false);
     if (error) {
-      avisar('Editar', error.message?.includes('15 minutos')
+      avisarChat('Editar', error.message?.includes('15 minutos')
         ? 'Ya pasaron los 15 minutos para editar este mensaje.'
         : 'No se pudo editar el mensaje.');
       return;
     }
     setMessages(prev => prev.map(x => x.id === editando.id ? { ...x, content: nuevo } : x));
     setEditando(null);
-  }, [editando, textoEdicion, avisar]);
+  }, [editando, textoEdicion, avisarChat]);
 
   const eliminarMiMensaje = useCallback(async (m: Message | null) => {
     if (!m) return;
     const hacerlo = async () => {
       const { error } = await supabase.rpc('borrar_mi_mensaje', { p_id: m.id });
       if (error) {
-        avisar('Eliminar', error.message?.includes('15 minutos')
+        avisarChat('Eliminar', error.message?.includes('15 minutos')
           ? 'Ya pasaron los 15 minutos para eliminar este mensaje.'
           : 'No se pudo eliminar el mensaje.');
         return;
@@ -973,7 +973,7 @@ export default function ChatThreadScreen() {
         { text: 'Eliminar', style: 'destructive', onPress: hacerlo },
       ]);
     }
-  }, [avisar]);
+  }, [avisarChat]);
 
   const copyMessageText = useCallback(async (m: Message | null) => {
     const txt = (m?.content || '').trim();
