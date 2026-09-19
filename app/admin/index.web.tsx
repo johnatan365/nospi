@@ -1443,6 +1443,20 @@ export default function AdminPanelScreen() {
   const [modMessagesLoading, setModMessagesLoading] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
 
+  // Al abrir un chat, arrancar abajo del todo: lo que importa es lo ultimo
+  // que se dijo, no lo primero. Antes tocaba bajar a mano cada vez.
+  //
+  // Se engancha a onContentSizeChange en vez de a un useEffect: el alto real
+  // de la lista se conoce cuando el contenido ya se midio, y ahi es cuando
+  // scrollToEnd cae en el sitio correcto. De paso sigue a los mensajes nuevos.
+  const refChatCanal = useRef<ScrollView | null>(null);
+  const refChatGrupo = useRef<ScrollView | null>(null);
+  const refChatMod = useRef<ScrollView | null>(null);
+  const refChatEvento = useRef<ScrollView | null>(null);
+  const irAlFinal = useCallback((ref: React.MutableRefObject<ScrollView | null>) => {
+    ref.current?.scrollToEnd({ animated: false });
+  }, []);
+
   // Ocultar deja el mensaje visible SOLO para quien lo escribio (y para los
   // admins, para poder revisarlo). El resto del chat deja de verlo, y tampoco
   // les aparece como ultima linea ni les suma al globo de no leidos.
@@ -6349,7 +6363,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   </TouchableOpacity>
                   </View>
                 </View>
-                <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 320 }}>
+                <ScrollView
+                  ref={refChatCanal}
+                  onContentSizeChange={() => irAlFinal(refChatCanal)}
+                  style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 320 }}>
                   {channelMessages.length === 0 ? (
                     <Text style={{ fontSize: 12.5, color: '#9CA3AF', textAlign: 'center', paddingVertical: 20 }}>
                       Sin mensajes todavía. Publica el primero.
@@ -6606,7 +6623,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 340 }}>
+              <ScrollView
+                ref={refChatGrupo}
+                onContentSizeChange={() => irAlFinal(refChatGrupo)}
+                style={{ flex: 1, backgroundColor: '#FAF8F9', padding: 12, maxHeight: 340 }}>
                 {groupChatMessages.length === 0 ? (
                   <Text style={{ fontSize: 12.5, color: '#9CA3AF', textAlign: 'center', paddingVertical: 20 }}>
                     Sin mensajes todavía. Sé el primero en escribir.
@@ -7127,7 +7147,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               </TouchableOpacity>
             )}
           </View>
-          <ScrollView style={styles.eventChatMessagesScroll}>
+          <ScrollView
+            ref={refChatMod}
+            onContentSizeChange={() => irAlFinal(refChatMod)}
+            style={styles.eventChatMessagesScroll}>
             {!activeModConvId ? (
               <Text style={styles.eventChatEmptyText}>Selecciona una conversación para leerla</Text>
             ) : modMessagesLoading ? (
@@ -10272,7 +10295,10 @@ setBulkWhatsAppPending(pending);
                     </TouchableOpacity>
                   )}
                 </View>
-                <ScrollView style={styles.eventChatMessagesScroll}>
+                <ScrollView
+                  ref={refChatEvento}
+                  onContentSizeChange={() => irAlFinal(refChatEvento)}
+                  style={styles.eventChatMessagesScroll}>
                   {eventChatMessagesLoading ? (
                     <Text style={styles.eventChatEmptyText}>Cargando mensajes...</Text>
                   ) : eventChatMessages.length === 0 ? (
