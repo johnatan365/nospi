@@ -636,8 +636,8 @@ export default function AppointmentsScreen() {
                   {esVirtual && !isAnteriorOrCancelada && (
                     <Text style={styles.appointmentLocation}>
                       {locationRevealed
-                        ? 'Videollamada · entra desde el evento en la app'
-                        : 'Videollamada · el enlace se abre desde la app'}
+                        ? 'El enlace ya está disponible en la app. El botón para entrar aparece 15 minutos antes.'
+                        : 'El enlace se revela el mismo día en la app.'}
                     </Text>
                   )}
 

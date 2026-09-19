@@ -1688,8 +1688,8 @@ export default function DinamicaScreen() {
           {esVirtual ? (
             <Text style={styles.eventLocation}>
               {locationRevealed
-                ? 'Videollamada · el botón para entrar está en el evento'
-                : 'El botón para entrar aparece 15 minutos antes'}
+                ? 'El enlace ya está disponible en la app. El botón para entrar aparece 15 minutos antes.'
+                : 'El enlace se revela el mismo día en la app.'}
             </Text>
           ) : (
             <>

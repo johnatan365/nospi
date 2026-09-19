@@ -479,7 +479,7 @@ export default function EventDetailsScreen() {
                 if (!isEnrolled) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      El enlace se abre desde la app. El botón para entrar aparece aquí 15 minutos antes de empezar.
+                      El enlace se revela el mismo día en la app. El botón para entrar aparece aquí 15 minutos antes de empezar.
                     </Text>
                   );
                 }
@@ -487,7 +487,7 @@ export default function EventDetailsScreen() {
                 if (!accesoListo) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      El acceso se activa el día del evento. Entra desde aquí: es lo que registra tu asistencia.
+                      El enlace se revela el mismo día en la app. Entra desde aquí: es lo que registra tu asistencia.
                     </Text>
                   );
                 }

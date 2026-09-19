@@ -288,7 +288,9 @@ export default function EventsScreen() {
                         </Text>
                         {esVirtual ? (
                           <Text style={styles.locationPlaceholderCompact} numberOfLines={1}>
-                            El enlace se abre desde la app
+                            {event.is_location_revealed
+                              ? 'El enlace ya está disponible en la app'
+                              : 'El enlace se revela el mismo día en la app'}
                           </Text>
                         ) : hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
