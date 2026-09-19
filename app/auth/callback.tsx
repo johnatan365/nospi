@@ -20,26 +20,50 @@ export default function AuthCallback() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      (async () => {
-        // El deep link completo (nospi://auth/callback#...) llega vía
-        // Linking, no vía window.location (eso solo existe en web).
-        const incomingUrl = (await Linking.getInitialURL()) || '';
-        const isRecovery = incomingUrl.includes('type=recovery');
+      // Lee los parametros venga como vengan: despues del '#' (flow implicit,
+      // que es como llega hoy el link de recuperar contrasena) o despues del
+      // '?' (flow PKCE, como llegaba antes y como siguen llegando los links
+      // pedidos desde una version vieja de la app).
+      const parseParams = (url: string): Record<string, string> => {
+        const out: Record<string, string> = {};
+        const trozos = [
+          url.includes('#') ? url.split('#')[1] : '',
+          url.includes('?') ? url.split('?')[1].split('#')[0] : '',
+        ];
+        for (const trozo of trozos) {
+          trozo.split('&').forEach((pair) => {
+            const [k, v] = pair.split('=');
+            if (k && v) out[decodeURIComponent(k)] = decodeURIComponent(v);
+          });
+        }
+        return out;
+      };
+
+      const handleUrl = async (incomingUrl: string) => {
+        const params = parseParams(incomingUrl);
+
+        // Un link de recuperacion se reconoce por 'type=recovery' (implicit).
+        // Antes solo se miraba eso, y los links PKCE — que traen '?code=' y
+        // NINGUN 'type=recovery' — se colaban sin ser detectados: la app abria
+        // y no pasaba nada. Por eso ahora un '?code=' que aterrice en esta
+        // pantalla tambien cuenta como recuperacion.
+        const isRecovery = incomingUrl.includes('type=recovery') || !!params.code;
 
         if (isRecovery) {
-          const params: Record<string, string> = {};
-          const hash = incomingUrl.includes('#') ? incomingUrl.split('#')[1] : '';
-          hash.split('&').forEach((pair) => {
-            const [k, v] = pair.split('=');
-            if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
-          });
           if (params.access_token && params.refresh_token) {
             await supabase.auth.setSession({
               access_token: params.access_token,
               refresh_token: params.refresh_token,
             });
+          } else if (params.code) {
+            // Link PKCE: el code_verifier quedo guardado en el AsyncStorage de
+            // la app, asi que el canje SOLO puede hacerse aqui adentro.
+            const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+            if (error) {
+              Sentry.addBreadcrumb({ message: `callback.tsx: nativo — fallo el canje del code: ${error.message}` });
+            }
           }
-          Sentry.addBreadcrumb({ message: 'callback.tsx: Android — recovery link, navigating to /reset-password' });
+          Sentry.addBreadcrumb({ message: 'callback.tsx: nativo — link de recuperacion, navegando a /reset-password' });
           router.replace('/reset-password');
           return;
         }
@@ -47,12 +71,25 @@ export default function AuthCallback() {
         // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          Sentry.addBreadcrumb({ message: 'callback.tsx: Android — session found, navigating to /' });
+          Sentry.addBreadcrumb({ message: 'callback.tsx: nativo — sesion encontrada, navegando a /' });
           router.replace('/');
         }
         // Si no hay sesión, register.tsx está procesando — no hacer nada
+      };
+
+      // getInitialURL solo devuelve el link cuando la app arranca en frio. Si
+      // ya estaba abierta en segundo plano — el caso normal de quien acaba de
+      // pedir el correo desde la app — el link llegaba por el evento 'url' y
+      // se ignoraba por completo. Hay que escuchar los dos.
+      (async () => {
+        const initial = (await Linking.getInitialURL()) || '';
+        if (initial) await handleUrl(initial);
       })();
-      return;
+
+      const sub = Linking.addEventListener('url', ({ url }) => {
+        if (url) handleUrl(url);
+      });
+      return () => sub.remove();
     }
 
     // Web: manejar el OAuth redirect normalmente
