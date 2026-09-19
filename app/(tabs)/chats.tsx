@@ -88,6 +88,8 @@ function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel:
   // La comunidad se le muestra bloqueada a quien todavia no ha asistido: es
   // para que vea que existe, no para que entre. La llave es venir a un evento,
   // no comprarlo — se puede pagar y no aparecer, y en ese caso sigue cerrada.
+  // Y la puerta se abre cuando el evento se cierra, no durante: nadie esta
+  // sentado en la mesa con el grupo grande encima.
   if (item.conv_type === 'community' && item.estado === 'bloqueada') {
     return { locked: true, unlockLabel: null };
   }
@@ -499,7 +501,7 @@ export default function ChatsScreen() {
                     if (esComunidadBloqueada) {
                       // Tocar algo y que no pase nada se siente roto. Se explica
                       // por que esta cerrado y como se abre.
-                      const msg = 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente.';
+                      const msg = 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente cuando el evento termine.';
                       if (Platform.OS === 'web') window.alert(msg);
                       else Alert.alert('Comunidad Nospi Medellín', msg);
                       return;

@@ -73,3 +73,38 @@ cancela no puede abrir conversaciones privadas con los que sí fueron.
 
 Ojo con la excepción, que es deliberada: si la conversación **ya existía**, la función la
 devuelve sin volver a validar. Es para que los chats abiertos antes de esa regla no se rompan.
+
+## La comunidad: se entra al cerrar el evento, no al llegar
+
+Aplicado el 19 de septiembre de 2026.
+
+La llave de la Comunidad Nospi no cambió: sigue siendo **haber confirmado
+asistencia** (`checked_in_at`), no haber pagado. Lo que cambió es **cuándo** se
+abre la puerta.
+
+Antes entraba en el mismo instante del check-in. Eso quiere decir **durante** el
+evento: la gente estaba sentada en la mesa, en la dinámica, y ya tenía encima el
+grupo de 160 personas. Ahora entra cuando el admin **cierra** el evento.
+
+Dos caminos, un solo lugar que decide:
+
+- `trg_comunidad_al_cerrar_evento` (en `events`, `AFTER UPDATE OF event_status`):
+  cuando el evento pasa a `closed`, mete a todos los que tengan `checked_in_at`
+  y no estén `cancelada`.
+- `trg_entrar_a_comunidad` (en `appointments`) ya **no** mete a nadie por su
+  cuenta: solo actúa si el evento **ya está cerrado**. Queda para el check-in
+  tardío, cuando el admin marca una llegada después de haber cerrado.
+
+Los dos llaman a `meter_en_comunidad(user_id)`, que es donde vive la regla de
+`comunidad_salidas`: quien se salió a propósito, o a quien sacó el admin, no
+vuelve a entrar solo. Ahí tampoco se filtra por `is_internal`.
+
+`volver_a_comunidad()` pide lo mismo: una asistencia confirmada en un evento
+**ya cerrado**. Si no, quien se salió podría reentrar a mitad de un evento y
+saltarse la regla por la puerta de atrás.
+
+### Cuidado al cerrar un evento viejo
+
+Cerrar un evento ahora mete gente a la comunidad. Si alguna vez hay que cerrar
+un evento antiguo que quedó colgado en `published`, revisa primero quién tiene
+`checked_in_at` ahí: van a entrar todos de una.
