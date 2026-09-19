@@ -503,8 +503,8 @@ export default function AppointmentsScreen() {
               if (!appointment.event) return null;
 
               const eventType = appointment.event.type || 'restaurant';
-              const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : eventType === 'cafe' ? 'Café' : eventType === 'bolos' ? 'Bolos' : 'Restaurante';
-              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : '🍽️';
+              const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : eventType === 'cafe' ? 'Café' : eventType === 'bolos' ? 'Bolos' : eventType === 'virtual' ? 'Videollamada' : 'Restaurante';
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : '🍽️';
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';

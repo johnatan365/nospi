@@ -10,6 +10,21 @@ import { useFocusEffect } from '@react-navigation/native';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { toqueFuerte, aviso } from '@/lib/haptics';
 
+// El boton para entrar a la videollamada se habilita 15 minutos antes, la
+// misma ventana que usa el confirmar-llegada de los eventos presenciales.
+const MINUTOS_ANTES_ENTRAR = 15;
+const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function horaBogota(d: Date): string {
+  const b = new Date(d.getTime() - BOGOTA_OFFSET_MS);
+  let h = b.getUTCHours();
+  const m = b.getUTCMinutes();
+  const suf = h >= 12 ? 'p. m.' : 'a. m.';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, '0')} ${suf}`;
+}
+
 interface Event {
   id: string;
   name: string;
@@ -21,6 +36,9 @@ interface Event {
   location_name: string;
   location_address: string;
   maps_link: string;
+  // Enlace del Meet para type='virtual'. NUNCA se muestra como texto: solo se
+  // abre desde el boton, porque ese boton es el que registra la asistencia.
+  meet_link: string | null;
   is_location_revealed: boolean;
   max_participants: number;
   event_status: 'draft' | 'published' | 'closed';
@@ -41,6 +59,17 @@ export default function EventDetailsScreen() {
   // zapatos se pagan aparte, en la bolera). Debe marcarse activamente (nunca
   // premarcado) para habilitar el botón de unirse.
   const [waiverAccepted, setWaiverAccepted] = useState(false);
+  // Momento en que la persona entro a la videollamada desde la app. Es lo que
+  // vale como asistencia en un evento virtual, igual que el GPS en uno fisico.
+  const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
+  const [entrando, setEntrando] = useState(false);
+  // Se refresca cada 30 s para que el boton se habilite solo cuando llega la
+  // hora, sin que la persona tenga que salir y volver a entrar a la pantalla.
+  const [ahora, setAhora] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
   const requiresWaiver = (t: string | undefined) => t === 'caminata' || t === 'bolos';
 
   const loadEvent = useCallback(async () => {
@@ -102,7 +131,7 @@ export default function EventDetailsScreen() {
     try {
       const { data, error } = await supabase
         .from('appointments')
-        .select('id')
+        .select('id, checked_in_at')
         .eq('user_id', user.id)
         .eq('event_id', id)
         .maybeSingle();
@@ -114,6 +143,7 @@ export default function EventDetailsScreen() {
 
       const enrolled = !!data;
       setIsEnrolled(enrolled);
+      setCheckedInAt((data as any)?.checked_in_at ?? null);
     } catch (error) {
       console.error('Failed to check enrollment:', error);
     }
@@ -173,6 +203,42 @@ export default function EventDetailsScreen() {
     Linking.openURL(event.maps_link).catch(err => {
       console.error('Failed to open maps link:', err);
     });
+  };
+
+  // Entrar a la videollamada. El orden importa: primero se registra la
+  // asistencia y despues se abre el Meet. Si se abriera primero, el navegador
+  // se lleva el foco y la escritura puede no alcanzar a salir.
+  //
+  // Este boton es la UNICA puerta al Meet: el enlace no viaja por correo ni por
+  // WhatsApp ni se muestra como texto. Por eso tocarlo equivale a entrar, y no
+  // es un boton de buena fe que alguien pueda apretar desde la cama.
+  const handleEntrarVideollamada = async () => {
+    if (!event?.meet_link || entrando) return;
+    setEntrando(true);
+    try {
+      if (user?.id && !checkedInAt) {
+        const ahora = new Date().toISOString();
+        const { error } = await supabase
+          .from('appointments')
+          .update({ checked_in_at: ahora, arrival_status: 'on_time', location_confirmed: true })
+          .eq('user_id', user.id)
+          .eq('event_id', id)
+          .is('checked_in_at', null);
+        if (error) {
+          // Que falle el registro no puede dejar a nadie por fuera de la
+          // llamada: se abre igual y queda para corregir a mano.
+          console.error('No se pudo registrar la asistencia:', error.message);
+        } else {
+          setCheckedInAt(ahora);
+        }
+      }
+      await Linking.openURL(event.meet_link);
+    } catch (e) {
+      console.error('No se pudo abrir la videollamada:', e);
+      Alert.alert('No se pudo abrir', 'Intenta de nuevo en unos segundos.');
+    } finally {
+      setEntrando(false);
+    }
   };
 
   const handleCancel = () => {
@@ -291,8 +357,9 @@ export default function EventDetailsScreen() {
     );
   }
 
-  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : 'Restaurante';
-  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : '🍽️';
+  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
+  const esVirtual = event.type === 'virtual';
   const dateText = formatDate(event.date);
   // Los eventos son de hombres y mujeres. El cierre de registro por genero
   // (registration_closed_men/women) es un tope DINAMICO para balancear cupos
@@ -322,7 +389,9 @@ export default function EventDetailsScreen() {
         <View style={styles.eventCard}>
           {/* Header - Icon and Title */}
           <View style={styles.headerSection}>
-            {event.type === 'caminata' ? (
+            {event.type === 'virtual' ? (
+              <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+            ) : event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'bar' ? (
               <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
@@ -373,10 +442,87 @@ export default function EventDetailsScreen() {
             </View>
           )}
 
-          {/* Location Section - Compact */}
+          {/* Acceso: en un evento virtual esta seccion reemplaza a la de
+              ubicacion. El enlace del Meet NUNCA se imprime como texto — solo
+              existe detras del boton, y tocarlo es lo que registra la
+              asistencia. Si se mostrara la URL, se copiaria y se entraria sin
+              pasar por la app, que es justo lo que medimos. */}
           <View style={styles.locationSection}>
-            <Text style={styles.locationTitle}>📍 Ubicación</Text>
-            {showLocation ? (
+            <Text style={styles.locationTitle}>{esVirtual ? '🎥 Videollamada' : '📍 Ubicación'}</Text>
+
+            {esVirtual ? (
+              (() => {
+                const inicioMs = event.date ? new Date(event.date).getTime() : null;
+                const abreMs = inicioMs === null ? null : inicioMs - MINUTOS_ANTES_ENTRAR * 60 * 1000;
+                const ventanaAbierta = abreMs !== null && ahora >= abreMs;
+                const accesoListo = isEnrolled && event.is_location_revealed && !!event.meet_link;
+
+                if (checkedInAt) {
+                  return (
+                    <>
+                      <Text style={styles.locationName}>
+                        ✅ Asistencia confirmada · {horaBogota(new Date(checkedInAt))}
+                      </Text>
+                      <Text style={styles.locationAddress}>
+                        Ya quedó registrado que entraste. Si te saliste, puedes volver desde aquí.
+                      </Text>
+                      <TouchableOpacity style={styles.mapsButton} onPress={handleEntrarVideollamada} activeOpacity={0.8}>
+                        <Text style={styles.mapsButtonText}>Volver a la videollamada</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+
+                if (!isEnrolled) {
+                  return (
+                    <Text style={styles.locationPlaceholder}>
+                      El enlace se abre desde la app. El botón para entrar aparece aquí 15 minutos antes de empezar.
+                    </Text>
+                  );
+                }
+
+                if (!accesoListo) {
+                  return (
+                    <Text style={styles.locationPlaceholder}>
+                      El acceso se activa el día del evento. Entra desde aquí: es lo que registra tu asistencia.
+                    </Text>
+                  );
+                }
+
+                if (!ventanaAbierta) {
+                  return (
+                    <>
+                      <Text style={styles.locationAddress}>
+                        Entra desde este botón: es lo que registra tu asistencia.
+                      </Text>
+                      <View style={[styles.mapsButton, styles.mapsButtonDisabled]}>
+                        <Text style={styles.mapsButtonText}>
+                          {abreMs !== null ? `Disponible a las ${horaBogota(new Date(abreMs))}` : 'Disponible el día del evento'}
+                        </Text>
+                      </View>
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <Text style={styles.locationAddress}>
+                      Al tocar el botón queda registrada tu asistencia y se abre la videollamada.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.mapsButton, entrando && styles.mapsButtonDisabled]}
+                      onPress={handleEntrarVideollamada}
+                      disabled={entrando}
+                      activeOpacity={0.8}
+                    >
+                      {entrando
+                        ? <ActivityIndicator color={nospiColors.white} />
+                        : <Text style={styles.mapsButtonText}>Entrar a la videollamada</Text>}
+                    </TouchableOpacity>
+                  </>
+                );
+              })()
+            ) : showLocation ? (
               <>
                 <Text style={styles.locationName}>{event.location_name}</Text>
                 <Text style={styles.locationAddress}>{event.location_address}</Text>
@@ -462,7 +608,9 @@ export default function EventDetailsScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.ticketTop}
               >
-                {event?.type === 'caminata' ? (
+                {event?.type === 'virtual' ? (
+                  <Image source={require('@/assets/images/icon-videollamada.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'caminata' ? (
                   <Image source={require('@/assets/images/icon-caminata.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'bar' ? (
                   <Image source={require('@/assets/images/icon-bar.png')} style={styles.ticketIcon} resizeMode="contain" />
@@ -667,6 +815,9 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  mapsButtonDisabled: {
+    backgroundColor: '#9CA3AF',
   },
   actionSection: {
     paddingTop: 12,

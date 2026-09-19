@@ -235,7 +235,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{section}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : '🍽️';
+                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
 
@@ -254,6 +254,8 @@ export default function EventsScreen() {
                         <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'cafe' ? (
                         <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      ) : event.type === 'virtual' ? (
+                        <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'bolos' ? (
                         // El icono de bolos se ve chico dentro del recuadro estandar de
                         // 62x53, asi que lo renderizamos ~35% mas grande pero centrado en

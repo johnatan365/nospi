@@ -1294,6 +1294,11 @@ export default function DinamicaScreen() {
     );
   }
 
+  // Un evento virtual no tiene lugar, ni llegada, ni mesa donde pedir algo.
+  // Esta bandera apaga todos esos textos. Va ANTES del primer return: mas
+  // abajo hay pantallas que salen por su propio return y tambien la usan.
+  const esVirtual = appointment?.event?.type === 'virtual';
+
   if (!appointment) {
     return (
       <LinearGradient
@@ -1388,7 +1393,7 @@ export default function DinamicaScreen() {
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>⏰</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Llega puntual</Text>
+              <Text style={styles.preEventTipTitle}>{esVirtual ? 'Conéctate puntual' : 'Llega puntual'}</Text>
               <Text style={styles.preEventTipText}>El evento arranca con una dinámica para romper el hielo. No querrás perderte el inicio.</Text>
             </View>
           </View>
@@ -1397,7 +1402,11 @@ export default function DinamicaScreen() {
             <Text style={styles.preEventTipIcon}>✅</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.preEventTipTitle}>Confirma tu asistencia</Text>
-              <Text style={styles.preEventTipText}>Ya en el lugar, abre esta pestaña y confirma tu asistencia para registrar tu llegada. Si no confirmas, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</Text>
+              <Text style={styles.preEventTipText}>
+                {esVirtual
+                  ? <>Entra a la videollamada desde el botón de la app: ese botón es el que registra tu asistencia. Si no entras por ahí, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</>
+                  : <>Ya en el lugar, abre esta pestaña y confirma tu asistencia para registrar tu llegada. Si no confirmas, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</>}
+              </Text>
             </View>
           </View>
 
@@ -1502,7 +1511,7 @@ export default function DinamicaScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.rulesTitle}>Moderador de la mesa</Text>
+                  <Text style={styles.rulesTitle}>{esVirtual ? 'Moderador del grupo' : 'Moderador de la mesa'}</Text>
                   <View style={styles.modVoiceOth}>
                     <Text style={styles.modVoiceOthText}>🗣️ {moderatorName} irá leyendo todo en voz alta. Escuchen para entender la dinámica.</Text>
                     <Text style={[styles.modVoiceOthText, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed' }]}>💬 Intenten no solo responder sí o no: expliquen su respuesta para que la charla fluya mejor.</Text>
@@ -1611,8 +1620,8 @@ export default function DinamicaScreen() {
     );
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : appointment.event.type === 'cafe' ? 'Café' : appointment.event.type === 'bolos' ? 'Bolos' : 'Restaurante';
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : '🍽️';
+  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : appointment.event.type === 'cafe' ? 'Café' : appointment.event.type === 'bolos' ? 'Bolos' : appointment.event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -1646,7 +1655,9 @@ export default function DinamicaScreen() {
 
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
-            {appointment.event.type === 'caminata' ? (
+            {appointment.event.type === 'virtual' ? (
+              <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+            ) : appointment.event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : appointment.event.type === 'bar' ? (
               <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
@@ -1669,7 +1680,11 @@ export default function DinamicaScreen() {
             </View>
           </View>
           {shouldShowLocationText && (
-            <Text style={styles.eventLocation}>Ubicación se revelará un día antes del evento</Text>
+            <Text style={styles.eventLocation}>
+              {esVirtual
+                ? 'El botón para entrar aparece 15 minutos antes'
+                : 'Ubicación se revelará un día antes del evento'}
+            </Text>
           )}
           {locationRevealed && locationText && (
             <Text style={styles.eventLocation}>{locationText}</Text>
@@ -1678,11 +1693,13 @@ export default function DinamicaScreen() {
 
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>Confirma tu llegada</Text>
+            <Text style={styles.codeEntryTitle}>{esVirtual ? 'Confirma tu asistencia' : 'Confirma tu llegada'}</Text>
             <Text style={styles.codeEntrySubtitle}>
-              {countdownDisplay === '¡Es la hora!'
-                ? 'Presiona el botón cuando estés en el lugar del evento'
-                : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
+              {esVirtual
+                ? 'Si ya entraste a la videollamada desde la app, tu asistencia quedó registrada. Si entraste por otro lado, confírmala aquí.'
+                : countdownDisplay === '¡Es la hora!'
+                  ? 'Presiona el botón cuando estés en el lugar del evento'
+                  : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
             </Text>
 
             {gpsError ? (
@@ -1707,7 +1724,7 @@ export default function DinamicaScreen() {
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
               <Text style={styles.confirmedText}>
-                ¡Llegada confirmada!
+                {esVirtual ? '¡Asistencia confirmada!' : '¡Llegada confirmada!'}
               </Text>
             </View>
 
@@ -1763,8 +1780,10 @@ export default function DinamicaScreen() {
                 </Text>
                 {/* La invitación a pedir depende del TIPO de evento: en una
                     cena aplica "la cena", en bar/café/bolos solo algo de tomar,
-                    y en caminata no hay dónde ordenar, así que no se muestra. */}
-                {appointment.event.type !== 'caminata' && (
+                    y en caminata no hay dónde ordenar, así que no se muestra.
+                    En videollamada tampoco: cada quien está en su casa y "algo
+                    en la mesa" no significa nada. */}
+                {appointment.event.type !== 'caminata' && !esVirtual && (
                   <>
                     <View style={styles.waitCardDivider} />
                     <View style={styles.waitCardDrink}>
