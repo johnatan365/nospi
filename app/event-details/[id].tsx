@@ -392,7 +392,7 @@ export default function EventDetailsScreen() {
             {event.type === 'virtual' ? (
               // Mismo agrandado que en la lista de eventos (ver events.tsx).
               <View style={{ width: 156, height: 132, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
-                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 201, height: 170, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 181, height: 153, tintColor: '#6B6B6B' }} resizeMode="contain" />
               </View>
             ) : event.type === 'caminata' ? (
               <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
@@ -404,10 +404,10 @@ export default function EventDetailsScreen() {
               <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 156, height: 132, marginBottom: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
             ) : event.type === 'bolos' ? (
               // Mismo truco que en events.tsx: caja del mismo tamano que los demas
-              // iconos (156x132) para no desalinear el layout, con el icono ~35% mas
+              // iconos (156x132) para no desalinear el layout, con el icono ~17% mas
               // grande centrado adentro (se ve chico si no se agranda un poco).
               <View style={{ width: 156, height: 132, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
-                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 211, height: 178, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 183, height: 155, tintColor: '#6B6B6B' }} resizeMode="contain" />
               </View>
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
@@ -613,7 +613,7 @@ export default function EventDetailsScreen() {
               >
                 {event?.type === 'virtual' ? (
                   <View style={{ width: 58, height: 50, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }}>
-                    <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 75, height: 64, tintColor: '#ffffff' }} resizeMode="contain" />
+                    <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 68, height: 58, tintColor: '#ffffff' }} resizeMode="contain" />
                   </View>
                 ) : event?.type === 'caminata' ? (
                   <Image source={require('@/assets/images/icon-caminata.png')} style={styles.ticketIcon} resizeMode="contain" />

@@ -259,17 +259,17 @@ export default function EventsScreen() {
                         // El icono de videollamada es ancho y bajo, asi que dentro del
                         // recuadro estandar se ve mas chico que los demas aunque mida lo
                         // mismo. Mismo truco que bolos: caja del tamano normal para no
-                        // mover el layout, con el icono ~29% mas grande centrado adentro.
+                        // mover el layout, con el icono ~16% mas grande centrado adentro.
                         <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 80, height: 68, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 72, height: 61, tintColor: '#6B6B6B' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bolos' ? (
                         // El icono de bolos se ve chico dentro del recuadro estandar de
-                        // 62x53, asi que lo renderizamos ~35% mas grande pero centrado en
+                        // 62x53, asi que lo renderizamos ~18% mas grande pero centrado en
                         // una caja de 62x53 (mismo tamano que los demas iconos) para que no
                         // empuje el texto y la tarjeta siga alineada con el resto de eventos.
                         <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 72, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 73, height: 63, tintColor: '#6B6B6B' }} resizeMode="contain" />
                         </View>
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>

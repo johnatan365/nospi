@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   avatarEventIcon: { width: 32, height: 32, tintColor: '#880E4F' },
   // El de videollamada es ancho y bajo: dentro de una caja cuadrada se encoge
   // a lo alto. Se dibuja mas grande, como en la lista de eventos.
-  avatarEventIconAncho: { width: 42, height: 42, tintColor: '#880E4F' },
+  avatarEventIconAncho: { width: 38, height: 38, tintColor: '#880E4F' },
   rowContent: { flex: 1, marginLeft: 12 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   rowTitle: { fontSize: 15, fontWeight: '700', color: '#1c1c1e', flex: 1, marginRight: 8 },

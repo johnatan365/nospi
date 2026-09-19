@@ -615,9 +615,9 @@ export default function AppointmentsScreen() {
                       <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                     ) : eventType === 'bolos' ? (
                       // Caja del mismo tamano que los demas iconos (72x62) para no
-                      // desalinear la tarjeta; el icono va ~35% mas grande adentro.
+                      // desalinear la tarjeta; el icono va ~17% mas grande adentro.
                       <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 97, height: 84, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 73, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       </View>
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>

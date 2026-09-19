@@ -3002,10 +3002,15 @@ export default function ChatThreadScreen() {
           </View>
         ) : (
         <>
-        {/* En los grupos, lo urgente no se resuelve en el chat: la gente del
-            grupo no puede hacer nada y el equipo no esta mirando el chat en
-            vivo. Por eso se apunta al WhatsApp, que es donde ya se les mando
-            la info del evento. */}
+        {/* Ni en el grupo del evento ni en la comunidad se resuelve lo que
+            necesita al equipo: nadie del grupo puede hacer nada y nosotros no
+            estamos mirando el chat en vivo. Por eso los dos apuntan al
+            WhatsApp, pero por motivos distintos.
+
+            En la comunidad ademas se dice PARA QUE es el grupo. Sin eso
+            termina siendo el buzon de quejas: alguien escribe un reclamo
+            delante de 160 personas, nadie del equipo lo ve, y lo unico que
+            queda es el reclamo colgado ahi. */}
         {(isGroup || isComunidad) && (
           <Text
             style={{
@@ -3013,8 +3018,9 @@ export default function ChatThreadScreen() {
               paddingHorizontal: 22, paddingTop: 6, lineHeight: 15,
             }}
           >
-            ¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido —
-            es el mismo número por donde te llegó la info del evento, y está en tu perfil.
+            {isComunidad
+              ? 'Este grupo es para la comunidad: conocerse, compartir planes y conversar. ¿Soporte técnico, sugerencias o reclamos? Por WhatsApp te atendemos con prioridad — el número está en tu perfil.'
+              : '¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido — es el mismo número por donde te llegó la info del evento, y está en tu perfil.'}
           </Text>
         )}
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
@@ -3857,7 +3863,7 @@ const styles = StyleSheet.create({
   headerEmoji: { fontSize: 16 },
   headerEventIcon: { width: 20, height: 20, tintColor: '#880E4F' },
   // Mismo caso que en la lista de chats: el de videollamada va mas grande.
-  headerEventIconAncho: { width: 27, height: 27, tintColor: '#880E4F' },
+  headerEventIconAncho: { width: 24, height: 24, tintColor: '#880E4F' },
   headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
   messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
   messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', width: '100%' },
