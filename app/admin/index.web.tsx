@@ -166,6 +166,7 @@ interface AdminChatMessage {
   media_kind?: 'image' | 'video' | null;
   media_mime?: string | null;
   media_size?: number | null;
+  hidden_at?: string | null;
 }
 
 // Bucket privado de las fotos y videos del chat: el admin tiene permiso para
@@ -1175,6 +1176,30 @@ export default function AdminPanelScreen() {
     }
   }, []);
 
+  // Menu de UN mensaje suelto: se abre al hacer clic sobre la burbuja, en
+  // cualquiera de los chats del panel (canal, grupo, moderacion, evento).
+  //
+  // El "📋 Copiar chat" de arriba copia la conversacion COMPLETA, que es otra
+  // cosa: aca se copia solo el mensaje que se toco, y ademas se puede ocultar.
+  const [menuMensaje, setMenuMensaje] = useState<
+    { id: string; autor: string; content: string; created_at: string; hidden: boolean } | null
+  >(null);
+  const [ocultando, setOcultando] = useState(false);
+
+  const abrirMenuMensaje = useCallback(
+    (m: { id: string; content?: string | null; created_at: string; hidden_at?: string | null }, autor: string) => {
+      setMenuMensaje({
+        id: m.id,
+        autor,
+        content: m.content || '',
+        created_at: m.created_at,
+        hidden: !!m.hidden_at,
+      });
+    },
+    [],
+  );
+
+
   const fechaCorta = (v: any) => {
     try {
       return new Date(v).toLocaleString('es-CO', {
@@ -1219,7 +1244,7 @@ export default function AdminPanelScreen() {
   const loadChannelMessages = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, sender_id, content, created_at, is_system, media_kind, poll_id')
+      .select('id, sender_id, content, created_at, is_system, media_kind, poll_id, hidden_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
     if (error) { console.error('Error cargando mensajes del canal:', error); return; }
@@ -1417,6 +1442,33 @@ export default function AdminPanelScreen() {
   const [chatMediaUrls, setChatMediaUrls] = useState<Record<string, string>>({});
   const [modMessagesLoading, setModMessagesLoading] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
+
+  // Ocultar deja el mensaje visible SOLO para quien lo escribio (y para los
+  // admins, para poder revisarlo). El resto del chat deja de verlo, y tampoco
+  // les aparece como ultima linea ni les suma al globo de no leidos.
+  // Es reversible: el mismo boton lo vuelve a mostrar.
+  //
+  // Va aca abajo y no junto al resto del menu porque necesita los setters de
+  // las tres listas de mensajes, que se declaran a esta altura.
+  const alternarOculto = useCallback(async () => {
+    if (!menuMensaje) return;
+    setOcultando(true);
+    const { error } = await supabase.rpc('admin_set_message_hidden', {
+      p_message_id: menuMensaje.id,
+      p_hidden: !menuMensaje.hidden,
+    });
+    setOcultando(false);
+    if (error) {
+      window.alert('No se pudo cambiar el mensaje: ' + error.message);
+      return;
+    }
+    const nuevo = !menuMensaje.hidden ? new Date().toISOString() : null;
+    const marcar = (arr: any[]) => arr.map((x) => (x.id === menuMensaje.id ? { ...x, hidden_at: nuevo } : x));
+    setChannelMessages((prev) => marcar(prev));
+    setModMessages((prev) => marcar(prev) as AdminChatMessage[]);
+    setEventChatMessages((prev) => marcar(prev) as AdminChatMessage[]);
+    setMenuMensaje(null);
+  }, [menuMensaje]);
 
   const loadAllDirectConversations = useCallback(async () => {
     setAllDirectConvosLoading(true);
@@ -6306,11 +6358,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     const mine = m.sender_id === adminUserId;
                     return (
                       <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: m.poll_id ? '92%' : '78%', minWidth: m.poll_id ? 280 : undefined, marginBottom: 8 }}>
-                        <View style={{
-                          backgroundColor: mine ? '#880E4F' : '#FFFFFF',
-                          borderWidth: 1, borderColor: mine ? '#880E4F' : '#E5E7EB',
-                          borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
-                        }}>
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() => abrirMenuMensaje(m, usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante'))}
+                          style={{
+                            backgroundColor: mine ? '#880E4F' : '#FFFFFF',
+                            borderWidth: 1, borderColor: m.hidden_at ? '#F59E0B' : (mine ? '#880E4F' : '#E5E7EB'),
+                            borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
+                          }}>
                           {!mine && (
                             <Text style={{ fontSize: 10, fontWeight: '800', color: '#AD1457', marginBottom: 2 }}>
                               {usersById[m.sender_id]?.name || 'Participante'}
@@ -6329,7 +6384,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </Text>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       </View>
                     );
                   })}
@@ -6560,11 +6615,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   const mine = m.sender_id === adminUserId;
                   return (
                     <View key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', marginBottom: 8 }}>
-                      <View style={{
-                        backgroundColor: mine ? '#880E4F' : '#FFFFFF',
-                        borderWidth: 1, borderColor: mine ? '#880E4F' : '#E5E7EB',
-                        borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
-                      }}>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => abrirMenuMensaje(m, usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante'))}
+                        style={{
+                          backgroundColor: mine ? '#880E4F' : '#FFFFFF',
+                          borderWidth: 1, borderColor: m.hidden_at ? '#F59E0B' : (mine ? '#880E4F' : '#E5E7EB'),
+                          borderRadius: 13, paddingVertical: 8, paddingHorizontal: 11,
+                        }}>
                         {!mine && (
                           <Text style={{ fontSize: 10, fontWeight: '800', color: '#AD1457', marginBottom: 2 }}>
                             {usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante')}
@@ -6581,7 +6639,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     </View>
                   );
                 })}
@@ -7088,7 +7146,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                         <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
                       </View>
                     )}
-                    <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => abrirMenuMensaje(msg, isAdmin ? 'Equipo Nospi' : (msg.sender_name || 'Participante'))}
+                      style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin, msg.hidden_at ? { borderWidth: 1, borderColor: '#F59E0B' } : null]}>
                       <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi' : msg.sender_name}</Text>
                       {renderChatMedia(msg)}
                       {!!(msg.content || '').trim() && (
@@ -7103,7 +7164,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                           <Text style={{ fontSize: 10, fontWeight: '700', color: '#880E4F' }}>👁 Ver quién lo vio</Text>
                         </TouchableOpacity>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })
@@ -10228,7 +10289,10 @@ setBulkWhatsAppPending(pending);
                               <Text style={{ fontSize: 12 }}>{isAdmin ? '📣' : '👤'}</Text>
                             </View>
                           )}
-                          <View style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin]}>
+                          <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => abrirMenuMensaje(msg, isAdmin ? 'Equipo Nospi' : (msg.sender_name || 'Participante'))}
+                      style={[styles.eventChatMsgBubble, isAdmin && styles.eventChatMsgBubbleAdmin, msg.hidden_at ? { borderWidth: 1, borderColor: '#F59E0B' } : null]}>
                             <Text style={styles.eventChatMsgSender}>{isAdmin ? 'Equipo Nospi (tú)' : msg.sender_name}</Text>
                             {renderChatMedia(msg)}
                             {!!(msg.content || '').trim() && (
@@ -10240,7 +10304,7 @@ setBulkWhatsAppPending(pending);
                                 <Text style={{ fontSize: 10, fontWeight: '700', color: '#880E4F' }}>👁 Ver quién lo vio</Text>
                               </TouchableOpacity>
                             </View>
-                          </View>
+                          </TouchableOpacity>
                         </View>
                       );
                     })
@@ -10272,6 +10336,62 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
       </Modal>
+      {/* Menu de un mensaje suelto: sale al hacer clic sobre la burbuja, en
+          cualquiera de los chats del panel. Vive en la raiz por lo mismo que
+          el de "quien lo vio": se abre desde cuatro pantallas distintas. */}
+        <Modal visible={!!menuMensaje} transparent animationType="fade" onRequestClose={() => setMenuMensaje(null)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setMenuMensaje(null)}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          >
+            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 460, overflow: 'hidden' }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#AD1457' }}>
+                  {menuMensaje?.autor}{menuMensaje ? ' · ' + fechaCorta(menuMensaje.created_at) : ''}
+                </Text>
+                <Text numberOfLines={4} style={{ fontSize: 13, color: '#1f2937', marginTop: 5, lineHeight: 18 }}>
+                  {menuMensaje?.content || '(sin texto)'}
+                </Text>
+                {menuMensaje?.hidden && (
+                  <Text style={{ fontSize: 11, color: '#B45309', marginTop: 7, fontWeight: '700' }}>
+                    🙈 Oculto. Solo lo ven quien lo escribió y los admins.
+                  </Text>
+                )}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (menuMensaje) copiarAlPortapapeles(menuMensaje.content || '', 'mensaje');
+                  setMenuMensaje(null);
+                }}
+                style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937' }}>📋 Copiar mensaje</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={alternarOculto}
+                disabled={ocultando}
+                style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', opacity: ocultando ? 0.5 : 1 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: menuMensaje?.hidden ? '#047857' : '#B45309' }}>
+                  {ocultando ? '…' : menuMensaje?.hidden ? '👁 Volver a mostrarlo a todos' : '🙈 Ocultar a los demás'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                  {menuMensaje?.hidden
+                    ? 'Vuelve a verse en el chat para todo el mundo.'
+                    : 'Quien lo escribió lo seguirá viendo igual y no se entera.'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setMenuMensaje(null)} style={{ paddingVertical: 13, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#6b7280' }}>Cancelar</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
       {/* Quién vio el mensaje. Vive AQUI, en la raiz, y no dentro del panel
           de canales: el mismo boton se usa ahora desde grupos, chats privados
           y el chat del evento, y un modal que solo existe mientras se mira la
