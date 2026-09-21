@@ -1562,6 +1562,18 @@ export default function DinamicaScreen() {
           )}
 
           <View style={styles.rulesCard}>
+            {/* Videollamada: lo primero que lee el moderador en voz alta es
+                pedir que todos prendan la cámara. Solo aplica a eventos
+                virtuales; en presencial no tiene sentido. */}
+            {esVirtual && (
+              <>
+                <View style={styles.rulesRow}>
+                  <Text style={styles.rulesEmoji}>📹</Text>
+                  <Text style={styles.rulesText}>Antes de empezar: todos con la cámara prendida. Parte de la experiencia es vernos las caras.</Text>
+                </View>
+                <View style={styles.rulesDivider} />
+              </>
+            )}
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>🎯</Text>
               <Text style={styles.rulesText}>{nivelesText}</Text>
