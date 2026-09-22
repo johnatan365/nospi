@@ -191,7 +191,7 @@ interface AdminMatch {
   conversation_id: string | null; created_at: string;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
+type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen' | 'no-shows' | 'hombres-dormidos';
 
 
 
@@ -9848,6 +9848,7 @@ setBulkWhatsAppPending(pending);
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
     { key: 'subscriptions', icon: '👑', label: 'Suscripciones' }, { key: 'promo-codes', icon: '🎟️', label: 'Códigos' }, { key: 'stats', icon: '📊', label: 'Estadísticas' }, { key: 'origen', icon: '🎯', label: 'Origen' },
     { key: 'no-shows',     icon: '🚫', label: 'No-shows' },
+    { key: 'hombres-dormidos', icon: '🙋', label: 'Hombres dormidos' },
     { key: 'moderation',   icon: '💬', label: 'Comunicación' },
     { key: 'config',       icon: '⚙️', label: 'Config' },
   ];
@@ -9976,7 +9977,7 @@ setBulkWhatsAppPending(pending);
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
                 if (item.key === 'moderation') { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
-                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
+                if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; } if (item.key === 'hombres-dormidos') { router.push('/admin/hombres-dormidos'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
                 setSidebarOpen(false);
               }}
