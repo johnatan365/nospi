@@ -830,6 +830,27 @@ export default function AdminPanelScreen() {
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   // Búsqueda dentro del modal de asistentes (por nombre, correo o celular).
   const [attendeeSearch, setAttendeeSearch] = useState('');
+  // Asistente al que apunto la ultima burbuja de edad. Se resalta unos segundos
+  // y se apaga solo: si quedara encendido, la proxima vez que se abre el modal
+  // habria una ficha marcada sin que nadie la haya pedido.
+  const [asistenteResaltado, setAsistenteResaltado] = useState<string | null>(null);
+
+  // Lleva la lista hasta la persona de esa burbuja y la marca. Limpia el
+  // buscador primero, porque si hay un filtro puesto la ficha puede no estar
+  // en pantalla y el salto no haria nada.
+  const irAlAsistente = useCallback((appointmentId?: string | null) => {
+    if (!appointmentId) return;
+    setAttendeeSearch('');
+    setAsistenteResaltado(appointmentId);
+    // Un frame para que la lista termine de re-renderizar sin el filtro.
+    requestAnimationFrame(() => {
+      document.getElementById(`asistente-${appointmentId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    window.setTimeout(() => {
+      setAsistenteResaltado((actual) => (actual === appointmentId ? null : actual));
+    }, 2600);
+  }, []);
 
   // Move attendee modal
   const [showMoveAttendeeModal, setShowMoveAttendeeModal] = useState(false);
@@ -2737,18 +2758,32 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // separa una mesa que fluye de una en la que alguien queda descolgado.
   const MARGEN_EDAD = 5;
 
-  type PersonaEdad = { gender?: string | null; age?: number | null };
+  // El id y el nombre viajan junto a la edad para que cada burbuja sepa a quien
+  // representa. Sin eso la fila es una lista de numeros sueltos y hay que bajar
+  // a buscar quien es cada uno en la lista de abajo.
+  type PersonaEdad = {
+    gender?: string | null;
+    age?: number | null;
+    appointmentId?: string | null;
+    name?: string | null;
+  };
 
   const analizarEdades = (personas: PersonaEdad[]) => {
     const norm = (g?: string | null) => (g === 'hombre' ? 'hombre' : g === 'mujer' ? 'mujer' : 'otro');
     const edades: Record<string, number[]> = { hombre: [], mujer: [], otro: [] };
+    const gente: Record<string, PersonaEdad[]> = { hombre: [], mujer: [], otro: [] };
 
     for (const p of personas) {
       const edad = Number(p.age);
       if (!Number.isFinite(edad) || edad <= 0) continue;
       edades[norm(p.gender)].push(edad);
+      gente[norm(p.gender)].push({ ...p, age: edad });
     }
     (Object.keys(edades) as string[]).forEach(k => edades[k].sort((x, y) => x - y));
+    // Mismo orden que las edades, para que la burbuja n corresponda a la
+    // persona n y el aviso de abajo siga cuadrando con lo que se ve.
+    (Object.keys(gente) as string[]).forEach(k =>
+      gente[k].sort((x, y) => Number(x.age) - Number(y.age)));
 
     const promedio = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a2, b) => a2 + b, 0) / xs.length) : null);
 
@@ -2774,6 +2809,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       min: todas.length ? Math.min(...todas) : null,
       max: todas.length ? Math.max(...todas) : null,
       hayAmbos: edades.hombre.length > 0 && edades.mujer.length > 0,
+      // Las mismas listas pero con nombre e id, para las burbujas clicables.
+      gHombre: gente.hombre,
+      gMujer: gente.mujer,
+      gOtro: gente.otro,
     };
   };
 
@@ -2815,28 +2854,41 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // del rango del otro genero: sin eso hay que comparar dos listas de numeros
   // en la cabeza, que era justo el punto debil de mostrarlas sueltas.
   const renderFilaEdades = (
-    icono: string, etiqueta: string, edades: number[], solos: Set<number>,
+    icono: string, etiqueta: string, gente: PersonaEdad[], solos: Set<number>,
     prom: number | null, color: string, fondo: string,
+    onPick?: (p: PersonaEdad) => void,
   ) => (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
       <Text style={{ width: 74, flexShrink: 0, fontSize: 12.5, fontWeight: '700', color: '#6B7280', paddingTop: 2 }}>
         {icono} {etiqueta}
       </Text>
       <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-        {edades.length === 0 ? (
+        {gente.length === 0 ? (
           <Text style={{ fontSize: 12.5, color: '#9CA3AF', paddingTop: 2 }}>Ninguno</Text>
-        ) : edades.map((e, i) => (
-          <View
-            key={`${e}-${i}`}
-            style={{
-              backgroundColor: fondo, borderRadius: 20, paddingVertical: 1, paddingHorizontal: 7,
-              borderWidth: solos.has(e) ? 1.5 : 0,
-              borderColor: '#B45309', borderStyle: 'dashed',
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: '700', color }}>{e}</Text>
-          </View>
-        ))}
+        ) : gente.map((p, i) => {
+          const e = Number(p.age);
+          // Solo es clicable si sabemos a quien llevar. En la practica siempre,
+          // pero si algun dia se reusa el bloque sin appointmentId la burbuja
+          // se sigue viendo igual y simplemente no hace nada.
+          const clicable = !!(onPick && p.appointmentId);
+          return (
+            <TouchableOpacity
+              key={`${p.appointmentId || e}-${i}`}
+              activeOpacity={clicable ? 0.6 : 1}
+              disabled={!clicable}
+              onPress={clicable ? () => onPick!(p) : undefined}
+              accessibilityLabel={clicable ? `Ver a ${p.name || 'esta persona'}, ${e} anos` : undefined}
+              style={{
+                backgroundColor: fondo, borderRadius: 20, paddingVertical: 1, paddingHorizontal: 7,
+                borderWidth: solos.has(e) ? 1.5 : 0,
+                borderColor: '#B45309', borderStyle: 'dashed',
+                ...(clicable ? { cursor: 'pointer' } as any : null),
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color }}>{e}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
       {prom !== null && (
         <Text style={{ flexShrink: 0, fontSize: 11.5, color: '#9CA3AF', paddingTop: 3 }}>prom. {prom}</Text>
@@ -2844,8 +2896,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     </View>
   );
 
-  // Bloque completo, tal cual va en Gestion de eventos.
-  const renderResumenEdades = (personas: PersonaEdad[]) => {
+  // Bloque completo, tal cual va en Gestion de eventos. Si se le pasa onPick,
+  // cada burbuja lleva a esa persona en la lista de abajo.
+  const renderResumenEdades = (personas: PersonaEdad[], onPick?: (p: PersonaEdad) => void) => {
     const an = analizarEdades(personas);
     if (an.hombre.length === 0 && an.mujer.length === 0) return null;
     const aviso = avisoEdades(an);
@@ -2855,10 +2908,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#EEEEEE',
         borderRadius: 12, padding: 13, gap: 8, marginTop: 10,
       }}>
-        {renderFilaEdades('👨', 'Hombres', an.hombre, an.solosH, an.promH, '#1D6FD0', '#E4EEFB')}
-        {renderFilaEdades('👩', 'Mujeres', an.mujer, an.solosM, an.promM, '#C2185B', '#FBE4EE')}
-        {an.otro.length > 0 &&
-          renderFilaEdades('🧑', 'Otros', an.otro, new Set<number>(), null, '#6B7280', '#F3F4F6')}
+        {renderFilaEdades('👨', 'Hombres', an.gHombre, an.solosH, an.promH, '#1D6FD0', '#E4EEFB', onPick)}
+        {renderFilaEdades('👩', 'Mujeres', an.gMujer, an.solosM, an.promM, '#C2185B', '#FBE4EE', onPick)}
+        {an.gOtro.length > 0 &&
+          renderFilaEdades('🧑', 'Otros', an.gOtro, new Set<number>(), null, '#6B7280', '#F3F4F6', onPick)}
         <View style={{
           flexDirection: 'row', gap: 7, alignItems: 'flex-start',
           backgroundColor: aviso.tono === 'ok' ? '#E8F6EC' : '#FDF1E3',
@@ -3016,6 +3069,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             age: att.user_age,
             age_range_min: att.user_age_range_min,
             age_range_max: att.user_age_range_max,
+            // Si el grupo no cae en el rango que pidio: 'attend' va igual,
+            // 'postpone' prefiere aplazar. Decide si el rango es exigencia o
+            // preferencia a la hora de sentar a alguien en una mesa apretada.
+            age_range_fallback: att.user_age_range_fallback,
+            // El registro de la PERSONA, no el de la inscripcion: la etiqueta
+            // de afinidad la usa para no decir "Sin responder" a quien se
+            // registro antes de que la pregunta existiera.
+            created_at: att.user_created_at,
           },
         })) || [];
         
@@ -10858,7 +10919,13 @@ setBulkWhatsAppPending(pending);
                 {renderResumenEdades(
                   eventAttendees
                     .filter((a: any) => a.status !== 'cancelada')
-                    .map((a: any) => ({ gender: a.users?.gender, age: a.users?.age }))
+                    .map((a: any) => ({
+                      gender: a.users?.gender,
+                      age: a.users?.age,
+                      appointmentId: a.id,
+                      name: a.users?.name,
+                    })),
+                  (p) => irAlAsistente(p.appointmentId)
                 )}
               </View>
             )}
@@ -10922,9 +10989,27 @@ setBulkWhatsAppPending(pending);
                   const ageRangeMin = attendee.users.age_range_min || 18;
                   const ageRangeMax = attendee.users.age_range_max || 99;
                   const ageRangeText = `${ageRangeMin} - ${ageRangeMax} años`;
-                  
+                  // Que respondio si el grupo no cae en el rango que pidio.
+                  // Se reusa la misma etiqueta de la tabla de Usuarios para no
+                  // tener dos formas de decir lo mismo en el panel.
+                  const afines = etiquetaAfines(
+                    (attendee.users as any).age_range_fallback,
+                    (attendee.users as any).created_at || null
+                  );
+                  const resaltado = asistenteResaltado === attendee.id;
+
                   return (
-                    <View key={attendee.id} style={styles.attendeeItem}>
+                    <View
+                      key={attendee.id}
+                      nativeID={`asistente-${attendee.id}`}
+                      style={[
+                        styles.attendeeItem,
+                        resaltado && {
+                          borderWidth: 2, borderColor: nospiColors.purpleDark,
+                          backgroundColor: '#F5F0FF',
+                        },
+                      ]}
+                    >
                       <View style={styles.attendeeHeader}>
                         <Text style={styles.attendeeNumber}>#{index + 1}</Text>
                         <Text style={styles.attendeeName}>{attendee.users.name}</Text>
@@ -10961,6 +11046,19 @@ setBulkWhatsAppPending(pending);
                       <View style={styles.ageRangeHighlight}>
                         <Text style={styles.ageRangeLabel}>🎯 Rango de edad preferido:</Text>
                         <Text style={styles.ageRangeValue}>{ageRangeText}</Text>
+                        {afines !== '' && (
+                          <Text style={{
+                            marginTop: 4, fontSize: 12.5, fontWeight: '700',
+                            color: afines === 'Asiste igual' ? '#15803D'
+                              : afines === 'Aplaza' ? '#B45309' : '#9CA3AF',
+                          }}>
+                            {afines === 'Asiste igual'
+                              ? '✓ Si el grupo no encaja, asiste igual'
+                              : afines === 'Aplaza'
+                              ? '⚠ Si el grupo no encaja, prefiere aplazar'
+                              : '· No respondió si asiste cuando el grupo no encaja'}
+                          </Text>
+                        )}
                       </View>
                       <View style={styles.attendeeStatusRow}>
                         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
