@@ -830,6 +830,11 @@ export default function AdminPanelScreen() {
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   // Búsqueda dentro del modal de asistentes (por nombre, correo o celular).
   const [attendeeSearch, setAttendeeSearch] = useState('');
+  // Solapa del modal de asistentes. Los cancelados van en su propia lista y
+  // nunca se mezclan con los confirmados: quien cancela desaparece de la mesa,
+  // y verlo ahi solo estorba al armar el grupo.
+  const [attendeesTab, setAttendeesTab] = useState<'confirmados' | 'cancelados'>('confirmados');
+  const [eventCancelled, setEventCancelled] = useState<any[]>([]);
   // Asistente al que apunto la ultima burbuja de edad. Se resalta unos segundos
   // y se apaga solo: si quedara encendido, la proxima vez que se abre el modal
   // habria una ficha marcada sin que nadie la haya pedido.
@@ -3026,12 +3031,46 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
-  const handleViewAttendees = async (event: Event) => {
+  // tab decide en cual solapa abre. Por defecto confirmados, que es como se
+  // abrio siempre; 'cancelados' lo usa el contador de Gestion de eventos.
+  const handleViewAttendees = async (event: Event, tab: 'confirmados' | 'cancelados' = 'confirmados') => {
 
     setSelectedEventForAttendees(event);
     setAttendeeSearch(''); // limpiar el buscador al abrir/recargar
+    setAttendeesTab(tab);
+    // Sin esto, al pasar de un evento a otro se alcanzan a ver un instante los
+    // cancelados del anterior, mientras llega la respuesta del nuevo.
+    setEventCancelled([]);
     setLoadingAttendees(true);
     setShowAttendeesModal(true);
+
+    // Los cancelados se piden aparte y viven en su propia lista: nunca se
+    // mezclan con los confirmados, que es justo lo que hace util esa pantalla.
+    supabase
+      .rpc('get_event_attendees_for_admin', { p_event_id: event.id, p_incluir_canceladas: true })
+      .then(({ data: cancel, error: cancelError }) => {
+        if (cancelError) {
+          console.error('Error cargando cancelados:', cancelError);
+          setEventCancelled([]);
+          return;
+        }
+        setEventCancelled((cancel || []).map((att: any) => ({
+          id: att.id,
+          cancelled_at: att.cancelled_at,
+          created_at: att.created_at,
+          payment_status: att.payment_status,
+          users: {
+            id: att.user_id,
+            name: att.user_name,
+            email: att.user_email,
+            phone: att.user_phone,
+            gender: att.user_gender,
+            age: att.user_age,
+            age_range_min: att.user_age_range_min,
+            age_range_max: att.user_age_range_max,
+          },
+        })));
+      });
 
     try {
       const { data, error } = await supabase
@@ -3042,7 +3081,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         window.alert('No se pudieron cargar los asistentes: ' + error.message);
         setEventAttendees([]);
       } else {
-        
+
         // Transform the flat data structure into the nested structure
         const transformedAttendees = data?.map((att: any) => ({
           id: att.id,
@@ -10304,11 +10343,28 @@ setBulkWhatsAppPending(pending);
                       {/* Asistentes REALES (confirmadas + las que ya asistieron),
                           sin contar las canceladas; los cancelados van aparte. */}
                       👥 Ver Asistentes ({appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status !== 'cancelada').length})
-                      {appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length > 0
-                        ? ` · ${appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length} cancelada${appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length === 1 ? '' : 's'}`
-                        : ''}
                     </Text>
                   </TouchableOpacity>
+
+                  {/* El conteo de cancelados era texto muerto pegado al boton de
+                      arriba. Ahora abre el mismo modal en su propia solapa, que
+                      es donde se ve quien cancelo, de que edad y cuando. */}
+                  {appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length > 0 && (
+                    <TouchableOpacity
+                      style={styles.configActionButton}
+                      onPress={() => {
+                        setShowConfigModal(false);
+                        handleViewAttendees(selectedEventForConfig, 'cancelados');
+                      }}
+                    >
+                      <Text style={styles.configActionButtonText}>
+                        {(() => {
+                          const n = appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length;
+                          return `🚫 Ver cancelados (${n})`;
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
           <TouchableOpacity
             style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
@@ -10930,6 +10986,66 @@ setBulkWhatsAppPending(pending);
               </View>
             )}
 
+            {/* Solapas. Solo aparecen si hay cancelados: si nadie cancelo, la
+                pantalla se ve exactamente como antes. */}
+            {!loadingAttendees && eventCancelled.length > 0 && (
+              <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingBottom: 10 }}>
+                {([
+                  ['confirmados', `Confirmados (${eventAttendees.length})`],
+                  ['cancelados', `Cancelados (${eventCancelled.length})`],
+                ] as ['confirmados' | 'cancelados', string][]).map(([k, label]) => (
+                  <TouchableOpacity
+                    key={k}
+                    onPress={() => { setAttendeesTab(k); setAttendeeSearch(''); }}
+                    style={{
+                      paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20,
+                      backgroundColor: attendeesTab === k ? nospiColors.purpleDark : '#F3F4F6',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 13, fontWeight: '700',
+                      color: attendeesTab === k ? '#FFFFFF' : '#4B5563',
+                    }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {attendeesTab === 'cancelados' ? (
+              <ScrollView style={styles.attendeesList}>
+                {eventCancelled.map((c, i) => (
+                  <View key={c.id} style={[styles.attendeeItem, { borderLeftWidth: 3, borderLeftColor: '#EF4444' }]}>
+                    <View style={styles.attendeeHeader}>
+                      <Text style={styles.attendeeNumber}>#{i + 1}</Text>
+                      <Text style={styles.attendeeName}>{c.users.name}</Text>
+                    </View>
+                    <Text style={styles.attendeeDetail}>
+                      👤 {c.users.gender === 'hombre' ? 'Hombre' : c.users.gender === 'mujer' ? 'Mujer' : 'No especificado'}
+                      {c.users.age ? ` · ${c.users.age} años` : ''}
+                      {c.users.age_range_min ? ` · pedía ${c.users.age_range_min}-${c.users.age_range_max}` : ''}
+                    </Text>
+                    <Text style={styles.attendeeDetail}>
+                      🚫 Canceló: {c.cancelled_at
+                        ? new Date(c.cancelled_at).toLocaleString('es-CO', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+                        : 'sin fecha — canceló antes de que se empezara a guardar'}
+                    </Text>
+                    <Text style={styles.attendeeDetail}>
+                      📝 Se había inscrito: {c.created_at
+                        ? new Date(c.created_at).toLocaleDateString('es-CO', {
+                            day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Bogota' })
+                        : '—'}
+                    </Text>
+                    {c.users.phone && (
+                      <Text style={styles.attendeeDetail}>📱 {c.users.phone}</Text>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+            <>
+
             {!loadingAttendees && eventAttendees.length > 0 && (
               <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
                 <TextInput
@@ -11131,6 +11247,8 @@ setBulkWhatsAppPending(pending);
               </ScrollView>
               );
             })()}
+            </>
+            )}
           </View>
         </View>
       </Modal>
