@@ -20,6 +20,7 @@ interface Event {
   location_name: string;
   location_address: string;
   maps_link: string;
+  meet_link?: string | null;
   require_gps_verification?: boolean;
   registration_closed_men?: boolean;
   registration_closed_women?: boolean;
@@ -213,15 +214,37 @@ const BLOQUE_INSTALAR_VISPERA = [
   `🍎 iPhone: ${TIENDA_IPHONE}`,
 ].join('\n');
 
+// En un evento virtual el enlace NO viaja por aqui: vive detras del boton de
+// la app, porque ese boton es el que registra la asistencia. Por eso el bloque
+// de instalacion cambia de tono — deja de ser una recomendacion.
+const BLOQUE_INSTALAR_VIRTUAL = [
+  `📲 *El enlace se abre desde la app de Nospi*, no te llega por aquí ni por correo. Instálala desde ya y el día del evento solo tocas un botón.`,
+  `🤖 Android: ${TIENDA_ANDROID}`,
+  `🍎 iPhone: ${TIENDA_IPHONE}`,
+].join('\n');
+
 const BLOQUE_INSTALAR_MISMO_DIA = [
   `📲 ¿Aún sin la app? Instálala antes de salir:`,
   `🤖 ${TIENDA_ANDROID}`,
   `🍎 ${TIENDA_IPHONE}`,
 ].join('\n');
 
+// La hora en que se habilita el boton de entrar: la del evento menos 15 min,
+// la misma ventana que usa la app (MINUTOS_ANTES_ENTRAR en event-details).
+function restarMinutos(time24?: string, minutos: number = 15): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec((time24 || '').trim());
+  if (!m) return '';
+  let total = parseInt(m[1], 10) * 60 + parseInt(m[2], 10) - minutos;
+  if (total < 0) total += 24 * 60;
+  const h24 = Math.floor(total / 60), mm = total % 60;
+  const suf = h24 >= 12 ? 'p.m.' : 'a.m.';
+  let h = h24 % 12; if (h === 0) h = 12;
+  return `${h}:${String(mm).padStart(2, '0')} ${suf}`;
+}
+
 // Arma el link de WhatsApp con el saludo predeterminado de Nospi, personalizado
 // con el primer nombre de la persona y, si se conoce, la fecha/hora del evento.
-function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
+function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string, eventType?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
 
@@ -236,7 +259,22 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     eventBlock = ' tu evento.';
   }
 
-  const message = [
+  const esVirtual = eventType === 'virtual';
+
+  const message = (esVirtual ? [
+    `¡Hola ${firstName}! 👋`,
+    ``,
+    `Quedaste dentro de${eventBlock}`,
+    `🎥 Es por videollamada, desde donde estés.`,
+    ``,
+    BLOQUE_INSTALAR_VIRTUAL,
+    ``,
+    `Cancelas gratis desde la app hasta 24 h antes y conservas tu saldo. Con menos de 24 h o si no entras, pierdes el saldo y te queda una falta — y con faltas se suspende la cuenta para reservar.`,
+    `📋 https://app.nospi.co/politica-asistencia`,
+    ``,
+    `¡Nos pillamos! 😎`,
+    `_Equipo Nospi_`,
+  ] : [
     `¡Hola ${firstName}! 👋`,
     ``,
     `Quedaste dentro de${eventBlock}`,
@@ -247,7 +285,7 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     ``,
     `¡Nos pillamos! 😎`,
     `_Equipo Nospi_`,
-    ].join('\n');
+  ]).join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -263,7 +301,8 @@ function buildEventReminderWhatsAppLink(
   isLocationRevealed?: boolean,
   locationName?: string,
   locationAddress?: string,
-  mapsLink?: string
+  mapsLink?: string,
+  eventType?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -283,7 +322,25 @@ function buildEventReminderWhatsAppLink(
     locationBlock = `📍 El lugar te lo mandamos hoy mismo.`;
   }
 
-  const message = [
+  const esVirtual = eventType === 'virtual';
+  const horaBoton = restarMinutos(eventTime, 15);
+
+  const message = (esVirtual ? [
+    `¡Hola ${firstName}! 👋`,
+    ``,
+    `Mañana es *${eventLabel}*.`,
+    dateLine,
+    `🎥 Por videollamada — no tienes que ir a ningún lado.`,
+    ``,
+    BLOQUE_INSTALAR_VIRTUAL,
+    ``,
+    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} te aparece el botón *Entrar a la videollamada* dentro del evento. Ese botón es el que registra tu asistencia.`,
+    ``,
+    `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
+    ``,
+    `¡Nos pillamos! 😄`,
+    `_Equipo Nospi_`,
+  ] : [
     `¡Hola ${firstName}! 👋`,
     ``,
     `Mañana es *${eventLabel}*.`,
@@ -296,7 +353,7 @@ function buildEventReminderWhatsAppLink(
     ``,
     `¡Nos pillamos! 😄`,
     `_Equipo Nospi_`,
-    ].join('\n');
+  ]).join('\n');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
@@ -318,7 +375,8 @@ function buildSameDayWhatsAppLink(
   eventTime?: string,
   locationName?: string,
   locationAddress?: string,
-  mapsLink?: string
+  mapsLink?: string,
+  eventType?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -326,7 +384,30 @@ function buildSameDayWhatsAppLink(
   const addressPart = locationAddress ? ` — ${locationAddress}` : '';
   const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
 
-  const message = [
+  const esVirtual = eventType === 'virtual';
+  const horaBoton = restarMinutos(eventTime, 15);
+
+  const message = (esVirtual ? [
+    `¡Hola ${firstName}! 👋`,
+    ``,
+    `*Hoy es ${(eventName || 'tu evento').trim()}*${timePart ? `,${timePart}` : '.'}`,
+    `🎥 Por videollamada.`,
+    ``,
+    `Así entras:`,
+    `1️⃣ Abre Nospi y entra al evento`,
+    `2️⃣ Desde las ${horaBoton || '15 minutos antes'} te aparece el botón *Entrar a la videollamada*`,
+    `3️⃣ Tócalo: con eso queda registrada tu asistencia y se abre la llamada`,
+    ``,
+    `⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.`,
+    ``,
+    `Prende la cámara y busca un lugar tranquilo con buena señal. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
+    ``,
+    `📲 ¿Aún sin la app? Instálala ya, o entra desde app.nospi.co`,
+    `🤖 ${TIENDA_ANDROID}`,
+    `🍎 ${TIENDA_IPHONE}`,
+    ``,
+    `¡Hoy Nospi! 🎉`,
+  ] : [
     `¡Hola ${firstName}! 👋`,
     ``,
     `*Hoy es ${(eventName || 'tu evento').trim()}*${timePart ? `,${timePart}` : '.'}`,
@@ -339,7 +420,7 @@ function buildSameDayWhatsAppLink(
     BLOQUE_INSTALAR_MISMO_DIA,
     ``,
     `¡Hoy Nospi! 🎉`,
-    ].join('\n');
+  ]).join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
@@ -713,7 +794,7 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
-  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar'>('all');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
   // ascendente (los más próximos a venir primero); las demás pestañas en
@@ -793,6 +874,7 @@ export default function AdminPanelScreen() {
     location_name: '',
     location_address: '',
     maps_link: '',
+    meet_link: '',
     require_gps_verification: true,
     registration_closed_men: false,
     registration_closed_women: false,
@@ -1534,6 +1616,16 @@ export default function AdminPanelScreen() {
     setRetenidos((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  // Tercera salida, ademas de publicar y eliminar: el mensaje sale de la
+  // bandeja y queda oculto para el grupo, pero su autor lo sigue viendo igual
+  // que siempre. No pide confirmacion porque se deshace desde el menu del
+  // mensaje dentro del chat, a diferencia de eliminar.
+  const ocultarRetenido = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('admin_ocultar_retenido', { p_id: id });
+    if (error) { window.alert('No se pudo ocultar: ' + error.message); return; }
+    setRetenidos((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
   const eliminarRetenido = useCallback(async (id: string, autor: string) => {
     if (!window.confirm(`¿Eliminar definitivamente el mensaje de ${autor}?`)) return;
     const { error } = await supabase.rpc('admin_delete_message', { p_id: id });
@@ -1702,8 +1794,8 @@ export default function AdminPanelScreen() {
   const buildReminderLinkForModal = (a: Appointment) => {
     if (!reminderWhatsAppModal || !selectedEventForConfig) return '';
     return reminderWhatsAppModal.kind === '48h'
-    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link)
-      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link);
+    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type)
+      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type);
   };
 
   const loadEventConversations = useCallback(async (eventId: string) => {
@@ -3051,6 +3143,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: '',
       location_address: '',
       maps_link: '',
+      meet_link: '',
       require_gps_verification: true,
       registration_closed_men: false,
       registration_closed_women: false,
@@ -3111,6 +3204,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: event.location_name || '',
       location_address: event.location_address || '',
       maps_link: event.maps_link || '',
+      meet_link: (event as any).meet_link || '',
       require_gps_verification: event.require_gps_verification ?? true,
       registration_closed_men: event.registration_closed_men ?? false,
       registration_closed_women: event.registration_closed_women ?? false,
@@ -3420,6 +3514,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: eventForm.location_name,
         location_address: eventForm.location_address,
         maps_link: eventForm.maps_link,
+        // El enlace del Meet vive en su propia columna, no en maps_link: ese lo
+        // imprimen como texto los correos y los WhatsApp, y el del Meet no puede
+        // salir de la app (ver supabase/EVENTO-VIRTUAL.md).
+        meet_link: (eventForm.meet_link || '').trim() || null,
         gps_link: gpsLink.trim() ? gpsLink.trim() : null,
         ...(mapsLinkCheck.status === 'ok' && typeof mapsLinkCheck.lat === 'number' && typeof mapsLinkCheck.lng === 'number'
           ? { latitude: mapsLinkCheck.lat, longitude: mapsLinkCheck.lng }
@@ -3488,6 +3586,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: '',
         location_address: '',
         maps_link: '',
+        meet_link: '',
         require_gps_verification: true,
         registration_closed_men: false,
         registration_closed_women: false,
@@ -3632,6 +3731,31 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     // esos mensajes salen cojos y no hay forma de recogerlos, asi que se
     // bloquea antes en vez de avisar despues.
     const lleno = (v: any) => typeof v === 'string' && v.trim().length > 0;
+    const esVirtual = eventData.type === 'virtual';
+
+    // Un evento virtual no tiene lugar, dirección ni coordenadas: lo único que
+    // tiene que estar listo es el link del Meet. Sin esta rama, los cuatro
+    // requisitos de abajo lo bloquearían para siempre y los correos y WhatsApps
+    // automáticos nunca saldrían.
+    if (esVirtual) {
+      if (!lleno(eventData.meet_link)) {
+        window.alert(
+          'No se puede activar el acceso todavía.\n\n' +
+          'Falta el link de la videollamada (Google Meet).\n\n' +
+          'Activar envía el correo y el WhatsApp avisando que ya se puede entrar, y esos ' +
+          'mensajes no se pueden recoger. Complétalo en Editar evento y vuelve a intentarlo.'
+        );
+        return;
+      }
+      const ok = window.confirm(
+        '¿Activar el acceso a la videollamada?\n\n' +
+        'A partir de ahora, a los asistentes les aparece el botón para entrar 15 minutos antes ' +
+        'de la hora del evento.\n\n' +
+        'Se les enviará el correo y el WhatsApp avisando. El link NO va en esos mensajes: ' +
+        'solo se abre desde la app, y ese botón es el que registra la asistencia.'
+      );
+      if (!ok) return;
+    } else {
     const faltantes: string[] = [];
     if (!lleno(eventData.location_name)) faltantes.push('Nombre del lugar');
     if (!lleno(eventData.location_address)) faltantes.push('Dirección del lugar');
@@ -3668,12 +3792,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       'Se les enviará el correo y el WhatsApp con el lugar a los asistentes confirmados.'
     );
     if (!confirmed) return;
+    }
 
     try {
 
       // Build full location string for the app's `location` column
-      const fullLocation = [eventData.location_name, eventData.location_address]
-        .filter(Boolean).join(' — ') || 'Ubicación revelada';
+      const fullLocation = esVirtual
+        ? 'Videollamada'
+        : ([eventData.location_name, eventData.location_address]
+            .filter(Boolean).join(' — ') || 'Ubicación revelada');
 
       const { error } = await supabase
         .from('events')
@@ -3786,6 +3913,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       location_name: '',
       location_address: '',
       maps_link: '',
+      meet_link: '',
       require_gps_verification: event.require_gps_verification,
       is_location_revealed: false,
       max_participants: event.max_participants,
@@ -6607,7 +6735,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               <Text style={{ padding: 14, fontSize: 12.5, color: '#6b7280' }}>No hay chats de evento todavía.</Text>
             ) : groupChats.map(g => {
               const on = g.conversation_id === activeGroupChatId;
-              const emoji = g.event_type === 'bar' ? '🍸' : g.event_type === 'caminata' ? '🚶'
+              const emoji = g.event_type === 'virtual' ? '🎥' : g.event_type === 'bar' ? '🍸' : g.event_type === 'caminata' ? '🚶'
                 : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : '🍽️';
               return (
                 <TouchableOpacity
@@ -6737,7 +6865,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     <View style={{ padding: 14 }}>
       <Text style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
         Estos mensajes no los ve nadie del grupo. Su autor sí los ve, como si se hubieran publicado.
-        Al aprobar, el mensaje queda con su fecha y hora originales.
+        Al publicar, el mensaje queda con su fecha y hora originales. Ocultar al grupo lo deja así
+        para siempre y lo saca de esta lista.
       </Text>
 
       {retenidosCargando ? (
@@ -6782,6 +6911,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#fff' }}>✓ Publicar al grupo</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => ocultarRetenido(r.id)}
+                style={{ backgroundColor: '#FEF3C7', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#92400E' }}>🙈 Ocultar al grupo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => copiarAlPortapapeles(r.contenido || '', 'retenido')}
                 style={{ backgroundColor: '#F3F4F6', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15 }}
               >
@@ -6798,7 +6933,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </View>
 
             <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 9 }}>
-              Si no haces nada, se queda retenido: solo lo ve quien lo escribió.
+              Si no haces nada, se queda retenido: solo lo ve quien lo escribió, pero la ficha sigue
+              aquí. «Ocultar al grupo» deja eso mismo como decisión tomada y la saca de la lista;
+              se puede deshacer desde el menú del mensaje, dentro del chat.
             </Text>
           </View>
         ))
@@ -6861,7 +6998,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     // Motivos de baja calificacion, contados (todas las categorias)
     const motivoCount: Record<string, number> = {};
     for (const r of filtered) {
-      for (const campo of ['motivos_dinamica', 'motivos_lugar', 'motivos_comida', 'motivos_grupo']) {
+      for (const campo of ['motivos_dinamica', 'motivos_lugar', 'motivos_comida', 'motivos_grupo', 'motivos_videollamada']) {
         for (const m of (r[campo] || [])) {
           if (!m) continue;
           motivoCount[m] = (motivoCount[m] || 0) + 1;
@@ -6873,12 +7010,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const color = (v: number | null) => v === null ? '#9CA3AF' : v >= 2.5 ? '#15803d' : v >= 2 ? '#b45309' : '#b91c1c';
     const fmt = (v: number | null) => v === null ? '—' : v.toFixed(2);
 
+    // La videollamada solo se califica en eventos virtuales: su barra aparece
+    // unicamente cuando hay alguna, para no dejar un KPI vacio en los reportes
+    // de cenas, cafes y bolos.
+    const hayVideollamada = filtered.some((r: any) => typeof r.videollamada === 'number');
+
     const kpis = [
       { label: 'Volvería a usar Nospi', value: pctSi === null ? '—' : `${pctSi}%`, pct: pctSi ?? 0, col: pctSi !== null && pctSi >= 70 ? '#15803d' : '#b45309' },
       { label: 'Lugar', value: fmt(avg('lugar')), pct: ((avg('lugar') ?? 0) / 3) * 100, col: color(avg('lugar')) },
       { label: 'Grupo', value: fmt(avg('grupo')), pct: ((avg('grupo') ?? 0) / 3) * 100, col: color(avg('grupo')) },
       { label: 'Comida', value: fmt(avg('comida')), pct: ((avg('comida') ?? 0) / 3) * 100, col: color(avg('comida')) },
       { label: 'Dinámica', value: fmt(avg('dinamica')), pct: ((avg('dinamica') ?? 0) / 3) * 100, col: color(avg('dinamica')) },
+      ...(hayVideollamada
+        ? [{ label: '🎥 Videollamada', value: fmt(avg('videollamada')), pct: ((avg('videollamada') ?? 0) / 3) * 100, col: color(avg('videollamada')) }]
+        : []),
     ];
 
     const exportFeedbackExcel = () => {
@@ -6889,14 +7034,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         Persona: r.user_name,
         Correo: r.user_email,
         Dinamica: r.dinamica ?? '',
-        Lugar: r.lugar ?? '',
+        'Puntaje lugar': r.lugar ?? '',
         Comida: r.comida ?? '',
         Grupo: r.grupo ?? '',
+        Videollamada: r.videollamada ?? '',
         Volveria: r.volveria === 'si' ? 'Sí' : r.volveria === 'no' ? 'No' : '',
         'Motivos dinámica': (r.motivos_dinamica || []).join(', '),
         'Motivos lugar': (r.motivos_lugar || []).join(', '),
         'Motivos comida': (r.motivos_comida || []).join(', '),
         'Motivos grupo': (r.motivos_grupo || []).join(', '),
+        'Motivos videollamada': (r.motivos_videollamada || []).join(', '),
         'Comentario dinámica': r.comentario_dinamica || '',
         'Comentario general': r.comentario_general || '',
       }));
@@ -8198,7 +8345,7 @@ setBulkWhatsAppPending(pending);
         </div>
 
         {filteredEvents.map((event) => {
-          const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : 'Restaurante';
+          const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           
@@ -8954,7 +9101,7 @@ setBulkWhatsAppPending(pending);
                         const alreadySent = !!nextAppt?.purchase_whatsapp_sent_at;
                         return (
                           <a
-                            href={buildWhatsAppLink(user.phone, user.name, nextAppt?.events?.name, nextAppt?.events?.date, nextAppt?.events?.time)}
+                            href={buildWhatsAppLink(user.phone, user.name, nextAppt?.events?.name, nextAppt?.events?.date, nextAppt?.events?.time, nextAppt?.events?.type)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => { if (nextAppt) markPurchaseWhatsAppSent(nextAppt.id); }}
@@ -9101,7 +9248,7 @@ setBulkWhatsAppPending(pending);
                   if (!window.confirm(`Se van a abrir ${withPhone.length} pestañas de WhatsApp (una por persona). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
                   withPhone.forEach((a: any) => {
                     window.open(
-                      buildWhatsAppLink(a.users.phone, a.users.name, selectedEvent.name, selectedEvent.date, selectedEvent.time),
+                      buildWhatsAppLink(a.users.phone, a.users.name, selectedEvent.name, selectedEvent.date, selectedEvent.time, selectedEvent.type),
                       '_blank'
                     );
                   });
@@ -9257,7 +9404,7 @@ setBulkWhatsAppPending(pending);
                             <td style={{ ...cellStyle, textAlign: 'center' }}>
                               {u.phone && (
                                 <a
-                                  href={buildWhatsAppLink(u.phone, u.name, selectedEvent?.name, selectedEvent?.date, selectedEvent?.time)}
+                                  href={buildWhatsAppLink(u.phone, u.name, selectedEvent?.name, selectedEvent?.date, selectedEvent?.time, selectedEvent?.type)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => markPurchaseWhatsAppSent(att.id)}
@@ -9625,7 +9772,8 @@ setBulkWhatsAppPending(pending);
                             participant.users.name,
                             events.find(e => e.id === selectedEventForMonitoring)?.name,
                             events.find(e => e.id === selectedEventForMonitoring)?.date,
-                            events.find(e => e.id === selectedEventForMonitoring)?.time
+                            events.find(e => e.id === selectedEventForMonitoring)?.time,
+                            events.find(e => e.id === selectedEventForMonitoring)?.type
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -10606,7 +10754,7 @@ setBulkWhatsAppPending(pending);
           {(bulkWhatsAppPending || []).map(a => (
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
-            <a href={buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+            <a href={buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time, (a.events as any)?.type)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
       </View>
@@ -10831,7 +10979,8 @@ setBulkWhatsAppPending(pending);
                             attendee.users.name,
                             selectedEventForAttendees?.name,
                             selectedEventForAttendees?.date,
-                            selectedEventForAttendees?.time
+                            selectedEventForAttendees?.time,
+                            selectedEventForAttendees?.type
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -10936,6 +11085,8 @@ setBulkWhatsAppPending(pending);
                 numberOfLines={4}
               />
 
+              {/* Un evento de videollamada no tiene lugar que llenar ni GPS
+                  que verificar: toda esa sección se reemplaza por el link. */}
               <Text style={styles.inputLabel}>Tipo de Evento *</Text>
               <select
                 style={{
@@ -10952,7 +11103,7 @@ setBulkWhatsAppPending(pending);
                 onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
               >
                 <option value="bar">Bar</option>
-                <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option><option value="bolos">Bolos</option>
+                <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option><option value="bolos">Bolos</option><option value="virtual">Videollamada</option>
               </select>
 
               <Text style={styles.inputLabel}>Fecha</Text>
@@ -10994,120 +11145,153 @@ setBulkWhatsAppPending(pending);
                 onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
               />
 
-              <Text style={styles.inputLabel}>Nombre del Lugar</Text>
-              <View style={{ position: 'relative', zIndex: 10 }}>
+              {/* Videollamada: un solo campo en vez de los cuatro de ubicación.
+                  El enlace no se envía por correo ni por WhatsApp — solo se abre
+                  desde el botón de la app, y ese botón es el que registra la
+                  asistencia. La verificación GPS tampoco aplica: cada quien
+                  está en su casa. */}
+              {(eventForm.type === 'virtual') ? (
+                <>
+                <Text style={styles.inputLabel}>Link de la videollamada (Google Meet) *</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia.
+                </Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Ej: Bar La Terraza"
-                  value={eventForm.location_name}
-                  onChangeText={(text) => { setEventForm({ ...eventForm, location_name: text }); setShowVenueSuggestions(true); }}
-                  onFocus={() => setShowVenueSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 150)}
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                  value={eventForm.meet_link}
+                  onChangeText={(text) => setEventForm({ ...eventForm, meet_link: text })}
                 />
-                {showVenueSuggestions && venueSuggestions.length > 0 && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      marginTop: -12,
-                      backgroundColor: '#FFFFFF',
-                      border: '1px solid #E0E0E0',
-                      borderRadius: 12,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                      overflow: 'hidden',
-                      maxHeight: 240,
-                    }}
-                  >
-                    {venueSuggestions.map((v, i) => (
-                      <TouchableOpacity
-                        key={v.location_name + i}
-                        style={{
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderBottomWidth: i < venueSuggestions.length - 1 ? 1 : 0,
-                          borderBottomColor: '#F0F0F0',
-                        }}
-                        onPress={() => {
-                          setEventForm({
-                            ...eventForm,
-                            location_name: v.location_name,
-                            location_address: v.location_address,
-                            maps_link: v.maps_link,
-                          });
-                          setShowVenueSuggestions(false);
-                          // Traer también el link del GPS y las coordenadas del lugar reusado.
-                          setGpsLink(v.gps_link || '');
-                          const vg = v.gps_link ? extractGpsFromLink(v.gps_link) : null;
-                          if (vg && coordsEnColombia(vg.lat, vg.lng)) {
-                            setMapsLinkCheck({ status: 'ok', lat: vg.lat, lng: vg.lng });
-                          } else if (typeof v.latitude === 'number' && typeof v.longitude === 'number') {
-                            setMapsLinkCheck({ status: 'ok', lat: v.latitude, lng: v.longitude });
-                          } else {
-                            setMapsLinkCheck({ status: 'idle' });
-                          }
-                        }}
-                      >
-                        <Text style={{ fontSize: 15, color: '#111827', fontWeight: '600' }}>📍 {v.location_name}</Text>
-                        {!!v.location_address && (
-                          <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{v.location_address}</Text>
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                {(() => {
+                  const v = (eventForm.meet_link || '').trim();
+                  if (!v) return null;
+                  if (/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i.test(v)) {
+                    return <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Link de Meet válido</Text>;
+                  }
+                  if (/^https:\/\/meet\.google\.com\//i.test(v)) {
+                    return <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Es de meet.google.com pero no tiene el formato abc-defg-hij. Revísalo.</Text>;
+                  }
+                  return <Text style={{ fontSize: 13, color: '#EF4444', marginTop: 4 }}>⚠️ Esto no parece un link de Google Meet.</Text>;
+                })()}
+                </>
+              ) : (
+                <>
+                <Text style={styles.inputLabel}>Nombre del Lugar</Text>
+                <View style={{ position: 'relative', zIndex: 10 }}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ej: Bar La Terraza"
+                    value={eventForm.location_name}
+                    onChangeText={(text) => { setEventForm({ ...eventForm, location_name: text }); setShowVenueSuggestions(true); }}
+                    onFocus={() => setShowVenueSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 150)}
+                  />
+                  {showVenueSuggestions && venueSuggestions.length > 0 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        marginTop: -12,
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #E0E0E0',
+                        borderRadius: 12,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                        overflow: 'hidden',
+                        maxHeight: 240,
+                      }}
+                    >
+                      {venueSuggestions.map((v, i) => (
+                        <TouchableOpacity
+                          key={v.location_name + i}
+                          style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderBottomWidth: i < venueSuggestions.length - 1 ? 1 : 0,
+                            borderBottomColor: '#F0F0F0',
+                          }}
+                          onPress={() => {
+                            setEventForm({
+                              ...eventForm,
+                              location_name: v.location_name,
+                              location_address: v.location_address,
+                              maps_link: v.maps_link,
+                            });
+                            setShowVenueSuggestions(false);
+                            // Traer también el link del GPS y las coordenadas del lugar reusado.
+                            setGpsLink(v.gps_link || '');
+                            const vg = v.gps_link ? extractGpsFromLink(v.gps_link) : null;
+                            if (vg && coordsEnColombia(vg.lat, vg.lng)) {
+                              setMapsLinkCheck({ status: 'ok', lat: vg.lat, lng: vg.lng });
+                            } else if (typeof v.latitude === 'number' && typeof v.longitude === 'number') {
+                              setMapsLinkCheck({ status: 'ok', lat: v.latitude, lng: v.longitude });
+                            } else {
+                              setMapsLinkCheck({ status: 'idle' });
+                            }
+                          }}
+                        >
+                          <Text style={{ fontSize: 15, color: '#111827', fontWeight: '600' }}>📍 {v.location_name}</Text>
+                          {!!v.location_address && (
+                            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{v.location_address}</Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.inputLabel}>Dirección del Lugar</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Calle 85 #15-20"
+                  value={eventForm.location_address}
+                  onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
+                />
+
+                <Text style={styles.inputLabel}>Link del computador (para el GPS)</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                  Pega aquí primero el link largo de Google Maps del computador (el que tiene @ seguido de dos números). De aquí se sacan las coordenadas del confirmar-llegada.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://www.google.com/maps/place/Nombre/@6.2454,-75.5920,16z/data=..."
+                  value={gpsLink}
+                  onChangeText={handleGpsLinkChange}
+                />
+                {mapsLinkCheck.status === 'ok' && (
+                  <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Coordenadas detectadas (lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}) — el confirmar-llegada queda listo.</Text>
                 )}
-              </View>
+                {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error === 'fuera-rango' && (
+                  <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Detecté lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}, pero no parecen de Colombia. Revisa el link por si quedó cruzado.</Text>
+                )}
+                {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error !== 'fuera-rango' && (
+                  <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Este link no trae coordenadas. Abre el link en el computador y pega la dirección larga (la que tiene @ con dos números).</Text>
+                )}
 
-              <Text style={styles.inputLabel}>Dirección del Lugar</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Calle 85 #15-20"
-                value={eventForm.location_address}
-                onChangeText={(text) => setEventForm({ ...eventForm, location_address: text })}
-              />
-
-              <Text style={styles.inputLabel}>Link del computador (para el GPS)</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                Pega aquí primero el link largo de Google Maps del computador (el que tiene @ seguido de dos números). De aquí se sacan las coordenadas del confirmar-llegada.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="https://www.google.com/maps/place/Nombre/@6.2454,-75.5920,16z/data=..."
-                value={gpsLink}
-                onChangeText={handleGpsLinkChange}
-              />
-              {mapsLinkCheck.status === 'ok' && (
-                <Text style={{ fontSize: 13, color: '#10B981', marginTop: 4 }}>✅ Coordenadas detectadas (lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}) — el confirmar-llegada queda listo.</Text>
-              )}
-              {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error === 'fuera-rango' && (
-                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Detecté lat: {mapsLinkCheck.lat?.toFixed(5)}, lng: {mapsLinkCheck.lng?.toFixed(5)}, pero no parecen de Colombia. Revisa el link por si quedó cruzado.</Text>
-              )}
-              {mapsLinkCheck.status === 'fail' && mapsLinkCheck.error !== 'fuera-rango' && (
-                <Text style={{ fontSize: 13, color: '#F59E0B', marginTop: 4 }}>⚠️ Este link no trae coordenadas. Abre el link en el computador y pega la dirección larga (la que tiene @ con dos números).</Text>
-              )}
-
-              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Link para mostrar</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                El link bonito que se envía a la gente por correo y WhatsApp (muestra el nombre del lugar). Si lo dejas vacío, se llena solo con el link limpio del de arriba.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="https://maps.app.goo.gl/...  (o se autogenera del link de arriba)"
-                value={eventForm.maps_link}
-                onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
-              />
+                <Text style={[styles.inputLabel, { marginTop: 14 }]}>Link para mostrar</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
+                  El link bonito que se envía a la gente por correo y WhatsApp (muestra el nombre del lugar). Si lo dejas vacío, se llena solo con el link limpio del de arriba.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://maps.app.goo.gl/...  (o se autogenera del link de arriba)"
+                  value={eventForm.maps_link}
+                  onChangeText={(text) => setEventForm({ ...eventForm, maps_link: text })}
+                />
               
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  style={styles.checkbox}
-                  onPress={() => setEventForm({ ...eventForm, require_gps_verification: !eventForm.require_gps_verification })}
-                >
-                  <Text style={styles.checkboxText}>
-                    {eventForm.require_gps_verification ? '☑' : '☐'} Requerir verificación GPS al confirmar llegada
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                <View style={styles.checkboxContainer}>
+                  <TouchableOpacity
+                    style={styles.checkbox}
+                    onPress={() => setEventForm({ ...eventForm, require_gps_verification: !eventForm.require_gps_verification })}
+                  >
+                    <Text style={styles.checkboxText}>
+                      {eventForm.require_gps_verification ? '☑' : '☐'} Requerir verificación GPS al confirmar llegada
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                </>
+              )}
 
               <Text style={styles.inputLabel}>Visibilidad por género</Text>
               <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
