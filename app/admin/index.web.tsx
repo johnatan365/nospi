@@ -205,6 +205,12 @@ type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions'
 const TIENDA_ANDROID = 'https://play.google.com/store/apps/details?id=app.nospi.mobile';
 const TIENDA_IPHONE = 'https://apps.apple.com/co/app/nospi/id6761556688';
 
+// Link de pago de Wompi por fuera de la app ($15.000, reutilizable). Se le manda
+// a quien se le cayo el pago dentro de la app: el checkout propio de Wompi no
+// arrastra la sesion ni el estado de la app, que es donde se caen la mayoria de
+// los intentos. Si algun dia se cambia el link en Wompi, se cambia aqui.
+const LINK_PAGO_DIRECTO = 'https://checkout.wompi.co/l/mVzF1m';
+
 // Bloque que recomienda instalar la app. El gancho es la dinamica, que es lo
 // unico que de verdad se hace mejor desde la app: no se obliga a nadie, se
 // recomienda en el momento en que tiene sentido.
@@ -426,32 +432,37 @@ function buildSameDayWhatsAppLink(
 }
 
 // Arma el link de WhatsApp para las personas cuyo último intento de pago
-// quedó declinado/con error, ofreciendo mandarles el link directo de pago.
+// quedó declinado/con error. El mensaje NO las devuelve al flujo de pago que se
+// les acaba de caer ni les pregunta si quieren el link: se lo manda de una, que
+// es lo unico que ha convertido a este grupo. Deja la transferencia de segunda
+// opcion y abre la puerta a la duda, que es la otra mitad de los rechazos.
 function buildDeclinedPaymentWhatsAppLink(phone: string, name?: string, eventName?: string, eventDate?: string, eventTime?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
-  const firstName = (name || '').trim().split(' ')[0] || 'ahí';
+  const firstName = (name || '').trim().split(' ')[0];
+  const saludo = firstName ? `¡Hola ${firstName}! 👋` : '¡Hola! 👋';
   const formattedDate = eventDate
-  ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })
+    ? new Date(eventDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })
     : '';
   const timePart = eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : '';
   const eventPart = eventName
-      ? `*${eventName.trim()}*${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
+    ? `*${eventName.trim()}*${formattedDate ? ` del ${formattedDate}` : ''}${timePart}`
     : 'tu evento';
 
   const message = [
-    `¡Hola ${firstName}! 👋`,
+    `${saludo} Soy Evelyn, de Nospi.`,
     ``,
-    `Te escribimos desde Nospi, la app que organiza cenas y planes para conocer gente nueva.`,
+    `Vi que intentaste reservar tu cupo para ${eventPart} y el pago no alcanzó a pasar. Tranqui, *no se te hizo ningún cobro*.`,
     ``,
-    `⚠️ Vimos que intentaste pagar tu cupo para ${eventPart}, pero el pago no se pudo completar.`,
+    `Para que no te vuelva a pasar te dejo un link de pago directo, por fuera de la app. Ahí puedes pagar con Nequi, tarjeta o PSE y suele pasar de una:`,
     ``,
-    `A veces pasa por un tema técnico del banco o de la app — nada grave.`,
+    `👉 ${LINK_PAGO_DIRECTO}`,
     ``,
-    `💳 Si quieres, te mandamos el link directo para que sea más fácil completar el pago. Solo cuéntanos y te lo enviamos.`,
+    `Si prefieres hacer una transferencia, dime y te paso los datos.`,
     ``,
-    `¡Te esperamos! Nospi 🙌`,
-    `_Equipo Nospi_`,
-    ].join('\n');
+    `Y si lo que te frenó no fue el pago sino una duda —no conoces a nadie, no sabes bien cómo funciona, te da cosa ir— escríbeme por aquí y te la resuelvo yo misma. Ir sin conocer a nadie es justamente la idea.`,
+    ``,
+    `_Evelyn · Nospi_`,
+  ].join('\n');
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
