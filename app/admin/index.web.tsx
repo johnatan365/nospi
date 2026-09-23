@@ -3031,13 +3031,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
-  // tab decide en cual solapa abre. Por defecto confirmados, que es como se
-  // abrio siempre; 'cancelados' lo usa el contador de Gestion de eventos.
-  const handleViewAttendees = async (event: Event, tab: 'confirmados' | 'cancelados' = 'confirmados') => {
+  const handleViewAttendees = async (event: Event) => {
 
     setSelectedEventForAttendees(event);
     setAttendeeSearch(''); // limpiar el buscador al abrir/recargar
-    setAttendeesTab(tab);
+    // Siempre se abre en confirmados; los cancelados son su propia solapa.
+    setAttendeesTab('confirmados');
     // Sin esto, al pasar de un evento a otro se alcanzan a ver un instante los
     // cancelados del anterior, mientras llega la respuesta del nuevo.
     setEventCancelled([]);
@@ -10345,26 +10344,6 @@ setBulkWhatsAppPending(pending);
                       👥 Ver Asistentes ({appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status !== 'cancelada').length})
                     </Text>
                   </TouchableOpacity>
-
-                  {/* El conteo de cancelados era texto muerto pegado al boton de
-                      arriba. Ahora abre el mismo modal en su propia solapa, que
-                      es donde se ve quien cancelo, de que edad y cuando. */}
-                  {appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length > 0 && (
-                    <TouchableOpacity
-                      style={styles.configActionButton}
-                      onPress={() => {
-                        setShowConfigModal(false);
-                        handleViewAttendees(selectedEventForConfig, 'cancelados');
-                      }}
-                    >
-                      <Text style={styles.configActionButtonText}>
-                        {(() => {
-                          const n = appointments.filter(a => a.event_id === selectedEventForConfig.id && a.status === 'cancelada').length;
-                          return `🚫 Ver cancelados (${n})`;
-                        })()}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
 
           <TouchableOpacity
             style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
