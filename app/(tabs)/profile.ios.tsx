@@ -8,6 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import { NOMBRES_CIUDADES_COLOMBIA } from '@/constants/Ciudades';
 import {
   MOSTRAR_INTERESADO_EN,
   ANCHO_MINIMO_RANGO_EDAD,
@@ -106,7 +107,10 @@ const COUNTRIES = [
 ];
 
 const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
-  'Colombia': ['Medellín', 'Bogotá', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira', 'Santa Marta'],
+  // Las 32 capitales, la misma lista del registro y del admin: si alguien
+  // quedo en la ciudad equivocada, aca la puede corregir a cualquiera de
+  // las que existen, no solo a ocho.
+  'Colombia': NOMBRES_CIUDADES_COLOMBIA,
   'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata'],
   'Brasil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza'],
   'Chile': ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta'],

@@ -6,12 +6,18 @@ import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { formatTimeAmPm } from '@/utils/formatTime';
+import { buscarCiudades, mismaCiudad, textoCiudadesEvento } from '@/constants/Ciudades';
 
 
 interface Event {
   id: string;
   name: string;
+  // `city` es la columna vieja (una sola ciudad): se sigue llenando para que
+  // las apps ya publicadas en las tiendas no se queden sin nada que mostrar.
+  // `cities` es la lista real y `nacional` marca los eventos de todo el pais.
   city: string;
+  cities?: string[] | null;
+  nacional?: boolean;
   description: string;
   type: string;
   date: string;
@@ -805,6 +811,15 @@ export default function AdminPanelScreen() {
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
+  // Filtro de ciudad de la gestion de eventos. Lista vacia = todas las
+  // ciudades. Los eventos nacionales salen siempre, se filtre lo que se
+  // filtre, porque en esa ciudad tambien se ven.
+  const [eventCityFilter, setEventCityFilter] = useState<string[]>([]);
+  const [cityFilterOpen, setCityFilterOpen] = useState(false);
+  const [cityFilterSearch, setCityFilterSearch] = useState('');
+  // Buscador del selector de ciudades del formulario de evento.
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [cityPickerSearch, setCityPickerSearch] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
@@ -904,6 +919,8 @@ export default function AdminPanelScreen() {
   const [eventForm, setEventForm] = useState({
     name: '',
     city: '',
+    cities: [] as string[],
+    nacional: false,
     description: '',
     type: 'bar',
     date: '',
@@ -920,6 +937,17 @@ export default function AdminPanelScreen() {
     event_status: 'draft' as 'draft' | 'published' | 'closed',
     price: '',
   });
+
+  // Marca / desmarca una ciudad del evento que se esta creando o editando.
+  const toggleCiudadEvento = (nombre: string) => {
+    setEventForm((prev) => {
+      const actual = prev.cities || [];
+      const next = actual.includes(nombre)
+        ? actual.filter((c) => c !== nombre)
+        : [...actual, nombre];
+      return { ...prev, cities: next };
+    });
+  };
 
   const [mapsLinkCheck, setMapsLinkCheck] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; lat?: number; lng?: number; error?: string }>({ status: 'idle' });
 
@@ -3246,6 +3274,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setEventForm({
       name: '',
       city: '',
+      cities: [],
+      nacional: false,
       description: '',
       type: 'bar',
       date: '',
@@ -3304,6 +3334,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setEventForm({
       name: event.name || '',
       city: event.city || '',
+      // Un evento guardado antes del cambio no tiene `cities`: se arma la
+      // lista con su unica ciudad para que al editarlo salga marcada.
+      cities: (event.cities && event.cities.length > 0)
+        ? event.cities
+        : (event.city ? [event.city] : []),
+      nacional: !!event.nacional,
       description: event.description || '',
       // FIX: la BD guarda 'restaurante' (español) pero el <select> usa
       // 'restaurant' (inglés) como value — sin este mapeo, el dropdown no
@@ -3590,8 +3626,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   const handleSaveEvent = async () => {
 
     try {
-      if (!eventForm.name || !eventForm.city) {
-        window.alert('Por favor completa el nombre y la ciudad del evento');
+      if (!eventForm.name) {
+        window.alert('Por favor completa el nombre del evento');
+        return;
+      }
+
+      // Sin ciudades y sin "Todo el pais", el evento no le aparece a nadie.
+      if (!eventForm.nacional && eventForm.cities.length === 0) {
+        window.alert('Marca al menos una ciudad, o marca "Todo el país". Si no, el evento no le aparece a nadie.');
         return;
       }
 
@@ -3613,7 +3655,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       // FIX: Map 'restaurant' to 'restaurante' to match database constraint
       const eventData = {
         name: eventForm.name,
-        city: eventForm.city,
+        // `city` (columna vieja, un solo texto) se sigue llenando con la
+        // primera ciudad para que las apps ya publicadas sigan mostrando algo.
+        // Quien decide de verdad a quien le aparece el evento es `cities` /
+        // `nacional`.
+        city: eventForm.nacional ? 'Todo el país' : (eventForm.cities[0] || ''),
+        cities: eventForm.nacional ? [] : eventForm.cities,
+        nacional: eventForm.nacional,
         description: eventForm.description,
         type: eventForm.type === 'restaurant' ? 'restaurante' : eventForm.type,
         date: isoDate,
@@ -3689,6 +3737,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       setEventForm({
         name: '',
         city: '',
+        cities: [],
+        nacional: false,
         description: '',
         type: 'bar',
         date: '',
@@ -4013,6 +4063,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const { data: newEvent, error } = await supabase.from('events').insert({
       name: nextName,
       city: event.city,
+      cities: (event.cities && event.cities.length > 0)
+        ? event.cities
+        : (event.city && !event.nacional ? [event.city] : []),
+      nacional: !!event.nacional,
       description: event.description,
       type: event.type,
       date: shiftedIso,
@@ -8342,7 +8396,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const renderEvents = () => {
+    // Un evento nacional se ve en todas las ciudades, asi que sale siempre,
+    // se filtre la ciudad que se filtre.
+    const eventoEnCiudades = (event: Event, ciudades: string[]) => {
+      if (ciudades.length === 0) return true;
+      if (event.nacional) return true;
+      const lista = (event.cities && event.cities.length > 0)
+        ? event.cities
+        : (event.city ? [event.city] : []);
+      return lista.some((c) => ciudades.some((sel) => mismaCiudad(c, sel)));
+    };
+
     const filteredEvents = events
+      .filter(event => eventoEnCiudades(event, eventCityFilter))
       .filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter)
       .filter(event => eventTypeFilter === 'all' || event.type === eventTypeFilter)
       .filter(event => {
@@ -8388,6 +8454,111 @@ setBulkWhatsAppPending(pending);
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* CIUDAD primero: es el filtro principal. Los botones de arriba
+            (WhatsApp y Crear Evento) son generales y no dependen de este
+            filtro: sirven para cualquier ciudad. */}
+        <div style={{ position: 'relative', zIndex: 30, marginBottom: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#880E4F', letterSpacing: 0.5, width: 58 }}>CIUDAD</span>
+            <button
+              type="button"
+              onClick={() => { setCityFilterSearch(''); setCityFilterOpen((v) => !v); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 250, border: `1px solid ${eventCityFilter.length > 0 ? '#880E4F' : '#D1D5DB'}`, background: '#FFF', borderRadius: 999, padding: '9px 16px', cursor: 'pointer' }}
+            >
+              <span style={{ flex: 1, textAlign: 'left', fontSize: 13.5, fontWeight: 700, color: '#111827' }}>
+                {eventCityFilter.length === 0
+                  ? 'Todas las ciudades'
+                  : eventCityFilter.length === 1
+                    ? eventCityFilter[0]
+                    : `${eventCityFilter.length} ciudades marcadas`}
+              </span>
+              <span style={{ fontSize: 12, color: '#6B7280' }}>⌄</span>
+            </button>
+
+            {eventCityFilter.map((c) => (
+              <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FCE4EC', border: '1px solid #F8BBD9', borderRadius: 999, padding: '5px 6px 5px 12px', fontSize: 13, fontWeight: 700, color: '#880E4F' }}>
+                {c}
+                <button
+                  type="button"
+                  onClick={() => setEventCityFilter(eventCityFilter.filter((x) => x !== c))}
+                  aria-label={`Quitar ${c} del filtro`}
+                  style={{ width: 18, height: 18, border: 0, borderRadius: 999, background: '#F8BBD9', color: '#880E4F', cursor: 'pointer', fontSize: 12, lineHeight: '18px', padding: 0 }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+
+            {eventCityFilter.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setEventCityFilter([])}
+                style={{ border: 0, background: 'transparent', fontSize: 13, fontWeight: 600, color: '#6B7280', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Ver todas
+              </button>
+            )}
+          </div>
+
+          {cityFilterOpen && (
+            <div style={{ position: 'absolute', left: 68, top: 46, width: 340, zIndex: 40, background: '#FFF', border: '1px solid #D1D5DB', borderRadius: 12, boxShadow: '0 16px 40px rgba(0,0,0,0.26)', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid #F3F4F6' }}>
+                <input
+                  value={cityFilterSearch}
+                  onChange={(e) => setCityFilterSearch(e.target.value)}
+                  placeholder="Busca ciudad o municipio"
+                  style={{ width: '100%', border: 0, outline: 'none', fontSize: 14, color: '#111827', background: 'transparent', boxSizing: 'border-box' }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setEventCityFilter([])}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', border: 0, borderBottom: '1px solid #F3F4F6', background: eventCityFilter.length === 0 ? '#FCE4EC' : '#FFF', padding: '11px 13px', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <span style={{ flex: 1, fontSize: 14.5, fontWeight: 700, color: '#111827' }}>Todas las ciudades</span>
+              </button>
+              <div style={{ maxHeight: 260, overflowY: 'auto', padding: 5 }}>
+                {buscarCiudades(cityFilterSearch).map(({ ciudad, via }) => {
+                  const marcada = eventCityFilter.includes(ciudad.nombre);
+                  const cuantos = events
+                    .filter(e => eventStatusFilter === 'all' || e.event_status === eventStatusFilter)
+                    .filter(e => e.nacional || ((e.cities && e.cities.length > 0) ? e.cities : (e.city ? [e.city] : [])).some(c => mismaCiudad(c, ciudad.nombre)))
+                    .length;
+                  return (
+                    <label
+                      key={ciudad.nombre}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: marcada ? '#FCE4EC' : '#FFF' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcada}
+                        onChange={() => setEventCityFilter(
+                          marcada
+                            ? eventCityFilter.filter((x) => x !== ciudad.nombre)
+                            : [...eventCityFilter, ciudad.nombre]
+                        )}
+                        style={{ width: 17, height: 17, accentColor: '#880E4F', cursor: 'pointer' }}
+                      />
+                      <span style={{ flex: 1, fontSize: 14, fontWeight: marcada ? 700 : 500, color: '#111827' }}>{ciudad.nombre}</span>
+                      <span style={{ fontSize: 12, color: cuantos === 0 ? '#D1D5DB' : '#6B7280' }}>{via ? `Incluye ${via}` : (cuantos === 0 ? '—' : cuantos)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', padding: '9px 12px', borderTop: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+                <span style={{ flex: 1 }} />
+                <button
+                  type="button"
+                  onClick={() => setCityFilterOpen(false)}
+                  style={{ border: 0, background: '#880E4F', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, color: '#FFF', cursor: 'pointer' }}
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
           {([
@@ -8473,7 +8644,7 @@ setBulkWhatsAppPending(pending);
                 </View>
               </View>
               <View style={styles.compactInfoRow}>
-                <Text style={styles.compactInfoText}>📍 {event.city}</Text>
+                <Text style={[styles.compactInfoText, event.nacional ? { color: '#3730A3', fontWeight: '700' } : null]}>📍 {textoCiudadesEvento(event)}</Text>
                 <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : (event.date || 'Fecha sin definir')}</Text>
                 <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>
@@ -11273,13 +11444,131 @@ setBulkWhatsAppPending(pending);
                 onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
               />
 
-              <Text style={styles.inputLabel}>Ciudad *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Bogotá"
-                value={eventForm.city}
-                onChangeText={(text) => setEventForm({ ...eventForm, city: text })}
-              />
+              <Text style={styles.inputLabel}>¿A quién le aparece? *</Text>
+              {/* Antes esto era un campo de texto libre con placeholder "Ej:
+                  Bogotá", y por eso entraron "Medellin" sin tilde y "Medellín"
+                  con tilde como dos ciudades distintas. Ahora sale de la misma
+                  lista que ve la persona al registrarse.
+
+                  "Todo el país" NO se guarda como las 1.122 ciudades una por
+                  una: es una marca aparte. Asi, quien viva en un municipio que
+                  ni esta en la lista igual ve los eventos nacionales. */}
+              <div style={{ border: '1px solid #E0E0E0', borderRadius: 12, padding: 12, marginBottom: 16, background: '#FFF' }}>
+
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '10px 12px', borderRadius: 10, border: eventForm.nacional ? '2px solid #880E4F' : '1px solid #E5E7EB', background: eventForm.nacional ? '#FCE4EC' : '#FFF' }}>
+                  <input
+                    type="checkbox"
+                    checked={eventForm.nacional}
+                    onChange={(e) => {
+                      setEventForm({ ...eventForm, nacional: e.target.checked });
+                      setCityPickerOpen(false);
+                    }}
+                    style={{ width: 18, height: 18, marginTop: 2, accentColor: '#880E4F', cursor: 'pointer' }}
+                  />
+                  <span>
+                    <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>Todo el país</span>
+                    <span style={{ display: 'block', fontSize: 12.5, color: '#6B4A58', marginTop: 2 }}>
+                      Le aparece a cualquier persona, viva donde viva. No hay que marcar ciudades.
+                    </span>
+                  </span>
+                </label>
+
+                {!eventForm.nacional && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#880E4F', letterSpacing: 0.4, marginBottom: 7 }}>O ESCOGE CIUDADES</div>
+
+                    <div style={{ border: '2px solid #880E4F', borderRadius: 10, padding: 9, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minHeight: 28 }}>
+                      {eventForm.cities.map((c) => (
+                        <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FCE4EC', borderRadius: 999, padding: '5px 6px 5px 12px', fontSize: 13.5, fontWeight: 700, color: '#880E4F' }}>
+                          {c}
+                          <button
+                            type="button"
+                            onClick={() => toggleCiudadEvento(c)}
+                            aria-label={`Quitar ${c}`}
+                            style={{ width: 19, height: 19, border: 0, borderRadius: 999, background: '#F8BBD9', color: '#880E4F', cursor: 'pointer', fontSize: 13, lineHeight: '19px', padding: 0 }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {eventForm.cities.length === 0 && (
+                        <span style={{ fontSize: 13.5, color: '#9CA3AF', padding: '5px 4px' }}>Ninguna ciudad marcada todavía</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setCityPickerSearch(''); setCityPickerOpen((v) => !v); }}
+                        style={{ border: '1px dashed #880E4F', background: '#FFF', borderRadius: 999, padding: '5px 13px', fontSize: 13, fontWeight: 700, color: '#880E4F', cursor: 'pointer' }}
+                      >
+                        {cityPickerOpen ? 'Cerrar lista' : '+ Agregar ciudad'}
+                      </button>
+                    </div>
+
+                    {cityPickerOpen && (
+                      <div style={{ marginTop: 9, border: '1px solid #D1D5DB', borderRadius: 12, overflow: 'hidden', background: '#FFF' }}>
+                        <div style={{ padding: '10px 12px', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            value={cityPickerSearch}
+                            onChange={(e) => setCityPickerSearch(e.target.value)}
+                            placeholder="Busca ciudad o municipio (Envigado, Ipiales…)"
+                            style={{ flex: 1, border: 0, outline: 'none', fontSize: 14.5, color: '#111827', background: 'transparent' }}
+                          />
+                          <span style={{ fontSize: 12, color: '#6B7280' }}>{eventForm.cities.length} marcadas</span>
+                        </div>
+                        <div style={{ maxHeight: 240, overflowY: 'auto', padding: 5 }}>
+                          {buscarCiudades(cityPickerSearch).map(({ ciudad, via }) => {
+                            const marcada = eventForm.cities.includes(ciudad.nombre);
+                            return (
+                              <label
+                                key={ciudad.nombre}
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer', background: marcada ? '#FCE4EC' : '#FFF' }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={marcada}
+                                  onChange={() => toggleCiudadEvento(ciudad.nombre)}
+                                  style={{ width: 17, height: 17, accentColor: '#880E4F', cursor: 'pointer' }}
+                                />
+                                <span style={{ flex: 1, fontSize: 14.5, fontWeight: marcada ? 700 : 500, color: '#111827' }}>{ciudad.nombre}</span>
+                                <span style={{ fontSize: 12, color: '#9CA3AF' }}>{via ? `Incluye ${via}` : ciudad.departamento}</span>
+                              </label>
+                            );
+                          })}
+                          {buscarCiudades(cityPickerSearch).length === 0 && (
+                            <div style={{ padding: '18px 12px', textAlign: 'center', fontSize: 13.5, color: '#6B7280' }}>No encontramos esa ciudad</div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+                          <button
+                            type="button"
+                            onClick={() => setEventForm({ ...eventForm, cities: [] })}
+                            style={{ border: '1px solid #D1D5DB', background: '#FFF', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
+                          >
+                            Quitar todas
+                          </button>
+                          <span style={{ flex: 1 }} />
+                          <button
+                            type="button"
+                            onClick={() => setCityPickerOpen(false)}
+                            style={{ border: 0, background: '#880E4F', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, color: '#FFF', cursor: 'pointer' }}
+                          >
+                            Listo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#6B4A58', marginTop: 10 }}>
+                  {eventForm.nacional
+                    ? 'Le aparece a cualquier persona del país. Es un solo evento y un solo grupo: todos entran al mismo cupo y al mismo chat.'
+                    : eventForm.cities.length === 0
+                      ? 'Sin ciudades marcadas el evento no le aparece a nadie.'
+                      : eventForm.cities.length === 1
+                        ? `Le aparece solo a quien tenga ${eventForm.cities[0]} en su perfil. Nadie de otra ciudad lo ve, ni siquiera si es videollamada.`
+                        : `Le aparece a quien tenga ${textoCiudadesEvento({ cities: eventForm.cities })} en su perfil. Es un solo evento: todos entran al mismo cupo y al mismo grupo.`}
+                </div>
+              </div>
 
               <Text style={styles.inputLabel}>Descripción</Text>
               <TextInput

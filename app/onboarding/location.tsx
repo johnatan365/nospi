@@ -1,77 +1,81 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView, Modal } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView, Modal, TextInput, FlatList } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
+import {
+  PAISES_NOSPI,
+  CIUDADES_POR_PAIS,
+  buscarCiudades,
+  normalizarTexto,
+} from '@/constants/Ciudades';
 
+const COUNTRIES = PAISES_NOSPI;
 
-const COUNTRIES = [
-  'Colombia',
-  'Argentina',
-  'Brasil',
-  'Chile',
-  'Ecuador',
-  'España',
-  'Estados Unidos',
-  'México',
-  'Perú',
-  'Venezuela',
-];
-
-const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
-  'Colombia': ['Medellín', 'Bogotá', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira', 'Santa Marta'],
-  'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata'],
-  'Brasil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza'],
-  'Chile': ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta'],
-  'Ecuador': ['Quito', 'Guayaquil', 'Cuenca', 'Santo Domingo', 'Machala'],
-  'España': ['Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Zaragoza'],
-  'Estados Unidos': ['Nueva York', 'Los Ángeles', 'Chicago', 'Houston', 'Miami'],
-  'México': ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana'],
-  'Perú': ['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Cusco'],
-  'Venezuela': ['Caracas', 'Maracaibo', 'Valencia', 'Barquisimeto', 'Maracay'],
-};
+type OpcionCiudad = { nombre: string; detalle: string };
 
 export default function LocationScreen() {
   const router = useRouter();
   const [country, setCountry] = useState('Colombia');
-  const [city, setCity] = useState('Medellín');
+  // NO hay ciudad predeterminada a proposito: si el campo viene lleno, hay
+  // gente que le da "siguiente, siguiente" y queda registrada en una ciudad
+  // que no es la suya. Sin ciudad, el boton Continuar queda bloqueado.
+  const [city, setCity] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   const handleCountryChange = (selectedCountry: string) => {
     console.log('User selected country:', selectedCountry);
     setCountry(selectedCountry);
-    const cities = CITIES_BY_COUNTRY[selectedCountry] || [];
-    if (cities.length > 0) {
-      setCity(cities[0]);
-    }
+    // Al cambiar de pais la ciudad anterior deja de tener sentido.
+    setCity('');
+    setBusqueda('');
   };
 
   const handleCityChange = (selectedCity: string) => {
     console.log('User selected city:', selectedCity);
     setCity(selectedCity);
+    setShowCityPicker(false);
+    setBusqueda('');
   };
+
+  // En Colombia la lista son las 32 capitales, pero el buscador reconoce los
+  // municipios: escribir "Envigado" lleva a Medellin, "Ipiales" a Pasto. Asi
+  // nadie se queda sin encontrarse y nadie parte el grupo marcando su
+  // municipio en vez de la ciudad donde de verdad pasan los planes.
+  const opciones: OpcionCiudad[] = useMemo(() => {
+    if (country === 'Colombia') {
+      return buscarCiudades(busqueda).map((r) => ({
+        nombre: r.ciudad.nombre,
+        detalle: r.via ? `Incluye ${r.via}` : r.ciudad.departamento,
+      }));
+    }
+    const q = normalizarTexto(busqueda);
+    return (CIUDADES_POR_PAIS[country] || [])
+      .filter((c) => !q || normalizarTexto(c).includes(q))
+      .map((c) => ({ nombre: c, detalle: '' }));
+  }, [country, busqueda]);
 
   const handleContinue = async () => {
     if (!country || !city) {
-      Alert.alert('Ubicación requerida', 'Por favor selecciona tu país y ciudad.');
+      Alert.alert('Ubicación requerida', 'Por favor selecciona tu país y tu ciudad.');
       return;
     }
 
     console.log('User location confirmed:', country, city);
-    
-    // Save location to AsyncStorage
+
     await trackOnboardingStep('location');
     await AsyncStorage.setItem('onboarding_country', country);
     await AsyncStorage.setItem('onboarding_city', city);
-    
+
     router.push('/onboarding/compatibility');
   };
 
-  const availableCities = CITIES_BY_COUNTRY[country] || [];
+  const puedeSeguir = !!city;
 
   return (
     <LinearGradient
@@ -80,17 +84,17 @@ export default function LocationScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
           <Text style={styles.title}>¿En qué país y ciudad te encuentras?</Text>
-          
+
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>País</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.selectedValueDisplay}
               onPress={() => setShowCountryPicker(true)}
               activeOpacity={0.7}
@@ -101,21 +105,30 @@ export default function LocationScreen() {
 
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>Ciudad</Text>
-            <TouchableOpacity 
-              style={styles.selectedValueDisplay}
-              onPress={() => setShowCityPicker(true)}
+            <TouchableOpacity
+              style={[styles.selectedValueDisplay, !city && styles.selectedValueDisplayEmpty]}
+              onPress={() => { setBusqueda(''); setShowCityPicker(true); }}
               activeOpacity={0.7}
             >
-              <Text style={styles.selectedValueText}>{city}</Text>
+              <Text style={[styles.selectedValueText, !city && styles.placeholderText]}>
+                {city || 'Elige tu ciudad'}
+              </Text>
             </TouchableOpacity>
+            <Text style={styles.hint}>
+              Elige la ciudad más cercana a ti. Si tu municipio no aparece, escríbelo igual:
+              te mostramos la ciudad a la que pertenece. La puedes cambiar después en tu perfil.
+            </Text>
           </View>
 
           <TouchableOpacity
-            style={styles.continueButton}
+            style={[styles.continueButton, !puedeSeguir && styles.continueButtonDisabled]}
             onPress={handleContinue}
             activeOpacity={0.8}
+            disabled={!puedeSeguir}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={[styles.continueButtonText, !puedeSeguir && styles.continueButtonTextDisabled]}>
+              {puedeSeguir ? 'Continuar' : 'Elige tu ciudad para seguir'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -131,7 +144,7 @@ export default function LocationScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Selecciona tu país</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowCountryPicker(false)}
                 style={styles.modalCloseButton}
               >
@@ -151,9 +164,9 @@ export default function LocationScreen() {
               dropdownIconColor="#000000"
             >
               {COUNTRIES.map((countryOption) => (
-                <Picker.Item 
-                  key={countryOption} 
-                  label={countryOption} 
+                <Picker.Item
+                  key={countryOption}
+                  label={countryOption}
                   value={countryOption}
                   color="#000000"
                 />
@@ -163,7 +176,7 @@ export default function LocationScreen() {
         </View>
       </Modal>
 
-      {/* City Picker Modal */}
+      {/* City Picker Modal — lista con buscador */}
       <Modal
         visible={showCityPicker}
         transparent={true}
@@ -171,37 +184,55 @@ export default function LocationScreen() {
         onRequestClose={() => setShowCityPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, styles.modalContentCity]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Selecciona tu ciudad</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowCityPicker(false)}
                 style={styles.modalCloseButton}
               >
-                <Text style={styles.modalCloseText}>Listo</Text>
+                <Text style={styles.modalCloseText}>Cerrar</Text>
               </TouchableOpacity>
             </View>
-            <Picker
-              selectedValue={city}
-              onValueChange={(value) => {
-                handleCityChange(value);
-                if (Platform.OS === 'android') {
-                  setShowCityPicker(false);
-                }
-              }}
-              style={styles.modalPicker}
-              color="#000000"
-              dropdownIconColor="#000000"
-            >
-              {availableCities.map((cityOption) => (
-                <Picker.Item 
-                  key={cityOption} 
-                  label={cityOption} 
-                  value={cityOption}
-                  color="#000000"
-                />
-              ))}
-            </Picker>
+
+            <View style={styles.searchWrapper}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Escribe tu ciudad o municipio"
+                placeholderTextColor="#9CA3AF"
+                value={busqueda}
+                onChangeText={setBusqueda}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <FlatList
+              data={opciones}
+              keyExtractor={(item) => item.nombre}
+              keyboardShouldPersistTaps="handled"
+              style={styles.cityList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.cityRow, item.nombre === city && styles.cityRowSelected]}
+                  onPress={() => handleCityChange(item.nombre)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.cityRowText, item.nombre === city && styles.cityRowTextSelected]}>
+                    {item.nombre}
+                  </Text>
+                  {!!item.detalle && <Text style={styles.cityRowDetail}>{item.detalle}</Text>}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={(
+                <View style={styles.emptyWrapper}>
+                  <Text style={styles.emptyTitle}>No encontramos esa ciudad</Text>
+                  <Text style={styles.emptyText}>
+                    Revisa cómo la escribiste, o escoge la ciudad grande más cercana a ti.
+                  </Text>
+                </View>
+              )}
+            />
           </View>
         </View>
       </Modal>
@@ -242,6 +273,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '600',
   },
+  hint: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: 'rgba(255, 255, 255, 0.72)',
+    marginTop: 10,
+  },
   selectedValueDisplay: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
@@ -250,11 +287,18 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
   },
+  selectedValueDisplayEmpty: {
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
   selectedValueText: {
     fontSize: 20,
     color: '#880E4F',
     fontWeight: '700',
     textAlign: 'center',
+  },
+  placeholderText: {
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
   continueButton: {
     backgroundColor: '#880E4F',
@@ -272,10 +316,19 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  continueButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   continueButtonText: {
     color: nospiColors.white,
     fontSize: 18,
     fontWeight: '700',
+  },
+  continueButtonTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.65)',
   },
   modalOverlay: {
     flex: 1,
@@ -295,6 +348,9 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
     width: Platform.OS === 'web' ? '100%' : undefined,
     maxWidth: Platform.OS === 'web' ? 400 : undefined,
+  },
+  modalContentCity: {
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -322,5 +378,59 @@ const styles = StyleSheet.create({
   modalPicker: {
     width: '100%',
     height: Platform.OS === 'ios' ? 200 : 50,
+  },
+  searchWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  searchInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#111827',
+  },
+  cityList: {
+    paddingHorizontal: 10,
+  },
+  cityRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  cityRowSelected: {
+    backgroundColor: '#FCE4EC',
+  },
+  cityRowText: {
+    fontSize: 17,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  cityRowTextSelected: {
+    fontWeight: '700',
+  },
+  cityRowDetail: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  emptyWrapper: {
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#6B7280',
+    marginTop: 6,
+    textAlign: 'center',
   },
 });
