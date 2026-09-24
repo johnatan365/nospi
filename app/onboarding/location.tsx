@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, ScrollView, Modal, TextInput, FlatList } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import {
   buscarCiudades,
   normalizarTexto,
 } from '@/constants/Ciudades';
+import { registrarCiudadNoEncontrada } from '@/utils/ciudadNoEncontrada';
 
 const COUNTRIES = PAISES_NOSPI;
 
@@ -59,6 +60,18 @@ export default function LocationScreen() {
       .filter((c) => !q || normalizarTexto(c).includes(q))
       .map((c) => ({ nombre: c, detalle: '' }));
   }, [country, busqueda]);
+
+  // Si busco algo y no salio nada, guardamos lo que escribio: es el dato para
+  // saber donde abrir. Se espera 1,2 s a que termine de escribir para no
+  // guardar una fila por cada letra.
+  useEffect(() => {
+    if (!showCityPicker) return;
+    if (opciones.length > 0) return;
+    const texto = busqueda.trim();
+    if (texto.length < 3) return;
+    const t = setTimeout(() => { registrarCiudadNoEncontrada(texto, 'registro'); }, 1200);
+    return () => clearTimeout(t);
+  }, [busqueda, opciones.length, showCityPicker]);
 
   const handleContinue = async () => {
     if (!country || !city) {

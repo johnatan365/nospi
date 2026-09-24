@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
@@ -9,15 +9,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
-import { buscarCiudades, eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
+import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
 
 const CACHE_KEY = 'cache_events';
 
 interface Event {
   id: string;
   name: string;
-  // `city` es la columna vieja (una sola ciudad). `cities` es la nueva lista y
-  // `nacional` marca los eventos que se ven en todo el pais. Se dejan las tres
+  // `city` es la columna vieja (una sola ciudad). `cities` es la lista nueva y
+  // `nacional` marca los eventos que se ven en todo el pais. Se leen las tres
   // para que un evento guardado antes del cambio siga apareciendo igual.
   city: string;
   cities: string[] | null;
@@ -97,13 +97,11 @@ export default function EventsScreen() {
   const { user, loading: authLoading } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  // Ciudad del perfil (la que eligio al registrarse) y la que la persona
-  // seleccione a mano en el filtro de arriba. La del filtro manda mientras
-  // este puesta; si la vacia, vuelve a mandar la del perfil.
+  // La ciudad NO se escoge aqui: es la del perfil. Si se pudiera cambiar desde
+  // esta pantalla, alguien de otra ciudad entraria sin darse cuenta a una sala
+  // que no le corresponde. Para cambiarla hay que ir al perfil, que es una
+  // decision consciente.
   const [ciudadPerfil, setCiudadPerfil] = useState('');
-  const [ciudadElegida, setCiudadElegida] = useState('');
-  const [selectorAbierto, setSelectorAbierto] = useState(false);
-  const [busquedaCiudad, setBusquedaCiudad] = useState('');
 
   const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
     if (!user?.id) return null;
@@ -219,25 +217,12 @@ export default function EventsScreen() {
     </ScrollView>
   );
 
-  const ciudadActiva = ciudadElegida || ciudadPerfil;
-
-  // Si todavia no sabemos la ciudad de la persona (perfil viejo sin ciudad),
-  // mostramos todo en vez de dejarla con la pantalla vacia.
+  // Sin ciudad en el perfil (cuentas viejas) mostramos todo, para no dejar a
+  // nadie con la pantalla vacia sin entender por que.
   const eventosVisibles = useMemo(() => {
-    if (!ciudadActiva) return events;
-    return events.filter((e) => eventoSeVeEn(e, ciudadActiva));
-  }, [events, ciudadActiva]);
-
-  const opcionesCiudad = useMemo(() => (
-    buscarCiudades(busquedaCiudad).map((r) => {
-      const planes = events.filter((e) => eventoSeVeEn(e, r.ciudad.nombre)).length;
-      return {
-        nombre: r.ciudad.nombre,
-        detalle: r.via ? `Incluye ${r.via}` : r.ciudad.departamento,
-        planes,
-      };
-    })
-  ), [busquedaCiudad, events]);
+    if (!ciudadPerfil) return events;
+    return events.filter((e) => eventoSeVeEn(e, ciudadPerfil));
+  }, [events, ciudadPerfil]);
 
   const groupedEvents: Record<string, Event[]> = {};
   eventosVisibles.forEach(event => {
@@ -260,23 +245,23 @@ export default function EventsScreen() {
           <Text style={styles.title}>Eventos Disponibles</Text>
           <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
 
-          <TouchableOpacity
-            style={styles.cityPill}
-            onPress={() => { setBusquedaCiudad(''); setSelectorAbierto(true); }}
-            activeOpacity={0.8}
-            accessibilityLabel="Cambiar ciudad"
-          >
-            <Text style={styles.cityPillIcon}>📍</Text>
-            <Text style={styles.cityPillText} numberOfLines={1}>
-              {ciudadActiva || 'Todas las ciudades'}
+          {/* La ciudad se muestra siempre, aunque no haya nada que mostrar: si
+              alguien se equivoco de ciudad al registrarse, aqui entiende por
+              que no ve planes, en vez de creer que la app esta vacia. */}
+          <View style={styles.cityBanner}>
+            <Text style={styles.cityBannerText} numberOfLines={1}>
+              📍 {ciudadPerfil ? `Eventos en ${ciudadPerfil}` : 'Eventos de todas las ciudades'}
             </Text>
-            <Text style={styles.cityPillCount}>
-              {eventosVisibles.length === 0
-                ? 'Próximamente'
-                : eventosVisibles.length === 1 ? '1 plan' : `${eventosVisibles.length} planes`}
-            </Text>
-            <Text style={styles.cityPillChevron}>⌄</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile')}
+              activeOpacity={0.7}
+              accessibilityLabel="Cambiar mi ciudad en el perfil"
+            >
+              <Text style={styles.cityBannerLink}>
+                {ciudadPerfil ? '¿No es tu ciudad? Cámbiala en tu perfil' : 'Elige tu ciudad en tu perfil'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {WEEK_SECTION_ORDER.map((section) => {
             const sectionEvents = groupedEvents[section];
@@ -334,6 +319,18 @@ export default function EventsScreen() {
                               <Text style={styles.freeBadgeText}>Gratis</Text>
                             </View>
                           )}
+                          {/* Un evento nacional o de varias ciudades trae gente
+                              de otras partes: se avisa antes de reservar, no
+                              despues. */}
+                          {event.nacional ? (
+                            <View style={styles.paisBadge}>
+                              <Text style={styles.paisBadgeText}>TODO EL PAÍS</Text>
+                            </View>
+                          ) : (event.cities && event.cities.length > 1) ? (
+                            <View style={styles.variasBadge}>
+                              <Text style={styles.variasBadgeText}>VARIAS CIUDADES</Text>
+                            </View>
+                          ) : null}
                         </View>
                         <Text style={styles.eventMetaCompact} numberOfLines={1}>
                           {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {textoCiudadesEvento(event)}
@@ -363,86 +360,28 @@ export default function EventsScreen() {
           {eventosVisibles.length === 0 && (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {ciudadActiva
-                  ? `Todavía no hay planes en ${ciudadActiva}`
+                {ciudadPerfil
+                  ? `Todavía no hay planes en ${ciudadPerfil}`
                   : 'No hay eventos disponibles en este momento'}
               </Text>
-              {!!ciudadActiva && (
-                <Text style={styles.emptySubText}>
-                  Te avisamos apenas abramos cupos acá. Mientras tanto puedes mirar otra ciudad
-                  desde el selector de arriba.
-                </Text>
+              {!!ciudadPerfil && (
+                <>
+                  <Text style={styles.emptySubText}>
+                    Te avisamos apenas abramos cupos acá.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => router.push('/(tabs)/profile')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.emptyButtonText}>No vivo en {ciudadPerfil}, cambiar mi ciudad</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           )}
         </ScrollView>
       )}
-
-      <Modal
-        visible={selectorAbierto}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectorAbierto(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Elige tu ciudad</Text>
-              <TouchableOpacity onPress={() => setSelectorAbierto(false)} style={styles.modalClose}>
-                <Text style={styles.modalCloseText}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.searchWrapper}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Escribe tu ciudad o municipio"
-                placeholderTextColor="#9CA3AF"
-                value={busquedaCiudad}
-                onChangeText={setBusquedaCiudad}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <FlatList
-              data={opcionesCiudad}
-              keyExtractor={(item) => item.nombre}
-              keyboardShouldPersistTaps="handled"
-              style={styles.cityList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.cityRow, item.nombre === ciudadActiva && styles.cityRowSelected]}
-                  onPress={() => {
-                    setCiudadElegida(item.nombre);
-                    setSelectorAbierto(false);
-                    setBusquedaCiudad('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.cityRowText, item.nombre === ciudadActiva && styles.cityRowTextSelected]}>
-                      {item.nombre}
-                    </Text>
-                    <Text style={styles.cityRowDetail}>{item.detalle}</Text>
-                  </View>
-                  <Text style={[styles.cityRowCount, item.planes === 0 && styles.cityRowCountEmpty]}>
-                    {item.planes === 0 ? 'Próximamente' : item.planes === 1 ? '1 plan' : `${item.planes} planes`}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={(
-                <View style={styles.emptyWrapper}>
-                  <Text style={styles.emptyListTitle}>No encontramos esa ciudad</Text>
-                  <Text style={styles.emptyListText}>
-                    Revisa cómo la escribiste, o escoge la ciudad grande más cercana a ti.
-                  </Text>
-                </View>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }
@@ -561,6 +500,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.7,
   },
+  paisBadge: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  paisBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#3730A3',
+  },
+  variasBadge: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  variasBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
   emptySubText: {
     fontSize: 14,
     lineHeight: 20,
@@ -571,138 +534,39 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     alignSelf: 'center',
   },
-  cityPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  emptyButton: {
+    marginTop: 18,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  emptyButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  cityBanner: {
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.30)',
-    borderRadius: 999,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 20,
-    gap: 8,
   },
-  cityPillIcon: {
-    fontSize: 14,
-  },
-  cityPillText: {
-    flex: 1,
+  cityBannerText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
-  cityPillCount: {
+  cityBannerLink: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.72)',
-  },
-  cityPillChevron: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginTop: -6,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    maxHeight: '78%',
-    width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#880E4F',
-  },
-  modalClose: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  modalCloseText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#AD1457',
-  },
-  searchWrapper: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  searchInput: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
-  },
-  cityList: {
-    paddingHorizontal: 8,
-  },
-  cityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 13,
-    borderRadius: 12,
-    gap: 10,
-  },
-  cityRowSelected: {
-    backgroundColor: '#FCE4EC',
-  },
-  cityRowText: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '500',
-  },
-  cityRowTextSelected: {
-    fontWeight: '700',
-  },
-  cityRowDetail: {
-    fontSize: 12.5,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  cityRowCount: {
-    fontSize: 13,
-    color: '#880E4F',
-    fontWeight: '600',
-  },
-  cityRowCountEmpty: {
-    color: '#9CA3AF',
-    fontWeight: '400',
-  },
-  emptyWrapper: {
-    paddingHorizontal: 20,
-    paddingVertical: 26,
-    alignItems: 'center',
-  },
-  emptyListTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  emptyListText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B7280',
-    marginTop: 6,
-    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.78)',
+    marginTop: 4,
+    textDecorationLine: 'underline',
   },
 });

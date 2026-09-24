@@ -820,6 +820,34 @@ export default function AdminPanelScreen() {
   // Buscador del selector de ciudades del formulario de evento.
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [cityPickerSearch, setCityPickerSearch] = useState('');
+
+  // Ciudades que la gente busco al registrarse y NO existen en la lista.
+  // Es el dato para decidir donde abrir: si varias personas escriben el mismo
+  // municipio, ahi hay gente esperando.
+  const [ciudadesBuscadas, setCiudadesBuscadas] = useState<{ texto: string; veces: number }[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('city_search_misses')
+        .select('texto, texto_normalizado')
+        .gte('created_at', desde)
+        .limit(2000);
+      if (error || !data || cancelado) return;
+      const cuenta = new Map<string, { texto: string; veces: number }>();
+      for (const fila of data as { texto: string; texto_normalizado: string }[]) {
+        const previo = cuenta.get(fila.texto_normalizado);
+        if (previo) { previo.veces += 1; }
+        else { cuenta.set(fila.texto_normalizado, { texto: fila.texto, veces: 1 }); }
+      }
+      setCiudadesBuscadas(
+        Array.from(cuenta.values()).sort((a, b) => b.veces - a.veces).slice(0, 12)
+      );
+    })();
+    return () => { cancelado = true; };
+  }, []);
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
@@ -937,6 +965,20 @@ export default function AdminPanelScreen() {
     event_status: 'draft' as 'draft' | 'published' | 'closed',
     price: '',
   });
+
+  // Un evento de Medellin se ve solo en Medellin, pero la ciudad es un dato
+  // que la persona declara: nadie verifica donde vive. Esto NO lo impide, solo
+  // lo hace visible — se ve la ciudad en rojo al lado del nombre antes de la
+  // videollamada, a tiempo para moverlo o devolverle la plata.
+  const ciudadNoCoincide = (evento: Event | null | undefined, ciudadPersona: string | null | undefined) => {
+    if (!evento || !ciudadPersona) return false;
+    if (evento.nacional) return false;
+    const lista = (evento.cities && evento.cities.length > 0)
+      ? evento.cities
+      : (evento.city ? [evento.city] : []);
+    if (lista.length === 0) return false;
+    return !lista.some((c) => mismaCiudad(c, ciudadPersona));
+  };
 
   // Marca / desmarca una ciudad del evento que se esta creando o editando.
   const toggleCiudadEvento = (nombre: string) => {
@@ -8455,6 +8497,24 @@ setBulkWhatsAppPending(pending);
           </View>
         </View>
 
+        {ciudadesBuscadas.length > 0 && (
+          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#9A3412', letterSpacing: 0.4, marginBottom: 6 }}>
+              CIUDADES QUE BUSCAN Y NO EXISTEN (últimos 90 días)
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {ciudadesBuscadas.map((c) => (
+                <span key={c.texto} style={{ background: '#FFF', border: '1px solid #FED7AA', borderRadius: 999, padding: '5px 12px', fontSize: 13, color: '#9A3412' }}>
+                  {c.texto} <strong>×{c.veces}</strong>
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A3412', marginTop: 7, opacity: 0.85 }}>
+              Ahí hay gente esperando. Si una se repite mucho, vale la pena abrirla o agregarla como municipio de la capital más cercana.
+            </div>
+          </div>
+        )}
+
         {/* CIUDAD primero: es el filtro principal. Los botones de arriba
             (WhatsApp y Crear Evento) son generales y no dependen de este
             filtro: sirven para cualquier ciudad. */}
@@ -10045,7 +10105,13 @@ setBulkWhatsAppPending(pending);
                     <>
                       <Text style={styles.participantDetail}>📧 {participant.users.email}</Text>
                       <Text style={styles.participantDetail}>📱 {participant.users.phone}</Text>
-                      <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
+                      {ciudadNoCoincide(events.find(e => e.id === selectedEventForMonitoring), participant.users.city) ? (
+                        <Text style={[styles.participantDetail, { color: '#B91C1C', fontWeight: '700' }]}>
+                          ⚠️ {participant.users.city} — no es la ciudad de este evento
+                        </Text>
+                      ) : (
+                        <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
+                      )}
                       {participant.users.phone && (
                         <a
                           href={buildWhatsAppLink(
@@ -11316,7 +11382,13 @@ setBulkWhatsAppPending(pending);
                           : '—'}
                       </Text>
                       <Text style={styles.attendeeDetail}>📱 {attendee.users.phone}</Text>
-                      <Text style={styles.attendeeDetail}>📍 {attendee.users.city}, {attendee.users.country}</Text>
+                      {ciudadNoCoincide(selectedEventForAttendees, attendee.users.city) ? (
+                        <Text style={[styles.attendeeDetail, { color: '#B91C1C', fontWeight: '700' }]}>
+                          ⚠️ {attendee.users.city}, {attendee.users.country} — no es la ciudad de este evento ({textoCiudadesEvento(selectedEventForAttendees as Event)})
+                        </Text>
+                      ) : (
+                        <Text style={styles.attendeeDetail}>📍 {attendee.users.city}, {attendee.users.country}</Text>
+                      )}
                       <Text style={styles.attendeeDetail}>👤 Género: {genderText}</Text>
                       <Text style={styles.attendeeDetail}>💝 Interesado en: {interestedInText}</Text>
                       {attendee.users.age && <Text style={styles.attendeeDetail}>🎂 Edad: {attendee.users.age} años</Text>}
