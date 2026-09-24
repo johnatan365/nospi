@@ -3858,7 +3858,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     try {
       const { data: newEvent, error } = await supabase.from('events').insert({
         name: (event.name ? event.name + ' (copia)' : null),
+        subtitulo: event.subtitulo || null,
         city: event.city,
+        cities: ciudadesDeEvento(event),
+        nacional: esNacional(event),
         description: event.description,
         type: event.type,
         date: event.date,
@@ -3867,6 +3870,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         location_name: event.location_name,
         location_address: event.location_address,
         maps_link: event.maps_link,
+        // El link de Meet NO se copia a proposito: cada videollamada tiene el
+        // suyo, y heredarlo mandaria a dos grupos distintos a la misma sala.
+        meet_link: '',
         require_gps_verification: event.require_gps_verification,
         is_location_revealed: false,
         max_participants: event.max_participants,
