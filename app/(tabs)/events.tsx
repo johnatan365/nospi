@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
-import { eventoSeVeEn, textoCiudadesEvento, esNacional, ciudadesDeEvento } from '@/constants/Ciudades';
+import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
 
 const CACHE_KEY = 'cache_events';
 
@@ -22,6 +22,9 @@ interface Event {
   city: string;
   cities: string[] | null;
   nacional: boolean;
+  // Segundo renglon del nombre, opcional. Lo escribe el admin para decidir
+  // donde parte un nombre largo, en vez de dejar que se corte solo.
+  subtitulo: string | null;
   description: string;
   type: string;
   date: string | null;
@@ -116,7 +119,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, city, cities, nacional, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
+        .select('id, name, subtitulo, city, cities, nacional, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
       supabase
@@ -276,6 +279,7 @@ export default function EventsScreen() {
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
                   const esVirtual = event.type === 'virtual';
+                  const tieneSegundoRenglon = !!(event.subtitulo && event.subtitulo.trim());
 
                   return (
                     <TouchableOpacity
@@ -285,56 +289,63 @@ export default function EventsScreen() {
                       activeOpacity={0.8}
                     >
                       {event.type === 'caminata' ? (
-                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 71, height: 61, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'bar' ? (
-                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 71, height: 61, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'restaurante' ? (
-                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 71, height: 61, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'cafe' ? (
-                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 62, height: 53, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 71, height: 61, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       ) : event.type === 'virtual' ? (
                         // El icono de videollamada es ancho y bajo, asi que dentro del
                         // recuadro estandar se ve mas chico que los demas aunque mida lo
                         // mismo. Mismo truco que bolos: caja del tamano normal para no
                         // mover el layout, con el icono ~16% mas grande centrado adentro.
-                        <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 72, height: 61, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <View style={{ width: 71, height: 61, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 83, height: 70, tintColor: '#6B6B6B' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bolos' ? (
                         // El icono de bolos se ve chico dentro del recuadro estandar de
                         // 62x53, asi que lo renderizamos ~18% mas grande pero centrado en
                         // una caja de 62x53 (mismo tamano que los demas iconos) para que no
                         // empuje el texto y la tarjeta siga alineada con el resto de eventos.
-                        <View style={{ width: 62, height: 53, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 73, height: 63, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                        <View style={{ width: 71, height: 61, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 72, tintColor: '#6B6B6B' }} resizeMode="contain" />
                         </View>
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
                       )}
                       <View style={styles.eventCardBody}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={styles.eventNameCompact} numberOfLines={1}>{event.name}</Text>
+                        {/* El alto de este bloque es FIJO (dos renglones),
+                            tenga o no tenga segundo renglon: asi todas las
+                            tarjetas de la lista miden exactamente lo mismo y
+                            la pantalla se ve pareja. Si no hay segundo
+                            renglon, el nombre puede usar los dos. */}
+                        <View style={styles.eventNameBlock}>
+                          <Text style={styles.eventNameCompact} numberOfLines={tieneSegundoRenglon ? 1 : 2}>
+                            {event.name}
+                          </Text>
+                          {tieneSegundoRenglon && (
+                            <Text style={styles.eventNameCompact} numberOfLines={1}>
+                              {event.subtitulo}
+                            </Text>
+                          )}
+                        </View>
+                        {/* El sello de Gratis va aqui y no al lado del nombre:
+                            alla le quitaba casi la mitad del ancho al titulo.
+                            La ciudad (o "Todo el pais") ya se lee en esta
+                            misma linea, asi que no hace falta repetirla en un
+                            sello aparte. */}
+                        <View style={styles.eventMetaRow}>
+                          <Text style={styles.eventMetaCompact} numberOfLines={1}>
+                            {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {textoCiudadesEvento(event)}
+                          </Text>
                           {event.price === 0 && (
                             <View style={styles.freeBadge}>
-                              <Text style={styles.freeBadgeText}>Gratis</Text>
+                              <Text style={styles.freeBadgeText}>GRATIS</Text>
                             </View>
                           )}
-                          {/* Un evento nacional o de varias ciudades trae gente
-                              de otras partes: se avisa antes de reservar, no
-                              despues. */}
-                          {esNacional(event) ? (
-                            <View style={styles.paisBadge}>
-                              <Text style={styles.paisBadgeText}>TODO EL PAÍS</Text>
-                            </View>
-                          ) : (ciudadesDeEvento(event).length > 1) ? (
-                            <View style={styles.variasBadge}>
-                              <Text style={styles.variasBadgeText}>VARIAS CIUDADES</Text>
-                            </View>
-                          ) : null}
                         </View>
-                        <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                          {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {textoCiudadesEvento(event)}
-                        </Text>
                         {esVirtual ? (
                           <Text style={styles.locationPlaceholderCompact} numberOfLines={1}>
                             {event.is_location_revealed
@@ -455,6 +466,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+    lineHeight: 21,
+  },
+  // Dos renglones exactos. El segundo puede ir vacio: el espacio se reserva
+  // igual para que todas las tarjetas midan lo mismo.
+  eventNameBlock: {
+    height: 42,
+    overflow: 'hidden',
+    justifyContent: 'flex-start',
+  },
+  eventMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
   },
   freeBadge: {
     backgroundColor: '#D1FAE5',
@@ -462,6 +486,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginLeft: 6,
+    flexShrink: 0,
   },
   freeBadgeText: {
     fontSize: 10,
@@ -471,7 +496,7 @@ const styles = StyleSheet.create({
   eventMetaCompact: {
     fontSize: 13,
     color: '#666',
-    marginTop: 2,
+    flexShrink: 1,
   },
   locationPlaceholderCompact: {
     fontSize: 11,
@@ -499,30 +524,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     opacity: 0.7,
-  },
-  paisBadge: {
-    backgroundColor: '#E0E7FF',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  paisBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#3730A3',
-  },
-  variasBadge: {
-    backgroundColor: '#DBEAFE',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  variasBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1D4ED8',
   },
   emptySubText: {
     fontSize: 14,

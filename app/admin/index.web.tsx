@@ -7,11 +7,15 @@ import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { buscarCiudades, mismaCiudad, textoCiudadesEvento, esNacional, ciudadesDeEvento, ETIQUETA_NACIONAL } from '@/constants/Ciudades';
+import { nombreLargoEvento } from '@/utils/nombreEvento';
 
 
 interface Event {
   id: string;
   name: string;
+  // Segundo renglon del nombre, opcional: sirve para decidir a mano donde
+  // parte un nombre largo en la tarjeta de la app.
+  subtitulo?: string | null;
   // `city` es la columna vieja (una sola ciudad): se sigue llenando para que
   // las apps ya publicadas en las tiendas no se queden sin nada que mostrar.
   // `cities` es la lista real y `nacional` marca los eventos de todo el pais.
@@ -946,6 +950,7 @@ export default function AdminPanelScreen() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     name: '',
+    subtitulo: '',
     city: '',
     cities: [] as string[],
     nacional: false,
@@ -3313,6 +3318,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setEditingEventId(null);
     setEventForm({
       name: '',
+      subtitulo: '',
       city: '',
       cities: [],
       nacional: false,
@@ -3373,6 +3379,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     
     setEventForm({
       name: event.name || '',
+      subtitulo: event.subtitulo || '',
       city: event.city || '',
       // Un evento guardado antes del cambio no tiene `cities`: se arma la
       // lista con su unica ciudad para que al editarlo salga marcada.
@@ -3703,6 +3710,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       // FIX: Map 'restaurant' to 'restaurante' to match database constraint
       const eventData = {
         name: eventForm.name,
+        subtitulo: eventForm.subtitulo.trim() || null,
         // `city` (columna vieja, un solo texto) se sigue llenando con la
         // primera ciudad para que las apps ya publicadas sigan mostrando algo.
         // Quien decide de verdad a quien le aparece el evento es `cities` /
@@ -3784,6 +3792,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       setEditingEventId(null);
       setEventForm({
         name: '',
+        subtitulo: '',
         city: '',
         cities: [],
         nacional: false,
@@ -4110,6 +4119,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
     const { data: newEvent, error } = await supabase.from('events').insert({
       name: nextName,
+      subtitulo: event.subtitulo || null,
       city: event.city,
       cities: ciudadesDeEvento(event),
       nacional: esNacional(event),
@@ -8699,7 +8709,12 @@ setBulkWhatsAppPending(pending);
           return (
             <View key={event.id} style={styles.listItemCompact}>
               <View style={styles.listItemHeader}>
-                <Text style={styles.listItemTitle}>{event.name || `${eventTypeText} - ${event.city}`}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.listItemTitle}>{event.name || `${eventTypeText} - ${event.city}`}</Text>
+                  {!!event.subtitulo && (
+                    <Text style={styles.listItemTitle}>{event.subtitulo}</Text>
+                  )}
+                </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                   <Text style={styles.statusBadgeText}>{statusText}</Text>
                 </View>
@@ -9443,7 +9458,7 @@ setBulkWhatsAppPending(pending);
                         const alreadySent = !!nextAppt?.purchase_whatsapp_sent_at;
                         return (
                           <a
-                            href={buildWhatsAppLink(user.phone, user.name, nextAppt?.events?.name, nextAppt?.events?.date, nextAppt?.events?.time, nextAppt?.events?.type)}
+                            href={buildWhatsAppLink(user.phone, user.name, nombreLargoEvento(nextAppt?.events), nextAppt?.events?.date, nextAppt?.events?.time, nextAppt?.events?.type)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => { if (nextAppt) markPurchaseWhatsAppSent(nextAppt.id); }}
@@ -9590,7 +9605,7 @@ setBulkWhatsAppPending(pending);
                   if (!window.confirm(`Se van a abrir ${withPhone.length} pestañas de WhatsApp (una por persona). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
                   withPhone.forEach((a: any) => {
                     window.open(
-                      buildWhatsAppLink(a.users.phone, a.users.name, selectedEvent.name, selectedEvent.date, selectedEvent.time, selectedEvent.type),
+                      buildWhatsAppLink(a.users.phone, a.users.name, nombreLargoEvento(selectedEvent), selectedEvent.date, selectedEvent.time, selectedEvent.type),
                       '_blank'
                     );
                   });
@@ -9746,7 +9761,7 @@ setBulkWhatsAppPending(pending);
                             <td style={{ ...cellStyle, textAlign: 'center' }}>
                               {u.phone && (
                                 <a
-                                  href={buildWhatsAppLink(u.phone, u.name, selectedEvent?.name, selectedEvent?.date, selectedEvent?.time, selectedEvent?.type)}
+                                  href={buildWhatsAppLink(u.phone, u.name, nombreLargoEvento(selectedEvent), selectedEvent?.date, selectedEvent?.time, selectedEvent?.type)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => markPurchaseWhatsAppSent(att.id)}
@@ -10118,7 +10133,7 @@ setBulkWhatsAppPending(pending);
                           href={buildWhatsAppLink(
                             participant.users.phone,
                             participant.users.name,
-                            events.find(e => e.id === selectedEventForMonitoring)?.name,
+                            nombreLargoEvento(events.find(e => e.id === selectedEventForMonitoring)),
                             events.find(e => e.id === selectedEventForMonitoring)?.date,
                             events.find(e => e.id === selectedEventForMonitoring)?.time,
                             events.find(e => e.id === selectedEventForMonitoring)?.type
@@ -11099,7 +11114,7 @@ setBulkWhatsAppPending(pending);
           {(bulkWhatsAppPending || []).map(a => (
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
             <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
-            <a href={buildWhatsAppLink(a.users.phone, a.users.name, a.events?.name, a.events?.date, a.events?.time, (a.events as any)?.type)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
+            <a href={buildWhatsAppLink(a.users.phone, a.users.name, nombreLargoEvento(a.events), a.events?.date, a.events?.time, (a.events as any)?.type)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
       </View>
@@ -11425,7 +11440,7 @@ setBulkWhatsAppPending(pending);
                           href={buildWhatsAppLink(
                             attendee.users.phone,
                             attendee.users.name,
-                            selectedEventForAttendees?.name,
+                            nombreLargoEvento(selectedEventForAttendees),
                             selectedEventForAttendees?.date,
                             selectedEventForAttendees?.time,
                             selectedEventForAttendees?.type
@@ -11516,6 +11531,30 @@ setBulkWhatsAppPending(pending);
                 value={eventForm.name}
                 onChangeText={(text) => setEventForm({ ...eventForm, name: text })}
               />
+
+              {/* En la tarjeta de la app caben dos renglones. Este campo
+                  decide DONDE parte un nombre largo, en vez de dejar que se
+                  corte solo en cualquier parte. Si se deja vacio, el espacio
+                  queda reservado igual y todas las tarjetas miden lo mismo. */}
+              <Text style={styles.inputLabel}>Segundo renglón (opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: con gente de todo el país"
+                value={eventForm.subtitulo}
+                onChangeText={(text) => setEventForm({ ...eventForm, subtitulo: text })}
+              />
+              <Text style={{ fontSize: 12.5, lineHeight: 18, color: '#6B7280', marginTop: -10, marginBottom: 16 }}>
+                {(() => {
+                  const CABEN = 26;
+                  const n = eventForm.name.trim();
+                  const seg = eventForm.subtitulo.trim();
+                  if (seg && n.length > CABEN) return `El nombre se va a cortar en el celular (${n.length} de ${CABEN}). Pasa parte al segundo renglón.`;
+                  if (seg && seg.length > CABEN) return `El segundo renglón se va a cortar (${seg.length} de ${CABEN}). Acórtalo un poco.`;
+                  if (!seg && n.length > CABEN * 2) return 'Muy largo incluso para dos renglones.';
+                  if (!seg && n.length > CABEN) return 'Se parte solo en dos renglones. Usa el segundo renglón si quieres decidir dónde.';
+                  return 'Cabe completo en la tarjeta.';
+                })()}
+              </Text>
 
               <Text style={styles.inputLabel}>¿A quién le aparece? *</Text>
               {/* Antes esto era un campo de texto libre con placeholder "Ej:

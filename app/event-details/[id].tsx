@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { nombreLargoEvento } from '@/utils/nombreEvento';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -412,7 +413,9 @@ export default function EventDetailsScreen() {
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
             )}
-            <Text style={styles.eventName}>{event.name}</Text>
+            {/* El nombre puede venir partido en dos renglones desde el admin.
+                Aca se muestra completo, con el mismo estilo en las dos lineas. */}
+            <Text style={styles.eventName}>{nombreLargoEvento(event)}</Text>
             <Text style={styles.eventType}>{eventTypeText}</Text>
           </View>
           
