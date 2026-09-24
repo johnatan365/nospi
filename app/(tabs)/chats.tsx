@@ -516,7 +516,7 @@ export default function ChatsScreen() {
                       // por que esta cerrado y como se abre.
                       const msg = 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente cuando el evento termine.';
                       if (Platform.OS === 'web') window.alert(msg);
-                      else Alert.alert('Comunidad Nospi Medellín', msg);
+                      else Alert.alert(item.channel_title || 'Comunidad Nospi', msg);
                       return;
                     }
                     if (!locked) openConversation(item);

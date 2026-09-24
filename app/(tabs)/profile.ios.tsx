@@ -211,7 +211,9 @@ export default function ProfileScreen() {
     setEditName(profileData.name || '');
     setEditPhone(profileData.phone || '');
     setEditCountry(profileData.country || 'Colombia');
-    setEditCity(profileData.city || 'Medellín');
+    // Si no tiene ciudad NO se prellena Medellin: al guardar quedaria
+    // asignado a una ciudad que no es la suya sin enterarse.
+    setEditCity(profileData.city || '');
     setEditInterestedIn(profileData.interested_in || 'ambos');
     setEditAgeRangeMin(profileData.age_range_min || 18);
     setEditAgeRangeMax(profileData.age_range_max || 60);
@@ -288,7 +290,7 @@ export default function ProfileScreen() {
           age_range_min: 18,
           age_range_max: 60,
           country: 'Colombia',
-          city: 'Medellín',
+          city: '',
           phone: '',
           profile_photo_url: profilePhotoUrl,
           interests: [],

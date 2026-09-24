@@ -180,7 +180,10 @@ export default function Index() {
                   age_range_max: ageRange.max,
                   ...agePreferenceFields(d['onboarding_age_fallback'], d['onboarding_age_confirmed_at']),
                   country: d['onboarding_country'] || 'Colombia',
-                  city: d['onboarding_city'] || 'Medellín',
+                  // Sin ciudad escogida NO se inventa Medellin: quedaria en una
+                  // ciudad que no es la suya sin enterarse. Vacia, la app le
+                  // muestra todo y le pide elegirla en el perfil.
+                  city: d['onboarding_city'] || '',
                   phone: phoneInfo.phoneNumber || null,
                   profile_photo_url: d['onboarding_photo'] || null,
                   interests,
@@ -239,7 +242,7 @@ export default function Index() {
                   age_range_min: 18,
                   age_range_max: 60,
                   country: 'Colombia',
-                  city: 'Medellín',
+                  city: '',
                   profile_photo_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
                   interests: [],
                   personality_traits: [],

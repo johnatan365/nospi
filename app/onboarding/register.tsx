@@ -364,7 +364,8 @@ export default function RegisterScreen() {
       const interestedIn = interestedInData || 'ambos';
       const ageRange = ageRangeData ? JSON.parse(ageRangeData) : { min: 18, max: 60 };
       const country = countryData || 'Colombia';
-      const city = cityData || 'Medellín';
+      // Sin ciudad escogida NO se inventa Medellin (ver app/index.tsx).
+      const city = cityData || '';
       const phoneInfo = phoneData ? JSON.parse(phoneData) : { phoneNumber: '' };
       const photo = photoData || null;
       // Este campo dejo de ser un porcentaje inventado (siempre 95-99) y ahora
