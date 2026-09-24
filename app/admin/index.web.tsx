@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { formatTimeAmPm } from '@/utils/formatTime';
-import { buscarCiudades, mismaCiudad, textoCiudadesEvento } from '@/constants/Ciudades';
+import { buscarCiudades, mismaCiudad, textoCiudadesEvento, esNacional, ciudadesDeEvento, ETIQUETA_NACIONAL } from '@/constants/Ciudades';
 
 
 interface Event {
@@ -972,10 +972,8 @@ export default function AdminPanelScreen() {
   // videollamada, a tiempo para moverlo o devolverle la plata.
   const ciudadNoCoincide = (evento: Event | null | undefined, ciudadPersona: string | null | undefined) => {
     if (!evento || !ciudadPersona) return false;
-    if (evento.nacional) return false;
-    const lista = (evento.cities && evento.cities.length > 0)
-      ? evento.cities
-      : (evento.city ? [evento.city] : []);
+    if (esNacional(evento)) return false;
+    const lista = ciudadesDeEvento(evento);
     if (lista.length === 0) return false;
     return !lista.some((c) => mismaCiudad(c, ciudadPersona));
   };
@@ -3378,10 +3376,18 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       city: event.city || '',
       // Un evento guardado antes del cambio no tiene `cities`: se arma la
       // lista con su unica ciudad para que al editarlo salga marcada.
+      //
+      // OJO con los nacionales: su columna vieja `city` dice literalmente
+      // "Todo el país", que NO es una ciudad. Si se sembrara la lista desde
+      // ahi, al abrir el evento apareceria una ficha "Todo el país" que
+      // parece legitima, y si se desmarca la casilla el evento queda con una
+      // ciudad inventada que no le aparece a nadie. Por eso los nacionales
+      // (y ese texto) nunca siembran la lista.
       cities: (event.cities && event.cities.length > 0)
-        ? event.cities
-        : (event.city ? [event.city] : []),
-      nacional: !!event.nacional,
+        ? event.cities.filter((c) => c !== ETIQUETA_NACIONAL)
+        : ((event.city && !event.nacional && event.city !== ETIQUETA_NACIONAL) ? [event.city] : []),
+      // Un evento viejo puede traer el texto en `city` sin la marca puesta.
+      nacional: !!event.nacional || event.city === ETIQUETA_NACIONAL,
       description: event.description || '',
       // FIX: la BD guarda 'restaurante' (español) pero el <select> usa
       // 'restaurant' (inglés) como value — sin este mapeo, el dropdown no
@@ -3701,7 +3707,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         // primera ciudad para que las apps ya publicadas sigan mostrando algo.
         // Quien decide de verdad a quien le aparece el evento es `cities` /
         // `nacional`.
-        city: eventForm.nacional ? 'Todo el país' : (eventForm.cities[0] || ''),
+        city: eventForm.nacional ? ETIQUETA_NACIONAL : (eventForm.cities[0] || ''),
         cities: eventForm.nacional ? [] : eventForm.cities,
         nacional: eventForm.nacional,
         description: eventForm.description,
@@ -4105,10 +4111,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const { data: newEvent, error } = await supabase.from('events').insert({
       name: nextName,
       city: event.city,
-      cities: (event.cities && event.cities.length > 0)
-        ? event.cities
-        : (event.city && !event.nacional ? [event.city] : []),
-      nacional: !!event.nacional,
+      cities: ciudadesDeEvento(event),
+      nacional: esNacional(event),
       description: event.description,
       type: event.type,
       date: shiftedIso,
@@ -8442,11 +8446,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     // se filtre la ciudad que se filtre.
     const eventoEnCiudades = (event: Event, ciudades: string[]) => {
       if (ciudades.length === 0) return true;
-      if (event.nacional) return true;
-      const lista = (event.cities && event.cities.length > 0)
-        ? event.cities
-        : (event.city ? [event.city] : []);
-      return lista.some((c) => ciudades.some((sel) => mismaCiudad(c, sel)));
+      if (esNacional(event)) return true;
+      return ciudadesDeEvento(event).some((c) => ciudades.some((sel) => mismaCiudad(c, sel)));
     };
 
     const filteredEvents = events
@@ -8583,7 +8584,7 @@ setBulkWhatsAppPending(pending);
                   const marcada = eventCityFilter.includes(ciudad.nombre);
                   const cuantos = events
                     .filter(e => eventStatusFilter === 'all' || e.event_status === eventStatusFilter)
-                    .filter(e => e.nacional || ((e.cities && e.cities.length > 0) ? e.cities : (e.city ? [e.city] : [])).some(c => mismaCiudad(c, ciudad.nombre)))
+                    .filter(e => esNacional(e) || ciudadesDeEvento(e).some(c => mismaCiudad(c, ciudad.nombre)))
                     .length;
                   return (
                     <label
@@ -8704,7 +8705,7 @@ setBulkWhatsAppPending(pending);
                 </View>
               </View>
               <View style={styles.compactInfoRow}>
-                <Text style={[styles.compactInfoText, event.nacional ? { color: '#3730A3', fontWeight: '700' } : null]}>📍 {textoCiudadesEvento(event)}</Text>
+                <Text style={[styles.compactInfoText, esNacional(event) ? { color: '#3730A3', fontWeight: '700' } : null]}>📍 {textoCiudadesEvento(event)}</Text>
                 <Text style={styles.compactInfoText}>📅 {event.start_time ? new Date(event.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : (event.date || 'Fecha sin definir')}</Text>
                 <Text style={styles.compactInfoText}>🕐 {formatTimeAmPm(event.time)}</Text>
               </View>

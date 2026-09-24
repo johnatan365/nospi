@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
-import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
+import { eventoSeVeEn, textoCiudadesEvento, esNacional, ciudadesDeEvento } from '@/constants/Ciudades';
 
 const CACHE_KEY = 'cache_events';
 
@@ -322,11 +322,11 @@ export default function EventsScreen() {
                           {/* Un evento nacional o de varias ciudades trae gente
                               de otras partes: se avisa antes de reservar, no
                               despues. */}
-                          {event.nacional ? (
+                          {esNacional(event) ? (
                             <View style={styles.paisBadge}>
                               <Text style={styles.paisBadgeText}>TODO EL PAÍS</Text>
                             </View>
-                          ) : (event.cities && event.cities.length > 1) ? (
+                          ) : (ciudadesDeEvento(event).length > 1) ? (
                             <View style={styles.variasBadge}>
                               <Text style={styles.variasBadgeText}>VARIAS CIUDADES</Text>
                             </View>

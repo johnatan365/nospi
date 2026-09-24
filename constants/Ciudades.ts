@@ -138,27 +138,45 @@ export function buscarCiudades(texto: string | null | undefined): ResultadoCiuda
   return salida;
 }
 
+// Lo que se escribe en la columna vieja `city` cuando el evento es de todo el
+// pais, para que las apps ya publicadas en las tiendas muestren algo.
+// NO es una ciudad: nunca debe compararse contra la ciudad de una persona ni
+// entrar a la lista `cities`.
+export const ETIQUETA_NACIONAL = 'Todo el país';
+
+export function esNacional(
+  evento: { city?: string | null; nacional?: boolean | null },
+): boolean {
+  return !!evento?.nacional || evento?.city === ETIQUETA_NACIONAL;
+}
+
+// Las ciudades reales de un evento, ya sin la etiqueta de nacional.
+export function ciudadesDeEvento(
+  evento: { cities?: string[] | null; city?: string | null; nacional?: boolean | null },
+): string[] {
+  if (esNacional(evento)) return [];
+  const lista = (evento?.cities && evento.cities.length > 0)
+    ? evento.cities
+    : (evento?.city ? [evento.city] : []);
+  return lista.filter((c) => !!c && c !== ETIQUETA_NACIONAL);
+}
+
 // Las ciudades en las que se ve un evento. Un evento nacional se ve en todas.
 export function eventoSeVeEn(
   evento: { cities?: string[] | null; city?: string | null; nacional?: boolean | null },
   ciudadUsuario: string | null | undefined,
 ): boolean {
-  if (evento?.nacional) return true;
+  if (esNacional(evento)) return true;
   if (!ciudadUsuario) return false;
-  const lista = (evento?.cities && evento.cities.length > 0)
-    ? evento.cities
-    : (evento?.city ? [evento.city] : []);
-  return lista.some((c) => mismaCiudad(c, ciudadUsuario));
+  return ciudadesDeEvento(evento).some((c) => mismaCiudad(c, ciudadUsuario));
 }
 
 // Texto para mostrar donde se ve un evento.
 export function textoCiudadesEvento(
   evento: { cities?: string[] | null; city?: string | null; nacional?: boolean | null },
 ): string {
-  if (evento?.nacional) return 'Todo el pais';
-  const lista = (evento?.cities && evento.cities.length > 0)
-    ? evento.cities
-    : (evento?.city ? [evento.city] : []);
+  if (esNacional(evento)) return 'Todo el país';
+  const lista = ciudadesDeEvento(evento);
   if (lista.length === 0) return 'Sin ciudad';
   if (lista.length === 1) return lista[0];
   if (lista.length === 2) return lista[0] + ' y ' + lista[1];
