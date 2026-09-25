@@ -3725,6 +3725,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
+      // Videollamada sin link = el dia del evento el boton de entrar no abre
+      // nada. Se exige al guardar para que no se olvide.
+      if (eventForm.type === 'virtual' && !/^https:\/\/meet\.google\.com\/\S+/i.test((eventForm.meet_link || '').trim())) {
+        window.alert('Falta el link de Google Meet.\n\nUna videollamada no se puede guardar sin su link (https://meet.google.com/...). Si no, el día del evento el botón de entrar no abre nada.');
+        return;
+      }
+
       const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
       const combinedDate = new Date(combinedDateString);
 
@@ -4256,6 +4263,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const handlePublishEvent = async (eventId: string) => {
+    // Los borradores automaticos y los duplicados nacen sin link de Meet (a
+    // proposito: cada videollamada tiene el suyo). No se publican sin el.
+    const ev = events.find((e: any) => e.id === eventId) as any;
+    if (ev?.type === 'virtual' && !(ev.meet_link || '').trim()) {
+      window.alert('Esta videollamada no tiene link de Google Meet.\n\nPonlo en Editar evento antes de publicarla.');
+      return;
+    }
     const confirmed = window.confirm('¿Publicar este evento?');
     if (!confirmed) return;
 
