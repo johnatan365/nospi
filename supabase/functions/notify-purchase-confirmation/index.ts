@@ -203,7 +203,10 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       htmlParagraph(`${cancelPolicyHtml} <a href="https://app.nospi.co/politica-asistencia" style="color:#880E4F;">Ver la política completa</a>`, { muted: true }),
       htmlParagraph('¡Nos pillamos! 😄'),
     ].join('');
-    const html = wrapBrandedHtml(bodyHtml, 'https://app.nospi.co', 'Ver mi cupo');
+    // "Ver mi cupo" no va a la raiz (esa es la pestaña Eventos, para comprar):
+    // presencial va a Citas, donde esta la reserva; videollamada a la Dinamica,
+    // que desde la compra explica como va a ser la llamada.
+    const html = wrapBrandedHtml(bodyHtml, esVirtual ? 'https://app.nospi.co/dinamica' : 'https://app.nospi.co/appointments', 'Ver mi cupo');
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

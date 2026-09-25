@@ -87,7 +87,11 @@ const EVENT_START_DELAY_MS = 5 * 60 * 1000;
 const MINUTOS_ANTES_ENTRAR = 10;
 
 // En un evento virtual el boton del correo lleva a la app, nunca al Meet.
-const URL_APP = 'https://app.nospi.co';
+// Botones de los correos: nunca a la raiz (abre la pestaña Eventos, que es el
+// catalogo para comprar). Videollamada y dia del evento van a la Dinamica, que
+// es donde se confirma y se juega. Sin "(tabs)" en la URL: los parentesis se
+// rompen en algunos clientes de correo y la ruta limpia funciona igual.
+const URL_DINAMICA = 'https://app.nospi.co/dinamica';
 
 async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; errorText?: string }> {
   if (!RESEND_API_KEY || !to) return { ok: false, errorText: 'sin API key o destinatario' };
@@ -305,7 +309,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       htmlParagraph('¡Hoy Nospi! 🎉', { strong: true }),
     ].join('');
     // Nunca maps_link: el boton lleva a la app, que es donde vive el enlace.
-    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_APP, 'Abrir mi evento') };
+    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica') };
   }
 
   const locationFull = buildLocationFull(event.location_name, event.location_address);
@@ -331,7 +335,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
     htmlBotonesTienda(),
     htmlParagraph('¡Hoy Nospi! 🎉', { strong: true }),
   ].join('');
-  const html = wrapBrandedHtml(bodyHtml, event.maps_link || 'https://app.nospi.co/(tabs)/dinamica', event.maps_link ? 'Como llegar' : 'Abrir Dinámica');
+  const html = wrapBrandedHtml(bodyHtml, event.maps_link || URL_DINAMICA, event.maps_link ? 'Como llegar' : 'Abrir la Dinámica');
 
   return { subject, text, html };
 }
@@ -351,8 +355,8 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
       ? `Tu videollamada "${event.name || 'Nospi'}" ya está en marcha.`
       : `Tu evento "${event.name || 'Nospi'}" ya está en marcha.`, '',
     ...(virtual
-      ? ['Adentro:', ...AL_ENTRAR_VIRTUAL, '', 'Dinámica: https://app.nospi.co/(tabs)/dinamica', '']
-      : ['Abran la pestaña Dinámica en la app para romper el hielo con tu grupo: https://app.nospi.co/(tabs)/dinamica', '',
+      ? ['Adentro:', ...AL_ENTRAR_VIRTUAL, '', 'Dinámica: https://app.nospi.co/dinamica', '']
+      : ['Abran la pestaña Dinámica en la app para romper el hielo con tu grupo: https://app.nospi.co/dinamica', '',
          'Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', '']),
     rescate,
     rescate ? '' : null,
@@ -372,7 +376,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
     htmlParagraph('¡Que la pasen increíble! ¡Nospi! 🎉'),
   ].join('');
 
-  const html = wrapBrandedHtml(bodyHtml, 'https://app.nospi.co/(tabs)/dinamica', 'Abrir Dinámica');
+  const html = wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica');
   return { subject, text, html };
 }
 
@@ -432,7 +436,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
     ].join('');
     // Nunca "Como llegar" ni maps_link: el enlace vive en la app.
-    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_APP, 'Abrir mi evento') };
+    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica') };
   }
 
   // El asunto dice cuando es, que es lo que la persona busca al abrirlo. El
@@ -511,7 +515,7 @@ function build3dText(firstName: string, event: any): { subject: string; text: st
       htmlParagraph('¡Nos pillamos! 😄', { strong: true }),
     ].join('');
     // Sin boton "Como llegar": no hay a donde llegar.
-    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_APP, 'Abrir mi evento') };
+    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica') };
   }
 
   const text = [
