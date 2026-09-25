@@ -224,8 +224,7 @@ const LINK_APP = 'nospi.co/app';
 const LINK_MEET = 'nospi.co/meet';
 
 const BLOQUE_INSTALAR_VISPERA = [
-  `📲 Mañana en la mesa hacen la dinámica desde el celular. Te recomiendo instalar la app hoy: abre de una y te avisa cuando arranca.`,
-  `👉 ${LINK_APP}`,
+  `📲 *Mañana la dinámica se juega desde el celular.* Instala Nospi hoy para que te avise cuando arranca y no te pierdas ningún match 👉 ${LINK_APP}`,
 ].join('\n');
 
 // En un evento virtual el enlace NO viaja por aqui: vive detras del boton de
@@ -235,7 +234,7 @@ const BLOQUE_INSTALAR_VIRTUAL = [
   `📲 *Antes de la llamada instala:*`,
   `Nospi 👉 ${LINK_APP}`,
   `Google Meet 👉 ${LINK_MEET}`,
-  `El enlace de la llamada se abre desde la app de Nospi: no te llega por aquí ni por correo.`,
+  `En Nospi está todo: el enlace de la llamada, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔`,
 ].join('\n');
 
 // Videollamada: en un Meet entre desconocidos nadie arranca solo. Estos pasos
@@ -253,13 +252,13 @@ const BLOQUE_AL_ENTRAR_VIRTUAL = [
 // Compra presencial: el lugar llega despues, asi que aqui solo se sugiere
 // instalar Nospi (mismo formato que el bloque virtual, sin Meet).
 const BLOQUE_INSTALAR_COMPRA = [
-  `📲 *Instala la app de Nospi:*`,
+  `📲 *Para vivir la dinámica completa, instala Nospi:*`,
   `👉 ${LINK_APP}`,
-  `Ahí haces la dinámica en la mesa y te avisamos cuando arranca.`,
+  `Ahí te avisamos cuando revelamos el lugar, cuando arranca la dinámica y cuando alguien con quien hiciste clic te escribe 💬`,
 ].join('\n');
 
 const BLOQUE_INSTALAR_MISMO_DIA = [
-  `📲 ¿Aún sin la app? Instálala antes de salir: 👉 ${LINK_APP}`,
+  `📲 ¿Aún sin la app? Instálala antes de salir: sin ella te pierdes los avisos de la dinámica y de tus matches 👉 ${LINK_APP}`,
 ].join('\n');
 
 // La hora en que se habilita el boton de entrar: la del evento menos 15 min,
@@ -442,7 +441,7 @@ function buildSameDayWhatsAppLink(
     ``,
     `Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
     ``,
-    `📲 ¿Aún sin Nospi o sin Google Meet? Instálalos ya:`,
+    `📲 ¿Aún sin Nospi o sin Meet? Instálalos ya: sin Nospi no te llega el aviso cuando arranca ni cuando un match te escribe.`,
     `Nospi 👉 ${LINK_APP}`,
     `Google Meet 👉 ${LINK_MEET}`,
     ``,
