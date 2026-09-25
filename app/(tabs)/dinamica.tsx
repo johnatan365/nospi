@@ -1537,8 +1537,10 @@ export default function DinamicaScreen() {
               <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
               <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
             </View>
-            <Text style={styles.title}>🎥 Así va a ser tu videollamada</Text>
-            <Text style={styles.subtitle}>{fechaTexto} · {formatTimeAmPm(appointment.event.time)} · 1 hora</Text>
+            {/* Mismo icono de videollamada (computador) que la pestaña Eventos. */}
+            <Image source={require('@/assets/images/icon-videollamada.png')} style={styles.virtualIcono} resizeMode="contain" />
+            <Text style={[styles.title, { textAlign: 'center' }]}>Así va a ser tu videollamada</Text>
+            <Text style={[styles.subtitle, { textAlign: 'center' }]}>{fechaTexto} · {formatTimeAmPm(appointment.event.time)} · 1 hora</Text>
 
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>📹</Text>
@@ -2362,6 +2364,7 @@ const styles = StyleSheet.create({
   volverMeetBtnText: { color: '#FFE9C7', fontSize: 15, fontWeight: '800' },
   virtualNota: { fontSize: 13, color: '#FFE9C7', textAlign: 'center', lineHeight: 19, marginVertical: 10 },
   virtualNotaOscura: { fontSize: 13, color: '#6d0e3c', textAlign: 'center', lineHeight: 19, marginTop: 6 },
+  virtualIcono: { width: 96, height: 80, tintColor: '#FFFFFF', alignSelf: 'center', marginBottom: 8 },
   virtualSeccion: { fontSize: 12, fontWeight: '800', letterSpacing: 1, color: '#F8BBD0', marginTop: 10, marginBottom: 6, alignSelf: 'flex-start' },
   infoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
   infoText: { fontSize: 16, fontWeight: '600', color: '#880E4F', textAlign: 'center', marginBottom: 8 },
