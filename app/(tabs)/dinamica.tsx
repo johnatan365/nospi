@@ -1995,13 +1995,19 @@ export default function DinamicaScreen() {
               <Text style={styles.rulesEmoji}>👥</Text>
               <Text style={styles.rulesText}>En cada pregunta responde quien tenga algo que contar; no es obligatorio para todos.</Text>
             </View>
-            <View style={styles.rulesDivider} />
             {/* Regla de la votación 👍/👎 (U): se anuncia desde el arranque
-                para que la tarjeta de voto no tome a nadie por sorpresa. */}
-            <View style={styles.rulesRow}>
-              <Text style={styles.rulesEmoji}>👍</Text>
-              <Text style={styles.rulesText}>En cada pregunta pueden calificar, desde su celular, si la dejamos o la quitamos para los próximos eventos. Es anónimo, opcional y nos ayuda a que cada encuentro sea mejor.</Text>
-            </View>
+                para que la tarjeta de voto no tome a nadie por sorpresa. En
+                videollamada no va: los participantes están en el Meet, no en
+                la app. */}
+            {!esVirtual && (
+              <>
+                <View style={styles.rulesDivider} />
+                <View style={styles.rulesRow}>
+                  <Text style={styles.rulesEmoji}>👍</Text>
+                  <Text style={styles.rulesText}>En cada pregunta pueden calificar, desde su celular, si la dejamos o la quitamos para los próximos eventos. Es anónimo, opcional y nos ayuda a que cada encuentro sea mejor.</Text>
+                </View>
+              </>
+            )}
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>💘</Text>
