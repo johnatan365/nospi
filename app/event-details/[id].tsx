@@ -406,31 +406,31 @@ export default function EventDetailsScreen() {
           <View style={styles.headerSection}>
             {event.type === 'virtual' ? (
               // Mismo agrandado que en la lista de eventos (ver events.tsx).
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 123, height: 104, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 137, height: 116, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'caminata' ? (
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 106, height: 90, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'bar' ? (
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 106, height: 90, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'restaurante' ? (
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 106, height: 90, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'cafe' ? (
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 106, height: 90, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'bolos' ? (
               // Mismo truco que en events.tsx: caja del mismo tamano que los demas
               // iconos (156x132) para no desalinear el layout, con el icono ~17% mas
               // grande centrado adentro (se ve chico si no se agranda un poco).
-              <View style={[CAJA_ICONO, { width: 156, height: 132, borderRadius: 30, marginBottom: 12 }]}>
-                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 124, height: 105, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 138, height: 117, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : (
               <Text style={styles.eventIcon}>{eventIcon}</Text>
