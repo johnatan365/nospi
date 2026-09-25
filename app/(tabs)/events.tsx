@@ -368,7 +368,7 @@ export default function EventsScreen() {
                         </View>
                         {esVirtual ? (
                           <Text style={styles.locationPlaceholderCompact} numberOfLines={1}>
-                            📹 Con cámara prendida · {event.is_location_revealed ? 'enlace ya disponible' : 'enlace el mismo día'}
+                            Con cámara prendida · {event.is_location_revealed ? 'enlace ya disponible' : 'enlace el mismo día'}
                           </Text>
                         ) : hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
