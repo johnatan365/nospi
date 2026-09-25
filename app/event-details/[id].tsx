@@ -11,9 +11,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { toqueFuerte, aviso } from '@/lib/haptics';
 
-// El boton para entrar a la videollamada se habilita 15 minutos antes, la
-// misma ventana que usa el confirmar-llegada de los eventos presenciales.
-const MINUTOS_ANTES_ENTRAR = 15;
+// Videollamada: la asistencia se confirma en la pestaña Dinámica desde 10
+// minutos antes (VIRTUAL_CONFIRM_MINUTES de dinamica.tsx). Ahí se escoge el
+// moderador y de ahí se entra al Meet; esta página solo lleva para allá.
+const MINUTOS_ANTES_ENTRAR = 10;
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
 
 function horaBogota(d: Date): string {
@@ -489,7 +490,7 @@ export default function EventDetailsScreen() {
                 if (!isEnrolled) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      El enlace se revela el mismo día en la app. El botón para entrar aparece aquí 15 minutos antes de empezar.
+                      Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
                     </Text>
                   );
                 }
@@ -497,7 +498,7 @@ export default function EventDetailsScreen() {
                 if (!accesoListo) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      El enlace se revela el mismo día en la app. Entra desde aquí: es lo que registra tu asistencia.
+                      Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
                     </Text>
                   );
                 }
@@ -506,7 +507,7 @@ export default function EventDetailsScreen() {
                   return (
                     <>
                       <Text style={styles.locationAddress}>
-                        Entra desde este botón: es lo que registra tu asistencia.
+                        Entras desde la pestaña Dinámica: ahí confirmas tu asistencia y escogen al moderador.
                       </Text>
                       <View style={[styles.mapsButton, styles.mapsButtonDisabled]}>
                         <Text style={styles.mapsButtonText}>
@@ -520,20 +521,17 @@ export default function EventDetailsScreen() {
                 return (
                   <>
                     <Text style={styles.locationAddress}>
-                      Al tocar el botón queda registrada tu asistencia y se abre la videollamada.
+                      Ve a la pestaña Dinámica: confirmas tu asistencia, escogen al moderador y de ahí entran todos a la llamada.
                     </Text>
                     <Text style={styles.locationAddress}>
                       📹 Entra con la cámara prendida. Todos llegan igual de nerviosos: verse las caras es lo que rompe el hielo.
                     </Text>
                     <TouchableOpacity
-                      style={[styles.mapsButton, entrando && styles.mapsButtonDisabled]}
-                      onPress={handleEntrarVideollamada}
-                      disabled={entrando}
+                      style={styles.mapsButton}
+                      onPress={() => router.push('/(tabs)/dinamica' as any)}
                       activeOpacity={0.8}
                     >
-                      {entrando
-                        ? <ActivityIndicator color={nospiColors.white} />
-                        : <Text style={styles.mapsButtonText}>Entrar a la videollamada</Text>}
+                      <Text style={styles.mapsButtonText}>Ir a la Dinámica</Text>
                     </TouchableOpacity>
                   </>
                 );

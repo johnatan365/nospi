@@ -641,9 +641,7 @@ export default function AppointmentsScreen() {
                       donde esta el boton, que es lo unico que hay que saber. */}
                   {esVirtual && !isAnteriorOrCancelada && (
                     <Text style={styles.appointmentLocation}>
-                      {locationRevealed
-                        ? 'El enlace ya está disponible en la app. El botón para entrar aparece 15 minutos antes.'
-                        : 'El enlace se revela el mismo día en la app.'}
+                      📹 Con cámara prendida. Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia.
                     </Text>
                   )}
 

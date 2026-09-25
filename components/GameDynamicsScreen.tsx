@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -43,6 +43,7 @@ interface Appointment {
     ready_users?: string[];
     moderator_id?: string | null;
     type?: string;
+    meet_link?: string | null;
   };
 }
 
@@ -804,6 +805,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
   const esVirtual = appointment.event?.type === 'virtual';
 
+  // Videollamada: si alguien se salió del Meet por error, desde cualquier
+  // pantalla del juego puede volver a la llamada.
+  const handleVolverMeet = useCallback(() => {
+    const link = appointment.event?.meet_link;
+    if (link) Linking.openURL(link).catch(() => {});
+  }, [appointment.event?.meet_link]);
+  const botonVolverMeet = esVirtual && appointment.event?.meet_link ? (
+    <TouchableOpacity style={styles.volverMeetBtn} onPress={handleVolverMeet} activeOpacity={0.8}>
+      <Text style={styles.volverMeetBtnText}>🎥 Volver a la videollamada</Text>
+    </TouchableOpacity>
+  ) : null;
+
   // Moderador: solo este usuario ve el botón para avanzar. El resto espera.
   // Si por algún motivo no hay moderador (dato viejo), se permite avanzar a
   // todos como antes, para no dejar la mesa trabada.
@@ -861,6 +874,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          {botonVolverMeet}
           {/* Level badge: nombre del nivel arriba (grande y centrado) y, debajo,
               el detalle "Nivel X de 3 · Pregunta Y de N". */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
@@ -1053,6 +1067,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, styles.closingIntroContainer]}>
+          {botonVolverMeet}
           <Text style={styles.closingIntroEmoji}>🎬</Text>
           <Text style={styles.closingIntroTitle}>¡Terminaron las preguntas!</Text>
           {!isModerator && (
@@ -1163,6 +1178,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 }
 
 const styles = StyleSheet.create({
+  volverMeetBtn: { borderWidth: 1.5, borderColor: '#F06292', backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginBottom: 14, alignSelf: 'stretch' },
+  volverMeetBtnText: { color: '#FFE9C7', fontSize: 15, fontWeight: '800' },
   gradient: {
     flex: 1,
   },

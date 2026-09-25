@@ -95,6 +95,16 @@ const DEFAULT_GPS_RADIUS_METERS = 150;
 const CONFIRM_EARLY_MINUTES = 15;
 const START_WINDOW_MINUTES = 5;
 
+// ── Videollamada (type = 'virtual') ─────────────────────────────────────────
+// Flujo propio: desde la compra se ve la explicación; VIRTUAL_CONFIRM_MINUTES
+// antes aparece "Confirmar asistencia" (no abre el Meet); al confirmar se ve la
+// sala con los confirmados y nadie entra hasta que haya moderador. Si a la hora
+// + VIRTUAL_AUTO_MOD_MINUTES nadie se ofreció, la app sortea uno entre los
+// confirmados. Con moderador, cada uno toca "Ir a Meet": ESE toque es la
+// asistencia (checked_in_at), no la confirmación.
+const VIRTUAL_CONFIRM_MINUTES = 10;
+const VIRTUAL_AUTO_MOD_MINUTES = 5;
+
 // Distancia en metros entre dos coordenadas (fórmula de Haversine)
 function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // radio de la Tierra en metros
@@ -163,6 +173,9 @@ export default function DinamicaScreen() {
   // moderador: cada quien pasa cuando presiona "Continuar" (se persiste para
   // sobrevivir refrescos). Desde el moderador en adelante el flujo es compartido.
   const [wentToChooseModerator, setWentToChooseModerator] = useState(false);
+  // Videollamada: ya tocó "Ir a Meet" (queda en la llamada). Desde ahí la app le
+  // muestra la dinámica sincronizada con el botón de volver a la llamada.
+  const [fueAMeet, setFueAMeet] = useState(false);
 
   // Bandera local del moderador para arrancar el juego (dispara el reintento de
   // handleStartExperience). Solo la usa quien presiona "Comenzar".
@@ -323,6 +336,10 @@ export default function DinamicaScreen() {
           AsyncStorage.getItem(`nospi_wentModerator_${apt.event_id}`),
         ]);
         setWentToChooseModerator(savedWentModerator === 'true');
+        if (apt.event?.type === 'virtual') {
+          const savedFueAMeet = await AsyncStorage.getItem(`nospi_fueAMeet_${apt.event_id}`);
+          setFueAMeet(savedFueAMeet === 'true' || !!apt.checked_in_at);
+        }
         const restoredCheckInPhase: CheckInPhase =
           savedCheckInPhase === 'confirmed' || savedCheckInPhase === 'code_entry' || savedCheckInPhase === 'waiting'
             ? (savedCheckInPhase as CheckInPhase)
@@ -785,26 +802,46 @@ export default function DinamicaScreen() {
     await confirmArrival();
   }, [confirmArrival]);
 
-  // Videollamada: el boton de confirmar ES la puerta al Meet, igual que en el
-  // detalle del evento. Primero registra la asistencia y despues abre el
-  // enlace (si se abriera primero, el navegador se lleva el foco y la
-  // escritura puede no alcanzar a salir). Si el registro falla, igual se abre:
-  // nadie se queda por fuera de la llamada por un error nuestro.
+  // ── Videollamada ──────────────────────────────────────────────────────────
+  // "Confirmar asistencia": entra a la sala (lista de confirmados + elegir
+  // moderador). NO es la asistencia: esa la marca "Ir a Meet" (checked_in_at).
   const [abriendoMeet, setAbriendoMeet] = useState(false);
-  const handleEntrarVideollamada = useCallback(async () => {
-    const link = appointment?.event?.meet_link;
-    if (!link || abriendoMeet) return;
-    setAbriendoMeet(true);
+  const [confirmandoVirtual, setConfirmandoVirtual] = useState(false);
+  const handleConfirmarVirtual = useCallback(async () => {
+    if (!appointment || !user || confirmandoVirtual) return;
+    setConfirmandoVirtual(true);
     try {
-      if (!appointment?.location_confirmed) await confirmArrival();
-      await Linking.openURL(link);
-    } catch (e) {
-      console.error('No se pudo abrir la videollamada:', e);
-      setGpsError('No se pudo abrir la videollamada. Intenta de nuevo.');
+      const ahora = new Date().toISOString();
+      const { error } = await supabase
+        .from('event_participants')
+        .upsert({
+          event_id: appointment.event_id,
+          user_id: user.id,
+          confirmed: true,
+          check_in_time: ahora,
+          is_presented: true,
+          presented_at: ahora,
+        }, { onConflict: 'event_id,user_id' });
+      if (error) {
+        setGpsError('No se pudo confirmar tu asistencia. Intenta de nuevo.');
+        return;
+      }
+      await supabase.from('appointments').update({ location_confirmed: true }).eq('id', appointment.id);
+      setAppointment(prev => (prev ? { ...prev, location_confirmed: true } : prev));
+      setCheckInPhase('confirmed');
+      setIsEventDay(true);
+      setGpsError('');
+      AsyncStorage.setItem(`nospi_checkInPhase_${appointment.event_id}`, 'confirmed');
+      setModeratorId(appointment.event?.moderator_id ?? null);
+      if (appointment.event?.game_phase) setGamePhase(appointment.event.game_phase);
+      cacheRef.current = null;
+      clearCached(CACHE_KEY);
+      loadActiveParticipants(appointment.event_id);
     } finally {
-      setAbriendoMeet(false);
+      setConfirmandoVirtual(false);
     }
-  }, [appointment?.event?.meet_link, appointment?.location_confirmed, abriendoMeet, confirmArrival]);
+  }, [appointment, user, confirmandoVirtual, loadActiveParticipants]);
+
 
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
@@ -1224,6 +1261,79 @@ export default function DinamicaScreen() {
     }
   }, [appointment?.event_id, gamePhase]);
 
+  // "Ir a Meet" / "Volver a la videollamada". La primera vez registra la
+  // asistencia (antes de abrir el enlace: si se abriera primero, el navegador
+  // se lleva el foco y la escritura puede no alcanzar a salir). Si es el
+  // moderador, además pasa al grupo a las reglas, para que al volver a Nospi
+  // las encuentre listas. Si el registro falla, igual se abre: nadie se queda
+  // por fuera de la llamada por un error nuestro.
+  const handleIrAMeet = useCallback(async () => {
+    const link = appointment?.event?.meet_link;
+    if (!link || abriendoMeet || !appointment) return;
+    setAbriendoMeet(true);
+    try {
+      if (!appointment.checked_in_at && user?.id) {
+        const ahora = new Date().toISOString();
+        const { error } = await supabase
+          .from('appointments')
+          .update({ checked_in_at: ahora, arrival_status: 'on_time', location_confirmed: true })
+          .eq('id', appointment.id)
+          .is('checked_in_at', null);
+        if (!error) setAppointment(prev => (prev ? { ...prev, checked_in_at: ahora } : prev));
+      }
+      if (!fueAMeet) {
+        setFueAMeet(true);
+        AsyncStorage.setItem(`nospi_fueAMeet_${appointment.event_id}`, 'true');
+      }
+      const soyModerador = !!user?.id && moderatorId === user.id;
+      if (soyModerador && (!gamePhase || gamePhase === 'intro' || gamePhase === 'ready')) {
+        await handleModeratorContinueToRules();
+      }
+      await Linking.openURL(link);
+    } catch (e) {
+      console.error('No se pudo abrir la videollamada:', e);
+      setGpsError('No se pudo abrir la videollamada. Intenta de nuevo.');
+    } finally {
+      setAbriendoMeet(false);
+    }
+  }, [appointment, abriendoMeet, user?.id, fueAMeet, moderatorId, gamePhase, handleModeratorContinueToRules]);
+
+  // Videollamada: si a la hora + VIRTUAL_AUTO_MOD_MINUTES nadie se ofreció como
+  // moderador, la app sortea uno entre los confirmados. Lo intenta cualquier
+  // teléfono que esté en la sala; el candado `is('moderator_id', null)` hace que
+  // solo gane el primero, y el sondeo de 4 s (más realtime) les muestra a todos
+  // el resultado. Se reintenta máximo cada 5 s mientras siga sin moderador.
+  const ultimoSorteoRef = useRef(0);
+  const debeSortearModerador =
+    appointment?.event?.type === 'virtual' &&
+    checkInPhase === 'confirmed' &&
+    !moderatorId &&
+    countdown <= (START_WINDOW_MINUTES - VIRTUAL_AUTO_MOD_MINUTES) * 60 * 1000 &&
+    activeParticipants.length > 0;
+  useEffect(() => {
+    if (!debeSortearModerador || !appointmentEventId) return;
+    const ahora = Date.now();
+    if (ahora - ultimoSorteoRef.current < 5000) return;
+    ultimoSorteoRef.current = ahora;
+    const candidatos = activeParticipants.map(p => p.user_id).filter(Boolean);
+    if (candidatos.length === 0) return;
+    const elegido = candidatos[Math.floor(Math.random() * candidatos.length)];
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .update({ moderator_id: elegido, updated_at: new Date().toISOString() })
+        .eq('id', appointmentEventId)
+        .is('moderator_id', null)
+        .select('moderator_id');
+      if (data && data.length > 0) {
+        setModeratorId(elegido);
+      } else {
+        const { data: row } = await supabase.from('events').select('moderator_id').eq('id', appointmentEventId).maybeSingle();
+        if (row?.moderator_id) setModeratorId(row.moderator_id);
+      }
+    })();
+  }, [debeSortearModerador, appointmentEventId, activeParticipants, countdown]);
+
   // Modal "Comenzar" SIN animaciones: se muestra fijo ~2s y se cierra por
   // temporizador, y ahi mismo se marca userReadyForGame (el arranque real del
   // juego). Las versiones animadas dejaban el velo pegado si un callback no
@@ -1368,6 +1478,253 @@ export default function DinamicaScreen() {
         </ScrollView>
       </LinearGradient>
     );
+  }
+
+  // ── Videollamada: flujo propio (ver VIRTUAL_CONFIRM_MINUTES arriba) ─────────
+  if (esVirtual) {
+    const inicioMs = appointment.event.start_time ? new Date(appointment.event.start_time).getTime() : Date.now();
+    const faltaMs = inicioMs - Date.now();
+    const ventanaConfirmar = faltaMs <= VIRTUAL_CONFIRM_MINUTES * 60 * 1000;
+    const horaSorteo = new Date(inicioMs + VIRTUAL_AUTO_MOD_MINUTES * 60 * 1000)
+      .toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+    const fechaTexto = new Date(inicioMs).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+    const confirmado = checkInPhase === 'confirmed' && appointment.location_confirmed;
+    const modTexto = moderatorName || 'el moderador';
+
+    const botonVolverMeet = (
+      <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
+        <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+      </TouchableOpacity>
+    );
+
+    const listaConfirmados = (
+      <View style={styles.participantsListCard}>
+        <View style={styles.participantsListHeader}>
+          <Text style={styles.participantsListTitle}>✅ Confirmados en la sala</Text>
+          <View style={styles.participantCountBadge}>
+            <Text style={styles.participantCountText}>{activeParticipants.length}</Text>
+          </View>
+        </View>
+        {activeParticipants.length > 0 && (
+          <View style={styles.participantsList}>
+            {activeParticipants.map((participant, index) => {
+              const displayName = participant.profiles?.name || 'Participante';
+              const photoUrl = participant.profiles?.profile_photo_url || null;
+              return (
+                <View key={index} style={styles.participantListItem}>
+                  {photoUrl ? (
+                    <ExpoImage source={{ uri: photoUrl }} style={styles.participantListPhoto} cachePolicy="memory-disk" transition={0} />
+                  ) : (
+                    <View style={styles.participantListPhotoPlaceholder}>
+                      <Text style={styles.participantListPhotoText}>{displayName.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.participantListName}>{displayName}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+
+    // 1) Desde la compra hasta confirmar: explicación + (10 min antes) confirmar.
+    if (!confirmado) {
+      return (
+        <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+            <View style={styles.countdownCard}>
+              <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
+              <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
+            </View>
+            <Text style={styles.title}>🎥 Así va a ser tu videollamada</Text>
+            <Text style={styles.subtitle}>{fechaTexto} · {formatTimeAmPm(appointment.event.time)} · 1 hora</Text>
+
+            <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>📹</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Con cámara prendida</Text>
+                <Text style={styles.preEventTipText}>La idea es conocernos. Conéctate con la cámara prendida, sobre todo cuando hables, desde un lugar tranquilo con buena señal.</Text>
+              </View>
+            </View>
+            <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>🗣️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Todos participan</Text>
+                <Text style={styles.preEventTipText}>No hay respuestas buenas ni malas. Arranca quien quiera y le pasa la palabra a otro. Si una pregunta no te gusta, dices "paso" y listo.</Text>
+              </View>
+            </View>
+            <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>🎤</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Uno de ustedes es el moderador</Text>
+                <Text style={styles.preEventTipText}>Lee las preguntas en voz alta y da la palabra. Se ofrece al empezar y la app le dice todo lo que tiene que hacer. <Text style={styles.preEventTipStrong}>Sin moderador no podemos arrancar</Text>, así que anímate 😉</Text>
+              </View>
+            </View>
+            <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>🎯</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Preguntas y juegos</Text>
+                <Text style={styles.preEventTipText}>3 niveles: Divertido, Coqueto y Atrevido, con juegos en medio. Ten a mano papel y lápiz ✏️</Text>
+              </View>
+            </View>
+            <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>💬</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Al final</Text>
+                <Text style={styles.preEventTipText}>Eliges en privado con quién hiciste clic. Si es mutuo, se abre un chat entre los dos 🔒</Text>
+              </View>
+            </View>
+
+            {ventanaConfirmar ? (
+              <View style={styles.codeEntryCard}>
+                <Text style={styles.codeEntryTitle}>¡Ya casi empezamos!</Text>
+                <Text style={styles.codeEntrySubtitle}>Confirma tu asistencia: verás quién más está y escogen al moderador. Después entran todos a la videollamada.</Text>
+                {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
+                <TouchableOpacity
+                  style={[styles.confirmCodeButton, confirmandoVirtual && styles.buttonDisabled]}
+                  onPress={handleConfirmarVirtual}
+                  disabled={confirmandoVirtual}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.confirmCodeButtonText}>{confirmandoVirtual ? 'Confirmando...' : 'Confirmar asistencia'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.virtualNota}>⏰ El botón para confirmar tu asistencia aparece aquí {VIRTUAL_CONFIRM_MINUTES} minutos antes de empezar.</Text>
+            )}
+
+            <TouchableOpacity onPress={() => router.push('/politica-asistencia')} style={styles.policyLinkWrap}>
+              <Text style={styles.policyLinkText}>📋 Ver la política de asistencia</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </LinearGradient>
+      );
+    }
+
+    // 2) Sala: nadie entra a la llamada hasta que haya moderador.
+    if (!moderatorId) {
+      return (
+        <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+            <View style={styles.modRoleCard}>
+              <Text style={[styles.rulesTitle, { marginBottom: 8 }]}>🎤 ¿Quién será el moderador?</Text>
+              <View style={styles.modRoleRow}>
+                <Text style={styles.modRoleEmoji}>🗣️</Text>
+                <Text style={styles.modRoleText}>Lee las preguntas en voz alta y da la palabra. La app le dice todo lo que tiene que hacer.</Text>
+              </View>
+              <View style={styles.modRoleDivider} />
+              <View style={styles.modRoleRow}>
+                <Text style={styles.modRoleEmoji}>⚠️</Text>
+                <Text style={styles.modRoleText}>Hasta que alguien se ofrezca, no podemos entrar a la videollamada.</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={[styles.comenzarButton, styles.becomeModBtn]} onPress={handleBecomeModerator} activeOpacity={0.85}>
+              <Text style={styles.becomeModBtnText} numberOfLines={1}>🙋 Quiero ser el moderador</Text>
+            </TouchableOpacity>
+            <Text style={styles.virtualNota}>Si a las {horaSorteo} nadie se ha ofrecido, la app escoge a alguien al azar entre los confirmados.</Text>
+            {listaConfirmados}
+          </ScrollView>
+        </LinearGradient>
+      );
+    }
+
+    // 3) Ya hay moderador y todavía no entró a la llamada: instrucciones + Ir a Meet.
+    if (!fueAMeet) {
+      return (
+        <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+            {isModerator ? (
+              <>
+                <Text style={styles.rulesTitle}>🎉 ¡Tú eres el moderador!</Text>
+                <Text style={styles.virtualSeccion}>AL ENTRAR A LA LLAMADA</Text>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>👋</Text>
+                  <Text style={styles.modVoiceText}>Saluda y pide que todos prendan la cámara.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>🔁</Text>
+                  <Text style={styles.modVoiceText}>Regresa a Nospi (la llamada sigue abierta en una ventanita) y lee en voz alta las reglas y las preguntas. Tú pasas a la siguiente.</Text>
+                </View>
+                <Text style={styles.virtualSeccion}>DURANTE EL JUEGO</Text>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>✋</Text>
+                  <Text style={styles.modVoiceText}>Si alguien levanta la mano, dale la palabra.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>🤫</Text>
+                  <Text style={styles.modVoiceText}>Si nadie arranca, cuenta tú primero o invita a alguien por su nombre.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>🙌</Text>
+                  <Text style={styles.modVoiceText}>Procura que todos hablen, sin presionar a nadie.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>📹</Text>
+                  <Text style={styles.modVoiceText}>Si alguien habla con la cámara apagada, pídele con buena onda que la prenda.</Text>
+                </View>
+                <Text style={styles.virtualNota}>💡 Si tienes computador, abre el Meet allá y deja Nospi en el celular.</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.modChosenCard}>
+                  <View style={styles.modChosenAvatar}>
+                    <Text style={styles.modChosenAvatarText}>{modTexto.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.modChosenName}>🎤 {modTexto} será el moderador</Text>
+                  <Text style={styles.virtualNotaOscura}>Lee las preguntas y da la palabra. Tú solo conversa.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>📹</Text>
+                  <Text style={styles.modVoiceText}>Cámara prendida, sobre todo cuando hables.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>✋</Text>
+                  <Text style={styles.modVoiceText}>Para hablar, levanta la mano en Meet o espera a que te pasen la palabra.</Text>
+                </View>
+                <View style={styles.modVoice}>
+                  <Text style={styles.modVoiceEmoji}>🗣️</Text>
+                  <Text style={styles.modVoiceText}>Participa: no hay respuestas malas, y si una no te gusta, di "paso".</Text>
+                </View>
+              </>
+            )}
+            {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.comenzarButton, (abriendoMeet || !appointment.event.meet_link) && styles.buttonDisabled]}
+              onPress={handleIrAMeet}
+              disabled={abriendoMeet || !appointment.event.meet_link}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.comenzarButtonText}>{abriendoMeet ? 'Abriendo...' : 'Ir a Meet'}</Text>
+            </TouchableOpacity>
+            {!appointment.event.meet_link && (
+              <Text style={styles.virtualNota}>El enlace de la videollamada todavía no está listo. Escríbenos a soporte si ya es la hora.</Text>
+            )}
+          </ScrollView>
+        </LinearGradient>
+      );
+    }
+
+    // 4) Ya está en la llamada pero el moderador aún no abrió las reglas.
+    if (!gameStarted && gamePhase !== 'rules') {
+      return (
+        <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+          <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { justifyContent: 'center', flexGrow: 1 }]}>
+            {botonVolverMeet}
+            <Text style={styles.rulesTitle}>🎥 Estás en la videollamada</Text>
+            {isModerator ? (
+              <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
+                <Text style={styles.comenzarButtonText}>Ver las reglas para leer</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.modWait}>
+                <Text style={styles.modWaitText}>⏳ {modTexto} está por empezar la dinámica</Text>
+              </View>
+            )}
+          </ScrollView>
+        </LinearGradient>
+      );
+    }
   }
 
   if (!isEventDay) {
@@ -1588,6 +1945,11 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
+          {esVirtual && (
+            <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
+              <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+            </TouchableOpacity>
+          )}
           <Text style={styles.rulesIcon}>🎲</Text>
           <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
 
@@ -1595,6 +1957,12 @@ export default function DinamicaScreen() {
             <View style={styles.modVoice}>
               <Text style={styles.modVoiceEmoji}>🗣️</Text>
               <Text style={styles.modVoiceText}>Léelo en voz alta para el grupo.</Text>
+            </View>
+          )}
+          {esVirtual && !isModerator && (
+            <View style={styles.modVoice}>
+              <Text style={styles.modVoiceEmoji}>🗣️</Text>
+              <Text style={styles.modVoiceText}>{moderatorName || 'El moderador'} lo está leyendo en voz alta en la llamada.</Text>
             </View>
           )}
 
@@ -1777,7 +2145,7 @@ export default function DinamicaScreen() {
             {esVirtual ? (
               <TouchableOpacity
                 style={[styles.confirmCodeButton, (abriendoMeet || !appointment.event.meet_link || !locationRevealed) && styles.buttonDisabled]}
-                onPress={handleEntrarVideollamada}
+                onPress={handleIrAMeet}
                 disabled={abriendoMeet || !appointment.event.meet_link || !locationRevealed}
                 activeOpacity={0.8}
               >
@@ -1811,7 +2179,7 @@ export default function DinamicaScreen() {
             {esVirtual && !!appointment.event.meet_link && (
               <TouchableOpacity
                 style={[styles.confirmCodeButton, abriendoMeet && styles.buttonDisabled, { marginBottom: 16 }]}
-                onPress={handleEntrarVideollamada}
+                onPress={handleIrAMeet}
                 disabled={abriendoMeet}
                 activeOpacity={0.8}
               >
@@ -1989,6 +2357,12 @@ const styles = StyleSheet.create({
   participantListPhotoText: { fontSize: 14, fontWeight: 'bold', color: '#880E4F' },
   participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
   buttonDisabled: { opacity: 0.5 },
+  // Videollamada
+  volverMeetBtn: { borderWidth: 1.5, borderColor: '#F06292', backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginBottom: 16, alignSelf: 'stretch' },
+  volverMeetBtnText: { color: '#FFE9C7', fontSize: 15, fontWeight: '800' },
+  virtualNota: { fontSize: 13, color: '#FFE9C7', textAlign: 'center', lineHeight: 19, marginVertical: 10 },
+  virtualNotaOscura: { fontSize: 13, color: '#6d0e3c', textAlign: 'center', lineHeight: 19, marginTop: 6 },
+  virtualSeccion: { fontSize: 12, fontWeight: '800', letterSpacing: 1, color: '#F8BBD0', marginTop: 10, marginBottom: 6, alignSelf: 'flex-start' },
   infoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
   infoText: { fontSize: 16, fontWeight: '600', color: '#880E4F', textAlign: 'center', marginBottom: 8 },
   infoTextSecondary: { fontSize: 13, color: '#666', textAlign: 'center' },

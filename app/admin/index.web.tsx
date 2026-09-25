@@ -246,8 +246,8 @@ const BLOQUE_INSTALAR_VIRTUAL = [
 const BLOQUE_AL_ENTRAR_VIRTUAL = [
   `*Al entrar a la llamada:*`,
   `📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal`,
-  `👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta. El que termine le pasa la palabra a otro`,
-  `🙋 Abran la *Dinámica* en la app: el primero que toque *Quiero ser el moderador* lleva el juego (la app le va diciendo qué hacer)`,
+  `🎤 El moderador lleva el juego desde la app: lee las preguntas y da la palabra. Tú solo conversa`,
+  `✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra`,
   `✏️ Ten a mano papel y lápiz`,
 ].join('\n');
 
@@ -352,7 +352,7 @@ function buildEventReminderWhatsAppLink(
   }
 
   const esVirtual = eventType === 'virtual';
-  const horaBoton = restarMinutos(eventTime, 15);
+  const horaBoton = restarMinutos(eventTime, 10);
 
   const message = (esVirtual ? [
     `¡Hola ${firstName}! 👋`,
@@ -363,7 +363,7 @@ function buildEventReminderWhatsAppLink(
     ``,
     BLOQUE_INSTALAR_VIRTUAL,
     ``,
-    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} te aparece el botón *Entrar a la videollamada* dentro del evento. Ese botón es el que registra tu asistencia.`,
+    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña *Dinámica* de la app, escogen al moderador y de ahí entran a la llamada.`,
     ``,
     `📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉`,
     ``,
@@ -416,7 +416,7 @@ function buildSameDayWhatsAppLink(
   const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
 
   const esVirtual = eventType === 'virtual';
-  const horaBoton = restarMinutos(eventTime, 15);
+  const horaBoton = restarMinutos(eventTime, 10);
 
   const message = (esVirtual ? [
     `¡Hola ${firstName}! 👋`,
@@ -425,9 +425,9 @@ function buildSameDayWhatsAppLink(
     `🎥 Por videollamada.`,
     ``,
     `Así entras:`,
-    `1️⃣ Abre Nospi y entra al evento`,
-    `2️⃣ Desde las ${horaBoton || '15 minutos antes'} te aparece el botón *Entrar a la videollamada*`,
-    `3️⃣ Tócalo: con eso queda registrada tu asistencia y se abre la llamada`,
+    `1️⃣ Abre Nospi, pestaña *Dinámica*: desde las ${horaBoton || '10 minutos antes'} aparece *Confirmar asistencia*`,
+    `2️⃣ Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉`,
+    `3️⃣ Tocas *Ir a Meet*: con eso queda registrada tu asistencia`,
     ``,
     `⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.`,
     ``,
@@ -11859,7 +11859,7 @@ setBulkWhatsAppPending(pending);
                 <>
                 <Text style={styles.inputLabel}>Link de la videollamada (Google Meet) *</Text>
                 <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia. Al guardarlo, el acceso queda activo solo (no hay que activar nada): el botón de entrar aparece 15 minutos antes y a los inscritos les llega el aviso.
+                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia. Al guardarlo, el acceso queda activo solo (no hay que activar nada). El día del evento, 10 minutos antes, los inscritos confirman en la Dinámica, escogen moderador y de ahí entran al Meet.
                 </Text>
                 <TextInput
                   style={styles.input}

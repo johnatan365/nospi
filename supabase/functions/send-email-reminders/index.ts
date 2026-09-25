@@ -54,6 +54,9 @@
 // es justo lo que medimos. Por eso en virtual el boton del correo apunta a
 // app.nospi.co y nunca a maps_link.
 //
+// v49: videollamada — nuevo flujo: 10 min antes se confirma en la Dinamica,
+// se escoge moderador (obligatorio) y 'Ir a Meet' es la asistencia.
+//
 // v48: videollamada — el correo del dia anterior sale solo a las 9 a.m. del dia
 // anterior (el acceso se activa al guardar el link, que puede ser dias antes).
 //
@@ -81,7 +84,7 @@ const EVENT_START_DELAY_MS = 5 * 60 * 1000;
 
 // Cuanto ANTES de la hora se habilita el boton de entrar a la videollamada.
 // Debe coincidir con MINUTOS_ANTES_ENTRAR de app/event-details/[id].tsx.
-const MINUTOS_ANTES_ENTRAR = 15;
+const MINUTOS_ANTES_ENTRAR = 10;
 
 // En un evento virtual el boton del correo lleva a la app, nunca al Meet.
 const URL_APP = 'https://app.nospi.co';
@@ -255,8 +258,8 @@ function htmlBotonesTienda(): string {
 // llamada. Mismo texto que BLOQUE_AL_ENTRAR_VIRTUAL del WhatsApp del admin.
 const AL_ENTRAR_VIRTUAL = [
   '📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal',
-  '👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta. El que termine le pasa la palabra a otro',
-  '🙋 Abran la Dinámica en la app: el primero que toque "Quiero ser el moderador" lleva el juego (la app le va diciendo qué hacer)',
+  '🎤 El moderador lleva el juego desde la app: lee las preguntas y da la palabra. Tú solo conversa',
+  '✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra',
   '✏️ Ten a mano papel y lápiz',
 ];
 
@@ -267,15 +270,15 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
     : `Hoy · ${event.name || 'Nospi'}`;
 
   if (virtual) {
-    const horaBoton = restarMinutos(event.time) || '15 minutos antes';
+    const horaBoton = restarMinutos(event.time) || '10 minutos antes';
     const text = [
       `Hola ${firstName},`, '', `Hoy es "${event.name || 'tu evento'}" 🎉`,
       event.time ? `🕖 ${formatTimeAmPm(event.time)}` : null,
       '🎥 Por videollamada.', '',
       'Así entras:',
-      '1. Abre Nospi y entra al evento',
-      `2. Desde las ${horaBoton} aparece el botón "Entrar a la videollamada"`,
-      '3. Tócalo: registra tu asistencia y abre la llamada', '',
+      `1. Abre Nospi, pestaña Dinámica: desde las ${horaBoton} aparece "Confirmar asistencia"`,
+      '2. Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉',
+      '3. Tocas "Ir a Meet": con eso queda registrada tu asistencia', '',
       '⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.', '',
       'Al entrar a la llamada:',
       ...AL_ENTRAR_VIRTUAL, '',
@@ -290,7 +293,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       htmlParagraph(`Hola ${firstName},`),
       htmlParagraph(`Hoy es <strong>"${event.name || 'tu evento'}"</strong> 🎉`),
       htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : ''}🎥 Por videollamada.`),
-      htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi y entra al evento<br />2. Desde las <strong>${horaBoton}</strong> aparece el botón "Entrar a la videollamada"<br />3. Tócalo: registra tu asistencia y abre la llamada`),
+      htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi, pestaña <strong>Dinámica</strong>: desde las <strong>${horaBoton}</strong> aparece "Confirmar asistencia"<br />2. Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉<br />3. Tocas <strong>"Ir a Meet"</strong>: con eso queda registrada tu asistencia`),
       htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras desde la app cuenta como falta</strong>, y con faltas se suspende la cuenta para reservar.'),
       htmlParagraph(`<strong>Al entrar a la llamada:</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`),
       htmlParagraph('Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
@@ -337,7 +340,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
   // Este es el UNICO correo que llega DESPUES de que arranco: para quien no
   // alcanzo a tocar el boton, es la ultima oportunidad antes de la falta.
   const rescate = virtual
-    ? '¿Todavía no entraste? El botón para entrar a la videollamada está en el evento, dentro de la app.'
+    ? '¿Todavía no entraste? Abre Nospi, pestaña Dinámica: confirmas tu asistencia y tocas Ir a Meet.'
     : null;
 
   const text = [
@@ -346,7 +349,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
       ? `Tu videollamada "${event.name || 'Nospi'}" ya está en marcha.`
       : `Tu evento "${event.name || 'Nospi'}" ya está en marcha.`, '',
     ...(virtual
-      ? ['Si todavía nadie arranca, arranca tú 😉', ...AL_ENTRAR_VIRTUAL, '', 'Dinámica: https://app.nospi.co/(tabs)/dinamica', '']
+      ? ['Adentro:', ...AL_ENTRAR_VIRTUAL, '', 'Dinámica: https://app.nospi.co/(tabs)/dinamica', '']
       : ['Abran la pestaña Dinámica en la app para romper el hielo con tu grupo: https://app.nospi.co/(tabs)/dinamica', '',
          'Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', '']),
     rescate,
@@ -360,7 +363,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
       ? `Tu videollamada <strong>"${event.name || 'Nospi'}"</strong> ya está en marcha 🎉`
       : `Tu evento <strong>"${event.name || 'Nospi'}"</strong> ya está en marcha 🎉`),
     virtual
-      ? htmlParagraph(`<strong>Si todavía nadie arranca, arranca tú 😉</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`)
+      ? htmlParagraph(`<strong>Adentro:</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`)
       : htmlParagraph('Abran la pestaña <strong>Dinámica</strong> en la app para romper el hielo con tu grupo.'),
     virtual ? '' : htmlParagraph('Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', { muted: true }),
     rescate ? htmlParagraph(`<strong>¿Todavía no entraste?</strong> El botón para entrar a la videollamada está en el evento, dentro de la app.`) : '',
@@ -394,7 +397,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
         ? '📲 El enlace se abre desde la app de Nospi. Si no la tienes, instálala hoy — mañana no vas a tener tiempo.'
         : '📲 El enlace se abre desde la app de Nospi. Si aún no la tienes, instálala ahora y ya queda resuelto.';
     const cuando = esVispera ? 'Mañana' : esHoy ? 'Hoy' : 'El día del evento';
-    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} te aparece el botón "Entrar a la videollamada" dentro del evento. Ese botón es el que registra tu asistencia.`;
+    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña Dinámica de la app, escogen al moderador y de ahí entran a la llamada. Ese botón de "Ir a Meet" es el que registra tu asistencia.`;
     const cancelarTexto = esHoy
       ? null
       : esVispera
@@ -426,7 +429,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : `📅 <strong>${formattedDate}</strong><br />`}🎥 Por videollamada.`),
       htmlParagraph(instalar),
       htmlBotonesTienda(),
-      htmlParagraph(botonLinea.replace('Ese botón es el que registra tu asistencia.', '<strong>Ese botón es el que registra tu asistencia.</strong>')),
+      htmlParagraph(botonLinea.replace('Ese botón de "Ir a Meet" es el que registra tu asistencia.', '<strong>Ese botón de "Ir a Meet" es el que registra tu asistencia.</strong>')),
       htmlParagraph('📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉'),
       cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
     ].join('');
