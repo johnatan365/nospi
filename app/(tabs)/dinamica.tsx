@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, getCachedEntry, setCached, clearCached } from '@/utils/cache';
+import { abrirMeet, obtenerMeetLink } from '@/lib/abrirMeet';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
 // Clave legacy (global, compartida entre cuentas). Se conserva solo para
@@ -1268,10 +1269,15 @@ export default function DinamicaScreen() {
   // las encuentre listas. Si el registro falla, igual se abre: nadie se queda
   // por fuera de la llamada por un error nuestro.
   const handleIrAMeet = useCallback(async () => {
-    const link = appointment?.event?.meet_link;
-    if (!link || abriendoMeet || !appointment) return;
+    if (abriendoMeet || !appointment) return;
     setAbriendoMeet(true);
     try {
+      // La caché puede traer el evento sin meet_link: en ese caso se lee de la base.
+      const link = await obtenerMeetLink(appointment.event_id, appointment.event?.meet_link);
+      if (!link) {
+        setGpsError('El enlace de la videollamada todavía no está listo. Escríbenos a soporte si ya es la hora.');
+        return;
+      }
       if (!appointment.checked_in_at && user?.id) {
         const ahora = new Date().toISOString();
         const { error } = await supabase
@@ -1289,7 +1295,7 @@ export default function DinamicaScreen() {
       if (soyModerador && (!gamePhase || gamePhase === 'intro' || gamePhase === 'ready')) {
         await handleModeratorContinueToRules();
       }
-      await Linking.openURL(link);
+      await abrirMeet(link);
     } catch (e) {
       console.error('No se pudo abrir la videollamada:', e);
       setGpsError('No se pudo abrir la videollamada. Intenta de nuevo.');
@@ -1692,16 +1698,13 @@ export default function DinamicaScreen() {
             )}
             {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
             <TouchableOpacity
-              style={[styles.comenzarButton, (abriendoMeet || !appointment.event.meet_link) && styles.buttonDisabled]}
+              style={[styles.comenzarButton, abriendoMeet && styles.buttonDisabled]}
               onPress={handleIrAMeet}
-              disabled={abriendoMeet || !appointment.event.meet_link}
+              disabled={abriendoMeet}
               activeOpacity={0.85}
             >
               <Text style={styles.comenzarButtonText}>{abriendoMeet ? 'Abriendo...' : 'Ir a Meet'}</Text>
             </TouchableOpacity>
-            {!appointment.event.meet_link && (
-              <Text style={styles.virtualNota}>El enlace de la videollamada todavía no está listo. Escríbenos a soporte si ya es la hora.</Text>
-            )}
           </ScrollView>
         </LinearGradient>
       );
@@ -1712,7 +1715,6 @@ export default function DinamicaScreen() {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
           <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { justifyContent: 'center', flexGrow: 1 }]}>
-            {botonVolverMeet}
             <Text style={styles.rulesTitle}>🎥 Estás en la videollamada</Text>
             {isModerator ? (
               <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
@@ -1723,6 +1725,8 @@ export default function DinamicaScreen() {
                 <Text style={styles.modWaitText}>⏳ {modTexto} está por empezar la dinámica</Text>
               </View>
             )}
+            {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
+            {botonVolverMeet}
           </ScrollView>
         </LinearGradient>
       );
@@ -1947,11 +1951,6 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
-          {esVirtual && (
-            <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
-              <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
-            </TouchableOpacity>
-          )}
           <Text style={styles.rulesIcon}>🎲</Text>
           <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
 
@@ -2027,6 +2026,13 @@ export default function DinamicaScreen() {
             <View style={styles.modWait}>
               <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} comience</Text>
             </View>
+          )}
+          {/* Abajo y no arriba: con Meet y Nospi abiertos a la vez, la
+              ventanita de Meet tapa la parte de arriba de la pantalla. */}
+          {esVirtual && (
+            <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
+              <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+            </TouchableOpacity>
           )}
         </ScrollView>
 
@@ -2366,7 +2372,7 @@ const styles = StyleSheet.create({
   participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
   buttonDisabled: { opacity: 0.5 },
   // Videollamada
-  volverMeetBtn: { borderWidth: 1.5, borderColor: '#F06292', backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginBottom: 16, alignSelf: 'stretch' },
+  volverMeetBtn: { borderWidth: 1.5, borderColor: '#F06292', backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginTop: 16, marginBottom: 8, alignSelf: 'stretch' },
   volverMeetBtnText: { color: '#FFE9C7', fontSize: 15, fontWeight: '800' },
   virtualNota: { fontSize: 13, color: '#FFE9C7', textAlign: 'center', lineHeight: 19, marginVertical: 10 },
   virtualNotaOscura: { fontSize: 13, color: '#6d0e3c', textAlign: 'center', lineHeight: 19, marginTop: 6 },

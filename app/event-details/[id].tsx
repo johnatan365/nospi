@@ -9,6 +9,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { formatTimeAmPm } from '@/utils/formatTime';
+import { abrirMeet } from '@/lib/abrirMeet';
 import { toqueFuerte, aviso } from '@/lib/haptics';
 
 // Videollamada: la asistencia se confirma en la pestaña Dinámica desde 10
@@ -234,7 +235,7 @@ export default function EventDetailsScreen() {
           setCheckedInAt(ahora);
         }
       }
-      await Linking.openURL(event.meet_link);
+      await abrirMeet(event.meet_link);
     } catch (e) {
       console.error('No se pudo abrir la videollamada:', e);
       Alert.alert('No se pudo abrir', 'Intenta de nuevo en unos segundos.');
