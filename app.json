@@ -3,7 +3,7 @@
     "owner": "johnatan365",
     "name": "Nospi",
     "slug": "nospi-pys0qtxkv8ugfywiet3zh",
-    "version": "1.0.42",
+    "version": "1.0.43",
     "orientation": "portrait",
     "icon": "./assets/adaptive-icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,7 @@
       "backgroundColor": "#1a0010"
     },
     "ios": {
-      "buildNumber": "104",
+      "buildNumber": "105",
       "supportsTablet": true,
       "bundleIdentifier": "app.nospi.mobile",
       "infoPlist": {
@@ -133,7 +133,7 @@
           ]
         }
       ],
-      "versionCode": 104
+      "versionCode": 105
     },
     "web": {
       "favicon": "./assets/icon.png",
