@@ -3928,43 +3928,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      // Copy questions from original event
-      const { data: originalQuestions, error: qError } = await supabase
-        .from('event_questions')
-        .select('level, question_text, question_order, is_default')
-        .eq('event_id', event.id)
-        .order('level', { ascending: true })
-        .order('question_order', { ascending: true });
-
-      if (!qError && originalQuestions && originalQuestions.length > 0) {
-        // Mismo contenido que el original, pero con un orden aleatorio NUEVO
-        // dentro de cada nivel — si no, el duplicado repetiria exactamente el
-        // mismo orden sorteado del evento original.
-        const levelOrder: string[] = [];
-        const byLevel: Record<string, typeof originalQuestions> = {};
-        for (const q of originalQuestions) {
-          if (!byLevel[q.level]) {
-            byLevel[q.level] = [];
-            levelOrder.push(q.level);
-          }
-          byLevel[q.level].push(q);
-        }
-        const reshuffled = levelOrder.flatMap((level) => shuffleArray(byLevel[level]));
-
-        const questionsToInsert = reshuffled.map((q, index) => ({
-          event_id: newEvent.id,
-          level: q.level,
-          question_text: q.question_text,
-          question_order: index,
-          is_default: q.is_default,
-        }));
-        const { error: insertError } = await supabase
-          .from('event_questions')
-          .insert(questionsToInsert);
-        if (insertError) {
-          console.error('Error copiando preguntas:', insertError);
-        }
-      }
+      // Preguntas: se sortean de nuevo desde el banco, igual que un evento
+      // nuevo. Antes se copiaban las del original revueltas y sin is_pinned ni
+      // applies_to: las fijadas perdían su posición (p. ej. los juegos de
+      // videollamada caían en cualquier parte) y el duplicado heredaba un
+      // sorteo viejo aunque el banco hubiera cambiado.
+      await insertRandomQuestionsFromBank(newEvent.id);
 
       window.alert('✅ Evento duplicado como borrador con sus preguntas. Recuerda cambiarle la fecha.');
       markSelfEventsMutation();
