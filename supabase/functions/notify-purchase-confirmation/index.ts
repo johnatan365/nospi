@@ -160,6 +160,12 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       ? '🎥 Es por videollamada, desde donde estés.'
       : '📍 El lugar te lo mandamos un día antes.';
 
+    // Se repite a proposito en todo el camino (compra, recordatorios, reglas):
+    // quien entra con la camara apagada rompe la experiencia del grupo.
+    const camaraText = esVirtual
+      ? '📹 Ojo: es con la cámara prendida. De eso se trata, de conocernos las caras, no de hablar con cuadritos negros 😉'
+      : null;
+
     const appText = esVirtual
       ? '📲 El enlace se abre desde la app de Nospi — no te lo mandamos por correo. Instálala desde ya y el día del evento solo tocas un botón.'
       : null;
@@ -170,6 +176,7 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       `Quedaste dentro de "${params.eventName}".`,
       params.time ? `📅 ${params.formattedDate} · ${params.time}` : `📅 ${params.formattedDate}`,
       accesoText,
+      camaraText,
       '',
       appText,
       appText ? `🤖 ${TIENDA_ANDROID}` : null,
@@ -190,6 +197,7 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       htmlParagraph(`Hola ${params.firstName || ''}${params.firstName ? ',' : ''}`),
       htmlParagraph(`Quedaste dentro de <strong>"${params.eventName}"</strong> 🎉`),
       htmlParagraph(`📅 ${params.formattedDate}${params.time ? ` · ${params.time}` : ''}<br />${accesoText}`),
+      camaraText ? htmlParagraph(`<strong>${camaraText}</strong>`) : '',
       appText ? htmlParagraph(appText) : '',
       appText ? htmlBotonesTienda() : '',
       htmlParagraph(`${cancelPolicyHtml} <a href="https://app.nospi.co/politica-asistencia" style="color:#880E4F;">Ver la política completa</a>`, { muted: true }),

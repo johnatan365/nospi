@@ -251,7 +251,7 @@ function htmlBotonesTienda(): string {
 // le dicen a cada uno que hacer al entrar, sin que nadie de Nospi este en la
 // llamada. Mismo texto que BLOQUE_AL_ENTRAR_VIRTUAL del WhatsApp del admin.
 const AL_ENTRAR_VIRTUAL = [
-  '📹 Prende la cámara y saluda, en un lugar tranquilo con buena señal',
+  '📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal',
   '👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta. El que termine le pasa la palabra a otro',
   '🙋 Abran la Dinámica en la app: el primero que toque "Quiero ser el moderador" lleva el juego (la app le va diciendo qué hacer)',
   '✏️ Ten a mano papel y lápiz',
@@ -409,7 +409,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       `🤖 ${TIENDA_ANDROID}`,
       `🍎 ${TIENDA_IPHONE}`, '',
       botonLinea, '',
-      '📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉', '',
+      '📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉', '',
       cancelarTexto,
       cancelarTexto ? '' : null,
       'Equipo Nospi',
@@ -424,7 +424,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       htmlParagraph(instalar),
       htmlBotonesTienda(),
       htmlParagraph(botonLinea.replace('Ese botón es el que registra tu asistencia.', '<strong>Ese botón es el que registra tu asistencia.</strong>')),
-      htmlParagraph('📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉'),
+      htmlParagraph('📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉'),
       cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
     ].join('');
     // Nunca "Como llegar" ni maps_link: el enlace vive en la app.

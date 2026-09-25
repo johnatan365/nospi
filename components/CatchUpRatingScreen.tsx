@@ -508,7 +508,11 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
             <View style={styles.iceBreak}>
               <Text style={styles.iceBreakIcon}>✨</Text>
               <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
-              <Text style={styles.iceBreakSub}>Ahora disfruten el resto de la noche y déjense sorprender ✨</Text>
+              <Text style={styles.iceBreakSub}>
+                {eventType === 'virtual'
+                  ? 'Si quieren, sigan conversando un rato en la llamada ✨'
+                  : 'Ahora disfruten el resto de la noche y déjense sorprender ✨'}
+              </Text>
             </View>
             <Text style={styles.thanks}>Gracias por calificar el encuentro 🙌</Text>
             <TouchableOpacity style={styles.btnGhost} onPress={() => router.replace('/(tabs)/events' as any)} activeOpacity={0.85}>

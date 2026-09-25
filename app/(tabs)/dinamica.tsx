@@ -1583,7 +1583,7 @@ export default function DinamicaScreen() {
               <>
                 <View style={styles.rulesRow}>
                   <Text style={styles.rulesEmoji}>📹</Text>
-                  <Text style={styles.rulesText}>Antes de empezar: todos con la cámara prendida, y siempre que hables, con cámara. Parte de la experiencia es vernos las caras.</Text>
+                  <Text style={styles.rulesText}>Todos con la cámara prendida, y siempre que hables, con cámara. Venimos a conocernos: sin cámara, eso no pasa.</Text>
                 </View>
                 <View style={styles.rulesDivider} />
                 <View style={styles.rulesRow}>

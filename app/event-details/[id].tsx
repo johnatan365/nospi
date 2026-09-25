@@ -455,6 +455,13 @@ export default function EventDetailsScreen() {
               pasar por la app, que es justo lo que medimos. */}
           <View style={styles.locationSection}>
             <Text style={styles.locationTitle}>{esVirtual ? '🎥 Videollamada' : '📍 Ubicación'}</Text>
+            {/* Se repite a proposito en cada punto del camino (compra, recordatorios,
+                reglas): quien entra con la camara apagada rompe la experiencia. */}
+            {esVirtual && !checkedInAt && (
+              <Text style={styles.locationAddress}>
+                📹 Es con la cámara prendida: la idea es conocernos las caras.
+              </Text>
+            )}
 
             {esVirtual ? (
               (() => {
@@ -514,6 +521,9 @@ export default function EventDetailsScreen() {
                   <>
                     <Text style={styles.locationAddress}>
                       Al tocar el botón queda registrada tu asistencia y se abre la videollamada.
+                    </Text>
+                    <Text style={styles.locationAddress}>
+                      📹 Entra con la cámara prendida. Todos llegan igual de nerviosos: verse las caras es lo que rompe el hielo.
                     </Text>
                     <TouchableOpacity
                       style={[styles.mapsButton, entrando && styles.mapsButtonDisabled]}

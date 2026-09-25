@@ -1066,7 +1066,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               </View>
               <View style={styles.closingIntroReadCard}>
                 <Text style={styles.closingIntroReadText}>
-                  “Hasta aquí llega la dinámica de preguntas 🎉. Ahora <Text style={styles.closingIntroStrong}>todos saquen su celular</Text>: viene la parte final, donde cada uno elige <Text style={styles.closingIntroStrong}>en privado</Text> con quién sintió conexión.”
+                  “Hasta aquí llega la dinámica de preguntas 🎉. Ahora <Text style={styles.closingIntroStrong}>{esVirtual ? 'todos vayan a la app de Nospi' : 'todos saquen su celular'}</Text>: viene la parte final, donde cada uno elige <Text style={styles.closingIntroStrong}>en privado</Text> con quién sintió conexión.”
                 </Text>
               </View>
               <View style={styles.closingIntroThanksCard}>
@@ -1087,7 +1087,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             <>
               <View style={styles.closingIntroReadCard}>
                 <Text style={styles.closingIntroReadText}>
-                  📱 <Text style={styles.closingIntroStrong}>Saca tu celular</Text>: ahora vas a elegir <Text style={styles.closingIntroStrong}>en privado</Text> con quién sentiste conexión.
+                  📱 <Text style={styles.closingIntroStrong}>{esVirtual ? 'Ve a la app de Nospi' : 'Saca tu celular'}</Text>: ahora vas a elegir <Text style={styles.closingIntroStrong}>en privado</Text> con quién sentiste conexión.
                 </Text>
               </View>
               <View style={styles.closingIntroThanksCard}>

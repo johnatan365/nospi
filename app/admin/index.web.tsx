@@ -245,7 +245,7 @@ const BLOQUE_INSTALAR_VIRTUAL = [
 // inicio (send-email-reminders).
 const BLOQUE_AL_ENTRAR_VIRTUAL = [
   `*Al entrar a la llamada:*`,
-  `📹 Prende la cámara y saluda, en un lugar tranquilo con buena señal`,
+  `📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal`,
   `👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta. El que termine le pasa la palabra a otro`,
   `🙋 Abran la *Dinámica* en la app: el primero que toque *Quiero ser el moderador* lleva el juego (la app le va diciendo qué hacer)`,
   `✏️ Ten a mano papel y lápiz`,
@@ -294,6 +294,7 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     ``,
     `Quedaste dentro de${eventBlock}`,
     `🎥 Es por videollamada, desde donde estés.`,
+    `📹 Ojo: es con la cámara prendida. De eso se trata, de conocernos las caras, no de hablar con cuadritos negros 😉`,
     ``,
     BLOQUE_INSTALAR_VIRTUAL,
     ``,
@@ -364,7 +365,7 @@ function buildEventReminderWhatsAppLink(
     ``,
     `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} te aparece el botón *Entrar a la videollamada* dentro del evento. Ese botón es el que registra tu asistencia.`,
     ``,
-    `📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉`,
+    `📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉`,
     ``,
     `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
     ``,

@@ -205,7 +205,7 @@ serve(async (req) => {
         const virtual = event.type === 'virtual';
         const title = virtual ? `🎥 ¡Hoy es tu videollamada!` : `¡Hoy es tu evento!`;
         const body = virtual
-          ? `${event.name || 'Tu videollamada'} — hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}. Entra desde la app con la cámara prendida y ten a mano papel y lápiz.`
+          ? `${event.name || 'Tu videollamada'} — hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}. Entra desde la app con la cámara prendida: la idea es conocernos las caras.`
           : `${event.name || 'Tu evento'} — hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}. Abre la app para ver como llegar.`;
         const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_reminder_sameday', event_id: apt.event_id });
         if (ok) await supabase.from('appointments').update({ sameday_reminder_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
