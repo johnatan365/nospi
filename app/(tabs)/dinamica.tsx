@@ -2121,30 +2121,30 @@ export default function DinamicaScreen() {
           <View style={styles.eventHeader}>
             {appointment.event.type === 'virtual' ? (
               // Mismo agrandado que en la lista de eventos (ver events.tsx).
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 66, height: 55, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 73, height: 61, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'caminata' ? (
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'bar' ? (
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'restaurante' ? (
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'cafe' ? (
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'bolos' ? (
               // Caja del mismo tamano que los demas iconos (84x70) para no
               // desalinear la tarjeta; el icono va ~17% mas grande adentro.
-              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
-                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 67, height: 56, tintColor: '#880E4F' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 74, height: 62, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
