@@ -54,6 +54,9 @@
 // es justo lo que medimos. Por eso en virtual el boton del correo apunta a
 // app.nospi.co y nunca a maps_link.
 //
+// v48: videollamada — el correo del dia anterior sale solo a las 9 a.m. del dia
+// anterior (el acceso se activa al guardar el link, que puede ser dias antes).
+//
 // v45: videollamada — el correo del mismo dia y el de inicio dicen que hacer al
 // entrar (camara, ronda de saludo, quien toca "Quiero ser el moderador",
 // papel y lapiz): en un Meet sin nadie de Nospi, nadie arrancaba solo.
@@ -672,6 +675,14 @@ serve(async (req) => {
             results.push({ block: '48h', appointmentId: apt.id, skipped: true, reason: 'ubicacion no revelada' });
             continue;
           }
+          // Videollamada: el acceso se activa solo al guardar el link (puede ser
+          // dias antes). Este correo no sale aqui sino en el cron, a las 9 a.m.
+          // del dia anterior (bloque 'vispera_virtual'), como en presencial
+          // cuando se revela la ubicacion el dia antes.
+          if (esVirtual(event)) {
+            results.push({ block: '48h', appointmentId: apt.id, skipped: true, reason: 'virtual: sale el dia anterior a las 9 a.m.' });
+            continue;
+          }
           const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
           const { subject, text, html } = build48hText(firstName, event, now);
           const { ok } = await sendEmail(user.email, subject, text, html);
@@ -710,6 +721,44 @@ serve(async (req) => {
           const { ok } = await sendEmail(user.email, subject, text, html);
           if (ok) await supabase.from('appointments').update({ reminder_3d_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: '3d', appointmentId: apt.id, ok });
+        }
+      }
+
+      // Videollamada, dia anterior a las 9 a.m. (hora Bogota): el correo de
+      // "manana es tu videollamada". Usa la misma marca que el correo al revelar
+      // (reminder_48h_email_sent_at), asi nunca sale dos veces. Si el link se
+      // pone despues de las 9, sale en la siguiente corrida de ese mismo dia.
+      {
+        const minutosAhora = nowBogota.getUTCHours() * 60 + nowBogota.getUTCMinutes();
+        const startOfTomorrow = new Date(Date.UTC(year, month, day, 0, 0, 0) + BOGOTA_OFFSET_MS + 24 * 60 * 60 * 1000);
+        const startOfDayAfter = new Date(startOfTomorrow.getTime() + 24 * 60 * 60 * 1000);
+        if (minutosAhora >= SAMEDAY_SEND_HOUR * 60) {
+          const { data: aptsVispera, error: errVispera } = await supabase
+            .from('appointments')
+            .select(`id, user_id, event_id, users!inner ( name, email ), events!inner ( name, date, time, location_name, location_address, maps_link, is_location_revealed, type )`)
+            .eq('status', 'confirmada')
+            .is('reminder_48h_email_sent_at', null)
+            .eq('events.type', 'virtual')
+            .gte('events.date', startOfTomorrow.toISOString())
+            .lt('events.date', startOfDayAfter.toISOString());
+          if (errVispera) {
+            results.push({ block: 'vispera_virtual', error: errVispera.message });
+          } else {
+            for (const apt of aptsVispera || []) {
+              const user = (apt as any).users;
+              const event = (apt as any).events;
+              if (!user?.email) continue;
+              if (!event.is_location_revealed) {
+                results.push({ block: 'vispera_virtual', appointmentId: apt.id, skipped: true, reason: 'sin link de Meet todavia' });
+                continue;
+              }
+              const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
+              const { subject, text, html } = build48hText(firstName, event, now);
+              const { ok } = await sendEmail(user.email, subject, text, html);
+              if (ok) await supabase.from('appointments').update({ reminder_48h_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
+              results.push({ block: 'vispera_virtual', appointmentId: apt.id, ok });
+            }
+          }
         }
       }
 

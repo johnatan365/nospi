@@ -12,6 +12,10 @@
 // app libera el boton "Continuar" (START_WINDOW_MINUTES en dinamica.tsx).
 // Asi el push llega cuando la mesa YA puede arrancar, no antes.
 //
+// v6: videollamada — el push de 'lista' sale a las 9 a.m. del dia anterior
+// (bloque a2) y no al activar el acceso, que ahora es automatico al guardar el
+// link del Meet y puede pasar dias antes.
+//
 // v5 (sep 2026): version videollamada (events.type = 'virtual') del push del
 // mismo dia (no hay "como llegar") y del de inicio (que hacer al entrar: camara,
 // saludo y quien toca "Quiero ser el moderador"). Antes esta funcion solo vivia
@@ -123,15 +127,16 @@ serve(async (req) => {
             results.push({ block: '48h', appointmentId: apt.id, skipped: true, reason: 'ubicacion no revelada' });
             continue;
           }
-          // En videollamada no hay lugar: "revelar" es activar el acceso. El
-          // push dice cuando aparece el boton de entrar, sin el enlace.
+          // Videollamada: el acceso se activa solo al guardar el link (puede ser
+          // dias antes). Este push no sale aqui sino en el cron, a las 9 a.m. del
+          // dia anterior (bloque 'vispera_virtual'). Mismo push, otra hora.
           const virtual = event.type === 'virtual';
-          const title = virtual
-            ? `🎥 Tu videollamada ya está lista`
-            : `📍 Ya revelamos la ubicación de ${event.name || 'tu evento'}`;
-          const body = virtual
-            ? 'El día del evento, 15 minutos antes, te aparece en la app el botón "Entrar a la videollamada".'
-            : (event.location_name ? `Lugar: ${event.location_name}. Abre la app para ver como llegar.` : 'Abre la app para ver como llegar.');
+          if (virtual) {
+            results.push({ block: '48h', appointmentId: apt.id, skipped: true, reason: 'virtual: sale el dia anterior a las 9 a.m.' });
+            continue;
+          }
+          const title = `📍 Ya revelamos la ubicación de ${event.name || 'tu evento'}`;
+          const body = event.location_name ? `Lugar: ${event.location_name}. Abre la app para ver como llegar.` : 'Abre la app para ver como llegar.';
           const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_location_revealed', event_id: apt.event_id });
           if (ok) await supabase.from('appointments').update({ reminder_48h_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: '48h', appointmentId: apt.id, ok });
@@ -172,6 +177,41 @@ serve(async (req) => {
         const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_reminder_3d', event_id: apt.event_id });
         if (ok) await supabase.from('appointments').update({ reminder_3d_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
         results.push({ block: '3d', appointmentId: apt.id, ok });
+      }
+    }
+
+    // a2) Videollamada, dia anterior a las 9 a.m.: el mismo push que en
+    //     presencial sale al revelar la ubicacion. Marca reminder_48h_push_sent_at
+    //     para que nunca salga dos veces.
+    {
+      const minutosAhora = nowBogota.getUTCHours() * 60 + nowBogota.getUTCMinutes();
+      const startOfTomorrow = new Date(Date.UTC(year, month, day, 0, 0, 0) + BOGOTA_OFFSET_MS + 24 * 60 * 60 * 1000);
+      const startOfDayAfter = new Date(startOfTomorrow.getTime() + 24 * 60 * 60 * 1000);
+      if (minutosAhora >= SAMEDAY_SEND_HOUR * 60) {
+        const { data: aptsVispera, error: errVispera } = await supabase
+          .from('appointments')
+          .select(`id, user_id, event_id, events!inner ( name, date, time, is_location_revealed, type )`)
+          .eq('status', 'confirmada')
+          .is('reminder_48h_push_sent_at', null)
+          .eq('events.type', 'virtual')
+          .gte('events.date', startOfTomorrow.toISOString())
+          .lt('events.date', startOfDayAfter.toISOString());
+        if (errVispera) {
+          results.push({ block: 'vispera_virtual', error: errVispera.message });
+        } else {
+          for (const apt of aptsVispera || []) {
+            const event = (apt as any).events;
+            if (!event.is_location_revealed) {
+              results.push({ block: 'vispera_virtual', appointmentId: apt.id, skipped: true, reason: 'sin link de Meet todavia' });
+              continue;
+            }
+            const title = `🎥 Mañana es tu videollamada`;
+            const body = `${event.name || 'Tu videollamada'}${event.time ? `, a las ${formatTimeAmPm(event.time)}` : ''}. Entras desde la app: el botón aparece 15 minutos antes. Con cámara prendida 📹`;
+            const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_location_revealed', event_id: apt.event_id });
+            if (ok) await supabase.from('appointments').update({ reminder_48h_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
+            results.push({ block: 'vispera_virtual', appointmentId: apt.id, ok });
+          }
+        }
       }
     }
 
