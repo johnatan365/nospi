@@ -4935,8 +4935,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       window.alert('Ojo: esa pregunta estaba FIJADA. Ya no saldrá al abrir la dinámica.');
     }
 
-    // Se quita de la lista al instante y se recargan las dos vistas.
-    setRanking(prev => prev.filter(x => x.question_text !== r.question_text));
+    // Sigue en la lista (por estadistica), pero marcada como ya eliminada.
+    setRanking(prev => prev.map(x => x.question_text === r.question_text ? { ...x, en_banco: false } : x));
     loadQuestions();
 
     const enEventos = res.eventos_abiertos || 0;
@@ -5329,7 +5329,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     };
     lista = [...lista].sort(orden[rankOrden]);
 
-    const conteo = (v: string) => ranking.filter(r => r.veredicto === v).length;
+    // Las ya eliminadas no cuentan: el conteo es de lo que falta por decidir.
+    const conteo = (v: string) => ranking.filter(r => r.veredicto === v && r.en_banco !== false).length;
 
     return (
       <View style={{ marginBottom: 16 }}>
@@ -5450,18 +5451,22 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               const porPersona = Number(r.seg_por_persona) || 0;
               const pct = Math.max(2, Math.round((porPersona / maxSeg) * 100));
               const lento = porPersona > 0 && porPersona < 6;
+              // Ya no esta en el banco: se muestra por estadistica, en gris y
+              // sin boton, para que se vea que no hay nada que hacer con ella.
+              const eliminada = r.en_banco === false;
               return (
                 <View
                   key={r.question_text + i}
                   style={{
                     borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 11,
-                    borderLeftWidth: 3, borderLeftColor: vColor,
-                    padding: 11, backgroundColor: '#FFFFFF', gap: 8,
+                    borderLeftWidth: 3, borderLeftColor: eliminada ? '#D1D5DB' : vColor,
+                    padding: 11, backgroundColor: eliminada ? '#F9FAFB' : '#FFFFFF', gap: 8,
+                    opacity: eliminada ? 0.75 : 1,
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: 9, alignItems: 'flex-start' }}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF', width: 20, paddingTop: 2 }}>{i + 1}</Text>
-                    <Text style={{ flex: 1, fontSize: 13.5, color: '#1f2937', lineHeight: 19 }}>{r.question_text}</Text>
+                    <Text style={{ flex: 1, fontSize: 13.5, color: eliminada ? '#6B7280' : '#1f2937', lineHeight: 19, textDecorationLine: eliminada ? 'line-through' : 'none' }}>{r.question_text}</Text>
                     <View style={{ backgroundColor: nBg, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 7, marginTop: 2 }}>
                       <Text style={{ fontSize: 9.5, fontWeight: '800', color: nColor }}>{nLabel}</Text>
                     </View>
@@ -5490,7 +5495,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#880E4F', minWidth: 24, textAlign: 'right' }}>
                       {r.puntaje}
                     </Text>
-                    {r.veredicto === 'eliminar' ? (
+                    {eliminada ? (
+                      <View style={{ backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#6B7280' }}>✓ Ya eliminada</Text>
+                      </View>
+                    ) : r.veredicto === 'eliminar' ? (
                       // El veredicto "Eliminar" es ademas el boton que la borra.
                       <TouchableOpacity
                         onPress={() => eliminarDelRanking(r)}
