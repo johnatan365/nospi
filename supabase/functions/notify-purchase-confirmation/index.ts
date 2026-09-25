@@ -14,12 +14,9 @@ const TEMPLATE_LANG = 'es_CO';
 
 const WEBHOOK_SECRET = 'nospi_purchase_wh_9d2f7a4c1e8b3f6a';
 
-// Links de las tiendas. En un evento virtual la app deja de ser una
-// recomendacion y pasa a ser la unica puerta: el enlace del Meet no viaja por
-// correo ni por WhatsApp, solo se abre desde el boton de la app, y ese boton
-// es el que registra la asistencia.
-const TIENDA_ANDROID = 'https://play.google.com/store/apps/details?id=app.nospi.mobile';
-const TIENDA_IPHONE = 'https://apps.apple.com/co/app/nospi/id6761556688';
+// Links cortos de instalar (detectan el celular y mandan a la tienda correcta).
+// En un evento virtual el enlace del Meet no viaja por correo: se abre desde
+// la app, y ese boton es el que registra la asistencia.
 const LINK_APP = 'https://nospi.co/app';
 const LINK_MEET = 'https://nospi.co/meet';
 
@@ -168,9 +165,10 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       ? '📹 Ojo: es con la cámara prendida. De eso se trata, de conocernos las caras, no de hablar con cuadritos negros 😉'
       : null;
 
+    // Mismos textos que el WhatsApp de compra: lo que se gana instalando Nospi.
     const appText = esVirtual
-      ? '📲 Antes de la llamada instala Nospi y Google Meet. El enlace de la llamada se abre desde la app de Nospi: no te lo mandamos por correo.'
-      : null;
+      ? '📲 Antes de la llamada instala Nospi y Google Meet. En Nospi está todo: el enlace de la llamada, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔'
+      : '📲 Para vivir la dinámica completa, instala Nospi. Ahí te avisamos cuando revelamos el lugar, cuando arranca la dinámica y cuando alguien con quien hiciste clic te escribe 💬';
 
     const text = [
       `Hola ${params.firstName || ''}${params.firstName ? ',' : ''}`,
@@ -182,7 +180,7 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       '',
       appText,
       appText ? 'Nospi 👉 nospi.co/app' : null,
-      appText ? 'Google Meet 👉 nospi.co/meet' : null,
+      esVirtual ? 'Google Meet 👉 nospi.co/meet' : null,
       appText ? '' : null,
       cancelPolicyText,
       '📋 https://app.nospi.co/politica-asistencia',
@@ -201,7 +199,7 @@ async function sendConfirmationEmail(params: { email: string; firstName: string;
       htmlParagraph(`📅 ${params.formattedDate}${params.time ? ` · ${params.time}` : ''}<br />${accesoText}`),
       camaraText ? htmlParagraph(`<strong>${camaraText}</strong>`) : '',
       appText ? htmlParagraph(appText) : '',
-      appText ? htmlBotonesTienda(true) : '',
+      htmlBotonesTienda(esVirtual),
       htmlParagraph(`${cancelPolicyHtml} <a href="https://app.nospi.co/politica-asistencia" style="color:#880E4F;">Ver la política completa</a>`, { muted: true }),
       htmlParagraph('¡Nos pillamos! 😄'),
     ].join('');
