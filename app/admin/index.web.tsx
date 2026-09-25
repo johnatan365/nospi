@@ -10755,7 +10755,9 @@ setBulkWhatsAppPending(pending);
                     </TouchableOpacity>
                   )}
 
-                  {selectedEventForConfig.event_status === 'published' && !selectedEventForConfig.is_location_revealed && (
+                  {/* En videollamada no hay nada que revelar: el acceso se activa
+                      solo al guardar el link del Meet (trigger en la base). */}
+                  {selectedEventForConfig.event_status === 'published' && !selectedEventForConfig.is_location_revealed && selectedEventForConfig.type !== 'virtual' && (
                     <TouchableOpacity
                       style={[styles.configActionButton, { backgroundColor: '#3B82F6' }]}
                       onPress={() => {
@@ -11843,7 +11845,7 @@ setBulkWhatsAppPending(pending);
                 <>
                 <Text style={styles.inputLabel}>Link de la videollamada (Google Meet) *</Text>
                 <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia.
+                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia. Al guardarlo, el acceso queda activo solo (no hay que activar nada): el botón de entrar aparece 15 minutos antes y a los inscritos les llega el aviso.
                 </Text>
                 <TextInput
                   style={styles.input}
@@ -12037,6 +12039,7 @@ setBulkWhatsAppPending(pending);
                 {`Déjalo vacío para usar el precio global ($ ${Number(configEventPrice || 0).toLocaleString('es-CO')} COP). Pon 0 para que el evento sea gratis.`}
               </Text>
 
+              {eventForm.type !== 'virtual' && (
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
                   style={styles.checkbox}
@@ -12047,6 +12050,7 @@ setBulkWhatsAppPending(pending);
                   </Text>
                 </TouchableOpacity>
               </View>
+              )}
 
               <Text style={styles.inputLabel}>Estado del Evento</Text>
               <select
