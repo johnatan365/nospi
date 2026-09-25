@@ -209,12 +209,6 @@ type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions'
 // ── Tabla ancha con barra de scroll horizontal duplicada arriba, sincronizada
 // con la de abajo — evita tener que bajar hasta el final de la tabla para
 // poder desplazarse lateralmente.
-// Links de las tiendas. Van en el texto del mensaje porque WhatsApp enviado a
-// mano (wa.me) no admite botones. Si algun dia existe nospi.co/app —un solo
-// link que detecta el dispositivo— se reemplazan las dos lineas por una.
-const TIENDA_ANDROID = 'https://play.google.com/store/apps/details?id=app.nospi.mobile';
-const TIENDA_IPHONE = 'https://apps.apple.com/co/app/nospi/id6761556688';
-
 // Link de pago de Wompi por fuera de la app ($15.000, reutilizable). Se le manda
 // a quien se le cayo el pago dentro de la app: el checkout propio de Wompi no
 // arrastra la sesion ni el estado de la app, que es donde se caen la mayoria de
@@ -254,6 +248,14 @@ const BLOQUE_AL_ENTRAR_VIRTUAL = [
   `🎤 El moderador lleva el juego desde la app: lee las preguntas y da la palabra. Tú solo conversa`,
   `✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra`,
   `✏️ Ten a mano papel y lápiz`,
+].join('\n');
+
+// Compra presencial: el lugar llega despues, asi que aqui solo se sugiere
+// instalar Nospi (mismo formato que el bloque virtual, sin Meet).
+const BLOQUE_INSTALAR_COMPRA = [
+  `📲 *Instala la app de Nospi:*`,
+  `👉 ${LINK_APP}`,
+  `Ahí haces la dinámica en la mesa y te avisamos cuando arranca.`,
 ].join('\n');
 
 const BLOQUE_INSTALAR_MISMO_DIA = [
@@ -311,6 +313,8 @@ function buildWhatsAppLink(phone: string, name?: string, eventName?: string, eve
     ``,
     `Quedaste dentro de${eventBlock}`,
     `📍 El lugar te lo mandamos un día antes.`,
+    ``,
+    BLOQUE_INSTALAR_COMPRA,
     ``,
     `Cancelas gratis desde la app hasta 24 h antes y conservas tu saldo. Con menos de 24 h o si no llegas, pierdes el saldo y te queda una falta — y con faltas se suspende la cuenta para reservar.`,
     `📋 https://app.nospi.co/politica-asistencia`,

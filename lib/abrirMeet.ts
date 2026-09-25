@@ -11,30 +11,16 @@ import { supabase } from '@/lib/supabase';
 //   universal, el sistema abre la app y la página de Nospi se queda como estaba.
 // - Web en computador: pestaña nueva, y Nospi sigue abierto en la suya.
 //
-// En la web del celular no se puede saber si la persona tiene la app de Meet:
-// se le pregunta una vez (debePreguntarMeet) y se guarda la respuesta. Si NO la
-// tiene, el Meet se abre en otra pestaña para que Nospi no se pierda.
-const CLAVE_TIENE_MEET = 'nospi_tiene_meet';
+// Si en el celular no tiene la app de Meet, el propio enlace de Google decide:
+// lo manda a instalarla o lo deja entrar desde el navegador. Nospi no pregunta.
 
 function esWebCelular(): boolean {
   return Platform.OS === 'web' && typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
-function leerTieneMeet(): string | null {
-  try { return typeof localStorage !== 'undefined' ? localStorage.getItem(CLAVE_TIENE_MEET) : null; } catch { return null; }
-}
-
-export function debePreguntarMeet(): boolean {
-  return esWebCelular() && !leerTieneMeet();
-}
-
-export function guardarTieneMeet(tiene: boolean): void {
-  try { localStorage.setItem(CLAVE_TIENE_MEET, tiene ? 'si' : 'no'); } catch { /* sin almacenamiento: se vuelve a preguntar */ }
-}
-
 export async function abrirMeet(link: string): Promise<void> {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    if (esWebCelular() && leerTieneMeet() !== 'no') {
+    if (esWebCelular()) {
       window.location.href = link;
     } else {
       window.open(link, '_blank', 'noopener');
