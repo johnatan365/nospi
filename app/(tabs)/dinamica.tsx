@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import GameDynamicsScreen from '@/components/GameDynamicsScreen';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, getCachedEntry, setCached, clearCached } from '@/utils/cache';
-import { abrirMeet, obtenerMeetLink } from '@/lib/abrirMeet';
+import { abrirMeet, obtenerMeetLink, debePreguntarMeet, guardarTieneMeet } from '@/lib/abrirMeet';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
 // Clave legacy (global, compartida entre cuentas). Se conserva solo para
@@ -807,6 +807,9 @@ export default function DinamicaScreen() {
   // "Confirmar asistencia": entra a la sala (lista de confirmados + elegir
   // moderador). NO es la asistencia: esa la marca "Ir a Meet" (checked_in_at).
   const [abriendoMeet, setAbriendoMeet] = useState(false);
+  // Web del celular: "¿Tienes la app de Google Meet?" (una sola vez).
+  const [preguntaMeet, setPreguntaMeet] = useState<null | 'pregunta' | 'no'>(null);
+  const [linkPendiente, setLinkPendiente] = useState<string | null>(null);
   const [confirmandoVirtual, setConfirmandoVirtual] = useState(false);
   const handleConfirmarVirtual = useCallback(async () => {
     if (!appointment || !user || confirmandoVirtual) return;
@@ -1295,6 +1298,11 @@ export default function DinamicaScreen() {
       if (soyModerador && (!gamePhase || gamePhase === 'intro' || gamePhase === 'ready')) {
         await handleModeratorContinueToRules();
       }
+      if (debePreguntarMeet()) {
+        setLinkPendiente(link);
+        setPreguntaMeet('pregunta');
+        return;
+      }
       await abrirMeet(link);
     } catch (e) {
       console.error('No se pudo abrir la videollamada:', e);
@@ -1577,6 +1585,16 @@ export default function DinamicaScreen() {
               </View>
             </View>
             <View style={styles.preEventTipCard}>
+              <Text style={styles.preEventTipIcon}>📲</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preEventTipTitle}>Instala Google Meet antes</Text>
+                <Text style={styles.preEventTipText}>La llamada es por Google Meet. Si lo instalas desde ya, entras sin demoras mientras los demás ya están conectados.</Text>
+                <TouchableOpacity onPress={() => Linking.openURL('https://nospi.co/meet')} activeOpacity={0.8}>
+                  <Text style={styles.virtualLinkMeet}>Instalar Google Meet →</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>💬</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.preEventTipTitle}>Al final</Text>
@@ -1706,6 +1724,45 @@ export default function DinamicaScreen() {
               <Text style={styles.comenzarButtonText}>{abriendoMeet ? 'Abriendo...' : 'Ir a Meet'}</Text>
             </TouchableOpacity>
           </ScrollView>
+          <Modal visible={preguntaMeet !== null} transparent animationType="fade" onRequestClose={() => setPreguntaMeet(null)}>
+            <View style={styles.meetModalFondo}>
+              <View style={styles.meetModalCard}>
+                <Text style={styles.meetModalIcono}>🎥</Text>
+                {preguntaMeet === 'pregunta' ? (
+                  <>
+                    <Text style={styles.meetModalTitulo}>¿Tienes la app de Google Meet instalada?</Text>
+                    <TouchableOpacity
+                      style={styles.comenzarButton}
+                      onPress={() => { guardarTieneMeet(true); setPreguntaMeet(null); if (linkPendiente) abrirMeet(linkPendiente); }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.comenzarButtonText}>Sí, abrir Meet</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.meetModalSecundario} onPress={() => setPreguntaMeet('no')} activeOpacity={0.85}>
+                      <Text style={styles.meetModalSecundarioTexto}>No la tengo</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.meetModalNota}>Tu respuesta se recuerda: no te lo volvemos a preguntar en este celular.</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.meetModalTitulo}>Instala Google Meet</Text>
+                    <Text style={styles.meetModalNota}>Para que la llamada funcione bien en el celular, instálalo (tarda un minuto) y vuelve aquí a tocar "Ir a Meet".</Text>
+                    <TouchableOpacity style={styles.comenzarButton} onPress={() => Linking.openURL('https://nospi.co/meet')} activeOpacity={0.85}>
+                      <Text style={styles.comenzarButtonText}>📲 Instalar Google Meet</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.meetModalSecundario}
+                      onPress={() => { guardarTieneMeet(false); setPreguntaMeet(null); if (linkPendiente) abrirMeet(linkPendiente); }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.meetModalSecundarioTexto}>Probar en el navegador (otra pestaña)</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.meetModalNota}>En el navegador, Nospi queda en su propia pestaña. Algunos celulares no dejan entrar a Meet sin la app.</Text>
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
         </LinearGradient>
       );
     }
@@ -2377,6 +2434,14 @@ const styles = StyleSheet.create({
   virtualNota: { fontSize: 13, color: '#FFE9C7', textAlign: 'center', lineHeight: 19, marginVertical: 10 },
   virtualNotaOscura: { fontSize: 13, color: '#6d0e3c', textAlign: 'center', lineHeight: 19, marginTop: 6 },
   virtualIcono: { width: 96, height: 80, tintColor: '#FFFFFF', alignSelf: 'center', marginTop: 12, marginBottom: 0 },
+  virtualLinkMeet: { marginTop: 8, fontSize: 14, fontWeight: '800', color: '#AD1457' },
+  meetModalFondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  meetModalCard: { width: '100%', maxWidth: 380, backgroundColor: '#FFE9C7', borderRadius: 22, padding: 22, alignItems: 'stretch' },
+  meetModalIcono: { fontSize: 36, textAlign: 'center', marginBottom: 6 },
+  meetModalTitulo: { fontSize: 20, fontWeight: '800', color: '#1a0010', textAlign: 'center', marginBottom: 14 },
+  meetModalSecundario: { borderWidth: 1.5, borderColor: '#C2185B', borderRadius: 14, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
+  meetModalSecundarioTexto: { color: '#880E4F', fontSize: 14, fontWeight: '700' },
+  meetModalNota: { fontSize: 12, color: '#6d3a55', textAlign: 'center', lineHeight: 17, marginTop: 10 },
   virtualSeccion: { fontSize: 12, fontWeight: '800', letterSpacing: 1, color: '#F8BBD0', marginTop: 10, marginBottom: 6, alignSelf: 'flex-start' },
   infoCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 16, marginBottom: 12 },
   infoText: { fontSize: 16, fontWeight: '600', color: '#880E4F', textAlign: 'center', marginBottom: 8 },

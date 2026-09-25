@@ -224,19 +224,24 @@ const LINK_PAGO_DIRECTO = 'https://checkout.wompi.co/l/mVzF1m';
 // Bloque que recomienda instalar la app. El gancho es la dinamica, que es lo
 // unico que de verdad se hace mejor desde la app: no se obliga a nadie, se
 // recomienda en el momento en que tiene sentido.
+// Links cortos (nospi.co/app, nospi.co/meet): cada uno detecta el celular y
+// manda a la tienda correcta. Una linea en vez de una por tienda.
+const LINK_APP = 'nospi.co/app';
+const LINK_MEET = 'nospi.co/meet';
+
 const BLOQUE_INSTALAR_VISPERA = [
   `📲 Mañana en la mesa hacen la dinámica desde el celular. Te recomiendo instalar la app hoy: abre de una y te avisa cuando arranca.`,
-  `🤖 Android: ${TIENDA_ANDROID}`,
-  `🍎 iPhone: ${TIENDA_IPHONE}`,
+  `👉 ${LINK_APP}`,
 ].join('\n');
 
 // En un evento virtual el enlace NO viaja por aqui: vive detras del boton de
 // la app, porque ese boton es el que registra la asistencia. Por eso el bloque
 // de instalacion cambia de tono — deja de ser una recomendacion.
 const BLOQUE_INSTALAR_VIRTUAL = [
-  `📲 *El enlace se abre desde la app de Nospi*, no te llega por aquí ni por correo. Instálala desde ya y el día del evento solo tocas un botón.`,
-  `🤖 Android: ${TIENDA_ANDROID}`,
-  `🍎 iPhone: ${TIENDA_IPHONE}`,
+  `📲 *Antes de la llamada instala:*`,
+  `Nospi 👉 ${LINK_APP}`,
+  `Google Meet 👉 ${LINK_MEET}`,
+  `El enlace de la llamada se abre desde la app de Nospi: no te llega por aquí ni por correo.`,
 ].join('\n');
 
 // Videollamada: en un Meet entre desconocidos nadie arranca solo. Estos pasos
@@ -252,9 +257,7 @@ const BLOQUE_AL_ENTRAR_VIRTUAL = [
 ].join('\n');
 
 const BLOQUE_INSTALAR_MISMO_DIA = [
-  `📲 ¿Aún sin la app? Instálala antes de salir:`,
-  `🤖 ${TIENDA_ANDROID}`,
-  `🍎 ${TIENDA_IPHONE}`,
+  `📲 ¿Aún sin la app? Instálala antes de salir: 👉 ${LINK_APP}`,
 ].join('\n');
 
 // La hora en que se habilita el boton de entrar: la del evento menos 15 min,
@@ -435,9 +438,9 @@ function buildSameDayWhatsAppLink(
     ``,
     `Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
     ``,
-    `📲 ¿Aún sin la app? Instálala ya, o entra desde app.nospi.co`,
-    `🤖 ${TIENDA_ANDROID}`,
-    `🍎 ${TIENDA_IPHONE}`,
+    `📲 ¿Aún sin Nospi o sin Google Meet? Instálalos ya:`,
+    `Nospi 👉 ${LINK_APP}`,
+    `Google Meet 👉 ${LINK_MEET}`,
     ``,
     `¡Hoy Nospi! 🎉`,
   ] : [
