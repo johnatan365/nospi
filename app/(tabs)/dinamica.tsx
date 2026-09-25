@@ -44,6 +44,7 @@ interface Event {
   longitude: number | null;
   radius_meters: number | null;
   require_gps_verification: boolean | null;
+  meet_link?: string | null;
 }
 
 interface Appointment {
@@ -441,7 +442,8 @@ export default function DinamicaScreen() {
               latitude,
               longitude,
               radius_meters,
-              require_gps_verification
+              require_gps_verification,
+              meet_link
             )
           `)
           .eq('user_id', user.id)
@@ -782,6 +784,27 @@ export default function DinamicaScreen() {
   const handleCodeConfirmation = useCallback(async () => {
     await confirmArrival();
   }, [confirmArrival]);
+
+  // Videollamada: el boton de confirmar ES la puerta al Meet, igual que en el
+  // detalle del evento. Primero registra la asistencia y despues abre el
+  // enlace (si se abriera primero, el navegador se lleva el foco y la
+  // escritura puede no alcanzar a salir). Si el registro falla, igual se abre:
+  // nadie se queda por fuera de la llamada por un error nuestro.
+  const [abriendoMeet, setAbriendoMeet] = useState(false);
+  const handleEntrarVideollamada = useCallback(async () => {
+    const link = appointment?.event?.meet_link;
+    if (!link || abriendoMeet) return;
+    setAbriendoMeet(true);
+    try {
+      if (!appointment?.location_confirmed) await confirmArrival();
+      await Linking.openURL(link);
+    } catch (e) {
+      console.error('No se pudo abrir la videollamada:', e);
+      setGpsError('No se pudo abrir la videollamada. Intenta de nuevo.');
+    } finally {
+      setAbriendoMeet(false);
+    }
+  }, [appointment?.event?.meet_link, appointment?.location_confirmed, abriendoMeet, confirmArrival]);
 
   const handleStartExperience = useCallback(async () => {
     if (!appointment?.event_id || startingExperience) return;
@@ -1736,10 +1759,12 @@ export default function DinamicaScreen() {
 
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>{esVirtual ? 'Confirma tu asistencia' : 'Confirma tu llegada'}</Text>
+            <Text style={styles.codeEntryTitle}>{esVirtual ? 'Entra a la videollamada' : 'Confirma tu llegada'}</Text>
             <Text style={styles.codeEntrySubtitle}>
               {esVirtual
-                ? 'Si ya entraste a la videollamada desde la app, tu asistencia quedó registrada. Si entraste por otro lado, confírmala aquí.'
+                ? (appointment.event.meet_link && locationRevealed
+                    ? 'Al tocar el botón queda registrada tu asistencia y se abre la videollamada. 📹 Entra con la cámara prendida: la idea es conocernos las caras.'
+                    : 'El enlace todavía no está activo. Aparece aquí el día del evento.')
                 : countdownDisplay === '¡Es la hora!'
                   ? 'Presiona el botón cuando estés en el lugar del evento'
                   : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
@@ -1749,16 +1774,29 @@ export default function DinamicaScreen() {
               <Text style={styles.codeErrorText}>{gpsError}</Text>
             ) : null}
 
-            <TouchableOpacity
-              style={[styles.confirmCodeButton, checkingGps && styles.buttonDisabled]}
-              onPress={handleCodeConfirmation}
-              disabled={checkingGps}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.confirmCodeButtonText}>
-                {checkingGps ? 'Verificando ubicación...' : 'Confirmar asistencia'}
-              </Text>
-            </TouchableOpacity>
+            {esVirtual ? (
+              <TouchableOpacity
+                style={[styles.confirmCodeButton, (abriendoMeet || !appointment.event.meet_link || !locationRevealed) && styles.buttonDisabled]}
+                onPress={handleEntrarVideollamada}
+                disabled={abriendoMeet || !appointment.event.meet_link || !locationRevealed}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmCodeButtonText}>
+                  {abriendoMeet ? 'Abriendo...' : 'Entrar a la videollamada'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.confirmCodeButton, checkingGps && styles.buttonDisabled]}
+                onPress={handleCodeConfirmation}
+                disabled={checkingGps}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmCodeButtonText}>
+                  {checkingGps ? 'Verificando ubicación...' : 'Confirmar asistencia'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1770,6 +1808,16 @@ export default function DinamicaScreen() {
                 {esVirtual ? '¡Asistencia confirmada!' : '¡Llegada confirmada!'}
               </Text>
             </View>
+            {esVirtual && !!appointment.event.meet_link && (
+              <TouchableOpacity
+                style={[styles.confirmCodeButton, abriendoMeet && styles.buttonDisabled, { marginBottom: 16 }]}
+                onPress={handleEntrarVideollamada}
+                disabled={abriendoMeet}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmCodeButtonText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.participantsListCard}>
               <View style={styles.participantsListHeader}>

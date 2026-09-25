@@ -619,6 +619,12 @@ export default function AppointmentsScreen() {
                       <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
                         <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 73, tintColor: '#6B6B6B' }} resizeMode="contain" />
                       </View>
+                    ) : eventType === 'virtual' ? (
+                      // Mismo icono que la pestaña Eventos (no el emoji de camara).
+                      // Es ancho y bajo: caja estandar con el icono un poco mas grande.
+                      <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                        <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 84, height: 71, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      </View>
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
                     )}
