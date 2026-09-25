@@ -301,36 +301,36 @@ export default function EventsScreen() {
                       activeOpacity={0.8}
                     >
                       {event.type === 'caminata' ? (
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 48, height: 41, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bar' ? (
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 48, height: 41, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'restaurante' ? (
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 48, height: 41, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'cafe' ? (
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 48, height: 41, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'virtual' ? (
                         // El icono de videollamada es ancho y bajo, asi que dentro del
                         // recuadro estandar se ve mas chico que los demas aunque mida lo
                         // mismo. Mismo truco que bolos: caja del tamano normal para no
                         // mover el layout, con el icono ~16% mas grande centrado adentro.
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 56, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 62, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bolos' ? (
                         // El icono de bolos se ve chico dentro del recuadro estandar de
                         // 62x53, asi que lo renderizamos ~18% mas grande pero centrado en
                         // una caja de 62x53 (mismo tamano que los demas iconos) para que no
                         // empuje el texto y la tarjeta siga alineada con el resto de eventos.
-                        <View style={[CAJA_ICONO, { width: 71, height: 61, borderRadius: 18, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 57, height: 49, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 64, height: 55, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : (
                         <Text style={styles.eventIconCompact}>{eventIcon}</Text>
