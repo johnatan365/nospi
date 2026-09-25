@@ -42,6 +42,7 @@ interface Appointment {
     current_question?: string;
     ready_users?: string[];
     moderator_id?: string | null;
+    type?: string;
   };
 }
 
@@ -801,6 +802,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const timerLabel = `${timeLeft}s`;
   const timerExpired = timeLeft === 0;
 
+  const esVirtual = appointment.event?.type === 'virtual';
+
   // Moderador: solo este usuario ve el botón para avanzar. El resto espera.
   // Si por algún motivo no hay moderador (dato viejo), se permite avanzar a
   // todos como antes, para no dejar la mesa trabada.
@@ -886,7 +889,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             },
           ]}>
             <View style={[styles.everyoneBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
-              <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>🙌 Responde quien tenga algo que contar</Text>
+              <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>
+                {esVirtual ? '🎤 Arranca quien quiera y le pasa la palabra a otro' : '🙌 Responde quien tenga algo que contar'}
+              </Text>
             </View>
 
             <Text style={[
@@ -913,11 +918,18 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               la anterior, lo que descuadra el ritmo (y la métrica de tiempos). */}
           <View style={[styles.instructionCard, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.2)' }]}>
             <Text style={[styles.instructionText, { color: theme.instructionText }]}>
-              {isModerator
-                ? (isLastQuestion
-                    ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar.'
-                    : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. ')
-                : 'No todos tienen que responder: habla quien tenga una historia o algo que aportar.'}
+              {/* Videollamada: en pantalla un silencio no incomoda a nadie y se
+                  alarga solo. En vez de "habla quien quiera", la palabra pasa de
+                  mano en mano (sin obligar a nadie) y se pide cámara al hablar. */}
+              {esVirtual
+                ? (isModerator
+                    ? `🗣️ Lee la pregunta en voz alta. Si en unos segundos nadie arranca, cuenta tú primero o invita a alguien por su nombre. Si alguien habla con la cámara apagada, pídele con buena onda que la prenda.${isLastQuestion ? '' : ' '}`
+                    : '📹 Cuando hables, prende la cámara. Al terminar, pásale la palabra a alguien: "¿Y tú, Laura?". Si no quieres responder esta, di "paso" y listo.')
+                : (isModerator
+                    ? (isLastQuestion
+                        ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar.'
+                        : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. ')
+                    : 'No todos tienen que responder: habla quien tenga una historia o algo que aportar.')}
               {isModerator && !isLastQuestion && (
                 <Text style={styles.instructionTextStrong}>No pases a la siguiente hasta que terminen de responder esta.</Text>
               )}

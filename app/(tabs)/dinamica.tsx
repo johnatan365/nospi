@@ -1505,6 +1505,20 @@ export default function DinamicaScreen() {
                     <Text style={styles.modVoiceEmoji}>💬</Text>
                     <Text style={styles.modVoiceText}>Anímalos a que no solo respondan sí o no, sino que expliquen su respuesta — así la charla fluye mejor.</Text>
                   </View>
+                  {/* Videollamada: nadie de Nospi está en el Meet, así que el
+                      moderador es quien ordena los turnos y evita los silencios. */}
+                  {esVirtual && (
+                    <>
+                      <View style={styles.modVoice}>
+                        <Text style={styles.modVoiceEmoji}>✋</Text>
+                        <Text style={styles.modVoiceText}>Si alguien levanta la mano en Meet, dale la palabra en orden: "Sigue Laura".</Text>
+                      </View>
+                      <View style={styles.modVoice}>
+                        <Text style={styles.modVoiceEmoji}>🤫</Text>
+                        <Text style={styles.modVoiceText}>Que no haya silencios: si nadie responde, responde tú primero o invita a alguien por su nombre.</Text>
+                      </View>
+                    </>
+                  )}
                   <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
                     <Text style={styles.comenzarButtonText}>Continuar</Text>
                   </TouchableOpacity>
@@ -1569,7 +1583,12 @@ export default function DinamicaScreen() {
               <>
                 <View style={styles.rulesRow}>
                   <Text style={styles.rulesEmoji}>📹</Text>
-                  <Text style={styles.rulesText}>Antes de empezar: todos con la cámara prendida. Parte de la experiencia es vernos las caras.</Text>
+                  <Text style={styles.rulesText}>Antes de empezar: todos con la cámara prendida, y siempre que hables, con cámara. Parte de la experiencia es vernos las caras.</Text>
+                </View>
+                <View style={styles.rulesDivider} />
+                <View style={styles.rulesRow}>
+                  <Text style={styles.rulesEmoji}>✋</Text>
+                  <Text style={styles.rulesText}>¿Quieres hablar? Levanta la mano en Meet y el moderador te da la palabra, así no se hablan encima.</Text>
                 </View>
                 <View style={styles.rulesDivider} />
               </>

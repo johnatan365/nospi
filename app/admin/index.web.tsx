@@ -239,6 +239,18 @@ const BLOQUE_INSTALAR_VIRTUAL = [
   `🍎 iPhone: ${TIENDA_IPHONE}`,
 ].join('\n');
 
+// Videollamada: en un Meet entre desconocidos nadie arranca solo. Estos pasos
+// le dicen a cada uno que hacer al entrar, sin depender de que alguien de Nospi
+// este en la llamada. El mismo texto va en el correo del mismo dia y en el de
+// inicio (send-email-reminders).
+const BLOQUE_AL_ENTRAR_VIRTUAL = [
+  `*Al entrar a la llamada:*`,
+  `📹 Prende la cámara y saluda, en un lugar tranquilo con buena señal`,
+  `👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta, en el orden en que aparecen en la pantalla`,
+  `🙋 Abran la *Dinámica* en la app: el primero que toque *Quiero ser el moderador* lleva el juego (la app le va diciendo qué hacer)`,
+  `✏️ Ten a mano papel y lápiz`,
+].join('\n');
+
 const BLOQUE_INSTALAR_MISMO_DIA = [
   `📲 ¿Aún sin la app? Instálala antes de salir:`,
   `🤖 ${TIENDA_ANDROID}`,
@@ -352,6 +364,8 @@ function buildEventReminderWhatsAppLink(
     ``,
     `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} te aparece el botón *Entrar a la videollamada* dentro del evento. Ese botón es el que registra tu asistencia.`,
     ``,
+    `📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉`,
+    ``,
     `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
     ``,
     `¡Nos pillamos! 😄`,
@@ -416,7 +430,9 @@ function buildSameDayWhatsAppLink(
     ``,
     `⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.`,
     ``,
-    `Prende la cámara y busca un lugar tranquilo con buena señal. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
+    BLOQUE_AL_ENTRAR_VIRTUAL,
+    ``,
+    `Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
     ``,
     `📲 ¿Aún sin la app? Instálala ya, o entra desde app.nospi.co`,
     `🤖 ${TIENDA_ANDROID}`,

@@ -53,6 +53,10 @@
 // Si viajara por correo se reenviaria y se entraria sin pasar por la app, que
 // es justo lo que medimos. Por eso en virtual el boton del correo apunta a
 // app.nospi.co y nunca a maps_link.
+//
+// v45: videollamada — el correo del mismo dia y el de inicio dicen que hacer al
+// entrar (camara, ronda de saludo, quien toca "Quiero ser el moderador",
+// papel y lapiz): en un Meet sin nadie de Nospi, nadie arrancaba solo.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -243,6 +247,16 @@ function htmlBotonesTienda(): string {
   return `<p style="margin:0 0 12px;">${boton(TIENDA_ANDROID, '🤖 Instalar en Android')}${boton(TIENDA_IPHONE, '🍎 Instalar en iPhone')}</p>`;
 }
 
+// Videollamada: en un Meet entre desconocidos nadie arranca solo. Estos pasos
+// le dicen a cada uno que hacer al entrar, sin que nadie de Nospi este en la
+// llamada. Mismo texto que BLOQUE_AL_ENTRAR_VIRTUAL del WhatsApp del admin.
+const AL_ENTRAR_VIRTUAL = [
+  '📹 Prende la cámara y saluda, en un lugar tranquilo con buena señal',
+  '👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta, en el orden en que aparecen en la pantalla',
+  '🙋 Abran la Dinámica en la app: el primero que toque "Quiero ser el moderador" lleva el juego (la app le va diciendo qué hacer)',
+  '✏️ Ten a mano papel y lápiz',
+];
+
 function buildSameDayText(firstName: string, event: any): { subject: string; text: string; html: string } {
   const virtual = esVirtual(event);
   const subject = event.time
@@ -260,7 +274,9 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       `2. Desde las ${horaBoton} aparece el botón "Entrar a la videollamada"`,
       '3. Tócalo: registra tu asistencia y abre la llamada', '',
       '⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.', '',
-      'Prende la cámara y busca un lugar tranquilo con buena señal. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un chat privado 🔒', '',
+      'Al entrar a la llamada:',
+      ...AL_ENTRAR_VIRTUAL, '',
+      'Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un chat privado 🔒', '',
       '📲 ¿Aún sin la app? Instálala ya, o entra desde app.nospi.co',
       `🤖 ${TIENDA_ANDROID}`,
       `🍎 ${TIENDA_IPHONE}`, '',
@@ -273,7 +289,8 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : ''}🎥 Por videollamada.`),
       htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi y entra al evento<br />2. Desde las <strong>${horaBoton}</strong> aparece el botón "Entrar a la videollamada"<br />3. Tócalo: registra tu asistencia y abre la llamada`),
       htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras desde la app cuenta como falta</strong>, y con faltas se suspende la cuenta para reservar.'),
-      htmlParagraph('Prende la cámara y busca un lugar tranquilo con buena señal. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
+      htmlParagraph(`<strong>Al entrar a la llamada:</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`),
+      htmlParagraph('Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
       htmlParagraph('📲 ¿Aún sin la app? Instálala ya, o entra desde app.nospi.co', { muted: true }),
       htmlBotonesTienda(),
       htmlParagraph('¡Hoy Nospi! 🎉', { strong: true }),
@@ -325,8 +342,10 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
     virtual
       ? `Tu videollamada "${event.name || 'Nospi'}" ya está en marcha.`
       : `Tu evento "${event.name || 'Nospi'}" ya está en marcha.`, '',
-    'Abran la pestaña Dinámica en la app para romper el hielo con tu grupo: https://app.nospi.co/(tabs)/dinamica', '',
-    'Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', '',
+    ...(virtual
+      ? ['Si todavía nadie arranca, arranca tú 😉', ...AL_ENTRAR_VIRTUAL, '', 'Dinámica: https://app.nospi.co/(tabs)/dinamica', '']
+      : ['Abran la pestaña Dinámica en la app para romper el hielo con tu grupo: https://app.nospi.co/(tabs)/dinamica', '',
+         'Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', '']),
     rescate,
     rescate ? '' : null,
     '¡Que la pasen increíble! ¡Nospi! 🎉', 'Equipo Nospi',
@@ -337,8 +356,10 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
     htmlParagraph(virtual
       ? `Tu videollamada <strong>"${event.name || 'Nospi'}"</strong> ya está en marcha 🎉`
       : `Tu evento <strong>"${event.name || 'Nospi'}"</strong> ya está en marcha 🎉`),
-    htmlParagraph('Abran la pestaña <strong>Dinámica</strong> en la app para romper el hielo con tu grupo.'),
-    htmlParagraph('Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', { muted: true }),
+    virtual
+      ? htmlParagraph(`<strong>Si todavía nadie arranca, arranca tú 😉</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`)
+      : htmlParagraph('Abran la pestaña <strong>Dinámica</strong> en la app para romper el hielo con tu grupo.'),
+    virtual ? '' : htmlParagraph('Elijan entre ustedes a alguien que se encargue de leer las preguntas en voz alta.', { muted: true }),
     rescate ? htmlParagraph(`<strong>¿Todavía no entraste?</strong> El botón para entrar a la videollamada está en el evento, dentro de la app.`) : '',
     htmlParagraph('¡Que la pasen increíble! ¡Nospi! 🎉'),
   ].join('');
@@ -388,6 +409,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       `🤖 ${TIENDA_ANDROID}`,
       `🍎 ${TIENDA_IPHONE}`, '',
       botonLinea, '',
+      '📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉', '',
       cancelarTexto,
       cancelarTexto ? '' : null,
       'Equipo Nospi',
@@ -402,6 +424,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
       htmlParagraph(instalar),
       htmlBotonesTienda(),
       htmlParagraph(botonLinea.replace('Ese botón es el que registra tu asistencia.', '<strong>Ese botón es el que registra tu asistencia.</strong>')),
+      htmlParagraph('📹 Conéctate con la cámara prendida y ten a mano papel y lápiz 😉'),
       cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
     ].join('');
     // Nunca "Como llegar" ni maps_link: el enlace vive en la app.
