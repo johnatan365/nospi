@@ -252,7 +252,7 @@ function htmlBotonesTienda(): string {
 // llamada. Mismo texto que BLOQUE_AL_ENTRAR_VIRTUAL del WhatsApp del admin.
 const AL_ENTRAR_VIRTUAL = [
   '📹 Prende la cámara y saluda, en un lugar tranquilo con buena señal',
-  '👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta, en el orden en que aparecen en la pantalla',
+  '👋 Hagan una ronda rápida: cada uno dice su nombre y desde dónde se conecta. El que termine le pasa la palabra a otro',
   '🙋 Abran la Dinámica en la app: el primero que toque "Quiero ser el moderador" lleva el juego (la app le va diciendo qué hacer)',
   '✏️ Ten a mano papel y lápiz',
 ];
