@@ -130,6 +130,18 @@ if (Platform.OS !== 'web') {
   });
 }
 
+
+// Recuadro de los iconos de evento: borde fino en el color de Nospi y esquinas
+// redondeadas. La caja conserva el tamano que ya tenia para no mover el layout;
+// lo que se encoge es el icono, para que la linea no quede pegada al borde.
+const CAJA_ICONO = {
+  borderWidth: 1.5,
+  borderColor: 'rgba(136,14,79,0.25)',
+  backgroundColor: '#FFFFFF',
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+};
+
 export default function DinamicaScreen() {
   const { user, loading: authLoading } = useSupabase();
   // CACHE POR USUARIO: la caché de la dinámica se guarda con una clave atada al
@@ -2093,22 +2105,30 @@ export default function DinamicaScreen() {
           <View style={styles.eventHeader}>
             {appointment.event.type === 'virtual' ? (
               // Mismo agrandado que en la lista de eventos (ver events.tsx).
-              <View style={{ width: 84, height: 70, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 97, height: 81, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 66, height: 55, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : appointment.event.type === 'caminata' ? (
-              <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
             ) : appointment.event.type === 'bar' ? (
-              <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
             ) : appointment.event.type === 'restaurante' ? (
-              <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
             ) : appointment.event.type === 'cafe' ? (
-              <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 84, height: 70, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 57, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
             ) : appointment.event.type === 'bolos' ? (
               // Caja del mismo tamano que los demas iconos (84x70) para no
               // desalinear la tarjeta; el icono va ~17% mas grande adentro.
-              <View style={{ width: 84, height: 70, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 99, height: 83, tintColor: '#6B6B6B' }} resizeMode="contain" />
+              <View style={[CAJA_ICONO, { width: 84, height: 70, borderRadius: 20, marginRight: 12 }]}>
+                <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 67, height: 56, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : (
               <Text style={styles.eventIconLarge}>{eventIcon}</Text>
