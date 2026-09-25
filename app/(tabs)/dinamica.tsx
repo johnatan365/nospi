@@ -520,6 +520,22 @@ export default function DinamicaScreen() {
             const evDayStartC = new Date(ev.getFullYear(), ev.getMonth(), ev.getDate()).getTime();
             cacheProtege = evDayStartC === todayStartC;
           }
+          if (cacheProtege && cachedApt?.event_id) {
+            // Antes de protegerlo, confirmar que ese evento sigue publicado. Si
+            // el admin lo dejo en borrador, lo cancelo o lo cerro (p. ej. un
+            // evento de prueba al que ya le borraron las inscripciones), no hay
+            // nada que proteger. Solo se suelta con evidencia positiva: si esta
+            // consulta tambien falla o vuelve vacia (el mismo parpadeo), se
+            // conserva la cache como antes.
+            try {
+              const { data: evRow } = await supabase
+                .from('events')
+                .select('event_status')
+                .eq('id', cachedApt.event_id)
+                .maybeSingle();
+              if (evRow && evRow.event_status !== 'published') cacheProtege = false;
+            } catch (_e) { /* sin evidencia: se conserva */ }
+          }
           if (cacheProtege) {
             // Mantener visible el evento de hoy que ya teniamos; no vaciar.
             applyAppointmentData(cachedApt!);
