@@ -41,6 +41,18 @@ interface Appointment {
 
 type FilterType = 'confirmadas' | 'anteriores' | 'canceladas';
 
+
+// Recuadro de los iconos de evento: borde fino en el color de Nospi y esquinas
+// redondeadas. La caja conserva el tamano que ya tenia para no mover el layout;
+// lo que se encoge es el icono, para que la linea no quede pegada al borde.
+const CAJA_ICONO = {
+  borderWidth: 1.5,
+  borderColor: 'rgba(136,14,79,0.25)',
+  backgroundColor: '#FFFFFF',
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+};
+
 export default function AppointmentsScreen() {
   const router = useRouter();
     const params = useLocalSearchParams<{ openFilter?: string }>();
@@ -606,24 +618,32 @@ export default function AppointmentsScreen() {
                     {/* Los iconos bajaron de 103x88 a 72x62. A tamano completo se
                         comian un tercio de la tarjeta y empujaban el titulo. */}
                     {eventType === 'caminata' ? (
-                      <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 49, height: 42, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
                     ) : eventType === 'bar' ? (
-                      <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 49, height: 42, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
                     ) : eventType === 'restaurante' ? (
-                      <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-restaurante.png')} style={{ width: 49, height: 42, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
                     ) : eventType === 'cafe' ? (
-                      <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 72, height: 62, marginRight: 12, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-cafe.png')} style={{ width: 49, height: 42, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
                     ) : eventType === 'bolos' ? (
                       // Caja del mismo tamano que los demas iconos (72x62) para no
                       // desalinear la tarjeta; el icono va ~17% mas grande adentro.
-                      <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 84, height: 73, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-bolos.png')} style={{ width: 58, height: 50, tintColor: '#880E4F' }} resizeMode="contain" />
                       </View>
                     ) : eventType === 'virtual' ? (
                       // Mismo icono que la pestaña Eventos (no el emoji de camara).
                       // Es ancho y bajo: caja estandar con el icono un poco mas grande.
-                      <View style={{ width: 72, height: 62, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                        <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 84, height: 71, tintColor: '#6B6B6B' }} resizeMode="contain" />
+                      <View style={[CAJA_ICONO, { width: 72, height: 62, borderRadius: 18, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-videollamada.png')} style={{ width: 57, height: 48, tintColor: '#880E4F' }} resizeMode="contain" />
                       </View>
                     ) : (
                       <Text style={styles.appointmentIcon}>{eventIcon}</Text>
