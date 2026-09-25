@@ -3502,16 +3502,26 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // al sorteo: ocupan su posición exacta en TODOS los eventos; los espacios
   // libres se completan al azar. Se usa al crear un evento nuevo y al crear
   // los borradores automáticos de las próximas semanas.
+  // Antes de todo se descartan las preguntas que no aplican al tipo del evento
+  // (applies_to): las "solo videollamada" nunca caen en una cena, y las "solo
+  // presencial" nunca en una videollamada.
   const insertRandomQuestionsFromBank = async (eventId: string) => {
-    const { data: globalQuestions, error: fetchError } = await supabase
+    const { data: bankQuestions, error: fetchError } = await supabase
       .from('event_questions')
-      .select('level, question_text, is_pinned, pinned_position, category')
+      .select('level, question_text, is_pinned, pinned_position, category, applies_to')
       .is('event_id', null);
 
-    if (fetchError || !globalQuestions || globalQuestions.length === 0) {
+    if (fetchError || !bankQuestions || bankQuestions.length === 0) {
       console.log('insertRandomQuestionsFromBank: no hay preguntas globales');
       return;
     }
+
+    const { data: eventRow } = await supabase.from('events').select('type').eq('id', eventId).maybeSingle();
+    const eventKind = eventRow?.type === 'virtual' ? 'virtual' : 'presencial';
+    const globalQuestions = bankQuestions.filter((q: any) => {
+      const appliesTo = q.applies_to || 'todos';
+      return appliesTo === 'todos' || appliesTo === eventKind;
+    });
 
     const perLevel = await fetchQuestionsPerLevel();
 
@@ -3586,6 +3596,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           // quedó codificada en question_order, que es lo que ordena la app.
           is_pinned: !!q.is_pinned,
           category: (q as any).category || 'opinion',
+          applies_to: (q as any).applies_to || 'todos',
         });
       }
     }
@@ -4531,6 +4542,22 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     }
   };
 
+  // Tocando el chip "Aplica a" de una pregunta del banco, rota entre
+  // Todos → Solo videollamada → Solo presencial → Todos.
+  const handleCycleQuestionAppliesTo = async (question: any) => {
+    const current = question.applies_to || 'todos';
+    const updated = current === 'todos' ? 'virtual' : current === 'virtual' ? 'presencial' : 'todos';
+    setQuestions(questions.map((q) => (q.id === question.id ? { ...q, applies_to: updated } : q)));
+    setAllQuestions(allQuestions.map((q) => (q.id === question.id ? { ...q, applies_to: updated } : q)));
+    const { error } = await supabase.from('event_questions').update({ applies_to: updated }).eq('id', question.id);
+    if (error) {
+      console.error('Error actualizando applies_to:', error);
+      window.alert('Error al cambiar a qué eventos aplica: ' + error.message);
+      setQuestions(questions.map((q) => (q.id === question.id ? { ...q, applies_to: current } : q)));
+      setAllQuestions(allQuestions.map((q) => (q.id === question.id ? { ...q, applies_to: current } : q)));
+    }
+  };
+
   const handleTogglePin = async (questionId: string) => {
     const target = allQuestions.find((q) => q.id === questionId);
     if (!target) return;
@@ -4551,7 +4578,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         );
         return;
       }
-      const conflict = levelList.find((q) => q.is_pinned && q.pinned_position === position && q.id !== questionId);
+      // Dos fijadas chocan solo si pueden caer en el MISMO evento: una "solo
+      // videollamada" y una "solo presencial" sí pueden compartir posición.
+      const targetAppliesTo = target.applies_to || 'todos';
+      const conflict = levelList.find((q) => {
+        if (!q.is_pinned || q.pinned_position !== position || q.id === questionId) return false;
+        const other = q.applies_to || 'todos';
+        return other === 'todos' || targetAppliesTo === 'todos' || other === targetAppliesTo;
+      });
       if (conflict) {
         window.alert(`Ya hay una pregunta fijada en la posición ${position}. Desfíjala primero o mueve esta a otra posición.`);
         return;
@@ -5563,6 +5597,28 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             }}
             onBlur={() => handleUpdateQuestion(question.id, question.question_text)}
           />
+          <TouchableOpacity onPress={() => handleCycleQuestionAppliesTo(question)}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '800',
+                borderRadius: 999,
+                paddingVertical: 3,
+                paddingHorizontal: 8,
+                ...((question.applies_to || 'todos') === 'virtual'
+                  ? { color: '#6B21A8', backgroundColor: '#F3E8FF' }
+                  : (question.applies_to || 'todos') === 'presencial'
+                    ? { color: '#1f2937', backgroundColor: '#E5E7EB' }
+                    : { color: '#6B7280', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB' }),
+              }}
+            >
+              {(question.applies_to || 'todos') === 'virtual'
+                ? '🎥 Solo videollamada'
+                : (question.applies_to || 'todos') === 'presencial'
+                  ? '🍽️ Solo presencial'
+                  : '🌐 Todos'}
+            </Text>
+          </TouchableOpacity>
           {question.is_pinned ? (
             <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 }}>
               📌 FIJA · pos. {question.pinned_position || levelPosition(question)}
@@ -10795,6 +10851,9 @@ setBulkWhatsAppPending(pending);
                                         {meta.short}
                                       </Text>
                                       <Text style={{ fontSize: 12, flex: 1, lineHeight: 17 }}>{q.question_text}</Text>
+                                      {(q as any).applies_to === 'virtual' && (
+                                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#6B21A8', backgroundColor: '#F3E8FF', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>🎥 video</Text>
+                                      )}
                                       {q.is_pinned ? (
                                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#92400E', backgroundColor: 'rgba(245,158,11,0.25)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 }}>📌 FIJA</Text>
                                       ) : (
