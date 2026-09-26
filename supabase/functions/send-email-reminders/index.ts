@@ -180,6 +180,11 @@ function esVirtual(event: any): boolean {
 // grupos dicen lo mismo, el mesero no sabe a cual sentar a quien. Si el evento
 // no esta dividido no hay match y el texto queda igual que siempre.
 // Espejo de marcaDeLlegada() en app/admin/index.web.tsx.
+function numeroDeMesa(eventName?: string | null): string | null {
+  const m = /\bmesa\s*(\d+)\b/i.exec(eventName || '');
+  return m ? m[1] : null;
+}
+
 function marcaDeLlegada(eventName?: string | null): string {
   const m = /\bmesa\s*(\d+)\b/i.exec(eventName || '');
   return m ? `Nospi Mesa ${m[1]}` : 'Nospi';
@@ -556,6 +561,39 @@ function build3dText(firstName: string, event: any): { subject: string; text: st
   return { subject, text, html };
 }
 
+
+// Correo corto y exclusivo para avisar la mesa asignada. Se usa cuando un
+// evento se divide en mesas y alguien no tiene WhatsApp: el recordatorio del
+// mismo dia ya salio, y reenviarlo entero solo por el numero de mesa es ruido.
+function buildMesaNoticeText(firstName: string, event: any): { subject: string; text: string; html: string } {
+  const mesa = numeroDeMesa(event.name);
+  const marca = marcaDeLlegada(event.name);
+  const locationFull = buildLocationFull(event.location_name, event.location_address);
+  const subject = mesa ? `Hoy vas en la Mesa ${mesa}` : 'Tu mesa de hoy';
+
+  const text = [
+    `Hola ${firstName},`, '',
+    mesa ? `Para hoy quedaste en la *Mesa ${mesa}*.` : 'Ya tienes mesa asignada para hoy.',
+    event.time ? `\u{1F556} ${formatTimeAmPm(event.time)}` : null,
+    locationFull ? `\u{1F4CD} ${locationFull}` : null,
+    event.maps_link ? `\u{1F5FA}\u{FE0F} ${event.maps_link}` : null, '',
+    `Al llegar di que vienes de ${marca} y te indican donde sentarte.`, '',
+    'Ya en la mesa abres la Dinamica en la app y confirmas tu llegada.', '',
+    '\u{00A1}Nos pillamos! \u{1F604}', 'Equipo Nospi',
+  ].filter((l) => l !== null).join('\n');
+
+  const bodyHtml = [
+    htmlParagraph(`Hola ${firstName},`),
+    htmlParagraph(mesa ? `Para hoy quedaste en la <strong>Mesa ${mesa}</strong>.` : 'Ya tienes mesa asignada para hoy.'),
+    htmlParagraph(`${event.time ? `\u{1F556} <strong>${formatTimeAmPm(event.time)}</strong>` : ''}${locationFull ? `<br />\u{1F4CD} <strong>${locationFull}</strong>` : ''}`),
+    htmlParagraph(`Al llegar di que vienes de <strong>${marca}</strong> y te indican d\u00F3nde sentarte.`),
+    htmlParagraph('Ya en la mesa abres la <strong>Din\u00E1mica</strong> en la app y confirmas tu llegada.', { muted: true }),
+    htmlParagraph('\u{00A1}Nos pillamos! \u{1F604}', { strong: true }),
+  ].join('');
+
+  return { subject, text, html: wrapBrandedHtml(bodyHtml, event.maps_link || URL_DINAMICA, event.maps_link ? 'Como llegar' : 'Abrir la Din\u00E1mica') };
+}
+
 function buildCorrectionText(firstName: string, event: any): { subject: string; text: string; html: string } {
   const correctDate = formatEventDateBogota(event.date);
   const wrongDate = formatEventDateBuggyUTC(event.date);
@@ -598,6 +636,7 @@ serve(async (req) => {
     let previewType: string = 'sameday';
     let previewTag: string = '';
     let sendCorrection = false;
+    let sendMesaNotice = false;
     let onlyEmails: string[] | null = null;
     try {
       const body = await req.json();
@@ -606,12 +645,47 @@ serve(async (req) => {
       if (body && typeof body.preview_type === 'string' && ['48h', 'sameday', '3d', 'event_start'].includes(body.preview_type)) previewType = body.preview_type;
       if (body && typeof body.preview_tag === 'string') previewTag = body.preview_tag;
       if (body && body.send_correction === true) sendCorrection = true;
+      if (body && body.mesa_notice === true) sendMesaNotice = true;
       if (body && Array.isArray(body.only_emails) && body.only_emails.length > 0) {
         onlyEmails = body.only_emails.map((e: string) => e.toLowerCase());
       }
     } catch (_e) { /* invocacion normal del cron, seguir */ }
 
     const now = new Date();
+
+    if (targetEventId && sendMesaNotice) {
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('name, date, time, location_name, location_address, maps_link, type')
+        .eq('id', targetEventId)
+        .single();
+
+      if (eventError || !eventData) {
+        results.push({ block: 'mesa_notice', error: eventError?.message || 'evento no encontrado' });
+      } else {
+        const { data: appts, error: apptsError } = await supabase
+          .from('appointments')
+          .select('id, users!inner ( name, email )')
+          .eq('event_id', targetEventId)
+          .eq('status', 'confirmada');
+
+        if (apptsError) {
+          results.push({ block: 'mesa_notice', error: apptsError.message });
+        } else {
+          for (const apt of appts || []) {
+            const user = (apt as any).users;
+            if (!user?.email) continue;
+            if (onlyEmails && !onlyEmails.includes(user.email.toLowerCase())) continue;
+            const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
+            const built = buildMesaNoticeText(firstName, eventData);
+            const { ok, errorText } = await sendEmail(user.email, built.subject, built.text, built.html);
+            results.push({ block: 'mesa_notice', appointmentId: apt.id, to: user.email, ok, errorText });
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ processed: results.length, results }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (targetEventId && sendCorrection) {
       const { data: eventData, error: eventError } = await supabase
