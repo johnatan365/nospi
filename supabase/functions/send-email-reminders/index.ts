@@ -175,6 +175,16 @@ function esVirtual(event: any): boolean {
   return event?.type === 'virtual';
 }
 
+// Cuando un evento se divide en mesas, el nombre lleva "Mesa N" y al llegar al
+// establecimiento hay que pedir esa mesa concreta, no solo "Nospi": si los dos
+// grupos dicen lo mismo, el mesero no sabe a cual sentar a quien. Si el evento
+// no esta dividido no hay match y el texto queda igual que siempre.
+// Espejo de marcaDeLlegada() en app/admin/index.web.tsx.
+function marcaDeLlegada(eventName?: string | null): string {
+  const m = /\bmesa\s*(\d+)\b/i.exec(eventName || '');
+  return m ? `Nospi Mesa ${m[1]}` : 'Nospi';
+}
+
 function sameDaySendMinutesBogota(eventDateISO: string): number {
   const eventBogota = new Date(new Date(eventDateISO).getTime() - BOGOTA_OFFSET_MS);
   const eventMinutes = eventBogota.getUTCHours() * 60 + eventBogota.getUTCMinutes();
@@ -318,7 +328,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
     event.time ? `🕖 ${formatTimeAmPm(event.time)}` : null,
     locationFull ? `📍 ${locationFull}` : null,
     event.maps_link ? `🗺️ ${event.maps_link}` : null, '',
-    'Al llegar di que vienes de Nospi y te indican la mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.', '',
+    `Al llegar di que vienes de ${marcaDeLlegada(event.name)} y te indican tu mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.`, '',
     'Ya en la mesa abres la Dinámica y confirmas tu llegada: si no confirmas cuenta como falta, y con faltas se suspende la cuenta para reservar. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un chat privado 🔒', '',
     INSTALAR_PRESENCIAL_HOY,
     '👉 nospi.co/app', '',
@@ -329,7 +339,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
     htmlParagraph(`Hola ${firstName},`),
     htmlParagraph(`Hoy es <strong>"${event.name || 'tu evento'}"</strong> 🎉`),
     htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : ''}${locationFull ? `📍 <strong>${locationFull}</strong>` : ''}`),
-    htmlParagraph('Al llegar di que vienes de Nospi y te indican la mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.'),
+    htmlParagraph(`Al llegar di que vienes de <strong>${marcaDeLlegada(event.name)}</strong> y te indican tu mesa. Llega puntual: arrancamos con la dinámica para romper el hielo.`),
     htmlParagraph('Ya en la mesa abres la <strong>Dinámica</strong> y confirmas tu llegada: <strong>si no confirmas cuenta como falta</strong>, y con faltas se suspende la cuenta para reservar. Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
     htmlParagraph(INSTALAR_PRESENCIAL_HOY, { muted: true }),
     htmlBotonesTienda(),
