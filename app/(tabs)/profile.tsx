@@ -1,5 +1,4 @@
-import { AgeFallbackChoices, AGE_FALLBACK_LABELS } from '@/components/AgeFallbackChoices';
-import { AgeFallback, parseAgeFallback, agePreferenceFields, validAgeRange } from '@/utils/agePreferences';
+import { validAgeRange } from '@/utils/agePreferences';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, Keyboard } from 'react-native';
 // El KeyboardAvoidingView de react-native no compensa nada en Android con
@@ -50,7 +49,6 @@ interface UserProfile {
   interested_in: string;
   age_range_min: number;
   age_range_max: number;
-  age_range_fallback?: AgeFallback | null;
   age_range_confirmed_at?: string | null;
   country: string;
   city: string;
@@ -177,7 +175,6 @@ export default function ProfileScreen() {
   const [editInterestedIn, setEditInterestedIn] = useState('');
   const [editAgeRangeMin, setEditAgeRangeMin] = useState(18);
   const [editAgeRangeMax, setEditAgeRangeMax] = useState(60);
-  const [editAgeFallback, setEditAgeFallback] = useState<AgeFallback | null>(null);
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [editPersonality, setEditPersonality] = useState<string[]>([]);
 
@@ -223,7 +220,6 @@ export default function ProfileScreen() {
     setEditInterestedIn(profileData.interested_in || 'ambos');
     setEditAgeRangeMin(profileData.age_range_min || 18);
     setEditAgeRangeMax(profileData.age_range_max || 60);
-    setEditAgeFallback(parseAgeFallback(profileData.age_range_fallback));
     setEditInterests(profileData.interests || []);
     setEditPersonality(profileData.personality_traits || []);
     // Parse phone into country + number
@@ -602,13 +598,14 @@ export default function ProfileScreen() {
 
   const handleSaveProfile = async () => {
     const preferenceChanged = editAgeRangeMin !== profile?.age_range_min || editAgeRangeMax !== profile?.age_range_max
-      || editAgeFallback !== (profile?.age_range_fallback ?? null);
-    if (preferenceChanged && (!editAgeFallback || !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax }))) {
-      Alert.alert('Revisa tus preferencias', 'Elige un rango válido y qué prefieres si no se completa el grupo.');
+;
+    if (preferenceChanged && !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax })) {
+      Alert.alert('Revisa tus preferencias', 'El mínimo no puede ser mayor que el máximo.');
       return;
     }
-    const preferenceFields = preferenceChanged
-      ? agePreferenceFields(editAgeFallback, new Date().toISOString()) : {};
+    // Ya no se guarda age_range_fallback: esa pregunta se quito porque prometia
+    // avisar "al menos un dia antes" y coordinar otra fecha, y eso no se hacia.
+    const preferenceFields = {};
 
     if (!editName.trim() || !editPhoneNumber.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
@@ -1182,9 +1179,6 @@ export default function ProfileScreen() {
                 </View>
                 <Slider style={styles.ageSlider} minimumValue={19} maximumValue={60} step={1} value={editAgeRangeMax} onValueChange={handleMaxAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
               </View>
-
-              <Text style={styles.inputLabel}>Si no completamos un grupo de tu rango, ¿qué prefieres?</Text>
-              <AgeFallbackChoices light value={editAgeFallback} onChange={setEditAgeFallback} />
 
               <Text style={styles.inputLabel}>Intereses</Text>
               <View style={styles.tagsEditContainer}>

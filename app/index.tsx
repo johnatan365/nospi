@@ -1,4 +1,3 @@
-import { agePreferenceFields } from '@/utils/agePreferences';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useRef } from 'react';
@@ -179,7 +178,6 @@ export default function Index() {
                   interested_in: d['onboarding_interested_in'] || 'ambos',
                   age_range_min: ageRange.min,
                   age_range_max: ageRange.max,
-                  ...agePreferenceFields(d['onboarding_age_fallback'], d['onboarding_age_confirmed_at']),
                   country: d['onboarding_country'] || 'Colombia',
                   // Sin ciudad escogida NO se inventa Medellin: quedaria en una
                   // ciudad que no es la suya sin enterarse. Vacia, la app le

@@ -1,4 +1,3 @@
-import { agePreferenceFields } from '@/utils/agePreferences';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, Platform, Image as RNImage } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -348,8 +347,6 @@ export default function RegisterScreen() {
       const genderData = await AsyncStorage.getItem('onboarding_gender');
       const interestedInData = await AsyncStorage.getItem('onboarding_interested_in');
       const ageRangeData = await AsyncStorage.getItem('onboarding_age_range');
-      const fallbackData = await AsyncStorage.getItem('onboarding_age_fallback');
-      const confirmedData = await AsyncStorage.getItem('onboarding_age_confirmed_at');
       const countryData = await AsyncStorage.getItem('onboarding_country');
       const cityData = await AsyncStorage.getItem('onboarding_city');
       const phoneData = await AsyncStorage.getItem('onboarding_phone');
@@ -473,7 +470,6 @@ export default function RegisterScreen() {
           interested_in: interestedIn,
           age_range_min: ageRange.min,
           age_range_max: ageRange.max,
-          ...agePreferenceFields(fallbackData, confirmedData),
           country,
           city,
           phone: phoneInfo.phoneNumber,
