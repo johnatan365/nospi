@@ -63,6 +63,10 @@
 // v45: videollamada — el correo del mismo dia y el de inicio dicen que hacer al
 // entrar (camara, ronda de saludo, quien toca "Quiero ser el moderador",
 // papel y lapiz): en un Meet sin nadie de Nospi, nadie arrancaba solo.
+//
+// v53: el moderador sale del mismo grupo. Los textos decian "el moderador lleva
+// el juego" y "alguien se ofrece", que sonaba a que Nospi pone el moderador.
+// Ahora dicen que es uno de ellos y nombran el boton exacto de la app.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -280,7 +284,7 @@ function htmlBotonesTienda(virtual = false): string {
 // llamada. Mismo texto que BLOQUE_AL_ENTRAR_VIRTUAL del WhatsApp del admin.
 const AL_ENTRAR_VIRTUAL = [
   '📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal',
-  '🎤 El moderador lleva el juego desde la app: lee las preguntas y da la palabra. Tú solo conversa',
+  '🎤 El moderador sale del mismo grupo — puede ser cualquiera de ustedes. Se postula en la app y desde ahí va leyendo las preguntas y dando la palabra',
   '✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra',
   '✏️ Ten a mano papel y lápiz',
 ];
@@ -299,7 +303,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       '🎥 Por videollamada.', '',
       'Así entras:',
       `1. Abre Nospi, pestaña Dinámica: desde las ${horaBoton} aparece "Confirmar asistencia"`,
-      '2. Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉',
+      '2. La app pregunta quién modera. Si te animas, toca "Quiero ser el moderador" — el primero que se postule queda 🙋',
       '3. Tocas "Ir a Meet": con eso queda registrada tu asistencia', '',
       '⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.', '',
       'Al entrar a la llamada:',
@@ -315,7 +319,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       htmlParagraph(`Hola ${firstName},`),
       htmlParagraph(`Hoy es <strong>"${event.name || 'tu evento'}"</strong> 🎉`),
       htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : ''}🎥 Por videollamada.`),
-      htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi, pestaña <strong>Dinámica</strong>: desde las <strong>${horaBoton}</strong> aparece "Confirmar asistencia"<br />2. Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉<br />3. Tocas <strong>"Ir a Meet"</strong>: con eso queda registrada tu asistencia`),
+      htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi, pestaña <strong>Dinámica</strong>: desde las <strong>${horaBoton}</strong> aparece "Confirmar asistencia"<br />2. La app pregunta quién modera. Si te animas, toca <strong>"Quiero ser el moderador"</strong> — el primero que se postule queda 🙋<br />3. Tocas <strong>"Ir a Meet"</strong>: con eso queda registrada tu asistencia`),
       htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras desde la app cuenta como falta</strong>, y con faltas se suspende la cuenta para reservar.'),
       htmlParagraph(`<strong>Al entrar a la llamada:</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`),
       htmlParagraph('Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
@@ -414,7 +418,7 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
         : `🎥 Tu videollamada de ${event.name || 'Nospi'} ya está lista`;
     const instalar = esHoy ? INSTALAR_VIRTUAL_HOY : INSTALAR_VIRTUAL;
     const cuando = esVispera ? 'Mañana' : esHoy ? 'Hoy' : 'El día del evento';
-    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña Dinámica de la app, escogen al moderador y de ahí entran a la llamada. Ese botón de "Ir a Meet" es el que registra tu asistencia.`;
+    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña Dinámica de la app; ahí uno del grupo se anima a ser el moderador y de una entran a la llamada. Ese botón de "Ir a Meet" es el que registra tu asistencia.`;
     const cancelarTexto = esHoy
       ? null
       : esVispera
