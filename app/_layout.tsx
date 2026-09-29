@@ -202,6 +202,7 @@ function RootLayoutInner() {
             <Stack.Screen name="catch-up-rating/[eventId]" options={{ headerShown: false }} />
             <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
             <Stack.Screen name="politica-asistencia" options={{ headerShown: false }} />
+            <Stack.Screen name="invita-y-gana" options={{ headerShown: false }} />
             <Stack.Screen name="admin" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="+not-found" />
