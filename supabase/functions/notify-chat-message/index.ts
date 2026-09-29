@@ -149,6 +149,18 @@ Deno.serve(async (req: Request) => {
 
     const data = { type: "chat_message", conversation_id: message.conversation_id };
 
+    // Que interruptor del perfil manda en este mensaje.
+    //
+    // "Avisos · <evento>" (channel_event) va como 'reserva' a proposito: ahi es
+    // donde se les pide confirmar asistencia y avisos del evento en curso, y no
+    // debe poder apagarse. El canal global si, porque son novedades.
+    const categoria =
+      convType === "direct" ? "privados"
+      : convType === "event_group" ? "mesa"
+      : convType === "community" ? "comunidad"
+      : convType === "channel_global" ? "novedades"
+      : "reserva";
+
     const sendPush = async (ids: string[], title: string, pushBody: string) => {
       if (ids.length === 0) return { skipped: true };
       const res = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
@@ -157,7 +169,13 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceRoleKey}`,
         },
-        body: JSON.stringify({ user_ids: ids, title, body: pushBody, data }),
+        // mentioned_user_ids va en LAS DOS llamadas: send-push lo usa para
+        // decidir, persona por persona, si quien eligio "solo si me mencionan"
+        // debe recibir este mensaje.
+        body: JSON.stringify({
+          user_ids: ids, title, body: pushBody, data,
+          categoria, mentioned_user_ids: mentionIds,
+        }),
       });
       return await res.json();
     };

@@ -738,6 +738,10 @@ export default function AdminPanelScreen() {
 
     // Enviar promo/notificacion push (Config section)
     const [broadcastAudience, setBroadcastAudience] = useState<'all' | 'event'>('all');
+    // Sin valor por defecto A PROPOSITO: el sistema no puede adivinar si un
+    // texto es una novedad o una promocion, y equivocarse significa mandarle
+    // publicidad a quien la apago. Se obliga a elegir.
+    const [broadcastCategoria, setBroadcastCategoria] = useState<'novedades' | 'promociones' | ''>('');
     const [broadcastEventId, setBroadcastEventId] = useState('');
     const [broadcastTitle, setBroadcastTitle] = useState('');
     const [broadcastBody, setBroadcastBody] = useState('');
@@ -2191,6 +2195,7 @@ export default function AdminPanelScreen() {
     const handleSendBroadcast = async () => {
           if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
           if (broadcastAudience === 'event' && !broadcastEventId) return;
+          if (!broadcastCategoria) return;
           setSendingBroadcast(true);
           setBroadcastResult(null);
           try {
@@ -2200,6 +2205,7 @@ export default function AdminPanelScreen() {
                                         event_id: broadcastAudience === 'event' ? broadcastEventId : undefined,
                                         title: broadcastTitle.trim(),
                                         body: broadcastBody.trim(),
+                                        categoria: broadcastCategoria,
                             },
                   });
                   if (error) {
@@ -8191,6 +8197,43 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </button>
           </div>
 
+          {/* Que tipo de aviso es. Cada uno mira su propio interruptor en el
+              perfil: quien apago las promociones no recibe las promociones,
+              pero sigue enterandose de los eventos nuevos -- que es lo que
+              llena las mesas. */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', marginBottom: 8 }}>
+              ¿Qué tipo de aviso es?
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {([
+                ['novedades', '📣 Novedad', 'Eventos nuevos, cupos, cambios'],
+                ['promociones', '🏷️ Promoción', 'Descuentos y campañas'],
+              ] as const).map(([key, label, ayuda]) => (
+                <button
+                  key={key}
+                  onClick={() => setBroadcastCategoria(key)}
+                  style={{
+                    flex: 1, padding: '10px 14px', borderRadius: 10, textAlign: 'left',
+                    border: broadcastCategoria === key ? '2px solid #6B0F3A' : '2px solid #FBCFE8',
+                    backgroundColor: broadcastCategoria === key ? '#6B0F3A' : 'white',
+                    color: broadcastCategoria === key ? 'white' : '#6B0F3A',
+                    fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                  }}
+                  type="button"
+                >
+                  {label}
+                  <div style={{ fontSize: 11, fontWeight: 400, marginTop: 2, opacity: 0.85 }}>{ayuda}</div>
+                </button>
+              ))}
+            </div>
+            {!broadcastCategoria && (
+              <div style={{ fontSize: 12, color: '#B45309', marginTop: 7 }}>
+                Elige uno para poder enviar. Quien haya apagado ese tipo de aviso no lo recibirá.
+              </div>
+            )}
+          </div>
+
           {broadcastAudience === 'event' && (
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#6B0F3A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
@@ -8246,12 +8289,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
           <button
             onClick={handleSendBroadcast}
-            disabled={sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)}
+            disabled={sendingBroadcast || !broadcastCategoria || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)}
             style={{
-              backgroundColor: (sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? '#9CA3AF' : '#6B0F3A',
+              backgroundColor: (sendingBroadcast || !broadcastCategoria || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? '#9CA3AF' : '#6B0F3A',
               color: 'white', border: 'none', borderRadius: 14,
               padding: '14px 36px', fontSize: 16, fontWeight: 700,
-              cursor: (sendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? 'not-allowed' : 'pointer',
+              cursor: (sendingBroadcast || !broadcastCategoria || !broadcastTitle.trim() || !broadcastBody.trim() || (broadcastAudience === 'event' && !broadcastEventId)) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 10,
               transition: 'background 0.2s',
             }}

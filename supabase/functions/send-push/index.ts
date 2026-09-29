@@ -63,6 +63,17 @@ Deno.serve(async (req: Request) => {
     const title: string = body?.title;
     const message: string = body?.body;
     const data = body?.data ?? {};
+    // De que tipo es este aviso. Decide que interruptor del perfil se mira.
+    // 'reserva' es el unico que no se puede apagar: son los avisos del evento
+    // que la persona reservo (empieza hoy, ubicacion, chat abierto, dinamica) y
+    // perderselos significa un no-show que ademas le daña la mesa a los demas.
+    const categoria: string = body?.categoria ?? "reserva";
+    // Para 'mesa' y 'comunidad': quienes fueron mencionados con @ en el mensaje.
+    // Quien eligio "solo si me mencionan" recibe unicamente si esta en esta
+    // lista. La funcion que avisa de los chats ya sabe a quien mencionaron.
+    const mencionados: Set<string> = new Set(
+      Array.isArray(body?.mentioned_user_ids) ? body.mentioned_user_ids : [],
+    );
 
     if (userIds.length === 0 || !title || !message) {
       return new Response(
@@ -74,9 +85,29 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Solo notificar a usuarios que tienen push activado en sus preferencias.
-    // Se consulta en lotes chicos para no pasarnos del limite de largo de URL
-    // de PostgREST cuando la lista de user_ids es grande (broadcast a todos).
+    // Decide, usuario por usuario, si este aviso le corresponde segun lo que
+    // eligio en su perfil. Se consulta en lotes chicos para no pasarnos del
+    // limite de largo de URL de PostgREST cuando la lista es grande.
+    //
+    // Ante la duda se ENVIA: una preferencia corrupta o incompleta no debe
+    // dejar a nadie sin enterarse de su evento.
+    const quiereRecibir = (prefs: any, uid: string): boolean => {
+      if (categoria === "reserva") return true;           // no tiene interruptor
+      if (!prefs || typeof prefs !== "object") return true;
+
+      if (categoria === "privados") return prefs.privados !== false;
+      if (categoria === "novedades") return prefs.novedades !== false;
+      if (categoria === "promociones") return prefs.promociones !== false;
+
+      if (categoria === "mesa" || categoria === "comunidad") {
+        const modo = prefs[categoria];
+        if (modo === "ninguno") return false;
+        if (modo === "menciones") return mencionados.has(uid);
+        return true;                                      // 'todos' o sin valor
+      }
+      return true;                                        // categoria desconocida
+    };
+
     const allowedUserIds: string[] = [];
     for (const idsChunk of chunk(userIds, QUERY_CHUNK_SIZE)) {
       const { data: users, error: usersError } = await supabase
@@ -92,13 +123,14 @@ Deno.serve(async (req: Request) => {
       }
 
       for (const u of users ?? []) {
-        if ((u as any).notification_preferences?.push !== false) allowedUserIds.push((u as any).id);
+        const uid = (u as any).id;
+        if (quiereRecibir((u as any).notification_preferences, uid)) allowedUserIds.push(uid);
       }
     }
 
     if (allowedUserIds.length === 0) {
       return new Response(
-        JSON.stringify({ sent: 0, skipped: userIds.length, reason: "ningun usuario tiene push activado" }),
+        JSON.stringify({ sent: 0, skipped: userIds.length, reason: `ningun usuario quiere recibir avisos de tipo ${categoria}` }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }

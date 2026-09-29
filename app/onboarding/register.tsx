@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { PREFERENCIAS_POR_DEFECTO } from '@/constants/Notificaciones';
 import { leerAtribucion } from '@/utils/atribucion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { completeOnboardingSession } from '@/utils/onboardingTracker';
@@ -480,12 +481,7 @@ export default function RegisterScreen() {
           interests,
           personality_traits: personality,
           compatibility_percentage: compatibility,
-          notification_preferences: {
-            whatsapp: false,
-            email: true,
-            sms: false,
-            push: true,
-          },
+          notification_preferences: PREFERENCIAS_POR_DEFECTO,
           registered_from: Platform.OS,
           onboarding_completed: true,
           // ESTA es la ruta real del registro con correo y contrasena. Sin la

@@ -11,6 +11,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
+import {
+  PreferenciasNotificacion, normalizarPreferencias, PREFERENCIAS_POR_DEFECTO,
+  INTERRUPTORES, CHATS, OPCIONES_CHAT, AVISO_SIEMPRE,
+} from '@/constants/Notificaciones';
 import { NOMBRES_CIUDADES_COLOMBIA } from '@/constants/Ciudades';
 import {
   MOSTRAR_INTERESADO_EN,
@@ -55,12 +59,7 @@ interface UserProfile {
   interests: string[];
   personality_traits: string[];
   compatibility_percentage: number;
-  notification_preferences: {
-    whatsapp: boolean;
-    email: boolean;
-    sms: boolean;
-    push: boolean;
-  };
+  notification_preferences: PreferenciasNotificacion;
 }
 
 // ── Phone country data ────────────────────────────────────────────────────────
@@ -304,7 +303,7 @@ export default function ProfileScreen() {
           interests: [],
           personality_traits: [],
           compatibility_percentage: 95,
-          notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+          notification_preferences: PREFERENCIAS_POR_DEFECTO,
           registered_from: Platform.OS,
           // Sin esto el perfil de rescate quedaba con utm_source NULL y sin la
           // marca de la puerta 2. Ver utils/atribucion.ts.
@@ -677,25 +676,30 @@ export default function ProfileScreen() {
     }
   };
 
-  const toggleNotification = async (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
+  // Guarda un cambio de preferencia. Se pinta al instante y despues se manda:
+  // esperar a la respuesta del servidor para mover el interruptor lo hace
+  // sentir trabado. Si falla, se vuelve atras y se avisa.
+  const guardarPreferencia = async (cambio: Partial<PreferenciasNotificacion>) => {
     if (!profile) return;
-    const newPreferences = { ...profile.notification_preferences, [type]: !profile.notification_preferences[type] };
+    const antes = normalizarPreferencias(profile.notification_preferences);
+    const nuevas = { ...antes, ...cambio };
 
-    try {
-      
-      const { error } = await supabase
-        .from('users')
-        .update({ notification_preferences: newPreferences })
-        .eq('id', user?.id);
+    const optimista = { ...profile, notification_preferences: nuevas };
+    cacheRef.current = { data: optimista, timestamp: Date.now() };
+    setCached(CACHE_KEY, optimista);
+    setProfile(optimista);
 
-      if (error) {  return; }
+    const { error } = await supabase
+      .from('users')
+      .update({ notification_preferences: nuevas })
+      .eq('id', user?.id);
 
-      const updated = { ...profile, notification_preferences: newPreferences };
-      cacheRef.current = { data: updated, timestamp: Date.now() };
-      setCached(CACHE_KEY, updated);
-      setProfile(updated);
-    } catch (err) {
-      
+    if (error) {
+      const revertido = { ...profile, notification_preferences: antes };
+      cacheRef.current = { data: revertido, timestamp: Date.now() };
+      setCached(CACHE_KEY, revertido);
+      setProfile(revertido);
+      Alert.alert('No se pudo guardar', 'Revisa tu conexión e intenta de nuevo.');
     }
   };
 
@@ -1445,19 +1449,71 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
-            <Text style={styles.modalSubtitle}>¿Cómo quieres que te recordemos las citas?</Text>
+            <Text style={styles.modalSubtitle}>Elige qué quieres que te llegue</Text>
 
-            {(['whatsapp', 'email', 'sms', 'push'] as const).map(type => {
-              const labels = { whatsapp: 'WhatsApp', email: 'Correo Electrónico', sms: 'SMS', push: 'Notificaciones Push' };
+            {(() => {
+              const prefs = normalizarPreferencias(profile.notification_preferences);
               return (
-                <TouchableOpacity key={type} style={styles.notificationOption} onPress={() => toggleNotification(type)} activeOpacity={0.8}>
-                  <Text style={styles.notificationOptionText}>{labels[type]}</Text>
-                  <View style={[styles.checkbox, profile.notification_preferences[type] && styles.checkboxActive]}>
-                    {profile.notification_preferences[type] && <Text style={styles.checkmark}>✓</Text>}
+                <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                  {INTERRUPTORES.map(op => (
+                    <TouchableOpacity
+                      key={op.clave}
+                      style={styles.notificationOption}
+                      onPress={() => guardarPreferencia({ [op.clave]: !prefs[op.clave] } as any)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={styles.notificationOptionText}>{op.titulo}</Text>
+                        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{op.ayuda}</Text>
+                      </View>
+                      <View style={[styles.checkbox, prefs[op.clave] && styles.checkboxActive]}>
+                        {prefs[op.clave] && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+
+                  {/* Los chats no son si/no: "solo si me mencionan" es lo que
+                      pide casi todo el mundo -- no quiero el ruido, pero si
+                      quiero enterarme cuando me escriben a mi. */}
+                  {CHATS.map(ch => (
+                    <View key={ch.clave} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}>
+                      <Text style={styles.notificationOptionText}>{ch.titulo}</Text>
+                      <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{ch.ayuda}</Text>
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                        {OPCIONES_CHAT.map(o => {
+                          const activa = prefs[ch.clave] === o.valor;
+                          return (
+                            <TouchableOpacity
+                              key={o.valor}
+                              onPress={() => guardarPreferencia({ [ch.clave]: o.valor } as any)}
+                              activeOpacity={0.8}
+                              style={{
+                                flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8,
+                                backgroundColor: activa ? '#880E4F' : '#F5F5F5',
+                              }}
+                            >
+                              <Text style={{
+                                fontSize: 11, fontWeight: activa ? '700' : '500', textAlign: 'center',
+                                color: activa ? '#FFFFFF' : '#6B7280',
+                              }}>
+                                {o.etiqueta}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12 }}>
+                    <Text style={{ fontSize: 14 }}>🔒</Text>
+                    <Text style={{ flex: 1, fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
+                      {AVISO_SIEMPRE}
+                    </Text>
                   </View>
-                </TouchableOpacity>
+                </ScrollView>
               );
-            })}
+            })()}
 
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setNotificationModalVisible(false)} activeOpacity={0.8}>
               <Text style={styles.modalCloseButtonText}>Cerrar</Text>

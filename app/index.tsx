@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
+import { PREFERENCIAS_POR_DEFECTO } from '@/constants/Notificaciones';
 import * as SplashScreen from 'expo-splash-screen';
 import { leerAtribucion } from '@/utils/atribucion';
 
@@ -192,12 +193,7 @@ export default function Index() {
                   // compatibles por edad (ver compatibility.tsx). Sin dato va
                   // 0, no 95: 95 seria inventar de nuevo.
                   compatibility_percentage: d['onboarding_compatibility'] ? parseInt(d['onboarding_compatibility']) : 0,
-                  notification_preferences: {
-                    whatsapp: false,
-                    email: true,
-                    sms: false,
-                    push: true,
-                  },
+                  notification_preferences: PREFERENCIAS_POR_DEFECTO,
                   registered_from: Platform.OS,
                   ...leerAtribucion(),
                 });
@@ -247,7 +243,7 @@ export default function Index() {
                   interests: [],
                   personality_traits: [],
                   compatibility_percentage: 95,
-                  notification_preferences: { whatsapp: false, email: true, sms: false, push: true },
+                  notification_preferences: PREFERENCIAS_POR_DEFECTO,
                   registered_from: 'web',
                   ...leerAtribucion(),
                 });
