@@ -259,6 +259,109 @@ function htmlParagraph(txt: string, opts?: { strong?: boolean; muted?: boolean }
   return `<p style="margin:0 0 12px; font-size:${size}; color:${color}; line-height:1.6; font-family: -apple-system, Helvetica, Arial, sans-serif;">${inner}</p>`;
 }
 
+// ── Plantillas de mensajes, editables desde el admin ────────────────────────
+// El texto de los mensajes de videollamada vive en app_config, no aqui: asi se
+// cambia una palabra desde Configuracion sin desplegar la funcion. Una sola
+// plantilla alimenta TRES salidas (el WhatsApp del admin, el correo en texto
+// plano y el correo en HTML), asi que WhatsApp y correo no se pueden
+// desincronizar.
+//
+// Formato: el de WhatsApp, que es el que ya se sabe escribir.
+//   *negrita*   _cursiva_   y una linea en blanco separa parrafos.
+// Comodines: {nombre} {evento} {fecha} {hora} {horaBoton}
+//
+// Los textos de abajo son el RESPALDO: si la clave se borra o queda vacia, el
+// correo sale igual con esto. Nunca se manda un correo en blanco.
+// Espejo de las mismas funciones en app/admin/index.web.tsx.
+
+const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
+  '\u00a1Hola {nombre}! \ud83d\udc4b', '',
+  '\ud83c\udfa5 *Hoy a las {hora}* es tu videollamada.', '',
+  '*Entras desde la app, en 3 toques:*',
+  '1\ufe0f\u20e3 Abre Nospi \u2192 pesta\u00f1a *Din\u00e1mica* (desde las {horaBoton})',
+  '2\ufe0f\u20e3 *Confirmar asistencia*',
+  '3\ufe0f\u20e3 Ah\u00ed mismo sale el bot\u00f3n *Ir a Meet*: lo tocas y te abre la llamada', '',
+  '\ud83c\udfa4 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*',
+  '\ud83d\udcf9 Te recomendamos entrar con la c\u00e1mara prendida: nos conocemos mejor vi\u00e9ndonos las caras',
+  '\u270f\ufe0f Ten a mano papel y l\u00e1piz', '',
+  'Al final eliges con qui\u00e9n hiciste clic \u2014 si es mutuo, se abre un *chat privado* \ud83d\udd12', '',
+  '\ud83d\udcf2 \u00bfA\u00fan sin las apps?',
+  'Nospi \ud83d\udc49 nospi.co/app',
+  'Google Meet \ud83d\udc49 nospi.co/meet', '',
+  '\u00a1Hoy Nospi! \ud83c\udf89',
+].join('\n');
+
+const PLANTILLA_VIRTUAL_VISPERA_DEFECTO = [
+  '\u00a1Hola {nombre}! \ud83d\udc4b', '',
+  '\ud83c\udfa5 *Ma\u00f1ana a las {hora}* es tu videollamada \u2014 desde donde est\u00e9s.', '',
+  '\ud83d\udcf2 *Inst\u00e1lalas hoy:*',
+  'Nospi \ud83d\udc49 nospi.co/app',
+  'Google Meet \ud83d\udc49 nospi.co/meet',
+  'En Nospi est\u00e1 el enlace, la din\u00e1mica y el chat con tus matches. Y te avisa cuando arranca \ud83d\udd14', '',
+  'Ma\u00f1ana desde las {horaBoton} confirmas en la pesta\u00f1a *Din\u00e1mica*, uno del grupo se anima a moderar y entran a la llamada.', '',
+  '\ud83d\udcf9 Te recomendamos entrar con la c\u00e1mara prendida: nos conocemos mejor vi\u00e9ndonos las caras. Ten a mano papel y l\u00e1piz \ud83d\ude09', '',
+  '\u00bfNo puedes ir? Cancela hoy y conservas tu saldo. Ma\u00f1ana ya no alcanzamos a devolverlo y te queda una falta.', '',
+  '\u00a1Nos pillamos! \ud83d\ude04',
+  '_Equipo Nospi_',
+].join('\n');
+
+// Un comodin que no exista se deja tal cual: es preferible que se vea "{hroa}"
+// y se note el error de dedo, a que salga un hueco silencioso en el mensaje.
+function aplicarComodines(plantilla: string, datos: Record<string, string>): string {
+  return (plantilla || '').replace(/\{(\w+)\}/g, (m, k) => (k in datos ? datos[k] : m));
+}
+
+// Version para leer como texto: se quitan las marcas de formato.
+function plantillaATexto(txt: string): string {
+  return (txt || '')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1');
+}
+
+// Version HTML. Se escapan los signos de HTML ANTES de aplicar el formato:
+// lo que se escribe en el admin es texto, no codigo, y asi un "<" pegado por
+// accidente no puede romper el correo.
+function plantillaAHtml(txt: string): string {
+  const escapar = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return (txt || '')
+    .split(/\n\s*\n/)
+    .map((bloque) => bloque.trim())
+    .filter((bloque) => bloque.length > 0)
+    .map((bloque) => {
+      const cuerpo = escapar(bloque)
+        .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+        .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+        // Los links van escritos a pelo (nospi.co/app). En el correo tienen que
+        // ser clicables o no sirven de nada.
+        .replace(/\b((?:https?:\/\/|www\.)[^\s<]+|nospi\.co\/[a-z0-9-]+)/gi,
+          (u) => `<a href="${u.startsWith('http') ? u : 'https://' + u}" style="color:#880E4F;">${u}</a>`)
+        .replace(/\n/g, '<br />');
+      return htmlParagraph(cuerpo);
+    })
+    .join('');
+}
+
+type Plantillas = { hoy: string; vispera: string };
+
+async function cargarPlantillas(supabase: any): Promise<Plantillas> {
+  const out: Plantillas = { hoy: PLANTILLA_VIRTUAL_HOY_DEFECTO, vispera: PLANTILLA_VIRTUAL_VISPERA_DEFECTO };
+  try {
+    const { data } = await supabase
+      .from('app_config')
+      .select('key, value')
+      .in('key', ['msg_virtual_hoy', 'msg_virtual_vispera']);
+    for (const row of data || []) {
+      const v = String(row.value || '').trim();
+      if (!v) continue;
+      if (row.key === 'msg_virtual_hoy') out.hoy = v;
+      if (row.key === 'msg_virtual_vispera') out.vispera = v;
+    }
+  } catch (e) {
+    console.error('send-email-reminders: no se pudieron leer las plantillas, se usan las de respaldo', e);
+  }
+  return out;
+}
+
 // Links cortos de instalar. Los textos no dicen solo "instala la app": dicen
 // lo que se gana (avisos del lugar, de la dinamica y de los matches). Son los
 // mismos que los WhatsApp del admin. No se dice que la app es obligatoria
@@ -290,43 +393,26 @@ const AL_ENTRAR_VIRTUAL = [
   '✏️ Ten a mano papel y lápiz',
 ];
 
-function buildSameDayText(firstName: string, event: any): { subject: string; text: string; html: string } {
+function buildSameDayText(firstName: string, event: any, plantillas?: Plantillas): { subject: string; text: string; html: string } {
   const virtual = esVirtual(event);
   const subject = event.time
     ? `Hoy, ${formatTimeAmPm(event.time)} · ${event.name || 'Nospi'}`
     : `Hoy · ${event.name || 'Nospi'}`;
 
   if (virtual) {
-    const horaBoton = restarMinutos(event.time) || '10 minutos antes';
-    const text = [
-      `Hola ${firstName},`, '',
-      `🎥 Hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''} es tu videollamada.`, '',
-      'Entras desde la app, en 3 toques:',
-      `1. Abre Nospi → pestaña Dinámica (desde las ${horaBoton})`,
-      '2. Confirmar asistencia',
-      '3. Ahí mismo sale el botón "Ir a Meet": lo tocas y te abre la llamada', '',
-      '🎤 Uno de ustedes modera: si te animas, toca "Quiero ser el moderador"',
-      '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras',
-      '✏️ Ten a mano papel y lápiz', '',
-      'Al final eliges con quién hiciste clic — si es mutuo, se abre un chat privado 🔒', '',
-      INSTALAR_VIRTUAL_HOY,
-      'Nospi 👉 nospi.co/app',
-      'Google Meet 👉 nospi.co/meet', '',
-      '¡Hoy Nospi! 🎉',
-    ].filter((l) => l !== null).join('\n');
-
-    const bodyHtml = [
-      htmlParagraph(`Hola ${firstName},`),
-      htmlParagraph(`🎥 <strong>Hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}</strong> es tu videollamada.`),
-      htmlParagraph(`<strong>Entras desde la app, en 3 toques:</strong><br />1. Abre Nospi → pestaña <strong>Dinámica</strong> (desde las <strong>${horaBoton}</strong>)<br />2. <strong>Confirmar asistencia</strong><br />3. Ahí mismo sale el botón <strong>"Ir a Meet"</strong>: lo tocas y te abre la llamada`),
-      htmlParagraph('🎤 Uno de ustedes modera: si te animas, toca <strong>"Quiero ser el moderador"</strong><br />📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras<br />✏️ Ten a mano papel y lápiz'),
-      htmlParagraph('Al final eliges con quién hiciste clic — si es mutuo, se abre un <strong>chat privado</strong> 🔒'),
-      htmlParagraph(INSTALAR_VIRTUAL_HOY, { muted: true }),
-      htmlBotonesTienda(true),
-      htmlParagraph('¡Hoy Nospi! 🎉', { strong: true }),
-    ].join('');
-    // Nunca maps_link: el boton lleva a la app, que es donde vive el enlace.
-    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica') };
+    // Texto unico desde la plantilla: el mismo que sale por WhatsApp.
+    const armado = aplicarComodines(plantillas?.hoy || PLANTILLA_VIRTUAL_HOY_DEFECTO, {
+      nombre: firstName,
+      evento: event.name || 'tu evento',
+      fecha: formatEventDateBogota(event.date),
+      hora: event.time ? formatTimeAmPm(event.time) : '',
+      horaBoton: restarMinutos(event.time) || '10 minutos antes',
+    });
+    return {
+      subject,
+      text: plantillaATexto(armado),
+      html: wrapBrandedHtml(plantillaAHtml(armado), URL_DINAMICA, 'Abrir la Dinámica'),
+    };
   }
 
   const locationFull = buildLocationFull(event.location_name, event.location_address);
@@ -397,7 +483,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
   return { subject, text, html };
 }
 
-function build48hText(firstName: string, event: any, now: Date): { subject: string; text: string; html: string } {
+function build48hText(firstName: string, event: any, now: Date, plantillas?: Plantillas): { subject: string; text: string; html: string } {
   const virtual = esVirtual(event);
   const formattedDate = formatEventDateBogota(event.date);
   const locationFull = buildLocationFull(event.location_name, event.location_address);
@@ -407,50 +493,27 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
   const esHoy = daysUntil <= 0;
 
   if (virtual) {
-    const horaBoton = restarMinutos(event.time);
     // El asunto nunca dice "ya tenemos el lugar": no hay lugar.
     const subject = esVispera
       ? `Mañana: ${event.name || 'tu evento'}${event.time ? `, ${formatTimeAmPm(event.time)}` : ''}`
-      : esHoy
-        ? `Hoy${event.time ? `, ${formatTimeAmPm(event.time)}` : ''} · ${event.name || 'tu evento'}`
-        : `🎥 Tu videollamada de ${event.name || 'Nospi'} ya está lista`;
-    const instalar = esHoy ? INSTALAR_VIRTUAL_HOY : INSTALAR_VIRTUAL;
-    const cuando = esVispera ? 'Mañana' : esHoy ? 'Hoy' : 'El día del evento';
-    const horaTexto = event.time ? ` a las ${formatTimeAmPm(event.time)}` : '';
-    const encabezado = `🎥 ${esVispera ? 'Mañana' : esHoy ? 'Hoy' : `El ${formattedDate}`}${horaTexto} es tu videollamada — desde donde estés.`;
-    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas en la pestaña Dinámica, uno del grupo se anima a moderar y entran a la llamada.`;
-    const cancelarTexto = esHoy
-      ? null
-      : esVispera
-        ? '¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.'
-        : '¿No puedes ir? Cancela hasta 24 h antes y conservas tu saldo. Después pierdes el saldo y te queda una falta.';
-
-    const text = [
-      `Hola ${firstName},`, '',
-      encabezado, '',
-      instalar,
-      'Nospi 👉 nospi.co/app',
-      'Google Meet 👉 nospi.co/meet',
-      esHoy ? null : NOSPI_TIENE, '',
-      botonLinea, '',
-      '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉', '',
-      cancelarTexto,
-      cancelarTexto ? '' : null,
-      'Equipo Nospi',
-    ].filter((l) => l !== null).join('\n');
-
-    const bodyHtml = [
-      htmlParagraph(`Hola ${firstName},`),
-      htmlParagraph(`🎥 <strong>${esVispera ? 'Mañana' : esHoy ? 'Hoy' : `El ${formattedDate}`}${horaTexto}</strong> es tu videollamada — desde donde estés.`),
-      htmlParagraph(instalar),
-      htmlBotonesTienda(true),
-      esHoy ? '' : htmlParagraph(NOSPI_TIENE, { muted: true }),
-      htmlParagraph(botonLinea.replace('Dinámica', '<strong>Dinámica</strong>')),
-      htmlParagraph('📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉'),
-      cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
-    ].join('');
-    // Nunca "Como llegar" ni maps_link: el enlace vive en la app.
-    return { subject, text, html: wrapBrandedHtml(bodyHtml, URL_DINAMICA, 'Abrir la Dinámica') };
+      : `Hoy${event.time ? `, ${formatTimeAmPm(event.time)}` : ''} · ${event.name || 'tu evento'}`;
+    // Si el link del Meet se guarda el mismo dia del evento, este correo ya no
+    // es de vispera: se manda el texto de "hoy", que es el que trae los pasos.
+    const base = esVispera
+      ? (plantillas?.vispera || PLANTILLA_VIRTUAL_VISPERA_DEFECTO)
+      : (plantillas?.hoy || PLANTILLA_VIRTUAL_HOY_DEFECTO);
+    const armado = aplicarComodines(base, {
+      nombre: firstName,
+      evento: event.name || 'tu evento',
+      fecha: formattedDate,
+      hora: event.time ? formatTimeAmPm(event.time) : '',
+      horaBoton: restarMinutos(event.time) || '10 minutos antes',
+    });
+    return {
+      subject,
+      text: plantillaATexto(armado),
+      html: wrapBrandedHtml(plantillaAHtml(armado), URL_DINAMICA, 'Abrir la Dinámica'),
+    };
   }
 
   // El asunto dice cuando es, que es lo que la persona busca al abrirlo. El
@@ -632,6 +695,10 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const results: any[] = [];
 
+    // Textos de los mensajes de videollamada: se leen una sola vez por
+    // invocacion, no una por destinatario.
+    const plantillas = await cargarPlantillas(supabase);
+
     let targetEventId: string | null = null;
     let previewEmail: string | null = null;
     let previewType: string = 'sameday';
@@ -733,10 +800,10 @@ serve(async (req) => {
         results.push({ block: 'preview', error: eventError?.message || 'evento no encontrado' });
       } else {
         let built: { subject: string; text: string; html?: string };
-        if (previewType === '48h') built = build48hText('Johnatan', eventData, now);
+        if (previewType === '48h') built = build48hText('Johnatan', eventData, now, plantillas);
         else if (previewType === '3d') built = build3dText('Johnatan', eventData);
         else if (previewType === 'event_start') built = buildEventStartText('Johnatan', eventData);
-        else built = buildSameDayText('Johnatan', eventData);
+        else built = buildSameDayText('Johnatan', eventData, plantillas);
         const tagSuffix = previewTag ? ` [${previewTag}]` : '';
         const { ok } = await sendEmail(previewEmail, `[PREVIEW]${tagSuffix} ${built.subject}`, built.text, built.html);
         results.push({ block: 'preview', type: previewType, to: previewEmail, ok });
@@ -773,7 +840,7 @@ serve(async (req) => {
             continue;
           }
           const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-          const { subject, text, html } = build48hText(firstName, event, now);
+          const { subject, text, html } = build48hText(firstName, event, now, plantillas);
           const { ok } = await sendEmail(user.email, subject, text, html);
           if (ok) await supabase.from('appointments').update({ reminder_48h_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: '48h', appointmentId: apt.id, ok });
@@ -842,7 +909,7 @@ serve(async (req) => {
                 continue;
               }
               const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-              const { subject, text, html } = build48hText(firstName, event, now);
+              const { subject, text, html } = build48hText(firstName, event, now, plantillas);
               const { ok } = await sendEmail(user.email, subject, text, html);
               if (ok) await supabase.from('appointments').update({ reminder_48h_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
               results.push({ block: 'vispera_virtual', appointmentId: apt.id, ok });
@@ -880,7 +947,7 @@ serve(async (req) => {
             continue;
           }
           const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-          const { subject, text, html } = buildSameDayText(firstName, event);
+          const { subject, text, html } = buildSameDayText(firstName, event, plantillas);
           const { ok } = await sendEmail(user.email, subject, text, html);
           if (ok) await supabase.from('appointments').update({ sameday_reminder_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: 'sameday', appointmentId: apt.id, ok });
