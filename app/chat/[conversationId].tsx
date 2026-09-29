@@ -795,6 +795,11 @@ export default function ChatThreadScreen() {
   // Antes "responder" solo existia como gesto oculto de mantener presionado,
   // asi que mucha gente no sabia que se podia.
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+  // Mensaje cuyas reacciones se estan mirando. Antes se veia el emoji y el
+  // numero pero no quien habia reaccionado, que es lo primero que uno quiere
+  // saber. El dato ya se guardaba (chat_message_reactions tiene user_id);
+  // solo faltaba mostrarlo.
+  const [reaccionesDe, setReaccionesDe] = useState<string | null>(null);
 
   // ── Checks de WhatsApp ────────────────────────────────────────────────────
   //
@@ -2931,7 +2936,12 @@ export default function ChatThreadScreen() {
                       <TouchableOpacity
                         key={emo}
                         style={[styles.reactionChip, mine === emo && styles.reactionChipMine]}
-                        onPress={() => toggleReaction(item.id, emo)}
+                        /* Tocar abre QUIEN reacciono, como WhatsApp. Para poner
+                           una reaccion se mantiene presionado el mensaje, que
+                           es donde esta el selector de emojis; y para quitar la
+                           propia se toca tu fila en esa lista. */
+                        onPress={() => { toque(); setReaccionesDe(item.id); }}
+                        accessibilityLabel={`Ver quién reaccionó con ${emo}`}
                         activeOpacity={0.7}
                       >
                         <Text style={styles.reactionChipEmoji}>{emo}</Text>
@@ -3522,6 +3532,53 @@ export default function ChatThreadScreen() {
 
       {/* Acciones al mantener presionado un mensaje. Sin boton Cancelar: se
           cierra tocando fuera del menu. */}
+      {/* Quien reacciono a un mensaje. Se abre tocando la reaccion.
+          Tocando tu propia fila la quitas, como en WhatsApp: si no, no habria
+          forma de deshacerla, porque el toque en el globo ya no alterna. */}
+      <Modal visible={!!reaccionesDe} animationType="slide" transparent onRequestClose={() => setReaccionesDe(null)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setReaccionesDe(null)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.attachSheet, { paddingBottom: insets.bottom + 18, maxHeight: '70%' }]}>
+            <View style={styles.sheetGrabber} />
+            <Text style={styles.attachSheetTitle}>Reacciones</Text>
+            <ScrollView>
+              {(reactions[reaccionesDe || ''] || []).map((r) => {
+                const esMia = r.user_id === user?.id;
+                const quien = esMia
+                  ? 'Tú'
+                  : r.user_id === NOSPI_SYSTEM_USER_ID
+                  ? 'Equipo Nospi'
+                  : participantsById[r.user_id]?.name || 'Alguien';
+                return (
+                  <TouchableOpacity
+                    key={r.user_id + r.emoji}
+                    activeOpacity={esMia ? 0.7 : 1}
+                    disabled={!esMia}
+                    onPress={() => {
+                      if (!esMia || !reaccionesDe) return;
+                      toggleReaction(reaccionesDe, r.emoji);
+                      setReaccionesDe(null);
+                    }}
+                    style={styles.reaccionFila}
+                  >
+                    <ChatAvatar
+                      uri={participantsById[r.user_id]?.profile_photo_url || null}
+                      name={quien}
+                      size={34}
+                      marginRight={10}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reaccionNombre}>{quien}</Text>
+                      {esMia && <Text style={styles.reaccionQuitar}>Toca para quitar tu reacción</Text>}
+                    </View>
+                    <Text style={styles.reaccionEmoji}>{r.emoji}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!actionMsg} animationType="fade" transparent onRequestClose={() => { setActionMsg(null); setActionAnchor(null); }}>
         <TouchableOpacity
           style={styles.actionOverlay}
@@ -4190,6 +4247,10 @@ const styles = StyleSheet.create({
   // un cambio de fondo porque el fondo distingue quien escribio -propio vs
   // ajeno- y pisarlo confundiria de quien es el mensaje.
   bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
+  reaccionFila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  reaccionNombre: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
+  reaccionQuitar: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
+  reaccionEmoji: { fontSize: 22, marginLeft: 10 },
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
   messageText: { fontSize: 15, color: '#2a2a2e', lineHeight: 20 },
   messageTextMine: { color: '#FFFFFF' },
