@@ -268,8 +268,9 @@ const LINK_MEET = 'https://nospi.co/meet';
 const INSTALAR_PRESENCIAL = '📲 Para vivir la dinámica completa, instala Nospi. Ahí te avisamos cuando revelamos el lugar, cuando arranca la dinámica y cuando alguien con quien hiciste clic te escribe 💬';
 const INSTALAR_PRESENCIAL_VISPERA = '📲 Mañana la dinámica se juega desde el celular. Instala Nospi hoy para que te avise cuando arranca y no te pierdas ningún match.';
 const INSTALAR_PRESENCIAL_HOY = '📲 ¿Aún sin la app? Instálala antes de salir: sin ella te pierdes los avisos de la dinámica y de tus matches.';
-const INSTALAR_VIRTUAL = '📲 Antes de la llamada instala Nospi y Google Meet. En Nospi está todo: el enlace de la llamada, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔';
-const INSTALAR_VIRTUAL_HOY = '📲 ¿Aún sin Nospi o sin Meet? Instálalos ya: sin Nospi no te llega el aviso cuando arranca ni cuando un match te escribe.';
+const INSTALAR_VIRTUAL = '📲 Instálalas hoy:';
+const INSTALAR_VIRTUAL_HOY = '📲 ¿Aún sin las apps?';
+const NOSPI_TIENE = 'En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔';
 
 // Links cortos de nospi.co: cada uno detecta el celular y manda a la tienda
 // correcta (App Store o Play Store). En videollamada va tambien Google Meet.
@@ -298,17 +299,17 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
   if (virtual) {
     const horaBoton = restarMinutos(event.time) || '10 minutos antes';
     const text = [
-      `Hola ${firstName},`, '', `Hoy es "${event.name || 'tu evento'}" 🎉`,
-      event.time ? `🕖 ${formatTimeAmPm(event.time)}` : null,
-      '🎥 Por videollamada.', '',
-      'Así entras:',
-      `1. Abre Nospi, pestaña Dinámica: desde las ${horaBoton} aparece "Confirmar asistencia"`,
-      '2. La app pregunta quién modera. Si te animas, toca "Quiero ser el moderador" — el primero que se postule queda 🙋',
-      '3. Tocas "Ir a Meet": con eso queda registrada tu asistencia', '',
-      '⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.', '',
-      'Al entrar a la llamada:',
-      ...AL_ENTRAR_VIRTUAL, '',
-      'Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un chat privado 🔒', '',
+      `Hola ${firstName},`, '',
+      `🎥 Hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''} es tu videollamada.`, '',
+      'Entras desde la app, en 3 toques:',
+      `1. Abre Nospi → pestaña Dinámica (desde las ${horaBoton})`,
+      '2. Confirmar asistencia',
+      '3. Ir a Meet y entras directo a la llamada', '',
+      '⚠️ El enlace solo está ahí. Si no entras por la app, cuenta como falta.', '',
+      '🎤 Uno de ustedes modera: si te animas, toca "Quiero ser el moderador"',
+      '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras',
+      '✏️ Ten a mano papel y lápiz', '',
+      'Al final eliges con quién hiciste clic — si es mutuo, se abre un chat privado 🔒', '',
       INSTALAR_VIRTUAL_HOY,
       'Nospi 👉 nospi.co/app',
       'Google Meet 👉 nospi.co/meet', '',
@@ -317,12 +318,11 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
 
     const bodyHtml = [
       htmlParagraph(`Hola ${firstName},`),
-      htmlParagraph(`Hoy es <strong>"${event.name || 'tu evento'}"</strong> 🎉`),
-      htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : ''}🎥 Por videollamada.`),
-      htmlParagraph(`<strong>Así entras:</strong><br />1. Abre Nospi, pestaña <strong>Dinámica</strong>: desde las <strong>${horaBoton}</strong> aparece "Confirmar asistencia"<br />2. La app pregunta quién modera. Si te animas, toca <strong>"Quiero ser el moderador"</strong> — el primero que se postule queda 🙋<br />3. Tocas <strong>"Ir a Meet"</strong>: con eso queda registrada tu asistencia`),
-      htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras desde la app cuenta como falta</strong>, y con faltas se suspende la cuenta para reservar.'),
-      htmlParagraph(`<strong>Al entrar a la llamada:</strong><br />${AL_ENTRAR_VIRTUAL.join('<br />')}`),
-      htmlParagraph('Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un <strong>chat privado</strong> 🔒'),
+      htmlParagraph(`🎥 <strong>Hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}</strong> es tu videollamada.`),
+      htmlParagraph(`<strong>Entras desde la app, en 3 toques:</strong><br />1. Abre Nospi → pestaña <strong>Dinámica</strong> (desde las <strong>${horaBoton}</strong>)<br />2. <strong>Confirmar asistencia</strong><br />3. <strong>Ir a Meet</strong> y entras directo a la llamada`),
+      htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras por la app, cuenta como falta.</strong>'),
+      htmlParagraph('🎤 Uno de ustedes modera: si te animas, toca <strong>"Quiero ser el moderador"</strong><br />📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras<br />✏️ Ten a mano papel y lápiz'),
+      htmlParagraph('Al final eliges con quién hiciste clic — si es mutuo, se abre un <strong>chat privado</strong> 🔒'),
       htmlParagraph(INSTALAR_VIRTUAL_HOY, { muted: true }),
       htmlBotonesTienda(true),
       htmlParagraph('¡Hoy Nospi! 🎉', { strong: true }),
@@ -418,7 +418,9 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
         : `🎥 Tu videollamada de ${event.name || 'Nospi'} ya está lista`;
     const instalar = esHoy ? INSTALAR_VIRTUAL_HOY : INSTALAR_VIRTUAL;
     const cuando = esVispera ? 'Mañana' : esHoy ? 'Hoy' : 'El día del evento';
-    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña Dinámica de la app; ahí uno del grupo se anima a ser el moderador y de una entran a la llamada. Ese botón de "Ir a Meet" es el que registra tu asistencia.`;
+    const horaTexto = event.time ? ` a las ${formatTimeAmPm(event.time)}` : '';
+    const encabezado = `🎥 ${esVispera ? 'Mañana' : esHoy ? 'Hoy' : `El ${formattedDate}`}${horaTexto} es tu videollamada — desde donde estés.`;
+    const botonLinea = `${cuando}${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas en la pestaña Dinámica, uno del grupo se anima a moderar y entran a la llamada.`;
     const cancelarTexto = esHoy
       ? null
       : esVispera
@@ -427,16 +429,13 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
 
     const text = [
       `Hola ${firstName},`, '',
-      esVispera ? `Mañana es "${event.name || 'tu evento'}".`
-        : esHoy ? `Hoy es "${event.name || 'tu evento'}".`
-        : `Te recordamos que ${bodyPhrase} "${event.name || 'tu evento'}".`,
-      event.time ? `🕖 ${formatTimeAmPm(event.time)}` : `📅 ${formattedDate}`,
-      '🎥 Por videollamada — no tienes que ir a ningún lado.', '',
+      encabezado, '',
       instalar,
       'Nospi 👉 nospi.co/app',
-      'Google Meet 👉 nospi.co/meet', '',
+      'Google Meet 👉 nospi.co/meet',
+      esHoy ? null : NOSPI_TIENE, '',
       botonLinea, '',
-      '📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉', '',
+      '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉', '',
       cancelarTexto,
       cancelarTexto ? '' : null,
       'Equipo Nospi',
@@ -444,14 +443,12 @@ function build48hText(firstName: string, event: any, now: Date): { subject: stri
 
     const bodyHtml = [
       htmlParagraph(`Hola ${firstName},`),
-      htmlParagraph(esVispera ? `Mañana es <strong>"${event.name || 'tu evento'}"</strong>.`
-        : esHoy ? `Hoy es <strong>"${event.name || 'tu evento'}"</strong>.`
-        : `Te recordamos que ${bodyPhrase} <strong>"${event.name || 'tu evento'}"</strong>.`),
-      htmlParagraph(`${event.time ? `🕖 <strong>${formatTimeAmPm(event.time)}</strong><br />` : `📅 <strong>${formattedDate}</strong><br />`}🎥 Por videollamada.`),
+      htmlParagraph(`🎥 <strong>${esVispera ? 'Mañana' : esHoy ? 'Hoy' : `El ${formattedDate}`}${horaTexto}</strong> es tu videollamada — desde donde estés.`),
       htmlParagraph(instalar),
       htmlBotonesTienda(true),
-      htmlParagraph(botonLinea.replace('Ese botón de "Ir a Meet" es el que registra tu asistencia.', '<strong>Ese botón de "Ir a Meet" es el que registra tu asistencia.</strong>')),
-      htmlParagraph('📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉'),
+      esHoy ? '' : htmlParagraph(NOSPI_TIENE, { muted: true }),
+      htmlParagraph(botonLinea.replace('Dinámica', '<strong>Dinámica</strong>')),
+      htmlParagraph('📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉'),
       cancelarTexto ? htmlParagraph(cancelarTexto.replace('te queda una falta', '<strong>te queda una falta</strong>'), { muted: true }) : '',
     ].join('');
     // Nunca "Como llegar" ni maps_link: el enlace vive en la app.
@@ -518,7 +515,8 @@ function build3dText(firstName: string, event: any): { subject: string; text: st
       '🎥 Por videollamada — no tienes que ir a ningún lado.', '',
       INSTALAR_VIRTUAL,
       'Nospi 👉 nospi.co/app',
-      'Google Meet 👉 nospi.co/meet', '',
+      'Google Meet 👉 nospi.co/meet',
+      NOSPI_TIENE, '',
       'Cancelas gratis hasta 24 h antes y conservas tu saldo. Después pierdes el saldo y te queda una falta en la cuenta.',
       '📋 https://app.nospi.co/politica-asistencia', '',
       '¡Nos pillamos! 😄', 'Equipo Nospi',
@@ -530,6 +528,7 @@ function build3dText(firstName: string, event: any): { subject: string; text: st
       htmlParagraph(`📅 <strong>${formattedDate}</strong>${event.time ? ` · <strong>${formatTimeAmPm(event.time)}</strong>` : ''}<br />🎥 Por videollamada — no tienes que ir a ningún lado.`),
       htmlParagraph(INSTALAR_VIRTUAL),
       htmlBotonesTienda(true),
+      htmlParagraph(NOSPI_TIENE, { muted: true }),
       htmlParagraph('Cancelas gratis hasta <strong>24 h antes</strong> y conservas tu saldo. Después pierdes el saldo y <strong>te queda una falta</strong> en la cuenta. <a href="https://app.nospi.co/politica-asistencia" style="color:#880E4F;">Ver política</a>', { muted: true }),
       htmlParagraph('¡Nos pillamos! 😄', { strong: true }),
     ].join('');
