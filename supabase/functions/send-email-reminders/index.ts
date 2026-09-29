@@ -304,7 +304,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
       'Entras desde la app, en 3 toques:',
       `1. Abre Nospi → pestaña Dinámica (desde las ${horaBoton})`,
       '2. Confirmar asistencia',
-      '3. Ir a Meet y entras directo a la llamada', '',
+      '3. Ahí mismo sale el botón "Ir a Meet": lo tocas y te abre la llamada', '',
       '⚠️ El enlace solo está ahí. Si no entras por la app, cuenta como falta.', '',
       '🎤 Uno de ustedes modera: si te animas, toca "Quiero ser el moderador"',
       '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras',
@@ -319,7 +319,7 @@ function buildSameDayText(firstName: string, event: any): { subject: string; tex
     const bodyHtml = [
       htmlParagraph(`Hola ${firstName},`),
       htmlParagraph(`🎥 <strong>Hoy${event.time ? ` a las ${formatTimeAmPm(event.time)}` : ''}</strong> es tu videollamada.`),
-      htmlParagraph(`<strong>Entras desde la app, en 3 toques:</strong><br />1. Abre Nospi → pestaña <strong>Dinámica</strong> (desde las <strong>${horaBoton}</strong>)<br />2. <strong>Confirmar asistencia</strong><br />3. <strong>Ir a Meet</strong> y entras directo a la llamada`),
+      htmlParagraph(`<strong>Entras desde la app, en 3 toques:</strong><br />1. Abre Nospi → pestaña <strong>Dinámica</strong> (desde las <strong>${horaBoton}</strong>)<br />2. <strong>Confirmar asistencia</strong><br />3. Ahí mismo sale el botón <strong>"Ir a Meet"</strong>: lo tocas y te abre la llamada`),
       htmlParagraph('⚠️ El enlace solo está ahí. <strong>Si no entras por la app, cuenta como falta.</strong>'),
       htmlParagraph('🎤 Uno de ustedes modera: si te animas, toca <strong>"Quiero ser el moderador"</strong><br />📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras<br />✏️ Ten a mano papel y lápiz'),
       htmlParagraph('Al final eliges con quién hiciste clic — si es mutuo, se abre un <strong>chat privado</strong> 🔒'),
