@@ -223,6 +223,65 @@ const LINK_PAGO_DIRECTO = 'https://checkout.wompi.co/l/mVzF1m';
 const LINK_APP = 'nospi.co/app';
 const LINK_MEET = 'nospi.co/meet';
 
+// ── Plantillas de los mensajes de videollamada ──────────────────────────────
+// El texto vive en app_config y se edita desde Configuracion, sin desplegar.
+// La MISMA plantilla arma el WhatsApp de aqui y los dos correos (texto plano y
+// HTML) de la funcion send-email-reminders, asi que no se pueden desincronizar.
+//
+// Formato: el de WhatsApp.  *negrita*   _cursiva_   linea en blanco = parrafo.
+// Comodines: {nombre} {evento} {fecha} {hora} {horaBoton}
+//
+// Estos textos son el RESPALDO por si la clave se borra o queda vacia.
+// Espejo de supabase/functions/send-email-reminders/index.ts.
+const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
+  `¡Hola {nombre}! 👋`,
+  ``,
+  `🎥 *Hoy a las {hora}* es tu videollamada.`,
+  ``,
+  `*Entras desde la app, en 3 toques:*`,
+  `1️⃣ Abre Nospi → pestaña *Dinámica* (desde las {horaBoton})`,
+  `2️⃣ *Confirmar asistencia*`,
+  `3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada`,
+  ``,
+  `🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*`,
+  `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras`,
+  `✏️ Ten a mano papel y lápiz`,
+  ``,
+  `Al final eliges con quién hiciste clic — si es mutuo, se abre un *chat privado* 🔒`,
+  ``,
+  `📲 ¿Aún sin las apps?`,
+  `Nospi 👉 nospi.co/app`,
+  `Google Meet 👉 nospi.co/meet`,
+  ``,
+  `¡Hoy Nospi! 🎉`,
+].join('\n');
+
+const PLANTILLA_VIRTUAL_VISPERA_DEFECTO = [
+  `¡Hola {nombre}! 👋`,
+  ``,
+  `🎥 *Mañana a las {hora}* es tu videollamada — desde donde estés.`,
+  ``,
+  `📲 *Instálalas hoy:*`,
+  `Nospi 👉 nospi.co/app`,
+  `Google Meet 👉 nospi.co/meet`,
+  `En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔`,
+  ``,
+  `Mañana desde las {horaBoton} confirmas en la pestaña *Dinámica*, uno del grupo se anima a moderar y entran a la llamada.`,
+  ``,
+  `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉`,
+  ``,
+  `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
+  ``,
+  `¡Nos pillamos! 😄`,
+  `_Equipo Nospi_`,
+].join('\n');
+
+// Un comodin que no exista se deja tal cual: es preferible ver "{hroa}" y
+// notar el error de dedo, a que salga un hueco silencioso en el mensaje.
+function aplicarComodines(plantilla: string, datos: Record<string, string>): string {
+  return (plantilla || '').replace(/\{(\w+)\}/g, (m, k) => (k in datos ? datos[k] : m));
+}
+
 const BLOQUE_INSTALAR_VISPERA = [
   `📲 *Mañana la dinámica se juega desde el celular.* Instala Nospi hoy para que te avise cuando arranca y no te pierdas ningún match 👉 ${LINK_APP}`,
 ].join('\n');
@@ -237,15 +296,6 @@ const BLOQUE_INSTALAR_VIRTUAL = [
   `En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔`,
 ].join('\n');
 
-// Mismo dia: los dos links de instalacion, sin el parrafo de por que. Quien
-// ya la tiene se salta el bloque de una mirada; quien no, tiene los dos links
-// juntos. El bloque viejo "Al entrar a la llamada" se quito: repetia los 3
-// pasos de arriba y explicaba el moderador por segunda vez.
-const BLOQUE_INSTALAR_VIRTUAL_HOY = [
-  `📲 ¿Aún sin las apps?`,
-  `Nospi 👉 ${LINK_APP}`,
-  `Google Meet 👉 ${LINK_MEET}`,
-].join('\n');
 
 // Compra presencial: el lugar llega despues, asi que aqui solo se sugiere
 // instalar Nospi (mismo formato que el bloque virtual, sin Meet).
@@ -335,7 +385,8 @@ function buildEventReminderWhatsAppLink(
   locationName?: string,
   locationAddress?: string,
   mapsLink?: string,
-  eventType?: string
+  eventType?: string,
+  plantilla?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -359,20 +410,14 @@ function buildEventReminderWhatsAppLink(
   const horaBoton = restarMinutos(eventTime, 10);
 
   const message = (esVirtual ? [
-    `¡Hola ${firstName}! 👋`,
-    ``,
-    `🎥 *Mañana${eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : ''}* es tu videollamada — desde donde estés.`,
-    ``,
-    BLOQUE_INSTALAR_VIRTUAL,
-    ``,
-    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas en la pestaña *Dinámica*, uno del grupo se anima a moderar y entran a la llamada.`,
-    ``,
-    `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉`,
-    ``,
-    `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
-    ``,
-    `¡Nos pillamos! 😄`,
-    `_Equipo Nospi_`,
+    // Texto unico, el mismo que sale por correo (ver send-email-reminders).
+    aplicarComodines(plantilla || PLANTILLA_VIRTUAL_VISPERA_DEFECTO, {
+      nombre: firstName,
+      evento: eventLabel,
+      fecha: formattedDate,
+      hora: eventTime ? formatTimeAmPm(eventTime) : '',
+      horaBoton: horaBoton || '10 minutos antes',
+    }),
   ] : [
     `¡Hola ${firstName}! 👋`,
     ``,
@@ -409,7 +454,8 @@ function buildSameDayWhatsAppLink(
   locationName?: string,
   locationAddress?: string,
   mapsLink?: string,
-  eventType?: string
+  eventType?: string,
+  plantilla?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -421,24 +467,14 @@ function buildSameDayWhatsAppLink(
   const horaBoton = restarMinutos(eventTime, 10);
 
   const message = (esVirtual ? [
-    `¡Hola ${firstName}! 👋`,
-    ``,
-    `🎥 *Hoy${timePart}* es tu videollamada.`,
-    ``,
-    `*Entras desde la app, en 3 toques:*`,
-    `1️⃣ Abre Nospi → pestaña *Dinámica* (desde las ${horaBoton || '10 minutos antes'})`,
-    `2️⃣ *Confirmar asistencia*`,
-    `3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada`,
-    ``,
-    `🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*`,
-    `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras`,
-    `✏️ Ten a mano papel y lápiz`,
-    ``,
-    `Al final eliges con quién hiciste clic — si es mutuo, se abre un *chat privado* 🔒`,
-    ``,
-    BLOQUE_INSTALAR_VIRTUAL_HOY,
-    ``,
-    `¡Hoy Nospi! 🎉`,
+    // Texto unico, el mismo que sale por correo (ver send-email-reminders).
+    aplicarComodines(plantilla || PLANTILLA_VIRTUAL_HOY_DEFECTO, {
+      nombre: firstName,
+      evento: (eventName || 'tu evento').trim(),
+      fecha: '',
+      hora: eventTime ? formatTimeAmPm(eventTime) : '',
+      horaBoton: horaBoton || '10 minutos antes',
+    }),
   ] : [
     `¡Hola ${firstName}! 👋`,
     ``,
@@ -815,6 +851,9 @@ export default function AdminPanelScreen() {
   // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
   const [configPuerta2, setConfigPuerta2] = useState(false);
   const [configMinAppVersion, setConfigMinAppVersion] = useState('');
+  // Texto de los mensajes de videollamada (WhatsApp y correo salen de aqui).
+  const [configMsgVirtualHoy, setConfigMsgVirtualHoy] = useState('');
+  const [configMsgVirtualVispera, setConfigMsgVirtualVispera] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
 
@@ -1924,8 +1963,8 @@ export default function AdminPanelScreen() {
   const buildReminderLinkForModal = (a: Appointment) => {
     if (!reminderWhatsAppModal || !selectedEventForConfig) return '';
     return reminderWhatsAppModal.kind === '48h'
-    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type)
-      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type);
+    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type, configMsgVirtualVispera)
+      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type, configMsgVirtualHoy);
   };
 
   const loadEventConversations = useCallback(async (eventId: string) => {
@@ -2121,6 +2160,8 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
+      if (row.key === 'msg_virtual_hoy') setConfigMsgVirtualHoy(row.value);
+      if (row.key === 'msg_virtual_vispera') setConfigMsgVirtualVispera(row.value);
     }
   };
 
@@ -2138,6 +2179,8 @@ export default function AdminPanelScreen() {
         { key: 'subscription_price_6m', value: configSubPrice6m },
         { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
         { key: 'min_app_version', value: configMinAppVersion.trim() },
+        { key: 'msg_virtual_hoy', value: configMsgVirtualHoy.trim() },
+        { key: 'msg_virtual_vispera', value: configMsgVirtualVispera.trim() },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -7999,6 +8042,71 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </div>
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
               Este es el botón de emergencia: apagarlo devuelve todo a la normalidad al instante, sin publicar código. Ojo que la marca se pone al REGISTRARSE — una cuenta que ya existía no cambia aunque abra el link.
+            </div>
+          </div>
+
+          {/* ── MENSAJES DE VIDEOLLAMADA ── */}
+          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #0F766E', gridColumn: '1 / -1' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F766E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              💬 Mensajes de videollamada
+            </div>
+            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
+              Lo que escribas aquí sale <strong>igual por WhatsApp y por correo</strong>. Se aplica de una, sin publicar nada.
+              Formato: <code>*negrita*</code>, <code>_cursiva_</code>, y una línea en blanco separa párrafos.
+            </div>
+
+            {[
+              {
+                etiqueta: 'El día anterior',
+                ayuda: 'Sale a las 9 a.m. del día antes, apenas el link del Meet esté guardado.',
+                comodines: '{nombre} · {evento} · {fecha} · {hora} · {horaBoton}',
+                valor: configMsgVirtualVispera,
+                set: setConfigMsgVirtualVispera,
+                defecto: PLANTILLA_VIRTUAL_VISPERA_DEFECTO,
+              },
+              {
+                etiqueta: 'El mismo día',
+                ayuda: 'Sale a las 9 a.m. del día del evento. Es el que trae los pasos para entrar.',
+                comodines: '{nombre} · {evento} · {hora} · {horaBoton}',
+                valor: configMsgVirtualHoy,
+                set: setConfigMsgVirtualHoy,
+                defecto: PLANTILLA_VIRTUAL_HOY_DEFECTO,
+              },
+            ].map((m) => (
+              <div key={m.etiqueta} style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{m.etiqueta}</div>
+                  <button
+                    onClick={() => { if (window.confirm('¿Volver este mensaje al texto original? Se pierde lo que tengas escrito.')) m.set(m.defecto); }}
+                    style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                  >
+                    restaurar el texto original
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>{m.ayuda}</div>
+                <textarea
+                  value={m.valor}
+                  onChange={(e) => m.set(e.target.value)}
+                  rows={14}
+                  spellCheck
+                  style={{
+                    width: '100%', boxSizing: 'border-box', padding: '12px 14px',
+                    fontSize: 14, lineHeight: 1.6, borderRadius: 10, border: '2px solid #E5E7EB',
+                    outline: 'none', color: '#111827', fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 12, color: '#9CA3AF' }}>Comodines: <code>{m.comodines}</code></div>
+                  <div style={{ fontSize: 12, color: m.valor.length > 900 ? '#DC2626' : '#9CA3AF', fontWeight: m.valor.length > 900 ? 700 : 400 }}>
+                    {m.valor.length} caracteres{m.valor.length > 900 ? ' — va quedando largo, la gente no lo lee' : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.5, borderTop: '1px solid #F3F4F6', paddingTop: 12 }}>
+              Si dejas un mensaje vacío, se manda el texto original que trae el sistema: nunca sale un correo en blanco.
+              Un comodín mal escrito se ve tal cual en el mensaje (por ejemplo <code>{'{hroa}'}</code>), así que revisa antes de guardar.
             </div>
           </div>
 
