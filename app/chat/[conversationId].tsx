@@ -801,6 +801,29 @@ export default function ChatThreadScreen() {
   // solo faltaba mostrarlo.
   const [reaccionesDe, setReaccionesDe] = useState<string | null>(null);
 
+  // "Fulano esta escribiendo...".
+  //
+  // Va por broadcast del canal de tiempo real y NO por una tabla: es
+  // informacion que vale dos segundos y guardarla en la base seria escribir
+  // miles de filas al dia para borrarlas enseguida.
+  //
+  // Se recuerda CUANDO aviso cada quien, no un si/no, porque si alguien cierra
+  // la app a mitad de una palabra no llega ningun "ya pare" y el aviso se
+  // quedaria pegado para siempre. Al no refrescarse, caduca solo.
+  const [escribiendo, setEscribiendo] = useState<Record<string, { nombre: string; ts: number }>>({});
+  const canalRef = useRef<any>(null);
+  const ultimoAvisoRef = useRef(0);
+  const [ahora, setAhora] = useState(Date.now());
+
+  // Un reloj lento solo mientras haya alguien escribiendo: sirve para que el
+  // aviso desaparezca solo al caducar, sin repintar la pantalla el resto del
+  // tiempo.
+  useEffect(() => {
+    if (Object.keys(escribiendo).length === 0) return;
+    const t = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [escribiendo]);
+
   // ── Checks de WhatsApp ────────────────────────────────────────────────────
   //
   //   ✓        se envio (esta en el servidor)
@@ -1497,6 +1520,23 @@ export default function ChatThreadScreen() {
   }, [conversationId]);
 
   // Actualiza el borrador en pantalla y lo persiste (o lo borra si queda vacío).
+  // Avisa a los demas que estas escribiendo. Con freno de 2 segundos: sin el
+  // se mandaria un aviso por cada tecla, y basta con refrescar el estado.
+  const avisarQueEscribo = useCallback(() => {
+    if (!canalRef.current || !user?.id) return;
+    const t = Date.now();
+    if (t - ultimoAvisoRef.current < 2000) return;
+    ultimoAvisoRef.current = t;
+    canalRef.current.send({
+      type: 'broadcast',
+      event: 'escribiendo',
+      // El nombre viaja en el aviso para no obligar a quien lo recibe a
+      // buscarlo: en un grupo puede llegar de alguien que todavia no tiene
+      // cargado en su lista de participantes.
+      payload: { user_id: user.id, nombre: participantsById[user.id]?.name || 'Alguien' },
+    });
+  }, [user?.id, participantsById]);
+
   const updateDraft = useCallback((text: string) => {
     setDraft(text);
     const m = text.match(/@([^\s@]{0,25})$/);
@@ -1526,6 +1566,15 @@ export default function ChatThreadScreen() {
         async (payload) => {
           const newMsg = payload.new as Message;
           setMessages((prev) => fusionarMensajeReal(prev, newMsg));
+          // Ya mando el mensaje: el "esta escribiendo" sobra. Sin esto se
+          // quedaria hasta caducar y se veria el aviso junto al mensaje ya
+          // entregado, que es justo lo que delata que esta mal hecho.
+          setEscribiendo((prev) => {
+            if (!prev[newMsg.sender_id]) return prev;
+            const copia = { ...prev };
+            delete copia[newMsg.sender_id];
+            return copia;
+          });
           await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
           // Solo si ya estaba abajo. Que llegue un mensaje mientras lees algo
           // de antes no es motivo para sacarte de donde estas.
@@ -1561,12 +1610,23 @@ export default function ChatThreadScreen() {
         },
         () => { loadReactions(); }
       )
+      .on('broadcast', { event: 'escribiendo' }, ({ payload }) => {
+        const p = payload as { user_id?: string; nombre?: string };
+        if (!p?.user_id || p.user_id === user?.id) return;   // lo propio no cuenta
+        setEscribiendo((prev) => ({
+          ...prev,
+          [p.user_id!]: { nombre: p.nombre || 'Alguien', ts: Date.now() },
+        }));
+      })
       .subscribe();
 
+    canalRef.current = channel;
+
     return () => {
+      canalRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [conversationId, loadReactions]);
+  }, [conversationId, loadReactions, user?.id]);
 
   // Carga inicial de las reacciones al abrir el chat.
   useEffect(() => { loadReactions(); }, [loadReactions]);
@@ -2595,6 +2655,22 @@ export default function ChatThreadScreen() {
             >
               {headerTitle}
             </Text>
+            {/* Quien esta escribiendo. Va DEBAJO del nombre y no encima del
+                cuadro de texto: asi no mueve la lista de mensajes al aparecer
+                y desaparecer, que es lo que hace WhatsApp. */}
+            {(() => {
+              // Caduca a los 4 s sin refresco. Quien cierra la app a mitad de
+              // una palabra no manda ningun "ya pare", asi que el aviso tiene
+              // que apagarse solo o se queda pegado.
+              const activos = Object.values(escribiendo).filter((e) => ahora - e.ts < 4000);
+              if (activos.length === 0) return null;
+              const texto = activos.length === 1
+                ? `${activos[0].nombre} está escribiendo…`
+                : activos.length === 2
+                ? `${activos[0].nombre} y ${activos[1].nombre} están escribiendo…`
+                : 'Varios están escribiendo…';
+              return <Text style={styles.headerEscribiendo} numberOfLines={1}>{texto}</Text>;
+            })()}
           </View>
 
           {esGrupal ? (
@@ -3181,7 +3257,7 @@ export default function ChatThreadScreen() {
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
-                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); if (pendingAssets.length > 0) { handleSendAll(); } else { handleSend(trimmed); } } else { updateDraft(text); } }}
+                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); if (pendingAssets.length > 0) { handleSendAll(); } else { handleSend(trimmed); } } else { updateDraft(text); if (text.trim()) avisarQueEscribo(); } }}
             multiline
             maxLength={2000}
           />
@@ -4247,6 +4323,7 @@ const styles = StyleSheet.create({
   // un cambio de fondo porque el fondo distingue quien escribio -propio vs
   // ajeno- y pisarlo confundiria de quien es el mensaje.
   bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
+  headerEscribiendo: { color: '#F8BBD0', fontSize: 12, marginTop: 1 },
   reaccionFila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   reaccionNombre: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
   reaccionQuitar: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
