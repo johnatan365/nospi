@@ -801,6 +801,21 @@ export default function ChatThreadScreen() {
   // solo faltaba mostrarlo.
   const [reaccionesDe, setReaccionesDe] = useState<string | null>(null);
 
+  // Buscar dentro de la conversacion.
+  //
+  // Se busca en el SERVIDOR y no entre los mensajes ya cargados: la lista
+  // arranca con los ultimos 50 y las conversaciones largas -la mas larga tiene
+  // 204 mensajes- se quedarian sin buscar en casi todo su historial. Las
+  // politicas de la base ya dejan a un participante leer su conversacion, asi
+  // que no hizo falta ninguna funcion nueva.
+  const [buscando, setBuscando] = useState(false);
+  const [consulta, setConsulta] = useState('');
+  const [resultados, setResultados] = useState<Message[] | null>(null);
+  const [buscandoAhora, setBuscandoAhora] = useState(false);
+  // Se esta viendo un tramo viejo al que se salto desde un resultado, en vez
+  // del final de la conversacion.
+  const [enTramoViejo, setEnTramoViejo] = useState(false);
+
   // "Fulano esta escribiendo...".
   //
   // Va por broadcast del canal de tiempo real y NO por una tabla: es
@@ -1336,6 +1351,7 @@ export default function ChatThreadScreen() {
     const visibles = (hay ? lote.slice(0, PAGINA) : lote).slice().reverse();
     setMessages(visibles);
     setHayAnteriores(hay);
+    setEnTramoViejo(false);
     setFijados((fijadosData as Message[]) || []);
     setParticipants((parts as Participant[]) || []);
 
@@ -1362,6 +1378,56 @@ export default function ChatThreadScreen() {
   useEffect(() => {
     loadEverything();
   }, [loadEverything]);
+
+  // Busca en todo el historial de la conversacion.
+  const hacerBusqueda = useCallback(async (texto: string) => {
+    const q = texto.trim();
+    if (!conversationId || q.length < 2) { setResultados(null); return; }
+    setBuscandoAhora(true);
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select(MESSAGE_COLUMNS)
+      .eq('conversation_id', conversationId)
+      // El % de los extremos hace que encuentre la palabra en medio de la
+      // frase; ilike ademas ignora mayusculas y minusculas.
+      .ilike('content', `%${q}%`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setBuscandoAhora(false);
+    setResultados(error ? [] : ((data as Message[]) || []));
+  }, [conversationId]);
+
+  // Trae el tramo de conversacion alrededor de un mensaje y lo deja en
+  // pantalla. Hace falta porque un resultado puede ser de hace meses y no
+  // estar entre los 50 que hay cargados.
+  const abrirTramoDe = useCallback(async (m: Message) => {
+    if (!conversationId) return;
+    const [antes, despues] = await Promise.all([
+      supabase.from('chat_messages').select(MESSAGE_COLUMNS)
+        .eq('conversation_id', conversationId)
+        .lte('created_at', m.created_at)
+        .order('created_at', { ascending: false }).limit(25),
+      supabase.from('chat_messages').select(MESSAGE_COLUMNS)
+        .eq('conversation_id', conversationId)
+        .gt('created_at', m.created_at)
+        .order('created_at', { ascending: true }).limit(25),
+    ]);
+    const tramo = [
+      ...(((antes.data as Message[]) || []).slice().reverse()),
+      ...(((despues.data as Message[]) || [])),
+    ];
+    if (tramo.length === 0) return;
+    setBuscando(false);
+    setConsulta('');
+    setResultados(null);
+    setMessages(tramo);
+    setHayAnteriores(true);
+    setEnTramoViejo(true);
+    // Que no se baje sola al final al cambiar el contenido de la lista.
+    cercaDelFinalRef.current = false;
+    pegandoArribaRef.current = true;
+    setTimeout(() => irAlMensaje(m.id), 300);
+  }, [conversationId, irAlMensaje]);
 
   const cargarAnteriores = useCallback(async () => {
     if (!conversationId || cargandoAnteriores) return;
@@ -2673,6 +2739,9 @@ export default function ChatThreadScreen() {
             })()}
           </View>
 
+          <TouchableOpacity onPress={() => { toque(); setBuscando(true); }} style={styles.headerActionButton}>
+            <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={21} color="#FFFFFF" />
+          </TouchableOpacity>
           {esGrupal ? (
             <TouchableOpacity onPress={() => setShowParticipants(true)} style={styles.headerActionButton}>
               <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={22} color="#FFFFFF" />
@@ -3127,6 +3196,17 @@ export default function ChatThreadScreen() {
                 : `${pendingAssets.length} adjuntos listos. Toca enviar cuando quieras.`}
             </Text>
           </View>
+        )}
+
+        {/* Solo aparece si se salto a un tramo viejo desde un resultado de
+            busqueda. Sin el no habria como volver al final: la lista ya no
+            contiene los mensajes recientes, solo el tramo que se trajo.
+            Va AFUERA del condicional de abajo -- adentro quedaria dentro de
+            una rama de un ternario, que no admite un bloque suelto. */}
+        {enTramoViejo && (
+          <TouchableOpacity style={styles.volverAlFinal} onPress={() => { toque(); loadEverything(); }} activeOpacity={0.85}>
+            <Text style={styles.volverAlFinalTexto}>↓ Ir a los mensajes recientes</Text>
+          </TouchableOpacity>
         )}
 
         {solicitudParaMi ? (
@@ -3608,6 +3688,67 @@ export default function ChatThreadScreen() {
 
       {/* Acciones al mantener presionado un mensaje. Sin boton Cancelar: se
           cierra tocando fuera del menu. */}
+      {/* Buscar en la conversación. Panel completo y no una barra encima del
+          chat: los resultados necesitan sitio para mostrar fecha y contexto,
+          y con la barra sola habria que adivinar a que mensaje corresponde. */}
+      <Modal visible={buscando} animationType="slide" onRequestClose={() => { setBuscando(false); setConsulta(''); setResultados(null); }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
+          <View style={styles.buscarBarra}>
+            <TouchableOpacity onPress={() => { setBuscando(false); setConsulta(''); setResultados(null); }} hitSlop={10}>
+              <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={26} color={nospiColors.purpleDark} />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.buscarInput}
+              placeholder="Buscar en esta conversación"
+              placeholderTextColor={nospiColors.gray400}
+              value={consulta}
+              autoFocus
+              returnKeyType="search"
+              onChangeText={(t) => { setConsulta(t); hacerBusqueda(t); }}
+            />
+            {!!consulta && (
+              <TouchableOpacity onPress={() => { setConsulta(''); setResultados(null); }} hitSlop={10}>
+                <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={20} color={nospiColors.gray400} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {consulta.trim().length < 2 ? (
+            <Text style={styles.buscarAyuda}>Escribe al menos dos letras.</Text>
+          ) : buscandoAhora ? (
+            <ActivityIndicator color={nospiColors.purpleDark} style={{ marginTop: 28 }} />
+          ) : (resultados || []).length === 0 ? (
+            <Text style={styles.buscarAyuda}>Sin resultados para «{consulta.trim()}».</Text>
+          ) : (
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={styles.buscarAyuda}>
+                {resultados!.length === 50 ? 'Primeros 50 resultados' : `${resultados!.length} resultado${resultados!.length === 1 ? '' : 's'}`}
+              </Text>
+              {resultados!.map((r) => {
+                const quien = r.sender_id === user?.id
+                  ? 'Tú'
+                  : r.sender_id === NOSPI_SYSTEM_USER_ID
+                  ? 'Equipo Nospi'
+                  : participantsById[r.sender_id]?.name || 'Alguien';
+                return (
+                  <TouchableOpacity key={r.id} style={styles.buscarFila} onPress={() => abrirTramoDe(r)} activeOpacity={0.7}>
+                    <View style={styles.buscarFilaTop}>
+                      <Text style={styles.buscarQuien} numberOfLines={1}>{quien}</Text>
+                      <Text style={styles.buscarFecha}>
+                        {new Date(r.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                        {' · '}
+                        {formatBogotaTime(new Date(r.created_at))}
+                      </Text>
+                    </View>
+                    <Text style={styles.buscarTexto} numberOfLines={2}>{r.content}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
+
       {/* Quien reacciono a un mensaje. Se abre tocando la reaccion.
           Tocando tu propia fila la quitas, como en WhatsApp: si no, no habria
           forma de deshacerla, porque el toque en el globo ya no alterna. */}
@@ -4324,6 +4465,19 @@ const styles = StyleSheet.create({
   // ajeno- y pisarlo confundiria de quien es el mensaje.
   bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
   headerEscribiendo: { color: '#F8BBD0', fontSize: 12, marginTop: 1 },
+  volverAlFinal: {
+    alignSelf: 'center', backgroundColor: nospiColors.purpleDark, borderRadius: 20,
+    paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
+  },
+  volverAlFinalTexto: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  buscarBarra: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  buscarInput: { flex: 1, fontSize: 16, color: '#1F2937', paddingVertical: 4 },
+  buscarAyuda: { color: '#9CA3AF', fontSize: 13, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
+  buscarFila: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  buscarFilaTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 2 },
+  buscarQuien: { flex: 1, fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark },
+  buscarFecha: { fontSize: 12, color: '#9CA3AF' },
+  buscarTexto: { fontSize: 14, color: '#374151', lineHeight: 19 },
   reaccionFila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   reaccionNombre: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
   reaccionQuitar: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
