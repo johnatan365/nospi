@@ -61,14 +61,7 @@ export default function AppointmentsScreen() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<FilterType>(params.openFilter === 'anteriores' ? 'anteriores' : 'confirmadas');
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
-  const [notificationPreferences, setNotificationPreferences] = useState({
-    whatsapp: false,
-    email: true,
-    sms: false,
-    push: true,
-  });
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
@@ -80,17 +73,6 @@ export default function AppointmentsScreen() {
     canceladas: null,
   });
 
-  const checkFirstTimeNotificationPrompt = useCallback(async () => {
-    try {
-      const hasSeenPrompt = await AsyncStorage.getItem('has_seen_notification_prompt');
-      if (!hasSeenPrompt) {
-        setShowNotificationModal(true);
-        await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
-      }
-    } catch (error) {
-      console.error('Error checking notification prompt:', error);
-    }
-  }, []);
 
   const fetchFreshAppointments = useCallback(async (filterType: FilterType): Promise<Appointment[] | null> => {
     if (!user?.id) return null;
@@ -260,10 +242,8 @@ export default function AppointmentsScreen() {
         } catch {
           // ignore
         }
-
-        checkFirstTimeNotificationPrompt();
       })();
-    }, [loadAppointments, user?.id, authLoading, checkFirstTimeNotificationPrompt])
+    }, [loadAppointments, user?.id, authLoading])
   );
 
   const formatDate = (dateString: string) => {
@@ -368,43 +348,7 @@ export default function AppointmentsScreen() {
     }
   };
 
-  const toggleNotification = (type: 'whatsapp' | 'email' | 'sms' | 'push') => {
-    setNotificationPreferences(prev => ({
-      ...prev,
-      [type]: !prev[type],
-    }));
-  };
 
-  const saveNotificationPreferences = async () => {
-    console.log('User tapped Guardar Preferencias', notificationPreferences);
-
-    // Always persist locally first so preferences are never lost
-    await AsyncStorage.setItem('notification_preferences', JSON.stringify(notificationPreferences));
-    await AsyncStorage.setItem('has_seen_notification_prompt', 'true');
-    setShowNotificationModal(false);
-
-    if (!user?.id) {
-      console.warn('saveNotificationPreferences: no user id, saved locally only');
-      return;
-    }
-
-    // Sync to Supabase in the background — do not block or alert the user on failure
-    try {
-      console.log('saveNotificationPreferences: syncing to Supabase for user:', user.id);
-      const { error } = await supabase
-        .from('users')
-        .update({ notification_preferences: notificationPreferences })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('saveNotificationPreferences: Supabase error (non-blocking):', error.message);
-      } else {
-        console.log('saveNotificationPreferences: synced to Supabase successfully');
-      }
-    } catch (error) {
-      console.error('saveNotificationPreferences: network error (non-blocking):', error);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     const statusColorMap: Record<string, string> = {
@@ -724,70 +668,15 @@ export default function AppointmentsScreen() {
         )}
 
         {/* Notification Preferences Modal */}
-        <Modal
-          visible={showNotificationModal}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowNotificationModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Preferencias de Notificación</Text>
-              <Text style={styles.modalSubtitle}>
-                ¿Cómo te gustaría recibir recordatorios de tus citas?
-              </Text>
+        {/* Aqui habia un aviso de primera vez que preguntaba "como quieres
+            recibir recordatorios" con cuatro opciones -- WhatsApp, correo,
+            SMS y push -- de las que solo push hacia algo. Ninguna funcion de
+            envio leia las otras tres.
 
-              <View style={styles.notificationOptions}>
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('whatsapp')}
-                >
-                  <Text style={styles.notificationOptionText}>📱 WhatsApp</Text>
-                  <View style={[styles.checkbox, notificationPreferences.whatsapp && styles.checkboxActive]}>
-                    {notificationPreferences.whatsapp && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('email')}
-                >
-                  <Text style={styles.notificationOptionText}>📧 Email</Text>
-                  <View style={[styles.checkbox, notificationPreferences.email && styles.checkboxActive]}>
-                    {notificationPreferences.email && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('sms')}
-                >
-                  <Text style={styles.notificationOptionText}>💬 SMS</Text>
-                  <View style={[styles.checkbox, notificationPreferences.sms && styles.checkboxActive]}>
-                    {notificationPreferences.sms && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.notificationOption}
-                  onPress={() => toggleNotification('push')}
-                >
-                  <Text style={styles.notificationOptionText}>🔔 Notificaciones Push</Text>
-                  <View style={[styles.checkbox, notificationPreferences.push && styles.checkboxActive]}>
-                    {notificationPreferences.push && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={saveNotificationPreferences}
-              >
-                <Text style={styles.saveButtonText}>Guardar Preferencias</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+            Se quito porque ademas escribia el formato VIEJO de preferencias:
+            a quien abriera Citas por primera vez le habria pisado lo que
+            eligio en su perfil. Las preferencias ahora se manejan en un solo
+            sitio: Perfil > Notificaciones. */}
 
         {/* Cancel Confirmation Modal */}
         <Modal
