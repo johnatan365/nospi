@@ -1,6 +1,10 @@
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+// El KeyboardAvoidingView de react-native no compensa nada en Android con
+// edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
+// teclado de verdad y usa el mismo behavior en las dos plataformas.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
@@ -36,7 +40,7 @@ export default function NameScreen() {
     >
       <KeyboardAvoidingView 
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
         <View style={styles.content}>
           <Text style={styles.title}>¿Cómo te llamas?</Text>

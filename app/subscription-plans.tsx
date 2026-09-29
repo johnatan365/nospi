@@ -2,8 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Modal, Alert, SafeAreaView,
-  Image, TextInput, KeyboardAvoidingView, Platform, Keyboard, AppState
+  Image, TextInput, Platform, Keyboard, AppState
 } from 'react-native';
+// El KeyboardAvoidingView de react-native no compensa nada en Android con
+// edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
+// teclado de verdad y usa el mismo behavior en las dos plataformas.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
@@ -1616,7 +1620,7 @@ export default function SubscriptionPlansScreen() {
             <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
           </TouchableOpacity>
         )}} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
@@ -1724,7 +1728,7 @@ export default function SubscriptionPlansScreen() {
             <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
           </TouchableOpacity>
         )}} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Image source={require('@/assets/images/logo_380.png')} style={styles.methodLogoLarge} resizeMode="contain" />

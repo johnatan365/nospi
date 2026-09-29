@@ -6,7 +6,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   Image,
   Modal,
@@ -18,6 +17,11 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
+// El KeyboardAvoidingView de react-native NO compensa nada en Android cuando la
+// app usa edge-to-edge: la ventana ya no se encoge al abrir el teclado. Este
+// otro mide el teclado de verdad y funciona igual en las dos plataformas.
+import { KeyboardAvoidingView, useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -763,6 +767,22 @@ export default function ChatThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Con el teclado abierto sobra el hueco que se reserva para la barra de
+  // navegacion del sistema: el teclado ya la tapa, y ese espacio se ve como una
+  // franja vacia entre el teclado y la barra de escribir.
+  //
+  // `progress` va de 0 (cerrado) a 1 (abierto) siguiendo la animacion real del
+  // teclado, asi que el hueco se va encogiendo con el: si se hiciera con un
+  // simple `visible ? 0 : insets.bottom` daria un salto justo al abrirlo.
+  const { progress } = useReanimatedKeyboardAnimation();
+  const padInput = useAnimatedStyle(() => ({
+    paddingBottom: insets.bottom * (1 - progress.value) + 8,
+  }));
+  const padAviso = useAnimatedStyle(() => ({
+    paddingBottom: insets.bottom * (1 - progress.value) + 10,
+  }));
+
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [meta, setMeta] = useState<ConversationMeta | null>(null);
@@ -1187,6 +1207,19 @@ export default function ChatThreadScreen() {
   const pegandoArribaRef = useRef(false);
 
   const listRef = useRef<FlatList<Message>>(null);
+  // Al abrir el teclado la lista se encoge pero conserva su posicion, asi que
+  // los ultimos mensajes quedan por encima del recorte y parece que la
+  // conversacion "salto" hacia atras. Se la baja de nuevo al final.
+  //
+  // Los 150 ms son para que el desplazamiento ocurra con la altura YA reducida;
+  // hacerlo antes lo dejaria a mitad de camino. Es el mismo truco que ya se usa
+  // al enviar un mensaje.
+  const tecladoVisible = useKeyboardState((k) => k.isVisible);
+  useEffect(() => {
+    if (!tecladoVisible) return;
+    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
+    return () => clearTimeout(t);
+  }, [tecladoVisible]);
   // Rutas para las que ya se pidio firma, para no volver a pedirlas en cada
   // render (y para no entrar en bucle si alguna falla).
   const signRequestedRef = useRef<Set<string>>(new Set());
@@ -2464,9 +2497,15 @@ export default function ChatThreadScreen() {
           las burbujas quedaban perdidas en el medio. En el celular no se nota
           porque la pantalla ya es angosta. Aca se limita todo el chat a una
           columna centrada, como hacen WhatsApp Web y Telegram Web. */}
+      {/* 'padding' en LAS DOS plataformas: antes en Android quedaba undefined
+          y por eso el teclado tapaba la barra de escribir. Con este
+          KeyboardAvoidingView (el de react-native-keyboard-controller) el mismo
+          behavior sirve en iOS y en Android.
+          El keyboardVerticalOffset se deja como estaba, distinto por
+          plataforma: en iOS venia funcionando bien y no hay por que tocarlo. */}
       <KeyboardAvoidingView
         style={[{ flex: 1 }, styles.chatColumn]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -2934,7 +2973,7 @@ export default function ChatThreadScreen() {
           // Solicitud que me llego: hay que decidir antes de conversar. El campo
           // de escribir no aparece — la base tampoco dejaria enviar, y mostrar
           // un campo que no funciona es peor que no mostrarlo.
-          <View style={[styles.solicitudBar, { paddingBottom: insets.bottom + 10 }]}>
+          <Reanimated.View style={[styles.solicitudBar, padAviso]}>
             <Text style={styles.solicitudTitulo}>
               {meta?.other_user_name || 'Esta persona'} quiere escribirte
             </Text>
@@ -2961,13 +3000,13 @@ export default function ChatThreadScreen() {
                   : <Text style={styles.solicitudAceptarText}>Aceptar</Text>}
               </TouchableOpacity>
             </View>
-          </View>
+          </Reanimated.View>
         ) : solicitudEnviadaPorMi ? (
           // Quien envio tiene que entender tres cosas: que fue una solicitud,
           // que el otro SI va a leer su mensaje (por eso se manda uno solo), y
           // que hasta que no le acepten no puede escribir mas. Sin esto parece
           // que la app se rompio.
-          <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
+          <Reanimated.View style={[styles.channelLockedBar, padAviso]}>
             <Text style={styles.channelLockedText}>
               ✓ Solicitud enviada
             </Text>
@@ -2975,17 +3014,17 @@ export default function ChatThreadScreen() {
               {(meta?.other_user_name || 'Esta persona')} va a leer tu mensaje y decide si quieren
               conversar. Hasta que acepte no puedes escribir más.
             </Text>
-          </View>
+          </Reanimated.View>
         ) : channelReadOnly ? (
           // Canal en solo lectura: no se escribe, pero las encuestas de arriba
           // si se pueden responder.
-          <View style={[styles.channelLockedBar, { paddingBottom: insets.bottom + 10 }]}>
+          <Reanimated.View style={[styles.channelLockedBar, padAviso]}>
             <Text style={styles.channelLockedText}>
               🔒 Solo el equipo de Nospi publica en este canal
             </Text>
-          </View>
+          </Reanimated.View>
         ) : recording ? (
-          <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+          <Reanimated.View style={[styles.inputBar, padInput]}>
             <TouchableOpacity style={styles.attachButton} onPress={cancelRecording}>
               <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={22} color="#FF8A9B" />
             </TouchableOpacity>
@@ -2999,7 +3038,7 @@ export default function ChatThreadScreen() {
             <TouchableOpacity style={styles.sendButton} onPress={sendRecording}>
               <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-          </View>
+          </Reanimated.View>
         ) : (
         <>
         {/* Ni en el grupo del evento ni en la comunidad se resuelve lo que
@@ -3023,7 +3062,7 @@ export default function ChatThreadScreen() {
               : '¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido — es el mismo número por donde te llegó la info del evento, y está en tu perfil.'}
           </Text>
         )}
-        <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+        <Reanimated.View style={[styles.inputBar, padInput]}>
           <TouchableOpacity
             style={styles.attachButton}
             onPress={() => setShowAttachMenu(true)}
@@ -3083,7 +3122,7 @@ export default function ChatThreadScreen() {
               <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           )}
-        </View>
+        </Reanimated.View>
         </>
         )}
       </KeyboardAvoidingView>
@@ -3289,7 +3328,7 @@ export default function ChatThreadScreen() {
           esa regla la decide la base, no esta pantalla. */}
       <Modal visible={showPollForm} animationType="slide" transparent onRequestClose={() => setShowPollForm(false)}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.gifOverlay}
         >
           <View style={[styles.pollSheet, { paddingBottom: insets.bottom + 16 }]}>
