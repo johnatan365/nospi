@@ -430,8 +430,6 @@ function buildSameDayWhatsAppLink(
     `2️⃣ *Confirmar asistencia*`,
     `3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada`,
     ``,
-    `⚠️ El enlace solo está ahí. Si no entras por la app, cuenta como falta.`,
-    ``,
     `🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*`,
     `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras`,
     `✏️ Ten a mano papel y lápiz`,
