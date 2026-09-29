@@ -239,6 +239,7 @@ async function sendAdminPurchaseEmail(params: {
   amountPaidCop?: number | null;
   remainingBalanceCop?: number | null;
   promo?: { code: string; discount?: number | null } | null;
+  referido?: { referidorNombre: string; codigo: string; premioCop?: number | null } | null;
 }): Promise<boolean> {
   if (!RESEND_API_KEY) return false;
   try {
@@ -260,12 +261,19 @@ async function sendAdminPurchaseEmail(params: {
       subject = `💰 Compra confirmada — ${nombre} → ${evento}`;
     }
 
+    // Si la persona llego por un referido se marca al principio del asunto,
+    // para filtrarlo de un vistazo sin perder el emoji de la forma de pago.
+    if (params.referido) {
+      subject = `🤝 REFERIDO · ${subject}`;
+    }
+
     const promoLine = params.promo
       ? `Código de promo: ${params.promo.code}${(params.promo.discount ?? null) !== null ? ` (−${params.promo.discount}%)` : ''}`
       : null;
     const amountStr = formatCop(params.amountPaidCop);
     const saldoStr = (params.remainingBalanceCop !== null && params.remainingBalanceCop !== undefined)
       ? formatCop(params.remainingBalanceCop) : null;
+    const premioStr = params.referido ? formatCop(params.referido.premioCop) : null;
 
     const text = [
       `${nombre} confirmó su cupo para "${evento}".`,
@@ -277,6 +285,8 @@ async function sendAdminPurchaseEmail(params: {
       `Forma de pago: ${paymentMethodLabel(params.paymentMethod)}`,
       amountStr ? `Monto pagado: ${amountStr}` : null,
       promoLine,
+      params.referido ? `Vino por referido de: ${params.referido.referidorNombre} (codigo ${params.referido.codigo})` : null,
+      (params.referido && premioStr) ? `Premio acreditado a ${params.referido.referidorNombre}: ${premioStr} de saldo` : null,
       saldoStr ? `Saldo restante de la persona: ${saldoStr}` : null,
       '',
       `Usuario: ${nombre}`,
@@ -422,6 +432,35 @@ serve(async (req) => {
       console.error('notify-purchase-confirmation: error resolviendo promo:', e);
     }
 
+    // Es ESTA compra la que le da el premio a quien lo invito? Se compara
+    // contra appointment_id y no contra el estado, para marcar solo la PRIMERA
+    // compra del invitado y no todas las que haga despues. El trigger que
+    // acredita el saldo corre antes que este correo (trg_acreditar_referido va
+    // antes que trg_notify_purchase_confirmation por orden alfabetico), asi que
+    // cuando llegamos aca la fila ya esta al dia.
+    let referido: { referidorNombre: string; codigo: string; premioCop?: number | null } | null = null;
+    try {
+      const { data: ref } = await supabase
+        .from('referrals')
+        .select('codigo, recompensa_cop, referrer_id, appointment_id')
+        .eq('referred_id', (apt as any).user_id)
+        .maybeSingle();
+      if (ref && (ref as any).appointment_id === appointment_id) {
+        const { data: referidor } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', (ref as any).referrer_id)
+          .maybeSingle();
+        referido = {
+          referidorNombre: (((referidor as any)?.name || '').trim()) || 'alguien',
+          codigo: (ref as any).codigo,
+          premioCop: (ref as any).recompensa_cop ?? null,
+        };
+      }
+    } catch (e) {
+      console.error('notify-purchase-confirmation: error resolviendo referido:', e);
+    }
+
     let emailResult: any = { skipped: true, reason: 'ya enviado previamente' };
     if (!apt.purchase_email_sent_at) {
       // Si el usuario no tiene correo no hay nada que enviarle: eso no es un
@@ -450,6 +489,7 @@ serve(async (req) => {
         amountPaidCop,
         remainingBalanceCop,
         promo,
+        referido,
       });
 
       let recurrentOk = true;
