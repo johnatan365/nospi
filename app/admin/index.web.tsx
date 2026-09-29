@@ -231,22 +231,20 @@ const BLOQUE_INSTALAR_VISPERA = [
 // la app, porque ese boton es el que registra la asistencia. Por eso el bloque
 // de instalacion cambia de tono — deja de ser una recomendacion.
 const BLOQUE_INSTALAR_VIRTUAL = [
-  `📲 *Antes de la llamada instala:*`,
+  `📲 *Instálalas hoy:*`,
   `Nospi 👉 ${LINK_APP}`,
   `Google Meet 👉 ${LINK_MEET}`,
-  `En Nospi está todo: el enlace de la llamada, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔`,
+  `En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔`,
 ].join('\n');
 
-// Videollamada: en un Meet entre desconocidos nadie arranca solo. Estos pasos
-// le dicen a cada uno que hacer al entrar, sin depender de que alguien de Nospi
-// este en la llamada. El mismo texto va en el correo del mismo dia y en el de
-// inicio (send-email-reminders).
-const BLOQUE_AL_ENTRAR_VIRTUAL = [
-  `*Al entrar a la llamada:*`,
-  `📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal`,
-  `🎤 El moderador sale del mismo grupo — *puede ser cualquiera de ustedes*. Se postula en la app y desde ahí va leyendo las preguntas y dando la palabra`,
-  `✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra`,
-  `✏️ Ten a mano papel y lápiz`,
+// Mismo dia: los dos links de instalacion, sin el parrafo de por que. Quien
+// ya la tiene se salta el bloque de una mirada; quien no, tiene los dos links
+// juntos. El bloque viejo "Al entrar a la llamada" se quito: repetia los 3
+// pasos de arriba y explicaba el moderador por segunda vez.
+const BLOQUE_INSTALAR_VIRTUAL_HOY = [
+  `📲 ¿Aún sin las apps?`,
+  `Nospi 👉 ${LINK_APP}`,
+  `Google Meet 👉 ${LINK_MEET}`,
 ].join('\n');
 
 // Compra presencial: el lugar llega despues, asi que aqui solo se sugiere
@@ -363,15 +361,13 @@ function buildEventReminderWhatsAppLink(
   const message = (esVirtual ? [
     `¡Hola ${firstName}! 👋`,
     ``,
-    `Mañana es *${eventLabel}*.`,
-    dateLine,
-    `🎥 Por videollamada — no tienes que ir a ningún lado.`,
+    `🎥 *Mañana${eventTime ? ` a las ${formatTimeAmPm(eventTime)}` : ''}* es tu videollamada — desde donde estés.`,
     ``,
     BLOQUE_INSTALAR_VIRTUAL,
     ``,
-    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña *Dinámica* de la app; ahí uno del grupo se anima a ser el moderador y de una entran a la llamada.`,
+    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas en la pestaña *Dinámica*, uno del grupo se anima a moderar y entran a la llamada.`,
     ``,
-    `📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉`,
+    `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉`,
     ``,
     `¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.`,
     ``,
@@ -427,23 +423,22 @@ function buildSameDayWhatsAppLink(
   const message = (esVirtual ? [
     `¡Hola ${firstName}! 👋`,
     ``,
-    `*Hoy es ${(eventName || 'tu evento').trim()}*${timePart ? `,${timePart}` : '.'}`,
-    `🎥 Por videollamada.`,
+    `🎥 *Hoy${timePart}* es tu videollamada.`,
     ``,
-    `Así entras:`,
-    `1️⃣ Abre Nospi, pestaña *Dinámica*: desde las ${horaBoton || '10 minutos antes'} aparece *Confirmar asistencia*`,
-    `2️⃣ La app pregunta quién modera. Si te animas, toca *"Quiero ser el moderador"* — el primero que se postule queda 🙋`,
-    `3️⃣ Tocas *Ir a Meet*: con eso queda registrada tu asistencia`,
+    `*Entras desde la app, en 3 toques:*`,
+    `1️⃣ Abre Nospi → pestaña *Dinámica* (desde las ${horaBoton || '10 minutos antes'})`,
+    `2️⃣ *Confirmar asistencia*`,
+    `3️⃣ *Ir a Meet* y entras directo a la llamada`,
     ``,
-    `⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.`,
+    `⚠️ El enlace solo está ahí. Si no entras por la app, cuenta como falta.`,
     ``,
-    BLOQUE_AL_ENTRAR_VIRTUAL,
+    `🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*`,
+    `📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras`,
+    `✏️ Ten a mano papel y lápiz`,
     ``,
-    `Al final eliges con quién hiciste clic: nadie se entera, y si es mutuo se abre un *chat privado* 🔒`,
+    `Al final eliges con quién hiciste clic — si es mutuo, se abre un *chat privado* 🔒`,
     ``,
-    `📲 ¿Aún sin Nospi o sin Meet? Instálalos ya: sin Nospi no te llega el aviso cuando arranca ni cuando un match te escribe.`,
-    `Nospi 👉 ${LINK_APP}`,
-    `Google Meet 👉 ${LINK_MEET}`,
+    BLOQUE_INSTALAR_VIRTUAL_HOY,
     ``,
     `¡Hoy Nospi! 🎉`,
   ] : [
