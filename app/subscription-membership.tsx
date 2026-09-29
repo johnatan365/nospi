@@ -2,8 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, SafeAreaView, TextInput,
-  KeyboardAvoidingView, Platform, Keyboard, Modal,
+  Keyboard, Modal,
 } from 'react-native';
+// El KeyboardAvoidingView de react-native no compensa nada en Android con
+// edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
+// teclado de verdad y usa el mismo behavior en las dos plataformas.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
@@ -663,7 +667,7 @@ export default function SubscriptionMembershipScreen() {
                 <Text style={styles.changeFormSubtitle}>
                   Tu suscripción sigue igual. No se hace ningún cobro ahora: el próximo cobro se hará a la tarjeta nueva.
                 </Text>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <KeyboardAvoidingView behavior="padding">
                   <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <View style={styles.cardNumberRow}>
                     <TextInput
@@ -803,7 +807,7 @@ export default function SubscriptionMembershipScreen() {
                   <Text style={styles.subscribeButtonText}>Suscribirme</Text>
                 </TouchableOpacity>
               ) : (
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <KeyboardAvoidingView behavior="padding">
                   <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <View style={styles.cardNumberRow}>
                     <TextInput

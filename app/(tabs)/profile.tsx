@@ -1,7 +1,11 @@
 import { AgeFallbackChoices, AGE_FALLBACK_LABELS } from '@/components/AgeFallbackChoices';
 import { AgeFallback, parseAgeFallback, agePreferenceFields, validAgeRange } from '@/utils/agePreferences';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, Platform, FlatList, SafeAreaView, Linking, Keyboard } from 'react-native';
+// El KeyboardAvoidingView de react-native no compensa nada en Android con
+// edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
+// teclado de verdad y usa el mismo behavior en las dos plataformas.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Image as ExpoImage } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 

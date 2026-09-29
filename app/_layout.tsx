@@ -1,6 +1,7 @@
 import "react-native-url-polyfill/auto";
 import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Stack } from "expo-router";
 import "react-native-reanimated";
 import React, { useState, useRef, useEffect } from "react";
@@ -218,11 +219,22 @@ export default Sentry.wrap(function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SupabaseProvider>
-          <AuthProvider>
-            <RootLayoutInner />
-          </AuthProvider>
-        </SupabaseProvider>
+        {/* Sin esto, en Android el teclado se monta ENCIMA de la barra de
+            escribir y la persona escribe a ciegas.
+            Por que pasa: la app usa edge-to-edge (obligatorio desde Android 15
+            y activado en app.json), asi que la ventana ya no se encoge al abrir
+            el teclado -- el contenido se dibuja detras. El KeyboardAvoidingView
+            de react-native no sabe compensar eso en Android.
+            Las dos banderas van en true porque ambas barras del sistema son
+            translucidas con edge-to-edge; si se dejan en false, la libreria
+            calcula mal la altura y aparece una franja. */}
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+          <SupabaseProvider>
+            <AuthProvider>
+              <RootLayoutInner />
+            </AuthProvider>
+          </SupabaseProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );
