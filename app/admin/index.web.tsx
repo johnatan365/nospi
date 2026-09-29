@@ -244,7 +244,7 @@ const BLOQUE_INSTALAR_VIRTUAL = [
 const BLOQUE_AL_ENTRAR_VIRTUAL = [
   `*Al entrar a la llamada:*`,
   `📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal`,
-  `🎤 El moderador lleva el juego desde la app: lee las preguntas y da la palabra. Tú solo conversa`,
+  `🎤 El moderador sale del mismo grupo — *puede ser cualquiera de ustedes*. Se postula en la app y desde ahí va leyendo las preguntas y dando la palabra`,
   `✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra`,
   `✏️ Ten a mano papel y lápiz`,
 ].join('\n');
@@ -369,7 +369,7 @@ function buildEventReminderWhatsAppLink(
     ``,
     BLOQUE_INSTALAR_VIRTUAL,
     ``,
-    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña *Dinámica* de la app, escogen al moderador y de ahí entran a la llamada.`,
+    `Mañana${horaBoton ? ` desde las ${horaBoton}` : ''} confirmas tu asistencia en la pestaña *Dinámica* de la app; ahí uno del grupo se anima a ser el moderador y de una entran a la llamada.`,
     ``,
     `📹 Conéctate con la cámara prendida: la idea es conocernos, y eso pasa viéndonos las caras. Ten a mano papel y lápiz 😉`,
     ``,
@@ -432,7 +432,7 @@ function buildSameDayWhatsAppLink(
     ``,
     `Así entras:`,
     `1️⃣ Abre Nospi, pestaña *Dinámica*: desde las ${horaBoton || '10 minutos antes'} aparece *Confirmar asistencia*`,
-    `2️⃣ Al confirmar, alguien se ofrece como moderador. Sin moderador no podemos arrancar, así que anímate 😉`,
+    `2️⃣ La app pregunta quién modera. Si te animas, toca *"Quiero ser el moderador"* — el primero que se postule queda 🙋`,
     `3️⃣ Tocas *Ir a Meet*: con eso queda registrada tu asistencia`,
     ``,
     `⚠️ El enlace solo está ahí. Si no entras desde la app cuenta como falta, y con faltas se suspende la cuenta para reservar.`,
