@@ -228,7 +228,15 @@ export default function SubscriptionPlansScreen() {
   // Ver PUERTA-2.md en la raiz del repo para como quitar todo esto.
   const [soloSuscripcionUsuario, setSoloSuscripcionUsuario] = useState(false);
   const pruebaEncendida = appConfig.prueba_solo_suscripcion === 'true';
-  const ocultarPagoPorEvento = pruebaEncendida && soloSuscripcionUsuario;
+  // EXCEPCION: a quien tiene saldo virtual pendiente NUNCA se le esconde la
+  // compra por evento, aunque este en la prueba. El boton de "Saldo Virtual"
+  // vive dentro de esa tarjeta (Por evento -> Como quieres pagar), asi que
+  // ocultarla dejaba la plata atrapada: la app le devuelve el saldo al cancelar
+  // a tiempo y despues no le da ninguna forma de gastarlo. Paso con una usuaria
+  // real el 29 de septiembre de 2026. virtual_balance y solo_suscripcion se leen
+  // en el mismo select de fetchVirtualBalance, asi que llegan juntos y no hay un
+  // instante en que uno este listo y el otro no.
+  const ocultarPagoPorEvento = pruebaEncendida && soloSuscripcionUsuario && virtualBalance <= 0;
 
   // Suscripción: si el usuario tiene una suscripción activa, se confirma la
   // asistencia gratis sin pasar por ningún método de pago.

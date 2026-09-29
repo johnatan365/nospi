@@ -64,6 +64,21 @@ Migración: `planes_3_6_meses_y_puerta_solo_suscripcion`.
 | `contexts/AppConfigContext.tsx` | Campo `prueba_solo_suscripcion` en `DEFAULT_CONFIG` |
 | `app/subscription-plans.tsx` | Estado `soloSuscripcionUsuario`, constantes `pruebaEncendida` y `ocultarPagoPorEvento`, el campo `solo_suscripcion` en el `select` de `users`, y el condicional que envuelve la tarjeta "Por evento" |
 
+### Excepción: quien tiene saldo virtual siempre ve "Por evento"
+
+`ocultarPagoPorEvento` lleva un `&& virtualBalance <= 0`. No es opcional.
+El botón de **Saldo Virtual** vive dentro de la tarjeta "Por evento"
+(Por evento → ¿Cómo quieres pagar?), así que esconder esa tarjeta dejaba el
+saldo atrapado: la app se lo devuelve a quien cancela con más de 24 horas y
+después no le daba ninguna forma de gastarlo. Solo veía la suscripción.
+
+Pasó con una usuaria real el 29 de septiembre de 2026 (había pagado $15.000
+por PSE, canceló a tiempo, le quedó el saldo, y la pantalla de confirmar solo
+le ofrecía suscribirse). Si algún día se reescribe esta puerta, la regla se
+mantiene: **nunca escondas la compra por evento a alguien con saldo pendiente.**
+La alternativa sería sacar el botón de saldo de esa tarjeta y ponerlo aparte.
+
+
 ---
 
 ## Cómo quitarlo del todo
