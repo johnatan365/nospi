@@ -6156,9 +6156,28 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const cancelledSubs = realSubs.filter((s) => s.status === 'cancelled' || s.status === 'canceled');
     const expiredSubs = realSubs.filter((s) => s.status === 'expired');
     // MRR: solo cuentan las suscripciones que VAN A RENOVAR (auto_renew).
-    // Las activas con renovacion cancelada estan terminando su mes pagado y
-    // no generan ingreso el mes entrante: contarlas inflaba el numero.
-    const mrr = activeSubs.filter((s) => s.auto_renew).reduce((sum, s) => sum + Number(s.price || 0), 0);
+    // Las activas con renovacion cancelada estan terminando su periodo pagado
+    // y no generan ingreso el mes entrante: contarlas inflaba el numero.
+    //
+    // Cada fila se divide entre los meses de su plan. subscriptions.price
+    // guarda el TOTAL del plan, no el precio por mes: sumarlo crudo metia los
+    // $59.000 de un plan de 3 meses como si entraran los tres meses. Con 6
+    // planes trimestrales eso inflaba el MRR en $236.000 (un 24%), y encima
+    // el numero no se movia el mes que esa persona renovaba de verdad.
+    const suscripcionesQueRenuevan = activeSubs.filter((s) => s.auto_renew);
+    const mrr = Math.round(
+      suscripcionesQueRenuevan.reduce(
+        (sum, s) => sum + Number(s.price || 0) / (PLAN_MONTHS[s.plan_type] || 1),
+        0,
+      ),
+    );
+    // Lo que de verdad se cobra cada mes salta segun quien renueve; el MRR es
+    // el promedio parejo. Vale la pena decir de donde sale para que el numero
+    // no parezca que "no cuadra" con la plata que entro ese mes.
+    const trimestralesOMas = suscripcionesQueRenuevan.filter((s) => (PLAN_MONTHS[s.plan_type] || 1) > 1).length;
+    const notaMrr = trimestralesOMas > 0
+      ? `${suscripcionesQueRenuevan.length} renovaran · ${trimestralesOMas} de plan largo, contadas por mes`
+      : `${suscripcionesQueRenuevan.length} renovaran`;
     const renewingSoon = activeSubs.filter((s) => s.auto_renew && s.next_charge_date && new Date(s.next_charge_date).getTime() <= soonThreshold);
     const withFailedCharges = realSubs.filter((s) => Number(s.failed_charge_count || 0) > 0);
 
@@ -6196,7 +6215,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     const summaryCards: { label: string; value: string; color: string; sub?: string }[] = [
       { label: 'Suscriptores activos', value: String(activeSubs.length), color: '#059669' },
       { label: 'Cancelados / vencidos', value: String(cancelledSubs.length + expiredSubs.length), color: '#EF4444' },
-      { label: 'Ingreso mensual estimado (MRR)', value: `$ ${mrr.toLocaleString('es-CO')} COP`, color: '#6B21A8' },
+      { label: 'Ingreso mensual estimado (MRR)', value: `$ ${mrr.toLocaleString('es-CO')} COP`, color: '#6B21A8', sub: notaMrr },
       {
         label: 'Recaudado en suscripciones',
         value: `$ ${totalRecaudado.toLocaleString('es-CO')} COP`,
