@@ -1466,6 +1466,41 @@ export default function DinamicaScreen() {
   // abajo hay pantallas que salen por su propio return y tambien la usan.
   const esVirtual = appointment?.event?.type === 'virtual';
 
+  // Sin sesion no hay nada que consultar: antes caiamos en la pantalla de
+  // abajo y le deciamos "No tienes ningun evento confirmado" a alguien que
+  // SI tenia cupo reservado, solo porque no habia iniciado sesion. Paso dos
+  // veces con usuarias reales. Aca le decimos la verdad y le damos el boton.
+  if (!appointment && !user) {
+    return (
+      <LinearGradient
+        colors={['#1a0010', '#880E4F', '#AD1457']}
+        style={styles.gradient}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <Text style={styles.title}>Dinámica</Text>
+          <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
+
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderIcon}>🔐</Text>
+            <Text style={styles.placeholderText}>Inicia sesión para ver tu evento</Text>
+            <Text style={styles.sesionAyudaText}>
+              Si ya reservaste tu cupo, entra con la misma cuenta con la que lo reservaste.
+            </Text>
+            <TouchableOpacity
+              style={[styles.confirmCodeButton, { marginTop: 20, alignSelf: 'stretch' }]}
+              onPress={() => router.replace('/login')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.confirmCodeButtonText}>Iniciar sesión</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
   if (!appointment) {
     return (
       <LinearGradient
@@ -2474,5 +2509,6 @@ const styles = StyleSheet.create({
   divertidoModalLevel: { fontSize: 38, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
   sessionInfoContainer: { marginTop: 20, alignItems: 'center' },
   sessionInfoText: { fontSize: 13, color: '#888', textAlign: 'center' },
+  sesionAyudaText: { fontSize: 14, color: '#666', textAlign: 'center', marginTop: 12, lineHeight: 20 },
   sessionSignOutText: { fontSize: 13, color: '#AD1457', fontWeight: '600', textAlign: 'center', marginTop: 8, textDecorationLine: 'underline' },
 });
