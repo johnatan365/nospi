@@ -428,7 +428,7 @@ function buildSameDayWhatsAppLink(
     `*Entras desde la app, en 3 toques:*`,
     `1️⃣ Abre Nospi → pestaña *Dinámica* (desde las ${horaBoton || '10 minutos antes'})`,
     `2️⃣ *Confirmar asistencia*`,
-    `3️⃣ *Ir a Meet* y entras directo a la llamada`,
+    `3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada`,
     ``,
     `⚠️ El enlace solo está ahí. Si no entras por la app, cuenta como falta.`,
     ``,
