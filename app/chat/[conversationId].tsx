@@ -1207,6 +1207,27 @@ export default function ChatThreadScreen() {
   const pegandoArribaRef = useRef(false);
 
   const listRef = useRef<FlatList<Message>>(null);
+
+  // Al tocar la cita de una respuesta se salta al mensaje original, como en
+  // WhatsApp. Se resalta un momento porque si no, en medio de la conversacion,
+  // no queda claro a cual de todos se llego.
+  const [resaltado, setResaltado] = useState<string | null>(null);
+  const resaltadoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const irAlMensaje = useCallback((id: string) => {
+    const i = messages.findIndex((m) => m.id === id);
+    if (i < 0) return;
+    toque();
+    // La lista se pega sola al final cuando cambia su contenido; esta bandera
+    // -la misma que usa "ver anteriores"- le dice que esta vez no lo haga.
+    pegandoArribaRef.current = true;
+    listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.5 });
+    setResaltado(id);
+    if (resaltadoTimer.current) clearTimeout(resaltadoTimer.current);
+    resaltadoTimer.current = setTimeout(() => setResaltado(null), 1800);
+  }, [messages]);
+
+  useEffect(() => () => { if (resaltadoTimer.current) clearTimeout(resaltadoTimer.current); }, []);
   // Al abrir el teclado la lista se encoge pero conserva su posicion, asi que
   // los ultimos mensajes quedan por encima del recorte y parece que la
   // conversacion "salto" hacia atras. Se la baja de nuevo al final.
@@ -2615,6 +2636,15 @@ export default function ChatThreadScreen() {
             if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
             listRef.current?.scrollToEnd({ animated: false });
           }}
+          onScrollToIndexFailed={(info) => {
+            // Pasa cuando la fila destino todavia no se midio (mensajes largos,
+            // fotos). Se acerca a ojo y se reintenta; sin esto el salto
+            // simplemente no ocurre y parece que el toque no hizo nada.
+            listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+            setTimeout(() => {
+              listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+            }, 250);
+          }}
           ListHeaderComponent={hayAnteriores ? (
             <TouchableOpacity
               onPress={cargarAnteriores}
@@ -2688,7 +2718,11 @@ export default function ChatThreadScreen() {
                     }
                   }}
                   delayLongPress={250}
-                  style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
+                  style={[
+                    styles.bubble,
+                    isMine ? styles.bubbleMine : styles.bubbleTheirs,
+                    resaltado === item.id && styles.bubbleResaltada,
+                  ]}
                 >
                   {/* El nombre abre la ficha igual que la foto: la gente toca
                       lo que esta leyendo, y en un mensaje lo que se lee es el
@@ -2710,12 +2744,24 @@ export default function ChatThreadScreen() {
                     )
                   )}
                   {repliedMsg && (
-                    <View style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}>
+                    /* Tocar la cita lleva al mensaje original, como en WhatsApp.
+                       Va como tocable anidado y no con un onPress en el <View>:
+                       la burbuja entera ya es un TouchableOpacity -el del menu
+                       al mantener presionado- y un hijo tocable es lo unico que
+                       le gana el gesto. Mismo motivo por el que el nombre del
+                       remitente esta envuelto aparte. */
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Ir al mensaje de ${repliedName}`}
+                      activeOpacity={0.7}
+                      onPress={() => irAlMensaje(repliedMsg.id)}
+                      style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}
+                    >
                       <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
                       <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
                         {messagePreviewText(repliedMsg)}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   )}
                   {item.media_expired && (
                     <View style={styles.expiredMedia}>
@@ -4112,6 +4158,10 @@ const styles = StyleSheet.create({
   channelLockedText: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
+  // Marca el mensaje al que se acaba de saltar desde una cita. Es un borde y no
+  // un cambio de fondo porque el fondo distingue quien escribio -propio vs
+  // ajeno- y pisarlo confundiria de quien es el mensaje.
+  bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
   senderName: { fontSize: 11, fontWeight: '700', color: '#AD1457', marginBottom: 2 },
   messageText: { fontSize: 15, color: '#2a2a2e', lineHeight: 20 },
   messageTextMine: { color: '#FFFFFF' },
