@@ -1211,6 +1211,12 @@ export default function ChatThreadScreen() {
   // Al tocar la cita de una respuesta se salta al mensaje original, como en
   // WhatsApp. Se resalta un momento porque si no, en medio de la conversacion,
   // no queda claro a cual de todos se llego.
+  // ¿La persona esta mirando el final de la conversacion, o se subio a leer
+  // algo de antes? De esto depende si se la baja sola cuando cambia el
+  // contenido. Va en una referencia y no en estado: cambia en cada pixel de
+  // desplazamiento y no debe repintar la lista.
+  const cercaDelFinalRef = useRef(true);
+
   const [resaltado, setResaltado] = useState<string | null>(null);
   const resaltadoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1218,9 +1224,10 @@ export default function ChatThreadScreen() {
     const i = messages.findIndex((m) => m.id === id);
     if (i < 0) return;
     toque();
-    // La lista se pega sola al final cuando cambia su contenido; esta bandera
-    // -la misma que usa "ver anteriores"- le dice que esta vez no lo haga.
-    pegandoArribaRef.current = true;
+    // Se marca que ya no esta en el final. Si no, cualquier cosa que cambie el
+    // alto de la lista -una foto que termina de cargar, un mensaje nuevo- la
+    // devolvia al ultimo mensaje a los pocos segundos, deshaciendo el salto.
+    cercaDelFinalRef.current = false;
     listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.5 });
     setResaltado(id);
     if (resaltadoTimer.current) clearTimeout(resaltadoTimer.current);
@@ -1238,6 +1245,9 @@ export default function ChatThreadScreen() {
   const tecladoVisible = useKeyboardState((k) => k.isVisible);
   useEffect(() => {
     if (!tecladoVisible) return;
+    // Solo si ya estaba mirando el final. Quien salto a un mensaje viejo y toca
+    // el cuadro de escribir para responderlo no quiere que se lo lleven abajo.
+    if (!cercaDelFinalRef.current) return;
     const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
     return () => clearTimeout(t);
   }, [tecladoVisible]);
@@ -1512,7 +1522,11 @@ export default function ChatThreadScreen() {
           const newMsg = payload.new as Message;
           setMessages((prev) => fusionarMensajeReal(prev, newMsg));
           await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+          // Solo si ya estaba abajo. Que llegue un mensaje mientras lees algo
+          // de antes no es motivo para sacarte de donde estas.
+          if (cercaDelFinalRef.current) {
+            setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+          }
         }
       )
       // Un mensaje puede cambiar despues de enviado: al fijarlo o quitarlo de
@@ -2634,8 +2648,22 @@ export default function ChatThreadScreen() {
           contentContainerStyle={styles.messagesContainer}
           onContentSizeChange={() => {
             if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
+            // Solo se baja sola si la persona ya estaba mirando el final. Si
+            // subio a leer algo -o salto desde una cita-, se la deja donde
+            // esta. Antes bajaba siempre, y como esto se dispara CADA vez que
+            // algo cambia de alto (una foto que carga, por ejemplo), a los
+            // pocos segundos la devolvia al ultimo mensaje.
+            if (!cercaDelFinalRef.current) return;
             listRef.current?.scrollToEnd({ animated: false });
           }}
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            const desdeElFinal = contentSize.height - contentOffset.y - layoutMeasurement.height;
+            // 120 px de margen: con menos, el rebote del desplazamiento la
+            // marcaba como "arriba" estando practicamente abajo.
+            cercaDelFinalRef.current = desdeElFinal < 120;
+          }}
+          scrollEventThrottle={100}
           onScrollToIndexFailed={(info) => {
             // Pasa cuando la fila destino todavia no se midio (mensajes largos,
             // fotos). Se acerca a ojo y se reintenta; sin esto el salto
