@@ -800,10 +800,15 @@ serve(async (req) => {
         results.push({ block: 'preview', error: eventError?.message || 'evento no encontrado' });
       } else {
         let built: { subject: string; text: string; html?: string };
-        if (previewType === '48h') built = build48hText('Johnatan', eventData, now, plantillas);
-        else if (previewType === '3d') built = build3dText('Johnatan', eventData);
-        else if (previewType === 'event_start') built = buildEventStartText('Johnatan', eventData);
-        else built = buildSameDayText('Johnatan', eventData, plantillas);
+        // Relleno genérico a propósito. Aquí antes iba un nombre propio real, y
+        // el preview se envía por correo: ese nombre salía en un mensaje firmado
+        // por Nospi. Ningún nombre de una persona concreta del equipo va en
+        // texto que pueda terminar delante de la comunidad.
+        const nombrePreview = 'Nombre';
+        if (previewType === '48h') built = build48hText(nombrePreview, eventData, now, plantillas);
+        else if (previewType === '3d') built = build3dText(nombrePreview, eventData);
+        else if (previewType === 'event_start') built = buildEventStartText(nombrePreview, eventData);
+        else built = buildSameDayText(nombrePreview, eventData, plantillas);
         const tagSuffix = previewTag ? ` [${previewTag}]` : '';
         const { ok } = await sendEmail(previewEmail, `[PREVIEW]${tagSuffix} ${built.subject}`, built.text, built.html);
         results.push({ block: 'preview', type: previewType, to: previewEmail, ok });
