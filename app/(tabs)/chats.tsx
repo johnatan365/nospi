@@ -111,6 +111,32 @@ export default function ChatsScreen() {
   const { user } = useSupabase();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
+
+  // El candado de cada chat se calcula al dibujar la lista. Si la pantalla ya
+  // estaba abierta cuando llega la hora de apertura, nadie la vuelve a dibujar
+  // y el chat sigue viendose bloqueado aunque el servidor ya lo abrio.
+  //
+  // Paso de verdad: la videollamada abria a las 20:30:00 y el aviso salio a
+  // las 20:30:08 -- correcto-- pero al tocarlo el chat seguia con candado,
+  // porque la lista se habia dibujado minutos antes.
+  //
+  // Se programa un repintado para el instante exacto en que se abre el
+  // proximo, y solo ese: nada de revisar cada segundo.
+  const [, forzarRepintado] = useState(0);
+  useEffect(() => {
+    const ahora = Date.now();
+    // De todos los chats todavia cerrados, cual se abre primero.
+    const proxima = conversations
+      .filter((c) => c.conv_type === 'event_group' && c.event_date)
+      .map((c) => new Date(c.event_date!).getTime() - CHAT_UNLOCK_MINUTES_BEFORE * 60 * 1000)
+      .filter((t) => t > ahora)
+      .sort((a, b) => a - b)[0];
+    if (!proxima) return;
+    // El +1000 es para caer justo despues del momento exacto y no un
+    // milisegundo antes, que dejaria el candado puesto otra vez.
+    const t = setTimeout(() => forzarRepintado((n) => n + 1), proxima - ahora + 1000);
+    return () => clearTimeout(t);
+  }, [conversations]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<ChatFilter>('grupos');

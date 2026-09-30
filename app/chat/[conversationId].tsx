@@ -2618,6 +2618,18 @@ export default function ChatThreadScreen() {
     : null;
   const isLocked = !!unlockAt && Date.now() < unlockAt.getTime();
 
+  // Quien se queda esperando en la pantalla del candado ("Se abre a las
+  // 8:30 p.m.") tenia que salir y volver a entrar para que se abriera: el
+  // candado se calcula al dibujar, y nadie volvia a dibujar al llegar la hora.
+  // Ahora se repinta solo en ese instante y se carga la conversacion.
+  useEffect(() => {
+    if (!isLocked || !unlockAt) return;
+    const falta = unlockAt.getTime() - Date.now();
+    // +1000 para caer despues del momento exacto, no justo antes.
+    const t = setTimeout(() => { loadEverything(); }, falta + 1000);
+    return () => clearTimeout(t);
+  }, [isLocked, unlockAt?.getTime(), loadEverything]);
+
   if (loading) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient}>
