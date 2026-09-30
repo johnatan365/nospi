@@ -65,6 +65,74 @@ cada conversación. Un grupo nuevo de un evento reciente o próximo queda arriba
 Los chats directos y los canales no se ven afectados: solo aparecen en la lista cuando ya tienen
 mensajes, así que para ellos el criterio sigue siendo el último mensaje.
 
+## El chat privado: tres puertas (esta sección reemplaza a la de abajo)
+
+Actualizado el 30 de septiembre de 2026. Lo que dice la sección siguiente
+("El chat privado ya estaba bien") describe la regla **vieja**, cuando escribirle
+a alguien que no se había cruzado contigo estaba bloqueado de plano. Ya no es así.
+
+Hoy un chat 1-1 se abre por **tres** caminos, y no hay un cuarto:
+
+1. **Match.** `open_direct_conversation(p_other)` exige una fila en
+   `event_matches`. Nace `aceptada`.
+2. **Mismo evento.** `get_or_create_direct_chat(p_other_user_id)` con las dos
+   personas en un mismo evento, ambas con `location_confirmed = true` y ninguna
+   `cancelada`. Nace `aceptada`.
+3. **Solicitud aceptada.** Mismo `get_or_create_direct_chat`, pero sin evento
+   compartido: nace `pendiente` con `solicitada_por = quien escribe`. Quien la
+   recibe llama a `aceptar_solicitud_chat` (pasa a `aceptada`) o a
+   `ignorar_solicitud_chat` (pasa a `ignorada`).
+
+Quién puede **escribir** lo decide `puede_escribir_en_directo(conversation_id)`:
+
+- `aceptada` → los dos, siempre.
+- `pendiente` → **solo** quien la envió y **solo mientras no haya ningún mensaje**.
+  O sea: un mensaje, uno, y se queda esperando.
+- `ignorada` → nadie. Para siempre. Quien la envió no vuelve a poder escribir.
+
+### El límite de solicitudes: era una condena, ahora es un límite diario
+
+`tope_solicitudes_pendientes()` no se puede quitar: es lo único que impide que
+una sola persona le escriba a los 203 miembros de la comunidad de un tiro.
+
+Pero como estaba escrito, contaba **todas** las solicitudes en `pendiente` de
+toda la vida. Y una solicitud ignorada se queda en `pendiente` para siempre. Así
+que quien mandaba 5 y no le contestaba nadie quedaba bloqueado **de por vida**,
+sin haber hecho nada mal, leyendo un "espera a que te contesten" que nunca iba a
+ocurrir. El tope castigaba la mala suerte, no el abuso.
+
+Desde el 30 de septiembre de 2026 (migración
+`20260930180000_limite_diario_solicitudes_chat.sql`):
+
+- el conteo lleva `and c.created_at > now() - interval '24 hours'`, así el límite
+  se libera solo con el paso de las horas;
+- el tope sube de **5 a 10**, porque con la ventana de 24 h el 5 quedaba corto
+  para alguien que sí está conociendo gente de buena fe;
+- el mensaje de error se reescribió: el viejo ("espera a que te contesten") había
+  dejado de ser cierto.
+
+**Ojo con el `errcode`.** El límite se lanza con `42501`. En la app,
+`startDirectChat` traducía cualquier `42501` como "solo puedes escribirle a
+personas que asistieron contigo a un evento" —la regla vieja—, así que la persona
+leía una explicación que no tenía nada que ver con lo que le pasó. Si alguna vez
+se agrega otro `raise` con `42501` en esa función, hay que volver a mirar ese
+bloque en `app/chat/[conversationId].tsx`.
+
+### Dónde se explica la regla dentro de la app
+
+La regla existía solo en la base de datos, y la gente la descubría chocándose con
+ella. Ahora se dice en tres momentos:
+
+- **Antes de enviar**, en la ficha de la persona (`app/chat/[conversationId].tsx`,
+  junto a "Escribir por privado").
+- **Al recibir**, en la `solicitudBar` de la conversación: un solo mensaje, y qué
+  pasa si se acepta o se ignora.
+- **En la pantalla de Chats** (`app/(tabs)/chats.tsx`, pestaña de directos): un
+  "¿Cómo se abren los chats 1-1?" con las tres puertas.
+
+Si alguna de las tres reglas cambia en la base, hay que cambiar esos tres textos.
+Un texto que promete algo que la base no cumple es peor que no tener texto.
+
 ## El chat privado ya estaba bien
 
 `get_or_create_direct_chat` exige, para un chat **nuevo**, que las dos personas hayan estado en
