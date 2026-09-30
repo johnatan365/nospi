@@ -3768,12 +3768,21 @@ export default function ChatThreadScreen() {
                 return (
                   <TouchableOpacity
                     key={r.user_id + r.emoji}
-                    activeOpacity={esMia ? 0.7 : 1}
-                    disabled={!esMia}
+                    activeOpacity={0.7}
+                    /* La fila propia quita tu reaccion; la de otra persona abre
+                       su ficha, que es lo que uno quiere al ver un nombre que
+                       no reconoce en un grupo grande. */
                     onPress={() => {
-                      if (!esMia || !reaccionesDe) return;
-                      toggleReaction(reaccionesDe, r.emoji);
+                      if (esMia) {
+                        if (!reaccionesDe) return;
+                        toggleReaction(reaccionesDe, r.emoji);
+                        setReaccionesDe(null);
+                        return;
+                      }
+                      const quienEs = participantsById[r.user_id];
+                      if (!quienEs) return;
                       setReaccionesDe(null);
+                      setPerfilVisto(quienEs);
                     }}
                     style={styles.reaccionFila}
                   >
@@ -3785,7 +3794,9 @@ export default function ChatThreadScreen() {
                     />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.reaccionNombre}>{quien}</Text>
-                      {esMia && <Text style={styles.reaccionQuitar}>Toca para quitar tu reacción</Text>}
+                      <Text style={styles.reaccionQuitar}>
+                        {esMia ? 'Toca para quitar tu reacción' : 'Toca para ver su perfil'}
+                      </Text>
                     </View>
                     <Text style={styles.reaccionEmoji}>{r.emoji}</Text>
                   </TouchableOpacity>
@@ -3808,11 +3819,23 @@ export default function ChatThreadScreen() {
           <View
             style={[
               styles.actionAnchored,
-              actionAnchor
-                ? (actionAnchor.y > SCREEN_H * 0.55
-                    ? { bottom: SCREEN_H - actionAnchor.y + 8 }
-                    : { top: actionAnchor.y + actionAnchor.height + 8 })
-                : { bottom: 40 },
+              (() => {
+                if (!actionAnchor) return { bottom: 40, maxHeight: SCREEN_H - 120 };
+                // Antes se decidia arriba/abajo comparando solo la posicion de
+                // la burbuja contra la mitad de la pantalla, SIN mirar lo alto
+                // que es el menu. En un mensaje cerca del borde de abajo el
+                // menu se salia y quedaba cortado por la mitad.
+                //
+                // Ahora se mide cuanto espacio hay de cada lado y se abre hacia
+                // donde quepa; ademas se le pone un techo para que, si no cabe
+                // entero en ningun lado, se pueda desplazar en vez de cortarse.
+                const margen = 8;
+                const abajo = SCREEN_H - (actionAnchor.y + actionAnchor.height) - margen;
+                const arriba = actionAnchor.y - margen;
+                return abajo >= arriba
+                  ? { top: actionAnchor.y + actionAnchor.height + margen, maxHeight: Math.max(200, abajo - 16) }
+                  : { bottom: SCREEN_H - actionAnchor.y + margen, maxHeight: Math.max(200, arriba - 16) };
+              })(),
               actionAnchor?.isMine ? { right: 12, alignItems: 'flex-end' } : { left: 12, alignItems: 'flex-start' },
             ]}
           >
@@ -3833,7 +3856,11 @@ export default function ChatThreadScreen() {
               );
             })}
           </View>
-          <View style={styles.actionSheetCompact}>
+          {/* Se puede desplazar por si el menu completo no cabe ni arriba ni
+              abajo de la burbuja. Sin esto, en un mensaje pegado al borde las
+              ultimas opciones quedaban cortadas y no habia forma de llegar a
+              ellas. */}
+          <ScrollView style={styles.actionSheetCompact} showsVerticalScrollIndicator={false} bounces={false}>
             <TouchableOpacity
               style={styles.actionSheetRow}
               onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); if (m) setReplyingTo(m); }}
@@ -3890,7 +3917,7 @@ export default function ChatThreadScreen() {
                 <Text style={[styles.attachOptionText, { color: '#B91C1C' }]}>Eliminar</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
