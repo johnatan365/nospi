@@ -11941,7 +11941,7 @@ setBulkWhatsAppPending(pending);
                 <>
                 <Text style={styles.inputLabel}>Link de la videollamada (Google Meet) *</Text>
                 <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, marginTop: -6 }}>
-                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia. Al guardarlo, el acceso queda activo solo (no hay que activar nada). El día del evento, 10 minutos antes, los inscritos confirman en la Dinámica, escogen moderador y de ahí entran al Meet.
+                  Pégalo aquí. Este link NO se envía por correo ni por WhatsApp: solo se abre desde el botón dentro de la app, y eso es lo que registra la asistencia. Al guardarlo, el acceso queda activo solo (no hay que activar nada). El día del evento, 15 minutos antes, los inscritos confirman en la Dinámica, escogen moderador y de ahí entran al Meet.
                 </Text>
                 <TextInput
                   style={styles.input}

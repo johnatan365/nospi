@@ -512,7 +512,7 @@ export default function EventDetailsScreen() {
                 if (!isEnrolled) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
+                      Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
                     </Text>
                   );
                 }
@@ -520,7 +520,7 @@ export default function EventDetailsScreen() {
                 if (!accesoListo) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
+                      Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
                     </Text>
                   );
                 }

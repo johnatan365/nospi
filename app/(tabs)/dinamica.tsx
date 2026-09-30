@@ -1630,7 +1630,7 @@ export default function DinamicaScreen() {
       </View>
     );
 
-    // 1) Desde la compra hasta confirmar: explicación + (10 min antes) confirmar.
+    // 1) Desde la compra hasta confirmar: explicación + (15 min antes) confirmar.
     if (!confirmado) {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>

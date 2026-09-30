@@ -220,7 +220,7 @@ serve(async (req) => {
               continue;
             }
             const title = `🎥 Mañana es tu videollamada`;
-            const body = `${event.name || 'Tu videollamada'}${event.time ? `, a las ${formatTimeAmPm(event.time)}` : ''}. 10 minutos antes confirmas tu asistencia en la Dinámica. Con cámara prendida 📹`;
+            const body = `${event.name || 'Tu videollamada'}${event.time ? `, a las ${formatTimeAmPm(event.time)}` : ''}. 15 minutos antes confirmas tu asistencia en la Dinámica. Con cámara prendida 📹`;
             const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_location_revealed', event_id: apt.event_id });
             if (ok) await supabase.from('appointments').update({ reminder_48h_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
             results.push({ block: 'vispera_virtual', appointmentId: apt.id, ok });
