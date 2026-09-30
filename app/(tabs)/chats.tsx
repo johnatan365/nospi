@@ -140,6 +140,11 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<ChatFilter>('grupos');
+  // Explicador de como se abren los chats 1-1. Arranca cerrado para no comerse
+  // la pantalla, pero la pregunta queda siempre visible: la duda de "¿por que a
+  // esta persona le puedo escribir y a esta no?" es la mas repetida, y hasta
+  // ahora la regla solo existia en la base de datos.
+  const [comoSeAbren, setComoSeAbren] = useState(false);
 
   // Aviso para activar las notificaciones en la web. Solo aparece si el
   // navegador las soporta y la persona todavia no ha decidido. En el telefono
@@ -472,6 +477,40 @@ export default function ChatsScreen() {
           </TouchableOpacity>
         )}
 
+        {filter === 'directos' && !loading && (
+          <View style={styles.comoBloque}>
+            <TouchableOpacity
+              style={styles.comoCabecera}
+              activeOpacity={0.8}
+              onPress={() => setComoSeAbren((v) => !v)}
+            >
+              <Text style={styles.comoPregunta}>¿Cómo se abren los chats 1-1?</Text>
+              <Text style={styles.comoFlecha}>{comoSeAbren ? '▴' : '▾'}</Text>
+            </TouchableOpacity>
+            {comoSeAbren && (
+              <View style={styles.comoCuerpo}>
+                <Text style={styles.comoLinea}>
+                  <Text style={styles.comoBullet}>💞  </Text>
+                  Hicieron match al final de un evento.
+                </Text>
+                <Text style={styles.comoLinea}>
+                  <Text style={styles.comoBullet}>🍽️  </Text>
+                  Estuvieron en el mismo evento: ahí se pueden escribir directo.
+                </Text>
+                <Text style={styles.comoLinea}>
+                  <Text style={styles.comoBullet}>✉️  </Text>
+                  Le enviaste una solicitud y te aceptó.
+                </Text>
+                <Text style={styles.comoCierre}>
+                  Si no se han cruzado, tu primer mensaje le llega como solicitud: esa persona lo
+                  lee y decide si se abre el chat. Puedes tener hasta 10 solicitudes sin responder
+                  al mismo tiempo.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {loading ? (
           renderSkeleton()
         ) : visibleConversations.length === 0 ? (
@@ -485,7 +524,9 @@ export default function ChatsScreen() {
             <Text style={styles.emptySubtitle}>
               {filter === 'grupos'
                 ? 'Cuando confirmes tu cita a un evento, se abrirá automáticamente el chat grupal con los demás asistentes.'
-                : 'Cuando le escribas a algún asistente de un evento, la conversación aparecerá aquí.'}
+                : filter === 'canales'
+                ? 'Cuando el equipo de Nospi publique algo, lo verás aquí.'
+                : 'Aquí van tus chats con una sola persona: los matches, la gente de tus eventos y las solicitudes que te acepten.'}
             </Text>
           </View>
         ) : (
@@ -678,6 +719,31 @@ const styles = StyleSheet.create({
   },
   pushBannerEmoji: { fontSize: 19 },
   pushBannerText: { flex: 1, fontSize: 13, color: '#FFFFFF', lineHeight: 18 },
+  // Explicador de las tres puertas del chat 1-1.
+  comoBloque: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  comoCabecera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+  },
+  comoPregunta: { flex: 1, fontSize: 13.5, fontWeight: '700', color: '#FFFFFF' },
+  comoFlecha: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginLeft: 8 },
+  comoCuerpo: { paddingBottom: 13, gap: 7 },
+  comoLinea: { fontSize: 13, color: 'rgba(255,255,255,0.92)', lineHeight: 18 },
+  comoBullet: { fontSize: 13 },
+  comoCierre: {
+    fontSize: 12.5,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 17,
+    marginTop: 4,
+  },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
