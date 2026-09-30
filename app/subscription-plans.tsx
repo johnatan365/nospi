@@ -1229,7 +1229,22 @@ export default function SubscriptionPlansScreen() {
           window.localStorage.setItem('nospi_payment_method', 'bancolombia');
           window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
         }
-        window.open(result.redirectUrl, '_blank');
+        // NO usar window.open(url, '_blank'): los navegadores integrados de
+        // Instagram, Facebook, Messenger y WhatsApp bloquean los popups en
+        // silencio — no lanzan error, simplemente no abren nada. La persona se
+        // queda mirando la misma pantalla creyendo que la app se colgo, la
+        // transaccion ya quedo creada en Wompi, expira a los ~12-17 minutos y
+        // a nosotros nos llega al admin como "compra declinada" cuando el banco
+        // nunca la vio. Medido sobre 60 dias: los usuarios que solo entran por
+        // web fallaban 67.7% en Bancolombia y 42% en PSE, contra 41.2% y 28.2%
+        // de los que usan la app nativa (que va por Linking.openURL y si abre
+        // un navegador real). Y de los que se quedaron trancados, solo 44% de
+        // los de web termino pagando algun dia, contra 95% de los de app.
+        // location.assign es una navegacion normal: ningun webview la bloquea.
+        // El viaje de vuelta ya existe (payment-callback + el redirect_url que
+        // manda la edge function), y el transactionId ya quedo en localStorage
+        // arriba, asi que al volver se retoma igual que antes.
+        window.location.assign(result.redirectUrl);
         setProcessingMethod(null);
         startWebPolling(bancolombiaTransactionId, 'bancolombia');
         return;
@@ -1566,7 +1581,22 @@ export default function SubscriptionPlansScreen() {
           window.localStorage.setItem('nospi_payment_method', 'pse');
           window.localStorage.setItem('nospi_payment_opened_time', Date.now().toString());
         }
-        window.open(data.redirectUrl, '_blank');
+        // NO usar window.open(url, '_blank'): los navegadores integrados de
+        // Instagram, Facebook, Messenger y WhatsApp bloquean los popups en
+        // silencio — no lanzan error, simplemente no abren nada. La persona se
+        // queda mirando la misma pantalla creyendo que la app se colgo, la
+        // transaccion ya quedo creada en Wompi, expira a los ~12-17 minutos y
+        // a nosotros nos llega al admin como "compra declinada" cuando el banco
+        // nunca la vio. Medido sobre 60 dias: los usuarios que solo entran por
+        // web fallaban 67.7% en Bancolombia y 42% en PSE, contra 41.2% y 28.2%
+        // de los que usan la app nativa (que va por Linking.openURL y si abre
+        // un navegador real). Y de los que se quedaron trancados, solo 44% de
+        // los de web termino pagando algun dia, contra 95% de los de app.
+        // location.assign es una navegacion normal: ningun webview la bloquea.
+        // El viaje de vuelta ya existe (payment-callback + el redirect_url que
+        // manda la edge function), y el transactionId ya quedo en localStorage
+        // arriba, asi que al volver se retoma igual que antes.
+        window.location.assign(data.redirectUrl);
         setProcessingMethod(null);
         setShowPSEForm(false);
         startWebPolling(data.transactionId, 'pse');
