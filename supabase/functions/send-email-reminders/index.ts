@@ -54,7 +54,8 @@
 // es justo lo que medimos. Por eso en virtual el boton del correo apunta a
 // app.nospi.co y nunca a maps_link.
 //
-// v49: videollamada — nuevo flujo: 10 min antes se confirma en la Dinamica,
+// v49: videollamada — nuevo flujo: 15 min antes se confirma en la Dinamica
+// (eran 10 hasta sep 2026; ver MINUTOS_ANTES_ENTRAR),
 // se escoge moderador (obligatorio) y 'Ir a Meet' es la asistencia.
 //
 // v48: videollamada — el correo del dia anterior sale solo a las 9 a.m. del dia

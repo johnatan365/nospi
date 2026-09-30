@@ -605,7 +605,7 @@ export default function AppointmentsScreen() {
                       donde esta el boton, que es lo unico que hay que saber. */}
                   {esVirtual && !isAnteriorOrCancelada && (
                     <Text style={styles.appointmentLocation}>
-                      📹 Con cámara prendida. Entras desde la pestaña Dinámica: 10 minutos antes confirmas tu asistencia.
+                      📹 Con cámara prendida. Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia.
                     </Text>
                   )}
 
