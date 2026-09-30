@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FichaPersona, PersonaFicha } from '@/components/FichaPersona';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -66,6 +68,8 @@ interface Profile {
   city: string;
   profile_photo_url: string | null;
   interested_in?: string;
+  edad?: number | null;
+  interests?: string[] | null;
 }
 
 interface Participant {
@@ -143,6 +147,13 @@ const CAJA_ICONO = {
 };
 
 export default function DinamicaScreen() {
+  // Esta pantalla no tiene cabecera: el degradado llega hasta arriba del todo.
+  // Sin reservar el alto de la barra de estado, el titulo quedaba pegado al
+  // reloj y a la muesca del telefono. Pasa en las OCHO pantallas del archivo,
+  // que comparten el mismo contenedor.
+  const insets = useSafeAreaInsets();
+  // Tocar la foto o el nombre de alguien abre su ficha, igual que en el chat.
+  const [personaVista, setPersonaVista] = useState<PersonaFicha | null>(null);
   const { user, loading: authLoading } = useSupabase();
   // CACHE POR USUARIO: la caché de la dinámica se guarda con una clave atada al
   // id de la cuenta logueada. Antes era una clave global ('cache_dinamica'), así
@@ -309,8 +320,12 @@ export default function DinamicaScreen() {
           profiles: {
             id: item.user_id,
             name: item.user_name,
-            email: item.user_email || '',
-            phone: item.user_phone || '',
+            // El servidor ya no devuelve correo ni telefono: no se mostraban
+            // en ningun lado y eran datos de contacto de otras personas.
+            email: '',
+            phone: '',
+            edad: item.user_edad ?? null,
+            interests: Array.isArray(item.user_interests) ? item.user_interests : null,
             city: item.user_city || '',
             profile_photo_url: item.user_profile_photo_url || null,
             interested_in: item.user_interested_in || '',
@@ -1444,7 +1459,7 @@ export default function DinamicaScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
           <SkeletonBox height={32} width="70%" borderRadius={8} style={{ marginBottom: 10, marginTop: 48 }} />
           <SkeletonBox height={18} width="50%" borderRadius={6} style={{ marginBottom: 24 }} />
           <View style={styles.skeletonCard}>
@@ -1478,7 +1493,7 @@ export default function DinamicaScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.title}>Dinámica</Text>
           <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
 
@@ -1509,7 +1524,7 @@ export default function DinamicaScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.title}>Dinámica</Text>
           <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
 
@@ -1568,6 +1583,9 @@ export default function DinamicaScreen() {
 
     const listaConfirmados = (
       <View style={styles.participantsListCard}>
+        {/* Va aqui dentro y no en cada pantalla: esta lista se usa en varias, y
+            repetir la ficha en todas invita a que alguna se quede sin ella. */}
+        <FichaPersona persona={personaVista} onClose={() => setPersonaVista(null)} />
         <View style={styles.participantsListHeader}>
           <Text style={styles.participantsListTitle}>✅ Confirmados en la sala</Text>
           <View style={styles.participantCountBadge}>
@@ -1580,7 +1598,22 @@ export default function DinamicaScreen() {
               const displayName = participant.profiles?.name || 'Participante';
               const photoUrl = participant.profiles?.profile_photo_url || null;
               return (
-                <View key={index} style={styles.participantListItem}>
+                /* Toda la fila abre la ficha, no solo la foto: la gente toca
+                   el nombre, que es lo que esta leyendo. */
+                <TouchableOpacity
+                  key={index}
+                  style={styles.participantListItem}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver el perfil de ${displayName}`}
+                  onPress={() => setPersonaVista({
+                    user_id: participant.user_id,
+                    name: displayName,
+                    profile_photo_url: photoUrl,
+                    edad: participant.profiles?.edad ?? null,
+                    interests: participant.profiles?.interests ?? null,
+                  })}
+                >
                   {photoUrl ? (
                     <ExpoImage source={{ uri: photoUrl }} style={styles.participantListPhoto} cachePolicy="memory-disk" transition={0} />
                   ) : (
@@ -1589,7 +1622,7 @@ export default function DinamicaScreen() {
                     </View>
                   )}
                   <Text style={styles.participantListName}>{displayName}</Text>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -1601,7 +1634,7 @@ export default function DinamicaScreen() {
     if (!confirmado) {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
-          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             <View style={styles.countdownCard}>
               <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
               <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
@@ -1677,7 +1710,7 @@ export default function DinamicaScreen() {
     if (!moderatorId) {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
-          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             <View style={styles.modRoleCard}>
               <Text style={[styles.rulesTitle, { marginBottom: 8 }]}>🎤 ¿Quién será el moderador?</Text>
               <View style={styles.modRoleRow}>
@@ -1704,7 +1737,7 @@ export default function DinamicaScreen() {
     if (!fueAMeet) {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
-          <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             {isModerator ? (
               <>
                 <Text style={styles.rulesTitle}>🎉 ¡Tú eres el moderador!</Text>
@@ -1828,7 +1861,7 @@ export default function DinamicaScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.title}>Tu Evento Nospi</Text>
           <Text style={styles.subtitle}>¡Se acerca una gran experiencia!</Text>
 
@@ -2137,7 +2170,7 @@ export default function DinamicaScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
         <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
         <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
 
@@ -2280,6 +2313,7 @@ export default function DinamicaScreen() {
                 </View>
               </View>
 
+              <FichaPersona persona={personaVista} onClose={() => setPersonaVista(null)} />
               {activeParticipants.length > 0 && (
                 <View style={styles.participantsList}>
                   {activeParticipants.map((participant, index) => {
@@ -2287,7 +2321,20 @@ export default function DinamicaScreen() {
                     const photoUrl = participant.profiles?.profile_photo_url || null;
                     return (
                       <React.Fragment key={index}>
-                        <View style={styles.participantListItem}>
+                        {/* Igual que en la sala: la fila entera abre la ficha. */}
+                        <TouchableOpacity
+                          style={styles.participantListItem}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Ver el perfil de ${displayName}`}
+                          onPress={() => setPersonaVista({
+                            user_id: participant.user_id,
+                            name: displayName,
+                            profile_photo_url: photoUrl,
+                            edad: participant.profiles?.edad ?? null,
+                            interests: participant.profiles?.interests ?? null,
+                          })}
+                        >
                           {photoUrl ? (
                             <ExpoImage
                               source={{ uri: photoUrl }}
@@ -2303,7 +2350,7 @@ export default function DinamicaScreen() {
                             </View>
                           )}
                           <Text style={styles.participantListName}>{displayName}</Text>
-                        </View>
+                        </TouchableOpacity>
                       </React.Fragment>
                     );
                   })}
