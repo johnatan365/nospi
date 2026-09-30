@@ -785,6 +785,21 @@ export default function ChatThreadScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+
+  // Vuelve a pedir la lista de participantes.
+  //
+  // Hace falta porque en la media hora antes del evento la base solo devuelve a
+  // quien YA escribio -- asi la conversacion tiene nombres sin revelar la lista
+  // completa de quien va a ir. Como la lista se pide una sola vez al abrir el
+  // chat, quien hable despues seguiria saliendo como "Un participante" hasta
+  // cerrar y volver a entrar.
+  const recargarParticipantes = useCallback(async () => {
+    if (!conversationId) return;
+    const { data } = await supabase.rpc('get_conversation_participants', {
+      p_conversation_id: conversationId,
+    });
+    if (data) setParticipants(data as Participant[]);
+  }, [conversationId]);
   const [meta, setMeta] = useState<ConversationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -1298,10 +1313,17 @@ export default function ChatThreadScreen() {
   // render (y para no entrar en bucle si alguna falla).
   const signRequestedRef = useRef<Set<string>>(new Set());
 
+  // Copia siempre fresca para usar DENTRO del canal de tiempo real: ese se
+  // crea una sola vez, asi que si leyera participantsById directamente se
+  // quedaria con la foto del primer render -- vacia-- y pediria la lista en
+  // cada mensaje.
+  const participantsByIdRef = useRef<Record<string, Participant>>({});
+
   const participantsById = participants.reduce<Record<string, Participant>>((acc, p) => {
     acc[p.user_id] = p;
     return acc;
   }, {});
+  participantsByIdRef.current = participantsById;
 
   // El equipo de Nospi puede escribir en un canal aunque este cerrado.
   const [isAdminUser, setIsAdminUser] = useState(false);
@@ -1632,6 +1654,11 @@ export default function ChatThreadScreen() {
         async (payload) => {
           const newMsg = payload.new as Message;
           setMessages((prev) => fusionarMensajeReal(prev, newMsg));
+          // Si escribe alguien que no tenemos identificado, se pide la lista de
+          // nuevo: acaba de "presentarse" al hablar.
+          if (newMsg.sender_id && !participantsByIdRef.current[newMsg.sender_id]) {
+            recargarParticipantes();
+          }
           // Ya mando el mensaje: el "esta escribiendo" sobra. Sin esto se
           // quedaria hasta caducar y se veria el aviso junto al mensaje ya
           // entregado, que es justo lo que delata que esta mal hecho.
