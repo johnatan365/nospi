@@ -3569,7 +3569,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // Antes de todo se descartan las preguntas que no aplican al tipo del evento
   // (applies_to): las "solo videollamada" nunca caen en una cena, y las "solo
   // presencial" nunca en una videollamada.
-  const insertRandomQuestionsFromBank = async (eventId: string) => {
+  //
+  // mezclarPorCategoria decide CÓMO se llenan los espacios libres:
+  //   true  (por defecto) → reparte parejo entre las 4 categorías, para que no
+  //          salga una dinámica de "puro debate" ni de "puras anécdotas".
+  //   false → azar puro sobre todo el banco del nivel, sin mirar categorías.
+  //          Sirve cuando el reparto parejo no es lo que uno quiere: por
+  //          ejemplo si el banco tiene muchas de una categoría que encaja mejor
+  //          con ese evento y el reparto justamente las está frenando.
+  // Las preguntas FIJADAS 📌 se respetan en los dos modos: son una decisión
+  // explícita del admin y no tienen nada que ver con el mix por categoría.
+  const insertRandomQuestionsFromBank = async (eventId: string, mezclarPorCategoria: boolean = true) => {
     const { data: bankQuestions, error: fetchError } = await supabase
       .from('event_questions')
       .select('level, question_text, is_pinned, pinned_position, category, applies_to')
@@ -3608,8 +3618,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       // resto, se reparte lo más parejo posible entre las 4 categorías (en
       // orden aleatorio en cada vuelta), para que ninguna dinámica salga
       // "puro debate" o "puras anécdotas".
+      //
+      // Con mezclarPorCategoria = false se salta todo eso y es azar puro: cada
+      // pregunta del nivel tiene la misma probabilidad, sin importar su
+      // categoría. Una categoría con muchas preguntas sale más, que es
+      // justamente lo que el reparto parejo evita.
       const rest = (() => {
         const notPinned = inLevel.filter((q) => !q.is_pinned);
+        if (!mezclarPorCategoria) return shuffleArray(notPinned);
         const byCat: Record<string, any[]> = {};
         for (const q of notPinned) {
           const cat = (q as any).category || 'opinion';
@@ -4849,10 +4865,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // adelante usando el banco global ACTUAL: cupo por nivel de app_config al azar por
   // nivel, con la pregunta fijada de primera en Divertido. Es la misma lógica
   // que se aplica al crear un evento (insertRandomQuestionsFromBank).
-  const handleSyncQuestionsToAllEvents = async () => {
+  const handleSyncQuestionsToAllEvents = async (mezclarPorCategoria: boolean = true) => {
+    const comoReparte = mezclarPorCategoria
+      ? 'Reparte PAREJO entre las 4 categorías (⚔️ debate, 💭 opinión, 📖 anécdota, 🎯 juego), para que no salga una dinámica de puro debate ni de puras anécdotas.'
+      : 'AZAR PURO, sin mirar categorías: cada pregunta del nivel tiene la misma probabilidad. Si el banco tiene muchas de una categoría, van a salir más.';
     const confirmed = window.confirm(
       'Esto RE-SORTEA las preguntas de TODOS los eventos abiertos (publicados y en borrador) de HOY en adelante, ' +
-      'usando el banco actual: 8 por nivel, con las preguntas FIJADAS 📌 en su posición exacta y el resto al azar. ' +
+      'usando el banco actual: 8 por nivel, con las preguntas FIJADAS 📌 en su posición exacta.\n\n' +
+      comoReparte + '\n\n' +
       'Se REEMPLAZAN las preguntas que tengan ahora. ¿Continuar?'
     );
     if (!confirmed) return;
@@ -4882,14 +4902,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       let ok = 0;
       for (const ev of targets) {
         try {
-          await insertRandomQuestionsFromBank(ev.id);
+          await insertRandomQuestionsFromBank(ev.id, mezclarPorCategoria);
           ok++;
         } catch (e) {
           console.error('Error re-sorteando evento', ev.id, e);
         }
       }
 
-      window.alert(`✅ Listo. Se re-sortearon las preguntas de ${ok} evento(s) abierto(s): fijadas en su posición + azar, del banco actual.`);
+      window.alert(
+        `✅ Listo. Se re-sortearon las preguntas de ${ok} evento(s) abierto(s), del banco actual.\n\n` +
+        (mezclarPorCategoria ? 'Modo: equilibrado por categoría.' : 'Modo: al azar, sin mirar categorías.')
+      );
       loadQuestions();
     } catch (err: any) {
       console.error('handleSyncQuestionsToAllEvents error:', err);
@@ -4901,15 +4924,24 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
   // Re-sortea las preguntas de UN solo evento (botón dentro de la config del
   // evento). Mismo criterio: 8 por nivel, fijadas en su posición + azar.
-  const handleReshuffleEventQuestions = async (eventId: string, eventName?: string) => {
+  // mezclarPorCategoria: igual que en el sorteo global, decide si el resto se
+  // reparte parejo entre categorías o si es azar puro sobre todo el banco.
+  const handleReshuffleEventQuestions = async (eventId: string, eventName?: string, mezclarPorCategoria: boolean = true) => {
+    const comoReparte = mezclarPorCategoria
+      ? 'Reparte PAREJO entre las 4 categorías (⚔️ debate, 💭 opinión, 📖 anécdota, 🎯 juego).'
+      : 'AZAR PURO, sin mirar categorías: si el banco tiene muchas de una, van a salir más.';
     const confirmed = window.confirm(
-      `¿Re-sortear las preguntas de "${eventName || 'este evento'}"? ` +
-      'Se reemplazan por 8 nuevas por nivel (las fijadas 📌 quedan en su posición, el resto al azar).'
+      `¿Re-sortear las preguntas de "${eventName || 'este evento'}"?\n\n` +
+      comoReparte + '\n\n' +
+      'Se reemplazan por 8 nuevas por nivel. Las fijadas 📌 quedan en su posición en los dos modos.'
     );
     if (!confirmed) return;
     try {
-      await insertRandomQuestionsFromBank(eventId);
-      window.alert('✅ Preguntas re-sorteadas para este evento.');
+      await insertRandomQuestionsFromBank(eventId, mezclarPorCategoria);
+      window.alert(
+        '✅ Preguntas re-sorteadas para este evento.\n\n' +
+        (mezclarPorCategoria ? 'Modo: equilibrado por categoría.' : 'Modo: al azar, sin mirar categorías.')
+      );
       // Si el visor de preguntas del evento está abierto, refrescarlo para
       // que muestre el mix nuevo sin que el admin tenga que cerrarlo y abrirlo.
       if (showEventQuestionsViewer) loadEventAssignedQuestions(eventId);
@@ -5893,12 +5925,23 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         )}
 
         <View style={styles.bulkActionsSection}>
+          {/* Los dos sorteos, uno al lado del otro. Se diferencian por el nombre
+              y por el color: verde = equilibrado (el de siempre), ámbar = azar
+              puro. Los dos respetan las preguntas fijadas 📌. */}
           <TouchableOpacity
             style={[styles.bulkActionButton, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#059669' }]}
-            onPress={handleSyncQuestionsToAllEvents}
+            onPress={() => handleSyncQuestionsToAllEvents(true)}
           >
             <Text style={[styles.bulkActionButtonText, { color: '#065F46' }]}>
-              🔀 Sincronizar a todos los eventos (re-sortea con el banco actual)
+              🎚️ Todos los eventos · EQUILIBRADO por categoría
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkActionButton, { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#D97706' }]}
+            onPress={() => handleSyncQuestionsToAllEvents(false)}
+          >
+            <Text style={[styles.bulkActionButtonText, { color: '#92400E' }]}>
+              🎲 Todos los eventos · AL AZAR, sin mirar categorías
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -10919,11 +10962,21 @@ setBulkWhatsAppPending(pending);
                     <Text style={styles.configActionButtonText}>📋 Duplicar Evento</Text>
                   </TouchableOpacity>
 
+                  {/* Los dos sorteos de ESTE evento. Mismos nombres que en la
+                      pestaña de Preguntas, para no tener que recordar cuál es
+                      cuál según dónde se esté. */}
                   <TouchableOpacity
                     style={[styles.configActionButton, { backgroundColor: '#8B5CF6' }]}
-                    onPress={() => handleReshuffleEventQuestions(selectedEventForConfig.id, selectedEventForConfig.name)}
+                    onPress={() => handleReshuffleEventQuestions(selectedEventForConfig.id, selectedEventForConfig.name, true)}
                   >
-                    <Text style={styles.configActionButtonText}>🔀 Re-sortear preguntas de este evento</Text>
+                    <Text style={styles.configActionButtonText}>🎚️ Re-sortear este evento · EQUILIBRADO por categoría</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.configActionButton, { backgroundColor: '#D97706' }]}
+                    onPress={() => handleReshuffleEventQuestions(selectedEventForConfig.id, selectedEventForConfig.name, false)}
+                  >
+                    <Text style={styles.configActionButtonText}>🎲 Re-sortear este evento · AL AZAR, sin categorías</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -10938,13 +10991,13 @@ setBulkWhatsAppPending(pending);
                   {showEventQuestionsViewer && (
                     <View style={{ borderWidth: 1, borderColor: '#EEE2E8', borderRadius: 12, padding: 12, marginBottom: 12, backgroundColor: '#fff' }}>
                       <Text style={{ fontSize: 11.5, color: '#8b7480', lineHeight: 17, marginBottom: 10 }}>
-                        Esto es lo que realmente quedó guardado para este evento (no el banco global). Las fijadas 📌 salen igual en todos los eventos; el resto vino del mix por categoría al sortear.
+                        Esto es lo que realmente quedó guardado para este evento (no el banco global). Las fijadas 📌 salen igual en todos los eventos; el resto vino del último sorteo que le hayas hecho — equilibrado por categoría 🎚️ o al azar 🎲.
                       </Text>
                       {loadingEventAssignedQuestions ? (
                         <ActivityIndicator size="small" color={nospiColors.purpleDark} />
                       ) : eventAssignedQuestions.length === 0 ? (
                         <Text style={{ fontSize: 13, color: '#9CA3AF' }}>
-                          Este evento todavía no tiene preguntas guardadas. Usa "🔀 Re-sortear" para asignarle un mix del banco.
+                          Este evento todavía no tiene preguntas guardadas. Usa uno de los dos botones de re-sortear para asignarle preguntas del banco.
                         </Text>
                       ) : (
                         <>
