@@ -264,20 +264,20 @@ function htmlParagraph(txt: string, opts?: { strong?: boolean; muted?: boolean }
   return `<p style="margin:0 0 12px; font-size:${size}; color:${color}; line-height:1.6; font-family: -apple-system, Helvetica, Arial, sans-serif;">${inner}</p>`;
 }
 
-// ── Plantillas de mensajes, editables desde el admin ────────────────────────
-// El texto de los mensajes de videollamada vive en app_config, no aqui: asi se
-// cambia una palabra desde Configuracion sin desplegar la funcion. Una sola
-// plantilla alimenta TRES salidas (el WhatsApp del admin, el correo en texto
-// plano y el correo en HTML), asi que WhatsApp y correo no se pueden
-// desincronizar.
+// ── Plantillas de los mensajes de videollamada ───────────────────────────────
+// Una sola plantilla alimenta TRES salidas (el WhatsApp que se manda a mano
+// desde el admin, el correo en texto plano y el correo en HTML), asi que
+// WhatsApp y correo no se pueden desincronizar.
+//
+// Hasta sep 2026 estos textos se leian de app_config para poder editarlos desde
+// Configuracion en el admin. Se quito: el mensaje vivia en dos sitios, y
+// corregir algo aqui no cambiaba nada mientras la base tuviera su propia copia.
+// Ahora se cambia aqui y en app/admin/index.web.tsx, que son espejo -- si se
+// toca uno, tocar el otro.
 //
 // Formato: el de WhatsApp, que es el que ya se sabe escribir.
 //   *negrita*   _cursiva_   y una linea en blanco separa parrafos.
 // Comodines: {nombre} {evento} {fecha} {hora} {horaBoton}
-//
-// Los textos de abajo son el RESPALDO: si la clave se borra o queda vacia, el
-// correo sale igual con esto. Nunca se manda un correo en blanco.
-// Espejo de las mismas funciones en app/admin/index.web.tsx.
 
 const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
   '\u00a1Hola {nombre}! \ud83d\udc4b', '',
@@ -346,27 +346,6 @@ function plantillaAHtml(txt: string): string {
     .join('');
 }
 
-type Plantillas = { hoy: string; vispera: string };
-
-async function cargarPlantillas(supabase: any): Promise<Plantillas> {
-  const out: Plantillas = { hoy: PLANTILLA_VIRTUAL_HOY_DEFECTO, vispera: PLANTILLA_VIRTUAL_VISPERA_DEFECTO };
-  try {
-    const { data } = await supabase
-      .from('app_config')
-      .select('key, value')
-      .in('key', ['msg_virtual_hoy', 'msg_virtual_vispera']);
-    for (const row of data || []) {
-      const v = String(row.value || '').trim();
-      if (!v) continue;
-      if (row.key === 'msg_virtual_hoy') out.hoy = v;
-      if (row.key === 'msg_virtual_vispera') out.vispera = v;
-    }
-  } catch (e) {
-    console.error('send-email-reminders: no se pudieron leer las plantillas, se usan las de respaldo', e);
-  }
-  return out;
-}
-
 // Links cortos de instalar. Los textos no dicen solo "instala la app": dicen
 // lo que se gana (avisos del lugar, de la dinamica y de los matches). Son los
 // mismos que los WhatsApp del admin. No se dice que la app es obligatoria
@@ -398,7 +377,7 @@ const AL_ENTRAR_VIRTUAL = [
   '✏️ Ten a mano papel y lápiz',
 ];
 
-function buildSameDayText(firstName: string, event: any, plantillas?: Plantillas): { subject: string; text: string; html: string } {
+function buildSameDayText(firstName: string, event: any): { subject: string; text: string; html: string } {
   const virtual = esVirtual(event);
   const subject = event.time
     ? `Hoy, ${formatTimeAmPm(event.time)} · ${event.name || 'Nospi'}`
@@ -406,7 +385,7 @@ function buildSameDayText(firstName: string, event: any, plantillas?: Plantillas
 
   if (virtual) {
     // Texto unico desde la plantilla: el mismo que sale por WhatsApp.
-    const armado = aplicarComodines(plantillas?.hoy || PLANTILLA_VIRTUAL_HOY_DEFECTO, {
+    const armado = aplicarComodines(PLANTILLA_VIRTUAL_HOY_DEFECTO, {
       nombre: firstName,
       evento: event.name || 'tu evento',
       fecha: formatEventDateBogota(event.date),
@@ -488,7 +467,7 @@ function buildEventStartText(firstName: string, event: any): { subject: string; 
   return { subject, text, html };
 }
 
-function build48hText(firstName: string, event: any, now: Date, plantillas?: Plantillas): { subject: string; text: string; html: string } {
+function build48hText(firstName: string, event: any, now: Date): { subject: string; text: string; html: string } {
   const virtual = esVirtual(event);
   const formattedDate = formatEventDateBogota(event.date);
   const locationFull = buildLocationFull(event.location_name, event.location_address);
@@ -505,8 +484,8 @@ function build48hText(firstName: string, event: any, now: Date, plantillas?: Pla
     // Si el link del Meet se guarda el mismo dia del evento, este correo ya no
     // es de vispera: se manda el texto de "hoy", que es el que trae los pasos.
     const base = esVispera
-      ? (plantillas?.vispera || PLANTILLA_VIRTUAL_VISPERA_DEFECTO)
-      : (plantillas?.hoy || PLANTILLA_VIRTUAL_HOY_DEFECTO);
+      ? PLANTILLA_VIRTUAL_VISPERA_DEFECTO
+      : PLANTILLA_VIRTUAL_HOY_DEFECTO;
     const armado = aplicarComodines(base, {
       nombre: firstName,
       evento: event.name || 'tu evento',
@@ -700,10 +679,6 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const results: any[] = [];
 
-    // Textos de los mensajes de videollamada: se leen una sola vez por
-    // invocacion, no una por destinatario.
-    const plantillas = await cargarPlantillas(supabase);
-
     let targetEventId: string | null = null;
     let previewEmail: string | null = null;
     let previewType: string = 'sameday';
@@ -810,10 +785,10 @@ serve(async (req) => {
         // por Nospi. Ningún nombre de una persona concreta del equipo va en
         // texto que pueda terminar delante de la comunidad.
         const nombrePreview = 'Nombre';
-        if (previewType === '48h') built = build48hText(nombrePreview, eventData, now, plantillas);
+        if (previewType === '48h') built = build48hText(nombrePreview, eventData, now);
         else if (previewType === '3d') built = build3dText(nombrePreview, eventData);
         else if (previewType === 'event_start') built = buildEventStartText(nombrePreview, eventData);
-        else built = buildSameDayText(nombrePreview, eventData, plantillas);
+        else built = buildSameDayText(nombrePreview, eventData);
         const tagSuffix = previewTag ? ` [${previewTag}]` : '';
         const { ok } = await sendEmail(previewEmail, `[PREVIEW]${tagSuffix} ${built.subject}`, built.text, built.html);
         results.push({ block: 'preview', type: previewType, to: previewEmail, ok });
@@ -850,7 +825,7 @@ serve(async (req) => {
             continue;
           }
           const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-          const { subject, text, html } = build48hText(firstName, event, now, plantillas);
+          const { subject, text, html } = build48hText(firstName, event, now);
           const { ok } = await sendEmail(user.email, subject, text, html);
           if (ok) await supabase.from('appointments').update({ reminder_48h_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: '48h', appointmentId: apt.id, ok });
@@ -919,7 +894,7 @@ serve(async (req) => {
                 continue;
               }
               const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-              const { subject, text, html } = build48hText(firstName, event, now, plantillas);
+              const { subject, text, html } = build48hText(firstName, event, now);
               const { ok } = await sendEmail(user.email, subject, text, html);
               if (ok) await supabase.from('appointments').update({ reminder_48h_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
               results.push({ block: 'vispera_virtual', appointmentId: apt.id, ok });
@@ -957,7 +932,7 @@ serve(async (req) => {
             continue;
           }
           const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-          const { subject, text, html } = buildSameDayText(firstName, event, plantillas);
+          const { subject, text, html } = buildSameDayText(firstName, event);
           const { ok } = await sendEmail(user.email, subject, text, html);
           if (ok) await supabase.from('appointments').update({ sameday_reminder_email_sent_at: new Date().toISOString() }).eq('id', apt.id);
           results.push({ block: 'sameday', appointmentId: apt.id, ok });
