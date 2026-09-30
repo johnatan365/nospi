@@ -231,8 +231,12 @@ const LINK_MEET = 'nospi.co/meet';
 // Formato: el de WhatsApp.  *negrita*   _cursiva_   linea en blanco = parrafo.
 // Comodines: {nombre} {evento} {fecha} {hora} {horaBoton}
 //
-// Estos textos son el RESPALDO por si la clave se borra o queda vacia.
-// Espejo de supabase/functions/send-email-reminders/index.ts.
+// Estos son LOS textos, no un respaldo: hasta sep 2026 se podian editar desde
+// Configuracion en el admin y se guardaban en app_config. Se quito ese editor
+// porque tener el mensaje en dos sitios -- codigo y base -- hacia que corregir
+// algo aca no sirviera de nada mientras la base tuviera su propia copia.
+// Espejo de supabase/functions/send-email-reminders/index.ts: si se cambia uno,
+// cambiar el otro, que es de donde sale el correo.
 const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
   `¡Hola {nombre}! 👋`,
   ``,
@@ -390,7 +394,6 @@ function buildEventReminderWhatsAppLink(
   locationAddress?: string,
   mapsLink?: string,
   eventType?: string,
-  plantilla?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -415,7 +418,7 @@ function buildEventReminderWhatsAppLink(
 
   const message = (esVirtual ? [
     // Texto unico, el mismo que sale por correo (ver send-email-reminders).
-    aplicarComodines(plantilla || PLANTILLA_VIRTUAL_VISPERA_DEFECTO, {
+    aplicarComodines(PLANTILLA_VIRTUAL_VISPERA_DEFECTO, {
       nombre: firstName,
       evento: eventLabel,
       fecha: formattedDate,
@@ -459,7 +462,6 @@ function buildSameDayWhatsAppLink(
   locationAddress?: string,
   mapsLink?: string,
   eventType?: string,
-  plantilla?: string
   ): string {
   const digits = (phone || '').replace(/\D/g, '');
   const firstName = (name || '').trim().split(' ')[0] || 'ahí';
@@ -472,7 +474,7 @@ function buildSameDayWhatsAppLink(
 
   const message = (esVirtual ? [
     // Texto unico, el mismo que sale por correo (ver send-email-reminders).
-    aplicarComodines(plantilla || PLANTILLA_VIRTUAL_HOY_DEFECTO, {
+    aplicarComodines(PLANTILLA_VIRTUAL_HOY_DEFECTO, {
       nombre: firstName,
       evento: (eventName || 'tu evento').trim(),
       fecha: '',
@@ -855,9 +857,6 @@ export default function AdminPanelScreen() {
   // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
   const [configPuerta2, setConfigPuerta2] = useState(false);
   const [configMinAppVersion, setConfigMinAppVersion] = useState('');
-  // Texto de los mensajes de videollamada (WhatsApp y correo salen de aqui).
-  const [configMsgVirtualHoy, setConfigMsgVirtualHoy] = useState('');
-  const [configMsgVirtualVispera, setConfigMsgVirtualVispera] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
 
@@ -1967,8 +1966,8 @@ export default function AdminPanelScreen() {
   const buildReminderLinkForModal = (a: Appointment) => {
     if (!reminderWhatsAppModal || !selectedEventForConfig) return '';
     return reminderWhatsAppModal.kind === '48h'
-    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type, configMsgVirtualVispera)
-      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type, configMsgVirtualHoy);
+    ? buildEventReminderWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.date, selectedEventForConfig.time, selectedEventForConfig.is_location_revealed, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type)
+      : buildSameDayWhatsAppLink(a.users.phone, a.users.name, selectedEventForConfig.name, selectedEventForConfig.time, selectedEventForConfig.location_name, selectedEventForConfig.location_address, selectedEventForConfig.maps_link, selectedEventForConfig.type);
   };
 
   const loadEventConversations = useCallback(async (eventId: string) => {
@@ -2164,8 +2163,6 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
-      if (row.key === 'msg_virtual_hoy') setConfigMsgVirtualHoy(row.value);
-      if (row.key === 'msg_virtual_vispera') setConfigMsgVirtualVispera(row.value);
     }
   };
 
@@ -2183,8 +2180,6 @@ export default function AdminPanelScreen() {
         { key: 'subscription_price_6m', value: configSubPrice6m },
         { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
         { key: 'min_app_version', value: configMinAppVersion.trim() },
-        { key: 'msg_virtual_hoy', value: configMsgVirtualHoy.trim() },
-        { key: 'msg_virtual_vispera', value: configMsgVirtualVispera.trim() },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -8046,71 +8041,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </div>
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
               Este es el botón de emergencia: apagarlo devuelve todo a la normalidad al instante, sin publicar código. Ojo que la marca se pone al REGISTRARSE — una cuenta que ya existía no cambia aunque abra el link.
-            </div>
-          </div>
-
-          {/* ── MENSAJES DE VIDEOLLAMADA ── */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #0F766E', gridColumn: '1 / -1' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F766E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              💬 Mensajes de videollamada
-            </div>
-            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
-              Lo que escribas aquí sale <strong>igual por WhatsApp y por correo</strong>. Se aplica de una, sin publicar nada.
-              Formato: <code>*negrita*</code>, <code>_cursiva_</code>, y una línea en blanco separa párrafos.
-            </div>
-
-            {[
-              {
-                etiqueta: 'El día anterior',
-                ayuda: 'Sale a las 9 a.m. del día antes, apenas el link del Meet esté guardado.',
-                comodines: '{nombre} · {evento} · {fecha} · {hora} · {horaBoton}',
-                valor: configMsgVirtualVispera,
-                set: setConfigMsgVirtualVispera,
-                defecto: PLANTILLA_VIRTUAL_VISPERA_DEFECTO,
-              },
-              {
-                etiqueta: 'El mismo día',
-                ayuda: 'Sale a las 9 a.m. del día del evento. Es el que trae los pasos para entrar.',
-                comodines: '{nombre} · {evento} · {hora} · {horaBoton}',
-                valor: configMsgVirtualHoy,
-                set: setConfigMsgVirtualHoy,
-                defecto: PLANTILLA_VIRTUAL_HOY_DEFECTO,
-              },
-            ].map((m) => (
-              <div key={m.etiqueta} style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{m.etiqueta}</div>
-                  <button
-                    onClick={() => { if (window.confirm('¿Volver este mensaje al texto original? Se pierde lo que tengas escrito.')) m.set(m.defecto); }}
-                    style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                  >
-                    restaurar el texto original
-                  </button>
-                </div>
-                <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>{m.ayuda}</div>
-                <textarea
-                  value={m.valor}
-                  onChange={(e) => m.set(e.target.value)}
-                  rows={14}
-                  spellCheck
-                  style={{
-                    width: '100%', boxSizing: 'border-box', padding: '12px 14px',
-                    fontSize: 14, lineHeight: 1.6, borderRadius: 10, border: '2px solid #E5E7EB',
-                    outline: 'none', color: '#111827', fontFamily: 'inherit', resize: 'vertical',
-                  }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 12, color: '#9CA3AF' }}>Comodines: <code>{m.comodines}</code></div>
-                  <div style={{ fontSize: 12, color: m.valor.length > 900 ? '#DC2626' : '#9CA3AF', fontWeight: m.valor.length > 900 ? 700 : 400 }}>
-                    {m.valor.length} caracteres{m.valor.length > 900 ? ' — va quedando largo, la gente no lo lee' : ''}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.5, borderTop: '1px solid #F3F4F6', paddingTop: 12 }}>
-              Si dejas un mensaje vacío, se manda el texto original que trae el sistema: nunca sale un correo en blanco.
-              Un comodín mal escrito se ve tal cual en el mensaje (por ejemplo <code>{'{hroa}'}</code>), así que revisa antes de guardar.
             </div>
           </div>
 
