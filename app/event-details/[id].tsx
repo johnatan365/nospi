@@ -12,10 +12,11 @@ import { formatTimeAmPm } from '@/utils/formatTime';
 import { abrirMeet } from '@/lib/abrirMeet';
 import { toqueFuerte, aviso } from '@/lib/haptics';
 
-// Videollamada: la asistencia se confirma en la pestaña Dinámica desde 10
-// minutos antes (VIRTUAL_CONFIRM_MINUTES de dinamica.tsx). Ahí se escoge el
+// Videollamada: la asistencia se confirma en la pestaña Dinámica desde 15
+// minutos antes (VIRTUAL_CONFIRM_MINUTES de dinamica.tsx, y el push y el correo
+// de "ya pueden conectarse" salen a esa misma hora). Ahí se escoge el
 // moderador y de ahí se entra al Meet; esta página solo lleva para allá.
-const MINUTOS_ANTES_ENTRAR = 10;
+const MINUTOS_ANTES_ENTRAR = 15;
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
 
 function horaBogota(d: Date): string {

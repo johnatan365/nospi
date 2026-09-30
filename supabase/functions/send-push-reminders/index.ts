@@ -12,6 +12,11 @@
 // app libera el boton "Continuar" (START_WINDOW_MINUTES en dinamica.tsx).
 // Asi el push llega cuando la mesa YA puede arrancar, no antes.
 //
+// v7 (sep 2026): videollamada — push propio de 'ya puedes conectarte' 15 min
+// antes (bloque d2, columna virtual_connect_push_sent_at), la misma hora en que
+// la app habilita el boton. El aviso de inicio pasa a ser el ultimo llamado y se
+// salta a quien ya confirmo.
+//
 // v6: videollamada — el push de 'lista' sale a las 9 a.m. del dia anterior
 // (bloque a2) y no al activar el acceso, que ahora es automatico al guardar el
 // link del Meet y puede pasar dias antes.
@@ -26,7 +31,8 @@
 //    de ESE evento que aun no lo hayan recibido (boton admin / trigger DB).
 // 2) Sin body (cron cada 5 min): recordatorio de 'faltan 3 dias', recordatorio
 //    del mismo dia, recordatorio de '2 horas antes', aviso de 'ya pueden
-//    chatear' (30 min antes) y aviso de 'el evento esta empezando, abre
+//    chatear' (30 min antes), aviso de 'ya puedes conectarte' de las
+//    videollamadas (15 min antes) y aviso de 'el evento esta empezando, abre
 //    Dinamica' (a la hora de inicio + 5 min).
 //
 // IMPORTANTE: 'events.date' ya es el instante UTC exacto del evento (ej.
@@ -47,6 +53,14 @@ const EARLY_EVENT_BUFFER_MINUTES = 120;
 // con START_WINDOW_MINUTES de la app (app/(tabs)/dinamica.tsx): es el momento
 // en que se libera "Continuar" para elegir moderador.
 const EVENT_START_DELAY_MS = 5 * 60 * 1000;
+
+// Videollamada: cuanto ANTES de la hora sale el push de "ya puedes conectarte".
+// Debe coincidir con VIRTUAL_CONFIRM_MINUTES de la app (app/(tabs)/dinamica.tsx):
+// es el momento exacto en que aparece el boton "Confirmar asistencia". Si el
+// push saliera antes, la gente entra y encuentra la pantalla todavia bloqueada
+// -- que es justo lo que pasaba cuando este aviso lo cubria el de 'ya pueden
+// chatear' (30 min antes) y la app abria a los 10.
+const VIRTUAL_CONNECT_BEFORE_MS = 15 * 60 * 1000;
 
 // Ventanas de gracia para los recordatorios de precision (2h / 30min / inicio):
 // si el cron se atrasa, igual dispara mientras no se haya pasado de esta
@@ -324,6 +338,39 @@ serve(async (req) => {
       }
     }
 
+    // d2) Videollamada, 15 min antes: "ya puedes conectarte". Es el aviso que
+    //     de verdad mueve a la gente, porque es el unico instante en que la
+    //     pantalla de Dinamica ya tiene el boton. Solo virtuales: en un
+    //     presencial 15 minutos antes la gente va llegando al sitio y el aviso
+    //     util es otro (el de confirmar por GPS, que sale al llegar).
+    const virtualConnectTarget = new Date(now.getTime() + VIRTUAL_CONNECT_BEFORE_MS);
+    const virtualConnectGraceStart = new Date(now.getTime() - PRECISION_GRACE_MS);
+
+    const { data: appointmentsConnect, error: errorConnect } = await supabase
+      .from('appointments')
+      .select(`id, user_id, event_id, events!inner ( name, date, type )`)
+      .eq('status', 'confirmada')
+      .is('virtual_connect_push_sent_at', null)
+      .eq('events.type', 'virtual')
+      .lte('events.date', virtualConnectTarget.toISOString())
+      .gt('events.date', virtualConnectGraceStart.toISOString());
+
+    if (errorConnect) {
+      results.push({ block: 'virtual_connect', error: errorConnect.message });
+    } else {
+      for (const apt of appointmentsConnect || []) {
+        const event = (apt as any).events;
+        const { ok } = await sendPush(
+          apt.user_id,
+          '🎥 ¡Ya puedes conectarte!',
+          `Abre Nospi y entra a la pestaña Dinámica: ahí confirmas tu asistencia, escogen al moderador y desde ahí mismo entran a "${event.name || 'tu videollamada'}".`,
+          { type: 'virtual_connect_dinamica', event_id: apt.event_id },
+        );
+        if (ok) await supabase.from('appointments').update({ virtual_connect_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
+        results.push({ block: 'virtual_connect', appointmentId: apt.id, ok });
+      }
+    }
+
     // e) Inicio del evento + 5 min: recordar abrir Dinamica para romper el
     //    hielo. Dispara cuando events.date <= now - EVENT_START_DELAY_MS, o sea
     //    justo cuando la app libera "Continuar" (fin de la tarjeta de espera).
@@ -332,7 +379,7 @@ serve(async (req) => {
 
     const { data: appointmentsStart, error: errorStart } = await supabase
       .from('appointments')
-      .select(`id, user_id, event_id, events!inner ( name, date, type )`)
+      .select(`id, user_id, event_id, location_confirmed, events!inner ( name, date, type )`)
       .eq('status', 'confirmada')
       .is('event_start_push_sent_at', null)
       .lte('events.date', startTarget.toISOString())
@@ -344,9 +391,21 @@ serve(async (req) => {
       for (const apt of appointmentsStart || []) {
         const event = (apt as any).events;
         const virtual = event.type === 'virtual';
-        const title = virtual ? `🎥 ¡Tu videollamada está empezando!` : `🎉 ¡${event.name || 'Tu evento'} está empezando!`;
+
+        // En videollamada este ya no es el primer aviso: el de 'ya puedes
+        // conectarte' salio 15 min antes (bloque d2). Para quien ya confirmo,
+        // repetirlo seria pedirle algo que ya hizo, asi que se lo salta. Se
+        // marca como enviado igual para que no quede pendiente y lo reintente
+        // en cada corrida del cron.
+        if (virtual && (apt as any).location_confirmed) {
+          await supabase.from('appointments').update({ event_start_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
+          results.push({ block: 'event_start', appointmentId: apt.id, skipped: true, reason: 'virtual: ya confirmo su asistencia' });
+          continue;
+        }
+
+        const title = virtual ? `🎥 ¡Tu videollamada ya empezó!` : `🎉 ¡${event.name || 'Tu evento'} está empezando!`;
         const body = virtual
-          ? 'Entra a Nospi y confirma tu asistencia: primero escogen al moderador y luego entran a la llamada.'
+          ? 'Todavía puedes entrar: abre la pestaña Dinámica, confirma tu asistencia y únete a la llamada.'
           : 'Abre la pestaña Dinámica para romper el hielo con tu grupo.';
         const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_start_dinamica', event_id: apt.event_id });
         if (ok) await supabase.from('appointments').update({ event_start_push_sent_at: new Date().toISOString() }).eq('id', apt.id);

@@ -87,8 +87,13 @@ const PRECISION_GRACE_MS = 45 * 60 * 1000;
 const EVENT_START_DELAY_MS = 5 * 60 * 1000;
 
 // Cuanto ANTES de la hora se habilita el boton de entrar a la videollamada.
-// Debe coincidir con MINUTOS_ANTES_ENTRAR de app/event-details/[id].tsx.
-const MINUTOS_ANTES_ENTRAR = 10;
+// Es el valor de {horaBoton} en las plantillas virtuales -- las mismas que se
+// usan por WhatsApp desde el admin, asi que los dos canales dicen la misma hora.
+// Debe coincidir con MINUTOS_ANTES_ENTRAR de app/event-details/[id].tsx,
+// VIRTUAL_CONFIRM_MINUTES de app/(tabs)/dinamica.tsx y VIRTUAL_CONNECT_BEFORE_MS
+// de send-push-reminders. Estuvo en 10 mientras el admin ya mandaba 15: la gente
+// lo intentaba a la hora que decia el WhatsApp y encontraba la pantalla cerrada.
+const MINUTOS_ANTES_ENTRAR = 15;
 
 // En un evento virtual el boton del correo lleva a la app, nunca al Meet.
 // Botones de los correos: nunca a la raiz (abre la pestaña Eventos, que es el
@@ -406,7 +411,7 @@ function buildSameDayText(firstName: string, event: any, plantillas?: Plantillas
       evento: event.name || 'tu evento',
       fecha: formatEventDateBogota(event.date),
       hora: event.time ? formatTimeAmPm(event.time) : '',
-      horaBoton: restarMinutos(event.time) || '10 minutos antes',
+      horaBoton: restarMinutos(event.time) || '15 minutos antes',
     });
     return {
       subject,
@@ -507,7 +512,7 @@ function build48hText(firstName: string, event: any, now: Date, plantillas?: Pla
       evento: event.name || 'tu evento',
       fecha: formattedDate,
       hora: event.time ? formatTimeAmPm(event.time) : '',
-      horaBoton: restarMinutos(event.time) || '10 minutos antes',
+      horaBoton: restarMinutos(event.time) || '15 minutos antes',
     });
     return {
       subject,

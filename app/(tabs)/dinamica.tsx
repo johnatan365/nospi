@@ -107,7 +107,7 @@ const START_WINDOW_MINUTES = 5;
 // + VIRTUAL_AUTO_MOD_MINUTES nadie se ofreció, la app sortea uno entre los
 // confirmados. Con moderador, cada uno toca "Ir a Meet": ESE toque es la
 // asistencia (checked_in_at), no la confirmación.
-const VIRTUAL_CONFIRM_MINUTES = 10;
+const VIRTUAL_CONFIRM_MINUTES = 15;
 const VIRTUAL_AUTO_MOD_MINUTES = 5;
 
 // Distancia en metros entre dos coordenadas (fórmula de Haversine)

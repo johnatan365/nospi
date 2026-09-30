@@ -310,7 +310,11 @@ const BLOQUE_INSTALAR_MISMO_DIA = [
 ].join('\n');
 
 // La hora en que se habilita el boton de entrar: la del evento menos 15 min,
-// la misma ventana que usa la app (MINUTOS_ANTES_ENTRAR en event-details).
+// la misma ventana que usa la app (MINUTOS_ANTES_ENTRAR en event-details,
+// VIRTUAL_CONFIRM_MINUTES en dinamica.tsx) y el mismo numero que el correo y el
+// push. OJO: este default ya decia 15 pero las dos llamadas pasaban 10, asi que
+// el WhatsApp anunciaba una hora y la app abria diez minutos despues. No volver
+// a pasar el minutaje en la llamada: el numero vive aqui y en ningun otro lado.
 function restarMinutos(time24?: string, minutos: number = 15): string {
   const m = /^(\d{1,2}):(\d{2})/.exec((time24 || '').trim());
   if (!m) return '';
@@ -407,7 +411,7 @@ function buildEventReminderWhatsAppLink(
   }
 
   const esVirtual = eventType === 'virtual';
-  const horaBoton = restarMinutos(eventTime, 10);
+  const horaBoton = restarMinutos(eventTime);
 
   const message = (esVirtual ? [
     // Texto unico, el mismo que sale por correo (ver send-email-reminders).
@@ -416,7 +420,7 @@ function buildEventReminderWhatsAppLink(
       evento: eventLabel,
       fecha: formattedDate,
       hora: eventTime ? formatTimeAmPm(eventTime) : '',
-      horaBoton: horaBoton || '10 minutos antes',
+      horaBoton: horaBoton || '15 minutos antes',
     }),
   ] : [
     `¡Hola ${firstName}! 👋`,
@@ -464,7 +468,7 @@ function buildSameDayWhatsAppLink(
   const mapsLine = mapsLink ? `\n🗺️ ${mapsLink}` : '';
 
   const esVirtual = eventType === 'virtual';
-  const horaBoton = restarMinutos(eventTime, 10);
+  const horaBoton = restarMinutos(eventTime);
 
   const message = (esVirtual ? [
     // Texto unico, el mismo que sale por correo (ver send-email-reminders).
@@ -473,7 +477,7 @@ function buildSameDayWhatsAppLink(
       evento: (eventName || 'tu evento').trim(),
       fecha: '',
       hora: eventTime ? formatTimeAmPm(eventTime) : '',
-      horaBoton: horaBoton || '10 minutos antes',
+      horaBoton: horaBoton || '15 minutos antes',
     }),
   ] : [
     `¡Hola ${firstName}! 👋`,
