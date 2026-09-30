@@ -2494,14 +2494,21 @@ export default function ChatThreadScreen() {
 
     if (error) {
       console.error('ChatThread: error starting direct chat', error);
-      // El chat privado exige que ambos hayan confirmado su llegada a un mismo
-      // evento. Ese caso NO se resuelve reintentando, asi que se explica aparte
-      // en vez de mostrar el mensaje generico de "intenta de nuevo".
+      // El unico error "de negocio" que puede devolver get_or_create_direct_chat
+      // es el limite de solicitudes sin responder, y lo lanza con errcode 42501.
+      // Ese caso NO se resuelve reintentando, asi que se explica aparte en vez
+      // de mostrar el mensaje generico de "intenta de nuevo".
+      //
+      // Antes este mismo 42501 se traducia como "solo puedes escribirle a
+      // personas que asistieron contigo a un evento", que era la regla vieja:
+      // desde que existen las solicitudes eso ya no es verdad, y la persona
+      // leia una explicacion que no tenia nada que ver con lo que le paso.
       const msg = String(error.message || '');
-      const bloqueadoPorAsistencia = msg.includes('asistieron contigo') || (error as any).code === '42501';
-      const titulo = bloqueadoPorAsistencia ? 'Chat no disponible' : 'No se pudo abrir el chat';
-      const detalle = bloqueadoPorAsistencia
-        ? 'Solo puedes escribirle por privado a personas que asistieron contigo a un evento.'
+      const limiteDeSolicitudes =
+        (error as any).code === '42501' || msg.includes('solicitudes sin responder');
+      const titulo = limiteDeSolicitudes ? 'Llegaste al límite del día' : 'No se pudo abrir el chat';
+      const detalle = limiteDeSolicitudes
+        ? 'Puedes tener hasta 10 solicitudes sin responder. En unas horas se liberan solas, y también se libera cada vez que alguien te acepta. Es para que nadie reciba mensajes en masa.'
         : 'Intenta de nuevo en unos segundos.';
       // Alert.alert de React Native NO muestra nada en web: alli hay que usar
       // window.alert, si no el usuario ve que "no pasa nada" y parece un error
@@ -3257,7 +3264,8 @@ export default function ChatThreadScreen() {
               {meta?.other_user_name || 'Esta persona'} quiere escribirte
             </Text>
             <Text style={styles.solicitudSub}>
-              No se han cruzado en un evento todavía. Si aceptas, podrán conversar.
+              No se han cruzado en un evento todavía, así que solo te puede enviar este
+              mensaje. Si aceptas, se abre el chat; si lo ignoras, no te vuelve a escribir.
             </Text>
             <View style={styles.solicitudBotones}>
               <TouchableOpacity
@@ -4103,8 +4111,18 @@ export default function ChatThreadScreen() {
               </View>
             )}
 
-            {/* Escribir por privado: solo tiene sentido con OTRA persona, y la
-                RPC ya valida que ambos hayan asistido al mismo evento. */}
+            {/* Escribir por privado: solo tiene sentido con OTRA persona. La RPC
+                decide si el chat se abre de una (ya se cruzaron en un evento) o
+                si va como solicitud. Eso hay que decirlo ANTES de tocar el
+                boton: si no, la persona cree que mando un mensaje normal y no
+                entiende por que no la dejan seguir escribiendo. */}
+            {perfilVisto && perfilVisto.user_id !== user?.id && (
+              <Text style={styles.perfilAvisoSolicitud}>
+                Si no se han cruzado en un evento, tu mensaje le llega como solicitud: la otra
+                persona lee ese primer mensaje y decide si se abre el chat.
+              </Text>
+            )}
+
             {perfilVisto && perfilVisto.user_id !== user?.id && (
               <TouchableOpacity
                 style={styles.perfilBoton}
@@ -4663,6 +4681,16 @@ const styles = StyleSheet.create({
   solicitudEnviadaSub: {
     fontSize: 12, color: 'rgba(255,255,255,0.75)', textAlign: 'center',
     marginTop: 4, lineHeight: 17, paddingHorizontal: 8,
+  },
+  // Aviso de la ficha de perfil: explica que el primer mensaje puede ir como
+  // solicitud. Va arriba del boton, no debajo, para que se lea antes de tocarlo.
+  perfilAvisoSolicitud: {
+    fontSize: 12.5,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 17,
+    marginTop: 14,
+    paddingHorizontal: 6,
   },
   solicitudTitulo: { fontSize: 16, fontWeight: '800', color: '#1F2937', textAlign: 'center' },
   solicitudSub: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 4, lineHeight: 18 },
