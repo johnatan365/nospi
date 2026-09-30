@@ -1029,17 +1029,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/invita-y-gana')} activeOpacity={0.8}>
-          <View style={styles.menuIconCircle}>
-            <Ionicons name="gift-outline" size={20} color="#880E4F" />
-          </View>
-          <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>Invita y gana</Text>
-            <Text style={styles.menuSub}>Gana saldo por cada amigo que traigas</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/subscription-membership')} activeOpacity={0.8}>
           <View style={styles.menuIconCircle}>
             <Ionicons name="diamond-outline" size={20} color="#880E4F" />
