@@ -1306,13 +1306,17 @@ export default function AdminPanelScreen() {
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
   // el admin; obligar a recargar seria justo lo contrario de "en vivo".
   useEffect(() => {
-    if (currentView !== 'realtime' || !selectedEventForMonitoring) {
-      setDinamicaViva(null);
-      setPresencia({});
-      setCierreVivo(null);
-      setModeradores([]);
-      return;
-    }
+    // Se limpia SIEMPRE que cambia el evento elegido, no solo al salir. Si no,
+    // los datos del evento anterior se quedan en pantalla hasta que vuelven las
+    // consultas del nuevo, y el admin ve el moderador (o la pregunta en curso)
+    // de un evento debajo del nombre de otro. En una pantalla cuyo trabajo es
+    // decir quien tiene el microfono ahora, mostrar al de otra mesa es peor que
+    // no mostrar nada.
+    setDinamicaViva(null);
+    setPresencia({});
+    setCierreVivo(null);
+    setModeradores([]);
+    if (currentView !== 'realtime' || !selectedEventForMonitoring) return;
     let vivo = true;
     const leer = async () => {
       const { data } = await supabase
