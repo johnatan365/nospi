@@ -204,7 +204,7 @@ interface AdminMatch {
   conversation_id: string | null; created_at: string;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
+type AdminView = 'dashboard' | 'events' | 'users' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
 
 
 
@@ -759,11 +759,6 @@ export default function AdminPanelScreen() {
   // despues de pintar el panel. Esta bandera es solo para avisarlo en la UI.
   const [heavyLoading, setHeavyLoading] = useState(false);
   const [usersLoadError, setUsersLoadError] = useState<string | null>(null);
-
-  // Participants table: sort + per-column filters
-  const [partSortCol, setPartSortCol] = useState<string>('');
-  const [partSortAsc, setPartSortAsc] = useState(true);
-  const [partColFilters, setPartColFilters] = useState<Record<string, Set<string>>>({});
 
   // Change admin password (Config section)
   const [newAdminPassword, setNewAdminPassword] = useState('');
@@ -1357,11 +1352,6 @@ export default function AdminPanelScreen() {
 
   const [realtimeEventTab, setRealtimeEventTab] = useState<'abiertos' | 'cerrados'>('abiertos');
 
-  // Participantes por evento
-  const [selectedParticipantEventId, setSelectedParticipantEventId] = useState<string>('');
-  const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
-  const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
-  const [participantTab, setParticipantTab] = useState<'confirmada' | 'cancelada' | 'anterior'>('confirmada');
   const [declinedPayments, setDeclinedPayments] = useState<any[]>([]);
   const [loadingDeclinedPayments, setLoadingDeclinedPayments] = useState(false);
 
@@ -2720,7 +2710,6 @@ const handleLogin = async () => {
       // Refrescar también las vistas que muestran datos de usuarios en otro
       // formato (no se actualizan solas con loadDashboardData).
       if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
-      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
     } catch (e: any) {
       setUserEditError(e.message || 'Error inesperado al guardar');
     } finally {
@@ -3323,7 +3312,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
       window.alert('✅ Llegada confirmada');
       if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
-      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
       // Refrescar tambien la pestana "En vivo": antes no se recargaba, asi que
       // la persona confirmada desde Gestion no aparecia alli hasta recargar.
       if (selectedEventForMonitoring === eventId) {
@@ -9144,36 +9132,6 @@ setBulkWhatsAppPending(pending);
     XLSX.writeFile(wb, `usuarios_nospi_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const exportParticipantsToExcel = (eventName: string) => {
-    if (participantAttendees.length === 0) { window.alert('No hay participantes para exportar'); return; }
-    const filtered = participantAttendees.filter(a => a.status === participantTab);
-    const data = filtered.map((a, i) => {
-      const u = a.users as any;
-      const statusLabel = a.status === 'confirmada' ? 'Confirmada' : a.status === 'cancelada' ? 'Cancelada' : 'Anterior';
-      return {
-        '#': i + 1,
-        'Nombre': u.name || '',
-        'Email': u.email || '',
-        'Teléfono': u.phone || '',
-        'Ciudad': u.city || '',
-        'País': u.country || '',
-        'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
-        'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
-        'Edad': u.age || '',
-        'Rango edad mín': u.age_range_min || 18,
-        'Rango edad máx': u.age_range_max || 99,
-        'Estado': statusLabel,
-        'Calificación': (a as any).avgRating != null ? `${((a as any).avgRating).toFixed(1)}/5 (${(a as any).ratingCount} votos)` : 'Sin calificación',
-      };
-    });
-    if (data.length === 0) { window.alert('No hay participantes en esta pestaña para exportar'); return; }
-    const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Participantes');
-    XLSX.writeFile(wb, `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
   const loadDeclinedPayments = async () => {
     setLoadingDeclinedPayments(true);
     try {
@@ -9212,61 +9170,7 @@ setBulkWhatsAppPending(pending);
     } catch (e) { console.error('Error marcando WhatsApp declinado enviado:', e); }
   };
 
-  const loadParticipantAttendees = async (eventId: string) => {
-    setLoadingParticipantAttendees(true);
-    try {
-      // Traer TODOS los estados (confirmada, cancelada, anterior).
-      // Usamos el RPC get_event_attendees_for_admin (SECURITY DEFINER) en vez de
-      // un select directo con join a "users", porque las políticas RLS de la
-      // tabla users solo permiten a cada usuario ver su propia fila: un join
-      // normal (users!inner) descarta silenciosamente todas las filas de otros
-      // usuarios y el admin termina viendo solo su propio registro.
-      const [aptsResult, ratingsResult] = await Promise.all([
-        supabase.rpc('get_event_attendees_for_admin', { p_event_id: eventId }),
-        supabase
-          .from('event_ratings')
-          .select('rated_user_id, rating')
-          .eq('event_id', eventId),
-      ]);
-
-      if (aptsResult.error) { window.alert('Error al cargar participantes: ' + aptsResult.error.message); return; }
-
-      // Calcular promedio de calificaciones por usuario
-      const ratingsMap: Record<string, { sum: number; count: number }> = {};
-      for (const r of (ratingsResult.data || [])) {
-        if (!ratingsMap[r.rated_user_id]) ratingsMap[r.rated_user_id] = { sum: 0, count: 0 };
-        ratingsMap[r.rated_user_id].sum += r.rating;
-        ratingsMap[r.rated_user_id].count += 1;
-      }
-
-      const transformed = (aptsResult.data || []).map((att: any) => {
-        const rData = ratingsMap[att.user_id];
-        const avgRating = rData ? (rData.sum / rData.count) : null;
-        return {
-          id: att.id, user_id: att.user_id, event_id: att.event_id,
-          status: att.status, payment_status: att.payment_status, created_at: att.created_at,
-          purchase_whatsapp_sent_at: att.purchase_whatsapp_sent_at,
-          avgRating,
-          ratingCount: rData?.count || 0,
-          users: {
-            id: att.user_id, name: att.user_name, email: att.user_email,
-            phone: att.user_phone, city: att.user_city, country: att.user_country,
-            interested_in: att.user_interested_in, gender: att.user_gender,
-            age: att.user_age, age_range_min: att.user_age_range_min, age_range_max: att.user_age_range_max,
-          },
-        };
-      });
-      setParticipantAttendees(transformed);
-    } catch (err: any) {
-      console.error('loadParticipantAttendees error:', err);
-      window.alert('Error inesperado al cargar participantes');
-    } finally {
-      setLoadingParticipantAttendees(false);
-    }
-  };
-
   const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Registro', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Plataforma'];
-  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   // Sort helper
   const makeSort = (
@@ -9796,241 +9700,6 @@ setBulkWhatsAppPending(pending);
               Última »
             </button>
           </div>
-        )}
-      </View>
-    );
-  };
-
-  const renderParticipants = () => {
-    const selectedEvent = events.find(e => e.id === selectedParticipantEventId);
-    const filtered = participantAttendees.filter(a => a.status === participantTab);
-
-    const tabConfig: { key: 'confirmada' | 'cancelada' | 'anterior'; label: string; emoji: string; color: string; bg: string }[] = [
-      { key: 'confirmada', label: 'Confirmadas', emoji: '✅', color: '#065F46', bg: '#D1FAE5' },
-      { key: 'cancelada',  label: 'Canceladas',  emoji: '❌', color: '#92400E', bg: '#FEF3C7' },
-      { key: 'anterior',   label: 'Anteriores',  emoji: '🕐', color: '#1D4ED8', bg: '#DBEAFE' },
-    ];
-
-    const statusBadge = (status: string) => {
-      const cfg = tabConfig.find(t => t.key === status);
-      if (!cfg) return null;
-      return (
-        <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: cfg.bg, color: cfg.color }}>
-          {cfg.emoji} {cfg.label.slice(0, -2)}
-        </span>
-      );
-    };
-
-    return (
-      <View style={styles.listContainer}>
-        {/* Botón principal: descargar TODOS los participantes de TODOS los eventos */}
-        <button
-          onClick={exportAllParticipantsToExcel}
-          disabled={exportingAll}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', backgroundColor: '#6B21A8', color: 'white', border: 'none',
-            borderRadius: 12, padding: '16px 20px', fontSize: 16, fontWeight: 800,
-            cursor: exportingAll ? 'default' : 'pointer', opacity: exportingAll ? 0.7 : 1,
-            marginBottom: 20, boxShadow: '0 2px 6px rgba(107, 33, 168, 0.3)',
-          }}
-        >
-          {exportingAll
-            ? '⏳ Generando Excel con todos los participantes...'
-            : '📥 Descargar TODOS los participantes de TODOS los eventos (Excel)'}
-        </button>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-          <Text style={styles.sectionTitle}>Participantes por Evento</Text>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {filtered.length > 0 && selectedEvent && (
-              <button
-                onClick={() => {
-                  const withPhone = filtered.filter((a: any) => a.users?.phone);
-                  if (withPhone.length === 0) { window.alert('Nadie en esta lista tiene teléfono registrado'); return; }
-                  if (!window.confirm(`Se van a abrir ${withPhone.length} pestañas de WhatsApp (una por persona). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                  withPhone.forEach((a: any) => {
-                    window.open(
-                      buildWhatsAppLink(a.users.phone, a.users.name, nombreLargoEvento(selectedEvent), selectedEvent.date, selectedEvent.time, selectedEvent.type),
-                      '_blank'
-                    );
-                  });
-                }}
-                style={{ backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-              >
-                💬 Enviar WhatsApp a todos ({filtered.filter((a: any) => a.users?.phone).length})
-              </button>
-            )}
-            {filtered.length > 0 && selectedEvent && (
-              <button
-                onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
-                style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-              >
-                📥 Solo este evento ({participantTab})
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Selector de evento */}
-        <div style={{ marginBottom: 16 }}>
-          <select
-            style={{ backgroundColor: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 15, width: '100%', color: '#374151', outline: 'none' }}
-            value={selectedParticipantEventId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setSelectedParticipantEventId(id);
-              setParticipantAttendees([]);
-              setParticipantTab('confirmada');
-              if (id) loadParticipantAttendees(id);
-            }}
-          >
-            <option value="">— Selecciona un evento —</option>
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>
-                {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : (ev.date || 'Fecha sin definir')} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {!selectedParticipantEventId ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF', fontSize: 16 }}>
-            Selecciona un evento para ver sus participantes
-          </div>
-        ) : loadingParticipantAttendees ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-            <Text style={styles.loadingText}>Cargando participantes...</Text>
-          </View>
-        ) : (
-          <>
-            {/* Info del evento */}
-            {selectedEvent && (
-              <div style={{ backgroundColor: '#F5F3FF', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 14, color: '#6B21A8', fontWeight: 700 }}>{selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}</span>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>📅 {selectedEvent.start_time ? new Date(selectedEvent.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : selectedEvent.date}</span>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>👥 {participantAttendees.length} total</span>
-              </div>
-            )}
-
-            {/* Clear filters */}
-            {Object.values(partColFilters).some((v: any) => v && v.size > 0) && (
-              <div style={{ marginBottom: 8 }}>
-                <button onClick={() => setPartColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  ✕ Limpiar filtros ({Object.values(partColFilters).filter(v => v && v.size > 0).length})
-                </button>
-              </div>
-            )}
-            {/* Sub-pestañas */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid #EDE9FE', paddingBottom: 0 }}>
-              {tabConfig.map(({ key, label, emoji }) => {
-                const count = participantAttendees.filter(a => a.status === key).length;
-                const active = participantTab === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setParticipantTab(key)}
-                    style={{
-                      padding: '10px 20px', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
-                      borderRadius: '8px 8px 0 0', transition: 'all 0.15s',
-                      backgroundColor: active ? '#6B21A8' : 'transparent',
-                      color: active ? 'white' : '#6B7280',
-                      borderBottom: active ? '2px solid #6B21A8' : '2px solid transparent',
-                      marginBottom: -2,
-                    }}
-                  >
-                    {emoji} {label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 4, backgroundColor: active ? 'rgba(255,255,255,0.2)' : '#EDE9FE', color: active ? 'white' : '#6B21A8', borderRadius: 20, padding: '1px 8px' }}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Tabla */}
-            {(() => {
-              const partCols: { label: string; key: string; w?: number }[] = [
-                { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 160 },
-                { label: 'Teléfono', key: 'phone', w: 120 }, { label: 'Ciudad', key: 'city', w: 90 },
-                { label: 'País', key: 'country', w: 80 }, { label: 'Género', key: 'gender', w: 80 },
-                { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
-                { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Estado', key: 'status', w: 100 },
-                { label: 'Calificación', key: '_rating', w: 110 }, { label: 'WhatsApp', key: '_whatsapp', w: 110 },
-              ];
-              const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
-              const activePartFilters = Object.values(partColFilters).filter((v: any) => v && v.size > 0).length;
-              const allPartRows = filtered.map(att => ({ ...att, ...(att.users as any) }));
-              const flatFiltered = applyColFilters(allPartRows, partColFilters);
-              const sortedPart = applySort(flatFiltered, partSortCol, partSortAsc);
-              return (
-                <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                        {partCols.map(c => <ExcelFilterTh key={c.key} colKey={c.key} label={c.label} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} allRows={allPartRows} width={c.w} />)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedPart.length === 0 ? (
-                        <tr><td colSpan={13} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
-                          {Object.values(partColFilters).some((v: any) => v && v.size > 0) ? 'Sin resultados para los filtros aplicados' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
-                        </td></tr>
-                      ) : sortedPart.map((att: any, i: number) => {
-                        const u = att.users as any || att;
-                        const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
-                        const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
-                        const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
-                        const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
-                        return (
-                          <tr key={att.id} style={row}>
-                            <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
-                            <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{u.name}</td>
-                            <td style={cellStyle}>{u.email}</td>
-                            <td style={cellStyle}>{u.phone}</td>
-                            <td style={cellStyle}>{u.city}</td>
-                            <td style={cellStyle}>{u.country}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: u.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: u.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>{gender}</span>
-                            </td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              {att.avgRating != null ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                  <span style={{ fontSize: 14 }}>{'⭐'.repeat(Math.round(att.avgRating))}{'☆'.repeat(5 - Math.round(att.avgRating))}</span>
-                                  <span style={{ fontSize: 11, color: '#6B7280' }}>{att.avgRating.toFixed(1)}/5 · {att.ratingCount}v</span>
-                                </div>
-                              ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
-                            </td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              {u.phone && (
-                                <a
-                                  href={buildWhatsAppLink(u.phone, u.name, nombreLargoEvento(selectedEvent), selectedEvent?.date, selectedEvent?.time, selectedEvent?.type)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => markPurchaseWhatsAppSent(att.id)}
-                                  style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                    backgroundColor: att.purchase_whatsapp_sent_at ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
-                                    padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-                                  }}
-                                >
-                                  {att.purchase_whatsapp_sent_at ? '✅ Enviado' : '💬 Enviar'}
-                                </a>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
-          </>
         )}
       </View>
     );
@@ -10707,7 +10376,6 @@ setBulkWhatsAppPending(pending);
     { key: 'dashboard',    icon: '📊', label: 'Dashboard' },
     { key: 'events',       icon: '🎉', label: 'Eventos' },
     { key: 'users',        icon: '👤', label: 'Usuarios' },
-    { key: 'participants', icon: '👥', label: 'Participantes' },
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
@@ -10907,7 +10575,6 @@ setBulkWhatsAppPending(pending);
             {currentView === 'dashboard'    && renderDashboard()}
             {currentView === 'events'       && renderEvents()}
             {currentView === 'users'        && renderUsers()}
-            {currentView === 'participants' && renderParticipants()}
             {currentView === 'questions'    && renderQuestions()}
             {currentView === 'realtime'     && renderRealtime()}
             {currentView === 'reconciliation' && renderReconciliation()}
