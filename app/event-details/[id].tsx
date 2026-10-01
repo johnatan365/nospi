@@ -33,6 +33,9 @@ interface Event {
   id: string;
   name: string;
   city: string;
+  // El admin puede esconder la ciudad (eventos de todo el país, donde mostrar
+  // una ciudad confunde). Es solo visual: no cambia a quién le aparece.
+  ocultar_ciudad?: boolean;
   description: string;
   type: string;
   date: string | null;
@@ -454,10 +457,12 @@ export default function EventDetailsScreen() {
               <Text style={styles.infoValue}>{event.date ? formatTimeAmPm(event.time) : 'Por definir'}</Text>
             </View>
 
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>🌆 Ciudad</Text>
-              <Text style={styles.infoValue}>{event.city}</Text>
-            </View>
+            {!event.ocultar_ciudad && (
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>🌆 Ciudad</Text>
+                <Text style={styles.infoValue}>{event.city}</Text>
+              </View>
+            )}
 
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>👥 Grupo</Text>

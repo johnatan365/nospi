@@ -22,6 +22,9 @@ interface Event {
   city: string;
   cities: string[] | null;
   nacional: boolean;
+  // Esconde la ciudad en la tarjeta. Solo visual: `nacional` y `cities` siguen
+  // decidiendo a quién le aparece el evento.
+  ocultar_ciudad: boolean;
   // Segundo renglon del nombre, opcional. Lo escribe el admin para decidir
   // donde parte un nombre largo, en vez de dejar que se corte solo.
   subtitulo: string | null;
@@ -131,7 +134,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, subtitulo, city, cities, nacional, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
+        .select('id, name, subtitulo, city, cities, nacional, ocultar_ciudad, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
       supabase
@@ -358,7 +361,7 @@ export default function EventsScreen() {
                             sello aparte. */}
                         <View style={styles.eventMetaRow}>
                           <Text style={styles.eventMetaCompact} numberOfLines={1}>
-                            {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''} • {textoCiudadesEvento(event)}
+                            {compactDate}{event.date ? ` • ${formatTimeAmPm(event.time)}` : ''}{event.ocultar_ciudad ? '' : ` • ${textoCiudadesEvento(event)}`}
                           </Text>
                           {event.price === 0 && (
                             <View style={styles.freeBadge}>
