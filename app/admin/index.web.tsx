@@ -1275,7 +1275,19 @@ export default function AdminPanelScreen() {
     current_level: string | null;
     current_question: string | null;
     current_question_started_at: string | null;
+    // Quien modera AHORA. El historial completo va aparte (moderadores): este
+    // campo solo hace falta para los eventos anteriores al registro, que
+    // tienen moderador pero ninguna fila de historial.
+    moderator_id: string | null;
   } | null>(null);
+
+  // Turnos de moderador del evento que se monitorea, del mas reciente al mas
+  // viejo. El rol puede rotar sin limite durante la dinamica ("Cambiar
+  // moderador" no tiene candado), y que rote mucho suele ser la senal de que
+  // algo paso: por eso se muestra el historial y no solo el nombre de turno.
+  const [moderadores, setModeradores] = useState<Array<{
+    user_id: string; nombre: string; desde: string; hasta: string | null;
+  }>>([]);
 
   // Hasta que hora se vio a cada persona EN EL SITIO. Es un PISO: la app solo
   // reporta con la pantalla abierta, asi que si guardan el telefono deja de
@@ -1294,20 +1306,30 @@ export default function AdminPanelScreen() {
   // elegido. Durante el evento la mesa avanza de pregunta sin que nadie toque
   // el admin; obligar a recargar seria justo lo contrario de "en vivo".
   useEffect(() => {
-    if (currentView !== 'realtime' || !selectedEventForMonitoring) {
-      setDinamicaViva(null);
-      setPresencia({});
-      setCierreVivo(null);
-      return;
-    }
+    // Se limpia SIEMPRE que cambia el evento elegido, no solo al salir. Si no,
+    // los datos del evento anterior se quedan en pantalla hasta que vuelven las
+    // consultas del nuevo, y el admin ve el moderador (o la pregunta en curso)
+    // de un evento debajo del nombre de otro. En una pantalla cuyo trabajo es
+    // decir quien tiene el microfono ahora, mostrar al de otra mesa es peor que
+    // no mostrar nada.
+    setDinamicaViva(null);
+    setPresencia({});
+    setCierreVivo(null);
+    setModeradores([]);
+    if (currentView !== 'realtime' || !selectedEventForMonitoring) return;
     let vivo = true;
     const leer = async () => {
       const { data } = await supabase
         .from('events')
-        .select('game_phase, current_question_index, current_level, current_question, current_question_started_at')
+        .select('game_phase, current_question_index, current_level, current_question, current_question_started_at, moderator_id')
         .eq('id', selectedEventForMonitoring)
         .maybeSingle();
       if (vivo && data) setDinamicaViva(data as any);
+
+      const { data: mods } = await supabase.rpc('admin_get_moderadores', {
+        p_event_id: selectedEventForMonitoring,
+      });
+      if (vivo) setModeradores((mods as any[]) || []);
 
       const { data: pres } = await supabase.rpc('admin_get_presencia', {
         p_event_id: selectedEventForMonitoring,
@@ -10121,6 +10143,27 @@ setBulkWhatsAppPending(pending);
             const min = Math.floor((Date.now() - new Date(d.current_question_started_at).getTime()) / 60000);
             llevan = min < 1 ? 'menos de un minuto' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
           }
+
+          // Moderador. `moderadores` viene del mas reciente al mas viejo, y el
+          // turno sin `hasta` es el que tiene el microfono ahora.
+          const turnoAbierto = moderadores.find((t) => !t.hasta) || null;
+          const turnosCerrados = moderadores.filter((t) => !!t.hasta);
+          const cambios = Math.max(0, moderadores.length - 1);
+          // Eventos anteriores a que existiera el historial: tienen moderador
+          // pero ninguna fila. Se muestra el nombre y se dice que no hay horas,
+          // en vez de dejar un hueco que parezca un error.
+          const modSinHistorial = !turnoAbierto && d.moderator_id
+            ? ((monitoringAttendees.find((a: any) => a.user_id === d.moderator_id) as any)?.user_name || 'Alguien')
+            : null;
+          const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('es-CO', {
+            hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota',
+          });
+          const haceDe = (iso: string) => {
+            const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+            if (min < 1) return 'hace menos de un minuto';
+            if (min < 60) return `hace ${min} min`;
+            return `hace ${Math.floor(min / 60)} h ${min % 60} min`;
+          };
           return (
             <View style={{
               backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, marginBottom: 16,
@@ -10132,6 +10175,92 @@ setBulkWhatsAppPending(pending);
                   {fase.texto}
                 </Text>
               </View>
+
+              {/* Quien tiene el microfono. Verde cuando hay uno estable, ambar
+                  cuando el rol viene rotando: tres cambios en una noche casi
+                  siempre quieren decir que algo paso (se fue, se quedo sin
+                  bateria, nadie quiere el papel). El color es la senal; el
+                  detalle de quien iba antes va debajo. */}
+              {(() => {
+                const roto = cambios >= 1;
+                const hayModerador = !!turnoAbierto || !!modSinHistorial;
+                const fondo = hayModerador
+                  ? (roto
+                      ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }
+                      : { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' })
+                  : { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' };
+                return (
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+                    paddingVertical: 10, paddingHorizontal: 12,
+                    borderRadius: 10, marginBottom: 10, borderWidth: 1, ...fondo,
+                  }}>
+                    <Text style={{ fontSize: 15 }}>🎤</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      {turnoAbierto ? (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                            <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                              Modera <Text style={{ fontWeight: '800' }}>{turnoAbierto.nombre}</Text>
+                            </Text>
+                            {roto && (
+                              <Text style={{
+                                fontSize: 11, fontWeight: '700', color: '#92400E',
+                                backgroundColor: '#FEF3C7', borderRadius: 6,
+                                paddingHorizontal: 7, paddingVertical: 1,
+                              }}>
+                                cambió {cambios} {cambios === 1 ? 'vez' : 'veces'}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                            Desde las {hhmm(turnoAbierto.desde)} · {haceDe(turnoAbierto.desde)}
+                          </Text>
+                          {turnosCerrados.length > 0 && (
+                            <Text style={{
+                              fontSize: 12, color: '#6B7280', lineHeight: 18,
+                              marginTop: 6, paddingTop: 6,
+                              borderTopWidth: 1, borderTopColor: '#FDE68A',
+                            }}>
+                              Antes: {turnosCerrados.slice(0, 3).map((t, i) => (
+                                <Text key={`${t.user_id}-${t.desde}`}>
+                                  {i > 0 ? ' · ' : ''}
+                                  <Text style={{ fontWeight: '700', color: '#78350F' }}>{t.nombre}</Text>
+                                  {` ${hhmm(t.desde)}–${hhmm(t.hasta as string)}`}
+                                </Text>
+                              ))}
+                              {turnosCerrados.length > 3 ? ` · y ${turnosCerrados.length - 3} más` : ''}
+                            </Text>
+                          )}
+                        </>
+                      ) : modSinHistorial ? (
+                        <>
+                          <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                            Modera <Text style={{ fontWeight: '800' }}>{modSinHistorial}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                            Sin horas ni cambios: es anterior a este registro
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={{ fontSize: 14, color: '#6B7280' }}>
+                            {turnosCerrados.length > 0
+                              ? 'La mesa se quedó sin moderador'
+                              : 'Nadie se ha postulado como moderador'}
+                          </Text>
+                          {turnosCerrados.length > 0 && (
+                            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                              El último fue {turnosCerrados[0].nombre}, hasta las {hhmm(turnosCerrados[0].hasta as string)}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()}
+
               {d.current_question ? (
                 <View style={{ backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12, borderLeftWidth: 3, borderLeftColor: '#880E4F' }}>
                   <Text style={{ color: '#880E4F', fontSize: 11, fontWeight: '800', letterSpacing: 0.4 }}>
