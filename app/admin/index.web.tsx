@@ -862,15 +862,6 @@ export default function AdminPanelScreen() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [activeEvents, setActiveEvents] = useState(0);
-  const [funnelData, setFunnelData] = useState<{step: string; count: number; pct: number}[]>([]);
-  const [funnelDateFrom, setFunnelDateFrom] = useState<string>(new Date().toLocaleDateString('en-CA'));
-  const [funnelDateTo, setFunnelDateTo] = useState<string>(new Date().toLocaleDateString('en-CA'));
-  const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
-  const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
-  const [funnelUtmSource, setFunnelUtmSource] = useState<string>('');
-  const [funnelLoading, setFunnelLoading] = useState<boolean>(false);
-  const [sessionData, setSessionData] = useState<{step: string; count: number}[]>([]);
-
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
@@ -2576,12 +2567,6 @@ const handleLogin = async () => {
 
       void (async () => {
         try { await loadDeclinedPayments(); } catch (e) { console.warn('Error cargando pagos declinados', e); }
-      })();
-
-      void (async () => {
-        try {
-          await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
-        } catch (e) { console.warn('Funnel error', e); }
       })();
 
     } catch (error) {
@@ -8402,235 +8387,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
-  const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string, showAlert = false) => {
-    setFunnelLoading(true);
-    try {
-      // Validar fechas solo si se especificaron parcialmente
-      if (showAlert && ((dateFrom && !dateTo) || (!dateFrom && dateTo))) {
-        alert('Por favor selecciona tanto fecha desde como fecha hasta.');
-        setFunnelLoading(false);
-        return;
-      }
-
-      // Usar onboarding_sessions para el funnel — cuenta device_ids únicos por paso
-      let sessionsQuery = supabase.from('onboarding_sessions').select('device_id, last_step, utm_source, created_at');
-      if (dateFrom) sessionsQuery = sessionsQuery.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
-      if (dateTo) sessionsQuery = sessionsQuery.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
-      if (funnelUtmSource) sessionsQuery = sessionsQuery.eq('utm_source', funnelUtmSource);
-      const { data: allSessions } = await sessionsQuery;
-
-      if (allSessions && allSessions.length > 0) {
-        const stepOrder = [
-          { key: 'landing_click', label: '0. Clic en landing (nospi.co)' },
-          { key: 'start',         label: '1. Presionaron Empezar en la app' },
-          { key: 'interests',     label: '2. Intereses' },
-          { key: 'name',          label: '3. Nombre' },
-          { key: 'birthdate',     label: '4. Fecha de nacimiento' },
-          { key: 'gender',        label: '5. Género' },
-          { key: 'interested_in', label: '6. A quién quieren conocer' },
-          { key: 'age_range',     label: '7. Rango de edad' },
-          { key: 'location',      label: '8. Ubicación' },
-          { key: 'compatibility', label: '9. Compatibilidad' },
-          { key: 'phone',         label: '10. Teléfono' },
-          { key: 'photo',         label: '11. Foto de perfil' },
-          { key: 'photo_skipped', label: '11. Saltaron la foto' },
-          { key: 'completed',     label: '12. Completaron registro ✅' },
-        ];
-        // Deduplicar por device_id — contar dispositivos únicos por paso
-        const uniqueByStep: Record<string, Set<string>> = {};
-        allSessions.forEach((s: any) => {
-          if (!uniqueByStep[s.last_step]) uniqueByStep[s.last_step] = new Set();
-          uniqueByStep[s.last_step].add(s.device_id);
-        });
-        const total = Object.values(uniqueByStep).reduce((acc: number, set: Set<string>) => Math.max(acc, set.size), 0);
-        const counts: Record<string, number> = {};
-        Object.entries(uniqueByStep).forEach(([step, set]) => { counts[step] = (set as Set<string>).size; });
-        const steps = stepOrder
-          .filter(s => counts[s.key])
-          .map(s => ({ step: s.label, count: counts[s.key], pct: Math.round((counts[s.key] / total) * 100) }));
-        setFunnelData(steps);
-      } else {
-        setFunnelData([]);
-      }
-    } catch (e) { console.warn('Funnel error', e); }
-    // Cargar sesiones de onboarding
-    try {
-      let query = supabase.from('onboarding_sessions').select('last_step, created_at');
-      if (dateFrom) query = query.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
-      if (dateTo) query = query.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
-      const { data: sessions } = await query;
-      if (sessions) {
-        const stepOrder = ['landing_click','start','interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
-        const counts: Record<string, number> = {};
-        sessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
-        setSessionData(stepOrder.filter(s => counts[s]).map(s => ({ step: s, count: counts[s] })));
-      }
-    } catch(e) { console.warn('Sessions error', e); }
-
-    setFunnelLoading(false);
-  };
-
-  const renderFunnel = () => (
-    <View style={{ marginTop: 24, backgroundColor: '#1a0010', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#880E4F' }}>
-      <Text style={{ color: '#F06292', fontSize: 18, fontWeight: '700', marginBottom: 4 }}>🔍 Funnel de Registro</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Filtra por rango de fecha y hora (hora Colombia)</Text>
-
-      {/* Filtros con date/time pickers nativos */}
-      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-        <style>{`
-          .funnel-picker {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(240,98,146,0.3);
-            border-radius: 8px;
-            padding: 10px 12px;
-            color: #fff;
-            font-size: 14px;
-            width: 100%;
-            cursor: pointer;
-            outline: none;
-            font-family: inherit;
-          }
-          .funnel-picker::-webkit-calendar-picker-indicator {
-            filter: invert(1) brightness(0.7);
-            cursor: pointer;
-          }
-          .funnel-picker:focus { border-color: #F06292; }
-          .funnel-label { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 4px; display: block; }
-          .funnel-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-          .funnel-col { flex: 1; min-width: 140px; }
-          .funnel-btn-row { display: flex; gap: 10px; margin-top: 4px; }
-          .funnel-btn-primary { flex: 1; background: #880E4F; border: none; border-radius: 8px; padding: 12px; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
-          .funnel-btn-primary:hover { background: #a01060; }
-          .funnel-btn-secondary { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(240,98,146,0.3); border-radius: 8px; padding: 12px; color: rgba(255,255,255,0.7); font-weight: 700; font-size: 14px; cursor: pointer; }
-          .funnel-btn-secondary:hover { background: rgba(255,255,255,0.12); }
-        `}</style>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">📅 Fecha desde</span>
-            <input
-              type="date"
-              className="funnel-picker"
-              value={funnelDateFrom}
-              onChange={(e: any) => { setFunnelDateFrom(e.target.value); setFunnelTimeFrom('00:00'); }}
-            />
-          </div>
-          <div className="funnel-col">
-            <span className="funnel-label">📅 Fecha hasta</span>
-            <input
-              type="date"
-              className="funnel-picker"
-              value={funnelDateTo}
-              onChange={(e: any) => { setFunnelDateTo(e.target.value); setFunnelTimeTo('23:59'); }}
-            />
-          </div>
-        </div>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">🕐 Hora desde</span>
-            <input
-              type="time"
-              className="funnel-picker"
-              value={funnelTimeFrom}
-              onChange={(e: any) => setFunnelTimeFrom(e.target.value)}
-            />
-          </div>
-          <div className="funnel-col">
-            <span className="funnel-label">🕐 Hora hasta</span>
-            <input
-              type="time"
-              className="funnel-picker"
-              value={funnelTimeTo}
-              onChange={(e: any) => setFunnelTimeTo(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">🔗 Landing (utm_source)</span>
-            <select
-              className="funnel-picker"
-              value={funnelUtmSource}
-              onChange={(e: any) => setFunnelUtmSource(e.target.value)}
-              style={{ background: '#1a0010', color: 'white', border: '1px solid rgba(240,98,146,0.3)', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
-            >
-              <option value="">Todas las landings</option>
-              <option value="lp1">LP1 — Landing actual (nospi.co)</option>
-              <option value="lp2">LP2 — Corta y directa</option>
-              <option value="lp3">LP3 — Evento específico</option>
-              <option value="lp4">LP4 — Recién llegadas</option>
-            </select>
-          </div>
-        </div>
-        <div className="funnel-btn-row">
-          <button
-            className="funnel-btn-primary"
-            onClick={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo, true)}
-          >
-            {funnelLoading ? 'Cargando...' : '🔍 Filtrar'}
-          </button>
-          <button
-            className="funnel-btn-secondary"
-            onClick={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); setFunnelUtmSource(''); loadFunnelData('', '', '00:00', '23:59'); }}
-          >
-            ↺ Ver todo
-          </button>
-        </div>
-      </View>
-
-      {/* Resultados */}
-      {funnelLoading ? (
-        <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>Cargando...</Text>
-      ) : (
-        <>
-          {funnelData.map((item, i) => (
-            <View key={i} style={{ marginBottom: 14 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, flex: 1 }}>{item.step}</Text>
-                <Text style={{ color: '#F06292', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>{item.count} ({item.pct}%)</Text>
-              </View>
-              <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-                <View style={{ height: 8, width: `${item.pct}%` as any, backgroundColor: item.pct > 60 ? '#10B981' : item.pct > 30 ? '#F59E0B' : '#EF4444', borderRadius: 4 }} />
-              </View>
-            </View>
-          ))}
-              {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Sin datos para el rango seleccionado</Text>}
-
-          {/* Sesiones anónimas */}
-          {sessionData.length > 0 && (
-            <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: 'rgba(240,98,146,0.2)', paddingTop: 16 }}>
-              <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
-              {sessionData.map((s, i) => {
-                const stepNames: Record<string, string> = {
-                  'landing_click': 'Clic en landing (nospi.co)',
-                  'start': 'Presionaron Empezar en la app',
-                  'interests': 'Intereses',
-                  'name': 'Nombre',
-                  'birthdate': 'Fecha de nacimiento',
-                  'gender': 'Género',
-                  'interested_in': 'A quién quiere conocer',
-                  'age_range': 'Rango de edad',
-                  'location': 'Ubicación',
-                  'compatibility': 'Compatibilidad',
-                  'phone': 'Teléfono',
-                  'photo': 'Foto de perfil',
-                  'photo_skipped': 'Saltó la foto',
-                  'completed': 'Completaron registro',
-                };
-                const label = stepNames[s.step] || s.step;
-                return (
-                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{s.step === 'completed' ? `✅ ${label}` : `⏸ Se quedaron en: ${label}`}</Text>
-                    <Text style={{ color: s.step === 'completed' ? '#10B981' : '#F59E0B', fontWeight: '700', fontSize: 13 }}>{s.count}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </>
-      )}
-    </View>
-  );
-
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -8651,7 +8407,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           ))}
         </View>
 
-        {renderFunnel()}
         <View style={styles.quickActions}>
           <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
           <TouchableOpacity
