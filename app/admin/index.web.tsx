@@ -22,6 +22,8 @@ interface Event {
   city: string;
   cities?: string[] | null;
   nacional?: boolean;
+  // Esconde la ciudad en la app. Solo cosmetico: no cambia a quien le aparece.
+  ocultar_ciudad?: boolean;
   description: string;
   type: string;
   date: string;
@@ -1016,6 +1018,7 @@ export default function AdminPanelScreen() {
     city: '',
     cities: [] as string[],
     nacional: false,
+    ocultar_ciudad: false,
     description: '',
     type: 'bar',
     date: '',
@@ -3386,6 +3389,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       city: '',
       cities: [],
       nacional: false,
+      ocultar_ciudad: false,
       description: '',
       type: 'bar',
       date: '',
@@ -3459,6 +3463,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         : ((event.city && !event.nacional && event.city !== ETIQUETA_NACIONAL) ? [event.city] : []),
       // Un evento viejo puede traer el texto en `city` sin la marca puesta.
       nacional: !!event.nacional || event.city === ETIQUETA_NACIONAL,
+      ocultar_ciudad: !!event.ocultar_ciudad,
       description: event.description || '',
       // FIX: la BD guarda 'restaurante' (español) pero el <select> usa
       // 'restaurant' (inglés) como value — sin este mapeo, el dropdown no
@@ -3817,6 +3822,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         city: eventForm.nacional ? ETIQUETA_NACIONAL : (eventForm.cities[0] || ''),
         cities: eventForm.nacional ? [] : eventForm.cities,
         nacional: eventForm.nacional,
+        ocultar_ciudad: eventForm.ocultar_ciudad,
         description: eventForm.description,
         type: eventForm.type === 'restaurant' ? 'restaurante' : eventForm.type,
         date: isoDate,
@@ -3895,6 +3901,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         city: '',
         cities: [],
         nacional: false,
+        ocultar_ciudad: false,
         description: '',
         type: 'bar',
         date: '',
@@ -11814,6 +11821,26 @@ setBulkWhatsAppPending(pending);
                     <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>Todo el país</span>
                     <span style={{ display: 'block', fontSize: 12.5, color: '#6B4A58', marginTop: 2 }}>
                       Le aparece a cualquier persona, viva donde viva. No hay que marcar ciudades.
+                    </span>
+                  </span>
+                </label>
+
+                {/* Esconder la ciudad es SOLO cosmetico: no cambia a quien le
+                    aparece el evento (eso lo deciden "Todo el país" y la lista
+                    de ciudades). Sirve para los eventos de todo el país, donde
+                    mostrar una ciudad confunde. */}
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '10px 12px', borderRadius: 10, marginTop: 10, border: eventForm.ocultar_ciudad ? '2px solid #0F766E' : '1px solid #E5E7EB', background: eventForm.ocultar_ciudad ? '#E6F4F1' : '#FFF' }}>
+                  <input
+                    type="checkbox"
+                    checked={eventForm.ocultar_ciudad}
+                    onChange={(e) => setEventForm({ ...eventForm, ocultar_ciudad: e.target.checked })}
+                    style={{ width: 18, height: 18, marginTop: 2, accentColor: '#0F766E', cursor: 'pointer' }}
+                  />
+                  <span>
+                    <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>Ocultar la ciudad</span>
+                    <span style={{ display: 'block', fontSize: 12.5, color: '#4B5563', marginTop: 2 }}>
+                      En la app no se muestra la ciudad de este evento, ni en la tarjeta de la lista ni en el detalle.
+                      No cambia a quién le aparece: eso lo sigue decidiendo lo de arriba.
                     </span>
                   </span>
                 </label>
