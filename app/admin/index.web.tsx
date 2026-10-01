@@ -204,7 +204,7 @@ interface AdminMatch {
   conversation_id: string | null; created_at: string;
 }
 
-type AdminView = 'dashboard' | 'events' | 'users' | 'participants' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
+type AdminView = 'dashboard' | 'events' | 'users' | 'questions' | 'realtime' | 'reconciliation' | 'subscriptions' | 'promo-codes' | 'stats' | 'moderation' | 'config' | 'origen';
 
 
 
@@ -760,11 +760,6 @@ export default function AdminPanelScreen() {
   const [heavyLoading, setHeavyLoading] = useState(false);
   const [usersLoadError, setUsersLoadError] = useState<string | null>(null);
 
-  // Participants table: sort + per-column filters
-  const [partSortCol, setPartSortCol] = useState<string>('');
-  const [partSortAsc, setPartSortAsc] = useState(true);
-  const [partColFilters, setPartColFilters] = useState<Record<string, Set<string>>>({});
-
   // Change admin password (Config section)
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
@@ -867,15 +862,6 @@ export default function AdminPanelScreen() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [activeEvents, setActiveEvents] = useState(0);
-  const [funnelData, setFunnelData] = useState<{step: string; count: number; pct: number}[]>([]);
-  const [funnelDateFrom, setFunnelDateFrom] = useState<string>(new Date().toLocaleDateString('en-CA'));
-  const [funnelDateTo, setFunnelDateTo] = useState<string>(new Date().toLocaleDateString('en-CA'));
-  const [funnelTimeFrom, setFunnelTimeFrom] = useState<string>('00:00');
-  const [funnelTimeTo, setFunnelTimeTo] = useState<string>('23:59');
-  const [funnelUtmSource, setFunnelUtmSource] = useState<string>('');
-  const [funnelLoading, setFunnelLoading] = useState<boolean>(false);
-  const [sessionData, setSessionData] = useState<{step: string; count: number}[]>([]);
-
   // Data lists
   const [events, setEvents] = useState<Event[]>([]);
   const [eventStatusFilter, setEventStatusFilter] = useState<'published' | 'draft' | 'closed' | 'all'>('published');
@@ -1357,11 +1343,6 @@ export default function AdminPanelScreen() {
 
   const [realtimeEventTab, setRealtimeEventTab] = useState<'abiertos' | 'cerrados'>('abiertos');
 
-  // Participantes por evento
-  const [selectedParticipantEventId, setSelectedParticipantEventId] = useState<string>('');
-  const [participantAttendees, setParticipantAttendees] = useState<EventAttendee[]>([]);
-  const [loadingParticipantAttendees, setLoadingParticipantAttendees] = useState(false);
-  const [participantTab, setParticipantTab] = useState<'confirmada' | 'cancelada' | 'anterior'>('confirmada');
   const [declinedPayments, setDeclinedPayments] = useState<any[]>([]);
   const [loadingDeclinedPayments, setLoadingDeclinedPayments] = useState(false);
 
@@ -2588,12 +2569,6 @@ const handleLogin = async () => {
         try { await loadDeclinedPayments(); } catch (e) { console.warn('Error cargando pagos declinados', e); }
       })();
 
-      void (async () => {
-        try {
-          await loadFunnelData(new Date().toLocaleDateString('en-CA'), new Date().toLocaleDateString('en-CA'), '00:00', '23:59');
-        } catch (e) { console.warn('Funnel error', e); }
-      })();
-
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       window.alert('Error inesperado al cargar datos: ' + String(error));
@@ -2720,7 +2695,6 @@ const handleLogin = async () => {
       // Refrescar también las vistas que muestran datos de usuarios en otro
       // formato (no se actualizan solas con loadDashboardData).
       if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
-      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
     } catch (e: any) {
       setUserEditError(e.message || 'Error inesperado al guardar');
     } finally {
@@ -3323,7 +3297,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       }
       window.alert('✅ Llegada confirmada');
       if (selectedEventForAttendees) await handleViewAttendees(selectedEventForAttendees);
-      if (selectedParticipantEventId) await loadParticipantAttendees(selectedParticipantEventId);
       // Refrescar tambien la pestana "En vivo": antes no se recargaba, asi que
       // la persona confirmada desde Gestion no aparecia alli hasta recargar.
       if (selectedEventForMonitoring === eventId) {
@@ -8414,235 +8387,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     );
   };
 
-  const loadFunnelData = async (dateFrom: string, dateTo: string, timeFrom: string, timeTo: string, showAlert = false) => {
-    setFunnelLoading(true);
-    try {
-      // Validar fechas solo si se especificaron parcialmente
-      if (showAlert && ((dateFrom && !dateTo) || (!dateFrom && dateTo))) {
-        alert('Por favor selecciona tanto fecha desde como fecha hasta.');
-        setFunnelLoading(false);
-        return;
-      }
-
-      // Usar onboarding_sessions para el funnel — cuenta device_ids únicos por paso
-      let sessionsQuery = supabase.from('onboarding_sessions').select('device_id, last_step, utm_source, created_at');
-      if (dateFrom) sessionsQuery = sessionsQuery.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
-      if (dateTo) sessionsQuery = sessionsQuery.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
-      if (funnelUtmSource) sessionsQuery = sessionsQuery.eq('utm_source', funnelUtmSource);
-      const { data: allSessions } = await sessionsQuery;
-
-      if (allSessions && allSessions.length > 0) {
-        const stepOrder = [
-          { key: 'landing_click', label: '0. Clic en landing (nospi.co)' },
-          { key: 'start',         label: '1. Presionaron Empezar en la app' },
-          { key: 'interests',     label: '2. Intereses' },
-          { key: 'name',          label: '3. Nombre' },
-          { key: 'birthdate',     label: '4. Fecha de nacimiento' },
-          { key: 'gender',        label: '5. Género' },
-          { key: 'interested_in', label: '6. A quién quieren conocer' },
-          { key: 'age_range',     label: '7. Rango de edad' },
-          { key: 'location',      label: '8. Ubicación' },
-          { key: 'compatibility', label: '9. Compatibilidad' },
-          { key: 'phone',         label: '10. Teléfono' },
-          { key: 'photo',         label: '11. Foto de perfil' },
-          { key: 'photo_skipped', label: '11. Saltaron la foto' },
-          { key: 'completed',     label: '12. Completaron registro ✅' },
-        ];
-        // Deduplicar por device_id — contar dispositivos únicos por paso
-        const uniqueByStep: Record<string, Set<string>> = {};
-        allSessions.forEach((s: any) => {
-          if (!uniqueByStep[s.last_step]) uniqueByStep[s.last_step] = new Set();
-          uniqueByStep[s.last_step].add(s.device_id);
-        });
-        const total = Object.values(uniqueByStep).reduce((acc: number, set: Set<string>) => Math.max(acc, set.size), 0);
-        const counts: Record<string, number> = {};
-        Object.entries(uniqueByStep).forEach(([step, set]) => { counts[step] = (set as Set<string>).size; });
-        const steps = stepOrder
-          .filter(s => counts[s.key])
-          .map(s => ({ step: s.label, count: counts[s.key], pct: Math.round((counts[s.key] / total) * 100) }));
-        setFunnelData(steps);
-      } else {
-        setFunnelData([]);
-      }
-    } catch (e) { console.warn('Funnel error', e); }
-    // Cargar sesiones de onboarding
-    try {
-      let query = supabase.from('onboarding_sessions').select('last_step, created_at');
-      if (dateFrom) query = query.gte('created_at', `${dateFrom}T${timeFrom}:00-05:00`);
-      if (dateTo) query = query.lte('created_at', `${dateTo}T${timeTo}:00-05:00`);
-      const { data: sessions } = await query;
-      if (sessions) {
-        const stepOrder = ['landing_click','start','interests','name','birthdate','gender','interested_in','age_range','location','compatibility','phone','photo','photo_skipped','completed'];
-        const counts: Record<string, number> = {};
-        sessions.forEach((s: any) => { counts[s.last_step] = (counts[s.last_step] || 0) + 1; });
-        setSessionData(stepOrder.filter(s => counts[s]).map(s => ({ step: s, count: counts[s] })));
-      }
-    } catch(e) { console.warn('Sessions error', e); }
-
-    setFunnelLoading(false);
-  };
-
-  const renderFunnel = () => (
-    <View style={{ marginTop: 24, backgroundColor: '#1a0010', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#880E4F' }}>
-      <Text style={{ color: '#F06292', fontSize: 18, fontWeight: '700', marginBottom: 4 }}>🔍 Funnel de Registro</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Filtra por rango de fecha y hora (hora Colombia)</Text>
-
-      {/* Filtros con date/time pickers nativos */}
-      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-        <style>{`
-          .funnel-picker {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(240,98,146,0.3);
-            border-radius: 8px;
-            padding: 10px 12px;
-            color: #fff;
-            font-size: 14px;
-            width: 100%;
-            cursor: pointer;
-            outline: none;
-            font-family: inherit;
-          }
-          .funnel-picker::-webkit-calendar-picker-indicator {
-            filter: invert(1) brightness(0.7);
-            cursor: pointer;
-          }
-          .funnel-picker:focus { border-color: #F06292; }
-          .funnel-label { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 4px; display: block; }
-          .funnel-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-          .funnel-col { flex: 1; min-width: 140px; }
-          .funnel-btn-row { display: flex; gap: 10px; margin-top: 4px; }
-          .funnel-btn-primary { flex: 1; background: #880E4F; border: none; border-radius: 8px; padding: 12px; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
-          .funnel-btn-primary:hover { background: #a01060; }
-          .funnel-btn-secondary { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(240,98,146,0.3); border-radius: 8px; padding: 12px; color: rgba(255,255,255,0.7); font-weight: 700; font-size: 14px; cursor: pointer; }
-          .funnel-btn-secondary:hover { background: rgba(255,255,255,0.12); }
-        `}</style>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">📅 Fecha desde</span>
-            <input
-              type="date"
-              className="funnel-picker"
-              value={funnelDateFrom}
-              onChange={(e: any) => { setFunnelDateFrom(e.target.value); setFunnelTimeFrom('00:00'); }}
-            />
-          </div>
-          <div className="funnel-col">
-            <span className="funnel-label">📅 Fecha hasta</span>
-            <input
-              type="date"
-              className="funnel-picker"
-              value={funnelDateTo}
-              onChange={(e: any) => { setFunnelDateTo(e.target.value); setFunnelTimeTo('23:59'); }}
-            />
-          </div>
-        </div>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">🕐 Hora desde</span>
-            <input
-              type="time"
-              className="funnel-picker"
-              value={funnelTimeFrom}
-              onChange={(e: any) => setFunnelTimeFrom(e.target.value)}
-            />
-          </div>
-          <div className="funnel-col">
-            <span className="funnel-label">🕐 Hora hasta</span>
-            <input
-              type="time"
-              className="funnel-picker"
-              value={funnelTimeTo}
-              onChange={(e: any) => setFunnelTimeTo(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="funnel-row">
-          <div className="funnel-col">
-            <span className="funnel-label">🔗 Landing (utm_source)</span>
-            <select
-              className="funnel-picker"
-              value={funnelUtmSource}
-              onChange={(e: any) => setFunnelUtmSource(e.target.value)}
-              style={{ background: '#1a0010', color: 'white', border: '1px solid rgba(240,98,146,0.3)', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
-            >
-              <option value="">Todas las landings</option>
-              <option value="lp1">LP1 — Landing actual (nospi.co)</option>
-              <option value="lp2">LP2 — Corta y directa</option>
-              <option value="lp3">LP3 — Evento específico</option>
-              <option value="lp4">LP4 — Recién llegadas</option>
-            </select>
-          </div>
-        </div>
-        <div className="funnel-btn-row">
-          <button
-            className="funnel-btn-primary"
-            onClick={() => loadFunnelData(funnelDateFrom, funnelDateTo, funnelTimeFrom, funnelTimeTo, true)}
-          >
-            {funnelLoading ? 'Cargando...' : '🔍 Filtrar'}
-          </button>
-          <button
-            className="funnel-btn-secondary"
-            onClick={() => { setFunnelDateFrom(''); setFunnelDateTo(''); setFunnelTimeFrom('00:00'); setFunnelTimeTo('23:59'); setFunnelUtmSource(''); loadFunnelData('', '', '00:00', '23:59'); }}
-          >
-            ↺ Ver todo
-          </button>
-        </div>
-      </View>
-
-      {/* Resultados */}
-      {funnelLoading ? (
-        <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>Cargando...</Text>
-      ) : (
-        <>
-          {funnelData.map((item, i) => (
-            <View key={i} style={{ marginBottom: 14 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, flex: 1 }}>{item.step}</Text>
-                <Text style={{ color: '#F06292', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>{item.count} ({item.pct}%)</Text>
-              </View>
-              <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-                <View style={{ height: 8, width: `${item.pct}%` as any, backgroundColor: item.pct > 60 ? '#10B981' : item.pct > 30 ? '#F59E0B' : '#EF4444', borderRadius: 4 }} />
-              </View>
-            </View>
-          ))}
-              {funnelData.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>Sin datos para el rango seleccionado</Text>}
-
-          {/* Sesiones anónimas */}
-          {sessionData.length > 0 && (
-            <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: 'rgba(240,98,146,0.2)', paddingTop: 16 }}>
-              <Text style={{ color: '#F06292', fontSize: 15, fontWeight: '700', marginBottom: 12 }}>📱 Sesiones iniciadas (dispositivos)</Text>
-              {sessionData.map((s, i) => {
-                const stepNames: Record<string, string> = {
-                  'landing_click': 'Clic en landing (nospi.co)',
-                  'start': 'Presionaron Empezar en la app',
-                  'interests': 'Intereses',
-                  'name': 'Nombre',
-                  'birthdate': 'Fecha de nacimiento',
-                  'gender': 'Género',
-                  'interested_in': 'A quién quiere conocer',
-                  'age_range': 'Rango de edad',
-                  'location': 'Ubicación',
-                  'compatibility': 'Compatibilidad',
-                  'phone': 'Teléfono',
-                  'photo': 'Foto de perfil',
-                  'photo_skipped': 'Saltó la foto',
-                  'completed': 'Completaron registro',
-                };
-                const label = stepNames[s.step] || s.step;
-                return (
-                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{s.step === 'completed' ? `✅ ${label}` : `⏸ Se quedaron en: ${label}`}</Text>
-                    <Text style={{ color: s.step === 'completed' ? '#10B981' : '#F59E0B', fontWeight: '700', fontSize: 13 }}>{s.count}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </>
-      )}
-    </View>
-  );
-
   const renderDashboard = () => {
     const statsData = [
       { label: 'Total Eventos', value: totalEvents, color: nospiColors.purpleDark },
@@ -8663,7 +8407,6 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           ))}
         </View>
 
-        {renderFunnel()}
         <View style={styles.quickActions}>
           <Text style={styles.quickActionsTitle}>Acciones Rápidas</Text>
           <TouchableOpacity
@@ -9144,36 +8887,6 @@ setBulkWhatsAppPending(pending);
     XLSX.writeFile(wb, `usuarios_nospi_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const exportParticipantsToExcel = (eventName: string) => {
-    if (participantAttendees.length === 0) { window.alert('No hay participantes para exportar'); return; }
-    const filtered = participantAttendees.filter(a => a.status === participantTab);
-    const data = filtered.map((a, i) => {
-      const u = a.users as any;
-      const statusLabel = a.status === 'confirmada' ? 'Confirmada' : a.status === 'cancelada' ? 'Cancelada' : 'Anterior';
-      return {
-        '#': i + 1,
-        'Nombre': u.name || '',
-        'Email': u.email || '',
-        'Teléfono': u.phone || '',
-        'Ciudad': u.city || '',
-        'País': u.country || '',
-        'Género': u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : 'No especificado',
-        'Interesado en': u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : 'No especificado',
-        'Edad': u.age || '',
-        'Rango edad mín': u.age_range_min || 18,
-        'Rango edad máx': u.age_range_max || 99,
-        'Estado': statusLabel,
-        'Calificación': (a as any).avgRating != null ? `${((a as any).avgRating).toFixed(1)}/5 (${(a as any).ratingCount} votos)` : 'Sin calificación',
-      };
-    });
-    if (data.length === 0) { window.alert('No hay participantes en esta pestaña para exportar'); return; }
-    const safeName = eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Participantes');
-    XLSX.writeFile(wb, `participantes_${safeName}_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
   const loadDeclinedPayments = async () => {
     setLoadingDeclinedPayments(true);
     try {
@@ -9212,61 +8925,7 @@ setBulkWhatsAppPending(pending);
     } catch (e) { console.error('Error marcando WhatsApp declinado enviado:', e); }
   };
 
-  const loadParticipantAttendees = async (eventId: string) => {
-    setLoadingParticipantAttendees(true);
-    try {
-      // Traer TODOS los estados (confirmada, cancelada, anterior).
-      // Usamos el RPC get_event_attendees_for_admin (SECURITY DEFINER) en vez de
-      // un select directo con join a "users", porque las políticas RLS de la
-      // tabla users solo permiten a cada usuario ver su propia fila: un join
-      // normal (users!inner) descarta silenciosamente todas las filas de otros
-      // usuarios y el admin termina viendo solo su propio registro.
-      const [aptsResult, ratingsResult] = await Promise.all([
-        supabase.rpc('get_event_attendees_for_admin', { p_event_id: eventId }),
-        supabase
-          .from('event_ratings')
-          .select('rated_user_id, rating')
-          .eq('event_id', eventId),
-      ]);
-
-      if (aptsResult.error) { window.alert('Error al cargar participantes: ' + aptsResult.error.message); return; }
-
-      // Calcular promedio de calificaciones por usuario
-      const ratingsMap: Record<string, { sum: number; count: number }> = {};
-      for (const r of (ratingsResult.data || [])) {
-        if (!ratingsMap[r.rated_user_id]) ratingsMap[r.rated_user_id] = { sum: 0, count: 0 };
-        ratingsMap[r.rated_user_id].sum += r.rating;
-        ratingsMap[r.rated_user_id].count += 1;
-      }
-
-      const transformed = (aptsResult.data || []).map((att: any) => {
-        const rData = ratingsMap[att.user_id];
-        const avgRating = rData ? (rData.sum / rData.count) : null;
-        return {
-          id: att.id, user_id: att.user_id, event_id: att.event_id,
-          status: att.status, payment_status: att.payment_status, created_at: att.created_at,
-          purchase_whatsapp_sent_at: att.purchase_whatsapp_sent_at,
-          avgRating,
-          ratingCount: rData?.count || 0,
-          users: {
-            id: att.user_id, name: att.user_name, email: att.user_email,
-            phone: att.user_phone, city: att.user_city, country: att.user_country,
-            interested_in: att.user_interested_in, gender: att.user_gender,
-            age: att.user_age, age_range_min: att.user_age_range_min, age_range_max: att.user_age_range_max,
-          },
-        };
-      });
-      setParticipantAttendees(transformed);
-    } catch (err: any) {
-      console.error('loadParticipantAttendees error:', err);
-      window.alert('Error inesperado al cargar participantes');
-    } finally {
-      setLoadingParticipantAttendees(false);
-    }
-  };
-
   const TABLE_HEADERS_USERS = ['#', 'Nombre', 'Registro', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Calificación promedio', 'Plataforma'];
-  const TABLE_HEADERS_PARTICIPANTS = ['#', 'Nombre', 'Email', 'Teléfono', 'Ciudad', 'País', 'Género', 'Interesado en', 'Edad', 'Rango edad', 'Estado', 'Calificación'];
 
   // Sort helper
   const makeSort = (
@@ -9796,241 +9455,6 @@ setBulkWhatsAppPending(pending);
               Última »
             </button>
           </div>
-        )}
-      </View>
-    );
-  };
-
-  const renderParticipants = () => {
-    const selectedEvent = events.find(e => e.id === selectedParticipantEventId);
-    const filtered = participantAttendees.filter(a => a.status === participantTab);
-
-    const tabConfig: { key: 'confirmada' | 'cancelada' | 'anterior'; label: string; emoji: string; color: string; bg: string }[] = [
-      { key: 'confirmada', label: 'Confirmadas', emoji: '✅', color: '#065F46', bg: '#D1FAE5' },
-      { key: 'cancelada',  label: 'Canceladas',  emoji: '❌', color: '#92400E', bg: '#FEF3C7' },
-      { key: 'anterior',   label: 'Anteriores',  emoji: '🕐', color: '#1D4ED8', bg: '#DBEAFE' },
-    ];
-
-    const statusBadge = (status: string) => {
-      const cfg = tabConfig.find(t => t.key === status);
-      if (!cfg) return null;
-      return (
-        <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, backgroundColor: cfg.bg, color: cfg.color }}>
-          {cfg.emoji} {cfg.label.slice(0, -2)}
-        </span>
-      );
-    };
-
-    return (
-      <View style={styles.listContainer}>
-        {/* Botón principal: descargar TODOS los participantes de TODOS los eventos */}
-        <button
-          onClick={exportAllParticipantsToExcel}
-          disabled={exportingAll}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', backgroundColor: '#6B21A8', color: 'white', border: 'none',
-            borderRadius: 12, padding: '16px 20px', fontSize: 16, fontWeight: 800,
-            cursor: exportingAll ? 'default' : 'pointer', opacity: exportingAll ? 0.7 : 1,
-            marginBottom: 20, boxShadow: '0 2px 6px rgba(107, 33, 168, 0.3)',
-          }}
-        >
-          {exportingAll
-            ? '⏳ Generando Excel con todos los participantes...'
-            : '📥 Descargar TODOS los participantes de TODOS los eventos (Excel)'}
-        </button>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-          <Text style={styles.sectionTitle}>Participantes por Evento</Text>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {filtered.length > 0 && selectedEvent && (
-              <button
-                onClick={() => {
-                  const withPhone = filtered.filter((a: any) => a.users?.phone);
-                  if (withPhone.length === 0) { window.alert('Nadie en esta lista tiene teléfono registrado'); return; }
-                  if (!window.confirm(`Se van a abrir ${withPhone.length} pestañas de WhatsApp (una por persona). Tendrás que darle "Enviar" en cada una. ¿Continuar?`)) return;
-                  withPhone.forEach((a: any) => {
-                    window.open(
-                      buildWhatsAppLink(a.users.phone, a.users.name, nombreLargoEvento(selectedEvent), selectedEvent.date, selectedEvent.time, selectedEvent.type),
-                      '_blank'
-                    );
-                  });
-                }}
-                style={{ backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-              >
-                💬 Enviar WhatsApp a todos ({filtered.filter((a: any) => a.users?.phone).length})
-              </button>
-            )}
-            {filtered.length > 0 && selectedEvent && (
-              <button
-                onClick={() => exportParticipantsToExcel(selectedEvent.name || `${selectedEvent.type}_${selectedEvent.city}`)}
-                style={{ backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-              >
-                📥 Solo este evento ({participantTab})
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Selector de evento */}
-        <div style={{ marginBottom: 16 }}>
-          <select
-            style={{ backgroundColor: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', fontSize: 15, width: '100%', color: '#374151', outline: 'none' }}
-            value={selectedParticipantEventId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setSelectedParticipantEventId(id);
-              setParticipantAttendees([]);
-              setParticipantTab('confirmada');
-              if (id) loadParticipantAttendees(id);
-            }}
-          >
-            <option value="">— Selecciona un evento —</option>
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>
-                {ev.name || `${ev.type} - ${ev.city}`} · {ev.start_time ? new Date(ev.start_time).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : (ev.date || 'Fecha sin definir')} · {ev.event_status === 'published' ? '✅ Publicado' : ev.event_status === 'closed' ? '🔒 Cerrado' : '📝 Borrador'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {!selectedParticipantEventId ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF', fontSize: 16 }}>
-            Selecciona un evento para ver sus participantes
-          </div>
-        ) : loadingParticipantAttendees ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={nospiColors.purpleDark} />
-            <Text style={styles.loadingText}>Cargando participantes...</Text>
-          </View>
-        ) : (
-          <>
-            {/* Info del evento */}
-            {selectedEvent && (
-              <div style={{ backgroundColor: '#F5F3FF', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 14, color: '#6B21A8', fontWeight: 700 }}>{selectedEvent.name || `${selectedEvent.type} - ${selectedEvent.city}`}</span>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>📅 {selectedEvent.start_time ? new Date(selectedEvent.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : selectedEvent.date}</span>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>👥 {participantAttendees.length} total</span>
-              </div>
-            )}
-
-            {/* Clear filters */}
-            {Object.values(partColFilters).some((v: any) => v && v.size > 0) && (
-              <div style={{ marginBottom: 8 }}>
-                <button onClick={() => setPartColFilters({})} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  ✕ Limpiar filtros ({Object.values(partColFilters).filter(v => v && v.size > 0).length})
-                </button>
-              </div>
-            )}
-            {/* Sub-pestañas */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid #EDE9FE', paddingBottom: 0 }}>
-              {tabConfig.map(({ key, label, emoji }) => {
-                const count = participantAttendees.filter(a => a.status === key).length;
-                const active = participantTab === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setParticipantTab(key)}
-                    style={{
-                      padding: '10px 20px', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
-                      borderRadius: '8px 8px 0 0', transition: 'all 0.15s',
-                      backgroundColor: active ? '#6B21A8' : 'transparent',
-                      color: active ? 'white' : '#6B7280',
-                      borderBottom: active ? '2px solid #6B21A8' : '2px solid transparent',
-                      marginBottom: -2,
-                    }}
-                  >
-                    {emoji} {label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 4, backgroundColor: active ? 'rgba(255,255,255,0.2)' : '#EDE9FE', color: active ? 'white' : '#6B21A8', borderRadius: 20, padding: '1px 8px' }}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Tabla */}
-            {(() => {
-              const partCols: { label: string; key: string; w?: number }[] = [
-                { label: 'Nombre', key: 'name', w: 130 }, { label: 'Email', key: 'email', w: 160 },
-                { label: 'Teléfono', key: 'phone', w: 120 }, { label: 'Ciudad', key: 'city', w: 90 },
-                { label: 'País', key: 'country', w: 80 }, { label: 'Género', key: 'gender', w: 80 },
-                { label: 'Interesado en', key: 'interested_in', w: 110 }, { label: 'Edad', key: 'age', w: 65 },
-                { label: 'Rango edad', key: 'age_range_min', w: 100 }, { label: 'Estado', key: 'status', w: 100 },
-                { label: 'Calificación', key: '_rating', w: 110 }, { label: 'WhatsApp', key: '_whatsapp', w: 110 },
-              ];
-              const onSortPart = makeSort(setPartSortCol, setPartSortAsc, partSortCol, partSortAsc);
-              const activePartFilters = Object.values(partColFilters).filter((v: any) => v && v.size > 0).length;
-              const allPartRows = filtered.map(att => ({ ...att, ...(att.users as any) }));
-              const flatFiltered = applyColFilters(allPartRows, partColFilters);
-              const sortedPart = applySort(flatFiltered, partSortCol, partSortAsc);
-              return (
-                <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid #EDE9FE' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...headerCellStyle, width: 40 }}>#</th>
-                        {partCols.map(c => <ExcelFilterTh key={c.key} colKey={c.key} label={c.label} sortCol={partSortCol} sortAsc={partSortAsc} onSort={onSortPart} filters={partColFilters} setFilters={setPartColFilters} allRows={allPartRows} width={c.w} />)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedPart.length === 0 ? (
-                        <tr><td colSpan={13} style={{ ...cellStyle, textAlign: 'center', color: '#9CA3AF', padding: 48, fontSize: 15 }}>
-                          {Object.values(partColFilters).some((v: any) => v && v.size > 0) ? 'Sin resultados para los filtros aplicados' : `No hay participantes ${participantTab === 'confirmada' ? 'confirmados' : participantTab === 'cancelada' ? 'cancelados' : 'anteriores'} en este evento`}
-                        </td></tr>
-                      ) : sortedPart.map((att: any, i: number) => {
-                        const u = att.users as any || att;
-                        const gender = u.gender === 'hombre' ? 'Hombre' : u.gender === 'mujer' ? 'Mujer' : '—';
-                        const interest = u.interested_in === 'hombres' ? 'Hombres' : u.interested_in === 'mujeres' ? 'Mujeres' : u.interested_in === 'ambos' ? 'Ambos' : '—';
-                        const ageRange = `${u.age_range_min || 18} – ${u.age_range_max || 99}`;
-                        const row = i % 2 === 0 ? rowEvenStyle : rowOddStyle;
-                        return (
-                          <tr key={att.id} style={row}>
-                            <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{i + 1}</td>
-                            <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{u.name}</td>
-                            <td style={cellStyle}>{u.email}</td>
-                            <td style={cellStyle}>{u.phone}</td>
-                            <td style={cellStyle}>{u.city}</td>
-                            <td style={cellStyle}>{u.country}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, backgroundColor: u.gender === 'hombre' ? '#DBEAFE' : '#FCE7F3', color: u.gender === 'hombre' ? '#1D4ED8' : '#BE185D' }}>{gender}</span>
-                            </td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{interest}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{u.age || '—'}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280' }}>{ageRange}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>{statusBadge(att.status)}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              {att.avgRating != null ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                  <span style={{ fontSize: 14 }}>{'⭐'.repeat(Math.round(att.avgRating))}{'☆'.repeat(5 - Math.round(att.avgRating))}</span>
-                                  <span style={{ fontSize: 11, color: '#6B7280' }}>{att.avgRating.toFixed(1)}/5 · {att.ratingCount}v</span>
-                                </div>
-                              ) : <span style={{ fontSize: 12, color: '#D1D5DB' }}>Sin votos</span>}
-                            </td>
-                            <td style={{ ...cellStyle, textAlign: 'center' }}>
-                              {u.phone && (
-                                <a
-                                  href={buildWhatsAppLink(u.phone, u.name, nombreLargoEvento(selectedEvent), selectedEvent?.date, selectedEvent?.time, selectedEvent?.type)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => markPurchaseWhatsAppSent(att.id)}
-                                  style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                    backgroundColor: att.purchase_whatsapp_sent_at ? '#9CA3AF' : '#25D366', color: 'white', textDecoration: 'none',
-                                    padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-                                  }}
-                                >
-                                  {att.purchase_whatsapp_sent_at ? '✅ Enviado' : '💬 Enviar'}
-                                </a>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
-          </>
         )}
       </View>
     );
@@ -10707,7 +10131,6 @@ setBulkWhatsAppPending(pending);
     { key: 'dashboard',    icon: '📊', label: 'Dashboard' },
     { key: 'events',       icon: '🎉', label: 'Eventos' },
     { key: 'users',        icon: '👤', label: 'Usuarios' },
-    { key: 'participants', icon: '👥', label: 'Participantes' },
     { key: 'questions',    icon: '❓', label: 'Preguntas' },
     { key: 'realtime',     icon: '🔴', label: 'En Vivo' },
     { key: 'reconciliation', icon: '🔄', label: 'Reconciliación' },
@@ -10907,7 +10330,6 @@ setBulkWhatsAppPending(pending);
             {currentView === 'dashboard'    && renderDashboard()}
             {currentView === 'events'       && renderEvents()}
             {currentView === 'users'        && renderUsers()}
-            {currentView === 'participants' && renderParticipants()}
             {currentView === 'questions'    && renderQuestions()}
             {currentView === 'realtime'     && renderRealtime()}
             {currentView === 'reconciliation' && renderReconciliation()}
