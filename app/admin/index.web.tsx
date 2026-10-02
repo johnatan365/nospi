@@ -4413,7 +4413,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     try {
       const [subsRes, eventsRes, revenueRes] = await Promise.all([
         supabase.rpc('get_all_subscriptions_for_admin'),
-        supabase.rpc('get_subscription_events_for_admin'),
+        // No es get_subscription_events_for_admin (obsoleta): esa filtraba por
+        // payment_method = 'subscription', asi que la ficha de cada suscriptor
+        // escondia todo lo que la persona habia reservado ANTES de suscribirse.
+        // Esta trae el historial completo con las banderas con_suscripcion /
+        // antes_de_suscripcion y el suscrito_at para poder agrupar.
+        supabase.rpc('get_subscription_user_events_for_admin'),
         // Los totales de plata NO se pueden sumar desde la lista de arriba:
         // subscriptions guarda una sola fila por persona con el precio del
         // ciclo actual. Salen de subscription_charges, que es el historial.
@@ -6304,6 +6309,24 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     '3_months': 3,
     '6_months': 6,
   };
+
+  // Con que se pago cada reserva. Sirve para que en la ficha del suscriptor se
+  // vea de una si el evento lo cubrio la suscripcion o lo pago aparte, y con
+  // que. 'banc' y 'bancolombia' son el mismo medio escrito de dos formas segun
+  // la epoca del registro. null son reservas viejas sin medio guardado.
+  const METODO_PAGO_LABEL: Record<string, string> = {
+    subscription: 'Suscripción',
+    pse: 'PSE',
+    nequi: 'Nequi',
+    bancolombia: 'Bancolombia',
+    banc: 'Bancolombia',
+    card: 'Tarjeta',
+    virtual_balance: 'Saldo virtual',
+    cortesia: 'Cortesía',
+    free: 'Gratis',
+    directo: 'Pago directo',
+  };
+  const metodoPagoLabel = (m?: string | null) => (m ? (METODO_PAGO_LABEL[m] || m) : 'Sin registro');
   const fmtCOP = (v: any) => {
     const n = Number(v || 0);
     return '$' + Math.round(n).toLocaleString('es-CO');
@@ -6359,6 +6382,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     });
 
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    // Con hora: para una suscripcion comprada hoy, saber si fue antes o despues
+    // de una reserva del mismo dia es justo lo que decide en que grupo cae.
+    const fmtDateTime = (d: string | null) => d ? new Date(d).toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 
     // Plata recaudada. Viene de subscription_charges (el historial), no de la
     // lista de suscripciones: esa guarda una fila por persona con el precio del
@@ -6492,6 +6518,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                       {filtered.map((s) => {
                         const isOpen = expandedSubscriptionId === s.id;
                         const events = subscriptionEvents.filter((e) => e.user_id === s.user_id);
+                        // Las dos banderas NO son opuestas: alguien ya suscrito puede pagar un
+                        // evento con saldo virtual o tarjeta. Por eso son tres grupos y no dos.
+                        const conSub = events.filter((e) => e.con_suscripcion);
+                        const sinSub = events.filter((e) => !e.con_suscripcion);
+                        const antesSub = sinSub.filter((e) => e.antes_de_suscripcion);
+                        const sinSubDespues = sinSub.filter((e) => !e.antes_de_suscripcion);
+                        const suscritoAt = events.find((e) => e.suscrito_at)?.suscrito_at || s.first_subscribed_at || s.start_date;
                         const statusColor = SUBSCRIPTION_STATUS_COLOR[s.status] || '#9CA3AF';
                         return (
                           <React.Fragment key={s.id}>
@@ -6593,7 +6626,15 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                               </td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>{s.last_charge_status || '—'}</td>
                               <td style={{ padding: '12px 14px', color: '#4B5563' }}>
-                                {s.events_attended} asistidos{Number(s.events_cancelled) > 0 ? ` · ${s.events_cancelled} cancelados` : ''}
+                                {/* events_attended solo cuenta lo que cubrio la suscripcion. El
+                                    renglon de abajo deja ver lo que la persona pago por fuera,
+                                    que antes no aparecia en ningun lado del panel. */}
+                                {s.events_attended} con suscripción{Number(s.events_cancelled) > 0 ? ` · ${s.events_cancelled} cancelados` : ''}
+                                {sinSub.length > 0 && (
+                                  <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
+                                    + {sinSub.length} sin suscripción{antesSub.length > 0 ? ` (${antesSub.length} antes de suscribirse)` : ''}
+                                  </div>
+                                )}
                               </td>
                               <td style={{ padding: '12px 14px', color: '#9CA3AF', textAlign: 'right' }}>{isOpen ? '▲' : '▼'}</td>
                             </tr>
@@ -6605,21 +6646,80 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                                       <strong>Motivo de cancelación:</strong> {s.cancellation_reason}
                                     </div>
                                   )}
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', margin: '10px 0 6px' }}>
-                                    Eventos usando la suscripción ({events.length})
+                                  {/* Se suscribio el ... : es la linea de corte de todo lo de
+                                      abajo, asi que va arriba y no escondida en una columna. */}
+                                  <div style={{ margin: '12px 0 10px', padding: '9px 14px', backgroundColor: '#F5F3FF', borderRadius: 10, fontSize: 13, color: '#5B21B6' }}>
+                                    👑 <strong>Se suscribió el {fmtDateTime(suscritoAt)}</strong>
+                                    {s.is_returning && s.first_subscribed_at && (
+                                      <span style={{ color: '#7C6AAE' }}> · ciclo actual desde {fmtDate(s.start_date)}</span>
+                                    )}
                                   </div>
+
                                   {events.length === 0 ? (
-                                    <Text style={{ fontSize: 13, color: '#9CA3AF' }}>Todavía no ha usado la suscripción para ningún evento.</Text>
+                                    <Text style={{ fontSize: 13, color: '#9CA3AF' }}>Esta persona no tiene ninguna reserva registrada.</Text>
                                   ) : (
-                                    events.map((e) => (
-                                      <div key={e.appointment_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #F3F4F6', fontSize: 13 }}>
-                                        <span style={{ color: '#1F2937', fontWeight: 600 }}>{e.event_name}</span>
-                                        <span style={{ color: '#6B7280' }}>{fmtDate(e.event_date)}</span>
-                                        <span style={{ color: e.status === 'cancelada' ? '#EF4444' : '#059669', fontWeight: 700 }}>
-                                          {e.status === 'cancelada' ? 'Cancelada' : e.status === 'anterior' ? 'Asistió' : 'Confirmada'}
-                                        </span>
-                                      </div>
-                                    ))
+                                    [
+                                      {
+                                        key: 'con',
+                                        titulo: `Con la suscripción (${conSub.length})`,
+                                        color: '#6B21A8',
+                                        vacio: 'Todavía no ha usado la suscripción para ningún evento.',
+                                        filas: conSub,
+                                      },
+                                      {
+                                        key: 'antes',
+                                        titulo: `Antes de suscribirse (${antesSub.length})`,
+                                        color: '#B45309',
+                                        vacio: null,
+                                        filas: antesSub,
+                                      },
+                                      {
+                                        key: 'aparte',
+                                        titulo: `Pagados aparte, ya suscrita (${sinSubDespues.length})`,
+                                        color: '#B45309',
+                                        vacio: null,
+                                        filas: sinSubDespues,
+                                      },
+                                    ].map((grupo) => {
+                                      // Los dos grupos de "sin suscripcion" solo se dibujan si
+                                      // tienen algo: para la mayoria de suscriptores estan vacios
+                                      // y meterian dos titulos muertos en cada ficha.
+                                      if (grupo.filas.length === 0 && !grupo.vacio) return null;
+                                      return (
+                                        <div key={grupo.key} style={{ marginBottom: 14 }}>
+                                          <div style={{ fontSize: 13, fontWeight: 700, color: grupo.color, margin: '10px 0 6px' }}>
+                                            {grupo.titulo}
+                                          </div>
+                                          {grupo.filas.length === 0 ? (
+                                            <Text style={{ fontSize: 13, color: '#9CA3AF' }}>{grupo.vacio}</Text>
+                                          ) : (
+                                            grupo.filas.map((e: any) => (
+                                              <div key={e.appointment_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid #F3F4F6', fontSize: 13 }}>
+                                                <span style={{ color: '#1F2937', fontWeight: 600, flex: '1 1 auto', minWidth: 140 }}>{e.event_name}</span>
+                                                <span style={{ color: '#6B7280', flex: '0 0 120px' }}>{fmtDate(e.event_date)}</span>
+                                                {/* Con que se pago: es justo el dato que faltaba para
+                                                    poder llevar el control de la suscripcion. */}
+                                                <span style={{ flex: '0 0 120px' }}>
+                                                  <span style={{
+                                                    backgroundColor: e.con_suscripcion ? '#F3E8FF' : '#FEF3C7',
+                                                    color: e.con_suscripcion ? '#6B21A8' : '#92400E',
+                                                    padding: '2px 8px', borderRadius: 8, fontWeight: 700, fontSize: 11,
+                                                  }}>
+                                                    {metodoPagoLabel(e.payment_method)}
+                                                  </span>
+                                                </span>
+                                                <span style={{ color: '#9CA3AF', flex: '0 0 80px', textAlign: 'right' }}>
+                                                  {e.con_suscripcion ? '' : Number(e.amount_paid_cop || 0) > 0 ? fmtCOP(e.amount_paid_cop) : ''}
+                                                </span>
+                                                <span style={{ color: e.status === 'cancelada' ? '#EF4444' : '#059669', fontWeight: 700, flex: '0 0 90px', textAlign: 'right' }}>
+                                                  {e.status === 'cancelada' ? 'Cancelada' : e.status === 'anterior' ? 'Asistió' : 'Confirmada'}
+                                                </span>
+                                              </div>
+                                            ))
+                                          )}
+                                        </div>
+                                      );
+                                    })
                                   )}
                                 </td>
                               </tr>
