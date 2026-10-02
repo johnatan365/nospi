@@ -1199,6 +1199,26 @@ export default function ChatThreadScreen() {
 
   const [showParticipants, setShowParticipants] = useState(false);
 
+  // Texto del buscador de la lista de Asistentes. La Comunidad Nospi ya va por
+  // 230 personas: encontrar a alguien bajando con el dedo es inviable, y en un
+  // grupo de evento (hasta 28) tampoco es comodo. Se filtra en memoria porque
+  // get_conversation_participants ya devuelve la lista completa -- no hace
+  // falta ir al servidor por cada letra.
+  const [buscaAsistente, setBuscaAsistente] = useState('');
+
+  // La lista que se pinta: todos menos uno mismo, filtrados por lo que se
+  // escriba. normalizeText quita tildes y mayusculas, asi que "martin"
+  // encuentra a "Martín" y "jose" a "José" -- en una lista de nombres en
+  // espanol eso no es un detalle, es la diferencia entre encontrar a alguien o
+  // no. Se busca con includes y no con startsWith (como si hacen las menciones
+  // con "@") porque aca la gente tambien busca por el apellido.
+  const asistentesFiltrados = (() => {
+    const base = participants.filter((p) => p.user_id !== user?.id);
+    const q = normalizeText(buscaAsistente);
+    if (!q) return base;
+    return base.filter((p) => normalizeText(p.name).includes(q));
+  })();
+
   // Abre la ficha SOLO cuando la lista de participantes ya se cerro. En iOS dos
   // <Modal> a la vez no funcionan: el segundo no aparece y, si la persona
   // insiste, las presentaciones se encolan y la pantalla se congela.
@@ -3686,19 +3706,65 @@ export default function ChatThreadScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={showParticipants} animationType="slide" transparent onRequestClose={() => setShowParticipants(false)}>
+      <Modal
+        visible={showParticipants}
+        animationType="slide"
+        transparent
+        // El buscador arranca vacio cada vez que se abre la lista: si no, al
+        // volver a entrar aparecerian solo los del filtro anterior y daria la
+        // impresion de que falta gente.
+        onShow={() => setBuscaAsistente('')}
+        onRequestClose={() => { setBuscaAsistente(''); setShowParticipants(false); }}
+      >
+        {/* La hoja esta pegada abajo (modalOverlay va con justifyContent
+            'flex-end'), asi que al abrirse el teclado para buscar taparia el
+            campo y casi toda la lista. El KeyboardAvoidingView la sube.
+            behavior="padding" en LAS DOS plataformas, igual que el de la
+            pantalla del chat: dejarlo en undefined para Android es justo el
+            error que ya se corrigio alla (con edge-to-edge la ventana no se
+            encoge y el teclado tapaba la barra de escribir). */}
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Asistentes</Text>
-              <TouchableOpacity onPress={() => setShowParticipants(false)}>
+              <TouchableOpacity onPress={() => { setBuscaAsistente(''); setShowParticipants(false); }}>
                 <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={nospiColors.purpleDark} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>Toca a alguien para chatear en privado</Text>
-            <ScrollView style={styles.participantsScroll} showsVerticalScrollIndicator={false}>
-              {participants
-                .filter((p) => p.user_id !== user?.id)
+
+            <View style={styles.buscaAsistenteBarra}>
+              <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={18} color={nospiColors.gray400} />
+              <TextInput
+                style={styles.buscaAsistenteInput}
+                placeholder="Buscar por nombre"
+                placeholderTextColor={nospiColors.gray400}
+                value={buscaAsistente}
+                onChangeText={setBuscaAsistente}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                // Sin autoFocus a proposito: el teclado tapando media lista
+                // estorba a quien solo queria mirar quien esta.
+              />
+              {!!buscaAsistente && (
+                <TouchableOpacity onPress={() => setBuscaAsistente('')} hitSlop={10}>
+                  <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={18} color={nospiColors.gray400} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {asistentesFiltrados.length === 0 && (
+              <Text style={styles.buscaAsistenteVacio}>
+                {buscaAsistente.trim()
+                  ? `Nadie con «${buscaAsistente.trim()}» en el nombre.`
+                  : 'Todavia no hay nadie mas por aqui.'}
+              </Text>
+            )}
+
+            <ScrollView style={styles.participantsScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {asistentesFiltrados
                 .map((p) => (
                   <TouchableOpacity
                     key={p.user_id}
@@ -3709,10 +3775,10 @@ export default function ChatThreadScreen() {
                     // mensaje sin querer.
                     // Se cierra la lista y la ficha se abre despues (ver
                     // perfilPendiente): dos modales a la vez no funcionan en iOS.
-                    onPress={() => { setPerfilPendiente(p); setShowParticipants(false); }}
+                    onPress={() => { setPerfilPendiente(p); setBuscaAsistente(''); setShowParticipants(false); }}
                   >
                     {p.profile_photo_url ? (
-                      <TouchableOpacity onPress={() => { setPerfilPendiente(p); setShowParticipants(false); }} activeOpacity={0.8}>
+                      <TouchableOpacity onPress={() => { setPerfilPendiente(p); setBuscaAsistente(''); setShowParticipants(false); }} activeOpacity={0.8}>
                         <ExpoImage source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} cachePolicy="memory-disk" transition={0} />
                       </TouchableOpacity>
                     ) : (
@@ -3731,6 +3797,7 @@ export default function ChatThreadScreen() {
             </ScrollView>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Acciones al mantener presionado un mensaje. Sin boton Cancelar: se
@@ -4663,6 +4730,23 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: '700', color: nospiColors.purpleDark },
   modalSubtitle: { fontSize: 13, color: nospiColors.gray500, marginBottom: 16 },
   participantsScroll: { maxHeight: 340 },
+  buscaAsistenteBarra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: nospiColors.gray100,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  buscaAsistenteInput: { flex: 1, fontSize: 15, color: '#1F2937', padding: 0 },
+  buscaAsistenteVacio: {
+    fontSize: 14,
+    color: nospiColors.gray500,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
