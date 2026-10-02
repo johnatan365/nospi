@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
-import { useRouter, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -131,7 +131,6 @@ function BarChart({ data, color }: { data: DayBar[]; color: string }) {
 }
 
 export default function StatsScreen() {
-  const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,10 +236,6 @@ export default function StatsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Estadísticas' }} />
-
-      <TouchableOpacity onPress={() => router.push('/admin')} style={styles.backLink}>
-        <Text style={styles.backLinkText}>‹ Volver al panel</Text>
-      </TouchableOpacity>
 
       <Text style={styles.title}>Estadísticas</Text>
       <Text style={styles.subtitle}>Inscripciones a eventos y suscripciones mensuales, día por día.</Text>
@@ -372,8 +367,6 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 24, paddingBottom: 60, maxWidth: 960, width: '100%', alignSelf: 'center' },
-  backLink: { marginBottom: 12 },
-  backLinkText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
   title: { fontSize: 26, fontWeight: 'bold', color: nospiColors.purpleDark },
   subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 16, lineHeight: 19 },
   filterBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10, marginBottom: 24 },

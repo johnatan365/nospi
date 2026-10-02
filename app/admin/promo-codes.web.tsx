@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Platform } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
-import { useRouter, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -85,7 +85,6 @@ function interestedInLabel(v: string | null) {
 }
 
 export default function PromoCodesScreen() {
-  const router = useRouter();
   const [codes, setCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -206,10 +205,6 @@ export default function PromoCodesScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Códigos promocionales' }} />
-
-      <TouchableOpacity onPress={() => router.push('/admin')} style={styles.backLink}>
-        <Text style={styles.backLinkText}>‹ Volver al panel</Text>
-      </TouchableOpacity>
 
       <View style={styles.headerRow}>
         <Text style={styles.title}>Códigos promocionales</Text>
@@ -334,8 +329,6 @@ export default function PromoCodesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 24, paddingBottom: 60, maxWidth: 960, width: '100%', alignSelf: 'center' },
-  backLink: { marginBottom: 12 },
-  backLinkText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   title: { fontSize: 26, fontWeight: 'bold', color: nospiColors.purpleDark },
   subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 19 },
