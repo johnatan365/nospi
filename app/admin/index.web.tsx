@@ -1343,6 +1343,28 @@ export default function AdminPanelScreen() {
 
   const [realtimeEventTab, setRealtimeEventTab] = useState<'abiertos' | 'cerrados'>('abiertos');
 
+  // Muro de "En vivo": todos los eventos que estan corriendo a la misma hora.
+  // Antes habia que cambiar el selector uno por uno para saber cual ya habia
+  // arrancado, justo en el rato de mas afan (tres videollamadas a las 9, o un
+  // cafe partido en dos mesas). La RPC los trae en UNA consulta con su resumen
+  // ya calculado: pedir cuatro consultas por evento cada diez segundos ponia
+  // lento el panel justo cuando mas se necesita.
+  const [eventosEnVivo, setEventosEnVivo] = useState<any[]>([]);
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+
+  useEffect(() => {
+    if (currentView !== 'realtime') { setEventosEnVivo([]); return; }
+    let vivo = true;
+    const leer = async () => {
+      const { data, error } = await supabase.rpc('admin_get_eventos_en_vivo');
+      if (error) { console.warn('Error cargando eventos en vivo', error); return; }
+      if (vivo) setEventosEnVivo((data as any[]) || []);
+    };
+    leer();
+    const id = setInterval(leer, 10000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [currentView]);
+
   const [declinedPayments, setDeclinedPayments] = useState<any[]>([]);
   const [loadingDeclinedPayments, setLoadingDeclinedPayments] = useState(false);
 
@@ -2585,6 +2607,15 @@ const handleLogin = async () => {
     if (currentView !== 'realtime') return;
     if (realtimeEventTab !== 'abiertos') return;
     if (selectedEventForMonitoring) return;
+    // Si hay algo en vivo, manda el muro: el detalle se abre en el primero de
+    // los que estan corriendo, no en el proximo del calendario.
+    if (eventosEnVivo.length > 0) {
+      const primero: any = eventosEnVivo[0];
+      setSelectedEventForMonitoring(primero.id);
+      loadEventParticipants(primero.id);
+      loadMonitoringAttendees(primero.id);
+      return;
+    }
     if (!events || events.length === 0) return;
 
     const abiertos = events.filter(e => e.event_status !== 'closed' && e.date);
@@ -2605,7 +2636,7 @@ const handleLogin = async () => {
       loadEventParticipants(elegido.id);
       loadMonitoringAttendees(elegido.id);
     }
-  }, [currentView, realtimeEventTab, events, selectedEventForMonitoring]);
+  }, [currentView, realtimeEventTab, events, selectedEventForMonitoring, eventosEnVivo]);
 
   // Recarga TODO el admin sin tener que cerrar y volver a abrir la app
   // (necesario cuando esta instalada en el celular desde Safari). Ademas de
@@ -9482,80 +9513,254 @@ setBulkWhatsAppPending(pending);
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Monitoreo en Tiempo Real</Text>
         
-        <View style={styles.realtimeInfo}>
-          <Text style={styles.realtimeInfoText}>
-            Selecciona un evento para monitorear la asistencia en tiempo real
-          </Text>
-        </View>
+        {/* Muro de eventos en vivo. Reemplaza al desplegable como forma de
+            entrar: cuando hay varios eventos a la misma hora, ver cual arranco
+            y cual sigue trabado no deberia costar tres clics. La ventana de
+            "en vivo" (45 min antes, 3 h despues) vive en la RPC, no aqui. */}
+        {eventosEnVivo.length > 0 && (
+          <View style={{ marginBottom: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: '#16A34A' }} />
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
+                En vivo ahora · {eventosEnVivo.length} {eventosEnVivo.length === 1 ? 'evento' : 'eventos'}
+              </Text>
+            </View>
 
-        <View style={styles.eventSelector}>
-          {/* Pestanas: eventos abiertos (publicados/borrador) vs cerrados, para
-              poder consultar quien confirmo asistencia en eventos ya pasados. */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-            {([
-              { key: 'abiertos' as const, label: '🟢 Abiertos', count: events.filter(e => e.event_status !== 'closed').length },
-              { key: 'cerrados' as const, label: '🔒 Cerrados', count: events.filter(e => e.event_status === 'closed').length },
-            ]).map(tab => {
-              const active = realtimeEventTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  onPress={() => { setRealtimeEventTab(tab.key); setSelectedEventForMonitoring(null); }}
-                  style={{
-                    flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
-                    backgroundColor: active ? '#AD1457' : '#F3F4F6',
-                    borderWidth: 1, borderColor: active ? '#AD1457' : '#E5E7EB',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#FFFFFF' : '#6B7280' }}>
-                    {tab.label} ({tab.count})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {eventosEnVivo.map((ev: any) => {
+                const abierto = selectedEventForMonitoring === ev.id;
+                const inscritos = Number(ev.inscritos) || 0;
+                const enSala = Number(ev.en_sala) || 0;
+                const enLlamada = Number(ev.en_llamada) || 0;
+                const hayMod = !!ev.moderator_id;
+                const esVirtual = ev.type === 'virtual';
+                // En presencial el check-in escribe los dos campos a la vez, asi
+                // que sala y llegada son el mismo numero y mostrar dos confunde.
+                const presentes = esVirtual ? enSala : enLlamada;
+                const tono: 'ok' | 'warn' | 'idle' =
+                  enLlamada > 0 ? 'ok' : enSala > 0 ? 'warn' : 'idle';
+                const RAYA = { ok: '#16A34A', warn: '#F59E0B', idle: '#D1D5DB' };
+                const FONDO = { ok: '#F0FDF4', warn: '#FFFBEB', idle: '#F9FAFB' };
+                const LINEA = { ok: '#BBF7D0', warn: '#FDE68A', idle: '#E5E7EB' };
+                const TINTA = { ok: '#15803D', warn: '#B45309', idle: '#6B7280' };
+                const etiqueta = enLlamada > 0
+                  ? (esVirtual ? 'En la videollamada' : 'En el sitio')
+                  : enSala > 0
+                    ? (esVirtual ? (hayMod ? 'Entrando al Meet' : 'Esperando moderador') : 'Llegando')
+                    : 'Todavía no llega nadie';
+                const pct = inscritos > 0 ? Math.round((presentes / inscritos) * 100) : 0;
+                const trabado = esVirtual && enSala > 0 && !hayMod;
+
+                return (
+                  <TouchableOpacity
+                    key={ev.id}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSelectedEventForMonitoring(ev.id);
+                      loadEventParticipants(ev.id);
+                      loadMonitoringAttendees(ev.id);
+                    }}
+                    style={{
+                      flexGrow: 1, flexBasis: 250, minWidth: 0, maxWidth: '100%',
+                      backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14,
+                      borderWidth: 1, borderColor: abierto ? '#AD1457' : '#E5E7EB',
+                      borderLeftWidth: 4, borderLeftColor: RAYA[tono],
+                      gap: 10,
+                    }}
+                  >
+                    <View>
+                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#1f2937' }} numberOfLines={2}>
+                        {ev.name || 'Evento'}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginTop: 2 }}>
+                        {ev.time || ''}{ev.subtitulo ? ` · ${ev.subtitulo}` : ''}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row' }}>
+                      <Text style={{
+                        fontSize: 11.5, fontWeight: '700', color: TINTA[tono],
+                        backgroundColor: FONDO[tono], borderWidth: 1, borderColor: LINEA[tono],
+                        borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9,
+                      }}>
+                        {etiqueta}
+                      </Text>
+                    </View>
+
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                      {hayMod
+                        ? <>Modera <Text style={{ fontWeight: '800', color: '#374151' }}>{ev.moderator_name || 'Alguien'}</Text></>
+                        : 'Sin moderador'}
+                    </Text>
+
+                    <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
+                      {esVirtual ? (
+                        <>
+                          <View>
+                            <Text style={{ fontSize: 21, fontWeight: '800', color: '#1f2937' }}>
+                              {enSala}<Text style={{ fontSize: 12.5, fontWeight: '600', color: '#9CA3AF' }}> / {inscritos}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600' }}>En la sala</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontSize: 21, fontWeight: '800', color: '#1f2937' }}>
+                              {enLlamada}<Text style={{ fontSize: 12.5, fontWeight: '600', color: '#9CA3AF' }}> / {inscritos}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600' }}>En la videollamada</Text>
+                          </View>
+                        </>
+                      ) : (
+                        <View>
+                          <Text style={{ fontSize: 21, fontWeight: '800', color: '#1f2937' }}>
+                            {enLlamada}<Text style={{ fontSize: 12.5, fontWeight: '600', color: '#9CA3AF' }}> / {inscritos}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600' }}>Ya llegaron</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View>
+                      <View style={{ height: 5, backgroundColor: '#F1F1F4', borderRadius: 3, overflow: 'hidden' }}>
+                        <View style={{ width: `${pct}%`, height: 5, backgroundColor: pct === 100 ? '#16A34A' : '#AD1457' }} />
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 6 }}>
+                        {esVirtual
+                          ? `Sala: ${ev.sala_hombres}H · ${ev.sala_mujeres}M   |   Llamada: ${ev.llamada_hombres}H · ${ev.llamada_mujeres}M`
+                          : `${ev.llamada_hombres}H · ${ev.llamada_mujeres}M`}
+                      </Text>
+                    </View>
+
+                    {trabado && (
+                      <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 9, padding: 9 }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E', marginBottom: 2 }}>
+                          ⏳ No ha arrancado
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: '#92400E', lineHeight: 16 }}>
+                          {enSala === 1 ? '1 persona esperando' : `${enSala} personas esperando`} y nadie acepta ser moderador. El botón de Meet no les aparece. La app sortea uno a los 5 minutos de la hora de inicio.
+                        </Text>
+                      </View>
+                    )}
+
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: abierto ? '#AD1457' : '#9CA3AF' }}>
+                      {abierto ? 'Viendo el detalle abajo' : 'Toca para ver el detalle'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
+        )}
 
-          <Text style={styles.inputLabel}>Seleccionar Evento:</Text>
-          <select
-            style={{
-              backgroundColor: '#F5F5F5',
-              borderWidth: 1,
-              borderColor: '#E0E0E0',
-              borderRadius: 12,
-              padding: 12,
-              fontSize: 16,
-              marginBottom: 16,
-              width: '100%',
-            }}
-            value={selectedEventForMonitoring || ''}
-            onChange={(e) => {
-              const eventId = e.target.value;
-              setSelectedEventForMonitoring(eventId);
-              if (eventId) {
-                loadEventParticipants(eventId);
-                loadMonitoringAttendees(eventId);
-              } else {
-                setMonitoringAttendees([]);
-              }
-            }}
-          >
-            <option value="">-- Selecciona un evento --</option>
-            {events
-              .filter(e => realtimeEventTab === 'abiertos'
-                ? e.event_status !== 'closed'
-                : e.event_status === 'closed')
-              // Cerrados: el mas reciente primero (los de hoy/ayer arriba).
-              .sort((a: any, b: any) => realtimeEventTab === 'cerrados'
-                ? new Date(b.date).getTime() - new Date(a.date).getTime()
-                : new Date(a.date).getTime() - new Date(b.date).getTime())
-              .map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name || `${event.type} - ${event.city}`} - {event.date}
-                </option>
-              ))}
-          </select>
-        </View>
+        {eventosEnVivo.length === 0 && (
+          <View style={styles.realtimeInfo}>
+            <Text style={styles.realtimeInfoText}>
+              No hay ningún evento en vivo ahora. Busca uno abajo para revisarlo.
+            </Text>
+          </View>
+        )}
+
+        {/* Buscar un evento puntual, cerrados incluidos. Se pliega solo cuando
+            hay algo en vivo: ahi lo que importa es el muro de arriba. Sin nada
+            en vivo queda siempre abierto, que es como se usa el resto del dia. */}
+        {(() => {
+          const puedePlegar = eventosEnVivo.length > 0;
+          const visible = !puedePlegar || buscadorAbierto;
+          return (
+            <View style={{
+              backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1,
+              borderColor: '#E5E7EB', marginBottom: 16, overflow: 'hidden',
+            }}>
+              <TouchableOpacity
+                disabled={!puedePlegar}
+                activeOpacity={0.7}
+                onPress={() => setBuscadorAbierto(v => !v)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  paddingVertical: 13, paddingHorizontal: 14,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>
+                  🔎 Buscar otro evento
+                </Text>
+                {puedePlegar && (
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF' }}>
+                    {visible ? 'Ocultar ▲' : 'Abiertos y cerrados ▼'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {visible && (
+                <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                  {/* Pestanas: eventos abiertos (publicados/borrador) vs cerrados, para
+                      poder consultar quien confirmo asistencia en eventos ya pasados. */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                    {([
+                      { key: 'abiertos' as const, label: '🟢 Abiertos', count: events.filter(e => e.event_status !== 'closed').length },
+                      { key: 'cerrados' as const, label: '🔒 Cerrados', count: events.filter(e => e.event_status === 'closed').length },
+                    ]).map(tab => {
+                      const active = realtimeEventTab === tab.key;
+                      return (
+                        <TouchableOpacity
+                          key={tab.key}
+                          onPress={() => { setRealtimeEventTab(tab.key); setSelectedEventForMonitoring(null); }}
+                          style={{
+                            flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
+                            backgroundColor: active ? '#AD1457' : '#F3F4F6',
+                            borderWidth: 1, borderColor: active ? '#AD1457' : '#E5E7EB',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#FFFFFF' : '#6B7280' }}>
+                            {tab.label} ({tab.count})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={styles.inputLabel}>Seleccionar Evento:</Text>
+                  <select
+                    style={{
+                      backgroundColor: '#F5F5F5',
+                      borderWidth: 1,
+                      borderColor: '#E0E0E0',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 16,
+                      width: '100%',
+                    }}
+                    value={selectedEventForMonitoring || ''}
+                    onChange={(e) => {
+                      const eventId = e.target.value;
+                      setSelectedEventForMonitoring(eventId);
+                      if (eventId) {
+                        loadEventParticipants(eventId);
+                        loadMonitoringAttendees(eventId);
+                      } else {
+                        setMonitoringAttendees([]);
+                      }
+                    }}
+                  >
+                    <option value="">-- Selecciona un evento --</option>
+                    {events
+                      .filter(e => realtimeEventTab === 'abiertos'
+                        ? e.event_status !== 'closed'
+                        : e.event_status === 'closed')
+                      // Cerrados: el mas reciente primero (los de hoy/ayer arriba).
+                      .sort((a: any, b: any) => realtimeEventTab === 'cerrados'
+                        ? new Date(b.date).getTime() - new Date(a.date).getTime()
+                        : new Date(a.date).getTime() - new Date(b.date).getTime())
+                      .map((event) => (
+                        <option key={event.id} value={event.id}>
+                          {event.name || `${event.type} - ${event.city}`} - {event.date}
+                        </option>
+                      ))}
+                  </select>
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         {/* En que pregunta va la mesa AHORA. Va encima de la asistencia porque
             durante el evento es el dato que se mira de reojo cada rato. */}
