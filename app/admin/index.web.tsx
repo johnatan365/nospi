@@ -915,6 +915,12 @@ export default function AdminPanelScreen() {
   const [userRatingAverages, setUserRatingAverages] = useState<Record<string, { avg: number; count: number }>>({}); 
   const [userPlatformActivity, setUserPlatformActivity] = useState<Record<string, { platform: string; last_seen_at: string; first_seen_at: string }[]>>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // Ultima foto de usuarios y eventos, para poder rearmar las citas desde un
+  // callback de realtime (ahi el estado que se ve es el del momento en que se
+  // suscribio, no el de ahora).
+  const usersRef = useRef<any[]>([]);
+  const eventsRef = useRef<any[]>([]);
+
   const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMessage, setReconcileMessage] = useState<string | null>(null);
@@ -2104,6 +2110,9 @@ export default function AdminPanelScreen() {
   useEffect(() => {
   }, []);
 
+  useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { eventsRef.current = events; }, [events]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDashboardData();
@@ -2146,6 +2155,39 @@ export default function AdminPanelScreen() {
 
     return () => {
       supabase.removeChannel(eventsChannel);
+    };
+  }, [isAuthenticated]);
+
+  // Realtime subscription for appointments
+  //
+  // Antes, cualquier cambio en "events" disparaba un loadDashboardData()
+  // completo, y de rebote eso tambien refrescaba las citas: por eso al entrar
+  // al panel ya se veia quien habia comprado. Cuando ese recargado completo se
+  // cambio por reloadEventsOnly() (para no traer 2,9 MB por una sola fila), las
+  // citas dejaron de refrescarse solas y habia que darle a Actualizar a mano.
+  //
+  // Esta suscripcion lo devuelve, pero barato: escucha la tabla de citas y
+  // recarga SOLO las citas (~211 KB), sin volver a traerse los usuarios.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase
+      .channel('admin_appointments_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments' },
+        () => {
+          // Si entran varias compras seguidas, se recarga una sola vez.
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => { reloadAppointmentsOnly(); }, 3000);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
     };
   }, [isAuthenticated]);
 
@@ -2337,61 +2379,135 @@ const handleLogin = async () => {
   // a aplicar sobre cada carga hasta que el servidor las devuelva ya guardadas.
   const marcasWhatsAppRef = useRef<Map<string, string>>(new Map());
 
+  // Las RPC de admin devuelven una TABLE y Supabase (PostgREST) corta la
+  // respuesta a 1.000 filas por defecto. Paginamos de a 1.000 con .range()
+  // hasta traer todo.
+  //
+  // La función valida auth.uid() contra la tabla admins (SECURITY DEFINER). Si
+  // el token del navegador venció justo al cargar, Supabase puede responder
+  // "not authorized" aunque sí seas admin — refrescamos la sesión una vez y
+  // reintentamos esa página para evitar el falso error.
+  const rpcAllForAdmin = async (fnName: string) => {
+    const RPC_PAGE_SIZE = 1000;
+    const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let from = 0;
+    const all: any[] = [];
+    while (true) {
+      let data: any = null;
+      let error: any = null;
+
+      // Hasta 3 intentos por página. En celular con mala señal la petición
+      // se cae con "TypeError: Load failed" y antes eso tumbaba toda la
+      // carga de usuarios; ahora se reintenta con una espera creciente.
+      for (let intento = 1; intento <= 3; intento++) {
+        const res = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+        data = res.data;
+        error = res.error;
+
+        if (error?.message?.includes('not authorized')) {
+          console.warn(`${fnName}: not authorized, refrescando sesión y reintentando…`);
+          await supabase.auth.refreshSession();
+          const retry = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (!error) break;
+
+        const esDeRed = /load failed|failed to fetch|network|timeout|abort/i.test(error.message || '');
+        if (!esDeRed || intento === 3) break;
+        console.warn(`${fnName}: fallo de red (intento ${intento}/3), reintentando…`, error.message);
+        await espera(intento * 1500);
+      }
+
+      if (error) return { data: all.length ? all : null, error };
+      all.push(...(data || []));
+      if (!data || data.length < RPC_PAGE_SIZE) break;
+      from += RPC_PAGE_SIZE;
+    }
+    return { data: all, error: null };
+  };
+
+  // Arma las citas con los datos de usuario y evento que ya estan en memoria
+  // (la RPC v2 solo trae las columnas de la cita) y vuelve a aplicar encima las
+  // marcas de WhatsApp hechas a mano que el servidor todavia no devuelve.
+  // Devuelve Appointment[]: users/events se arman con los campos que el panel
+  // usa, no con la interfaz completa, igual que antes de sacar esto a su
+  // propia funcion.
+  const armarCitas = (citasCrudas: any[], usersList: any[], eventsList: any[]): Appointment[] => {
+    const usersById = new Map<string, any>((usersList || []).map((u: any) => [u.id, u]));
+    const eventsById = new Map<string, any>((eventsList || []).map((e: any) => [e.id, e]));
+    return (citasCrudas || []).map((apt: any) => {
+      const u = usersById.get(apt.user_id);
+      const e = eventsById.get(apt.event_id);
+      const marca = marcasWhatsAppRef.current.get(apt.id);
+      if (marca && apt.purchase_whatsapp_sent_at) marcasWhatsAppRef.current.delete(apt.id);
+      return {
+        id: apt.id,
+        user_id: apt.user_id,
+        event_id: apt.event_id,
+        status: apt.status,
+        payment_status: apt.payment_status,
+        created_at: apt.created_at,
+        purchase_whatsapp_sent_at: apt.purchase_whatsapp_sent_at || marca || null,
+        reminder_48h_sent_at: apt.reminder_48h_sent_at,
+        sameday_reminder_sent_at: apt.sameday_reminder_sent_at,
+        users: {
+          id: apt.user_id,
+          name: u?.name || '',
+          email: u?.email || '',
+          phone: u?.phone || '',
+          city: u?.city || '',
+          country: u?.country || '',
+          interested_in: u?.interested_in || '',
+          gender: u?.gender || '',
+          age: u?.age ?? null,
+        },
+        events: {
+          id: apt.event_id,
+          name: e?.name || '',
+          city: e?.city || '',
+          type: e?.type || '',
+          date: e?.date || null,
+          time: e?.time || '',
+          location: e?.location || '',
+          location_name: e?.location_name || '',
+          location_address: e?.location_address || '',
+          maps_link: e?.maps_link || '',
+          require_gps_verification: e?.require_gps_verification ?? true,
+          is_location_revealed: e?.is_location_revealed ?? false,
+          address: e?.address ?? null,
+          start_time: e?.start_time ?? null,
+          max_participants: e?.max_participants ?? 0,
+          current_participants: e?.current_participants ?? 0,
+          status: e?.status || '',
+          event_status: (e?.event_status || 'published') as 'draft' | 'published' | 'closed',
+          description: e?.description || '',
+        },
+      };
+    }) as any as Appointment[];
+  };
+
+  // Solo las citas (~211 KB), sin volver a traerse los 2.700 usuarios. Se usa
+  // cuando llega una compra o una cancelacion por realtime: antes eso no
+  // recargaba nada y habia que darle a Actualizar a mano para ver quien compro.
+  const reloadAppointmentsOnly = async () => {
+    // Si los usuarios todavia no han llegado (carga inicial en vuelo), no se
+    // rearman las citas: saldrian todas sin nombre ni telefono. La carga
+    // pesada que viene en camino las va a dejar completas de todos modos.
+    if (!usersRef.current.length || !eventsRef.current.length) return;
+    const { data, error } = await rpcAllForAdmin('get_all_appointments_for_admin_v2');
+    if (error) { console.warn('No se pudieron recargar las citas:', error.message); return; }
+    const citas = armarCitas(data || [], usersRef.current, eventsRef.current);
+    setAppointments(citas);
+    setTotalAppointments(citas.length);
+  };
+
   const loadHeavyAdminData = async (eventsList: any[]) => {
     const miCarga = ++cargaPesadaRef.current;
     const quedoVieja = () => cargaPesadaRef.current !== miCarga;
     setHeavyLoading(true);
     try {
-      // Las RPC de admin devuelven una TABLE y Supabase (PostgREST) corta la
-      // respuesta a 1.000 filas por defecto. Paginamos de a 1.000 con .range()
-      // hasta traer todo.
-      //
-      // La función valida auth.uid() contra la tabla admins (SECURITY DEFINER). Si
-      // el token del navegador venció justo al cargar, Supabase puede responder
-      // "not authorized" aunque sí seas admin — refrescamos la sesión una vez y
-      // reintentamos esa página para evitar el falso error.
-      const RPC_PAGE_SIZE = 1000;
-      const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-      const rpcAllForAdmin = async (fnName: string) => {
-        let from = 0;
-        const all: any[] = [];
-        while (true) {
-          let data: any = null;
-          let error: any = null;
-
-          // Hasta 3 intentos por página. En celular con mala señal la petición
-          // se cae con "TypeError: Load failed" y antes eso tumbaba toda la
-          // carga de usuarios; ahora se reintenta con una espera creciente.
-          for (let intento = 1; intento <= 3; intento++) {
-            const res = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
-            data = res.data;
-            error = res.error;
-
-            if (error?.message?.includes('not authorized')) {
-              console.warn(`${fnName}: not authorized, refrescando sesión y reintentando…`);
-              await supabase.auth.refreshSession();
-              const retry = await supabase.rpc(fnName).range(from, from + RPC_PAGE_SIZE - 1);
-              data = retry.data;
-              error = retry.error;
-            }
-
-            if (!error) break;
-
-            const esDeRed = /load failed|failed to fetch|network|timeout|abort/i.test(error.message || '');
-            if (!esDeRed || intento === 3) break;
-            console.warn(`${fnName}: fallo de red (intento ${intento}/3), reintentando…`, error.message);
-            await espera(intento * 1500);
-          }
-
-          if (error) return { data: all.length ? all : null, error };
-          all.push(...(data || []));
-          if (!data || data.length < RPC_PAGE_SIZE) break;
-          from += RPC_PAGE_SIZE;
-        }
-        return { data: all, error: null };
-      };
-
       const [
         { data: usersData, error: usersError },
         { data: allRatings },
@@ -2458,68 +2574,9 @@ const handleLogin = async () => {
       if (appointmentsError) {
         console.error('Error loading appointments:', appointmentsError);
       } else {
-        const usersById = new Map<string, any>((usersData || []).map((u: any) => [u.id, u]));
-        const eventsById = new Map<string, any>((eventsList || []).map((e: any) => [e.id, e]));
-        const transformedAppointments = (appointmentsRawData || []).map((apt: any) => {
-          const u = usersById.get(apt.user_id);
-          const e = eventsById.get(apt.event_id);
-          return {
-            id: apt.id,
-            user_id: apt.user_id,
-            event_id: apt.event_id,
-            status: apt.status,
-            payment_status: apt.payment_status,
-            created_at: apt.created_at,
-            purchase_whatsapp_sent_at: apt.purchase_whatsapp_sent_at,
-            reminder_48h_sent_at: apt.reminder_48h_sent_at,
-            sameday_reminder_sent_at: apt.sameday_reminder_sent_at,
-            users: {
-              id: apt.user_id,
-              name: u?.name || '',
-              email: u?.email || '',
-              phone: u?.phone || '',
-              city: u?.city || '',
-              country: u?.country || '',
-              interested_in: u?.interested_in || '',
-              gender: u?.gender || '',
-              age: u?.age ?? null,
-            },
-            events: {
-              id: apt.event_id,
-              name: e?.name || '',
-              city: e?.city || '',
-              type: e?.type || '',
-              date: e?.date || null,
-              time: e?.time || '',
-              location: e?.location || '',
-              location_name: e?.location_name || '',
-              location_address: e?.location_address || '',
-              maps_link: e?.maps_link || '',
-              require_gps_verification: e?.require_gps_verification ?? true,
-              is_location_revealed: e?.is_location_revealed ?? false,
-              address: e?.address ?? null,
-              start_time: e?.start_time ?? null,
-              max_participants: e?.max_participants ?? 0,
-              current_participants: e?.current_participants ?? 0,
-              status: e?.status || '',
-              event_status: (e?.event_status || 'published') as 'draft' | 'published' | 'closed',
-              description: e?.description || '',
-            },
-          };
-        });
-
-        // Las marcas hechas a mano hace un momento pueden no venir todavia en
-        // esta respuesta (salio antes del guardado). Se reaplican encima, y se
-        // olvidan en cuanto el servidor ya las trae.
-        const conMarcas = transformedAppointments.map((a: any) => {
-          const marca = marcasWhatsAppRef.current.get(a.id);
-          if (!marca) return a;
-          if (a.purchase_whatsapp_sent_at) { marcasWhatsAppRef.current.delete(a.id); return a; }
-          return { ...a, purchase_whatsapp_sent_at: marca };
-        });
-
-        setAppointments(conMarcas);
-        setTotalAppointments(conMarcas.length);
+        const citas = armarCitas(appointmentsRawData || [], usersData || [], eventsList || []);
+        setAppointments(citas);
+        setTotalAppointments(citas.length);
       }
     } catch (e) {
       console.error('Error cargando datos pesados del admin', e);
