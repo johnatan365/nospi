@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
@@ -48,6 +48,10 @@ const COLOR: Record<string, string> = {
 };
 
 export default function OrigenScreen() {
+  // La tabla (canal + tres columnas de 92px) no cabe en un telefono: al canal le
+  // quedarian ~70px. Debajo de 768 cada canal se apila en un bloque.
+  const { width } = useWindowDimensions();
+  const esMovil = width < 768;
   const [users, setUsers] = useState<UserRow[]>([]);
   const [conCita, setConCita] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -117,9 +121,9 @@ export default function OrigenScreen() {
   });
 
   function kpi(label: string, valor: string, destacado?: boolean) {
-    return e(View, { style: [s.kpi, destacado ? s.kpiOn : null] },
+    return e(View, { style: [s.kpi, esMovil ? s.kpiMovil : null, destacado ? s.kpiOn : null] },
       e(Text, { style: [s.kpiLabel, destacado ? s.kpiLabelOn : null] }, label),
-      e(Text, { style: [s.kpiValor, destacado ? s.kpiValorOn : null] }, valor));
+      e(Text, { style: [s.kpiValor, esMovil ? s.kpiValorMovil : null, destacado ? s.kpiValorOn : null] }, valor));
   }
 
   let cuerpo;
@@ -136,7 +140,7 @@ export default function OrigenScreen() {
         kpi('Conversion', pct + '%', true)),
 
       e(View, { style: s.tabla },
-        e(View, { style: s.thead },
+        esMovil ? null : e(View, { style: s.thead },
           e(Text, { style: [s.th, s.colCanal] }, 'Canal'),
           e(Text, { style: [s.th, s.colNum] }, 'Registros'),
           e(Text, { style: [s.th, s.colNum] }, 'Reservaron'),
@@ -145,13 +149,27 @@ export default function OrigenScreen() {
         filas.map(function (f) {
           const ancho = f.sinDato ? 100 : Math.max(2, Math.min(100, (f.registros / maxReg) * 100));
           const color = f.sinDato ? '#D8D8D8' : (COLOR[f.canal] || '#880E4F');
+          const etiqueta = f.sinDato
+            ? e(Text, { style: s.historico }, '· historico')
+            : e(Text, { style: [s.badge, f.pago ? null : s.badgeOrg] }, f.pago ? 'PAGO' : 'ORGANICO');
+          if (esMovil) {
+            return e(View, { key: f.clave, style: [s.tr, s.trMovil, f.sinDato ? s.trGris : null] },
+              e(View, { style: s.canalLinea },
+                e(Text, { style: [s.canal, f.sinDato ? s.canalGris : null] }, f.canal),
+                etiqueta),
+              e(View, { style: [s.barra, s.barraMovil] }, e(View, { style: [s.barraFill, { width: (ancho + '%') as any, backgroundColor: color }] })),
+              e(View, { style: s.cifras },
+                e(Text, { style: [s.cifra, f.sinDato ? s.gris : null] }, f.registros + ' registros'),
+                e(Text, { style: s.sep }, '·'),
+                e(Text, { style: [s.cifra, f.sinDato ? s.gris : null] }, f.reservaron + ' reservaron'),
+                e(Text, { style: s.sep }, '·'),
+                e(Text, { style: [s.cifra, s.bold, f.tasa > 0 ? (f.sinDato ? s.gris : s.verde) : s.apagado] }, f.tasa.toFixed(1).replace('.', ',') + '%')));
+          }
           return e(View, { key: f.clave, style: [s.tr, f.sinDato ? s.trGris : null] },
             e(View, { style: s.colCanal },
               e(View, { style: s.canalLinea },
                 e(Text, { style: [s.canal, f.sinDato ? s.canalGris : null] }, f.canal),
-                f.sinDato
-                  ? e(Text, { style: s.historico }, '· historico')
-                  : e(Text, { style: [s.badge, f.pago ? null : s.badgeOrg] }, f.pago ? 'PAGO' : 'ORGANICO')),
+                etiqueta),
               e(View, { style: s.barra }, e(View, { style: [s.barraFill, { width: (ancho + '%') as any, backgroundColor: color }] }))),
             e(Text, { style: [s.td, s.colNum, f.sinDato ? s.gris : null] }, String(f.registros)),
             e(Text, { style: [s.td, s.colNum, f.sinDato ? s.gris : null] }, String(f.reservaron)),
@@ -166,7 +184,7 @@ export default function OrigenScreen() {
 
   return e(View, { style: s.wrap },
     e(Stack.Screen, { options: { title: 'Origen de registros' } }),
-    e(View, { style: s.inner },
+    e(View, { style: [s.inner, esMovil ? s.innerMovil : null] },
       e(View, { style: s.barraTop },
         e(View, { style: s.tabs }, tabs),
         e(TouchableOpacity, { onPress: cargar, style: s.reload }, e(Text, { style: s.reloadTxt }, 'Recargar'))),
@@ -176,6 +194,7 @@ export default function OrigenScreen() {
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#fff' },
   inner: { flex: 1, width: '100%', maxWidth: 780, alignSelf: 'center', padding: 20 },
+  innerMovil: { padding: 14 },
 
   barraTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
   tabs: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
@@ -191,7 +210,9 @@ const s = StyleSheet.create({
   kpiOn: { backgroundColor: '#FFF0F6', borderColor: '#F7C9DC' },
   kpiLabel: { fontSize: 10, color: '#888', fontWeight: '700', letterSpacing: 0.5 },
   kpiLabelOn: { color: '#9C3161' },
+  kpiMovil: { paddingVertical: 10, paddingHorizontal: 10 },
   kpiValor: { fontSize: 26, fontWeight: '700', marginTop: 3, color: '#1A1A1A' },
+  kpiValorMovil: { fontSize: 20 },
   kpiValorOn: { color: '#880E4F' },
 
   tabla: { borderWidth: 1, borderColor: '#EEE', borderRadius: 12, overflow: 'hidden' },
@@ -200,6 +221,10 @@ const s = StyleSheet.create({
   tr: { flexDirection: 'row', paddingVertical: 13, paddingHorizontal: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F2F2F2' },
   colCanal: { flex: 1.7 },
   colNum: { width: 92, textAlign: 'right' },
+  trMovil: { flexDirection: 'column', alignItems: 'stretch' },
+  cifras: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 9 },
+  cifra: { fontSize: 12.5, color: '#222' },
+  sep: { fontSize: 12.5, color: '#CFCFCF' },
 
   canalLinea: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   canal: { fontSize: 14, fontWeight: '600', color: '#1A1A1A', textTransform: 'capitalize' },
@@ -209,6 +234,7 @@ const s = StyleSheet.create({
   historico: { fontSize: 10, color: '#BBB' },
   trGris: { backgroundColor: '#FCFCFC' },
   barra: { height: 4, backgroundColor: '#F0F0F0', borderRadius: 99, marginTop: 7, width: '88%', overflow: 'hidden' },
+  barraMovil: { width: '100%' },
   barraFill: { height: '100%', borderRadius: 99 },
 
   td: { fontSize: 14, color: '#222' },
