@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
-import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 interface StrikeDetail {
@@ -38,7 +37,6 @@ function isSuspended(u: UserRow): boolean {
 }
 
 export default function NoShowsScreen() {
-  const router = useRouter();
   // En el celular la tabla de 6 columnas no cabe: cada columna queda con ~40px
   // y el texto se parte letra por letra. Debajo de 768 se muestran tarjetas.
   const { width } = useWindowDimensions();
@@ -264,10 +262,6 @@ export default function NoShowsScreen() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={{ padding: isMobile ? 14 : 20, paddingBottom: 60 }}>
-      <TouchableOpacity onPress={() => router.push('/admin')} style={styles.backLink}>
-        <Text style={styles.backLinkText}>‹ Volver al panel</Text>
-      </TouchableOpacity>
-
       <Text style={[styles.title, isMobile && { fontSize: 20 }]}>No-shows / Faltas</Text>
       <Text style={styles.subtitle}>Usuarios que no confirmaron su asistencia. Los avisos y suspensiones se aplican en automático al cerrar cada evento.</Text>
 
@@ -334,8 +328,6 @@ export default function NoShowsScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#f4f0f2' },
-  backLink: { marginBottom: 10 },
-  backLinkText: { color: nospiColors.purpleDark, fontSize: 14, fontWeight: '600' },
   title: { fontSize: 24, fontWeight: '800', color: '#241019' },
   subtitle: { fontSize: 13, color: '#6b7280', marginTop: 4, marginBottom: 18, maxWidth: 720, lineHeight: 19 },
   kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
