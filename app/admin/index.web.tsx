@@ -1341,7 +1341,6 @@ export default function AdminPanelScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
 
-  const [realtimeEventTab, setRealtimeEventTab] = useState<'abiertos' | 'cerrados'>('abiertos');
 
   // Muro de "En vivo": todos los eventos que estan corriendo a la misma hora.
   // Antes habia que cambiar el selector uno por uno para saber cual ya habia
@@ -1356,7 +1355,7 @@ export default function AdminPanelScreen() {
     if (currentView !== 'realtime') { setEventosEnVivo([]); return; }
     let vivo = true;
     const leer = async () => {
-      const { data, error } = await supabase.rpc('admin_get_eventos_en_vivo');
+      const { data, error } = await supabase.rpc('admin_get_panel_en_vivo');
       if (error) { console.warn('Error cargando eventos en vivo', error); return; }
       if (vivo) setEventosEnVivo((data as any[]) || []);
     };
@@ -2599,44 +2598,20 @@ const handleLogin = async () => {
     }
   };
 
-  // Al entrar a "En vivo" (pestana Abiertos), preseleccionar automaticamente el
-  // evento abierto MAS PROXIMO, para no tener que elegirlo a mano cada vez.
-  // Prioriza los de hoy en adelante (el mas cercano primero); si no hay ninguno
-  // futuro, cae al mas reciente. No pisa una seleccion que ya hayas hecho.
+  // Al entrar a "En vivo" se abre solo el detalle de lo que esta CORRIENDO.
+  // Si no hay nada en vivo no se abre nada: antes caia en el evento abierto mas
+  // proximo y mostraba una pantalla de ceros -- 0 de 10, sin moderador, lista
+  // vacia -- que no dice nada de un evento que es manana.
   useEffect(() => {
     if (currentView !== 'realtime') return;
-    if (realtimeEventTab !== 'abiertos') return;
     if (selectedEventForMonitoring) return;
-    // Si hay algo en vivo, manda el muro: el detalle se abre en el primero de
-    // los que estan corriendo, no en el proximo del calendario.
-    if (eventosEnVivo.length > 0) {
-      const primero: any = eventosEnVivo[0];
-      setSelectedEventForMonitoring(primero.id);
-      loadEventParticipants(primero.id);
-      loadMonitoringAttendees(primero.id);
-      return;
-    }
-    if (!events || events.length === 0) return;
-
-    const abiertos = events.filter(e => e.event_status !== 'closed' && e.date);
-    if (abiertos.length === 0) return;
-
-    const ahora = Date.now();
-    // Copias antes de ordenar: .sort() muta el array y no queremos alterar
-    // el orden del listado de eventos que usa el resto del admin.
-    const futuros = [...abiertos]
-      .filter(e => new Date(e.date).getTime() >= ahora - 12 * 60 * 60 * 1000)
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const pasados = [...abiertos]
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    const elegido = futuros[0] || pasados[0];
-    if (elegido) {
-      setSelectedEventForMonitoring(elegido.id);
-      loadEventParticipants(elegido.id);
-      loadMonitoringAttendees(elegido.id);
-    }
-  }, [currentView, realtimeEventTab, events, selectedEventForMonitoring, eventosEnVivo]);
+    const vivos = eventosEnVivo.filter((e: any) => e.estado === 'vivo');
+    if (vivos.length === 0) return;
+    const primero: any = vivos[0];
+    setSelectedEventForMonitoring(primero.id);
+    loadEventParticipants(primero.id);
+    loadMonitoringAttendees(primero.id);
+  }, [currentView, selectedEventForMonitoring, eventosEnVivo]);
 
   // Recarga TODO el admin sin tener que cerrar y volver a abrir la app
   // (necesario cuando esta instalada en el celular desde Safari). Ademas de
@@ -9509,6 +9484,19 @@ setBulkWhatsAppPending(pending);
   };
 
   const renderRealtime = () => {
+    // En Vivo responde dos preguntas: que esta corriendo AHORA y que viene en
+    // las proximas 24 horas. La RPC marca cada fila con una u otra.
+    const vivos = eventosEnVivo.filter((e: any) => e.estado === 'vivo');
+    const proximos = eventosEnVivo.filter((e: any) => e.estado !== 'vivo');
+    const cerrados = events.filter(e => e.event_status === 'closed');
+    const faltaTexto = (min: number) => {
+      if (min <= 0) return 'empieza ya';
+      if (min < 60) return `en ${min} min`;
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      if (h < 24) return m > 0 ? `en ${h} h ${m} min` : `en ${h} h`;
+      return `en ${Math.round(min / 60)} h`;
+    };
     return (
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Monitoreo en Tiempo Real</Text>
@@ -9517,17 +9505,17 @@ setBulkWhatsAppPending(pending);
             entrar: cuando hay varios eventos a la misma hora, ver cual arranco
             y cual sigue trabado no deberia costar tres clics. La ventana de
             "en vivo" (45 min antes, 3 h despues) vive en la RPC, no aqui. */}
-        {eventosEnVivo.length > 0 && (
+        {vivos.length > 0 && (
           <View style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: '#16A34A' }} />
               <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
-                En vivo ahora · {eventosEnVivo.length} {eventosEnVivo.length === 1 ? 'evento' : 'eventos'}
+                En vivo ahora · {vivos.length} {vivos.length === 1 ? 'evento' : 'eventos'}
               </Text>
             </View>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              {eventosEnVivo.map((ev: any) => {
+              {vivos.map((ev: any) => {
                 const abierto = selectedEventForMonitoring === ev.id;
                 const inscritos = Number(ev.inscritos) || 0;
                 const enSala = Number(ev.en_sala) || 0;
@@ -9651,17 +9639,100 @@ setBulkWhatsAppPending(pending);
           </View>
         )}
 
+        {/* Lo que viene en 24 h. Aqui la asistencia todavia no existe, asi que
+            se muestra lo que decide si el evento va a salir bien: cuanta gente
+            lleva contra el cupo y como va el balance. Esto reemplaza al viejo
+            desplegable de eventos futuros, que solo sabia mostrar ceros. */}
+        {proximos.length > 0 && (
+          <View style={{ marginBottom: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: '#9CA3AF' }} />
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
+                Lo que viene · próximas 24 horas
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {proximos.map((ev: any) => {
+                const abierto = selectedEventForMonitoring === ev.id;
+                const inscritos = Number(ev.inscritos) || 0;
+                const h = Number(ev.inscritos_hombres) || 0;
+                const m = Number(ev.inscritos_mujeres) || 0;
+                const cupo = Number(ev.max_participants) || 0;
+                const sobra = cupo > 0 && inscritos > cupo;
+                // Desbalance: un genero se lleva mas de dos tercios de la mesa.
+                const desbalance = inscritos >= 4 && (h > inscritos * 0.67 || m > inscritos * 0.67);
+                const aviso = sobra
+                  ? `${inscritos} inscritos para ${cupo} cupos — hay que partirlo en mesas`
+                  : inscritos === 0
+                    ? 'Todavía no se ha inscrito nadie'
+                    : desbalance
+                      ? 'Desbalanceado — conviene invitar del género que falta'
+                      : null;
+
+                return (
+                  <TouchableOpacity
+                    key={ev.id}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSelectedEventForMonitoring(ev.id);
+                      loadEventParticipants(ev.id);
+                      loadMonitoringAttendees(ev.id);
+                    }}
+                    style={{
+                      flexGrow: 1, flexBasis: 250, minWidth: 0, maxWidth: '100%',
+                      backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14,
+                      borderWidth: 1, borderColor: abierto ? '#AD1457' : '#E5E7EB',
+                      borderLeftWidth: 4, borderLeftColor: aviso ? '#F59E0B' : '#D1D5DB',
+                      gap: 8,
+                    }}
+                  >
+                    <View>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#1f2937' }} numberOfLines={2}>
+                        {ev.name || 'Evento'}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginTop: 2 }}>
+                        {ev.time || ''}{ev.subtitulo ? ` · ${ev.subtitulo}` : ''} · {faltaTexto(Number(ev.minutos_para_empezar) || 0)}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      <Text style={{ fontSize: 21, fontWeight: '800', color: '#1f2937' }}>
+                        {inscritos}
+                        {cupo > 0 && (
+                          <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#9CA3AF' }}> / {cupo} cupos</Text>
+                        )}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>{h}H · {m}M</Text>
+                    </View>
+
+                    {aviso && (
+                      <Text style={{ fontSize: 11.5, color: '#B45309', fontWeight: '700', lineHeight: 16 }}>
+                        {aviso}
+                      </Text>
+                    )}
+
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: abierto ? '#AD1457' : '#9CA3AF' }}>
+                      {abierto ? 'Viendo los inscritos abajo' : 'Toca para ver los inscritos'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {eventosEnVivo.length === 0 && (
           <View style={styles.realtimeInfo}>
             <Text style={styles.realtimeInfoText}>
-              No hay ningún evento en vivo ahora. Busca uno abajo para revisarlo.
+              No hay eventos hoy ni en las próximas 24 horas. Busca uno pasado abajo.
             </Text>
           </View>
         )}
 
-        {/* Buscar un evento puntual, cerrados incluidos. Se pliega solo cuando
-            hay algo en vivo: ahi lo que importa es el muro de arriba. Sin nada
-            en vivo queda siempre abierto, que es como se usa el resto del dia. */}
+        {/* El selector se queda solo para lo que YA paso: a que hora llego cada
+            quien, quien falto. Para los futuros no servia -- ahi no hay nada que
+            monitorear -- y por eso desaparecio la pestana de abiertos. */}
         {(() => {
           const puedePlegar = eventosEnVivo.length > 0;
           const visible = !puedePlegar || buscadorAbierto;
@@ -9680,44 +9751,17 @@ setBulkWhatsAppPending(pending);
                 }}
               >
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>
-                  🔎 Buscar otro evento
+                  🔒 Ver un evento pasado ({cerrados.length})
                 </Text>
                 {puedePlegar && (
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF' }}>
-                    {visible ? 'Ocultar ▲' : 'Abiertos y cerrados ▼'}
+                    {visible ? 'Ocultar ▲' : 'Abrir ▼'}
                   </Text>
                 )}
               </TouchableOpacity>
 
               {visible && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-                  {/* Pestanas: eventos abiertos (publicados/borrador) vs cerrados, para
-                      poder consultar quien confirmo asistencia en eventos ya pasados. */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                    {([
-                      { key: 'abiertos' as const, label: '🟢 Abiertos', count: events.filter(e => e.event_status !== 'closed').length },
-                      { key: 'cerrados' as const, label: '🔒 Cerrados', count: events.filter(e => e.event_status === 'closed').length },
-                    ]).map(tab => {
-                      const active = realtimeEventTab === tab.key;
-                      return (
-                        <TouchableOpacity
-                          key={tab.key}
-                          onPress={() => { setRealtimeEventTab(tab.key); setSelectedEventForMonitoring(null); }}
-                          style={{
-                            flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
-                            backgroundColor: active ? '#AD1457' : '#F3F4F6',
-                            borderWidth: 1, borderColor: active ? '#AD1457' : '#E5E7EB',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#FFFFFF' : '#6B7280' }}>
-                            {tab.label} ({tab.count})
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
                   <Text style={styles.inputLabel}>Seleccionar Evento:</Text>
                   <select
                     style={{
@@ -9742,14 +9786,9 @@ setBulkWhatsAppPending(pending);
                     }}
                   >
                     <option value="">-- Selecciona un evento --</option>
-                    {events
-                      .filter(e => realtimeEventTab === 'abiertos'
-                        ? e.event_status !== 'closed'
-                        : e.event_status === 'closed')
-                      // Cerrados: el mas reciente primero (los de hoy/ayer arriba).
-                      .sort((a: any, b: any) => realtimeEventTab === 'cerrados'
-                        ? new Date(b.date).getTime() - new Date(a.date).getTime()
-                        : new Date(a.date).getTime() - new Date(b.date).getTime())
+                    {[...cerrados]
+                      // El mas reciente primero: los de hoy y ayer arriba.
+                      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map((event) => (
                         <option key={event.id} value={event.id}>
                           {event.name || `${event.type} - ${event.city}`} - {event.date}
