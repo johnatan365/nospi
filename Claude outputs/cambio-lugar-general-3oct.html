@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cambio de lugar · General</title>
+<style>
+  :root {
+    --bg:#f6f4f5; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+    --linea:#e5e7eb; --nospi:#AD1457; --wa:#25D366; --ok:#f0fdf4; --okb:#bbf7d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#141012; --card:#1e1a1c; --ink:#f3f4f6; --muted:#9ca3af;
+      --linea:#363033; --ok:#14251a; --okb:#1f4d32;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#141012; --card:#1e1a1c; --ink:#f3f4f6; --muted:#9ca3af;
+    --linea:#363033; --ok:#14251a; --okb:#1f4d32;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:0 16px 56px;
+  }
+  .wrap { max-width:720px; margin:0 auto; }
+  header.top { padding:28px 0 8px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 4px; }
+  .lugar { font-size:14px; margin:14px 0 0; padding:12px 14px; background:var(--card);
+           border:1px solid var(--linea); border-radius:12px; }
+  .barra { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 0 10px;
+           border-bottom:1px solid var(--linea); margin-bottom:18px; }
+  .prog { display:flex; align-items:center; gap:12px; }
+  .prog-txt { font-size:14px; font-weight:700; white-space:nowrap; }
+  .pista { flex:1; height:8px; background:var(--linea); border-radius:999px; overflow:hidden; }
+  .relleno { height:100%; width:0%; background:var(--nospi); transition:width .25s ease; }
+  .card { background:var(--card); border:1px solid var(--linea); border-radius:16px;
+          padding:16px; margin-bottom:14px; }
+  .card.hecho { background:var(--ok); border-color:var(--okb); }
+  .card.especial { border-color:var(--nospi); border-width:2px; }
+  .card-head { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+  .card h2 { font-size:17px; margin:0; }
+  .tel { margin:2px 0 0; font-size:13px; color:var(--muted); }
+  .check input { width:24px; height:24px; accent-color:var(--nospi); cursor:pointer; }
+  .msg { border-top:1px solid var(--linea); padding-top:12px; margin-top:12px; }
+  .msg:first-of-type { border-top:0; padding-top:0; margin-top:0; }
+  .msg-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .msg-label { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .copiar { font:inherit; font-size:13px; padding:5px 12px; border-radius:999px; cursor:pointer;
+            border:1px solid var(--linea); background:transparent; color:var(--ink); }
+  .texto { white-space:pre-wrap; font:14px/1.55 inherit; margin:0 0 12px; color:var(--muted); }
+  .wa { display:inline-block; background:var(--wa); color:#06281a; text-decoration:none;
+        font-weight:700; padding:11px 20px; border-radius:999px; font-size:15px; }
+  .nota { font-size:13px; color:var(--muted); margin:22px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Cambio de lugar — grupo de General</h1>
+    <p class="sub">Sábado 3 de octubre, 3:00 p.m. · 9 personas · el correo ya les llegó</p>
+    <p class="lugar">📍 <strong>General Cafe Bar — Cl. 13 #43D-84, El Poblado</strong><br />Al llegar preguntan por <strong>Nospi</strong> (sin número de mesa: son el único grupo allá).</p>
+  </header>
+
+  <div class="barra">
+    <div class="prog">
+      <span class="prog-txt"><span id="hechos">0</span> de 9</span>
+      <div class="pista"><div class="relleno" id="relleno"></div></div>
+    </div>
+  </div>
+
+  
+    <article class="card especial" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Sandra G</h2>
+          <p class="tel">+573138251379 · 58 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Respuesta a su mensaje</span>
+            <button class="copiar" data-texto="¡Jajaja tienes razón en algo, Sandra 😄 Si uno ya sabe dónde es, se pierde la gracia.
+
+No siempre es allá, vamos rotando. Y mira la casualidad: *mañana tu grupo no va a Primavera.* Tuvimos un inconveniente con el lugar y los movimos a otro café. Te paso la dirección ahora mismo.">Copiar</button>
+          </div>
+          <pre class="texto">¡Jajaja tienes razón en algo, Sandra 😄 Si uno ya sabe dónde es, se pierde la gracia.
+
+No siempre es allá, vamos rotando. Y mira la casualidad: *mañana tu grupo no va a Primavera.* Tuvimos un inconveniente con el lugar y los movimos a otro café. Te paso la dirección ahora mismo.</pre>
+          <a class="wa" href="https://wa.me/573138251379?text=%C2%A1Jajaja%20tienes%20raz%C3%B3n%20en%20algo%2C%20Sandra%20%F0%9F%98%84%20Si%20uno%20ya%20sabe%20d%C3%B3nde%20es%2C%20se%20pierde%20la%20gracia.%0A%0ANo%20siempre%20es%20all%C3%A1%2C%20vamos%20rotando.%20Y%20mira%20la%20casualidad%3A%20%2Ama%C3%B1ana%20tu%20grupo%20no%20va%20a%20Primavera.%2A%20Tuvimos%20un%20inconveniente%20con%20el%20lugar%20y%20los%20movimos%20a%20otro%20caf%C3%A9.%20Te%20paso%20la%20direcci%C3%B3n%20ahora%20mismo." target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">La información de mañana</span>
+            <button class="copiar" data-texto="Acá va 👇
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+Te mandé el correo también.
+
+¡Nos vemos a las 3! ☕️">Copiar</button>
+          </div>
+          <pre class="texto">Acá va 👇
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+Te mandé el correo también.
+
+¡Nos vemos a las 3! ☕️</pre>
+          <a class="wa" href="https://wa.me/573138251379?text=Ac%C3%A1%20va%20%F0%9F%91%87%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0ATe%20mand%C3%A9%20el%20correo%20tambi%C3%A9n.%0A%0A%C2%A1Nos%20vemos%20a%20las%203%21%20%E2%98%95%EF%B8%8F" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Alejo</h2>
+          <p class="tel">+573155105801 · 46 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Alejo! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Alejo! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573155105801?text=%C2%A1Hola%20Alejo%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>LuisFer</h2>
+          <p class="tel">+573182898736 · 46 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola LuisFer! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola LuisFer! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573182898736?text=%C2%A1Hola%20LuisFer%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Giovani</h2>
+          <p class="tel">+573214258376 · 48 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Giovani! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Giovani! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573214258376?text=%C2%A1Hola%20Giovani%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Juan Fdo Herrera</h2>
+          <p class="tel">+573217994333 · 49 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Juan Fdo! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Juan Fdo! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573217994333?text=%C2%A1Hola%20Juan%20Fdo%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Verónica Ossa Ramírez</h2>
+          <p class="tel">+573005757463 · 46 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Verónica! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Verónica! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573005757463?text=%C2%A1Hola%20Ver%C3%B3nica%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Natalia</h2>
+          <p class="tel">+573122291962 · 46 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Natalia! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Natalia! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573122291962?text=%C2%A1Hola%20Natalia%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Sandra</h2>
+          <p class="tel">+573245707121 · 48 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Sandra! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Sandra! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573245707121?text=%C2%A1Hola%20Sandra%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+    <article class="card" data-persona>
+      <header class="card-head">
+        <label class="check"><input type="checkbox" data-hecho><span></span></label>
+        <div>
+          <h2>Andrea</h2>
+          <p class="tel">+573145079811 · 49 años</p>
+        </div>
+      </header>
+      
+        <div class="msg">
+          <div class="msg-head">
+            <span class="msg-label">Aviso del cambio</span>
+            <button class="copiar" data-texto="¡Hola Andrea! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄">Copiar</button>
+          </div>
+          <pre class="texto">¡Hola Andrea! 👋 Cambio de última hora y quería avisarte directo.
+
+*El lugar de mañana cambió.* Tuvimos un inconveniente con Café Primavera, así que tu grupo va a:
+
+📍 *General Cafe Bar* — Cl. 13 #43D-84, El Poblado
+🕒 Sábado 3 de octubre, 3:00 p.m.
+🗺️ https://maps.app.goo.gl/PyJY4gU1kwvPhLze8?g_st=ic
+
+Al llegar *pregunta por Nospi* y te indican dónde sentarte.
+
+Ojo que es en El Poblado, no en Laureles — calcula el tiempo 😉
+
+Te acabo de mandar el correo también, por si acaso.
+
+¡Nos pillamos! 😄</pre>
+          <a class="wa" href="https://wa.me/573145079811?text=%C2%A1Hola%20Andrea%21%20%F0%9F%91%8B%20Cambio%20de%20%C3%BAltima%20hora%20y%20quer%C3%ADa%20avisarte%20directo.%0A%0A%2AEl%20lugar%20de%20ma%C3%B1ana%20cambi%C3%B3.%2A%20Tuvimos%20un%20inconveniente%20con%20Caf%C3%A9%20Primavera%2C%20as%C3%AD%20que%20tu%20grupo%20va%20a%3A%0A%0A%F0%9F%93%8D%20%2AGeneral%20Cafe%20Bar%2A%20%E2%80%94%20Cl.%2013%20%2343D-84%2C%20El%20Poblado%0A%F0%9F%95%92%20S%C3%A1bado%203%20de%20octubre%2C%203%3A00%20p.m.%0A%F0%9F%97%BA%EF%B8%8F%20https%3A//maps.app.goo.gl/PyJY4gU1kwvPhLze8%3Fg_st%3Dic%0A%0AAl%20llegar%20%2Apregunta%20por%20Nospi%2A%20y%20te%20indican%20d%C3%B3nde%20sentarte.%0A%0AOjo%20que%20es%20en%20El%20Poblado%2C%20no%20en%20Laureles%20%E2%80%94%20calcula%20el%20tiempo%20%F0%9F%98%89%0A%0ATe%20acabo%20de%20mandar%20el%20correo%20tambi%C3%A9n%2C%20por%20si%20acaso.%0A%0A%C2%A1Nos%20pillamos%21%20%F0%9F%98%84" target="_blank" rel="noopener" data-msg>Abrir WhatsApp</a>
+        </div>
+    </article>
+
+  <p class="nota">Cada botón abre WhatsApp con el mensaje ya escrito — solo das enviar. La casilla de la izquierda es para ti, para no perder el hilo; se guarda en este navegador.</p>
+</div>
+
+<script>
+  const CLAVE = 'nospi-cambio-general-3oct';
+  let guardado = {};
+  try { guardado = JSON.parse(localStorage.getItem(CLAVE) || '{}'); } catch (e) { guardado = {}; }
+
+  const tarjetas = Array.from(document.querySelectorAll('[data-persona]'));
+
+  function pintar() {
+    const n = tarjetas.filter(c => c.querySelector('[data-hecho]').checked).length;
+    document.getElementById('hechos').textContent = n;
+    document.getElementById('relleno').style.width = (n / tarjetas.length * 100) + '%';
+  }
+
+  tarjetas.forEach((card, i) => {
+    const box = card.querySelector('[data-hecho]');
+    if (guardado[i]) { box.checked = true; card.classList.add('hecho'); }
+    box.addEventListener('change', () => {
+      card.classList.toggle('hecho', box.checked);
+      guardado[i] = box.checked;
+      try { localStorage.setItem(CLAVE, JSON.stringify(guardado)); } catch (e) {}
+      pintar();
+    });
+    card.querySelectorAll('[data-msg]').forEach(a => a.addEventListener('click', () => {
+      if (!box.checked) { box.checked = true; box.dispatchEvent(new Event('change')); }
+    }));
+  });
+
+  document.querySelectorAll('.copiar').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(b.dataset.texto);
+      const antes = b.textContent; b.textContent = 'Copiado';
+      setTimeout(() => { b.textContent = antes; }, 1400);
+    } catch (e) { b.textContent = 'No se pudo'; }
+  }));
+
+  pintar();
+</script>
+</body>
+</html>
