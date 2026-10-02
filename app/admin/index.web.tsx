@@ -3109,9 +3109,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   // (lo pone tanto el GPS del asistente como el boton del admin) o fecha de
   // check-in. Los cancelados no cuentan como inscritos.
   const resumenAsistencia = useMemo(() => {
-    const vacio = { confirmados: 0, inscritos: 0 };  // las edades se anaden aparte
-    const acc: Record<string, { confirmados: number; inscritos: number; edades: number[] }> = {
-      hombre: { ...vacio, edades: [] }, mujer: { ...vacio, edades: [] }, otro: { ...vacio, edades: [] },
+    const vacio = { confirmados: 0, enSala: 0, inscritos: 0 };  // las edades se anaden aparte
+    const acc: Record<string, { confirmados: number; enSala: number; inscritos: number; edades: number[]; edadesSala: number[] }> = {
+      hombre: { ...vacio, edades: [], edadesSala: [] },
+      mujer: { ...vacio, edades: [], edadesSala: [] },
+      otro: { ...vacio, edades: [], edadesSala: [] },
     };
 
     for (const a of monitoringAttendees) {
@@ -3119,14 +3121,28 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const g = a.user_gender === 'hombre' ? 'hombre' : a.user_gender === 'mujer' ? 'mujer' : 'otro';
       acc[g].inscritos += 1;
       const llego = !!a.checked_in_at || (a.arrival_status && a.arrival_status !== 'pending');
+      // En las videollamadas hay dos escalones. "Confirmar asistencia" solo
+      // marca location_confirmed: la persona queda en la sala de espera y NO
+      // puede entrar al Meet hasta que alguien acepte ser moderador. El toque
+      // de "Ir a Meet" es el que escribe checked_in_at. Por eso la sala se
+      // cuenta aparte: si solo mirasemos la llamada, un evento con todo el
+      // mundo esperando se ve igual que uno al que no llego nadie.
+      const enSala = llego || !!a.location_confirmed;
+      const edad = Number(a.user_age);
       if (llego) {
         acc[g].confirmados += 1;
         // Edades de quien YA esta dentro: en vivo eso importa mas que el total.
-        const edad = Number(a.user_age);
         if (Number.isFinite(edad) && edad > 0) acc[g].edades.push(edad);
       }
+      if (enSala) {
+        acc[g].enSala += 1;
+        if (Number.isFinite(edad) && edad > 0) acc[g].edadesSala.push(edad);
+      }
     }
-    (Object.keys(acc) as string[]).forEach(k => acc[k].edades.sort((x, y) => x - y));
+    (Object.keys(acc) as string[]).forEach(k => {
+      acc[k].edades.sort((x, y) => x - y);
+      acc[k].edadesSala.sort((x, y) => x - y);
+    });
 
     return {
       hombre: acc.hombre,
@@ -3134,6 +3150,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       otro: acc.otro,
       total: {
         confirmados: acc.hombre.confirmados + acc.mujer.confirmados + acc.otro.confirmados,
+        enSala: acc.hombre.enSala + acc.mujer.enSala + acc.otro.enSala,
         inscritos: acc.hombre.inscritos + acc.mujer.inscritos + acc.otro.inscritos,
       },
     };
@@ -9768,19 +9785,32 @@ setBulkWhatsAppPending(pending);
           );
         })()}
 
-        {/* Resumen de asistencia por genero: cuantos confirmaron llegada y
-            cuantos faltan. Lo importante en vivo es saber si falta un genero,
-            no solo el total. */}
+        {/* Resumen de asistencia por genero: cuantos llegaron y cuantos faltan.
+            Lo importante en vivo es saber si falta un genero, no solo el total.
+            En videollamada se muestran los dos escalones por separado — sala de
+            espera y llamada — porque el boton de Meet no aparece hasta que haya
+            moderador, y sin esa distincion un grupo entero esperando se ve en el
+            panel igual que un grupo al que no llego nadie. */}
         {selectedEventForMonitoring && resumenAsistencia.total.inscritos > 0 && (() => {
-          const filas: { icono: string; etiqueta: string; listos: string; datos: { confirmados: number; inscritos: number; edades: number[] } }[] = [
-            { icono: '👨', etiqueta: 'Hombres', listos: 'Todos confirmados', datos: resumenAsistencia.hombre },
-            { icono: '👩', etiqueta: 'Mujeres', listos: 'Todas confirmadas', datos: resumenAsistencia.mujer },
+          const eventoVivo = events.find(e => e.id === selectedEventForMonitoring);
+          const esVirtual = eventoVivo?.type === 'virtual';
+          const filas: {
+            icono: string; etiqueta: string; listos: string;
+            datos: { confirmados: number; enSala: number; inscritos: number; edades: number[]; edadesSala: number[] };
+          }[] = [
+            { icono: '\u{1F468}', etiqueta: 'Hombres', listos: 'Todos confirmados', datos: resumenAsistencia.hombre },
+            { icono: '\u{1F469}', etiqueta: 'Mujeres', listos: 'Todas confirmadas', datos: resumenAsistencia.mujer },
           ];
           if (resumenAsistencia.otro.inscritos > 0) {
-            filas.push({ icono: '🧑', etiqueta: 'Otros', listos: 'Todos confirmados', datos: resumenAsistencia.otro });
+            filas.push({ icono: '\u{1F9D1}', etiqueta: 'Otros', listos: 'Todos confirmados', datos: resumenAsistencia.otro });
           }
           const t = resumenAsistencia.total;
-          const faltanTotal = t.inscritos - t.confirmados;
+          // En virtual el numero que dice "llego la gente" es la sala, no la
+          // llamada. En presencial los dos son lo mismo (el check-in escribe
+          // location_confirmed y checked_in_at a la vez).
+          const presentes = esVirtual ? t.enSala : t.confirmados;
+          const faltanTotal = t.inscritos - presentes;
+          const sinModerador = esVirtual && !dinamicaViva?.moderator_id;
 
           return (
             <View style={{
@@ -9789,19 +9819,55 @@ setBulkWhatsAppPending(pending);
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
-                  Asistencia confirmada
+                  {esVirtual ? 'Asistencia en vivo' : 'Asistencia confirmada'}
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: faltanTotal === 0 ? '#15803d' : '#B45309' }}>
-                  {t.confirmados} de {t.inscritos}
-                  {faltanTotal > 0 ? ` · faltan ${faltanTotal}` : ' · todos llegaron 🎉'}
+                  {presentes} de {t.inscritos}
+                  {faltanTotal > 0 ? ` \u00b7 faltan ${faltanTotal}` : ' \u00b7 todos llegaron \u{1F389}'}
                 </Text>
               </View>
 
+              {esVirtual && (
+                <View style={{
+                  flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 12,
+                  backgroundColor: '#FAFAFA', borderRadius: 10, padding: 10,
+                  borderWidth: 1, borderColor: '#EEEEEE',
+                }}>
+                  <Text style={{ fontSize: 13, color: '#4B5563' }}>
+                    {'\u{1F7E1}'} En la sala de espera{' '}
+                    <Text style={{ fontWeight: '800', color: '#B45309' }}>{t.enSala}</Text>
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#4B5563' }}>
+                    {'\u{1F7E2}'} Ya en la videollamada{' '}
+                    <Text style={{ fontWeight: '800', color: '#047857' }}>{t.confirmados}</Text>
+                  </Text>
+                </View>
+              )}
+
+              {esVirtual && sinModerador && t.enSala > 0 && (
+                <View style={{
+                  backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A',
+                  borderRadius: 10, padding: 12, marginBottom: 12,
+                }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#92400E', marginBottom: 4 }}>
+                    {'\u23F3'} La videollamada no ha arrancado
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: '#92400E', lineHeight: 18 }}>
+                    {t.enSala === 1
+                      ? 'Hay 1 persona esperando en la sala'
+                      : `Hay ${t.enSala} personas esperando en la sala`}
+                    {' y todav\u00eda nadie acept\u00f3 ser moderador. El bot\u00f3n "Ir a Meet" no les aparece hasta que alguien acepte. Si nadie se postula, la app sortea un moderador a los 5 minutos de la hora de inicio.'}
+                  </Text>
+                </View>
+              )}
+
               <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
                 {filas.map(f => {
-                  const faltan = f.datos.inscritos - f.datos.confirmados;
+                  const aqui = esVirtual ? f.datos.enSala : f.datos.confirmados;
+                  const edadesAqui = esVirtual ? f.datos.edadesSala : f.datos.edades;
+                  const faltan = f.datos.inscritos - aqui;
                   const pct = f.datos.inscritos > 0
-                    ? Math.round((f.datos.confirmados / f.datos.inscritos) * 100)
+                    ? Math.round((aqui / f.datos.inscritos) * 100)
                     : 0;
                   const completo = f.datos.inscritos > 0 && faltan === 0;
                   return (
@@ -9815,7 +9881,7 @@ setBulkWhatsAppPending(pending);
                         {f.icono} {f.etiqueta}
                       </Text>
                       <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937' }}>
-                        {f.datos.confirmados}
+                        {aqui}
                         <Text style={{ fontSize: 14, fontWeight: '600', color: '#9CA3AF' }}> / {f.datos.inscritos}</Text>
                       </Text>
                       <View style={{ height: 6, backgroundColor: '#F1F1F4', borderRadius: 3, overflow: 'hidden', marginTop: 8 }}>
@@ -9825,12 +9891,17 @@ setBulkWhatsAppPending(pending);
                         {f.datos.inscritos === 0
                           ? 'Sin inscritos'
                           : faltan > 0
-                          ? `Faltan ${faltan} por confirmar`
+                          ? `Faltan ${faltan} por ${esVirtual ? 'entrar' : 'confirmar'}`
                           : f.listos}
                       </Text>
-                      {f.datos.edades.length > 0 && (
+                      {esVirtual && (
                         <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 3 }}>
-                          Aquí: {f.datos.edades.join(' · ')}
+                          {f.datos.confirmados} en la videollamada
+                        </Text>
+                      )}
+                      {edadesAqui.length > 0 && (
+                        <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 3 }}>
+                          Aqu\u00ed: {edadesAqui.join(' \u00b7 ')}
                         </Text>
                       )}
                     </View>
@@ -9839,7 +9910,7 @@ setBulkWhatsAppPending(pending);
               </View>
 
               {monitoringLoading && (
-                <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 10 }}>Actualizando…</Text>
+                <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 10 }}>Actualizando\u2026</Text>
               )}
             </View>
           );
@@ -9848,7 +9919,9 @@ setBulkWhatsAppPending(pending);
         {selectedEventForMonitoring && (
           <View style={styles.participantsContainer}>
             <Text style={styles.participantsTitle}>
-              Participantes Confirmados ({eventParticipants.length})
+              {events.find(e => e.id === selectedEventForMonitoring)?.type === 'virtual'
+                ? `En la sala (${eventParticipants.length})`
+                : `Participantes Confirmados (${eventParticipants.length})`}
             </Text>
             {/* Cuantos siguen en el sitio ahora mismo. Solo aparece cuando hay
                 al menos un reporte: antes del primero no habria nada que decir
@@ -9869,8 +9942,21 @@ setBulkWhatsAppPending(pending);
               );
             })()}
             {eventParticipants.map((participant, index) => {
-              const checkInStatus = participant.is_presented ? '✅ Presente' : '⏳ Pendiente';
-              const checkInColor = participant.is_presented ? '#10B981' : '#F59E0B';
+              // En videollamada estar en la lista solo significa que la persona
+              // toco "Confirmar asistencia": esta en la sala de espera. Lo que
+              // dice que ya entro al Meet es checked_in_at, que vive en el
+              // inscrito, no en event_participants. Sin separarlos, todos salen
+              // como "Presente" aunque nadie haya entrado a la llamada.
+              const esVirtualLista = events.find(e => e.id === selectedEventForMonitoring)?.type === 'virtual';
+              const inscrito: any = monitoringAttendees.find((a: any) => a.user_id === participant.user_id);
+              const enLlamada = !!inscrito?.checked_in_at
+                || (!!inscrito?.arrival_status && inscrito.arrival_status !== 'pending');
+              const checkInStatus = esVirtualLista
+                ? (enLlamada ? '🟢 En la videollamada' : '🟡 En sala de espera')
+                : (participant.is_presented ? '✅ Presente' : '⏳ Pendiente');
+              const checkInColor = esVirtualLista
+                ? (enLlamada ? '#10B981' : '#F59E0B')
+                : (participant.is_presented ? '#10B981' : '#F59E0B');
               // Hasta que hora se le vio en el sitio. Se considera "sigue ahi"
               // si reporto en los ultimos 12 minutos: la app avisa cada 5, asi
               // que dos fallos seguidos todavia no significan que se fue.
@@ -9932,10 +10018,13 @@ setBulkWhatsAppPending(pending);
                   )}
                   {participant.check_in_time && (
                     <Text style={styles.participantDetail}>
-                      🕐 Check-in: {new Date(participant.check_in_time).toLocaleString('es-ES')}
+                      🕐 {esVirtualLista ? 'Entró a la sala' : 'Check-in'}: {new Date(participant.check_in_time).toLocaleString('es-ES')}
                     </Text>
                   )}
-                  {participant.presented_at && (
+                  {/* En virtual presented_at es el mismo instante en que entro
+                      a la sala, asi que repetirlo como "Presentado" hace creer
+                      que ya esta en la llamada. */}
+                  {participant.presented_at && !esVirtualLista && (
                     <Text style={styles.participantDetail}>
                       ✅ Presentado: {new Date(participant.presented_at).toLocaleString('es-ES')}
                     </Text>
