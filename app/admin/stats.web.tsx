@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
 import { Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -131,6 +131,10 @@ function BarChart({ data, color }: { data: DayBar[]; color: string }) {
 }
 
 export default function StatsScreen() {
+  // Las dos tablas de 4 columnas no caben en un telefono. Debajo de 768 cada
+  // fila se muestra como tarjeta.
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,10 +238,10 @@ export default function StatsScreen() {
   const totalSubsRevenue = subsFiltered.reduce((s, su) => s + (Number(su.price) || 0), 0);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}>
       <Stack.Screen options={{ title: 'Estadísticas' }} />
 
-      <Text style={styles.title}>Estadísticas</Text>
+      <Text style={[styles.title, isMobile && { fontSize: 21 }]}>Estadísticas</Text>
       <Text style={styles.subtitle}>Inscripciones a eventos y suscripciones mensuales, día por día.</Text>
 
       <View style={styles.filterBar}>
@@ -264,31 +268,31 @@ export default function StatsScreen() {
       ) : (
         <>
           <View style={styles.cardsRow}>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{totalAppts}</Text>
               <Text style={styles.cardLabel}>Inscripciones a eventos (total)</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{totalWompi}</Text>
               <Text style={styles.cardLabel}>Pagadas por Wompi</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{totalManual}</Text>
               <Text style={styles.cardLabel}>Agregadas manualmente (sin pago)</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{formatCOP(totalApptsRevenue)}</Text>
               <Text style={styles.cardLabel}>Recaudado en eventos (real)</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{totalApptsUnknown}</Text>
               <Text style={styles.cardLabel}>Sin información de pago</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{totalSubs}</Text>
               <Text style={styles.cardLabel}>Suscripciones mensuales</Text>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, isMobile && styles.cardMobile]}>
               <Text style={styles.cardValue}>{formatCOP(totalSubsRevenue)}</Text>
               <Text style={styles.cardLabel}>Ingreso por suscripciones</Text>
             </View>
@@ -304,6 +308,27 @@ export default function StatsScreen() {
           <Text style={styles.sectionTitle}>Inscripciones por día y evento</Text>
           {apptsByDayEvent.length === 0 ? (
             <Text style={styles.emptyText}>No hay inscripciones en el rango seleccionado.</Text>
+          ) : isMobile ? (
+            <View style={styles.mList}>
+              {apptsByDayEvent.map((row) => (
+                <View key={`${row.day}|${row.eventName}`} style={styles.mCard}>
+                  <Text style={styles.mTitle}>{row.eventName}</Text>
+                  <Text style={styles.mDate}>{formatDayFull(row.day)}</Text>
+                  <View style={styles.mGrid}>
+                    <View style={styles.mCell}>
+                      <Text style={styles.mLabel}>Inscripciones</Text>
+                      <Text style={styles.mValue}>{row.count}</Text>
+                      <Text style={styles.tdMuted}>{row.wompiCount} por Wompi{row.manualCount > 0 ? ` · ${row.manualCount} manual` : ''}</Text>
+                    </View>
+                    <View style={styles.mCell}>
+                      <Text style={styles.mLabel}>Recaudo</Text>
+                      <Text style={styles.mValue}>{formatCOP(row.revenue)}</Text>
+                      {row.unknown > 0 ? <Text style={styles.tdMuted}>+{row.unknown} sin información</Text> : null}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.table}>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
@@ -340,6 +365,25 @@ export default function StatsScreen() {
           <Text style={styles.sectionTitle}>Suscripciones por día y plan</Text>
           {subsByDayPlan.length === 0 ? (
             <Text style={styles.emptyText}>No hay suscripciones en el rango seleccionado.</Text>
+          ) : isMobile ? (
+            <View style={styles.mList}>
+              {subsByDayPlan.map((row) => (
+                <View key={`${row.day}|${row.plan}`} style={styles.mCard}>
+                  <Text style={styles.mTitle}>{planLabel(row.plan)}</Text>
+                  <Text style={styles.mDate}>{formatDayFull(row.day)}</Text>
+                  <View style={styles.mGrid}>
+                    <View style={styles.mCell}>
+                      <Text style={styles.mLabel}>Suscripciones</Text>
+                      <Text style={styles.mValue}>{row.count}</Text>
+                    </View>
+                    <View style={styles.mCell}>
+                      <Text style={styles.mLabel}>Ingreso</Text>
+                      <Text style={styles.mValue}>{formatCOP(row.revenue)}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.table}>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
@@ -367,6 +411,7 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 24, paddingBottom: 60, maxWidth: 960, width: '100%', alignSelf: 'center' },
+  contentMobile: { padding: 14, paddingBottom: 60 },
   title: { fontSize: 26, fontWeight: 'bold', color: nospiColors.purpleDark },
   subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 16, lineHeight: 19 },
   filterBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10, marginBottom: 24 },
@@ -380,6 +425,7 @@ const styles = StyleSheet.create({
   noteText: { color: '#9CA3AF', fontSize: 11, marginTop: -20, marginBottom: 24, fontStyle: 'italic' },
   cardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
   card: { flexGrow: 1, minWidth: 160, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 16 },
+  cardMobile: { minWidth: 0, flexBasis: '46%', padding: 12 },
   cardValue: { fontSize: 22, fontWeight: 'bold', color: nospiColors.purpleDark },
   cardLabel: { fontSize: 12, color: '#6B7280', marginTop: 4 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111', marginTop: 12, marginBottom: 12 },
@@ -395,4 +441,13 @@ const styles = StyleSheet.create({
   th: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase' },
   td: { fontSize: 13, color: '#111' },
   tdMuted: { fontSize: 10, color: '#9CA3AF', marginTop: 2, fontStyle: 'italic' },
+  // --- tarjetas de celular (reemplazan las tablas debajo de 768px) ---
+  mList: { gap: 10, marginBottom: 28 },
+  mCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', padding: 14 },
+  mTitle: { fontSize: 14.5, fontWeight: '700', color: '#111', lineHeight: 20 },
+  mDate: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  mGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
+  mCell: { flexGrow: 1, flexBasis: '42%', minWidth: 0 },
+  mLabel: { fontSize: 10, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.3 },
+  mValue: { fontSize: 15, fontWeight: '700', color: '#111', marginTop: 2 },
 });
