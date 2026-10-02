@@ -10160,124 +10160,135 @@ setBulkWhatsAppPending(pending);
           );
         })()}
 
-        {selectedEventForMonitoring && (
-          <View style={styles.participantsContainer}>
-            <Text style={styles.participantsTitle}>
-              {events.find(e => e.id === selectedEventForMonitoring)?.type === 'virtual'
-                ? `En la sala (${eventParticipants.length})`
-                : `Participantes Confirmados (${eventParticipants.length})`}
-            </Text>
-            {/* Cuantos siguen en el sitio ahora mismo. Solo aparece cuando hay
-                al menos un reporte: antes del primero no habria nada que decir
-                y un "0 en el sitio" seria enganoso. */}
-            {(() => {
-              const marcas = Object.values(presencia).map(p => p.last_seen_at).filter(Boolean) as string[];
-              if (marcas.length === 0) return null;
-              const dentro = marcas.filter(v => (Date.now() - new Date(v).getTime()) / 60000 <= 12).length;
-              const fuera = marcas.length - dentro;
-              const ultima = marcas.map(v => new Date(v).getTime()).sort((a, b) => b - a)[0];
-              return (
-                <Text style={{ fontSize: 13, color: '#4B5563', marginTop: 2, marginBottom: 8 }}>
-                  <Text style={{ fontWeight: '700', color: '#047857' }}>{dentro}</Text> siguen en el sitio
-                  {fuera > 0 ? ` · ${fuera} ya se fueron` : ''}
-                  {' · última señal '}
-                  {new Date(ultima).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                </Text>
-              );
-            })()}
-            {eventParticipants.map((participant, index) => {
-              // En videollamada estar en la lista solo significa que la persona
-              // toco "Confirmar asistencia": esta en la sala de espera. Lo que
-              // dice que ya entro al Meet es checked_in_at, que vive en el
-              // inscrito, no en event_participants. Sin separarlos, todos salen
-              // como "Presente" aunque nadie haya entrado a la llamada.
-              const esVirtualLista = events.find(e => e.id === selectedEventForMonitoring)?.type === 'virtual';
-              const inscrito: any = monitoringAttendees.find((a: any) => a.user_id === participant.user_id);
-              const enLlamada = !!inscrito?.checked_in_at
-                || (!!inscrito?.arrival_status && inscrito.arrival_status !== 'pending');
-              const checkInStatus = esVirtualLista
-                ? (enLlamada ? '🟢 En la videollamada' : '🟡 En sala de espera')
-                : (participant.is_presented ? '✅ Presente' : '⏳ Pendiente');
-              const checkInColor = esVirtualLista
-                ? (enLlamada ? '#10B981' : '#F59E0B')
-                : (participant.is_presented ? '#10B981' : '#F59E0B');
-              // Hasta que hora se le vio en el sitio. Se considera "sigue ahi"
-              // si reporto en los ultimos 12 minutos: la app avisa cada 5, asi
-              // que dos fallos seguidos todavia no significan que se fue.
-              const visto = presencia[participant.user_id]?.last_seen_at || null;
-              const vistoMin = visto ? (Date.now() - new Date(visto).getTime()) / 60000 : null;
-              const sigueAhi = vistoMin !== null && vistoMin <= 12;
-              const vistoHora = visto
-                ? new Date(visto).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
-                : null;
-              
-              return (
-                <View key={participant.id} style={styles.participantItem}>
-                  <View style={styles.participantHeader}>
-                    <Text style={styles.participantNumber}>#{index + 1}</Text>
-                    <Text style={styles.participantName}>{participant.users?.name || 'Usuario'}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: checkInColor }]}>
-                      <Text style={styles.statusBadgeText}>{checkInStatus}</Text>
-                    </View>
-                    {!!vistoHora && (
-                      <Text style={{ fontSize: 12, color: sigueAhi ? '#047857' : '#9CA3AF', marginLeft: 8, fontWeight: sigueAhi ? '700' : '400' }}>
-                        {sigueAhi ? `en el sitio · ${vistoHora}` : `visto por última vez ${vistoHora}`}
-                      </Text>
-                    )}
+        {/* La lista de gente. Se arma con monitoringAttendees -- los INSCRITOS --
+            y no con event_participants, que solo tiene a quien ya entro. Por eso
+            antes no habia forma de ver quien faltaba: los que no llegan no estan
+            en esa tabla. Los cancelados quedan fuera a proposito: cancelar a
+            tiempo no es lo mismo que no aparecer. */}
+        {selectedEventForMonitoring && (() => {
+          const evSel = events.find(e => e.id === selectedEventForMonitoring);
+          const esVirtualLista = evSel?.type === 'virtual';
+          const cerrado = evSel?.event_status === 'closed';
+          const inscritos = monitoringAttendees.filter((a: any) => a.status !== 'cancelada');
+          const llego = (a: any) => !!a.checked_in_at || (!!a.arrival_status && a.arrival_status !== 'pending');
+          const entraron = inscritos.filter(llego);
+          const faltan = inscritos.filter((a: any) => !llego(a));
+
+          // La hora de entrada a la sala vive en event_participants; la de la
+          // llamada, en la cita. Se juntan aqui para mostrar una sola linea.
+          const horaSala: Record<string, string> = {};
+          eventParticipants.forEach((p: any) => { if (p.check_in_time) horaSala[p.user_id] = p.check_in_time; });
+
+          const hhmm = (v: string) => new Date(v).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+
+          const fila = (a: any, idx: number, vino: boolean) => {
+            const visto = presencia[a.user_id]?.last_seen_at || null;
+            const vistoMin = visto ? (Date.now() - new Date(visto).getTime()) / 60000 : null;
+            const sigueAhi = vistoMin !== null && vistoMin <= 12;
+            const enSala = !!horaSala[a.user_id];
+            const sello = vino
+              ? (esVirtualLista ? '🟢 En la videollamada' : '✅ Llegó')
+              : enSala
+                ? '🟡 En sala de espera'
+                : cerrado ? '🚫 No llegó' : '⏳ Falta';
+            const colorSello = vino ? '#10B981' : enSala ? '#F59E0B' : cerrado ? '#B91C1C' : '#9CA3AF';
+            return (
+              <View key={a.id || a.user_id} style={styles.participantItem}>
+                <View style={styles.participantHeader}>
+                  <Text style={styles.participantNumber}>#{idx + 1}</Text>
+                  <Text style={styles.participantName}>{a.user_name || 'Usuario'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: colorSello }]}>
+                    <Text style={styles.statusBadgeText}>{sello}</Text>
                   </View>
-                  {participant.users && (
-                    <>
-                      <Text style={styles.participantDetail}>📧 {participant.users.email}</Text>
-                      <Text style={styles.participantDetail}>📱 {participant.users.phone}</Text>
-                      {ciudadNoCoincide(events.find(e => e.id === selectedEventForMonitoring), participant.users.city) ? (
-                        <Text style={[styles.participantDetail, { color: '#B91C1C', fontWeight: '700' }]}>
-                          ⚠️ {participant.users.city} — no es la ciudad de este evento
-                        </Text>
-                      ) : (
-                        <Text style={styles.participantDetail}>📍 {participant.users.city}</Text>
-                      )}
-                      {participant.users.phone && (
-                        <a
-                          href={buildWhatsAppLink(
-                            participant.users.phone,
-                            participant.users.name,
-                            nombreLargoEvento(events.find(e => e.id === selectedEventForMonitoring)),
-                            events.find(e => e.id === selectedEventForMonitoring)?.date,
-                            events.find(e => e.id === selectedEventForMonitoring)?.time,
-                            events.find(e => e.id === selectedEventForMonitoring)?.type
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
-                            padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
-                            marginTop: 8,
-                          }}
-                        >
-                          💬 Enviar WhatsApp
-                        </a>
-                      )}
-                    </>
-                  )}
-                  {participant.check_in_time && (
-                    <Text style={styles.participantDetail}>
-                      🕐 {esVirtualLista ? 'Entró a la sala' : 'Check-in'}: {new Date(participant.check_in_time).toLocaleString('es-ES')}
-                    </Text>
-                  )}
-                  {/* En virtual presented_at es el mismo instante en que entro
-                      a la sala, asi que repetirlo como "Presentado" hace creer
-                      que ya esta en la llamada. */}
-                  {participant.presented_at && !esVirtualLista && (
-                    <Text style={styles.participantDetail}>
-                      ✅ Presentado: {new Date(participant.presented_at).toLocaleString('es-ES')}
+                  {!!visto && (
+                    <Text style={{ fontSize: 12, color: sigueAhi ? '#047857' : '#9CA3AF', marginLeft: 8, fontWeight: sigueAhi ? '700' : '400' }}>
+                      {sigueAhi ? `en el sitio · ${hhmm(visto)}` : `visto por última vez ${hhmm(visto)}`}
                     </Text>
                   )}
                 </View>
-              );
-            })}
-          </View>
-        )}
+                <Text style={styles.participantDetail}>
+                  {a.user_gender === 'hombre' ? '👨' : a.user_gender === 'mujer' ? '👩' : '🧑'} {a.user_age || '—'} años
+                </Text>
+                {!!a.user_email && <Text style={styles.participantDetail}>📧 {a.user_email}</Text>}
+                {!!a.user_phone && <Text style={styles.participantDetail}>📱 {a.user_phone}</Text>}
+                {ciudadNoCoincide(evSel, a.user_city) ? (
+                  <Text style={[styles.participantDetail, { color: '#B91C1C', fontWeight: '700' }]}>
+                    ⚠️ {a.user_city} — no es la ciudad de este evento
+                  </Text>
+                ) : (
+                  !!a.user_city && <Text style={styles.participantDetail}>📍 {a.user_city}</Text>
+                )}
+                {!!a.user_phone && (
+                  <a
+                    href={buildWhatsAppLink(a.user_phone, a.user_name, nombreLargoEvento(evSel), evSel?.date, evSel?.time, evSel?.type)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      backgroundColor: '#25D366', color: 'white', textDecoration: 'none',
+                      padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+                      marginTop: 8,
+                    }}
+                  >
+                    💬 Enviar WhatsApp
+                  </a>
+                )}
+                {enSala && (
+                  <Text style={styles.participantDetail}>
+                    🕐 {esVirtualLista ? 'Entró a la sala' : 'Check-in'}: {hhmm(horaSala[a.user_id])}
+                  </Text>
+                )}
+                {vino && !!a.checked_in_at && esVirtualLista && (
+                  <Text style={styles.participantDetail}>
+                    🎥 Entró a la videollamada: {hhmm(a.checked_in_at)}
+                  </Text>
+                )}
+              </View>
+            );
+          };
+
+          return (
+            <View style={styles.participantsContainer}>
+              {/* Los que faltan van ARRIBA: son los accionables, a esos se les
+                  escribe. Con el evento cerrado dejan de ser "falta" y pasan a
+                  ser "no llego", que es el dato que queda para revisar despues. */}
+              {faltan.length > 0 && (
+                <>
+                  <Text style={[styles.participantsTitle, { color: cerrado ? '#B91C1C' : '#B45309' }]}>
+                    {cerrado ? `🚫 No llegaron (${faltan.length})` : `⏳ Faltan por entrar (${faltan.length})`}
+                  </Text>
+                  {faltan.map((a: any, i: number) => fila(a, i, false))}
+                </>
+              )}
+
+              <Text style={[styles.participantsTitle, faltan.length > 0 ? { marginTop: 18 } : null]}>
+                {esVirtualLista ? `🟢 Entraron (${entraron.length})` : `✅ Llegaron (${entraron.length})`}
+              </Text>
+              {/* Cuantos siguen en el sitio ahora mismo. Solo aparece cuando hay
+                  al menos un reporte: antes del primero no habria nada que decir
+                  y un "0 en el sitio" seria enganoso. */}
+              {(() => {
+                const marcas = Object.values(presencia).map(p => p.last_seen_at).filter(Boolean) as string[];
+                if (marcas.length === 0) return null;
+                const dentro = marcas.filter(v => (Date.now() - new Date(v).getTime()) / 60000 <= 12).length;
+                const fuera = marcas.length - dentro;
+                const ultima = marcas.map(v => new Date(v).getTime()).sort((x, y) => y - x)[0];
+                return (
+                  <Text style={{ fontSize: 13, color: '#4B5563', marginTop: 2, marginBottom: 8 }}>
+                    <Text style={{ fontWeight: '700', color: '#047857' }}>{dentro}</Text> siguen en el sitio
+                    {fuera > 0 ? ` · ${fuera} ya se fueron` : ''}
+                    {' · última señal '}
+                    {hhmm(new Date(ultima).toISOString())}
+                  </Text>
+                );
+              })()}
+              {entraron.length === 0 && (
+                <Text style={{ fontSize: 13, color: '#9CA3AF', marginTop: 4 }}>Todavía no ha entrado nadie.</Text>
+              )}
+              {entraron.map((a: any, i: number) => fila(a, i, true))}
+            </View>
+          );
+        })()}
       </View>
     );
   };
