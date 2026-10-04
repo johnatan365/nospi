@@ -108,6 +108,16 @@ const MEDIA_RETENTION_DAYS = 30;
 // Ancho maximo de una foto/video dentro de la burbuja. La altura se calcula
 // con la proporcion real del archivo para que no se vea deformado.
 const MEDIA_MAX_WIDTH = 210;
+
+// La caja de escribir crece con el texto, como en WhatsApp: desde un renglon
+// hasta seis, y de ahi en adelante se queda quieta y hace scroll por dentro.
+// Sin esto solo se veia el renglon donde iba el cursor, asi que para corregir
+// algo de mas arriba habia que adivinar donde estaba.
+//
+// 42 = un renglon (20 de linea + 22 de relleno), y es la misma altura que los
+// botones de los lados, asi los tres quedan alineados.
+const INPUT_ALTURA_MIN = 42;
+const INPUT_ALTURA_MAX = 142;
 const MEDIA_MAX_HEIGHT = 320;
 
 // "12,4 MB" a partir de los bytes, para poder decirle cuanto pesa de mas.
@@ -1645,14 +1655,38 @@ export default function ChatThreadScreen() {
     });
   }, [user?.id, participantsById]);
 
+  // Alto de la caja de escribir EN LA WEB. En iPhone y Android no se usa: ahi
+  // el TextInput de varias lineas ya crece solo entre minHeight y maxHeight.
+  // Un <textarea>, en cambio, nunca crece solo -- hay que medirlo a mano.
+  const [alturaInputWeb, setAlturaInputWeb] = useState(INPUT_ALTURA_MIN);
+  const inputRef = useRef<any>(null);
+
+  // Se pone la altura en 'auto' ANTES de medir: el scrollHeight de un textarea
+  // nunca baja de su altura actual, asi que sin este paso la caja crecia pero
+  // no volvia a encogerse al borrar texto.
+  const medirAlturaWeb = useCallback(() => {
+    if (Platform.OS !== 'web') return;
+    const nodo = inputRef.current as any;
+    if (!nodo || !nodo.style) return;
+    const previa = nodo.style.height;
+    nodo.style.height = 'auto';
+    const medida = nodo.scrollHeight || INPUT_ALTURA_MIN;
+    nodo.style.height = previa;
+    setAlturaInputWeb(Math.max(INPUT_ALTURA_MIN, Math.min(INPUT_ALTURA_MAX, medida)));
+  }, []);
+
   const updateDraft = useCallback((text: string) => {
     setDraft(text);
+    // Al enviar se limpia el borrador: la caja vuelve a un renglon de una vez,
+    // sin esperar a que el navegador vuelva a medir.
+    if (!text) setAlturaInputWeb(INPUT_ALTURA_MIN);
+    else if (Platform.OS === 'web') requestAnimationFrame(medirAlturaWeb);
     const m = text.match(/@([^\s@]{0,25})$/);
     setMentionQuery(m ? m[1] : null);
     if (!conversationId) return;
     if (text) AsyncStorage.setItem(DRAFT_KEY(conversationId), text).catch(() => {});
     else AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
-  }, [conversationId]);
+  }, [conversationId, medirAlturaWeb]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -3393,14 +3427,16 @@ export default function ChatThreadScreen() {
           >
             <Text style={styles.gifShortcutText}>GIF</Text>
           </TouchableOpacity>
-          {/* numberOfLines={1}: en la web una caja de texto de varias lineas se
-              dibuja como un <textarea>, y el navegador le pone DOS renglones de
-              alto por defecto. Por eso el recuadro se veia mas alto que el "+" y
-              el texto quedaba pegado al techo en vez de centrado. Con un solo
-              renglon la altura queda en 42, igual que los botones de los lados. */}
+          {/* Crece con el texto, hasta seis renglones (ver INPUT_ALTURA_MAX).
+              Antes tenia numberOfLines={1} para que en la web el <textarea> no
+              naciera con dos renglones de alto; el problema es que en Android
+              eso ademas lo dejaba clavado en UN renglon, y en la web el estilo
+              le fijaba height: 42, asi que no podia crecer en ninguna parte.
+              Ahora la altura de la web la maneja alturaInputWeb y en nativo
+              crece solo entre minHeight y maxHeight. */}
           <TextInput
-            style={styles.textInput}
-            numberOfLines={1}
+            ref={inputRef}
+            style={[styles.textInput, Platform.OS === 'web' ? { height: alturaInputWeb } : null]}
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
@@ -4696,14 +4732,15 @@ const styles = StyleSheet.create({
     // el input (con <16px, el navegador agranda toda la pagina al escribir,
     // lo que corta los botones de los extremos -- el bug reportado en web).
     fontSize: 16,
-    maxHeight: 100,
+    // Hasta seis renglones; de ahi en adelante hace scroll por dentro.
+    maxHeight: INPUT_ALTURA_MAX,
     marginRight: 8,
     // 42 = la misma altura del boton "+" y del de enviar, asi los tres quedan
-    // alineados. En la web ademas se fija la altura (no solo el minimo) porque
-    // el <textarea> no se estira solo: sin esto vuelve a crecer a dos renglones.
-    minHeight: 42,
+    // alineados cuando hay un solo renglon. La altura de la web va aparte, en
+    // el style del propio TextInput, porque el <textarea> no se estira solo.
+    minHeight: INPUT_ALTURA_MIN,
     ...Platform.select({
-      web: { height: 42, lineHeight: 20, paddingVertical: 11 },
+      web: { lineHeight: 20, paddingVertical: 11 },
       default: {},
     }),
   },
