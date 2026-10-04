@@ -118,14 +118,18 @@ const MEDIA_MAX_WIDTH = 210;
 //
 // 42 = un renglon (20 de linea + 22 de relleno), y es la misma altura que los
 // botones de los lados, asi los tres quedan alineados.
-// Hasta cuantos mensajes sin leer vale la pena abrir el chat ATRAS, en la
-// linea de "no leidos", en vez de abajo en el ultimo mensaje.
+// El chat SIEMPRE abre donde la persona se quedo leyendo, y si no quiere leerlo
+// todo se baja con la flecha de la esquina.
 //
-// Por encima de esto no ayuda: dejar a alguien 200 mensajes atras en la
-// Comunidad no hace que los lea, solo lo deja perdido. Ahi se abre abajo y se
-// le ofrece el salto con un boton, que decida la persona. Ademas solo se cargan
-// los ultimos 50 mensajes, asi que mas atras no se podria saltar sin paginar.
-const UMBRAL_ABRIR_EN_NO_LEIDOS = 30;
+// Pero la primera carga trae solo los ultimos PAGINA mensajes, y hay gente con
+// cientos sin leer: su punto de lectura no viene en esa pagina. Cuando pasa, se
+// extiende hacia atras HASTA la marca con una segunda consulta -- solo para
+// quien lo necesita, no en cada apertura.
+//
+// Y con un techo: sin el, alguien que no entra a la Comunidad en meses abriria
+// el chat cargando miles de mensajes. Si se pasa de aqui se abre en lo mas
+// viejo que se trajo, con "Ver mensajes anteriores" arriba para seguir.
+const MAX_MENSAJES_AL_ABRIR = 250;
 
 const INPUT_ALTURA_MIN = 42;
 const INPUT_ALTURA_MAX = 142;
@@ -953,7 +957,9 @@ export default function ChatThreadScreen() {
   // bajando sola y no se sabria donde se quedo uno.
   const [cortaNoLeidos, setCortaNoLeidos] = useState<string | null>(null);
   const [pendientesAlAbrir, setPendientesAlAbrir] = useState(0);
-  const [ofrecerSalto, setOfrecerSalto] = useState(false);
+  // La flecha de la esquina para bajar al ultimo mensaje. Es state y no ref
+  // porque tiene que repintar al aparecer y desaparecer.
+  const [mostrarBajar, setMostrarBajar] = useState(false);
 
   // El mensaje mas nuevo que de verdad ESTUVO EN PANTALLA. Es lo que se manda
   // al marcar leido, en vez de now(): asi lo que no se vio no queda leido.
@@ -982,20 +988,6 @@ export default function ChatThreadScreen() {
     }
   };
   const alVerItems = useCallback((info: any) => { alVerItemsRef.current?.(info); }, []);
-
-  const saltarAlPrimerNoLeido = useCallback(() => {
-    setOfrecerSalto(false);
-    const i = idPrimerNoLeido ? messages.findIndex((m) => m.id === idPrimerNoLeido) : -1;
-    if (i >= 0) {
-      cercaDelFinalRef.current = false;
-      listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.3 });
-    } else {
-      // El primer no leido quedo fuera de la pagina cargada: se sube a lo mas
-      // viejo que hay, donde esta el boton de "Ver mensajes anteriores".
-      cercaDelFinalRef.current = false;
-      listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    }
-  }, [idPrimerNoLeido, messages]);
 
   // Hasta donde se puede decir honestamente que se leyo.
   //
@@ -1591,27 +1583,61 @@ export default function ChatThreadScreen() {
     const visibles = (hay ? lote.slice(0, PAGINA) : lote).slice().reverse();
 
     // La marca de lectura se congela aqui, antes de pintar: es la que dice
-    // donde va la linea de "no leidos". Solo cuentan los mensajes de OTROS --
-    // los propios nunca estan sin leer.
+    // donde va la linea de "no leidos" y donde abre el chat.
     const corta = (miFila as any)?.last_read_at ?? null;
-    const sinLeer = corta
-      ? visibles.filter((m) => m.sender_id !== user.id && m.created_at > corta).length
-      : visibles.filter((m) => m.sender_id !== user.id).length;
-    setCortaNoLeidos(sinLeer > 0 ? corta : null);
-    setPendientesAlAbrir(sinLeer);
-    // Con muchos pendientes se abre abajo y se ofrece el salto con un boton.
-    setOfrecerSalto(sinLeer > UMBRAL_ABRIR_EN_NO_LEIDOS);
+
+    // Si la marca de lectura es MAS VIEJA que lo que trajimos, el punto donde
+    // se quedo no esta en pantalla. Se extiende hacia atras hasta ahi (con
+    // techo), para poder abrir el chat justo donde lo dejo.
+    let listaFinal = visibles;
+    let quedanAnteriores = hay;
+    if (corta && visibles.length > 0 && visibles[0].created_at > corta) {
+      const faltan = MAX_MENSAJES_AL_ABRIR - visibles.length;
+      if (faltan > 0) {
+        const { data: atras } = await supabase
+          .from('chat_messages')
+          .select(MESSAGE_COLUMNS)
+          // gte y no gt: el mensaje de la marca es el ultimo que SI leyo, y
+          // tenerlo arriba del divisor ayuda a ubicarse.
+          .gte('created_at', corta)
+          .lt('created_at', visibles[0].created_at)
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: false })
+          .limit(faltan + 1);
+        const lote2 = ((atras as Message[]) || []);
+        const hay2 = lote2.length > faltan;
+        const extra = (hay2 ? lote2.slice(0, faltan) : lote2).slice().reverse();
+        if (extra.length > 0) {
+          const yaEstan = new Set(visibles.map((m) => m.id));
+          listaFinal = [...extra.filter((m) => !yaEstan.has(m.id)), ...visibles];
+        }
+        // Si se topo con el techo, todavia hay cosas antes de la marca.
+        quedanAnteriores = hay2 || hay;
+      }
+    }
+
+    // El conteo va sobre la lista YA extendida. Solo cuentan los mensajes de
+    // OTROS: los propios nunca estan sin leer.
+    const sinLeerCargados = corta
+      ? listaFinal.filter((m) => m.sender_id !== user.id && m.created_at > corta).length
+      : listaFinal.filter((m) => m.sender_id !== user.id).length;
+    // Para la etiqueta se prefiere el numero REAL de la lista de chats: si se
+    // topo con el techo, los cargados son menos que los que de verdad hay.
+    const thisConv = (convs || []).find((c: any) => c.conversation_id === conversationId);
+    const sinLeerReal = Number(thisConv?.unread_count ?? 0) || sinLeerCargados;
+
+    setCortaNoLeidos(sinLeerCargados > 0 ? corta : null);
+    setPendientesAlAbrir(Math.max(sinLeerReal, sinLeerCargados));
     yaColoqueInicialRef.current = false;
     maxVistoRef.current = corta;
     vistosRef.current = new Set();
 
-    setMessages(visibles);
-    setHayAnteriores(hay);
+    setMessages(listaFinal);
+    setHayAnteriores(quedanAnteriores);
     setEnTramoViejo(false);
     setFijados((fijadosData as Message[]) || []);
     setParticipants((parts as Participant[]) || []);
 
-    const thisConv = (convs || []).find((c: any) => c.conversation_id === conversationId);
     if (thisConv) {
       setMeta({
         conv_type: thisConv.conv_type,
@@ -3108,16 +3134,17 @@ export default function ChatThreadScreen() {
           onContentSizeChange={() => {
             if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
 
-            // La primera vez decide DONDE abrir. Con pendientes que caben en lo
-            // cargado se abre en la linea de "no leidos"; si no, abajo como
-            // siempre y se ofrece el salto con un boton.
+            // La primera vez decide DONDE abrir: SIEMPRE donde la persona se
+            // quedo leyendo, haya 3 pendientes o 300. Si no quiere leerlos
+            // todos, baja con la flecha de la esquina.
             if (!yaColoqueInicialRef.current && messages.length > 0) {
               yaColoqueInicialRef.current = true;
-              if (pendientesAlAbrir > 0 && pendientesAlAbrir <= UMBRAL_ABRIR_EN_NO_LEIDOS && idPrimerNoLeido) {
+              if (idPrimerNoLeido) {
                 const i = messages.findIndex((m) => m.id === idPrimerNoLeido);
                 if (i >= 0) {
                   cercaDelFinalRef.current = false;
-                  listRef.current?.scrollToIndex({ index: i, animated: false, viewPosition: 0.3 });
+                  setMostrarBajar(true);
+                  listRef.current?.scrollToIndex({ index: i, animated: false, viewPosition: 0.25 });
                   return;
                 }
               }
@@ -3136,6 +3163,10 @@ export default function ChatThreadScreen() {
             // 120 px de margen: con menos, el rebote del desplazamiento la
             // marcaba como "arriba" estando practicamente abajo.
             cercaDelFinalRef.current = desdeElFinal < 120;
+            // La flecha para bajar: solo cuando hay algo abajo que no se ve.
+            // El margen es mas ancho que el de arriba para que no parpadee al
+            // rebotar el desplazamiento.
+            setMostrarBajar(desdeElFinal > 220);
           }}
           scrollEventThrottle={100}
           onScrollToIndexFailed={(info) => {
@@ -3468,6 +3499,33 @@ export default function ChatThreadScreen() {
           }
         />
 
+        {/* Flecha para bajar al ultimo mensaje. El chat abre siempre donde la
+            persona se quedo leyendo, asi que esta es la salida para quien no
+            quiere leerselo todo. Flota sobre la lista para no robarle alto, y
+            solo aparece cuando de verdad hay algo abajo que no se ve. */}
+        {mostrarBajar && (
+          <TouchableOpacity
+            style={styles.bajarAlFinal}
+            onPress={() => {
+              toque();
+              cercaDelFinalRef.current = true;
+              setMostrarBajar(false);
+              listRef.current?.scrollToEnd({ animated: true });
+            }}
+            activeOpacity={0.85}
+            accessibilityLabel="Ir al último mensaje"
+          >
+            <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="keyboard-arrow-down" size={22} color="#FFFFFF" />
+            {pendientesAlAbrir > 0 && (
+              <View style={styles.bajarGlobo}>
+                <Text style={styles.bajarGloboTexto}>
+                  {pendientesAlAbrir > 99 ? '99+' : pendientesAlAbrir}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
         {mentionSuggestions.length > 0 && (
           <View style={styles.mentionBar}>
             <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 190 }}>
@@ -3565,21 +3623,7 @@ export default function ChatThreadScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Muchos pendientes: el chat abrio abajo (dejar a alguien 200 mensajes
-            atras no le sirve) y aqui se le ofrece el salto, que decida. Se
-            esconde al tocarlo. */}
-        {ofrecerSalto && !enTramoViejo && (
-          <TouchableOpacity
-            style={styles.irANoLeidos}
-            onPress={() => { toque(); saltarAlPrimerNoLeido(); }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.volverAlFinalTexto}>↑ {pendientesAlAbrir} sin leer</Text>
-            <TouchableOpacity onPress={() => setOfrecerSalto(false)} hitSlop={10} style={{ marginLeft: 10 }}>
-              <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
+
 
         {solicitudParaMi ? (
           // Solicitud que me llego: hay que decidir antes de conversar. El campo
@@ -4952,13 +4996,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
   },
   volverAlFinalTexto: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  // Mismo aspecto que "Ir a los mensajes recientes", para que se lean como lo
-  // que son: dos atajos de navegacion dentro de la conversacion.
-  irANoLeidos: {
-    alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
-    backgroundColor: nospiColors.purpleDark, borderRadius: 20,
-    paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
+  // Flecha redonda flotante, abajo a la derecha. Flota (position absolute)
+  // para no quitarle alto al chat, que con el teclado abierto ya va justo.
+  bajarAlFinal: {
+    position: 'absolute', right: 14, bottom: 14,
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: nospiColors.purpleDark,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 5,
   },
+  // El globito con cuantos quedan sin leer, pegado arriba de la flecha.
+  bajarGlobo: {
+    position: 'absolute', top: -5, right: -4, minWidth: 19, height: 19,
+    borderRadius: 10, backgroundColor: '#E91E63',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5,
+  },
+  bajarGloboTexto: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   // Linea de "no leidos". Raya a los lados y el texto en medio, como WhatsApp.
   divisorNoLeidos: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
