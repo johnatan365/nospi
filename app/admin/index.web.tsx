@@ -176,15 +176,31 @@ interface AdminChatMessage {
   content: string;
   created_at: string;
   media_path?: string | null;
-  media_kind?: 'image' | 'video' | null;
+  media_kind?: 'image' | 'video' | 'audio' | null;
   media_mime?: string | null;
   media_size?: number | null;
+  media_duration?: number | null;
+  // Las fotos y videos se borran solos al mes; las notas de voz se quedan.
+  media_expired?: boolean | null;
   hidden_at?: string | null;
 }
 
 // Bucket privado de las fotos y videos del chat: el admin tiene permiso para
 // firmarlos (politica "chat media: admins pueden ver") y asi poder moderar.
 const CHAT_MEDIA_BUCKET = 'chat-media';
+
+// Los GIFs guardan el enlace publico de GIPHY en media_path, no una ruta del
+// bucket. Firmarlo devuelve basura y el GIF no se ve: hay que usarlo tal cual.
+// Mismo criterio que esEnlaceDirecto en app/chat/[conversationId].tsx.
+const esEnlaceDirecto = (path?: string | null) =>
+  !!path && /^(https?|file|blob|data|content):/.test(path);
+
+// Segundos a "0:19", para la nota de voz.
+const duracionCorta = (seg?: number | null) => {
+  if (!seg || seg <= 0) return '';
+  const total = Math.round(seg);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
 const CHAT_MEDIA_TTL_SECONDS = 60 * 60;
 
 interface AdminDirectConversation {
@@ -1537,15 +1553,19 @@ export default function AdminPanelScreen() {
 
   // loadPollResults se define mas abajo; el ref evita el orden de declaracion.
   const loadPollResultsRef = useRef<((msgs: any[]) => void) | null>(null);
+  // Lo mismo con signChatMedia: los visores de canales y grupos se declaran
+  // antes que ella, y sin esto habria que reordenar medio archivo.
+  const signChatMediaRef = useRef<((msgs: AdminChatMessage[] | null) => void) | null>(null);
 
   const loadChannelMessages = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, sender_id, content, created_at, is_system, media_kind, poll_id, hidden_at')
+      .select('id, sender_id, content, created_at, is_system, media_path, media_kind, media_mime, media_duration, media_expired, poll_id, hidden_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
     if (error) { console.error('Error cargando mensajes del canal:', error); return; }
     setChannelMessages(data || []);
+    signChatMediaRef.current?.(data as any);
     loadPollResultsRef.current?.(data || []);
   }, []);
 
@@ -1677,11 +1697,12 @@ export default function AdminPanelScreen() {
   const loadGroupChatMessages = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, sender_id, content, created_at, is_system, media_kind')
+      .select('id, sender_id, content, created_at, is_system, media_path, media_kind, media_mime, media_duration, media_expired')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
     if (error) { console.error('Error cargando mensajes:', error); return; }
     setGroupChatMessages(data || []);
+    signChatMediaRef.current?.(data as any);
   }, []);
 
   const sendGroupChatMessage = async () => {
@@ -1882,8 +1903,16 @@ export default function AdminPanelScreen() {
   // Pide los enlaces firmados de los adjuntos de una tanda de mensajes. Sin
   // esto las fotos no cargan: el bucket es privado.
   const signChatMedia = useCallback(async (msgs: AdminChatMessage[] | null) => {
+    // Se excluyen los GIFs (ya traen enlace publico) y los caducados, cuyo
+    // archivo ya no existe: pedir su firma era una peticion condenada a fallar
+    // que dejaba la burbuja en "cargando..." para siempre.
     const paths = Array.from(
-      new Set((msgs || []).map((m) => m.media_path).filter(Boolean) as string[])
+      new Set(
+        (msgs || [])
+          .filter((m) => !m.media_expired && !esEnlaceDirecto(m.media_path))
+          .map((m) => m.media_path)
+          .filter(Boolean) as string[]
+      )
     );
     if (paths.length === 0) return;
     const { data, error } = await supabase.storage
@@ -1898,6 +1927,8 @@ export default function AdminPanelScreen() {
       return next;
     });
   }, []);
+
+  useEffect(() => { signChatMediaRef.current = signChatMedia; }, [signChatMedia]);
 
   // Baja el archivo como blob (el enlace firmado es de otro origen, asi que el
   // atributo download no basta) y lo guarda, o lo pasa a la hoja de compartir
@@ -1928,17 +1959,40 @@ export default function AdminPanelScreen() {
   };
 
   // Pinta el adjunto de un mensaje dentro de la burbuja del panel.
+  //
+  // La idea es poder MODERAR sin descargar: la foto se ve, el video y la nota
+  // de voz se reproducen ahi mismo. Antes solo habia rama de foto y video, asi
+  // que una nota de voz caia en la de foto y salia una imagen rota.
   const renderChatMedia = (msg: AdminChatMessage) => {
     if (!msg.media_path) return null;
-    const url = chatMediaUrls[msg.media_path];
-    if (!url) {
+
+    // El archivo ya se borro (las fotos y videos duran un mes). Se dice, en vez
+    // de dejar la burbuja esperando un enlace que no va a llegar.
+    if (msg.media_expired) {
       return (
-        <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>
-          {msg.media_kind === 'video' ? '🎥 Video (cargando...)' : '📷 Foto (cargando...)'}
+        <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4, fontStyle: 'italic' }}>
+          🗑️ El archivo ya caducó y se borró del servidor
         </Text>
       );
     }
-    const filename = (msg.media_path || '').split('/').pop() || (msg.media_kind === 'video' ? 'video.mp4' : 'foto.jpg');
+
+    // Los GIFs vienen con enlace publico de GIPHY: se usan sin firmar.
+    const url = esEnlaceDirecto(msg.media_path)
+      ? msg.media_path
+      : chatMediaUrls[msg.media_path];
+    if (!url) {
+      return (
+        <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>
+          {msg.media_kind === 'video' ? '🎥 Video (cargando...)'
+            : msg.media_kind === 'audio' ? '🎤 Nota de voz (cargando...)'
+            : '📷 Foto (cargando...)'}
+        </Text>
+      );
+    }
+    const filename = (msg.media_path || '').split('/').pop()
+      || (msg.media_kind === 'video' ? 'video.mp4'
+        : msg.media_kind === 'audio' ? 'nota-de-voz.m4a'
+        : 'foto.jpg');
     const acciones = (
       <View style={{ flexDirection: 'row', gap: 14, marginBottom: 6 }}>
         <TouchableOpacity onPress={() => downloadChatMedia(url, filename, false)}>
@@ -1949,6 +2003,27 @@ export default function AdminPanelScreen() {
         </TouchableOpacity>
       </View>
     );
+    // Nota de voz: el reproductor del navegador basta y trae barra, volumen y
+    // velocidad. Al lado va la duracion, para saber si son 5 segundos o 2 min
+    // antes de darle play.
+    if (msg.media_kind === 'audio') {
+      const dur = duracionCorta(msg.media_duration);
+      return (
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            {React.createElement('audio', {
+              src: url,
+              controls: true,
+              preload: 'metadata',
+              style: { height: 34, width: 230, display: 'block' },
+            })}
+            {!!dur && <Text style={{ fontSize: 11, fontWeight: '700', color: '#6B7280' }}>{dur}</Text>}
+          </View>
+          {acciones}
+        </View>
+      );
+    }
+
     if (msg.media_kind === 'video') {
       return (
         <View>
@@ -7154,9 +7229,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             </Text>
                           )}
                           {m.poll_id ? renderPollCard(m.poll_id, mine) : (
-                            <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
-                              {m.content}
-                            </Text>
+                            <>
+                              {renderChatMedia(m as AdminChatMessage)}
+                              {!!(m.content || '').trim() && (
+                                <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
+                                  {m.content}
+                                </Text>
+                              )}
+                            </>
                           )}
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 3 }}>
                             <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
@@ -7398,9 +7478,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                             {usersById[m.sender_id]?.name || (m.is_system ? 'Equipo Nospi' : 'Participante')}
                           </Text>
                         )}
-                        <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
-                          {m.media_kind ? `📎 ${m.media_kind}${m.content ? ' · ' + m.content : ''}` : m.content}
-                        </Text>
+                        {renderChatMedia(m as AdminChatMessage)}
+                        {!!(m.content || '').trim() && (
+                          <Text style={{ fontSize: 12.5, color: mine ? '#FFFFFF' : '#1f2937', lineHeight: 17 }}>
+                            {m.content}
+                          </Text>
+                        )}
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
                           <TouchableOpacity onPress={() => abrirVistos(m.id, m.content || '')}>
                             <Text style={{ fontSize: 9.5, fontWeight: '700', color: mine ? 'rgba(255,255,255,0.85)' : '#880E4F' }}>👁 Ver quién lo vio</Text>
