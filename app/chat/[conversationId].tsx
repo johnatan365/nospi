@@ -4453,7 +4453,7 @@ export default function ChatThreadScreen() {
               }}
               accessibilityLabel="Ver todos los emojis"
             >
-              <MaterialIcons name="add" size={19} color={nospiColors.purpleDark} />
+              <MaterialIcons name="add" size={22} color={nospiColors.purpleDark} />
             </TouchableOpacity>
           </View>
           {/* Se puede desplazar por si el menu completo no cabe ni arriba ni
@@ -4942,6 +4942,10 @@ const styles = StyleSheet.create({
   },
   reactionBar: {
     flexDirection: 'row',
+    // Sin esto los hijos se ESTIRAN al alto de la fila (alignItems por defecto
+    // es 'stretch'). Con los emojis no se nota porque llenan ese alto, pero el
+    // "+" es un icono de 22 y quedaba pegado arriba.
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 28,
     paddingHorizontal: 8,
@@ -4954,7 +4958,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  reactionBarBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20 },
+  reactionBarBtn: {
+    paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
   reactionBarBtnActive: { backgroundColor: '#FCE4EC' },
   reactionBarEmoji: { fontSize: 26 },
   reactionChips: { flexDirection: 'row', gap: 4, marginTop: -6, marginBottom: 8 },
@@ -5453,7 +5460,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   // El "+" se distingue de los emojis: fondo gris claro y el signo en vinotinto.
-  reactionBarMas: { backgroundColor: '#F3F4F6' },
+  // Circulo de lado fijo para que quede del tamano de un emoji y no mas chico;
+  // el paddingHorizontal del boton generico lo dejaria ovalado.
+  reactionBarMas: {
+    backgroundColor: '#F3F4F6',
+    width: 34, height: 34, borderRadius: 17,
+    paddingHorizontal: 0, paddingVertical: 0,
+  },
   // Alto fijo (70% de la pantalla) y no "lo que ocupe": son mas de mil emojis,
   // asi que sin tope la hoja taparia la pantalla entera.
   emojiSheet: {
