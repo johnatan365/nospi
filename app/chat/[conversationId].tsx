@@ -3125,8 +3125,22 @@ export default function ChatThreadScreen() {
           </TouchableOpacity>
         )}
 
+        {/* La lista y la flecha van juntas en este contenedor a proposito: la
+            flecha flota en el area de LA LISTA, que termina justo encima de la
+            barra de escribir. Antes flotaba en el contenedor de toda la
+            pantalla, con bottom: 14, y quedaba detras del boton del microfono.
+            Un bottom fijo mas grande tampoco servia: la barra crece con el
+            texto (hasta 142) y ademas la empujan otras barras --responder,
+            subiendo archivos, menciones, canal cerrado--, asi que el numero
+            correcto cambia todo el tiempo. */}
+        <View style={styles.areaLista}>
         <FlatList
           ref={listRef}
+          // flex:1 explicito: antes la lista era hija directa del contenedor de
+          // la pantalla y heredaba el alto que quedaba. Ahora va dentro de
+          // areaLista, y sin esto un ScrollView toma el alto de su CONTENIDO y
+          // se desborda cuando la conversacion es larga.
+          style={{ flex: 1 }}
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesContainer}
@@ -3525,6 +3539,7 @@ export default function ChatThreadScreen() {
             )}
           </TouchableOpacity>
         )}
+        </View>
 
         {mentionSuggestions.length > 0 && (
           <View style={styles.mentionBar}>
@@ -4998,8 +5013,11 @@ const styles = StyleSheet.create({
   volverAlFinalTexto: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   // Flecha redonda flotante, abajo a la derecha. Flota (position absolute)
   // para no quitarle alto al chat, que con el teclado abierto ya va justo.
+  // Ocupa lo que quede entre la cabecera y la barra de escribir. Es el marco
+  // de referencia de la flecha.
+  areaLista: { flex: 1 },
   bajarAlFinal: {
-    position: 'absolute', right: 14, bottom: 14,
+    position: 'absolute', right: 14, bottom: 12,
     width: 42, height: 42, borderRadius: 21,
     backgroundColor: nospiColors.purpleDark,
     alignItems: 'center', justifyContent: 'center',
