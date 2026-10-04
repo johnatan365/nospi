@@ -374,7 +374,7 @@ function FilaEscribiendo({
       <View style={styles.pilaCaras}>
         {caras.map((q, i) => (
           <View key={`${q.user_id}-${i}`} style={[styles.caraPila, i > 0 && styles.caraPilaEncimada]}>
-            <ChatAvatar uri={q.foto} name={q.nombre} size={20} onPress={onTocarCara(q.user_id)} />
+            <ChatAvatar uri={q.foto} name={q.nombre} size={26} onPress={onTocarCara(q.user_id)} />
           </View>
         ))}
         {sobran > 0 && (
@@ -964,7 +964,18 @@ export default function ChatThreadScreen() {
   // congelado: si se moviera mientras se lee, la linea de "no leidos" iria
   // bajando sola y no se sabria donde se quedo uno.
   const [cortaNoLeidos, setCortaNoLeidos] = useState<string | null>(null);
+  // Dos contadores, y la diferencia importa:
+  //
+  //  pendientesAlAbrir  se congela al abrir. Es el de la linea divisoria
+  //                     ("10 mensajes sin leer"), que marca DONDE se quedo uno
+  //                     y por eso no debe moverse mientras se lee.
+  //
+  //  pendientesVivos    baja a medida que los mensajes pasan por pantalla. Es
+  //                     el del globito de la flecha. Antes el globito usaba el
+  //                     congelado, asi que uno leia los 10, bajaba, volvia a
+  //                     subir y la flecha seguia diciendo "10 sin leer".
   const [pendientesAlAbrir, setPendientesAlAbrir] = useState(0);
+  const [pendientesVivos, setPendientesVivos] = useState(0);
   // La flecha de la esquina para bajar al ultimo mensaje. Es state y no ref
   // porque tiene que repintar al aparecer y desaparecer.
   const [mostrarBajar, setMostrarBajar] = useState(false);
@@ -1000,6 +1011,15 @@ export default function ChatThreadScreen() {
       if (v?.item?.id) vistosRef.current.add(v.item.id);
       if (ts && (!maxVistoRef.current || ts > maxVistoRef.current)) maxVistoRef.current = ts;
     }
+    // Cuantos quedan sin leer DE VERDAD: los de otros, posteriores a la marca,
+    // que todavia no han pasado por pantalla.
+    if (!cortaNoLeidos || !user?.id) return;
+    const quedan = messages.filter(
+      (m) => m.sender_id !== user.id && m.created_at > cortaNoLeidos && !vistosRef.current.has(m.id),
+    ).length;
+    // Solo si cambio: esto se dispara en cada desplazamiento y repintar la
+    // pantalla por un numero igual no sirve de nada.
+    setPendientesVivos((prev) => (prev === quedan ? prev : quedan));
   };
   const alVerItems = useCallback((info: any) => { alVerItemsRef.current?.(info); }, []);
 
@@ -1642,6 +1662,7 @@ export default function ChatThreadScreen() {
 
     setCortaNoLeidos(sinLeerCargados > 0 ? corta : null);
     setPendientesAlAbrir(Math.max(sinLeerReal, sinLeerCargados));
+    setPendientesVivos(Math.max(sinLeerReal, sinLeerCargados));
     yaColoqueInicialRef.current = false;
     maxVistoRef.current = corta;
     vistosRef.current = new Set();
@@ -3551,10 +3572,10 @@ export default function ChatThreadScreen() {
             accessibilityLabel="Ir al último mensaje"
           >
             <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="keyboard-arrow-down" size={22} color="#FFFFFF" />
-            {pendientesAlAbrir > 0 && (
+            {pendientesVivos > 0 && (
               <View style={styles.bajarGlobo}>
                 <Text style={styles.bajarGloboTexto}>
-                  {pendientesAlAbrir > 99 ? '99+' : pendientesAlAbrir}
+                  {pendientesVivos > 99 ? '99+' : pendientesVivos}
                 </Text>
               </View>
             )}
@@ -5113,25 +5134,35 @@ const styles = StyleSheet.create({
   bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
   // ── "Fulano esta escribiendo", al final de la lista ──────────────────────
   // Una sola fila, siempre: con una persona o con ocho mide lo mismo.
-  filaEscribiendo: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2, marginBottom: 4 },
+  //
+  // Las medidas son LAS MISMAS que las de un mensaje de verdad, a proposito.
+  // Al principio eran mas pequenas en todo --foto 20 contra 26, relleno 9/12
+  // contra 10/14, esquina 13 contra 18, 4 px de separacion contra 10-- y el
+  // problema no era que fuera pequena en si: era mas pequena que TODO lo que
+  // tenia alrededor, asi que el ojo no la registraba y quedaba pegada a la
+  // barra de escribir. Igualada al mensaje se lee como lo que es, "viene un
+  // mensaje", y cuesta 14 px de alto.
+  filaEscribiendo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 10 },
   pilaCaras: { flexDirection: 'row', alignItems: 'center' },
   // El borde del color del fondo recorta la cara de atras y deja claro que
-  // estan encimadas a proposito, no mal alineadas.
-  caraPila: { borderRadius: 11, borderWidth: 2, borderColor: nospiColors.purpleDark },
-  caraPilaEncimada: { marginLeft: -8 },
+  // estan encimadas a proposito, no mal alineadas. 15 = (26 de la foto + 2 de
+  // borde por lado) / 2.
+  caraPila: { borderRadius: 15, borderWidth: 2, borderColor: nospiColors.purpleDark },
+  caraPilaEncimada: { marginLeft: -9 },
   caraMas: {
-    width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center', justifyContent: 'center',
   },
-  caraMasTexto: { color: '#FFFFFF', fontSize: 9, fontWeight: '800' },
+  caraMasTexto: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' },
   burbujaPuntos: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: 13, borderBottomLeftRadius: 4,
-    paddingVertical: 9, paddingHorizontal: 12,
+    // 18 y la esquina de abajo recortada: identico a la burbuja de un mensaje.
+    borderRadius: 18, borderBottomLeftRadius: 5,
+    paddingVertical: 11, paddingHorizontal: 15,
   },
-  puntoEscribiendo: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.75)' },
-  textoEscribiendo: { flexShrink: 1, color: '#F8BBD0', fontSize: 11, fontWeight: '600' },
+  puntoEscribiendo: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(255,255,255,0.75)' },
+  textoEscribiendo: { flexShrink: 1, color: '#F8BBD0', fontSize: 12.5, fontWeight: '600' },
   volverAlFinal: {
     alignSelf: 'center', backgroundColor: nospiColors.purpleDark, borderRadius: 20,
     paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
