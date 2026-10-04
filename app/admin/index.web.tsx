@@ -9643,6 +9643,12 @@ setBulkWhatsAppPending(pending);
   const renderRealtime = () => {
     // En Vivo responde dos preguntas: que esta corriendo AHORA y que viene en
     // las proximas 24 horas. La RPC marca cada fila con una u otra.
+    //
+    // "Ahora" llega hasta que el evento se CIERRA (cron de las 12:05 a.m. o a
+    // mano desde el admin), no hasta 3 horas despues de empezar como antes:
+    // entre esas dos cosas habia un hueco de horas en el que el evento no
+    // aparecia en ninguna parte, y es justo cuando hay que corregir la
+    // asistencia antes de que el cierre marque las inasistencias.
     const vivos = eventosEnVivo.filter((e: any) => e.estado === 'vivo');
     const proximos = eventosEnVivo.filter((e: any) => e.estado !== 'vivo');
     const cerrados = events.filter(e => e.event_status === 'closed');
@@ -9661,7 +9667,9 @@ setBulkWhatsAppPending(pending);
         {/* Muro de eventos en vivo. Reemplaza al desplegable como forma de
             entrar: cuando hay varios eventos a la misma hora, ver cual arranco
             y cual sigue trabado no deberia costar tres clics. La ventana de
-            "en vivo" (45 min antes, 3 h despues) vive en la RPC, no aqui. */}
+            "en vivo" (desde 45 min antes hasta que el evento se cierre) vive en
+            la RPC, no aqui. Los mas recientes salen primero, que es lo que de
+            verdad esta corriendo. */}
         {vivos.length > 0 && (
           <View style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
