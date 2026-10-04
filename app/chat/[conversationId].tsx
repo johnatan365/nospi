@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -116,6 +116,15 @@ const MEDIA_MAX_WIDTH = 210;
 //
 // 42 = un renglon (20 de linea + 22 de relleno), y es la misma altura que los
 // botones de los lados, asi los tres quedan alineados.
+// Hasta cuantos mensajes sin leer vale la pena abrir el chat ATRAS, en la
+// linea de "no leidos", en vez de abajo en el ultimo mensaje.
+//
+// Por encima de esto no ayuda: dejar a alguien 200 mensajes atras en la
+// Comunidad no hace que los lea, solo lo deja perdido. Ahi se abre abajo y se
+// le ofrece el salto con un boton, que decida la persona. Ademas solo se cargan
+// los ultimos 50 mensajes, asi que mas atras no se podria saltar sin paginar.
+const UMBRAL_ABRIR_EN_NO_LEIDOS = 30;
+
 const INPUT_ALTURA_MIN = 42;
 const INPUT_ALTURA_MAX = 142;
 const MEDIA_MAX_HEIGHT = 320;
@@ -863,6 +872,93 @@ export default function ChatThreadScreen() {
   const [escribiendo, setEscribiendo] = useState<Record<string, { nombre: string; ts: number }>>({});
   const canalRef = useRef<any>(null);
   const ultimoAvisoRef = useRef(0);
+
+  // ── Donde abrir el chat y hasta donde marcar leido ────────────────────────
+  //
+  // `cortaNoLeidos` es mi last_read_at EN EL MOMENTO DE ABRIR, y se queda
+  // congelado: si se moviera mientras se lee, la linea de "no leidos" iria
+  // bajando sola y no se sabria donde se quedo uno.
+  const [cortaNoLeidos, setCortaNoLeidos] = useState<string | null>(null);
+  const [pendientesAlAbrir, setPendientesAlAbrir] = useState(0);
+  const [ofrecerSalto, setOfrecerSalto] = useState(false);
+
+  // El mensaje mas nuevo que de verdad ESTUVO EN PANTALLA. Es lo que se manda
+  // al marcar leido, en vez de now(): asi lo que no se vio no queda leido.
+  const maxVistoRef = useRef<string | null>(null);
+  // La colocacion inicial se hace una sola vez, en el primer onContentSizeChange.
+  const yaColoqueInicialRef = useRef(false);
+
+  // El id del primer mensaje sin leer: delante de el va la linea divisoria.
+  // null si no hay pendientes o si ya no esta en lo cargado.
+  const idPrimerNoLeido = useMemo(() => {
+    if (!cortaNoLeidos || !user?.id) return null;
+    const m = messages.find((x) => x.sender_id !== user.id && x.created_at > cortaNoLeidos);
+    return m ? m.id : null;
+  }, [messages, cortaNoLeidos, user?.id]);
+
+  // Que mensajes estuvieron en pantalla. onViewableItemsChanged tiene que ser
+  // una referencia ESTABLE o React Native avisa en consola, asi que la funcion
+  // va en un ref y el handler nunca cambia.
+  const vistosRef = useRef<Set<string>>(new Set());
+  const alVerItemsRef = useRef<any>(null);
+  alVerItemsRef.current = ({ viewableItems }: any) => {
+    for (const v of viewableItems || []) {
+      const ts = v?.item?.created_at;
+      if (v?.item?.id) vistosRef.current.add(v.item.id);
+      if (ts && (!maxVistoRef.current || ts > maxVistoRef.current)) maxVistoRef.current = ts;
+    }
+  };
+  const alVerItems = useCallback((info: any) => { alVerItemsRef.current?.(info); }, []);
+
+  const saltarAlPrimerNoLeido = useCallback(() => {
+    setOfrecerSalto(false);
+    const i = idPrimerNoLeido ? messages.findIndex((m) => m.id === idPrimerNoLeido) : -1;
+    if (i >= 0) {
+      cercaDelFinalRef.current = false;
+      listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.3 });
+    } else {
+      // El primer no leido quedo fuera de la pagina cargada: se sube a lo mas
+      // viejo que hay, donde esta el boton de "Ver mensajes anteriores".
+      cercaDelFinalRef.current = false;
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }
+  }, [idPrimerNoLeido, messages]);
+
+  // Hasta donde se puede decir honestamente que se leyo.
+  //
+  // last_read_at es UNA sola fecha, asi que marcar "hasta el mas nuevo que vi"
+  // marcaria de paso todo lo anterior. En un chat abierto abajo con 200
+  // pendientes, ver el ultimo mensaje borraria los 200 -- justo lo que se
+  // queria evitar.
+  //
+  // Por eso la marca avanza solo de forma CONTIGUA: desde donde se habia
+  // quedado, mientras cada mensaje siguiente haya estado en pantalla. Si se
+  // salto el hueco, la marca no lo cruza y esos mensajes siguen pendientes.
+  const hastaDondeLei = useCallback((): string | null => {
+    const vistos = vistosRef.current;
+    const corta = cortaNoLeidos;
+    // Sin pendientes al abrir: basta con lo mas nuevo que se vio.
+    if (!corta) return maxVistoRef.current;
+
+    let marca: string | null = corta;
+    for (const m of messages) {
+      if (m.created_at <= corta) continue;        // ya estaba leido
+      if (m.sender_id === user?.id) { marca = m.created_at; continue; }  // lo propio no cuenta
+      if (!vistos.has(m.id)) break;              // aqui se corto la lectura
+      marca = m.created_at;
+    }
+    return marca;
+  }, [messages, cortaNoLeidos, user?.id]);
+
+  const marcarLeido = useCallback((hasta?: string | null) => {
+    if (!conversationId) return;
+    const p_hasta = hasta ?? hastaDondeLei();
+    // Nada que marcar: no se vio ni un mensaje (y la funcion trataria el null
+    // como "hasta ahora", que es lo que se quiere evitar).
+    if (!p_hasta) return;
+    supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId, p_hasta })
+      .then(() => {}, (err: unknown) => console.error('ChatThread: error marcando leido', err));
+  }, [conversationId, hastaDondeLei]);
   const [ahora, setAhora] = useState(Date.now());
 
   // Un reloj lento solo mientras haya alguien escribiendo: sirve para que el
@@ -1376,7 +1472,7 @@ export default function ChatThreadScreen() {
   const loadEverything = useCallback(async () => {
     if (!conversationId || !user?.id) return;
 
-    const [{ data: msgs, error: msgsError }, { data: parts, error: partsError }, { data: convs }, { data: fijadosData }] =
+    const [{ data: msgs, error: msgsError }, { data: parts, error: partsError }, { data: convs }, { data: miFila }, { data: fijadosData }] =
       await Promise.all([
         // Solo la ultima pagina, no la conversacion entera.
         //
@@ -1393,6 +1489,15 @@ export default function ChatThreadScreen() {
           .limit(PAGINA + 1),
         supabase.rpc('get_conversation_participants', { p_conversation_id: conversationId }),
         supabase.rpc('get_my_conversations'),
+        // Mi propia marca de lectura: es la que decide donde va la linea de
+        // "no leidos" y si el chat abre atras o abajo. La politica de la tabla
+        // ya deja leer la fila propia (user_id = auth.uid()).
+        supabase
+          .from('chat_participants')
+          .select('last_read_at')
+          .eq('conversation_id', conversationId)
+          .eq('user_id', user.id)
+          .maybeSingle(),
         // Los fijados van aparte justamente porque pueden ser mas viejos que la
         // pagina cargada; si dependieran de la lista, la banda de arriba se
         // vaciaria al paginar.
@@ -1411,6 +1516,22 @@ export default function ChatThreadScreen() {
     const lote = ((msgs as Message[]) || []);
     const hay = lote.length > PAGINA;
     const visibles = (hay ? lote.slice(0, PAGINA) : lote).slice().reverse();
+
+    // La marca de lectura se congela aqui, antes de pintar: es la que dice
+    // donde va la linea de "no leidos". Solo cuentan los mensajes de OTROS --
+    // los propios nunca estan sin leer.
+    const corta = (miFila as any)?.last_read_at ?? null;
+    const sinLeer = corta
+      ? visibles.filter((m) => m.sender_id !== user.id && m.created_at > corta).length
+      : visibles.filter((m) => m.sender_id !== user.id).length;
+    setCortaNoLeidos(sinLeer > 0 ? corta : null);
+    setPendientesAlAbrir(sinLeer);
+    // Con muchos pendientes se abre abajo y se ofrece el salto con un boton.
+    setOfrecerSalto(sinLeer > UMBRAL_ABRIR_EN_NO_LEIDOS);
+    yaColoqueInicialRef.current = false;
+    maxVistoRef.current = corta;
+    vistosRef.current = new Set();
+
     setMessages(visibles);
     setHayAnteriores(hay);
     setEnTramoViejo(false);
@@ -1434,7 +1555,10 @@ export default function ChatThreadScreen() {
     }
 
     setLoading(false);
-    await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+    // OJO: aqui NO se marca leido. Antes se hacia, y era justo el problema: se
+    // abria el chat, bajaba al ultimo mensaje y todo lo que no se vio quedaba
+    // leido. Ahora lo marca onViewableItemsChanged, con lo que de verdad
+    // estuvo en pantalla, y se guarda al salir.
   }, [conversationId, user]);
 
   useEffect(() => {
@@ -1732,7 +1856,9 @@ export default function ChatThreadScreen() {
             delete copia[newMsg.sender_id];
             return copia;
           });
-          await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
+          // Llego un mensaje con el chat abierto: si se esta mirando el final,
+          // se ve de inmediato, asi que cuenta como leido hasta el.
+          if (cercaDelFinalRef.current) marcarLeido(newMsg.created_at);
           // Solo si ya estaba abajo. Que llegue un mensaje mientras lees algo
           // de antes no es motivo para sacarte de donde estas.
           if (cercaDelFinalRef.current) {
@@ -2604,17 +2730,10 @@ export default function ChatThreadScreen() {
   const handleBack = () => {
     // Marcar leído NO debe bloquear la navegación (antes se hacía await y si el
     // RPC se demoraba, la flecha "no respondía"). Se dispara en segundo plano.
-    if (conversationId) {
-      // El builder de supabase-js es un PromiseLike, no una Promise completa:
-      // no tiene .catch(). El manejo del error va como segundo argumento de
-      // .then(), que es lo que PromiseLike si expone. Con .catch() el error se
-      // perdia en silencio y ademas TypeScript lo marcaba.
-      supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId })
-        .then(
-          () => {},
-          (err: unknown) => console.error('ChatThread: error marking conversation read', err),
-        );
-    }
+    //
+    // Se marca HASTA EL MENSAJE MAS NUEVO QUE ESTUVO EN PANTALLA, no hasta
+    // ahora: lo que no se vio sigue contando como pendiente.
+    marcarLeido();
     // Si no hay pantalla anterior en la pila (se entró por notificación, deep
     // link o desde el pop-up de match con router.push), router.back() no hace
     // nada. En ese caso vamos a la lista de chats.
@@ -2914,8 +3033,24 @@ export default function ChatThreadScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesContainer}
+          onViewableItemsChanged={alVerItems}
           onContentSizeChange={() => {
             if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
+
+            // La primera vez decide DONDE abrir. Con pendientes que caben en lo
+            // cargado se abre en la linea de "no leidos"; si no, abajo como
+            // siempre y se ofrece el salto con un boton.
+            if (!yaColoqueInicialRef.current && messages.length > 0) {
+              yaColoqueInicialRef.current = true;
+              if (pendientesAlAbrir > 0 && pendientesAlAbrir <= UMBRAL_ABRIR_EN_NO_LEIDOS && idPrimerNoLeido) {
+                const i = messages.findIndex((m) => m.id === idPrimerNoLeido);
+                if (i >= 0) {
+                  cercaDelFinalRef.current = false;
+                  listRef.current?.scrollToIndex({ index: i, animated: false, viewPosition: 0.3 });
+                  return;
+                }
+              }
+            }
             // Solo se baja sola si la persona ya estaba mirando el final. Si
             // subio a leer algo -o salto desde una cita-, se la deja donde
             // esta. Antes bajaba siempre, y como esto se dispara CADA vez que
@@ -2953,6 +3088,18 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           ) : null}
           renderItem={({ item }) => {
+            // Linea de "no leidos": va DELANTE del primer mensaje sin leer, y
+            // se queda quieta mientras el chat este abierto (la marca que la
+            // decide se congelo al abrir).
+            const divisorNoLeidos = item.id === idPrimerNoLeido ? (
+              <View style={styles.divisorNoLeidos}>
+                <View style={styles.divisorNoLeidosRaya} />
+                <Text style={styles.divisorNoLeidosTexto}>
+                  {pendientesAlAbrir === 1 ? '1 mensaje sin leer' : `${pendientesAlAbrir} mensajes sin leer`}
+                </Text>
+                <View style={styles.divisorNoLeidosRaya} />
+              </View>
+            ) : null;
             const isMine = item.sender_id === user?.id;
             const isSystem = item.sender_id === NOSPI_SYSTEM_USER_ID;
             const sender = participantsById[item.sender_id];
@@ -2977,6 +3124,7 @@ export default function ChatThreadScreen() {
 
             return (
               <>
+              {divisorNoLeidos}
               <View style={[styles.messageRow, isMine ? styles.messageRowMine : styles.messageRowTheirs]}>
                 {showSenderInfo && !isSystem && (
                   <ChatAvatar
@@ -3325,6 +3473,22 @@ export default function ChatThreadScreen() {
         {enTramoViejo && (
           <TouchableOpacity style={styles.volverAlFinal} onPress={() => { toque(); loadEverything(); }} activeOpacity={0.85}>
             <Text style={styles.volverAlFinalTexto}>↓ Ir a los mensajes recientes</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Muchos pendientes: el chat abrio abajo (dejar a alguien 200 mensajes
+            atras no le sirve) y aqui se le ofrece el salto, que decida. Se
+            esconde al tocarlo. */}
+        {ofrecerSalto && !enTramoViejo && (
+          <TouchableOpacity
+            style={styles.irANoLeidos}
+            onPress={() => { toque(); saltarAlPrimerNoLeido(); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.volverAlFinalTexto}>↑ {pendientesAlAbrir} sin leer</Text>
+            <TouchableOpacity onPress={() => setOfrecerSalto(false)} hitSlop={10} style={{ marginLeft: 10 }}>
+              <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
 
@@ -4679,6 +4843,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
   },
   volverAlFinalTexto: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  // Mismo aspecto que "Ir a los mensajes recientes", para que se lean como lo
+  // que son: dos atajos de navegacion dentro de la conversacion.
+  irANoLeidos: {
+    alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
+    backgroundColor: nospiColors.purpleDark, borderRadius: 20,
+    paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
+  },
+  // Linea de "no leidos". Raya a los lados y el texto en medio, como WhatsApp.
+  divisorNoLeidos: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 6, marginBottom: 12,
+  },
+  divisorNoLeidosRaya: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.25)' },
+  divisorNoLeidosTexto: {
+    color: '#F8BBD0', fontSize: 11.5, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.4,
+  },
   buscarBarra: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEE' },
   buscarInput: { flex: 1, fontSize: 16, color: '#1F2937', paddingVertical: 4 },
   buscarAyuda: { color: '#9CA3AF', fontSize: 13, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
