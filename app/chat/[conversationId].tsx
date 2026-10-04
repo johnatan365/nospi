@@ -34,6 +34,11 @@ import { toque, toqueFuerte, error as hapticoError } from '@/lib/haptics';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
+// Para los checks se usa MaterialIcons DIRECTO y no IconSymbol: el doble
+// check de verdad ('done-all') solo existe en el set de Material, y en iPhone
+// IconSymbol usa SF Symbols, que no tiene equivalente. MaterialIcons es una
+// fuente, asi que se ve igual en iPhone, Android y web.
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import {
   gifsBuscar,
@@ -3458,10 +3463,17 @@ export default function ChatThreadScreen() {
                         significan nada para quien lo lee. */}
                     {isMine && !item.pending && (() => {
                       const e = checksDe(item);
+                      // Antes eran dos palitos de texto ('✓✓') pegados con
+                      // letterSpacing negativo. Nunca quedo bien: el
+                      // letterSpacing se comporta distinto en cada plataforma y
+                      // se seguian viendo como dos marcas sueltas. 'done-all' ES
+                      // el doble check, un solo glifo, igual que en WhatsApp.
                       return (
-                        <Text style={[styles.checks, e === 'leido' && styles.checksLeido]}>
-                          {e === 'enviado' ? '✓' : '✓✓'}
-                        </Text>
+                        <MaterialIcons
+                          name={e === 'enviado' ? 'done' : 'done-all'}
+                          size={15}
+                          color={e === 'leido' ? '#7FD3FF' : 'rgba(255,255,255,0.65)'}
+                        />
                       );
                     })()}
                   </View>
@@ -3772,7 +3784,19 @@ export default function ChatThreadScreen() {
             placeholder="Escribe un mensaje..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
-                        onChangeText={(text) => { if (text.endsWith('\n')) { const trimmed = text.slice(0, -1); updateDraft(trimmed); if (pendingAssets.length > 0) { handleSendAll(); } else { handleSend(trimmed); } } else { updateDraft(text); if (text.trim()) avisarQueEscribo(); } }}
+            // Enter hace un salto de linea, no envia.
+            //
+            // Antes, cualquier texto que terminara en \n disparaba el envio: era
+            // la forma de que Enter mandara el mensaje. El costo es que se
+            // volvia imposible escribir un mensaje de varios parrafos -- al
+            // intentar bajar un renglon, el mensaje salia a medias.
+            //
+            // Para enviar esta el boton de la derecha. Es como funciona WhatsApp
+            // en el celular.
+            onChangeText={(text) => {
+              updateDraft(text);
+              if (text.trim()) avisarQueEscribo();
+            }}
             multiline
             maxLength={2000}
           />
@@ -5077,12 +5101,9 @@ const styles = StyleSheet.create({
   infoNombre: { fontSize: 14, color: nospiColors.gray800, flex: 1 },
   infoHora: { fontSize: 11.5, color: nospiColors.gray400 },
   infoVacio: { fontSize: 13, color: nospiColors.gray400, textAlign: 'center', paddingVertical: 22 },
-  // letterSpacing negativo para que los dos palitos se peguen como en WhatsApp
-  // en vez de parecer dos marcas sueltas.
-  checks: { fontSize: 11, color: 'rgba(255,255,255,0.65)', letterSpacing: -2.5 },
-  // Azul claro y no el azul de WhatsApp: sobre el vinotinto de la burbuja
-  // propia, el azul oscuro se pierde.
-  checksLeido: { color: '#7FD3FF' },
+  // Los checks ya no son texto sino el icono 'done' / 'done-all' de Material
+  // (ver la burbuja). El azul del leido es claro y no el de WhatsApp: sobre el
+  // vinotinto de la burbuja propia, el azul oscuro se pierde.
   emptyMessages: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 40 },
   emptyMessagesText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' },
   replyPreview: {
