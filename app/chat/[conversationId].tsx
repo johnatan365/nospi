@@ -271,11 +271,21 @@ function initialsOf(name?: string | null): string {
 // Avatar de usuario con respaldo: si no hay foto o si la foto FALLA al cargar
 // (onError), muestra la inicial del nombre en un círculo, en vez de quedar en
 // blanco. Esto arregla el "a veces carga, a veces no" de las fotos del chat.
+// alignTop: pega la foto ARRIBA de la burbuja, a la altura del nombre, en vez
+// de abajo. La fila del mensaje alinea al final (alignItems: 'flex-end') porque
+// eso es lo correcto para la burbuja, pero arrastraba tambien la foto: en un
+// mensaje de varias lineas el nombre quedaba arriba y el circulito alla abajo,
+// sin relacion visible entre los dos.
+//
+// El marginTop de 3 lo centra con el renglon del nombre: la burbuja tiene 10 de
+// relleno arriba y el nombre mide unos 13, asi que su centro cae a ~16,5 -- y el
+// de una foto de 26 cae a 13.
 function ChatAvatar({
-  uri, name, size, marginRight = 0, onPress,
-}: { uri: string | null; name: string; size: number; marginRight?: number; onPress?: () => void }) {
+  uri, name, size, marginRight = 0, onPress, alignTop = false,
+}: { uri: string | null; name: string; size: number; marginRight?: number; onPress?: () => void; alignTop?: boolean }) {
   const [failed, setFailed] = useState(false);
   const box = { width: size, height: size, borderRadius: size / 2, marginRight } as const;
+  const fuera = alignTop ? { alignSelf: 'flex-start' as const, marginTop: 3 } : null;
   const inner = uri && !failed ? (
     // cache 'force-cache': una vez descargada, la foto se reusa desde el cache
     // (no se vuelve a bajar al salir y volver al chat) -> queda estática.
@@ -286,9 +296,9 @@ function ChatAvatar({
     </View>
   );
   if (onPress) {
-    return <TouchableOpacity onPress={onPress} activeOpacity={0.8}>{inner}</TouchableOpacity>;
+    return <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={fuera}>{inner}</TouchableOpacity>;
   }
-  return inner;
+  return alignTop ? <View style={fuera}>{inner}</View> : inner;
 }
 
 // Detecta URLs (http/https o que empiecen por www.) para poder abrirlas al tocar.
@@ -2813,30 +2823,38 @@ export default function ChatThreadScreen() {
             {/* En el privado, el titulo ES el nombre de la otra persona, asi
                 que tambien abre su ficha. En grupos y canales es el nombre del
                 evento y no hay ficha que abrir. */}
-            <Text
-              style={styles.headerTitle}
-              numberOfLines={1}
-              onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
-              suppressHighlighting={!otherParticipant}
-            >
-              {headerTitle}
-            </Text>
-            {/* Quien esta escribiendo. Va DEBAJO del nombre y no encima del
-                cuadro de texto: asi no mueve la lista de mensajes al aparecer
-                y desaparecer, que es lo que hace WhatsApp. */}
-            {(() => {
-              // Caduca a los 4 s sin refresco. Quien cierra la app a mitad de
-              // una palabra no manda ningun "ya pare", asi que el aviso tiene
-              // que apagarse solo o se queda pegado.
-              const activos = Object.values(escribiendo).filter((e) => ahora - e.ts < 4000);
-              if (activos.length === 0) return null;
-              const texto = activos.length === 1
-                ? `${activos[0].nombre} está escribiendo…`
-                : activos.length === 2
-                ? `${activos[0].nombre} y ${activos[1].nombre} están escribiendo…`
-                : 'Varios están escribiendo…';
-              return <Text style={styles.headerEscribiendo} numberOfLines={1}>{texto}</Text>;
-            })()}
+            {/* El nombre y el "esta escribiendo" van en COLUMNA: headerCenter
+                es una fila (para dejar la foto a la izquierda), asi que sin
+                esta envoltura el aviso salia AL LADO del nombre, no debajo. Y
+                como el nombre lleva flexShrink y el aviso no, el nombre se
+                quedaba con todo el ancho y el aviso se exprimia a cero: el
+                texto se pintaba pero no se veia nunca. */}
+            <View style={styles.headerTitleColumna}>
+              <Text
+                style={styles.headerTitle}
+                numberOfLines={1}
+                onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
+                suppressHighlighting={!otherParticipant}
+              >
+                {headerTitle}
+              </Text>
+              {/* Quien esta escribiendo. Va DEBAJO del nombre y no encima del
+                  cuadro de texto: asi no mueve la lista de mensajes al aparecer
+                  y desaparecer, que es lo que hace WhatsApp. */}
+              {(() => {
+                // Caduca a los 4 s sin refresco. Quien cierra la app a mitad de
+                // una palabra no manda ningun "ya pare", asi que el aviso tiene
+                // que apagarse solo o se queda pegado.
+                const activos = Object.values(escribiendo).filter((e) => ahora - e.ts < 4000);
+                if (activos.length === 0) return null;
+                const texto = activos.length === 1
+                  ? `${activos[0].nombre} está escribiendo…`
+                  : activos.length === 2
+                  ? `${activos[0].nombre} y ${activos[1].nombre} están escribiendo…`
+                  : 'Varios están escribiendo…';
+                return <Text style={styles.headerEscribiendo} numberOfLines={1}>{texto}</Text>;
+              })()}
+            </View>
           </View>
 
           <TouchableOpacity onPress={() => { toque(); setBuscando(true); }} style={styles.headerActionButton}>
@@ -2966,6 +2984,7 @@ export default function ChatThreadScreen() {
                     name={senderName}
                     size={26}
                     marginRight={6}
+                    alignTop
                     // Abre la ficha, no el visor de fotos. Funciona aunque la
                     // persona no tenga foto: el nombre y la edad son lo que se
                     // quiere ver.
@@ -2973,7 +2992,7 @@ export default function ChatThreadScreen() {
                   />
                 )}
                 {showSenderInfo && isSystem && (
-                  <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+                  <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder, { alignSelf: 'flex-start', marginTop: 3 }]}>
                     <Text style={{ fontSize: 14 }}>📣</Text>
                   </View>
                 )}
@@ -4424,6 +4443,9 @@ const styles = StyleSheet.create({
   directChatBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingVertical: 10, marginHorizontal: 12, marginBottom: 8, borderRadius: 10 },
   directChatBannerText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  // Columna del nombre + "esta escribiendo". flexShrink para que un nombre
+  // largo se siga cortando con puntos suspensivos y no empuje los botones.
+  headerTitleColumna: { flexShrink: 1 },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
   headerAvatarPlaceholder: {
     width: 32,
