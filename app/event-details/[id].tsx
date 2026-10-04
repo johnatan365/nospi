@@ -266,7 +266,20 @@ export default function EventDetailsScreen() {
   };
 
   const handleConfirm = async () => {
-    if (requiresWaiver(event?.type) && !waiverAccepted) return;
+    // Antes esto era un `return` mudo y el boton ademas iba `disabled`: quien no
+    // veia la casilla tocaba "Confirmar Asistencia" y NO pasaba absolutamente
+    // nada — ni mensaje, ni vibracion, ni pantalla. Una usuaria escribio a
+    // soporte el 4 de octubre de 2026 diciendo "no me lleva a transferir o
+    // gestionar el tramite"; nunca habia llegado a la pasarela. Ahora el boton
+    // siempre responde y dice que falta marcar la casilla.
+    if (requiresWaiver(event?.type) && !waiverAccepted) {
+      aviso();
+      const msg = event?.type === 'bolos'
+        ? 'Para reservar primero marca la casilla de arriba confirmando que leíste que la pista y los zapatos se pagan aparte en la bolera.'
+        : 'Para reservar primero marca la casilla de arriba aceptando participar bajo tu propia responsabilidad.';
+      if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Falta un paso', msg); }
+      return;
+    }
 
     // Reservar es LA accion de la app: el golpecito va aqui, al tocar, no al
     // final del proceso de pago, para que se sienta que el boton respondio.
@@ -617,7 +630,11 @@ export default function EventDetailsScreen() {
                   (confirming || (requiresWaiver(event.type) && !waiverAccepted)) && styles.confirmButtonDisabled,
                 ]}
                 onPress={handleConfirm}
-                disabled={confirming || (requiresWaiver(event.type) && !waiverAccepted)}
+                // Solo `confirming` bloquea el toque. Si tambien bloqueara por la
+                // casilla, handleConfirm nunca correria y el aviso de arriba no
+                // llegaria a verse: el boton se veria apagado y mudo otra vez.
+                // El estilo apagado se conserva como pista de que falta algo.
+                disabled={confirming}
                 activeOpacity={0.8}
               >
                 {confirming ? (
