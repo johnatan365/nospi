@@ -21,7 +21,9 @@ import {
 // app usa edge-to-edge: la ventana ya no se encoge al abrir el teclado. Este
 // otro mide el teclado de verdad y funciona igual en las dos plataformas.
 import { KeyboardAvoidingView, useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Reanimated, { useAnimatedStyle } from 'react-native-reanimated';
+import Reanimated, {
+  useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withDelay,
+} from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -308,6 +310,77 @@ function ChatAvatar({
     return <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={fuera}>{inner}</TouchableOpacity>;
   }
   return alignTop ? <View style={fuera}>{inner}</View> : inner;
+}
+
+// Uno de los tres puntitos que saltan. Va en su propio componente porque cada
+// uno necesita sus propios hooks de animacion: meterlos en un bucle dentro del
+// padre romperia las reglas de los hooks.
+function PuntoQueSalta({ retraso }: { retraso: number }) {
+  const y = useSharedValue(0);
+  useEffect(() => {
+    y.value = withDelay(retraso, withRepeat(
+      withSequence(withTiming(-4, { duration: 300 }), withTiming(0, { duration: 500 })),
+      -1, false,
+    ));
+  }, [retraso, y]);
+  const estilo = useAnimatedStyle(() => ({
+    transform: [{ translateY: y.value }],
+    opacity: 0.55 + (-y.value / 4) * 0.45,
+  }));
+  return <Reanimated.View style={[styles.puntoEscribiendo, estilo]} />;
+}
+
+// "Fulano esta escribiendo", al final de la lista de mensajes.
+//
+// UNA SOLA FILA, pase lo que pase: hasta tres caras encimadas y el resto como
+// "+N". Con una burbuja por persona, cuatro a la vez se comen unos 140 px --
+// con el teclado abierto, casi la mitad de lo que queda visible-- y en la
+// Comunidad (233 personas) podrian ser ocho. Asi el alto es el mismo con una
+// que con ocho, y solo hay una cosa animandose en pantalla.
+const CARAS_MAX = 3;
+
+function FilaEscribiendo({
+  quienes, onTocarCara,
+}: {
+  quienes: { user_id: string; nombre: string; foto: string | null }[];
+  // Tocar la cara abre la ficha de esa persona, igual que en las burbujas y en
+  // la cabecera. Devuelve undefined si no se tiene cargada: entonces no se
+  // puede abrir nada y la foto no responde al toque.
+  onTocarCara: (userId: string) => (() => void) | undefined;
+}) {
+  if (quienes.length === 0) return null;
+  const caras = quienes.slice(0, CARAS_MAX);
+  const sobran = quienes.length - caras.length;
+  // El nombre solo cuando cabe y sirve. De tres en adelante el numero se lee
+  // mas rapido que tres nombres, y no desborda.
+  const texto = quienes.length === 1
+    ? quienes[0].nombre
+    : quienes.length === 2
+    ? `${quienes[0].nombre} y ${quienes[1].nombre}`
+    : `${quienes.length} escribiendo`;
+
+  return (
+    <View style={styles.filaEscribiendo}>
+      <View style={styles.pilaCaras}>
+        {caras.map((q, i) => (
+          <View key={`${q.user_id}-${i}`} style={[styles.caraPila, i > 0 && styles.caraPilaEncimada]}>
+            <ChatAvatar uri={q.foto} name={q.nombre} size={20} onPress={onTocarCara(q.user_id)} />
+          </View>
+        ))}
+        {sobran > 0 && (
+          <View style={[styles.caraPila, styles.caraPilaEncimada, styles.caraMas]}>
+            <Text style={styles.caraMasTexto}>+{sobran}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.burbujaPuntos}>
+        <PuntoQueSalta retraso={0} />
+        <PuntoQueSalta retraso={180} />
+        <PuntoQueSalta retraso={360} />
+      </View>
+      <Text style={styles.textoEscribiendo} numberOfLines={1}>{texto}</Text>
+    </View>
+  );
 }
 
 // Detecta URLs (http/https o que empiecen por www.) para poder abrirlas al tocar.
@@ -869,7 +942,7 @@ export default function ChatThreadScreen() {
   // Se recuerda CUANDO aviso cada quien, no un si/no, porque si alguien cierra
   // la app a mitad de una palabra no llega ningun "ya pare" y el aviso se
   // quedaria pegado para siempre. Al no refrescarse, caduca solo.
-  const [escribiendo, setEscribiendo] = useState<Record<string, { nombre: string; ts: number }>>({});
+  const [escribiendo, setEscribiendo] = useState<Record<string, { nombre: string; foto: string | null; ts: number }>>({});
   const canalRef = useRef<any>(null);
   const ultimoAvisoRef = useRef(0);
 
@@ -1782,10 +1855,14 @@ export default function ChatThreadScreen() {
     canalRef.current.send({
       type: 'broadcast',
       event: 'escribiendo',
-      // El nombre viaja en el aviso para no obligar a quien lo recibe a
-      // buscarlo: en un grupo puede llegar de alguien que todavia no tiene
-      // cargado en su lista de participantes.
-      payload: { user_id: user.id, nombre: participantsById[user.id]?.name || 'Alguien' },
+      // El nombre y la foto viajan en el aviso para no obligar a quien lo
+      // recibe a buscarlos: en un grupo puede llegar de alguien que todavia no
+      // tiene cargado en su lista de participantes.
+      payload: {
+        user_id: user.id,
+        nombre: participantsById[user.id]?.name || 'Alguien',
+        foto: participantsById[user.id]?.profile_photo_url || null,
+      },
     });
   }, [user?.id, participantsById]);
 
@@ -1894,11 +1971,17 @@ export default function ChatThreadScreen() {
         () => { loadReactions(); }
       )
       .on('broadcast', { event: 'escribiendo' }, ({ payload }) => {
-        const p = payload as { user_id?: string; nombre?: string };
+        const p = payload as { user_id?: string; nombre?: string; foto?: string | null };
         if (!p?.user_id || p.user_id === user?.id) return;   // lo propio no cuenta
         setEscribiendo((prev) => ({
           ...prev,
-          [p.user_id!]: { nombre: p.nombre || 'Alguien', ts: Date.now() },
+          [p.user_id!]: {
+            nombre: p.nombre || 'Alguien',
+            // Si ya tenemos a la persona cargada, se prefiere su foto local:
+            // esta cacheada y evita descargarla otra vez.
+            foto: participantsByIdRef.current[p.user_id!]?.profile_photo_url ?? p.foto ?? null,
+            ts: Date.now(),
+          },
         }));
       })
       .subscribe();
@@ -2957,22 +3040,10 @@ export default function ChatThreadScreen() {
               >
                 {headerTitle}
               </Text>
-              {/* Quien esta escribiendo. Va DEBAJO del nombre y no encima del
-                  cuadro de texto: asi no mueve la lista de mensajes al aparecer
-                  y desaparecer, que es lo que hace WhatsApp. */}
-              {(() => {
-                // Caduca a los 4 s sin refresco. Quien cierra la app a mitad de
-                // una palabra no manda ningun "ya pare", asi que el aviso tiene
-                // que apagarse solo o se queda pegado.
-                const activos = Object.values(escribiendo).filter((e) => ahora - e.ts < 4000);
-                if (activos.length === 0) return null;
-                const texto = activos.length === 1
-                  ? `${activos[0].nombre} está escribiendo…`
-                  : activos.length === 2
-                  ? `${activos[0].nombre} y ${activos[1].nombre} están escribiendo…`
-                  : 'Varios están escribiendo…';
-                return <Text style={styles.headerEscribiendo} numberOfLines={1}>{texto}</Text>;
-              })()}
+              {/* El "esta escribiendo" ya NO va aqui: se movio al final de la
+                  lista de mensajes, como una burbuja mas (ver FilaEscribiendo y
+                  el ListFooterComponent). Abajo es donde la persona tiene los
+                  ojos mientras escribe. */}
             </View>
           </View>
 
@@ -3076,6 +3147,24 @@ export default function ChatThreadScreen() {
               listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 250);
           }}
+          ListFooterComponent={(() => {
+            // Caduca a los 4 s sin refresco. Quien cierra la app a mitad de una
+            // palabra no manda ningun "ya pare", asi que el aviso tiene que
+            // apagarse solo o se queda pegado.
+            const activos = Object.entries(escribiendo)
+              .filter(([, e]) => ahora - e.ts < 4000)
+              .map(([uid, e]) => ({ user_id: uid, nombre: e.nombre, foto: e.foto }));
+            if (activos.length === 0) return null;
+            return (
+              <FilaEscribiendo
+                quienes={activos}
+                onTocarCara={(uid) => {
+                  const p = participantsById[uid];
+                  return p ? () => setPerfilVisto(p) : undefined;
+                }}
+              />
+            );
+          })()}
           ListHeaderComponent={hayAnteriores ? (
             <TouchableOpacity
               onPress={cargarAnteriores}
@@ -4837,7 +4926,27 @@ const styles = StyleSheet.create({
   // un cambio de fondo porque el fondo distingue quien escribio -propio vs
   // ajeno- y pisarlo confundiria de quien es el mensaje.
   bubbleResaltada: { borderWidth: 2, borderColor: '#F06292' },
-  headerEscribiendo: { color: '#F8BBD0', fontSize: 12, marginTop: 1 },
+  // ── "Fulano esta escribiendo", al final de la lista ──────────────────────
+  // Una sola fila, siempre: con una persona o con ocho mide lo mismo.
+  filaEscribiendo: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2, marginBottom: 4 },
+  pilaCaras: { flexDirection: 'row', alignItems: 'center' },
+  // El borde del color del fondo recorta la cara de atras y deja claro que
+  // estan encimadas a proposito, no mal alineadas.
+  caraPila: { borderRadius: 11, borderWidth: 2, borderColor: nospiColors.purpleDark },
+  caraPilaEncimada: { marginLeft: -8 },
+  caraMas: {
+    width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  caraMasTexto: { color: '#FFFFFF', fontSize: 9, fontWeight: '800' },
+  burbujaPuntos: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 13, borderBottomLeftRadius: 4,
+    paddingVertical: 9, paddingHorizontal: 12,
+  },
+  puntoEscribiendo: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.75)' },
+  textoEscribiendo: { flexShrink: 1, color: '#F8BBD0', fontSize: 11, fontWeight: '600' },
   volverAlFinal: {
     alignSelf: 'center', backgroundColor: nospiColors.purpleDark, borderRadius: 20,
     paddingVertical: 8, paddingHorizontal: 16, marginBottom: 8,
