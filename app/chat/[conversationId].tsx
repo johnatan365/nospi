@@ -979,6 +979,9 @@ export default function ChatThreadScreen() {
   // La flecha de la esquina para bajar al ultimo mensaje. Es state y no ref
   // porque tiene que repintar al aparecer y desaparecer.
   const [mostrarBajar, setMostrarBajar] = useState(false);
+  // A cuantos pixeles del final esta la vista. Se usa para traer a la vista el
+  // aviso de "esta escribiendo", que es lo ultimo de la lista.
+  const distanciaDelFinalRef = useRef(0);
 
   // Selector de emojis completo (el boton "+" de la barra de reacciones).
   // Guarda el mensaje al que se le va a reaccionar, porque el menu de acciones
@@ -1067,6 +1070,25 @@ export default function ChatThreadScreen() {
     if (Object.keys(escribiendo).length === 0) return;
     const t = setInterval(() => setAhora(Date.now()), 1000);
     return () => clearInterval(t);
+  }, [escribiendo]);
+
+  // El aviso de "esta escribiendo" es lo ULTIMO de la lista, asi que si la
+  // vista esta un poco subida aparece por debajo del borde y no se ve.
+  //
+  // El desplazamiento automatico de onContentSizeChange no alcanzaba: usa un
+  // margen de 120 px, y basta estar 150 arriba --algo que pasa a cada rato, con
+  // una foto que carga o despues de leer el ultimo mensaje-- para que no haga
+  // nada. Aqui el margen es de 400: si se esta leyendo cerca del final, se baja
+  // a mostrarlo; si se esta arriba leyendo historia, no se mueve nada.
+  const habiaAlguienRef = useRef(false);
+  useEffect(() => {
+    const hayAlguien = Object.keys(escribiendo).length > 0;
+    const apenasAparecio = hayAlguien && !habiaAlguienRef.current;
+    habiaAlguienRef.current = hayAlguien;
+    if (!apenasAparecio) return;
+    if (distanciaDelFinalRef.current > 400) return;
+    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(t);
   }, [escribiendo]);
 
   // ── Checks de WhatsApp ────────────────────────────────────────────────────
@@ -3212,6 +3234,9 @@ export default function ChatThreadScreen() {
             // 120 px de margen: con menos, el rebote del desplazamiento la
             // marcaba como "arriba" estando practicamente abajo.
             cercaDelFinalRef.current = desdeElFinal < 120;
+            // La distancia exacta, no solo el si/no: la usa el aviso de
+            // "esta escribiendo" para decidir si vale la pena bajar a mostrarlo.
+            distanciaDelFinalRef.current = desdeElFinal;
             // La flecha para bajar: solo cuando hay algo abajo que no se ve.
             // El margen es mas ancho que el de arriba para que no parpadee al
             // rebotar el desplazamiento.
@@ -4913,7 +4938,10 @@ const styles = StyleSheet.create({
   // Mismo caso que en la lista de chats: el de videollamada va mas grande.
   headerEventIconAncho: { width: 24, height: 24, tintColor: '#880E4F' },
   headerTitle: { flexShrink: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', textAlign: 'left' },
-  messagesContainer: { paddingHorizontal: 16, paddingVertical: 12, flexGrow: 1 },
+  // paddingBottom mas grande que el de arriba a proposito: lo ultimo de la
+  // lista --el ultimo mensaje, o el aviso de "esta escribiendo"-- queda pegado
+  // a la barra de escribir con solo 12, y se lee como si estuviera cortado.
+  messagesContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
   messageRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', width: '100%' },
   messageRowMine: { justifyContent: 'flex-end' },
   messageRowTheirs: { justifyContent: 'flex-start' },
