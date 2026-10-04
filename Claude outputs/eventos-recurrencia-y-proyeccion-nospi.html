@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qué eventos generan recurrencia</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f7f5f6; --surface:#ffffff; --surface-2:#faf8f9;
+    --ink:#121014; --ink-2:#55505a; --ink-3:#8b8491;
+    --line:#e7e2e9; --line-2:#d6cfda;
+    --brand:#AD1457;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --good:#0f7b4f; --warn:#b06a00; --bad:#c02a2a;
+    --good-bg:#e7f5ee; --warn-bg:#fdf3e2; --bad-bg:#fdeaea;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg:#131215; --surface:#1c1a1f; --surface-2:#232028;
+      --ink:#ffffff; --ink-2:#c6c0cd; --ink-3:#938c9c;
+      --line:#302c37; --line-2:#413b4a;
+      --brand:#f2779f;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+      --good:#4cc08a; --warn:#e0a44a; --bad:#f07070;
+      --good-bg:#15291f; --warn-bg:#2d2213; --bad-bg:#2e1717;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#131215; --surface:#1c1a1f; --surface-2:#232028;
+    --ink:#ffffff; --ink-2:#c6c0cd; --ink-3:#938c9c;
+    --line:#302c37; --line-2:#413b4a;
+    --brand:#f2779f;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#4cc08a; --warn:#e0a44a; --bad:#f07070;
+    --good-bg:#15291f; --warn-bg:#2d2213; --bad-bg:#2e1717;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 16px 80px}
+  .eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--brand);font-weight:800}
+  h1{font-size:clamp(26px,5vw,38px);line-height:1.15;margin:8px 0 10px;letter-spacing:-.02em}
+  .sub{color:var(--ink-2);font-size:15px;max-width:64ch}
+  h2{font-size:21px;margin:46px 0 4px;letter-spacing:-.01em;padding-top:22px;border-top:1px solid var(--line)}
+  h2 .num{color:var(--brand);font-variant-numeric:tabular-nums;margin-right:10px}
+  h3{font-size:15.5px;margin:26px 0 8px}
+  p{margin:10px 0}
+  .muted{color:var(--ink-2)}
+  small{font-size:12.5px;color:var(--ink-3);display:block;margin-top:7px;line-height:1.5}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+  .verdict{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:12px;padding:20px 22px;margin:22px 0}
+  .verdict p:first-child{margin-top:0} .verdict p:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0 4px}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);
+    padding:8px 10px;border-bottom:1.5px solid var(--line-2);font-weight:700}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tableScroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:4px 6px}
+  .nm{font-weight:650}
+  .em{font-size:12px;color:var(--ink-3)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:7px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .pill.ok{background:var(--good-bg);color:var(--good)}
+  .pill.wr{background:var(--warn-bg);color:var(--warn)}
+  .pill.bd{background:var(--bad-bg);color:var(--bad)}
+  .pill.nt{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+  .barRow{display:grid;grid-template-columns:128px 1fr auto;gap:12px;align-items:center;padding:5px 0}
+  .barRow .k{font-size:12.5px;color:var(--ink-2);text-align:right}
+  .track{position:relative;height:18px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0}
+  .barRow .v{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0 2px;font-size:12.5px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:18px 0 6px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .tile .v{font-size:26px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+  .tile .l{font-size:12.5px;color:var(--ink-2);margin-top:5px;line-height:1.35}
+  .tile .n{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+  .tile.ok .v{color:var(--good)} .tile.wr .v{color:var(--warn)} .tile.bd .v{color:var(--bad)}
+  .quad{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0}
+  .q{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 17px}
+  .q h4{margin:0 0 6px;font-size:14px}
+  .q p{margin:4px 0;font-size:13.5px;color:var(--ink-2)}
+  ul{margin:10px 0;padding-left:20px} li{margin:7px 0}
+  footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+  @media (max-width:620px){ .barRow{grid-template-columns:96px 1fr auto} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow">Informe interno · Nospi · 2 de octubre de 2026</div>
+<h1>Qué eventos generan recurrencia, y hasta dónde puede llegar</h1>
+<p class="sub">53 eventos cerrados en 5 formatos, 355 asistencias pagadas. Las cortesías y el evento gratuito del 9 de agosto quedan fuera, igual que en el informe anterior.</p>
+
+<div class="verdict">
+  <p><strong>Un evento puede hacer dos trabajos distintos, y conviene no confundirlos.</strong> Puede ser una buena <em>puerta de entrada</em> (la gente que lo estrena vuelve después) o un buen <em>imán</em> (atrae a quienes ya vinieron). Casi ningún formato hace los dos.</p>
+  <p><strong>El Café es la mejor puerta de entrada:</strong> el 19,4 % de quienes estrenaron con un café volvieron, contra 13,3 % de la cena. <strong>Los Bolos son el mejor imán:</strong> 26 % de sus asistentes ya habían venido antes — pero de los 9 que lo estrenaron, ninguno volvió. Bolos es donde van los fieles, no donde se hacen.</p>
+  <p><strong>Y la cena, que es el 58 % de tus eventos, es el formato más flojo en los tres indicadores a la vez:</strong> menos gente por evento (6,4), menos repetidores (10,4 %) y el peor no-show (29 %).</p>
+</div>
+
+<h2><span class="num">1</span>Los cinco formatos, lado a lado</h2>
+
+<div class="tableScroll">
+<table>
+  <thead><tr>
+    <th>Formato</th><th class="n">Eventos</th><th class="n">Asistencias</th><th class="n">Por evento</th>
+    <th class="n">Imán<br><span class="em">% ya habían venido</span></th>
+    <th class="n">Puerta<br><span class="em">% de estrenos que volvió</span></th>
+    <th class="n">% que se suscribió</th>
+    <th class="n">No-show</th>
+    <th class="n">Tiquetes por evento</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="nm">Cena <span class="em">(restaurante)</span></td><td class="n">31</td><td class="n">192</td><td class="n">6,4</td>
+      <td class="n">10,4 %</td><td class="n">13,3 % <span class="em">(17/128)</span></td><td class="n">10,2 %</td>
+      <td class="n"><span class="pill bd">29,0 %</span></td><td class="n">$93.852</td>
+    </tr>
+    <tr>
+      <td class="nm">Café</td><td class="n">10</td><td class="n">77</td><td class="n">7,7</td>
+      <td class="n">14,3 %</td><td class="n"><span class="pill ok">19,4 %</span> <span class="em">(6/31)</span></td><td class="n">12,9 %</td>
+      <td class="n"><span class="pill wr">16,9 %</span></td><td class="n">$124.500</td>
+    </tr>
+    <tr>
+      <td class="nm">Bolos</td><td class="n">5</td><td class="n">38</td><td class="n">7,6</td>
+      <td class="n"><span class="pill ok">26,3 %</span></td><td class="n"><span class="pill bd">0 %</span> <span class="em">(0/9)</span></td><td class="n">0 %</td>
+      <td class="n"><span class="pill bd">24,0 %</span></td><td class="n">$159.000</td>
+    </tr>
+    <tr>
+      <td class="nm">Videollamada</td><td class="n">5</td><td class="n">29</td><td class="n">7,3</td>
+      <td class="n">20,7 %</td><td class="n"><span class="pill nt">sin datos aún</span></td><td class="n">—</td>
+      <td class="n"><span class="pill ok">3,2 %</span></td><td class="n">$57.000</td>
+    </tr>
+    <tr>
+      <td class="nm">Caminata</td><td class="n">2</td><td class="n">19</td><td class="n">9,5</td>
+      <td class="n">10,5 %</td><td class="n">11,8 % <span class="em">(2/17)</span></td><td class="n">0 %</td>
+      <td class="n"><span class="pill nt">sin medir</span></td><td class="n">$112.500</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+<small><strong>Cómo leer las dos columnas del medio.</strong> «Imán» = de todas las asistencias a ese formato, qué porcentaje fue de alguien que ya había ido antes a cualquier evento de Nospi. «Puerta» = de las personas que estrenaron Nospi con ese formato <em>y que llevan más de 30 días</em>, qué porcentaje volvió después a cualquier otro. El no-show solo se puede comparar desde el <strong>14 de agosto</strong>, que es cuando empezó a marcarse; por eso la caminata (26 jul y 9 ago) aparece sin medir y no como 0 %. Los tiquetes por evento no incluyen a los suscriptores, que entran sin pagar tiquete, así que subestiman los formatos con muchos suscriptores.</small>
+
+<h3>Capacidad de atraer gente que ya vino («imán»)</h3>
+<div class="card">
+  <div class="barRow"><div class="k">Bolos</div><div class="track"><div class="fill" style="width:100%;background:var(--s1)"></div></div><div class="v">26,3 %</div></div>
+  <div class="barRow"><div class="k">Videollamada</div><div class="track"><div class="fill" style="width:78.7%;background:var(--s1)"></div></div><div class="v">20,7 %</div></div>
+  <div class="barRow"><div class="k">Café</div><div class="track"><div class="fill" style="width:54.4%;background:var(--s1)"></div></div><div class="v">14,3 %</div></div>
+  <div class="barRow"><div class="k">Caminata</div><div class="track"><div class="fill" style="width:39.9%;background:var(--s1)"></div></div><div class="v">10,5 %</div></div>
+  <div class="barRow"><div class="k">Cena</div><div class="track"><div class="fill" style="width:39.5%;background:var(--s1)"></div></div><div class="v">10,4 %</div></div>
+</div>
+
+<h3>Capacidad de enganchar a quien estrena («puerta»)</h3>
+<div class="card">
+  <div class="barRow"><div class="k">Café</div><div class="track"><div class="fill" style="width:100%;background:var(--s3)"></div></div><div class="v">19,4 %</div></div>
+  <div class="barRow"><div class="k">Cena</div><div class="track"><div class="fill" style="width:68.6%;background:var(--s3)"></div></div><div class="v">13,3 %</div></div>
+  <div class="barRow"><div class="k">Caminata</div><div class="track"><div class="fill" style="width:60.8%;background:var(--s3)"></div></div><div class="v">11,8 %</div></div>
+  <div class="barRow"><div class="k">Bolos</div><div class="track"><div class="fill" style="width:1%;background:var(--s3)"></div></div><div class="v">0 %</div></div>
+  <div class="barRow"><div class="k">Videollamada</div><div class="track"><div class="fill" style="width:0;background:var(--s3)"></div></div><div class="v">—</div></div>
+</div>
+<small>Ojo con el tamaño de muestra: Café son 31 estrenos maduros y Bolos solo 9. Con 9 personas, el 0 % puede ser mala suerte tanto como mal formato — bastaría que una sola hubiera vuelto para que fuera 11 %. La cena, con 128, es la única cifra realmente sólida de esta gráfica.</small>
+
+<h2><span class="num">2</span>Qué hace bien cada formato</h2>
+
+<div class="quad">
+  <div class="q">
+    <h4>☕ Café — <span style="color:var(--good)">el mejor para crecer</span></h4>
+    <p>La mejor puerta de entrada (19,4 %) y la que más convierte a suscripción (12,9 %). Mejor densidad que la cena (7,7 vs 6,4) y casi la mitad de no-show (16,9 % vs 29 %).</p>
+    <p>Es más barato para la persona, de día, menos comprometedor que una cena. Eso baja la barrera de entrada y la de volver.</p>
+  </div>
+  <div class="q">
+    <h4>🎳 Bolos — <span style="color:var(--warn)">el mejor para fidelizar</span></h4>
+    <p>26 % de repetidores, el más alto, y el que más tiquete deja por evento ($159.000). Pero de 9 estrenos, 0 volvieron.</p>
+    <p>Tiene el peor no-show después de la cena (24 %) y la cancelación más alta (28,6 %). Sirve como premio a los fieles, no como primera cita.</p>
+  </div>
+  <div class="q">
+    <h4>💻 Videollamada — <span style="color:var(--good)">la sorpresa</span></h4>
+    <p>Solo 3 días de vida y ya 20,7 % de repetidores. Y un no-show de <strong>3,2 %</strong> contra 29 % de la cena: nadie deja plantada una videollamada.</p>
+    <p>Sin costo de sede, sin límite de ciudad. Es el único formato que puede atender a quien no vive en Medellín.</p>
+  </div>
+  <div class="q">
+    <h4>🍽️ Cena — <span style="color:var(--bad)">el que hay que arreglar</span></h4>
+    <p>58 % de tus eventos y el más flojo en todo: 6,4 personas por evento, 10,4 % de repetidores, 29 % de no-show y el menor ingreso por evento.</p>
+    <p>No está roto — produce 192 asistencias y el 10,2 % de quienes lo estrenan se suscriben. Pero está sobre-programado para lo que rinde.</p>
+  </div>
+  <div class="q">
+    <h4>🥾 Caminata — <span style="color:var(--ink-2)">sin concluir</span></h4>
+    <p>Solo 2 eventos, los dos antes de que existiera el control de no-show. La mejor densidad de todas (9,5 por evento) y la menor cancelación (8,3 %).</p>
+    <p>Dos datos no son una conclusión. Vale hacer dos o tres más antes de decidir.</p>
+  </div>
+</div>
+
+<h3>Los eventos concretos con más gente repetida</h3>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Evento</th><th>Formato</th><th class="n">Asistentes</th><th class="n">Ya habían venido</th><th class="n">%</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Bolos (23 de agosto)</td><td>Bolos</td><td class="n">9</td><td class="n">4</td><td class="n"><span class="pill ok">44 %</span></td></tr>
+    <tr><td class="nm">Cena (21 de agosto)</td><td>Cena</td><td class="n">7</td><td class="n">3</td><td class="n">43 %</td></tr>
+    <tr><td class="nm">Video Llamada (1 de octubre) 3</td><td>Virtual</td><td class="n">7</td><td class="n">3</td><td class="n">43 %</td></tr>
+    <tr><td class="nm">Bolos (30 de agosto)</td><td>Bolos</td><td class="n">6</td><td class="n">2</td><td class="n">33 %</td></tr>
+    <tr><td class="nm">Cena (9 de septiembre)</td><td>Cena</td><td class="n">6</td><td class="n">2</td><td class="n">33 %</td></tr>
+    <tr><td class="nm">Cafe (29 de agosto)</td><td>Café</td><td class="n">13</td><td class="n">4</td><td class="n">31 %</td></tr>
+    <tr><td class="nm">Bolos (20 de septiembre)</td><td>Bolos</td><td class="n">7</td><td class="n">2</td><td class="n">29 %</td></tr>
+    <tr><td class="nm">Cafe (19 de septiembre) - Mesa 1</td><td>Café</td><td class="n">7</td><td class="n">2</td><td class="n">29 %</td></tr>
+    <tr><td class="nm">Cafe (15 de agosto)</td><td>Café</td><td class="n">14</td><td class="n">3</td><td class="n">21 %</td></tr>
+  </tbody>
+</table>
+</div>
+<small>Tres de los nueve son Bolos, de solo cinco que has hecho. Y el Café del 29 de agosto (13 personas) y el del 15 de agosto (14) son de los eventos más llenos de toda la operación.</small>
+
+<h2><span class="num">3</span>La recurrencia está mejorando, y eso no se veía antes</h2>
+
+<p>Este es el hallazgo que no estaba en el informe anterior. Mirando la tasa de regreso <strong>dentro de los primeros 30 días</strong>, por mes en que la persona estrenó:</p>
+
+<div class="card">
+  <div class="barRow"><div class="k">Estrenó en julio</div><div class="track"><div class="fill" style="width:38.9%;background:var(--s2)"></div></div><div class="v">6,5 %</div></div>
+  <div class="barRow"><div class="k">Estrenó en agosto</div><div class="track"><div class="fill" style="width:100%;background:var(--s3)"></div></div><div class="v">16,7 %</div></div>
+  <small style="margin-top:10px">77 personas en la cohorte de julio, 108 en la de agosto. Septiembre todavía no cumple los 30 días para medirse completo.</small>
+</div>
+
+<p><strong>La tasa de regreso a 30 días se multiplicó por 2,6 entre julio y agosto.</strong> Eso no sale en el promedio general porque la cohorte de julio arrastra el número hacia abajo. Y explica una rareza de los datos: la tasa a 60 días (7,4 %) es <em>más baja</em> que la de 30 días (12,4 %), lo cual sería imposible si fuera el mismo grupo de gente — solo tiene sentido porque el grupo que ya cumplió 60 días es casi todo gente de julio, cuando el producto era peor.</p>
+
+<div class="tiles">
+  <div class="tile"><div class="v">105</div><div class="l">personas nuevas al mes</div><div class="n">108 en agosto, 103 en septiembre</div></div>
+  <div class="tile wr"><div class="v">121</div><div class="l">asistencias pagadas en septiembre</div><div class="n">eran 133 en agosto</div></div>
+  <div class="tile"><div class="v">14,9 %</div><div class="l">de las asistencias de septiembre fueron de repetidores</div><div class="n">3,8 % en julio</div></div>
+</div>
+
+<p>La captación de gente nueva <strong>se estancó en unas 105 personas por mes</strong> y las asistencias totales bajaron de 133 a 121. Mientras la recurrencia no suba, el negocio queda amarrado a lo que entre por la puerta cada mes.</p>
+
+<h2><span class="num">4</span>Cómo nos vemos contra otras apps parecidas</h2>
+
+<p>Buscando referencias públicas, la comparación más directa es <strong>Timeleft</strong>, que hace exactamente lo mismo que Nospi (cenas con desconocidos, suscripción) y es hoy el referente del sector: 150.000 participantes al mes en más de 200 ciudades y €18 M de ingreso anual recurrente. No publican tasa de regreso, pero sí un dato muy útil.</p>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Indicador</th><th>Referencia del sector</th><th>Nospi hoy</th><th>Lectura</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="nm">Experiencias por miembro al mes</td>
+      <td>Timeleft: pasó de <strong>1,4 a 2,2</strong> al abrir formatos más allá de la cena</td>
+      <td><strong>1,79</strong> por suscriptor activo</td>
+      <td><span class="pill ok">Estamos dentro del rango</span></td>
+    </tr>
+    <tr>
+      <td class="nm">Tasa de segunda compra (primera → segunda)</td>
+      <td>Mediana de comercio directo al consumidor: <strong>18 % a 30 %</strong></td>
+      <td><strong>13,5 %</strong> general · <strong>16,7 %</strong> cohorte de agosto</td>
+      <td><span class="pill wr">Por debajo, pero acercándonos</span></td>
+    </tr>
+    <tr>
+      <td class="nm">Tasa de regreso a 30 días</td>
+      <td>Rango típico: <strong>10 % a 25 %</strong></td>
+      <td><strong>16,7 %</strong> (cohorte de agosto)</td>
+      <td><span class="pill ok">Dentro del rango, mitad de tabla</span></td>
+    </tr>
+    <tr>
+      <td class="nm">Ventana que predice fidelidad</td>
+      <td>Quien repite en <strong>menos de 60 días</strong> tiene <strong>3×</strong> más probabilidad de volverse cliente de largo plazo</td>
+      <td>Mediana de Nospi: <strong>7,5 días</strong></td>
+      <td><span class="pill ok">Muy a favor nuestro</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p><strong>La conclusión honesta: no estamos mal, estamos jóvenes.</strong> La cohorte de agosto ya cae dentro del rango normal de regreso a 30 días. Lo que falta es que ese 16,7 % suba al 25 % y que no se caiga después del segundo evento.</p>
+
+<p>Y hay un detalle a favor que vale oro: <strong>quien vuelve, vuelve en 7,5 días de mediana.</strong> La referencia dice que repetir antes de 60 días triplica la probabilidad de quedarse. Los que vuelven en Nospi lo hacen ocho veces más rápido que ese umbral. El problema no es que la gente tarde en volver — es que la mayoría no vuelve ninguna vez.</p>
+
+<p class="muted">Una advertencia sobre estas comparaciones: las cifras de comercio al consumidor son de productos, no de experiencias sociales, y Timeleft no publica su tasa de regreso. Sirven para ubicarnos en un orden de magnitud, no como meta exacta.</p>
+
+<h2><span class="num">5</span>Proyección: qué pasa si la recurrencia sube</h2>
+
+<p>El modelo es simple y está calibrado contra lo real: con 105 personas nuevas al mes y 1,16 eventos por persona, salen 122 asistencias al mes. Septiembre dio 121. El modelo funciona.</p>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Escenario</th><th class="n">Tasa de 2ª visita</th><th class="n">Eventos por persona</th><th class="n">Asistencias al mes</th><th class="n">Diferencia</th><th class="n">Tiquetes extra al mes</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Hoy</td><td class="n">13,5 %</td><td class="n">1,16</td><td class="n">122</td><td class="n">—</td><td class="n">—</td></tr>
+    <tr><td class="nm">Cohorte de agosto sostenida</td><td class="n">16,7 %</td><td class="n">1,21</td><td class="n">127</td><td class="n">+5</td><td class="n">+$75.000</td></tr>
+    <tr><td class="nm">Piso de la referencia del sector</td><td class="n">20 %</td><td class="n">1,28</td><td class="n">134</td><td class="n">+12</td><td class="n"><span class="pill ok">+$180.000</span></td></tr>
+    <tr><td class="nm">Mediana del sector</td><td class="n">25 %</td><td class="n">1,38</td><td class="n">145</td><td class="n">+23</td><td class="n"><span class="pill ok">+$345.000</span></td></tr>
+    <tr><td class="nm">Techo realista a 12 meses</td><td class="n">30 %</td><td class="n">1,50</td><td class="n">158</td><td class="n">+36</td><td class="n"><span class="pill ok">+$540.000</span></td></tr>
+  </tbody>
+</table>
+</div>
+<small>Supuestos: 105 personas nuevas al mes (el promedio de agosto y septiembre, que está estancado) y $15.000 por tiquete. «Eventos por persona» se deriva de la tasa de segunda visita asumiendo que quien vuelve una vez vuelve en promedio 1,5 veces más, que es lo que se ve hoy en los datos. No incluye el ingreso extra de suscripción, que subiría también: las personas que vuelven se suscriben más.</small>
+
+<p><strong>Lo que esta tabla dice en una frase:</strong> llegar a la mediana del sector vale unos <strong>$345.000 al mes en tiquetes</strong> sin conseguir una sola persona nueva — y ese dinero no cuesta pauta, porque son personas que ya te conocen. En un año son $4,1 M, más lo que suba la suscripción.</p>
+
+<h2><span class="num">6</span>Qué haría yo con la programación</h2>
+
+<ul>
+  <li><strong>Subir Café y bajar Cena.</strong> Hoy es 31 cenas contra 10 cafés. El café engancha mejor (19,4 % vs 13,3 %), llena más (7,7 vs 6,4), convierte más a suscripción (12,9 % vs 10,2 %) y le fallan mucho menos (16,9 % vs 29 % de no-show). Si el próximo mes fuera mitad y mitad en vez de tres a uno, cada peso de captación rendiría más.</li>
+  <li><strong>Usar Bolos como premio, no como entrada.</strong> Es tu mejor imán (26 %) y el que más tiquete deja ($159.000 por evento). Reservarlo o priorizarlo para quien ya fue una vez le daría a esa gente una razón concreta para volver — justo donde está el hueco.</li>
+  <li><strong>Apostarle a la videollamada más de lo que su edad sugiere.</strong> Tres días de vida, 20,7 % de repetidores y <strong>3,2 % de no-show</strong> contra 29 % de la cena. Sin sede, sin límite geográfico y con la gente que sí llega. Es el formato con la mejor relación esfuerzo/resultado de todo el portafolio.</li>
+  <li><strong>Atacar el no-show de la cena.</strong> 29 % es casi una de cada tres sillas vendidas que queda vacía. Eso vacía las mesas, y una mesa vacía es exactamente lo que hace que la gente no vuelva. Es un problema de la cena en particular, no de Nospi en general: el café está en 16,9 % y la videollamada en 3,2 %.</li>
+  <li><strong>Hacer dos o tres caminatas más antes de decidir.</strong> Es el formato con más gente por evento (9,5) y menos cancelaciones (8,3 %), pero solo hay dos datos y los dos son de antes de que midieras no-show. Vale la pena saberlo bien.</li>
+</ul>
+
+<h2><span class="num">7</span>Lo que estos números no pueden decir</h2>
+<div class="card">
+  <p><strong>Las muestras son chicas en todo lo que no sea cena.</strong> Café tiene 31 estrenos maduros, Bolos 9, Caminata 17. El 0 % de Bolos como puerta de entrada cambiaría a 11 % si una sola persona más hubiera vuelto. Trátalos como señales, no como veredictos.</p>
+  <p><strong>Los formatos no arrancaron al tiempo</strong> — cena desde el 16 de julio, café desde el 8 de agosto, bolos desde el 23 de agosto, videollamada desde el 30 de septiembre. Quien estrenó con cena ha tenido más meses para volver que quien estrenó con bolos, y eso favorece a la cena en la columna «puerta». Aun así la cena pierde.</p>
+  <p><strong>No se puede separar el formato del momento.</strong> Café y bolos nacieron cuando ya habías mejorado la operación; parte de su ventaja puede ser que Nospi en agosto era mejor que Nospi en julio, no que el café sea mejor que la cena. La única forma de resolverlo es programar los dos formatos en paralelo y volver a medir en un mes.</p>
+  <p><strong>El ingreso por evento subestima los formatos con suscriptores</strong>, porque un suscriptor entra sin pagar tiquete y no aparece en esa columna.</p>
+</div>
+
+<footer>
+  Base: 53 eventos cerrados entre el 16 de julio y el 2 de octubre de 2026 · 355 asistencias pagadas de 306 personas · Se excluyen cortesías, el evento gratuito del 9 de agosto y los 3 usuarios internos (Johnatan, Nospi, Equipo Nospi).<br>
+  Referencias externas: Timeleft (entrevista a su equipo, agosto 2025) y benchmarks públicos de tasa de recompra 2026.
+</footer>
+
+</div>
+</body>
+</html>

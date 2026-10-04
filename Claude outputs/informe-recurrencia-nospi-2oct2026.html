@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recurrencia y suscripciones Nospi</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f7f5f6; --surface:#ffffff; --surface-2:#faf8f9;
+    --ink:#121014; --ink-2:#55505a; --ink-3:#8b8491;
+    --line:#e7e2e9; --line-2:#d6cfda;
+    --brand:#AD1457; --brand-soft:#FCE7F0;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --good:#0f7b4f; --warn:#b06a00; --bad:#c02a2a;
+    --good-bg:#e7f5ee; --warn-bg:#fdf3e2; --bad-bg:#fdeaea;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg:#131215; --surface:#1c1a1f; --surface-2:#232028;
+      --ink:#ffffff; --ink-2:#c6c0cd; --ink-3:#938c9c;
+      --line:#302c37; --line-2:#413b4a;
+      --brand:#f2779f; --brand-soft:#3a1527;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+      --good:#4cc08a; --warn:#e0a44a; --bad:#f07070;
+      --good-bg:#15291f; --warn-bg:#2d2213; --bad-bg:#2e1717;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#131215; --surface:#1c1a1f; --surface-2:#232028;
+    --ink:#ffffff; --ink-2:#c6c0cd; --ink-3:#938c9c;
+    --line:#302c37; --line-2:#413b4a;
+    --brand:#f2779f; --brand-soft:#3a1527;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#4cc08a; --warn:#e0a44a; --bad:#f07070;
+    --good-bg:#15291f; --warn-bg:#2d2213; --bad-bg:#2e1717;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 16px 80px}
+  header.top{margin-bottom:34px}
+  .eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--brand);font-weight:800}
+  h1{font-size:clamp(27px,5vw,40px);line-height:1.15;margin:8px 0 10px;letter-spacing:-.02em}
+  .sub{color:var(--ink-2);font-size:15px;max-width:62ch}
+  h2{font-size:21px;margin:46px 0 4px;letter-spacing:-.01em;padding-top:22px;border-top:1px solid var(--line)}
+  h2 .num{color:var(--brand);font-variant-numeric:tabular-nums;margin-right:10px}
+  h3{font-size:15.5px;margin:26px 0 8px;color:var(--ink)}
+  p{margin:10px 0}
+  .lead{font-size:16.5px;color:var(--ink)}
+  .muted{color:var(--ink-2)}
+  small{font-size:12.5px;color:var(--ink-3);display:block;margin-top:7px;line-height:1.5}
+  strong{font-weight:700}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+  .verdict{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:12px;padding:20px 22px;margin:22px 0}
+  .verdict p:first-child{margin-top:0}
+  .verdict p:last-child{margin-bottom:0}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0 6px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .tile .v{font-size:27px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+  .tile .l{font-size:12.5px;color:var(--ink-2);margin-top:5px;line-height:1.35}
+  .tile .n{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+  .tile.ok .v{color:var(--good)} .tile.wr .v{color:var(--warn)} .tile.bd .v{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0 4px}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);
+    padding:8px 10px;border-bottom:1.5px solid var(--line-2);font-weight:700;white-space:nowrap}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tableScroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:4px 6px}
+  .nm{font-weight:650}
+  .em{font-size:12px;color:var(--ink-3)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:7px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .pill.ok{background:var(--good-bg);color:var(--good)}
+  .pill.wr{background:var(--warn-bg);color:var(--warn)}
+  .pill.bd{background:var(--bad-bg);color:var(--bad)}
+  .pill.nt{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+  /* barras */
+  .bars{margin:14px 0 2px}
+  .barRow{display:grid;grid-template-columns:116px 1fr auto;gap:12px;align-items:center;padding:4px 0}
+  .barRow .k{font-size:12.5px;color:var(--ink-2);text-align:right}
+  .track{position:relative;height:17px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0}
+  .barRow .v{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:58px;text-align:right}
+  /* barras apiladas de ingresos */
+  .stack{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;padding:5px 0}
+  .stack .k{font-size:12.5px;color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
+  .stackTrack{display:flex;height:22px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+  .seg{height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;
+    font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden}
+  .seg + .seg{border-left:2px solid var(--surface)}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0 2px;font-size:12.5px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block}
+  ul{margin:10px 0;padding-left:20px} li{margin:6px 0}
+  .do{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:16px 20px;margin:14px 0}
+  .do h3{margin-top:0}
+  .do .why{font-size:13px;color:var(--ink-2);margin-top:6px}
+  footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+  @media (max-width:620px){
+    .barRow{grid-template-columns:92px 1fr auto}
+    .barRow .k{font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Informe interno · Nospi</div>
+  <h1>¿Vuelve la gente, y la suscripción está funcionando?</h1>
+  <p class="sub">Todo lo que hay en la base de datos desde el primer evento (16 de julio de 2026) hasta hoy, 2 de octubre de 2026. 53 eventos cerrados, 11 semanas de operación. <strong>Las asistencias de cortesía y las del evento gratuito del 9 de agosto no cuentan como recurrencia</strong> — ver la nota metodológica al final.</p>
+</header>
+
+<div class="verdict">
+  <p class="lead"><strong>La respuesta corta: el negocio está creciendo en plata, pero todavía no en recurrencia.</strong></p>
+  <p>Los ingresos subieron de $1,48 M en julio a $4,17 M en septiembre — casi se triplicaron — y la suscripción pasó de ser el 16 % al 35 % de la plata del mes. Eso es acogida real: la gente paga, y cada vez más de forma recurrente.</p>
+  <p>Pero de las <strong>306 personas que han pagado para ir a un evento, 274 fueron una sola vez</strong>. Entre quienes ya tuvieron tiempo de volver (primer evento hace más de un mes), solo el <strong>13,5 %</strong> regresó. Y la suscripción casi no se está vendiendo como upgrade de quien ya probó: de 54 suscriptores, apenas <strong>4</strong> habían ido a un evento antes de suscribirse. La suscripción hoy es la puerta de entrada, no el premio a la fidelidad.</p>
+  <p>El dato que más plata deja sobre la mesa: <strong>18 de las 32 personas que han vuelto dos o más veces no están suscritas</strong>, y cuatro de ellas ya pagaron en tiquetes sueltos más de lo que cuesta un mes de suscripción.</p>
+</div>
+
+<div class="tiles">
+  <div class="tile"><div class="v">306</div><div class="l">personas han pagado por ir a un evento</div><div class="n">de 3.440 registradas</div></div>
+  <div class="tile bd"><div class="v">13,5 %</div><div class="l">volvió una segunda vez pagando</div><div class="n">cohorte con 30+ días de margen</div></div>
+  <div class="tile"><div class="v">54</div><div class="l">han comprado suscripción</div><div class="n">41 vigentes hoy</div></div>
+  <div class="tile ok"><div class="v">62,5 %</div><div class="l">renovación mensual real</div><div class="n">10 de 16 con auto-renovación activa</div></div>
+  <div class="tile ok"><div class="v">$4,17 M</div><div class="l">ingresos de septiembre</div><div class="n">+59 % vs agosto</div></div>
+  <div class="tile wr"><div class="v">14</div><div class="l">suscriptores que pagaron y nunca fueron</div><div class="n">26 % de los suscriptores</div></div>
+</div>
+
+<!-- ============================= 1 ============================= -->
+<h2><span class="num">1</span>Recurrencia: cuánta gente vuelve</h2>
+
+<p>La definición que uso de "asistió": una reserva de un evento ya pasado que <strong>no</strong> quedó marcada como no-show <strong>y que la persona pagó</strong> — de su bolsillo, con saldo virtual o con la suscripción. Las cortesías y el evento gratuito del 9 de agosto quedan por fuera: una silla regalada no demuestra que alguien decidiera volver. Son 355 asistencias pagadas de 306 personas distintas, o sea <strong>1,16 eventos por persona</strong>.</p>
+
+<p class="muted">Para dimensionarlo: se excluyen <strong>38 asistencias gratuitas</strong> — 13 cortesías individuales (11 de hombres, 2 de mujeres) y 25 del evento gratis del 9 de agosto (9 hombres, 16 mujeres).</p>
+
+<div class="card">
+  <h3 style="margin-top:0">Cuántas veces ha ido cada persona</h3>
+  <div class="bars">
+    <div class="barRow"><div class="k">1 vez</div><div class="track"><div class="fill" style="width:100%;background:var(--s2)"></div></div><div class="v">274</div></div>
+    <div class="barRow"><div class="k">2 veces</div><div class="track"><div class="fill" style="width:7.3%;background:var(--s1)"></div></div><div class="v">20</div></div>
+    <div class="barRow"><div class="k">3 veces</div><div class="track"><div class="fill" style="width:3.3%;background:var(--s1)"></div></div><div class="v">9</div></div>
+    <div class="barRow"><div class="k">4 veces</div><div class="track"><div class="fill" style="width:0.9%;background:var(--s1)"></div></div><div class="v">1</div></div>
+    <div class="barRow"><div class="k">5 veces</div><div class="track"><div class="fill" style="width:1.1%;background:var(--s1)"></div></div><div class="v">2</div></div>
+  </div>
+  <small>89,5 % pagó una sola vez. Las barras están a la misma escala: la de "1 vez" no es un error de dibujo, es la realidad del embudo. Sin descontar las cortesías esto se veía mejor de lo que es (291 / 25 / 7 / 4 / 3).</small>
+</div>
+
+<p>Ese 89,5 % exagera el problema, porque mucha gente estrenó hace pocos días y todavía no ha tenido un segundo evento al cual ir. Separando por madurez:</p>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Cohorte</th><th class="n">Personas</th><th class="n">Volvieron</th><th class="n">Tasa</th></tr></thead>
+  <tbody>
+    <tr><td>Primer evento hace <strong>más de 30 días</strong> (tuvieron margen real)</td><td class="n">185</td><td class="n">25</td><td class="n"><span class="pill bd">13,5 %</span></td></tr>
+    <tr><td>Primer evento en los últimos 30 días (aún en juego)</td><td class="n">121</td><td class="n">7</td><td class="n"><span class="pill nt">5,8 %</span></td></tr>
+  </tbody>
+</table>
+</div>
+<small>Entonces la cifra honesta de recurrencia es <strong>13,5 %</strong>, no 10,5 %. Quien vuelve, vuelve rápido: la mediana entre el primer y el segundo evento pagado es de <strong>7,5 días</strong>. Si alguien no regresó en las dos primeras semanas, casi nunca regresa.</small>
+
+<h3>La diferencia por género es grande y vale la pena mirarla</h3>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Género</th><th class="n">Asistentes</th><th class="n">Asistencias pagadas</th><th class="n">Promedio</th><th class="n">Volvieron</th><th class="n">Tasa general</th><th class="n">Tasa en cohorte madura</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Mujeres</td><td class="n">181</td><td class="n">198</td><td class="n">1,09</td><td class="n">12</td><td class="n">6,6 %</td><td class="n"><span class="pill bd">7,7 %</span> <span class="em">(8 de 104)</span></td></tr>
+    <tr><td class="nm">Hombres</td><td class="n">125</td><td class="n">157</td><td class="n">1,26</td><td class="n">20</td><td class="n">16,0 %</td><td class="n"><span class="pill wr">21,0 %</span> <span class="em">(17 de 81)</span></td></tr>
+  </tbody>
+</table>
+</div>
+<small><strong>Esta es la tabla donde más pesaba el error de contar las cortesías</strong>: 11 de las 13 cortesías individuales fueron para hombres, así que la tasa masculina venía inflada (18,8 % antes, 16,0 % ahora). Pero la brecha no desaparece — al contrario, en la cohorte con margen real de volver es más amplia: <strong>21,0 % de los hombres contra 7,7 % de las mujeres</strong>. Las mujeres son el 59 % de quienes pagan por venir y vuelven a un tercio de la tasa de los hombres. Eso tiene dos lecturas que no puedo distinguir con los datos: o la experiencia en la mesa les resulta menos buena, o el motivo por el que vinieron se resuelve en una sola salida. Vale una llamada a tres o cuatro de las que fueron una vez y no volvieron.</small>
+
+<h3>Las personas más recurrentes (solo eventos pagados)</h3>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Persona</th><th class="n">Edad</th><th class="n">Pagados</th><th class="n">Cortesías</th><th>Último pagado</th><th>Suscrita</th><th class="n">Cupos próximos</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Lucho<div class="em">luisdelgadocorrales@gmail.com</div></td><td class="n">36</td><td class="n">5</td><td class="n">—</td><td>30 sep</td><td><span class="pill ok">Sí</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">John<div class="em">jhonfredymoreno@gmail.com</div></td><td class="n">44</td><td class="n">5</td><td class="n">—</td><td>12 sep</td><td><span class="pill ok">Sí</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Jhon<div class="em">jhonsoonn6@gmail.com</div></td><td class="n">35</td><td class="n">4</td><td class="n">—</td><td>8 ago</td><td><span class="pill wr">Venció</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Nataly<div class="em">natika2@hotmail.com</div></td><td class="n">39</td><td class="n">3</td><td class="n">—</td><td>26 sep</td><td><span class="pill bd">No</span></td><td class="n">1</td></tr>
+    <tr><td class="nm">Mauricio<div class="em">megadescargas100@gmail.com</div></td><td class="n">31</td><td class="n">3</td><td class="n">1</td><td>20 sep</td><td><span class="pill bd">No</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Andrea1<div class="em">yudyabv@gmail.com</div></td><td class="n">40</td><td class="n">3</td><td class="n">—</td><td>10 sep</td><td><span class="pill ok">Sí</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">LuisFer<div class="em">lfarenasf@gmail.com</div></td><td class="n">46</td><td class="n">3</td><td class="n">2</td><td>10 sep</td><td><span class="pill bd">No</span></td><td class="n">2</td></tr>
+    <tr><td class="nm">Juan Sebastián Fernández<div class="em">juansebastianfernandezmarin@gmail.com</div></td><td class="n">28</td><td class="n">3</td><td class="n">1</td><td>30 ago</td><td><span class="pill bd">No</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Juan Fdo Herrera<div class="em">herrerajf@gmail.com</div></td><td class="n">49</td><td class="n">3</td><td class="n">1</td><td>29 ago</td><td><span class="pill bd">No</span></td><td class="n">1</td></tr>
+    <tr><td class="nm">Dayana<div class="em">dayan9746@hotmail.com</div></td><td class="n">31</td><td class="n">3</td><td class="n">—</td><td>22 ago</td><td><span class="pill wr">Venció</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Marcela<div class="em">yudymarce@gmail.com</div></td><td class="n">42</td><td class="n">3</td><td class="n">—</td><td>15 ago</td><td><span class="pill wr">Venció</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Ktha<div class="em">bordagroup@hotmail.com</div></td><td class="n">47</td><td class="n">3</td><td class="n">—</td><td>8 ago</td><td><span class="pill wr">Venció</span></td><td class="n">0</td></tr>
+  </tbody>
+</table>
+</div>
+<small>Al descontar las cortesías, <strong>7 personas salen de la lista de recurrentes</strong> (de 39 a 32): Julián Córdoba, Strovosky, Danilo, Rodolfo Agudelo, Luis (fuzzyluis), Paty y Caro volvieron gracias a una silla regalada, no a una decisión de pagar otra vez. Y LuisFer, que era el no-suscriptor con 5 eventos, en realidad pagó 3 y le regalaste 2 — sigue siendo el mejor candidato a suscripción, pero el argumento es menos fuerte de lo que te dije.</small>
+
+<p>Las últimas cuatro filas siguen diciendo lo mismo que antes: Jhon, Dayana, Marcela y Ktha están entre quienes más han pagado por venir, y las cuatro dejaron vencer la suscripción. No se fueron porque no les gustara; se fueron en la época en que la auto-renovación todavía no existía (ver sección 3).</p>
+
+<!-- ============================= 2 ============================= -->
+<h2><span class="num">2</span>Del evento suelto a la suscripción</h2>
+
+<p>Esta es la pregunta que hiciste: ¿quiénes fueron a un evento pagando suelto y <em>después</em> compraron la suscripción? La respuesta es incómoda.</p>
+
+<div class="tiles">
+  <div class="tile"><div class="v">54</div><div class="l">suscriptores en total</div></div>
+  <div class="tile"><div class="v">7</div><div class="l">pagaron algún evento suelto antes de suscribirse</div></div>
+  <div class="tile bd"><div class="v">4</div><div class="l">ya habían <em>asistido</em> a un evento antes de suscribirse</div></div>
+  <div class="tile bd"><div class="v">13,1 %</div><div class="l">de los 306 asistentes que pagaron terminó suscrito</div></div>
+</div>
+
+<p><strong>50 de los 54 suscriptores compraron la suscripción antes de pisar su primer evento.</strong> O sea que hoy la suscripción no es un upgrade que se gana con una buena primera experiencia: es la primera compra, hecha a ciegas. Eso explica buena parte de lo que verás en las secciones 3 y 4 — gente que paga, no va, y cancela.</p>
+
+<h3>Los 7 que sí pagaron suelto antes (y qué pasó después)</h3>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Persona</th><th>Se suscribió</th><th>Pagó antes con</th><th class="n">Eventos antes</th><th class="n">Eventos después</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Jhon</td><td>29 jul</td><td>Tarjeta</td><td class="n">1</td><td class="n">3</td></tr>
+    <tr><td class="nm">John</td><td>15 ago</td><td>Nequi + saldo</td><td class="n">1</td><td class="n">4</td></tr>
+    <tr><td class="nm">Alejo</td><td>16 ago</td><td>PSE</td><td class="n">1</td><td class="n">1</td></tr>
+    <tr><td class="nm">Didi</td><td>27 ago</td><td>Nequi</td><td class="n">0 <span class="em">(reservó, no asistió)</span></td><td class="n">1</td></tr>
+    <tr><td class="nm">Andrea1</td><td>7 sep</td><td>Nequi</td><td class="n">2</td><td class="n">1</td></tr>
+    <tr><td class="nm">Marly Catherine</td><td>10 sep</td><td>Tarjeta</td><td class="n">0 <span class="em">(reservó, no asistió)</span></td><td class="n">0</td></tr>
+    <tr><td class="nm">Sofía Caro</td><td>2 oct</td><td>Bancolombia + saldo</td><td class="n">0 <span class="em">(tiene 3 cupos)</span></td><td class="n">0</td></tr>
+  </tbody>
+</table>
+</div>
+<small>De los 4 que de verdad asistieron antes de suscribirse, tres (Jhon, John, Andrea1) están entre las 14 personas más recurrentes de todo Nospi. La muestra es minúscula, pero apunta en una dirección clara: <strong>quien prueba primero y se suscribe después, usa mucho más la suscripción</strong> (promedio de 2,3 eventos después, contra 1,11 del suscriptor promedio).</small>
+
+<!-- ============================= 3 ============================= -->
+<h2><span class="num">3</span>Renovaciones: quién renovó y quién no</h2>
+
+<p>Aquí hay una trampa de medición que hay que resolver antes de dar una cifra. La <strong>primera renovación automática del sistema se cobró el 18 de agosto</strong>. Todo el que se suscribió en julio tenía su fecha de renovación antes de esa fecha, así que no renovó porque no había con qué, no porque no quisiera.</p>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Medición</th><th class="n">Llegaron a su fecha de renovación</th><th class="n">Renovaron</th><th class="n">Tasa</th></tr></thead>
+  <tbody>
+    <tr><td>Todos los mensuales (incluye la era sin auto-renovación)</td><td class="n">23</td><td class="n">12</td><td class="n"><span class="pill wr">52,2 %</span></td></tr>
+    <tr><td><strong>Solo los que ya tenían auto-renovación disponible</strong> (desde el 5 de agosto)</td><td class="n">16</td><td class="n">10</td><td class="n"><span class="pill ok">62,5 %</span></td></tr>
+    <tr><td>Segunda renovación consecutiva</td><td class="n">2</td><td class="n">1</td><td class="n"><span class="pill nt">Ferney, 3 ciclos</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><strong>62,5 % es la cifra que vale.</strong> Para una suscripción de consumo mensual recién nacida, eso no está mal. Y hay un detalle más: de los 6 que no renovaron en ese grupo, <strong>4 habían apagado la auto-renovación el mismo día que compraron</strong> — Yeison, NicoJey, Julián y CrisRave. Sus propias razones lo dicen: <em>"ensayo del primer mes.. nada más"</em>, <em>"solo quiero probar un mes"</em>. No se fueron decepcionados; nunca pensaron quedarse. Los únicos dos que renunciaron de verdad fueron Jerónimo y Yam.</p>
+
+<h3>Los 23 mensuales que ya pasaron su primer ciclo</h3>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Persona</th><th>Se suscribió</th><th class="n">Renovaciones</th><th class="n">Pagado</th><th class="n">Eventos asistidos</th><th>Resultado</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Ferney Escobar</td><td>26 jul</td><td class="n">2</td><td class="n">$89.700</td><td class="n">1</td><td><span class="pill ok">Renovó ×2</span></td></tr>
+    <tr><td class="nm">Diana</td><td>19 jul</td><td class="n">1</td><td class="n">$59.800</td><td class="n">1</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Daniel</td><td>5 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">2</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Andrés</td><td>6 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">1</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Luis</td><td>8 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">2</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Jimena</td><td>10 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">1</td><td><span class="pill wr">Renovó, luego canceló</span></td></tr>
+    <tr><td class="nm">Fernando</td><td>13 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">0</td><td><span class="pill bd">Renovó sin ir nunca</span></td></tr>
+    <tr><td class="nm">John</td><td>15 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">5</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Alejo</td><td>16 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">2</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Didi</td><td>27 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">1</td><td><span class="pill ok">Renovó</span></td></tr>
+    <tr><td class="nm">Paula Andrea Vélez</td><td>29 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">1</td><td><span class="pill wr">Renovó, luego canceló</span></td></tr>
+    <tr><td class="nm">Camilo</td><td>29 ago</td><td class="n">1</td><td class="n">$59.800</td><td class="n">0</td><td><span class="pill bd">Renovó sin ir nunca</span></td></tr>
+    <tr><td class="nm">Marcela</td><td>23 jul</td><td class="n">0</td><td class="n">$29.900</td><td class="n">3</td><td><span class="pill nt">Venció · era sin auto-renov.</span></td></tr>
+    <tr><td class="nm">Ktha</td><td>25 jul</td><td class="n">0</td><td class="n">$29.900</td><td class="n">3</td><td><span class="pill nt">Venció · era sin auto-renov.</span></td></tr>
+    <tr><td class="nm">Javier</td><td>28 jul</td><td class="n">0</td><td class="n">$29.900</td><td class="n">1</td><td><span class="pill nt">Venció · era sin auto-renov.</span></td></tr>
+    <tr><td class="nm">Dayana</td><td>29 jul</td><td class="n">0</td><td class="n">$29.900</td><td class="n">3</td><td><span class="pill nt">Venció · era sin auto-renov.</span></td></tr>
+    <tr><td class="nm">Jhon</td><td>29 jul</td><td class="n">0</td><td class="n">$29.900</td><td class="n">4</td><td><span class="pill nt">Venció · era sin auto-renov.</span></td></tr>
+    <tr><td class="nm">Jerónimo Flórez</td><td>5 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">1</td><td><span class="pill bd">No renovó</span></td></tr>
+    <tr><td class="nm">Yam</td><td>25 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">2</td><td><span class="pill bd">No renovó</span></td></tr>
+    <tr><td class="nm">Yeison</td><td>17 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">0</td><td><span class="pill nt">Apagó auto-renov. el día 1</span></td></tr>
+    <tr><td class="nm">NicoJey</td><td>23 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">1</td><td><span class="pill nt">Apagó auto-renov. el día 1</span></td></tr>
+    <tr><td class="nm">Julián</td><td>27 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">1</td><td><span class="pill nt">Apagó auto-renov. el día 1</span></td></tr>
+    <tr><td class="nm">CrisRave</td><td>30 ago</td><td class="n">0</td><td class="n">$29.900</td><td class="n">1</td><td><span class="pill nt">Apagó auto-renov. el día 1</span></td></tr>
+  </tbody>
+</table>
+</div>
+<small>Lo contraintuitivo: entre los que renovaron hay dos con <strong>cero</strong> eventos asistidos (Fernando y Camilo), y entre los que no renovaron están los que más fueron (Jhon con 4, Marcela, Ktha y Dayana con 3). Hoy la renovación la decide la inercia de la auto-renovación, no la satisfacción. Eso sostiene el ingreso a corto plazo y lo pone en riesgo a mediano: a Fernando y Camilo les va a llegar un tercer cobro por algo que no han usado.</small>
+
+<!-- ============================= 4 ============================= -->
+<h2><span class="num">4</span>Cancelaciones y suscriptores que nunca fueron</h2>
+
+<h3>Las 11 cancelaciones, una por una</h3>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Persona</th><th>Suscrita</th><th>Canceló</th><th class="n">Días</th><th class="n">Eventos</th><th>Motivo que dejó escrito</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Yeison</td><td>17 ago</td><td>17 ago</td><td class="n">0</td><td class="n">0</td><td>"No lo uso lo suficiente"</td></tr>
+    <tr><td class="nm">NicoJey</td><td>23 ago</td><td>23 ago</td><td class="n">0</td><td class="n">1</td><td>"Ensayo del primer mes.. nada más"</td></tr>
+    <tr><td class="nm">Julián</td><td>27 ago</td><td>27 ago</td><td class="n">0</td><td class="n">1</td><td>"Solo quiero probar un mes"</td></tr>
+    <tr><td class="nm">CrisRave</td><td>30 ago</td><td>30 ago</td><td class="n">0</td><td class="n">1</td><td>"NA"</td></tr>
+    <tr><td class="nm">Jimena</td><td>10 ago</td><td>16 sep</td><td class="n">36</td><td class="n">1</td><td>Se mudó a Bogotá</td></tr>
+    <tr><td class="nm">Will</td><td>20 sep</td><td>20 sep</td><td class="n">0</td><td class="n">1</td><td>"No" · tiene 1 cupo próximo</td></tr>
+    <tr><td class="nm">Diana C</td><td>18 sep</td><td>21 sep</td><td class="n">3</td><td class="n">1</td><td>"N/a" · tiene 1 cupo próximo</td></tr>
+    <tr><td class="nm">Jesse</td><td>29 sep</td><td>29 sep</td><td class="n">0</td><td class="n">0</td><td>"No lo uso lo suficiente"</td></tr>
+    <tr><td class="nm">Paula Andrea Vélez</td><td>29 ago</td><td>29 sep</td><td class="n">31</td><td class="n">1</td><td>"No quiero suscripción"</td></tr>
+    <tr><td class="nm">Adriana</td><td>5 sep</td><td>2 oct</td><td class="n">26</td><td class="n">0</td><td><strong>"No cumplió mis expectativas"</strong></td></tr>
+    <tr><td class="nm">Diana (Gómez)</td><td>24 sep</td><td>2 oct</td><td class="n">7</td><td class="n">1</td><td><strong>"No cumplió mis expectativas"</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Separando el ruido de la señal: <strong>6 de las 11 cancelaciones son el mismo día de la compra</strong> — gente apagando la auto-renovación de entrada para probar un mes. Eso no es churn por mala experiencia, es la ausencia de un plan "un mes sin compromiso".</p>
+
+<p>Las que sí hay que mirar de frente son las dos de hoy, ambas de plan trimestral y ambas con la misma frase: <strong>"no cumplió mis expectativas"</strong>.</p>
+<ul>
+  <li><strong>Adriana</strong> (olayaadri@gmail.com): pagó $59.000 el 5 de septiembre, tiene <strong>7 reservas canceladas y cero eventos asistidos</strong> en 27 días. Algo le impidió sistemáticamente llegar. Es la única persona en toda la base con ese patrón, y vale una llamada: o hay un problema de la app, o de horarios, o algo que le pasó en el proceso.</li>
+  <li><strong>Diana Gómez</strong> (dianagomezjuli@gmail.com): se suscribió el 24 de septiembre, fue a su primer evento <em>hoy</em> y canceló el mismo día. La experiencia de hoy es lo que la hizo cancelar. Esa sí es información fresca y accionable.</li>
+</ul>
+
+<h3>Los 14 que pagaron y nunca han asistido</h3>
+<p>26 % de los suscriptores. Diez de ellos no tienen ni un cupo próximo reservado.</p>
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Persona</th><th>Plan</th><th class="n">Días suscrita</th><th class="n">Pagado</th><th class="n">No-shows</th><th class="n">Cupos próximos</th><th>Riesgo</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">Fernando</td><td>Mensual</td><td class="n">49</td><td class="n">$59.800</td><td class="n">1</td><td class="n">0</td><td><span class="pill bd">Le cobran otra vez</span></td></tr>
+    <tr><td class="nm">Camilo</td><td>Mensual</td><td class="n">33</td><td class="n">$59.800</td><td class="n">1</td><td class="n">0</td><td><span class="pill bd">Le cobran otra vez</span></td></tr>
+    <tr><td class="nm">Adriana</td><td>Trimestral</td><td class="n">26</td><td class="n">$59.000</td><td class="n">0</td><td class="n">0</td><td><span class="pill bd">Ya canceló, molesta</span></td></tr>
+    <tr><td class="nm">Claudia</td><td>Mensual</td><td class="n">26</td><td class="n">$29.900</td><td class="n">0</td><td class="n">0</td><td><span class="pill bd">Le cobran otra vez</span></td></tr>
+    <tr><td class="nm">Laura Trujillo</td><td>Mensual</td><td class="n">26</td><td class="n">$29.900</td><td class="n">1</td><td class="n">0</td><td><span class="pill bd">Le cobran otra vez</span></td></tr>
+    <tr><td class="nm">Marly Catherine</td><td>Mensual</td><td class="n">22</td><td class="n">$29.900</td><td class="n">2</td><td class="n">0</td><td><span class="pill bd">Dos no-shows seguidos</span></td></tr>
+    <tr><td class="nm">Adryfitness</td><td>Mensual</td><td class="n">21</td><td class="n">$29.900</td><td class="n">0</td><td class="n">2</td><td><span class="pill wr">Aún en juego</span></td></tr>
+    <tr><td class="nm">Lina Molina</td><td>Trimestral</td><td class="n">17</td><td class="n">$59.000</td><td class="n">1</td><td class="n">1</td><td><span class="pill wr">Aún en juego</span></td></tr>
+    <tr><td class="nm">Pilar</td><td>Mensual</td><td class="n">11</td><td class="n">$29.900</td><td class="n">0</td><td class="n">0</td><td><span class="pill wr">Sin reservar nada</span></td></tr>
+    <tr><td class="nm">Juan</td><td>Trimestral</td><td class="n">10</td><td class="n">$59.000</td><td class="n">0</td><td class="n">0</td><td><span class="pill wr">Sin reservar nada</span></td></tr>
+    <tr><td class="nm">Yeison</td><td>Mensual</td><td class="n">46</td><td class="n">$29.900</td><td class="n">0</td><td class="n">0</td><td><span class="pill nt">Ya venció</span></td></tr>
+    <tr><td class="nm">Jesse</td><td>Trimestral</td><td class="n">3</td><td class="n">$59.000</td><td class="n">0</td><td class="n">0</td><td><span class="pill nt">Ya canceló</span></td></tr>
+    <tr><td class="nm">Martha Isabel</td><td>Mensual</td><td class="n">1</td><td class="n">$29.900</td><td class="n">0</td><td class="n">1</td><td><span class="pill ok">Recién entró</span></td></tr>
+    <tr><td class="nm">Sofía Caro</td><td>Trimestral</td><td class="n">0</td><td class="n">$59.000</td><td class="n">0</td><td class="n">3</td><td><span class="pill ok">Recién entró</span></td></tr>
+  </tbody>
+</table>
+</div>
+<small>Los cinco de arriba son los urgentes: pagaron entre $29.900 y $59.800, llevan tres semanas o más suscritos, no han ido a nada y no tienen nada reservado. A varios les va a entrar otro cobro automático. Un cobro por algo que nunca se usó es la forma más rápida de convertir un cliente tibio en una queja.</small>
+
+<!-- ============================= 5 ============================= -->
+<h2><span class="num">5</span>La plata: sí hay acogida</h2>
+
+<div class="legend">
+  <span><i class="swatch" style="background:var(--s1)"></i> Eventos sueltos</span>
+  <span><i class="swatch" style="background:var(--s2)"></i> Suscripciones</span>
+</div>
+<div class="card">
+  <div class="stack"><div class="k">Julio</div>
+    <div class="stackTrack">
+      <div class="seg" style="width:29.8%;background:var(--s1)">$1,24 M</div>
+      <div class="seg" style="width:5.7%;background:var(--s2)"></div>
+    </div></div>
+  <div class="stack"><div class="k">Agosto</div>
+    <div class="stackTrack">
+      <div class="seg" style="width:50.0%;background:var(--s1)">$2,09 M</div>
+      <div class="seg" style="width:12.9%;background:var(--s2)">$538 k</div>
+    </div></div>
+  <div class="stack"><div class="k">Sept.</div>
+    <div class="stackTrack">
+      <div class="seg" style="width:65.1%;background:var(--s1)">$2,72 M</div>
+      <div class="seg" style="width:34.9%;background:var(--s2)">$1,46 M</div>
+    </div></div>
+  <div class="stack"><div class="k">Oct. (2 d)</div>
+    <div class="stackTrack">
+      <div class="seg" style="width:2.5%;background:var(--s1)"></div>
+      <div class="seg" style="width:2.1%;background:var(--s2)"></div>
+    </div></div>
+  <small>Escala común: el ancho total representa $4,17 M (el mes más alto). Julio incluye $239 k de suscripciones, que a esta escala casi no se ve.</small>
+</div>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Mes</th><th class="n">Eventos sueltos</th><th class="n">Suscripciones</th><th class="n">Total</th><th class="n">Crecimiento</th><th class="n">% de suscripción</th></tr></thead>
+  <tbody>
+    <tr><td>Julio <span class="em">(desde el 16)</span></td><td class="n">$1.244.400</td><td class="n">$239.200</td><td class="n"><strong>$1.483.600</strong></td><td class="n">—</td><td class="n">16 %</td></tr>
+    <tr><td>Agosto</td><td class="n">$2.085.000</td><td class="n">$538.200</td><td class="n"><strong>$2.623.200</strong></td><td class="n"><span class="pill ok">+77 %</span></td><td class="n">21 %</td></tr>
+    <tr><td>Septiembre</td><td class="n">$2.715.000</td><td class="n">$1.457.900</td><td class="n"><strong>$4.172.900</strong></td><td class="n"><span class="pill ok">+59 %</span></td><td class="n">35 %</td></tr>
+    <tr><td>Octubre <span class="em">(2 días)</span></td><td class="n">$105.000</td><td class="n">$88.900</td><td class="n"><strong>$193.900</strong></td><td class="n">—</td><td class="n">46 %</td></tr>
+    <tr style="border-top:2px solid var(--line-2)"><td><strong>Total 11 semanas</strong></td><td class="n"><strong>$6.149.400</strong></td><td class="n"><strong>$2.324.200</strong></td><td class="n"><strong>$8.473.600</strong></td><td class="n"></td><td class="n">27 %</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="tiles">
+  <div class="tile ok"><div class="v">$895 k</div><div class="l">ingreso mensual comprometido</div><div class="n">32 suscripciones con auto-renovación activa</div></div>
+  <div class="tile"><div class="v">$1,12 M</div><div class="l">equivalente mensual de todo lo vigente</div><div class="n">41 suscripciones activas</div></div>
+  <div class="tile ok"><div class="v">$38.737</div><div class="l">le cuesta a Nospi cada evento que un suscriptor usa</div><div class="n">vs $15.000 del ticket suelto</div></div>
+  <div class="tile bd"><div class="v">60,9 %</div><div class="l">de los pagos intentados se aprueba</div><div class="n">era 51,5 % en julio</div></div>
+</div>
+
+<p><strong>El margen de la suscripción es excelente justo porque la gente no la usa.</strong> Los 54 suscriptores han pagado $2.324.200 y han consumido 60 eventos: $38.737 por evento, dos veces y media el precio del ticket. Eso es plata hoy y es un problema mañana — una suscripción que no se usa no se renueva por mucho tiempo.</p>
+
+<p>Y el dato que más duele: <strong>4 de cada 10 pagos que la gente intenta no se completan.</strong> En julio se perdía la mitad. Entre julio y hoy hay 322 intentos no aprobados. Aunque solo una parte de esos sean clientes reales que se rindieron, ahí hay más plata que en cualquier otra palanca de este informe.</p>
+
+<!-- ============================= 6 ============================= -->
+<h2><span class="num">6</span>La operación: más eventos, menos gente en cada uno</h2>
+
+<div class="tableScroll">
+<table>
+  <thead><tr><th>Mes</th><th class="n">Eventos</th><th class="n">Asistencias</th><th class="n">Promedio por evento</th><th class="n">Personas distintas</th><th class="n">No-shows</th><th class="n">% no-show</th></tr></thead>
+  <tbody>
+    <tr><td>Julio</td><td class="n">10</td><td class="n">82</td><td class="n"><strong>8,2</strong></td><td class="n">78</td><td class="n">0</td><td class="n">0 %</td></tr>
+    <tr><td>Agosto</td><td class="n">18</td><td class="n">182</td><td class="n"><strong>10,1</strong></td><td class="n">140</td><td class="n">40</td><td class="n"><span class="pill wr">18,0 %</span></td></tr>
+    <tr><td>Septiembre</td><td class="n">20</td><td class="n">136</td><td class="n"><strong>6,8</strong></td><td class="n">120</td><td class="n">29</td><td class="n"><span class="pill wr">17,6 %</span></td></tr>
+    <tr><td>Octubre <span class="em">(2 días)</span></td><td class="n">5</td><td class="n">22</td><td class="n"><strong>4,4</strong></td><td class="n">22</td><td class="n">3</td><td class="n">12,0 %</td></tr>
+  </tbody>
+</table>
+</div>
+<small>Esta es la única sección donde <strong>sí</strong> cuentan las asistencias de cortesía y las del evento gratuito: aquí la pregunta es cuánta gente había sentada en la mesa, y para eso da igual quién pagó la silla. El conteo de no-shows de julio es 0 porque la verificación por GPS todavía no existía, no porque nadie faltara; para comparar, usa agosto contra septiembre.</small>
+
+<p>Esta tabla explica algo que las cifras de plata esconden: <strong>de agosto a septiembre subiste de 18 a 20 eventos pero la asistencia promedio cayó de 10,1 a 6,8 personas</strong> — un 33 % menos gente en cada mesa. El ingreso creció igual, por la suscripción, pero la experiencia por evento se diluyó. Y en un producto donde el valor <em>es</em> la cantidad de gente nueva en la mesa, eso se siente. Posiblemente sea parte de por qué aparecieron hoy las dos cancelaciones por "no cumplió mis expectativas".</p>
+
+<p>El no-show estable en ~18 % es otra fuga: casi una de cada cinco sillas vendidas queda vacía, y el que no fue queda con la sensación de no haber recibido nada.</p>
+
+<!-- ============================= 7 ============================= -->
+<h2><span class="num">7</span>Qué haría yo con esto, en orden</h2>
+
+<div class="do">
+  <h3>1. Llamar a Adriana y a Diana Gómez esta semana</h3>
+  <p class="muted">Son las dos únicas personas en toda la base que escribieron "no cumplió mis expectativas", las dos canceló hoy, las dos de plan trimestral. Adriana canceló 7 reservas sin lograr asistir nunca — eso no es desinterés, es un obstáculo. Diana fue hoy y canceló el mismo día.</p>
+  <p class="why">Por qué primero: son 2 llamadas y es la única información directa que hay sobre qué está fallando. Todo lo demás en este informe es inferencia.</p>
+</div>
+
+<div class="do">
+  <h3>2. Ofrecerle la suscripción a los 18 recurrentes que no la tienen</h3>
+  <p class="muted">Los cuatro con mejor argumento, porque ya pagaron en tiquetes sueltos <strong>$60.000</strong> cada uno — más del doble de un mes de suscripción: <strong>Nataly</strong> (3 pagados, 1 cupo próximo), <strong>LuisFer</strong> (3 pagados + 2 cortesías, 2 cupos próximos), <strong>Juan Fdo Herrera</strong> (3 pagados, 1 cupo próximo) y <strong>Mauricio</strong> (3 pagados). Después: Juan Sebastián Fernández, Rafael Ríos, Alejo (alefonne), Natalia, Paola, Carlos, Walter, Lina María, Willy, Juan Sebastián Espinosa, Mauricio (maoroj), Federico, Diana Vélez y Jhennifer.</p>
+  <p class="why">Por qué: los 4 suscriptores que probaron antes de suscribirse usan la suscripción el doble que el promedio. Este grupo es exactamente ese perfil, y no se les ha ofrecido.</p>
+</div>
+
+<div class="do">
+  <h3>3. Antes del próximo cobro, escribirles a los 5 que pagaron y nunca fueron</h3>
+  <p class="muted"><strong>Fernando</strong> (49 días, $59.800), <strong>Camilo</strong> (33 días, $59.800), <strong>Claudia</strong>, <strong>Laura Trujillo</strong> y <strong>Marly Catherine</strong>. Ninguno tiene nada reservado y a varios les entra otro cobro.</p>
+  <p class="why">Por qué: un tercer cobro por algo nunca usado es cómo se fabrica una queja y una devolución. Un mensaje tipo "te guardé un cupo en el evento del sábado, ¿te lo aparto?" cuesta nada y puede rescatar el ciclo.</p>
+</div>
+
+<div class="do">
+  <h3>4. Atacar el 39 % de pagos que no se aprueban</h3>
+  <p class="muted">Ya mejoró de 51,5 % a 60,9 % con el arreglo del navegador. Faltan 322 intentos no aprobados en 11 semanas.</p>
+  <p class="why">Por qué: es la única palanca donde el esfuerzo no es de retención ni de contenido, sino técnico, y donde cada punto porcentual es plata que ya estaba decidida a entrar.</p>
+</div>
+
+<div class="do">
+  <h3>5. Dejar de abrir más eventos por un mes y concentrar la gente</h3>
+  <p class="muted">20 eventos con 6,8 personas promedio es peor producto que 14 eventos con 10. La demanda no creció al ritmo de la agenda.</p>
+  <p class="why">Por qué: la densidad de la mesa <em>es</em> el producto. Con mesas más llenas sube la probabilidad de que alguien conozca a alguien, y eso es lo que hace que vuelva — hoy solo vuelve el 13,5 %.</p>
+</div>
+
+<div class="do">
+  <h3>6. Pensar un "primer mes sin compromiso" explícito</h3>
+  <p class="muted">6 de las 11 cancelaciones fueron el mismo día de la compra, con razones como "solo quiero probar un mes". Esa gente no quería irse: quería no quedar amarrada.</p>
+  <p class="why">Por qué: hoy apagar la auto-renovación es la única forma que tienen de expresar "quiero probar", y eso te borra la renovación de entrada. Un plan de prueba explícito convierte esas 6 cancelaciones en 6 decisiones al final del mes, cuando ya conocen el producto.</p>
+</div>
+
+<!-- ============================= nota ============================= -->
+<h2><span class="num">8</span>Cómo se midió (y qué no se puede afirmar)</h2>
+
+<div class="card">
+  <p><strong>"Asistió" a un evento</strong> = reserva de un evento ya pasado, en estado <code>anterior</code>, no marcada como no-show, <strong>y pagada</strong> (de bolsillo, con saldo virtual o con la suscripción). Con esa definición son <strong>306 personas y 355 asistencias</strong>.</p>
+  <p><strong>Por qué se excluyen las gratuitas.</strong> Una primera versión de este informe contaba también las cortesías y el evento gratuito del 9 de agosto, y eso inflaba la recurrencia — sobre todo la de los hombres, porque 11 de las 13 cortesías individuales fueron invitaciones a hombres para cuadrar el género de una mesa. Una silla regalada no es evidencia de que la persona decidiera volver, así que no cuenta como recurrencia. Las 38 asistencias gratuitas (<code>cortesia</code> y <code>free</code>) quedan fuera de toda la sección 1 y de la sección 2. Sí siguen contando en la sección 6, porque ahí la pregunta es cuánta gente había en la mesa, y para eso da igual quién pagó la silla.</p>
+  <p><strong>Otras definiciones que se descartaron:</strong> si solo contara a quien hizo check-in por GPS serían 227 personas, pero el GPS no existía en julio y agosto, así que castigaría injustamente los primeros meses. Si contara todo <code>anterior</code> sin excluir no-shows serían 384 personas. Elegí la del medio.</p>
+  <p><strong>"Se suscribió el..."</strong> = el primer cobro aprobado en el historial de cobros, no <code>start_date</code> de la suscripción. <code>start_date</code> es el inicio del ciclo actual y se sobrescribe en cada renovación; usarlo haría ver como "antes de suscribirse" eventos que sí fueron con suscripción.</p>
+  <p><strong>Ingresos de eventos</strong> = pagos aprobados en el registro de intentos de pago (Wompi), no la columna de monto de la reserva: a 123 reservas les falta ese dato y subestimarían los ingresos. <strong>Ingresos de suscripción</strong> = historial de cobros aprobados. Los dos no se traslapan (ningún cobro de suscripción pasa por el registro de intentos de evento, verificado: el monto máximo allí es $15.000).</p>
+  <p><strong>Cuidado con julio y agosto.</strong> 36 de los 70 cobros de suscripción están marcados como reconstruidos: se dedujeron de las fechas cuando se creó la tabla de historial, no se leyeron de Wompi. Las cifras de suscripción de julio ($239 k) y agosto ($538 k) son estimadas; septiembre en adelante es dato real.</p>
+  <p><strong>Lo que este informe no puede responder:</strong> por qué las mujeres vuelven a menos de la mitad de la tasa de los hombres, y si la caída de asistencia por evento en septiembre es causa o consecuencia de abrir más eventos. Ninguna de las dos se resuelve con los datos que hay — se resuelven preguntándole a la gente.</p>
+  <p class="muted" style="margin-bottom:0">Se excluyen de todos los conteos los 3 usuarios internos: <strong>Johnatan</strong> (johnatan365@hotmail.com), <strong>Nospi</strong> (nospisocial@gmail.com) y Equipo Nospi. Entre los dos primeros suman 29 asistencias y 1 suscripción que no aparecen en ninguna cifra de este informe.</p>
+</div>
+
+<footer>
+  Informe generado el 2 de octubre de 2026 sobre la base de datos de producción de Nospi · Periodo cubierto: 16 de julio – 2 de octubre de 2026 · 53 eventos cerrados, 306 asistentes de pago, 54 suscriptores. Corregido el 2 de octubre para excluir las asistencias de cortesía.
+</footer>
+
+</div>
+</body>
+</html>
