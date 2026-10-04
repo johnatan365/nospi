@@ -39,6 +39,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 // IconSymbol usa SF Symbols, que no tiene equivalente. MaterialIcons es una
 // fuente, asi que se ve igual en iPhone, Android y web.
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { CATEGORIAS_EMOJI, REACCIONES_RAPIDAS } from '@/constants/Emojis';
 import * as ImagePicker from 'expo-image-picker';
 import {
   gifsBuscar,
@@ -576,7 +577,9 @@ function renderMessageContent(
 // umbral, se activa el responder al soltar. En web el arrastre con mouse es
 // incomodo, asi que alli la via principal sigue siendo mantener presionado.
 // Los 6 emojis de reaccion rapida, iguales a los de WhatsApp.
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+// Los seis de la barra rapida y el catalogo completo del boton "+" viven
+// juntos en constants/Emojis.ts, para que no se desincronicen.
+const QUICK_REACTIONS = REACCIONES_RAPIDAS;
 
 // Alto de pantalla, para decidir si el menu de acciones se abre hacia arriba o
 // hacia abajo del mensaje presionado.
@@ -965,6 +968,12 @@ export default function ChatThreadScreen() {
   // La flecha de la esquina para bajar al ultimo mensaje. Es state y no ref
   // porque tiene que repintar al aparecer y desaparecer.
   const [mostrarBajar, setMostrarBajar] = useState(false);
+
+  // Selector de emojis completo (el boton "+" de la barra de reacciones).
+  // Guarda el mensaje al que se le va a reaccionar, porque el menu de acciones
+  // se cierra al abrirlo: si no, al elegir el emoji ya no se sabria de cual era.
+  const [emojisParaMensaje, setEmojisParaMensaje] = useState<Message | null>(null);
+  const [categoriaEmoji, setCategoriaEmoji] = useState(CATEGORIAS_EMOJI[0].clave);
 
   // El mensaje mas nuevo que de verdad ESTUVO EN PANTALLA. Es lo que se manda
   // al marcar leido, en vez de now(): asi lo que no se vio no queda leido.
@@ -3870,6 +3879,76 @@ export default function ChatThreadScreen() {
         </View>
       </Modal>
 
+      {/* Todos los emojis, por categorias. Se abre con el "+" de la barra de
+          reacciones. Una cuadricula y no una lista con buscador: el buscador
+          necesitaria un nombre en espanol por cada uno de los 1.100 y mas emojis,
+          y uno a medias es peor que ninguno -- se escribe "fiesta", no sale
+          nada, y parece que el emoji no existe. */}
+      <Modal
+        visible={!!emojisParaMensaje}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEmojisParaMensaje(null)}
+      >
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setEmojisParaMensaje(null)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={[styles.emojiSheet, { paddingBottom: insets.bottom + 10 }]}
+          >
+            <View style={styles.sheetGrabber} />
+
+            {/* Pestanas de categoria. Van arriba y con scroll horizontal: son
+                ocho y en un telefono angosto no caben todas de una. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.emojiTabs}
+              contentContainerStyle={{ gap: 6, paddingHorizontal: 4 }}
+            >
+              {CATEGORIAS_EMOJI.map((c) => (
+                <TouchableOpacity
+                  key={c.clave}
+                  onPress={() => setCategoriaEmoji(c.clave)}
+                  style={[styles.emojiTab, categoriaEmoji === c.clave && styles.emojiTabActiva]}
+                  accessibilityLabel={c.nombre}
+                >
+                  <Text style={{ fontSize: 20 }}>{c.icono}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.emojiCategoriaNombre}>
+              {CATEGORIAS_EMOJI.find((c) => c.clave === categoriaEmoji)?.nombre}
+            </Text>
+
+            {/* numColumns fijo en 8 y no calculado: con un ancho de pantalla
+                cualquiera, 8 columnas dejan el emoji en un tamano que se puede
+                tocar sin apuntar. */}
+            <FlatList
+              key={categoriaEmoji}
+              data={CATEGORIAS_EMOJI.find((c) => c.clave === categoriaEmoji)?.emojis || []}
+              keyExtractor={(e, i) => `${categoriaEmoji}-${i}-${e}`}
+              numColumns={8}
+              style={styles.emojiGrid}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item: emo }) => (
+                <TouchableOpacity
+                  style={styles.emojiCelda}
+                  onPress={() => {
+                    const m = emojisParaMensaje;
+                    setEmojisParaMensaje(null);
+                    if (m) { toque(); toggleReaction(m.id, emo); }
+                  }}
+                >
+                  <Text style={styles.emojiCeldaTexto}>{emo}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={showAttachMenu} animationType="fade" transparent onRequestClose={() => setShowAttachMenu(false)}>
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowAttachMenu(false)}>
           {/* activeOpacity + onPress vacio: sin esto, tocar dentro de la hoja
@@ -4361,6 +4440,21 @@ export default function ChatThreadScreen() {
                 </TouchableOpacity>
               );
             })}
+            {/* Abre el catalogo completo. Cierra el menu de acciones primero y
+                se guarda el mensaje aparte, porque al cerrarse el menu se
+                pierde actionMsg y ya no se sabria a cual reaccionar. */}
+            <TouchableOpacity
+              style={[styles.reactionBarBtn, styles.reactionBarMas]}
+              onPress={() => {
+                const m = actionMsg;
+                setActionMsg(null);
+                setActionAnchor(null);
+                if (m) { setCategoriaEmoji(CATEGORIAS_EMOJI[0].clave); setEmojisParaMensaje(m); }
+              }}
+              accessibilityLabel="Ver todos los emojis"
+            >
+              <MaterialIcons name="add" size={19} color={nospiColors.purpleDark} />
+            </TouchableOpacity>
           </View>
           {/* Se puede desplazar por si el menu completo no cabe ni arriba ni
               abajo de la burbuja. Sin esto, en un mensaje pegado al borde las
@@ -5358,6 +5452,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
   },
+  // El "+" se distingue de los emojis: fondo gris claro y el signo en vinotinto.
+  reactionBarMas: { backgroundColor: '#F3F4F6' },
+  // Alto fijo (70% de la pantalla) y no "lo que ocupe": son mas de mil emojis,
+  // asi que sin tope la hoja taparia la pantalla entera.
+  emojiSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    height: '70%',
+  },
+  emojiTabs: { flexGrow: 0, marginTop: 6, marginBottom: 2 },
+  emojiTab: {
+    paddingVertical: 6, paddingHorizontal: 9, borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  emojiTabActiva: { backgroundColor: '#FCE4EC', borderWidth: 1.5, borderColor: nospiColors.purpleDark },
+  emojiCategoriaNombre: {
+    fontSize: 11.5, fontWeight: '800', color: '#9CA3AF',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+    paddingHorizontal: 6, paddingTop: 8, paddingBottom: 4,
+  },
+  emojiGrid: { flex: 1 },
+  emojiCelda: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  emojiCeldaTexto: { fontSize: 26 },
   // La barrita gris de arriba: sin ella la hoja no se lee como algo que se
   // arrastra o se cierra, sobre todo en Android.
   sheetGrabber: {
