@@ -3718,20 +3718,21 @@ export default function ChatThreadScreen() {
             estamos mirando el chat en vivo. Por eso los dos apuntan al
             WhatsApp, pero por motivos distintos.
 
-            En la comunidad ademas se dice PARA QUE es el grupo. Sin eso
-            termina siendo el buzon de quejas: alguien escribe un reclamo
-            delante de 160 personas, nadie del equipo lo ve, y lo unico que
-            queda es el reclamo colgado ahi. */}
-        {(isGroup || isComunidad) && (
+            En la COMUNIDAD no va ninguno. Lo tuvo: explicaba para que era el
+            grupo y por donde pedir soporte, para que no se volviera el buzon
+            de quejas delante de 233 personas. Se quito porque es el chat mas
+            activo que hay y esas cuatro lineas le estaban robando sitio a la
+            conversacion, que es lo que la gente va a ver. Si vuelve a llenarse
+            de reclamos, el sitio para decirlo es un mensaje fijado -- se lee
+            igual y no ocupa alto. */}
+        {isGroup && (
           <Text
             style={{
               fontSize: 11, color: '#9CA3AF', textAlign: 'center',
               paddingHorizontal: 22, paddingTop: 6, lineHeight: 15,
             }}
           >
-            {isComunidad
-              ? 'Este grupo es para la comunidad: conocerse, compartir planes y conversar. ¿Soporte técnico, sugerencias o reclamos? Por WhatsApp te atendemos con prioridad — el número está en tu perfil.'
-              : '¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido — es el mismo número por donde te llegó la info del evento, y está en tu perfil.'}
+            ¿Algo urgente del evento? Escríbenos por WhatsApp, ahí te respondemos más rápido — es el mismo número por donde te llegó la info del evento, y está en tu perfil.
           </Text>
         )}
         <Reanimated.View style={[styles.inputBar, padInput]}>
