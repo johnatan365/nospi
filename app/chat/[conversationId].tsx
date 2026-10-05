@@ -4876,8 +4876,8 @@ export default function ChatThreadScreen() {
               })}
             </ScrollView>
 
-            <TouchableOpacity style={styles.perfilCerrar} onPress={() => setVerEnLinea(false)} activeOpacity={0.85}>
-              <Text style={styles.perfilCerrarTexto}>Cerrar</Text>
+            <TouchableOpacity style={styles.perfilBoton} onPress={() => setVerEnLinea(false)} activeOpacity={0.85}>
+              <Text style={styles.perfilBotonText}>Cerrar</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
