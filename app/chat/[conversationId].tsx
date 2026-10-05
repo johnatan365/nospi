@@ -5164,9 +5164,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
   },
   enLineaNombre: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: '#1F2937' },
+  // Borde BLANCO, no del color del fondo.
+  //
+  // El borde no es decoracion: separa el punto de la foto. Sin el, sobre una
+  // foto con verdes o muy clara el punto se come con el fondo -- y es lo unico
+  // que dice que esa persona esta conectada.
+  //
+  // Lo que estaba mal era el color. Al ponerle el del fondo de cada pantalla
+  // quedaba un aro vinotinto, que sobre la lista blanca no pegaba con nada. El
+  // blanco no es "un color mas": separa de cualquier foto sin pelearse con la
+  // marca, y es lo que hacen WhatsApp, Instagram y Messenger.
   puntoEnLinea: {
     position: 'absolute', bottom: 0, backgroundColor: '#2BD97C',
-    borderWidth: 2, borderColor: nospiColors.purpleDark,
+    borderWidth: 2, borderColor: '#FFFFFF',
   },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
   headerAvatarPlaceholder: {
