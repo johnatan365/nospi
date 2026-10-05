@@ -40,7 +40,12 @@ function getSessionShared() {
 export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  // El manejador de AppState se registra UNA vez, asi que no puede leer `user`
+  // del cierre (se quedaria con el del primer render). Por eso va en un ref,
+  // que si se mantiene al dia.
+  const userRef = useRef<User | null>(null);
   const [loading, setLoading] = useState(true);
+  userRef.current = user;
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(RECOVERY_FLOW_DETECTED_ON_LOAD);
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,12 +175,43 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Refresh session when app comes back to foreground.
+    // Al volver a primer plano se revisa la sesion.
+    //
+    // Antes, si esto fallaba, el error se descartaba en silencio ("ignored") y
+    // la sesion muerta se quedaba puesta: la app seguia pintando como si
+    // hubiera usuario, cada consulta devolvia 401, y a la primera pantalla que
+    // leia un dato nulo saltaba el "Algo salio mal" -- con un boton de
+    // reintentar que no servia de nada. Era el caso de volver a la web despues
+    // de varias horas.
+    //
+    // Ahora, si no hay sesion y creiamos tener una, se intenta renovar; y si
+    // tampoco se puede, se cierra limpiamente para que la app mande al login.
+    // Quedarse sin sesion es molesto; quedarse a medias es peor, porque no se
+    // entiende ni se puede salir.
     const handleAppState = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
         try {
           console.log('SupabaseProvider: App became active, refreshing session');
           const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+
+          if (!refreshedSession) {
+            // Si nunca hubo sesion, no hay nada que recuperar: es alguien sin
+            // entrar y ya esta donde debe estar.
+            if (!userRef.current) return;
+
+            console.warn('SupabaseProvider: habia usuario pero no hay sesion — intentando renovar');
+            const { data: renovada, error: errRenovar } = await supabase.auth.refreshSession();
+            if (!errRenovar && renovada?.session) {
+              console.log('SupabaseProvider: sesion renovada');
+              setSession(renovada.session);
+              setUser(renovada.session.user);
+              return;
+            }
+            console.warn('SupabaseProvider: no se pudo renovar — cerrando sesion', errRenovar);
+            await supabase.auth.signOut();
+            return;
+          }
+
           if (refreshedSession) {
             setSession(refreshedSession);
             setUser(refreshedSession.user);
