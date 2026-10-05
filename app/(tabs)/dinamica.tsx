@@ -2523,11 +2523,13 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', color: '#2BD97C',
     paddingHorizontal: 4, paddingBottom: 6,
   },
-  // El punto verde sobre la foto, en la sala de espera.
+  // El punto verde sobre la foto, en la sala de espera. Borde blanco, igual
+  // que en el chat y en la lista: separa el punto de la foto sin meter el
+  // color de la marca, que sobre fondo claro quedaba como un aro sucio.
   puntoEnLineaDin: {
     position: 'absolute', right: -2, bottom: -2,
     width: 13, height: 13, borderRadius: 6.5,
-    backgroundColor: '#2BD97C', borderWidth: 2, borderColor: '#2A0618',
+    backgroundColor: '#2BD97C', borderWidth: 2, borderColor: '#FFFFFF',
   },
   participantListPhotoText: { fontSize: 14, fontWeight: 'bold', color: '#880E4F' },
   participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
