@@ -243,6 +243,16 @@ export default function SubscriptionPlansScreen() {
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [autoConfirmError, setAutoConfirmError] = useState(false);
+  // Sin estos, un suscriptor AL DIA podia terminar viendo la lista de PRECIOS.
+  // Pasaba en tres casos: (a) la confirmacion automatica falla y la pantalla
+  // cae al listado de planes, (b) entra aqui desde el menu, sin evento
+  // pendiente, y (c) vuelve de "Ver politica de asistencia" tras cerrar el
+  // modal. En los tres lo que lee es "$29.900" y entiende que le estan
+  // cobrando otra vez. Un suscriptor vigente escribio por WhatsApp justo eso
+  // el 4 de octubre de 2026.
+  const [pendingEventIdState, setPendingEventIdState] = useState<string | null>(null);
+  const [autoConfirmDone, setAutoConfirmDone] = useState(false);
+  const [retryingAutoConfirm, setRetryingAutoConfirm] = useState(false);
 
   // Precio del evento pendiente (columna events.price) — null si el evento usa
   // el precio global de configuración, 0 si el evento es gratis.
@@ -492,6 +502,7 @@ export default function SubscriptionPlansScreen() {
       if (!user?.id) { setCheckingSubscription(false); setLoadingEventPrice(false); return; }
       try {
         const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
+        setPendingEventIdState(pendingEventId);
 
         // Suscripción activa y precio del evento pendiente se consultan en paralelo
         // -- ambos determinan si hay que saltarse la pasarela de pago.
@@ -520,8 +531,10 @@ export default function SubscriptionPlansScreen() {
             setAutoConfirmError(true);
           }
         }
+        setAutoConfirmDone(true);
       } catch {
         setHasActiveSubscription(false);
+        setAutoConfirmDone(true);
       } finally {
         setCheckingSubscription(false);
         setLoadingEventPrice(false);
@@ -1637,7 +1650,19 @@ export default function SubscriptionPlansScreen() {
     );
   }
 
-  if ((hasActiveSubscription || eventPrice === 0) && !autoConfirmError && !showSuccessModal && !showSubscriptionConfirmModal) {
+  // Mientras se esta confirmando el cupo de un evento pendiente. La condicion
+  // exige que HAYA evento pendiente y que la confirmacion no haya terminado:
+  // antes bastaba con tener suscripcion activa, asi que quien entraba desde el
+  // menu (sin evento pendiente) o volvia de la politica de asistencia se
+  // quedaba con este spinner girando para siempre.
+  if (
+    (hasActiveSubscription || eventPrice === 0) &&
+    pendingEventIdState &&
+    !autoConfirmDone &&
+    !autoConfirmError &&
+    !showSuccessModal &&
+    !showSubscriptionConfirmModal
+  ) {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
         <ActivityIndicator size="large" color="#fff" />
@@ -1646,6 +1671,80 @@ export default function SubscriptionPlansScreen() {
             ? 'Tienes suscripción activa — confirmando tu asistencia sin costo…'
             : 'Este evento es gratis — confirmando tu asistencia…'}
         </Text>
+      </LinearGradient>
+    );
+  }
+
+  // Ya se confirmo (o no habia nada que confirmar) y la persona TIENE
+  // suscripcion vigente: nunca se le muestran precios. Antes caia al listado de
+  // planes y leia "$29.900" como un cobro nuevo.
+  if (hasActiveSubscription && !showSuccessModal && !showSubscriptionConfirmModal) {
+    const reintentar = async () => {
+      if (!pendingEventIdState || retryingAutoConfirm) return;
+      setRetryingAutoConfirm(true);
+      const ok = await confirmAppointment('suscripcion_activa', 'subscription', pendingEventIdState, 0);
+      setRetryingAutoConfirm(false);
+      if (ok) {
+        setAutoConfirmError(false);
+        setShowSubscriptionConfirmModal(true);
+      }
+    };
+    const soporte = appConfig.support_whatsapp ? `https://wa.me/${appConfig.support_whatsapp}` : null;
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
+        <Text style={{ fontSize: 44, marginBottom: 12 }}>👑</Text>
+        <Text style={{ color: '#fff', fontSize: 19, fontWeight: '800', textAlign: 'center', marginBottom: 10 }}>
+          Ya tienes tu suscripción activa
+        </Text>
+        <Text style={{ color: '#F3E8FF', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
+          {autoConfirmError
+            ? 'No alcanzamos a confirmar tu cupo en este momento. No se te va a cobrar nada: tu suscripción ya cubre este evento.'
+            : 'Con ella entras a todos los eventos sin pagar nada aparte. No tienes ningún cobro pendiente.'}
+        </Text>
+        {autoConfirmError && pendingEventIdState && (
+          <TouchableOpacity
+            style={{ marginTop: 22, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 30 }}
+            onPress={reintentar}
+            disabled={retryingAutoConfirm}
+            activeOpacity={0.8}
+          >
+            {retryingAutoConfirm
+              ? <ActivityIndicator color="#880E4F" />
+              : <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>Reintentar</Text>}
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={{ marginTop: autoConfirmError ? 12 : 22, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 30, borderWidth: 1.5, borderColor: '#ffffff80' }}
+          onPress={() => router.replace('/(tabs)/appointments')}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Ver mis citas</Text>
+        </TouchableOpacity>
+        {autoConfirmError && soporte && (
+          <TouchableOpacity style={{ marginTop: 16 }} onPress={() => Linking.openURL(soporte)} activeOpacity={0.7}>
+            <Text style={{ color: '#F3E8FF', fontSize: 14, textDecorationLine: 'underline' }}>Escribirnos por WhatsApp</Text>
+          </TouchableOpacity>
+        )}
+      </LinearGradient>
+    );
+  }
+
+  // Evento gratis que no se pudo confirmar: mismo criterio, sin precios.
+  if (eventPrice === 0 && !showSuccessModal && !showSubscriptionConfirmModal) {
+    return (
+      <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
+        <Text style={{ fontSize: 44, marginBottom: 12 }}>🎟️</Text>
+        <Text style={{ color: '#fff', fontSize: 19, fontWeight: '800', textAlign: 'center', marginBottom: 10 }}>Este evento es gratis</Text>
+        <Text style={{ color: '#F3E8FF', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
+          No alcanzamos a confirmar tu cupo en este momento, pero no hay nada que pagar.
+        </Text>
+        <TouchableOpacity
+          style={{ marginTop: 22, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 30 }}
+          onPress={() => router.replace('/(tabs)/appointments')}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>Ver mis citas</Text>
+        </TouchableOpacity>
       </LinearGradient>
     );
   }
