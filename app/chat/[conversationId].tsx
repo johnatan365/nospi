@@ -41,6 +41,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 // fuente, asi que se ve igual en iPhone, Android y web.
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CATEGORIAS_EMOJI, REACCIONES_RAPIDAS } from '@/constants/Emojis';
+import { normalizarPrivacidad, textoUltimaVez } from '@/constants/Privacidad';
+import { idsPresentes, textoEnLinea, tocarUltimaVez, pedirUltimaVez } from '@/lib/presencia';
 import * as ImagePicker from 'expo-image-picker';
 import {
   gifsBuscar,
@@ -230,6 +232,8 @@ interface ConversationMeta {
   event_name: string | null;
   event_type: string | null;
   event_date: string | null;
+  // El id hace falta para pedir su "ultima vez" y para saber si esta en linea.
+  other_user_id: string | null;
   other_user_name: string | null;
   other_user_photo: string | null;
   // Solo en canales: si la gente puede responder, y el nombre del canal.
@@ -303,8 +307,13 @@ function initialsOf(name?: string | null): string {
 // relleno arriba y el nombre mide unos 13, asi que su centro cae a ~16,5 -- y el
 // de una foto de 26 cae a 13.
 function ChatAvatar({
-  uri, name, size, marginRight = 0, onPress, alignTop = false,
-}: { uri: string | null; name: string; size: number; marginRight?: number; onPress?: () => void; alignTop?: boolean }) {
+  uri, name, size, marginRight = 0, onPress, alignTop = false, enLinea = false,
+}: {
+  uri: string | null; name: string; size: number; marginRight?: number;
+  onPress?: () => void; alignTop?: boolean;
+  /** Punto verde en la esquina: la persona tiene la app abierta ahora. */
+  enLinea?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   const box = { width: size, height: size, borderRadius: size / 2, marginRight } as const;
   const fuera = alignTop ? { alignSelf: 'flex-start' as const, marginTop: 3 } : null;
@@ -317,10 +326,24 @@ function ChatAvatar({
       <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.42 }}>{initialsOf(name)}</Text>
     </View>
   );
+  // El punto va en una envoltura con position relative. El borde es del color
+  // del fondo para que se lea como "encima de la foto" y no como un pegote.
+  const conPunto = enLinea ? (
+    <View style={{ position: 'relative' }}>
+      {inner}
+      <View style={[styles.puntoEnLinea, {
+        width: Math.max(9, size * 0.34),
+        height: Math.max(9, size * 0.34),
+        borderRadius: Math.max(9, size * 0.34) / 2,
+        right: marginRight,
+      }]} />
+    </View>
+  ) : inner;
+
   if (onPress) {
-    return <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={fuera}>{inner}</TouchableOpacity>;
+    return <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={fuera}>{conPunto}</TouchableOpacity>;
   }
-  return alignTop ? <View style={fuera}>{inner}</View> : inner;
+  return alignTop || enLinea ? <View style={fuera}>{conPunto}</View> : inner;
 }
 
 // Uno de los tres puntitos que saltan. Va en su propio componente porque cada
@@ -986,6 +1009,21 @@ export default function ChatThreadScreen() {
   // aviso de "esta escribiendo", que es lo ultimo de la lista.
   const distanciaDelFinalRef = useRef(0);
 
+  // ── Quien esta en linea ───────────────────────────────────────────────────
+  // Los user_id presentes en el canal, sin contarme. Viene de Realtime
+  // Presence, asi que es efimero: si alguien cierra la app desaparece solo.
+  const [enLinea, setEnLinea] = useState<string[]>([]);
+  // Mis dos interruptores. Si "en linea" esta apagado no me anuncio Y tampoco
+  // leo el de los demas (reciprocidad).
+  const [miPrivacidad, setMiPrivacidad] = useState(normalizarPrivacidad(null));
+  // En un ref ademas del state: el canal se arma una vez y no debe rehacerse
+  // cada vez que llegan los interruptores, pero sus manejadores si necesitan
+  // el valor al dia.
+  const miPrivacidadRef = useRef(miPrivacidad);
+  miPrivacidadRef.current = miPrivacidad;
+  // La ultima vez de la otra persona, solo en un chat privado.
+  const [ultimaVezOtro, setUltimaVezOtro] = useState<string | null>(null);
+
   // Selector de emojis completo (el boton "+" de la barra de reacciones).
   // Guarda el mensaje al que se le va a reaccionar, porque el menu de acciones
   // se cierra al abrirlo: si no, al elegir el emoji ya no se sabria de cual era.
@@ -1067,13 +1105,16 @@ export default function ChatThreadScreen() {
   // vacias, para que corra solo al desmontar) y sin el se quedaria con la
   // version vieja de la funcion, sin los mensajes que se leyeron despues.
   const marcarLeidoRef = useRef<(hasta?: string | null) => void>(() => {});
-  useEffect(() => () => { marcarLeidoRef.current(); }, []);
+  useEffect(() => () => { marcarLeidoRef.current(); tocarUltimaVez(); }, []);
 
   // Y tambien al mandar la app al fondo: ahi no se desmonta nada, asi que sin
   // esto quien lee y bloquea el telefono pierde la lectura.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (estado) => {
-      if (estado === 'background' || estado === 'inactive') marcarLeidoRef.current();
+      if (estado === 'background' || estado === 'inactive') {
+        marcarLeidoRef.current();
+        tocarUltimaVez();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -1633,6 +1674,40 @@ export default function ChatThreadScreen() {
     recargarParticipantes();
   }, [loading, conversationId, user?.id, messages, participantsById, recargarParticipantes]);
 
+  // Mis interruptores de privacidad. Deciden si me anuncio en el canal y si
+  // leo lo de los demas.
+  useEffect(() => {
+    if (!user?.id) return;
+    let vivo = true;
+    supabase
+      .from('users')
+      .select('mostrar_en_linea, mostrar_ultima_vez')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (vivo && data) setMiPrivacidad(normalizarPrivacidad(data)); });
+    return () => { vivo = false; };
+  }, [user?.id]);
+
+  // Con quien es el chat, cuando es privado. Se prefiere el de meta porque
+  // llega antes que la lista de participantes.
+  const otherParticipantId = meta?.conv_type === 'direct'
+    ? (meta.other_user_id ?? participants.find((p) => p.user_id !== user?.id)?.user_id ?? null)
+    : null;
+
+  // La ultima vez del otro, solo en privado y solo si no esta conectado ahora
+  // (si esta, lo que se muestra es "en linea" y esto sobra). La base aplica la
+  // reciprocidad, asi que si yo la tengo apagada vuelve vacio.
+  useEffect(() => {
+    const otro = otherParticipantId;
+    if (!otro || !miPrivacidad.ultimaVez || enLinea.includes(otro)) {
+      setUltimaVezOtro(null);
+      return;
+    }
+    let vivo = true;
+    pedirUltimaVez([otro]).then((mapa) => { if (vivo) setUltimaVezOtro(mapa[otro] ?? null); });
+    return () => { vivo = false; };
+  }, [otherParticipantId, miPrivacidad.ultimaVez, enLinea]);
+
   // El equipo de Nospi puede escribir en un canal aunque este cerrado.
   const [isAdminUser, setIsAdminUser] = useState(false);
   useEffect(() => {
@@ -1753,6 +1828,7 @@ export default function ChatThreadScreen() {
         event_name: thisConv.event_name,
         event_type: thisConv.event_type,
         event_date: thisConv.event_date,
+        other_user_id: thisConv.other_user_id ?? null,
         other_user_name: thisConv.other_user_name,
         other_user_photo: thisConv.other_user_photo,
         replies_open: thisConv.replies_open,
@@ -2105,6 +2181,13 @@ export default function ChatThreadScreen() {
         },
         () => { loadReactions(); }
       )
+      // Quien esta conectado. Va en ESTE canal y no en uno aparte para no
+      // abrir dos por conversacion.
+      .on('presence', { event: 'sync' }, () => {
+        // Si yo tengo el interruptor apagado, tampoco leo el de los demas.
+        if (!miPrivacidadRef.current.enLinea) { setEnLinea([]); return; }
+        setEnLinea(idsPresentes(channel.presenceState() as any, user?.id));
+      })
       .on('broadcast', { event: 'escribiendo' }, ({ payload }) => {
         const p = payload as { user_id?: string; nombre?: string; foto?: string | null };
         if (!p?.user_id || p.user_id === user?.id) return;   // lo propio no cuenta
@@ -2119,7 +2202,14 @@ export default function ChatThreadScreen() {
           },
         }));
       })
-      .subscribe();
+      .subscribe((estado) => {
+        // Anunciarse SOLO si el interruptor esta encendido: esa es la mitad de
+        // la reciprocidad que de verdad se puede garantizar, porque sin track()
+        // no se aparece en el estado del canal y nadie puede verlo.
+        if (estado !== 'SUBSCRIBED' || !user?.id) return;
+        if (!miPrivacidadRef.current.enLinea) return;
+        channel.track({ user_id: user.id, desde: Date.now() });
+      });
 
     canalRef.current = channel;
 
@@ -3148,6 +3238,7 @@ export default function ChatThreadScreen() {
                 name={headerTitle}
                 size={30}
                 marginRight={8}
+                enLinea={!!otherParticipantId && miPrivacidad.enLinea && enLinea.includes(otherParticipantId)}
                 // En el privado, tocar la foto del otro tambien abre su ficha,
                 // no el visor con Descargar y Compartir.
                 onPress={otherParticipant ? () => setPerfilVisto(otherParticipant) : undefined}
@@ -3174,7 +3265,35 @@ export default function ChatThreadScreen() {
               {/* El "esta escribiendo" ya NO va aqui: se movio al final de la
                   lista de mensajes, como una burbuja mas (ver FilaEscribiendo y
                   el ListFooterComponent). Abajo es donde la persona tiene los
-                  ojos mientras escribe. */}
+                  ojos mientras escribe.
+
+                  Lo que SI va aqui es quien esta conectado. En un privado, "en
+                  linea" o la ultima vez; en un grupo, cuantos hay. Y si no hay
+                  nada que decir no se escribe NADA: poner "sin conexion" o
+                  "oculto" delata que el otro lo apago, que es justo la pregunta
+                  incomoda que el interruptor queria evitar. */}
+              {(() => {
+                if (!miPrivacidad.enLinea) return null;
+
+                if (otherParticipantId) {
+                  if (enLinea.includes(otherParticipantId)) {
+                    return <Text style={styles.headerEnLinea} numberOfLines={1}>en línea</Text>;
+                  }
+                  // new Date() y no el reloj `ahora`: ese solo avanza mientras alguien
+                  // escribe, asi que podria decir "hace 2 minutos" llevando 20.
+                  const texto = textoUltimaVez(ultimaVezOtro, new Date());
+                  return texto
+                    ? <Text style={styles.headerUltimaVez} numberOfLines={1}>{texto}</Text>
+                    : null;
+                }
+
+                // Grupos, comunidad y canales: el numero y no la lista. En la
+                // Comunidad hay 246 personas.
+                const cuantos = enLinea.length;
+                return cuantos > 0
+                  ? <Text style={styles.headerEnLinea} numberOfLines={1}>{textoEnLinea(cuantos)}</Text>
+                  : null;
+              })()}
             </View>
           </View>
 
@@ -4971,6 +5090,14 @@ const styles = StyleSheet.create({
   // Columna del nombre + "esta escribiendo". flexShrink para que un nombre
   // largo se siga cortando con puntos suspensivos y no empuje los botones.
   headerTitleColumna: { flexShrink: 1 },
+  // "en línea" en verde; la última vez en gris, que es un dato de contexto y
+  // no una señal de que puedas escribir ahora mismo.
+  headerEnLinea: { color: '#6EE7A8', fontSize: 12, fontWeight: '700', marginTop: 1 },
+  headerUltimaVez: { color: 'rgba(255,255,255,0.6)', fontSize: 11.5, marginTop: 1 },
+  puntoEnLinea: {
+    position: 'absolute', bottom: 0, backgroundColor: '#2BD97C',
+    borderWidth: 2, borderColor: nospiColors.purpleDark,
+  },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },
   headerAvatarPlaceholder: {
     width: 32,
