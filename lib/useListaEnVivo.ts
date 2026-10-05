@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from './supabase';
-import { canalDeConversacion, idsPresentes } from './presencia';
+import { canalDeConversacion, canalDeEvento, idsPresentes } from './presencia';
 
 /** Cuanto vale un aviso de "escribiendo" sin refrescarse. Igual que en el chat. */
 const ESCRIBIENDO_VIVE_MS = 4000;
@@ -130,4 +130,42 @@ export function textoEscribiendoEnLista(quienes: QuienEscribe[], esGrupal: boole
   if (quienes.length === 1) return `${quienes[0].nombre} está escribiendo`;
   if (quienes.length === 2) return `${quienes[0].nombre} y ${quienes[1].nombre} están escribiendo`;
   return `${quienes.length} escribiendo`;
+}
+
+/**
+ * Quien tiene la app abierta en un evento, para la sala de la videollamada.
+ *
+ * Mas simple que el de la lista: un solo canal, sin "escribiendo", y se suelta
+ * al desmontar la pantalla.
+ */
+export function usePresenciaEvento(
+  eventId: string | null | undefined,
+  miId: string | null | undefined,
+  mostrarEnLinea: boolean,
+) {
+  const [ids, setIds] = useState<string[]>([]);
+  const mostrarRef = useRef(mostrarEnLinea);
+  mostrarRef.current = mostrarEnLinea;
+
+  useEffect(() => {
+    if (!eventId || !miId) { setIds([]); return; }
+    const nombre = canalDeEvento(eventId);
+    const viejo = supabase.getChannels().find((c) => c.topic === `realtime:${nombre}`);
+    if (viejo) supabase.removeChannel(viejo);
+
+    const canal = supabase
+      .channel(nombre)
+      .on('presence', { event: 'sync' }, () => {
+        if (!mostrarRef.current) { setIds([]); return; }
+        setIds(idsPresentes(canal.presenceState() as any, miId));
+      })
+      .subscribe((estado) => {
+        if (estado !== 'SUBSCRIBED' || !mostrarRef.current) return;
+        canal.track({ user_id: miId, desde: Date.now() });
+      });
+
+    return () => { supabase.removeChannel(canal); };
+  }, [eventId, miId]);
+
+  return ids;
 }

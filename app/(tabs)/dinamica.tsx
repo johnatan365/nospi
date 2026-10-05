@@ -5,6 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FichaPersona, PersonaFicha } from '@/components/FichaPersona';
+import { usePresenciaEvento } from '@/lib/useListaEnVivo';
+import { normalizarPrivacidad } from '@/constants/Privacidad';
+import { textoEnLinea } from '@/lib/presencia';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
@@ -183,6 +186,22 @@ export default function DinamicaScreen() {
   const [loadError, setLoadError] = useState(false);
 
   const [activeParticipants, setActiveParticipants] = useState<Participant[]>([]);
+
+  // Quien tiene la app abierta AHORA. Es distinto de activeParticipants, que
+  // dice quien CONFIRMO su asistencia: se puede confirmar y luego irse a hacer
+  // otra cosa, y eso es justo lo que quiere saber el que esta esperando solo.
+  const [miPrivacidadDin, setMiPrivacidadDin] = useState(normalizarPrivacidad(null));
+  useEffect(() => {
+    if (!user?.id) return;
+    let vivo = true;
+    supabase
+      .from('users')
+      .select('mostrar_en_linea, mostrar_ultima_vez')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (vivo && data) setMiPrivacidadDin(normalizarPrivacidad(data)); });
+    return () => { vivo = false; };
+  }, [user?.id]);
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
   // Cuantas preguntas tiene cargadas ESTE evento por nivel (para mostrarlo en
@@ -1006,6 +1025,10 @@ export default function DinamicaScreen() {
   const appointmentId = appointment?.id ?? null;
   const appointmentEventId = appointment?.event_id ?? null;
 
+  // Los que estan conectados en este evento.
+  const enLineaEvento = usePresenciaEvento(appointmentEventId, user?.id, miPrivacidadDin.enLinea);
+  const estaEnLinea = (uid?: string | null) => !!uid && enLineaEvento.includes(uid);
+
   useEffect(() => {
     if (!appointmentEventId || !appointmentId || !user) return;
 
@@ -1592,6 +1615,12 @@ export default function DinamicaScreen() {
             <Text style={styles.participantCountText}>{activeParticipants.length}</Text>
           </View>
         </View>
+        {/* Cuantos de los confirmados estan de verdad con la app abierta. Si no
+            hay ninguno no se escribe nada: un "0 en línea" dice menos que el
+            silencio y alarma sin motivo justo cuando la gente va llegando. */}
+        {enLineaEvento.length > 0 && (
+          <Text style={styles.participantsEnLinea}>🟢 {textoEnLinea(enLineaEvento.length)}</Text>
+        )}
         {activeParticipants.length > 0 && (
           <View style={styles.participantsList}>
             {activeParticipants.map((participant, index) => {
@@ -1614,13 +1643,16 @@ export default function DinamicaScreen() {
                     interests: participant.profiles?.interests ?? null,
                   })}
                 >
-                  {photoUrl ? (
-                    <ExpoImage source={{ uri: photoUrl }} style={styles.participantListPhoto} cachePolicy="memory-disk" transition={0} />
-                  ) : (
-                    <View style={styles.participantListPhotoPlaceholder}>
-                      <Text style={styles.participantListPhotoText}>{displayName.charAt(0).toUpperCase()}</Text>
-                    </View>
-                  )}
+                  <View style={{ position: 'relative' }}>
+                    {photoUrl ? (
+                      <ExpoImage source={{ uri: photoUrl }} style={styles.participantListPhoto} cachePolicy="memory-disk" transition={0} />
+                    ) : (
+                      <View style={styles.participantListPhotoPlaceholder}>
+                        <Text style={styles.participantListPhotoText}>{displayName.charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    {estaEnLinea(participant.user_id) && <View style={styles.puntoEnLineaDin} />}
+                  </View>
                   <Text style={styles.participantListName}>{displayName}</Text>
                 </TouchableOpacity>
               );
@@ -2486,6 +2518,17 @@ const styles = StyleSheet.create({
   participantListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   participantListPhotoPlaceholder: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(173, 20, 87, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   participantListPhoto: { width: 34, height: 34, borderRadius: 17, marginRight: 10, backgroundColor: 'rgba(173, 20, 87, 0.15)' },
+  // Cuantos de los confirmados estan de verdad con la app abierta.
+  participantsEnLinea: {
+    fontSize: 12, fontWeight: '700', color: '#2BD97C',
+    paddingHorizontal: 4, paddingBottom: 6,
+  },
+  // El punto verde sobre la foto, en la sala de espera.
+  puntoEnLineaDin: {
+    position: 'absolute', right: -2, bottom: -2,
+    width: 13, height: 13, borderRadius: 6.5,
+    backgroundColor: '#2BD97C', borderWidth: 2, borderColor: '#2A0618',
+  },
   participantListPhotoText: { fontSize: 14, fontWeight: 'bold', color: '#880E4F' },
   participantListName: { fontSize: 15, color: '#333', fontWeight: '500' },
   buttonDisabled: { opacity: 0.5 },

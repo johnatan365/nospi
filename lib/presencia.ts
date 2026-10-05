@@ -90,3 +90,14 @@ export async function pedirUltimaVez(userIds: string[]): Promise<Record<string, 
   }
   return mapa;
 }
+
+// ── Presencia de un evento ──────────────────────────────────────────────────
+//
+// La sala de espera de la videollamada no es un chat, asi que no tiene un canal
+// de conversacion donde colgarse: lleva el suyo, por evento.
+//
+// Lo que aporta sobre la lista que ya hay: esa dice quien CONFIRMO su
+// asistencia --toco el boton-- y esto dice quien tiene la app abierta AHORA.
+// Alguien puede confirmar y luego irse a hacer otra cosa, y eso es justo lo que
+// quiere saber el que esta esperando solo.
+export const canalDeEvento = (eventId: string) => `presencia_evento_${eventId}`;
