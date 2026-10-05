@@ -12,7 +12,6 @@ import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-nativ
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
-import * as Sentry from '@sentry/react-native';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -60,10 +59,9 @@ export default function AuthCallback() {
             // la app, asi que el canje SOLO puede hacerse aqui adentro.
             const { error } = await supabase.auth.exchangeCodeForSession(params.code);
             if (error) {
-              Sentry.addBreadcrumb({ message: `callback.tsx: nativo — fallo el canje del code: ${error.message}` });
+              console.warn('callback.tsx: nativo — falló el canje del code:', error.message);
             }
           }
-          Sentry.addBreadcrumb({ message: 'callback.tsx: nativo — link de recuperacion, navegando a /reset-password' });
           router.replace('/reset-password');
           return;
         }
@@ -71,7 +69,6 @@ export default function AuthCallback() {
         // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          Sentry.addBreadcrumb({ message: 'callback.tsx: nativo — sesion encontrada, navegando a /' });
           router.replace('/');
         }
         // Si no hay sesión, register.tsx está procesando — no hacer nada

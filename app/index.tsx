@@ -4,7 +4,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
-import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 import { PREFERENCIAS_POR_DEFECTO } from '@/constants/Notificaciones';
 import * as SplashScreen from 'expo-splash-screen';
@@ -126,7 +125,6 @@ export default function Index() {
 
       if (user) {
         console.log('Index: User authenticated, checking profile existence');
-        Sentry.addBreadcrumb({ message: 'Index: user authenticated', data: { userId: user.id, email: user.email } });
         setIsCheckingProfile(true);
 
         try {
@@ -156,7 +154,6 @@ export default function Index() {
               const flowType = await AsyncStorage.getItem('oauth_flow_type');
               isRegisterFlow = flowType === 'register';
             }
-            Sentry.addBreadcrumb({ message: 'Index: no profile found', data: { isRegisterFlow, platform: Platform.OS } });
 
             if (isRegisterFlow) {
               console.log('Index: No profile — register flow, creating profile from onboarding data');
@@ -211,7 +208,6 @@ export default function Index() {
 
                 await clearOnboardingData();
                 console.log('Index: Profile created successfully, redirecting to events');
-                Sentry.captureMessage('Index: register complete — navigating to events', { level: 'info', extra: { userId: user.id } });
                 hasNavigated.current = true;
                 await hideSplash();
                 router.replace('/(tabs)/events');
@@ -223,7 +219,6 @@ export default function Index() {
               }
             } else {
               console.log('Index: No profile — login flow, signing out and showing error');
-              Sentry.captureMessage('Index: no_profile flow triggered', { level: 'warning', extra: { userId: user.id, platform: Platform.OS } });
               if (Platform.OS === 'web') {
                 // On web, oauth_flow_type may be lost after redirect — treat missing profile as new registration
                 const { error: fallbackInsertError } = await supabase.from('users').upsert({
@@ -308,7 +303,6 @@ export default function Index() {
             router.replace(target as any);
           } else {
             console.log('Index: No pending payment, redirecting to events');
-            Sentry.captureMessage('Index: login complete — navigating to events', { level: 'info', extra: { userId: user.id } });
             hasNavigated.current = true;
             await hideSplash();
             router.replace('/(tabs)/events');

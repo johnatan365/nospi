@@ -24,17 +24,6 @@ import { SystemBars } from "react-native-edge-to-edge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 import MatchPopup from "@/components/MatchPopup";
-import * as Sentry from "@sentry/react-native";
-
-Sentry.init({
-  dsn: "https://b2517bba95f69144b1b2b63ab48321aa@o4511187847151616.ingest.us.sentry.io/4511187857047552",
-  debug: Platform.OS === 'android',
-  enableNativeNagger: false,
-  tracesSampleRate: 1.0,
-  integrations: [
-    Sentry.breadcrumbsIntegration({ console: true }),
-  ],
-});
 
 // El splash se mantiene visible hasta que index.tsx decida a dónde navegar,
 // eliminando la pantalla blanca entre el splash y la pantalla de bienvenida.
@@ -214,7 +203,7 @@ function RootLayoutInner() {
   );
 }
 
-export default Sentry.wrap(function RootLayout() {
+export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -237,4 +226,4 @@ export default Sentry.wrap(function RootLayout() {
       </GestureHandlerRootView>
     </ErrorBoundary>
   );
-});
+}

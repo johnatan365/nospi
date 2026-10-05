@@ -25,7 +25,7 @@ async function main() {
       '@/utils/onboardingTracker': path.join(__dirname, 'tracker.ts'),
     },
     plugins: [{ name: 'block-production', setup(build) {
-      build.onResolve({ filter: /supabase|sentry|onboardingTracker/ }, args => {
+      build.onResolve({ filter: /supabase|onboardingTracker/ }, args => {
         if (args.path === '@/utils/onboardingTracker') return { path: path.join(__dirname, 'tracker.ts') };
         throw new Error('Production dependency forbidden in local preview: ' + args.path);
       });

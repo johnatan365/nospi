@@ -6,7 +6,7 @@ Rama de trabajo: `preview/preferencias-edad`, basada en `7e05ef0`.
 
 El servidor importa las pantallas reales `age-range`, `age-fallback` y `location`, con React Native Web y el Slider instalado de la app. Sustituye únicamente el router y la analítica para aislar el recorrido. El resto del registro, catálogo y pago son fixtures explícitos, no una prueba integral de esos servicios.
 
-La migración se verifica sobre PostgreSQL embebido (PGlite). Guarda únicamente datos ficticios en `.preview-data`. No importa Supabase, Sentry, la raíz de Expo ni los píxeles del sitio. El servidor solo escucha en `127.0.0.1`; una política CSP restringe las conexiones al mismo origen.
+La migración se verifica sobre PostgreSQL embebido (PGlite). Guarda únicamente datos ficticios en `.preview-data`. No importa Supabase, la raíz de Expo ni los píxeles del sitio. El servidor solo escucha en `127.0.0.1`; una política CSP restringe las conexiones al mismo origen.
 
 ## Ejecución
 
