@@ -178,7 +178,8 @@
         {
           "microphonePermission": "Nospi usa el micrófono solo para grabar las notas de voz que tú decidas enviar en el chat."
         }
-      ]
+      ],
+      "./plugins/withDisableReleaseLint"
     ],
     "scheme": "nospi",
     "experiments": {
