@@ -1,5 +1,5 @@
 import React, { Component, ReactNode } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
 interface Props {
@@ -37,7 +37,41 @@ export class ErrorBoundary extends Component<Props, State> {
     this.props.onError?.(error, errorInfo);
   }
 
+  // "Intentar de nuevo" tiene que RECUPERAR de verdad.
+  //
+  // Antes solo borraba la marca de error y volvia a pintar los mismos hijos.
+  // Si la causa seguia ahi --y casi siempre sigue: la tipica es una sesion
+  // vencida despues de horas-- volvia a reventar en el mismo instante y el
+  // boton parecia muerto. La gente terminaba recargando a mano o recortando la
+  // direccion hasta app.nospi.co, que es justo lo que esto hace ahora.
   handleReset = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        // A la RAIZ y no a la pagina actual: si lo que falla es la pantalla en
+        // la que esta (un chat que ya no existe, un evento cerrado), recargar
+        // ahi mismo vuelve a fallar. Desde la raiz la app decide a donde ir.
+        window.location.replace('/');
+        return;
+      } catch {
+        // Si algo impide navegar, al menos se reintenta pintando.
+      }
+    }
+
+    // En movil se reinicia la app. Va en require() y dentro de un try: si el
+    // modulo falla, esta pantalla es lo ultimo que le queda a la persona y no
+    // puede romperse ella misma.
+    if (Platform.OS !== 'web') {
+      try {
+        const Updates = require('expo-updates');
+        if (typeof Updates?.reloadAsync === 'function') {
+          Updates.reloadAsync().catch(() => {});
+          return;
+        }
+      } catch {
+        // Sin expo-updates se cae al reintento de siempre.
+      }
+    }
+
     this.setState({
       hasError: false,
       error: null,
