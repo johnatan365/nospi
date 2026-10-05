@@ -1416,6 +1416,8 @@ export default function ChatThreadScreen() {
   // Tocar la cara de alguien pregunta "quien es este", no "muestrame esta
   // imagen mas grande": la ficha responde eso y ademas no deja bajar la foto.
   const [perfilVisto, setPerfilVisto] = useState<Participant | null>(null);
+  // La lista de quienes estan conectados, al tocar "N en línea" del encabezado.
+  const [verEnLinea, setVerEnLinea] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   // Ficha que se quiere abrir DESDE la lista de participantes.
   //
@@ -3290,9 +3292,17 @@ export default function ChatThreadScreen() {
                 // Grupos, comunidad y canales: el numero y no la lista. En la
                 // Comunidad hay 246 personas.
                 const cuantos = enLinea.length;
-                return cuantos > 0
-                  ? <Text style={styles.headerEnLinea} numberOfLines={1}>{textoEnLinea(cuantos)}</Text>
-                  : null;
+                if (cuantos === 0) return null;
+                // Se toca para ver QUIENES son. El numero solo dice que hay
+                // gente; en un grupo lo siguiente que uno quiere saber es si
+                // esta alguien en particular.
+                return (
+                  <TouchableOpacity onPress={() => { toque(); setVerEnLinea(true); }} hitSlop={6}>
+                    <Text style={styles.headerEnLinea} numberOfLines={1}>
+                      {textoEnLinea(cuantos)} ›
+                    </Text>
+                  </TouchableOpacity>
+                );
               })()}
             </View>
           </View>
@@ -4823,6 +4833,56 @@ export default function ChatThreadScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Quienes estan conectados ahora. Se abre al tocar "N en línea". */}
+      <Modal
+        visible={verEnLinea}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setVerEnLinea(false)}
+      >
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setVerEnLinea(false)}>
+          <TouchableOpacity
+            style={[styles.perfilSheet, { paddingBottom: insets.bottom + 18, alignItems: 'stretch' }]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.sheetGrabber} />
+            <Text style={styles.enLineaSheetTitulo}>
+              🟢 {textoEnLinea(enLinea.length)}
+            </Text>
+
+            {/* Lista y no cuadricula: se busca un nombre concreto, y en la
+                Comunidad pueden ser varios. Con scroll por si no caben. */}
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              {enLinea.map((uid) => {
+                const p = participantsById[uid];
+                // Puede no estar en la lista: antes de que el chat abra, la base
+                // solo devuelve a quien ya escribio. Igual se muestra, porque
+                // esconderlo seria decir que hay menos gente de la que hay.
+                const nombre = p?.name || 'Un participante';
+                return (
+                  <TouchableOpacity
+                    key={uid}
+                    style={styles.enLineaFila}
+                    activeOpacity={p ? 0.7 : 1}
+                    disabled={!p}
+                    onPress={() => { if (p) { setVerEnLinea(false); setPerfilVisto(p); } }}
+                    accessibilityLabel={p ? `Ver el perfil de ${nombre}` : nombre}
+                  >
+                    <ChatAvatar uri={p?.profile_photo_url ?? null} name={nombre} size={34} marginRight={11} enLinea />
+                    <Text style={styles.enLineaNombre} numberOfLines={1}>{nombre}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.perfilCerrar} onPress={() => setVerEnLinea(false)} activeOpacity={0.85}>
+              <Text style={styles.perfilCerrarTexto}>Cerrar</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Ficha de una persona de la mesa. Se abre al tocar su foto. */}
       {/* Al cerrar la ficha tambien se limpia la foto ampliada: si no, al
           volver a abrir otra ficha aparecia la foto de la anterior encima. */}
@@ -5094,6 +5154,16 @@ const styles = StyleSheet.create({
   // no una señal de que puedas escribir ahora mismo.
   headerEnLinea: { color: '#6EE7A8', fontSize: 12, fontWeight: '700', marginTop: 1 },
   headerUltimaVez: { color: 'rgba(255,255,255,0.6)', fontSize: 11.5, marginTop: 1 },
+  enLineaSheetTitulo: {
+    fontSize: 15, fontWeight: '800', color: '#1F2937',
+    textAlign: 'center', marginBottom: 12,
+  },
+  enLineaFila: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 9, paddingHorizontal: 4,
+    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+  },
+  enLineaNombre: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: '#1F2937' },
   puntoEnLinea: {
     position: 'absolute', bottom: 0, backgroundColor: '#2BD97C',
     borderWidth: 2, borderColor: nospiColors.purpleDark,
