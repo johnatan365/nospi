@@ -11,6 +11,11 @@ import {
   PreferenciasNotificacion, normalizarPreferencias, PREFERENCIAS_POR_DEFECTO,
   INTERRUPTORES, CHATS, OPCIONES_CHAT, AVISO_SIEMPRE,
 } from '@/constants/Notificaciones';
+import {
+  normalizarPrivacidad, OPCIONES_PRIVACIDAD, resumenPrivacidad,
+  PRIVACIDAD_TITULO, PRIVACIDAD_SUBTITULO, PRIVACIDAD_RECIPROCIDAD,
+  type Privacidad,
+} from '@/constants/Privacidad';
 import { NOMBRES_CIUDADES_COLOMBIA } from '@/constants/Ciudades';
 import {
   MOSTRAR_INTERESADO_EN,
@@ -469,6 +474,44 @@ export default function ProfileScreen() {
       router.replace('/welcome');
     } catch (err) {
       
+    }
+  };
+
+  const [privacidadModalVisible, setPrivacidadModalVisible] = useState(false);
+
+  // Guarda los dos interruptores de privacidad.
+  //
+  // La regla de "apagar en linea apaga tambien la ultima vez" vive en la base
+  // (guardar_privacidad): aqui se aplica tambien para que la pantalla no
+  // muestre un estado imposible mientras llega la respuesta.
+  const guardarPrivacidad = async (cambio: Partial<Privacidad>) => {
+    if (!profile) return;
+    const antes = normalizarPrivacidad(profile);
+    const pedido = { ...antes, ...cambio };
+    const nuevas: Privacidad = {
+      enLinea: pedido.enLinea,
+      ultimaVez: pedido.enLinea && pedido.ultimaVez,
+    };
+
+    const aplicar = (v: Privacidad) => {
+      const siguiente = {
+        ...profile,
+        mostrar_en_linea: v.enLinea,
+        mostrar_ultima_vez: v.ultimaVez,
+      };
+      cacheRef.current = { data: siguiente, timestamp: Date.now() };
+      setCached(CACHE_KEY, siguiente);
+      setProfile(siguiente);
+    };
+    aplicar(nuevas);
+
+    const { error } = await supabase.rpc('guardar_privacidad', {
+      p_en_linea: nuevas.enLinea,
+      p_ultima_vez: nuevas.ultimaVez,
+    });
+    if (error) {
+      aplicar(antes);
+      Alert.alert('No se pudo guardar', 'Revisa tu conexión e intenta de nuevo.');
     }
   };
 
@@ -946,6 +989,17 @@ export default function ProfileScreen() {
           <View style={styles.menuTextWrap}>
             <Text style={styles.menuTitle}>Preferencias de Notificaciones</Text>
             <Text style={styles.menuSub}>Toca para configurar</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuRow} onPress={() => setPrivacidadModalVisible(true)} activeOpacity={0.8}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="eye-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>{PRIVACIDAD_TITULO}</Text>
+            <Text style={styles.menuSub}>{PRIVACIDAD_SUBTITULO}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
@@ -1431,6 +1485,58 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      {/* Privacidad: en linea y ultima vez */}
+      <Modal visible={privacidadModalVisible} transparent animationType="slide" onRequestClose={() => setPrivacidadModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{PRIVACIDAD_TITULO}</Text>
+            <Text style={styles.modalSubtitle}>{PRIVACIDAD_RECIPROCIDAD}</Text>
+
+            {(() => {
+              const priv = normalizarPrivacidad(profile);
+              return (
+                <View>
+                  {OPCIONES_PRIVACIDAD.map(op => {
+                    // La ultima vez se ve apagada y no responde cuando "en
+                    // linea" esta apagado: asi se entiende que una depende de
+                    // la otra, en vez de dejar tocar algo que no hace nada.
+                    const bloqueada = op.clave === 'ultimaVez' && !priv.enLinea;
+                    return (
+                      <TouchableOpacity
+                        key={op.clave}
+                        style={[styles.notificationOption, bloqueada && { opacity: 0.45 }]}
+                        onPress={() => { if (!bloqueada) guardarPrivacidad({ [op.clave]: !priv[op.clave] } as any); }}
+                        activeOpacity={bloqueada ? 1 : 0.8}
+                        disabled={bloqueada}
+                      >
+                        <View style={{ flex: 1, paddingRight: 12 }}>
+                          <Text style={styles.notificationOptionText}>{op.titulo}</Text>
+                          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{op.ayuda}</Text>
+                        </View>
+                        <View style={[styles.checkbox, priv[op.clave] && styles.checkboxActive]}>
+                          {priv[op.clave] && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12 }}>
+                    <Text style={{ fontSize: 14 }}>{priv.enLinea ? '👁️' : '🔒'}</Text>
+                    <Text style={{ flex: 1, fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
+                      {resumenPrivacidad(priv)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPrivacidadModalVisible(false)} activeOpacity={0.8}>
+              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Delete Account Modal */}
       <Modal visible={showDeleteAccountModal} transparent animationType="fade" onRequestClose={() => setShowDeleteAccountModal(false)}>
         <View style={styles.modalOverlay}>
