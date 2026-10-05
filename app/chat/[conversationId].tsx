@@ -1,21 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  Image,
-  Modal,
-  ScrollView,
   ActivityIndicator,
   Alert,
-  Linking,
   Animated,
-  PanResponder,
+  AppState,
   Dimensions,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  PanResponder,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 // El KeyboardAvoidingView de react-native NO compensa nada en Android cuando la
 // app usa edge-to-edge: la ventana ya no se encoge al abrir el teclado. Este
@@ -909,11 +910,13 @@ export default function ChatThreadScreen() {
   // cerrar y volver a entrar.
   const recargarParticipantes = useCallback(async () => {
     if (!conversationId) return;
-    const { data } = await supabase.rpc('get_conversation_participants', {
+    const { data, error } = await supabase.rpc('get_conversation_participants', {
       p_conversation_id: conversationId,
     });
+    if (error) { console.error('ChatThread: error recargando participantes', error); return; }
     if (data) setParticipants(data as Participant[]);
   }, [conversationId]);
+
   const [meta, setMeta] = useState<ConversationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -1052,6 +1055,29 @@ export default function ChatThreadScreen() {
     return marca;
   }, [messages, cortaNoLeidos, user?.id]);
 
+  // Marcar leido al SALIR, por cualquier camino.
+  //
+  // Antes esto vivia solo en handleBack, el boton de atras de la cabecera. Si
+  // alguien salia deslizando, con el boton del sistema, cambiando de pestaña o
+  // cerrando la app, no se marcaba nada: se leian los mensajes, el contador
+  // bajaba a cero en pantalla, y al volver a entrar aparecian otra vez como sin
+  // leer. Que es justo lo que se veia.
+  //
+  // El ref hace falta porque el limpiador del efecto se crea UNA vez (deps
+  // vacias, para que corra solo al desmontar) y sin el se quedaria con la
+  // version vieja de la funcion, sin los mensajes que se leyeron despues.
+  const marcarLeidoRef = useRef<(hasta?: string | null) => void>(() => {});
+  useEffect(() => () => { marcarLeidoRef.current(); }, []);
+
+  // Y tambien al mandar la app al fondo: ahi no se desmonta nada, asi que sin
+  // esto quien lee y bloquea el telefono pierde la lectura.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (estado) => {
+      if (estado === 'background' || estado === 'inactive') marcarLeidoRef.current();
+    });
+    return () => sub.remove();
+  }, []);
+
   const marcarLeido = useCallback((hasta?: string | null) => {
     if (!conversationId) return;
     const p_hasta = hasta ?? hastaDondeLei();
@@ -1061,6 +1087,8 @@ export default function ChatThreadScreen() {
     supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId, p_hasta })
       .then(() => {}, (err: unknown) => console.error('ChatThread: error marcando leido', err));
   }, [conversationId, hastaDondeLei]);
+
+  marcarLeidoRef.current = marcarLeido;
   const [ahora, setAhora] = useState(Date.now());
 
   // Un reloj lento solo mientras haya alguien escribiendo: sirve para que el
@@ -1582,6 +1610,29 @@ export default function ChatThreadScreen() {
   }, {});
   participantsByIdRef.current = participantsById;
 
+  // Si la lista de participantes se cae en la carga inicial, los nombres salen
+  // todos como "Un participante" y no se arreglaba hasta reiniciar la app:
+  // solo se reintentaba al llegar un mensaje NUEVO de alguien sin identificar.
+  // Paso en la Comunidad, que tiene 246 participantes.
+  //
+  // Aqui se mira lo contrario: si entre los mensajes YA cargados hay remitentes
+  // que no se pueden nombrar, se vuelve a pedir la lista. Un solo reintento por
+  // conversacion, para no quedar en bucle si de verdad no hay lista (antes de
+  // que el chat abra, la base no devuelve a nadie a proposito).
+  const reintentoParticipantesRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || !conversationId || !user?.id) return;
+    if (reintentoParticipantesRef.current === conversationId) return;
+    const faltaAlguno = messages.some(
+      (m) => m.sender_id !== user.id
+        && m.sender_id !== NOSPI_SYSTEM_USER_ID
+        && !participantsById[m.sender_id],
+    );
+    if (!faltaAlguno) return;
+    reintentoParticipantesRef.current = conversationId;
+    recargarParticipantes();
+  }, [loading, conversationId, user?.id, messages, participantsById, recargarParticipantes]);
+
   // El equipo de Nospi puede escribir en un canal aunque este cerrado.
   const [isAdminUser, setIsAdminUser] = useState(false);
   useEffect(() => {
@@ -1688,6 +1739,7 @@ export default function ChatThreadScreen() {
     yaColoqueInicialRef.current = false;
     maxVistoRef.current = corta;
     vistosRef.current = new Set();
+    reintentoParticipantesRef.current = null;
 
     setMessages(listaFinal);
     setHayAnteriores(quedanAnteriores);
@@ -2894,12 +2946,8 @@ export default function ChatThreadScreen() {
   };
 
   const handleBack = () => {
-    // Marcar leído NO debe bloquear la navegación (antes se hacía await y si el
-    // RPC se demoraba, la flecha "no respondía"). Se dispara en segundo plano.
-    //
-    // Se marca HASTA EL MENSAJE MAS NUEVO QUE ESTUVO EN PANTALLA, no hasta
-    // ahora: lo que no se vio sigue contando como pendiente.
-    marcarLeido();
+    // El marcado de leido NO va aqui: va en el efecto de desmontaje, que cubre
+    // TODAS las salidas. Ver el comentario de ese efecto.
     // Si no hay pantalla anterior en la pila (se entró por notificación, deep
     // link o desde el pop-up de match con router.push), router.back() no hace
     // nada. En ese caso vamos a la lista de chats.
