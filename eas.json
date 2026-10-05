@@ -14,7 +14,8 @@
       "ios": {
         "buildConfiguration": "Release",
         "credentialsSource": "local"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
