@@ -6,6 +6,8 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { useListaEnVivo, textoEscribiendoEnLista } from '@/lib/useListaEnVivo';
+import { normalizarPrivacidad } from '@/constants/Privacidad';
 import { useRouter } from 'expo-router';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
@@ -111,6 +113,20 @@ export default function ChatsScreen() {
   const { user } = useSupabase();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  // Mis interruptores de privacidad: si tengo "en linea" apagado no me anuncio
+  // y tampoco veo el punto verde de los demas.
+  const [miPrivacidadLista, setMiPrivacidadLista] = useState(normalizarPrivacidad(null));
+  useEffect(() => {
+    if (!user?.id) return;
+    let vivo = true;
+    supabase
+      .from('users')
+      .select('mostrar_en_linea, mostrar_ultima_vez')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (vivo && data) setMiPrivacidadLista(normalizarPrivacidad(data)); });
+    return () => { vivo = false; };
+  }, [user?.id]);
 
   // El candado de cada chat se calcula al dibujar la lista. Si la pantalla ya
   // estaba abierta cuando llega la hora de apertura, nadie la vuelve a dibujar
@@ -378,6 +394,19 @@ export default function ChatsScreen() {
     : filter === 'canales' ? channelConversations
     : [...solicitudes, ...directConversations];
 
+  // Quien esta en linea y quien escribe, SOLO de las conversaciones que se
+  // estan viendo. Las de las otras pestañas no se escuchan: no se ven, y cada
+  // una cuesta un canal.
+  //
+  // Se dejan fuera las bloqueadas: no se puede entrar, asi que saber quien
+  // esta ahi no aporta y seria un canal gastado.
+  const idsEnVivo = visibleConversations
+    .filter((c) => !getChatLockInfo(c).locked)
+    .map((c) => c.conversation_id);
+  const { escribiendoEn, enLineaEn } = useListaEnVivo(
+    idsEnVivo, user?.id, miPrivacidadLista.enLinea,
+  );
+
   return (
     <LinearGradient
       colors={['#1a0010', '#880E4F', '#AD1457']}
@@ -563,6 +592,12 @@ export default function ChatsScreen() {
               const photoUrl = (isGroup || isChannel || isComunidad) ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);
+              // Quien escribe en esta conversacion, ya filtrado por caducidad.
+              const quienesEscriben = locked ? [] : escribiendoEn(item.conversation_id);
+              const textoEscribiendo = textoEscribiendoEnLista(
+                quienesEscriben, isGroup || isComunidad || isChannel,
+              );
+              const hayEnLinea = !locked && enLineaEn(item.conversation_id) > 0;
               const esComunidadBloqueada = isComunidad && item.estado === 'bloqueada';
               const esSinAsistencia = item.estado === 'bloqueada_sin_asistencia';
 
@@ -590,6 +625,11 @@ export default function ChatsScreen() {
                   }}
                   disabled={locked && !esComunidadBloqueada && !esSinAsistencia}
                 >
+                  {/* El punto verde va envolviendo la foto, no dentro de cada
+                      rama: la foto cambia segun el tipo de chat (foto, silueta,
+                      candado...) y repetirlo en todas invita a que alguna se
+                      quede sin el. */}
+                  <View style={{ position: 'relative' }}>
                   {photoUrl ? (
                     <Image source={{ uri: photoUrl }} style={styles.avatar} />
                   ) : locked ? (
@@ -626,6 +666,9 @@ export default function ChatsScreen() {
                     </View>
                   )}
 
+                  {hayEnLinea && <View style={styles.puntoEnLinea} />}
+                  </View>
+
                   <View style={styles.rowContent}>
                     <View style={styles.rowHeader}>
                       {/* Dos lineas: "Comunidad Nospi Medellin" y varios
@@ -658,6 +701,15 @@ export default function ChatsScreen() {
                       </Text>
                     ) : (
                       <View style={styles.rowFooter}>
+                        {/* Mientras alguien escribe, el aviso OCUPA el sitio de
+                            la vista previa en vez de añadir un renglon: asi la
+                            fila no cambia de alto cada vez que alguien empieza
+                            y para de escribir, que haria temblar la lista. */}
+                        {textoEscribiendo ? (
+                          <Text style={styles.rowEscribiendo} numberOfLines={1}>
+                            {textoEscribiendo}…
+                          </Text>
+                        ) : (
                         <Text
                           style={[styles.rowLastMessage, hasUnread && styles.rowLastMessageUnread]}
                           numberOfLines={1}
@@ -676,6 +728,7 @@ export default function ChatsScreen() {
                             ? 'Quienes ya vinieron a un evento de Nospi'
                             : 'Sin mensajes todavía'}
                         </Text>
+                        )}
                         {hasUnread && (
                           <View style={styles.unreadBadge}>
                             <Text style={styles.unreadBadgeText}>
@@ -817,6 +870,16 @@ const styles = StyleSheet.create({
   rowTitleLocked: { color: '#9a9a9e' },
   rowLockedText: { fontSize: 12, color: '#AD1457' },
   avatar: { width: 52, height: 52, borderRadius: 15 },
+  // El punto verde en la esquina de la foto. El borde es del color del fondo
+  // de la fila para que se lea como encima de la foto y no como un pegote.
+  puntoEnLinea: {
+    position: 'absolute', right: -2, bottom: -2,
+    width: 14, height: 14, borderRadius: 7,
+    backgroundColor: '#2BD97C', borderWidth: 2.5, borderColor: '#FFFFFF',
+  },
+  // El "escribiendo" en verde oscuro: se distingue del gris de la vista previa
+  // sin competir con el nombre.
+  rowEscribiendo: { flex: 1, fontSize: 13, color: '#1F6F4F', fontWeight: '700' },
   avatarPlaceholder: {
     backgroundColor: 'rgba(136,14,79,0.10)',
     alignItems: 'center',
