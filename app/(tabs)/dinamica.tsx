@@ -2389,20 +2389,14 @@ export default function DinamicaScreen() {
                             en_linea: estaEnLinea(participant.user_id),
                           })}
                         >
-                          {photoUrl ? (
-                            <ExpoImage
-                              source={{ uri: photoUrl }}
-                              style={styles.participantListPhoto}
-                              cachePolicy="memory-disk"
-                              transition={0}
-                            />
-                          ) : (
-                            <View style={styles.participantListPhotoPlaceholder}>
-                              <Text style={styles.participantListPhotoText}>
-                                {displayName.charAt(0).toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
+                          <AvatarNospi
+                            url={photoUrl}
+                            gender={participant.profiles?.gender}
+                            nombre={displayName}
+                            size={34}
+                            style={styles.participantListPhoto}
+                            transition={0}
+                          />
                           <Text style={styles.participantListName}>{displayName}</Text>
                         </TouchableOpacity>
                       </React.Fragment>
