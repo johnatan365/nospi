@@ -31,12 +31,11 @@ import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { compressProfilePhoto } from '@/lib/imageCompress';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { leerImagenParaSubir, FotoVaciaError } from '@/lib/subirFoto';
+import { MisFotos } from '@/components/MisFotos';
+import { AvatarNospi } from '@/components/AvatarNospi';
 import Constants from 'expo-constants';
 import appJson from '@/app.json';
 import { useFocusEffect } from '@react-navigation/native';
@@ -169,7 +168,11 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Tocar el avatar de arriba lleva a la rejilla de fotos, que es donde se
+  // suben ahora. Antes el avatar abria el selector el mismo y solo dejaba
+  // tener una foto.
+  const scrollRef = useRef<ScrollView>(null);
+  const yMisFotos = useRef(0);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
 
@@ -534,109 +537,12 @@ export default function ProfileScreen() {
     setEditModalVisible(true);
   };
 
-  const handlePhotoPress = async () => {
-    
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      // Se reduce a 1080 px antes de subir: la app nunca muestra mas que eso,
-      // y asi la foto pesa ~200 KB en vez de 1 MB. Ademas carga mas rapido
-      // para quien la ve.
-      const comprimida = await compressProfilePhoto(result.assets[0].uri);
-      await uploadPhoto(comprimida.uri);
-    }
-  };
-
-  const uploadPhoto = async (uri: string) => {
-    setUploadingPhoto(true);
-    try {
-      
-      
-      // On web, blob URIs don't have file extensions - default to jpg
-      // compressProfilePhoto siempre devuelve JPEG, en las tres plataformas.
-      const fileExt = 'jpg';
-      
-      const timestamp = Date.now();
-      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
-
-      // Se lee ANTES de borrar nada: si la imagen no se puede leer, la foto que
-      // ya tenia la persona sigue intacta. Antes se borraba primero y se subia
-      // despues, asi que quien intentaba cambiar su foto y fallaba la lectura
-      // se quedaba sin ninguna.
-      let uploadData: ArrayBuffer;
-      try {
-        uploadData = await leerImagenParaSubir(uri);
-      } catch (e) {
-        Alert.alert('No pudimos leer la foto', e instanceof FotoVaciaError ? e.message : 'Intenta con otra foto de tu galería.');
-        return;
-      }
-
-      const { data: existingFiles } = await supabase.storage
-        .from('profile-photos')
-        .list(user?.id || '', { search: user?.id || '' });
-
-      if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map(f => `${user?.id}/${f.name}`);
-        await supabase.storage.from('profile-photos').remove(filesToDelete);
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from('profile-photos')
-        .upload(filePath, uploadData, { contentType: `image/${fileExt}`, cacheControl: '3600', upsert: true });
-
-      if (uploadError) {
-        
-        Alert.alert('Error', `No se pudo subir la foto: ${uploadError.message}`);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
-      const basePhotoUrl = urlData.publicUrl;
-      
-
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ profile_photo_url: basePhotoUrl })
-        .eq('id', user?.id);
-
-      if (updateError) {
-        
-        Alert.alert('Error', 'No se pudo actualizar el perfil');
-        return;
-      }
-
-      // Update cache and state with cache-busted URL for immediate display
-      const cacheBustedUrl = `${basePhotoUrl}?t=${timestamp}`;
-      setProfile(prev => {
-        if (!prev) return null;
-        const updated = { ...prev, profile_photo_url: cacheBustedUrl };
-        const toCache = { ...updated, profile_photo_url: basePhotoUrl };
-        cacheRef.current = { data: toCache, timestamp: Date.now() };
-        clearCached(CACHE_KEY);
-        setCached(CACHE_KEY, toCache);
-        return updated;
-      });
-
-      
-      Alert.alert('Éxito', 'Foto de perfil actualizada');
-    } catch (err) {
-      
-      Alert.alert('Error', 'No se pudo subir la foto. Por favor intenta de nuevo.');
-    } finally {
-      setUploadingPhoto(false);
-    }
+  // Tocar la foto de arriba baja a "Mis fotos". La subida ya no vive aqui:
+  // esta en components/MisFotos.tsx, que es el mismo codigo para esta pantalla
+  // y para la de iOS. Tener una copia por pantalla fue justo lo que dejo 53
+  // fotos en 0 bytes sin que nadie se enterara.
+  const handlePhotoPress = () => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, yMisFotos.current - 12), animated: true });
   };
 
   const handleSaveProfile = async () => {
@@ -923,34 +829,30 @@ export default function ProfileScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={handlePhotoPress} activeOpacity={0.8}>
-            {profile.profile_photo_url ? (
-              <View>
-                <ExpoImage
-                  source={{ uri: profile.profile_photo_url }}
-                  style={styles.profilePhoto}
-                  cachePolicy="memory-disk"
-                  transition={0}
-                />
-                {uploadingPhoto && (
-                  <View style={styles.photoOverlay} />
-                )}
-                <View style={styles.editPhotoIcon}>
-                  <Text style={styles.editPhotoIconText}>✏️</Text>
-                </View>
+          <TouchableOpacity
+            onPress={handlePhotoPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Ver y cambiar mis fotos"
+          >
+            <View>
+              {/* Quien no ha subido foto ve el personaje de Nospi, no una
+                  inicial sobre un circulo gris: eso parecia un error de la app
+                  y no una foto que falta. */}
+              <AvatarNospi
+                url={profile.profile_photo_url}
+                gender={profile.gender}
+                nombre={profile.name}
+                size={120}
+                style={styles.profilePhotoBorde}
+                transition={0}
+              />
+              <View style={styles.editPhotoIcon}>
+                <Text style={styles.editPhotoIconText}>✏️</Text>
               </View>
-            ) : (
-              <View style={styles.profilePhotoPlaceholder}>
-                <Text style={styles.profilePhotoPlaceholderText}>
-                  {profile.name.charAt(0).toUpperCase()}
-                </Text>
-                <View style={styles.editPhotoIcon}>
-                  <Text style={styles.editPhotoIconText}>✏️</Text>
-                </View>
-              </View>
-            )}
+            </View>
           </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.age}>{profile.age} años</Text>
@@ -969,6 +871,17 @@ export default function ProfileScreen() {
             <Text style={styles.heroStatNum}>{profile.personality_traits.length}</Text>
             <Text style={styles.heroStatLabel}>RASGOS</Text>
           </View>
+        </View>
+
+        <View
+          style={styles.section}
+          onLayout={(ev) => { yMisFotos.current = ev.nativeEvent.layout.y; }}
+        >
+          <MisFotos
+            userId={profile.id}
+            gender={profile.gender}
+            onCambio={(url) => setProfile((prev) => (prev ? { ...prev, profile_photo_url: url } : prev))}
+          />
         </View>
 
         <View style={styles.section}>
@@ -1669,6 +1582,7 @@ const styles = StyleSheet.create({
   retryButtonText: { color: nospiColors.white, fontSize: 16, fontWeight: '600' },
   header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
   profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
+  profilePhotoBorde: { marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white, backgroundColor: 'rgba(173, 20, 87, 0.20)' },
   profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60 },

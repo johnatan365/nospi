@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
 // La foto de alguien, con un respaldo digno cuando no la ha subido.
@@ -44,7 +44,7 @@ export function AvatarNospi({
   size?: number;
   /** Por defecto es un circulo. Se pasa otro valor para esquinas menos redondas. */
   radio?: number;
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle & ImageStyle>;
   transition?: number;
 }) {
   const borderRadius = radio ?? size / 2;
