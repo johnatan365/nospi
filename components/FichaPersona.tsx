@@ -160,10 +160,15 @@ export function FichaPersona({
                 <Text style={estilos.nombre} numberOfLines={1}>
                   {persona?.name || 'Alguien'}
                 </Text>
-                {persona?.en_linea && <View style={estilos.puntoEnLinea} />}
               </View>
               {!!subtitulo && <Text style={estilos.subtitulo}>{subtitulo}</Text>}
             </View>
+
+            {/* Puntico verde de "en linea": arriba a la derecha de la foto,
+                como en WhatsApp. Antes iba junto al nombre, abajo. */}
+            {persona?.en_linea && (
+              <View style={estilos.puntoEnLinea} pointerEvents="none" />
+            )}
           </View>
 
           <View style={estilos.cuerpo}>
@@ -244,8 +249,9 @@ const estilos = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
   puntoEnLinea: {
-    width: 11, height: 11, borderRadius: 6, backgroundColor: '#4ADE80',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)',
+    position: 'absolute', top: 16, right: 16,
+    width: 18, height: 18, borderRadius: 9, backgroundColor: '#4ADE80',
+    borderWidth: 3, borderColor: '#FFFFFF',
   },
   subtitulo: {
     fontSize: 15, color: 'rgba(255,255,255,0.92)', marginTop: 2, fontWeight: '500',
