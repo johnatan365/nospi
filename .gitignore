@@ -45,3 +45,7 @@ supabase/.temp
 .preview-data/
 preview/reports/
 .preview-build/
+
+# Carpetas de trabajo de Claude (no son parte de la app)
+_to_delete/
+Claude outputs/
