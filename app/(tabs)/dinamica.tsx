@@ -73,6 +73,13 @@ interface Profile {
   interested_in?: string;
   edad?: number | null;
   interests?: string[] | null;
+  // Estos tres ya estaban guardados en la base y nunca se mostraban. La ficha
+  // de perfil nueva los usa: el genero para el avatar de Nospi de quien no
+  // subio foto, los rasgos para los chips de "Como es", y las fotos para poder
+  // pasar varias en vez de ver solo una.
+  gender?: string | null;
+  personality_traits?: string[] | null;
+  fotos?: string[] | null;
 }
 
 interface Participant {
@@ -319,7 +326,7 @@ export default function DinamicaScreen() {
   const loadActiveParticipants = useCallback(async (eventId: string) => {
     try {
       const { data, error } = await supabase
-        .rpc('get_event_participants_for_interaction', { p_event_id: eventId });
+        .rpc('get_event_participants_for_interaction_v2', { p_event_id: eventId });
 
       if (error) {
 
@@ -348,6 +355,9 @@ export default function DinamicaScreen() {
             city: item.user_city || '',
             profile_photo_url: item.user_profile_photo_url || null,
             interested_in: item.user_interested_in || '',
+            gender: item.user_gender || null,
+            personality_traits: Array.isArray(item.user_personality_traits) ? item.user_personality_traits : null,
+            fotos: Array.isArray(item.user_photos) ? item.user_photos : null,
           },
         }));
 
@@ -1639,8 +1649,13 @@ export default function DinamicaScreen() {
                     user_id: participant.user_id,
                     name: displayName,
                     profile_photo_url: photoUrl,
+                    fotos: participant.profiles?.fotos ?? null,
                     edad: participant.profiles?.edad ?? null,
+                    city: participant.profiles?.city ?? null,
+                    gender: participant.profiles?.gender ?? null,
                     interests: participant.profiles?.interests ?? null,
+                    personality_traits: participant.profiles?.personality_traits ?? null,
+                    en_linea: estaEnLinea(participant.user_id),
                   })}
                 >
                   <View style={{ position: 'relative' }}>
@@ -2363,8 +2378,13 @@ export default function DinamicaScreen() {
                             user_id: participant.user_id,
                             name: displayName,
                             profile_photo_url: photoUrl,
+                            fotos: participant.profiles?.fotos ?? null,
                             edad: participant.profiles?.edad ?? null,
+                            city: participant.profiles?.city ?? null,
+                            gender: participant.profiles?.gender ?? null,
                             interests: participant.profiles?.interests ?? null,
+                            personality_traits: participant.profiles?.personality_traits ?? null,
+                            en_linea: estaEnLinea(participant.user_id),
                           })}
                         >
                           {photoUrl ? (
