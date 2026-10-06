@@ -1085,7 +1085,22 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScrollView} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Editar Perfil</Text>
+              {/* Flecha para salir arriba. Sin esto, la unica forma de cerrar
+                  era bajar hasta el final a buscar "Cancelar", aunque no se
+                  hubiera cambiado nada. */}
+              <View style={styles.modalBarra}>
+                <TouchableOpacity
+                  style={styles.modalVolver}
+                  onPress={() => setEditModalVisible(false)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver sin guardar"
+                >
+                  <Ionicons name="chevron-back" size={24} color="#880E4F" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Editar Perfil</Text>
+              </View>
 
               <Text style={styles.inputLabel}>Nombre</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
@@ -1654,6 +1669,8 @@ const styles = StyleSheet.create({
   modalScrollContent: { flexGrow: 1 },
   modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#880E4F', marginBottom: 8 },
+  modalBarra: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: -8 },
+  modalVolver: { padding: 4 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 12 },
   inputHelp: { fontSize: 12, color: '#6B7280', marginTop: -4, marginBottom: 10, lineHeight: 16 },
