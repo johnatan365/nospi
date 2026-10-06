@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshCon
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { AvatarNospi } from '@/components/AvatarNospi';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,6 +31,8 @@ interface ConversationRow {
   replies_open?: boolean | null;
   channel_title?: string | null;
   other_user_photo: string | null;
+  /** Para pintar el personaje de Nospi cuando la otra persona no tiene foto. */
+  other_user_gender?: string | null;
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number;
@@ -277,7 +280,7 @@ export default function ChatsScreen() {
       /* seguimos; el resguardo de abajo evita vaciar la lista por un parpadeo */
     }
 
-    const { data, error } = await supabase.rpc('get_my_conversations');
+    const { data, error } = await supabase.rpc('get_my_conversations_v2');
 
     if (error) {
       console.error('ChatsScreen: error loading conversations', error);
@@ -661,9 +664,19 @@ export default function ChatsScreen() {
                       <Image source={eventIconSource(item.event_type)} style={item.event_type === 'virtual' ? styles.avatarEventIconAncho : styles.avatarEventIcon} resizeMode="contain" />
                     </View>
                   ) : (
-                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                      <Text style={styles.avatarEmoji}>👤</Text>
-                    </View>
+                    /* Un privado con alguien que no subio foto. Antes salia el
+                       emoji 👤 gris, igual para todo el mundo; ahora sale el
+                       personaje de Nospi segun su genero. Si no se conoce el
+                       genero, AvatarNospi vuelve solo a la inicial del nombre,
+                       que sigue diciendo mas que un muneco generico. */
+                    <AvatarNospi
+                      url={null}
+                      gender={item.other_user_gender}
+                      nombre={item.other_user_name}
+                      size={52}
+                      radio={15}
+                      style={styles.avatar}
+                    />
                   )}
 
                   {hayEnLinea && <View style={styles.puntoEnLinea} />}
