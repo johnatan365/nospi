@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image as ExpoImage } from 'expo-image';
 
 // La foto de alguien, con un respaldo digno cuando no la ha subido.
@@ -75,10 +76,21 @@ export function AvatarNospi({
     );
   }
 
-  const inicial = (nombre || '?').trim().charAt(0).toUpperCase() || '?';
+  // Ultimo recurso. Si hay nombre se usa su inicial, que al menos distingue a
+  // una persona de otra. Si no hay NADA -- pasa cuando la pantalla todavia no
+  // cargo a esa persona, o cuando el chat aun no esta abierto y el servidor no
+  // manda el nombre -- va una silueta en los colores de Nospi.
+  //
+  // Antes aqui salia un signo de interrogacion: se leia como "algo fallo", y
+  // la gente preguntaba por que su perfil aparecia roto.
+  const inicial = (nombre || '').trim().charAt(0).toUpperCase();
   return (
     <View style={[base, estilos.inicialCaja, style]}>
-      <Text style={[estilos.inicialTexto, { fontSize: Math.max(12, size * 0.4) }]}>{inicial}</Text>
+      {inicial ? (
+        <Text style={[estilos.inicialTexto, { fontSize: Math.max(12, size * 0.4) }]}>{inicial}</Text>
+      ) : (
+        <Ionicons name="person" size={Math.max(12, size * 0.5)} color="#880E4F" />
+      )}
     </View>
   );
 }

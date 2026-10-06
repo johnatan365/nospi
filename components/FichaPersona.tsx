@@ -51,9 +51,17 @@ function aLista(v: unknown): string[] {
 export function FichaPersona({
   persona,
   onClose,
+  pie,
 }: {
   persona: PersonaFicha | null;
   onClose: () => void;
+  /**
+   * Contenido propio de la pantalla que la abre, justo encima de "Cerrar".
+   * El chat lo usa para el aviso de solicitud y el boton de escribir por
+   * privado. Existe para que no haga falta una segunda ficha hecha a mano:
+   * antes el chat tenia la suya y por eso ahi solo se veia UNA foto.
+   */
+  pie?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -109,9 +117,13 @@ export function FichaPersona({
               </View>
             ) : (
               <View style={estilos.sinFoto}>
-                <Text style={estilos.sinFotoInicial}>
-                  {(persona?.name || '?').trim().charAt(0).toUpperCase()}
-                </Text>
+                {/* Sin interrogante: si no hay nombre se deja solo el texto,
+                    que dice mas y no parece un error de la app. */}
+                {!!(persona?.name || '').trim() && (
+                  <Text style={estilos.sinFotoInicial}>
+                    {persona!.name.trim().charAt(0).toUpperCase()}
+                  </Text>
+                )}
                 <Text style={estilos.sinFotoTexto}>Todavía no ha subido fotos</Text>
               </View>
             )}
@@ -205,6 +217,8 @@ export function FichaPersona({
                 Todavía no ha contado sus intereses. Pregúntale en el evento 😉
               </Text>
             )}
+
+            {pie}
 
             <TouchableOpacity style={estilos.cerrar} onPress={onClose} activeOpacity={0.85}>
               <Text style={estilos.cerrarTexto}>Cerrar</Text>

@@ -26,7 +26,8 @@ import Reanimated, {
   useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withDelay,
 } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
-import { avatarPorGenero } from '@/components/AvatarNospi';
+import { AvatarNospi, avatarPorGenero } from '@/components/AvatarNospi';
+import { FichaPersona } from '@/components/FichaPersona';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1434,7 +1435,6 @@ export default function ChatThreadScreen() {
   const [perfilVisto, setPerfilVisto] = useState<Participant | null>(null);
   // La lista de quienes estan conectados, al tocar "N en línea" del encabezado.
   const [verEnLinea, setVerEnLinea] = useState(false);
-  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   // Ficha que se quiere abrir DESDE la lista de participantes.
   //
   // En iOS no se pueden presentar dos <Modal> a la vez: el segundo no aparece,
@@ -4495,15 +4495,19 @@ export default function ChatThreadScreen() {
                     // perfilPendiente): dos modales a la vez no funcionan en iOS.
                     onPress={() => { setPerfilPendiente(p); setBuscaAsistente(''); setShowParticipants(false); }}
                   >
-                    {p.profile_photo_url ? (
-                      <TouchableOpacity onPress={() => { setPerfilPendiente(p); setBuscaAsistente(''); setShowParticipants(false); }} activeOpacity={0.8}>
-                        <ExpoImage source={{ uri: p.profile_photo_url }} style={styles.participantAvatar} cachePolicy="memory-disk" transition={0} />
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={[styles.participantAvatar, styles.participantAvatarPlaceholder]}>
-                        <Text style={{ fontSize: 18 }}>👤</Text>
-                      </View>
-                    )}
+                    <TouchableOpacity
+                      onPress={() => { setPerfilPendiente(p); setBuscaAsistente(''); setShowParticipants(false); }}
+                      activeOpacity={0.8}
+                    >
+                      <AvatarNospi
+                        url={p.profile_photo_url}
+                        gender={p.gender}
+                        nombre={p.name}
+                        size={40}
+                        style={styles.participantAvatar}
+                        transition={0}
+                      />
+                    </TouchableOpacity>
                     <Text style={styles.participantName}>{p.name}</Text>
                     {startingChatWith === p.user_id ? (
                       <ActivityIndicator size="small" color={nospiColors.purpleDark} />
@@ -4911,122 +4915,52 @@ export default function ChatThreadScreen() {
       {/* Ficha de una persona de la mesa. Se abre al tocar su foto. */}
       {/* Al cerrar la ficha tambien se limpia la foto ampliada: si no, al
           volver a abrir otra ficha aparecia la foto de la anterior encima. */}
-      <Modal
-        visible={!!perfilVisto}
-        animationType="slide"
-        transparent
-        onRequestClose={() => { setFotoAmpliada(null); setPerfilVisto(null); }}
-      >
-        <TouchableOpacity
-          style={styles.attachOverlay}
-          activeOpacity={1}
-          onPress={() => { setFotoAmpliada(null); setPerfilVisto(null); }}
-        >
-          {/* El paddingBottom incluye insets.bottom: sin eso, en Android el
-              boton "Cerrar" queda pegado a la barra de navegacion del sistema y
-              casi no hay donde tocarlo. */}
-          <TouchableOpacity
-            style={[styles.perfilSheet, { paddingBottom: insets.bottom + 24 }]}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            {perfilVisto?.profile_photo_url ? (
-              // La foto se puede ampliar desde aca, pero por un visor propio
-              // sin Descargar ni Compartir: es la foto de otra persona.
-              <TouchableOpacity onPress={() => setFotoAmpliada(perfilVisto.profile_photo_url)} activeOpacity={0.85}>
-                <ExpoImage
-                  source={{ uri: perfilVisto.profile_photo_url }}
-                  style={styles.perfilFoto}
-                  cachePolicy="memory-disk"
-                  transition={120}
-                />
-              </TouchableOpacity>
-            ) : (
-              <View style={[styles.perfilFoto, styles.perfilFotoPlaceholder]}>
-                <Text style={{ fontSize: 44 }}>👤</Text>
-              </View>
-            )}
-
-            <Text style={styles.perfilNombre}>{perfilVisto?.name || 'Alguien'}</Text>
-            {typeof perfilVisto?.edad === 'number' && (
-              <Text style={styles.perfilEdad}>{perfilVisto.edad} años</Text>
-            )}
-
-            {!!perfilVisto?.interests?.length && (
-              <View style={styles.perfilChips}>
-                {perfilVisto.interests.map((it) => (
-                  <View key={it} style={styles.perfilChip}>
-                    <Text style={styles.perfilChipText}>{it}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Escribir por privado: solo tiene sentido con OTRA persona. La RPC
-                decide si el chat se abre de una (ya se cruzaron en un evento) o
-                si va como solicitud. Eso hay que decirlo ANTES de tocar el
-                boton: si no, la persona cree que mando un mensaje normal y no
-                entiende por que no la dejan seguir escribiendo. */}
-            {perfilVisto && perfilVisto.user_id !== user?.id && (
-              <Text style={styles.perfilAvisoSolicitud}>
-                Si no se han cruzado en un evento, tu mensaje le llega como solicitud: la otra
-                persona lee ese primer mensaje y decide si se abre el chat.
-              </Text>
-            )}
-
-            {perfilVisto && perfilVisto.user_id !== user?.id && (
-              <TouchableOpacity
-                style={styles.perfilBoton}
-                disabled={!!startingChatWith}
-                onPress={() => {
-                  const otro = perfilVisto.user_id;
-                  // Se cierran los DOS modales antes de tocar la navegacion.
-                  // La ficha suele abrirse encima del modal de participantes, y
-                  // en iOS un router.push mientras un Modal se esta cerrando se
-                  // pierde: la conversacion se creaba en la base pero la
-                  // pantalla no se abria, y parecia que el boton no hacia nada.
-                  setPerfilVisto(null);
-                  setShowParticipants(false);
-                  setTimeout(() => handleStartDirectChat(otro), 350);
-                }}
-                activeOpacity={0.85}
-              >
-                {startingChatWith === perfilVisto.user_id ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.perfilBotonText}>Escribir por privado</Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.attachCancel} onPress={() => { setFotoAmpliada(null); setPerfilVisto(null); }}>
-              <Text style={styles.attachCancelText}>Cerrar</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-
-          {/* La foto ampliada se dibuja DENTRO de este mismo modal, como una
-              capa encima, y no como un <Modal> aparte. Asi se evita de raiz el
-              problema de iOS con dos modales simultaneos, y ademas al cerrarla
-              se vuelve a la ficha en vez de salirse a la conversacion.
-              Sin Descargar ni Compartir: es la cara de otra persona. */}
-          {!!fotoAmpliada && (
+      {/* La ficha de perfil es la MISMA de la dinamica y del perfil propio.
+          Antes el chat tenia su propia hoja hecha a mano, y por eso aqui solo
+          se veia UNA foto por mucho que la persona hubiera subido seis: era
+          otro componente que no sabia de la galeria. Lo propio del chat (el
+          aviso de solicitud y el boton de escribir por privado) va en el pie. */}
+      <FichaPersona
+        persona={perfilVisto && {
+          ...perfilVisto,
+          // El punto verde solo si esa persona dejo ver que esta en linea.
+          en_linea: miPrivacidad.enLinea && enLinea.includes(perfilVisto.user_id),
+        }}
+        onClose={() => setPerfilVisto(null)}
+        pie={perfilVisto && perfilVisto.user_id !== user?.id ? (
+          <>
+            {/* Esto hay que decirlo ANTES de tocar el boton: si no, la persona
+                cree que mando un mensaje normal y no entiende por que no la
+                dejan seguir escribiendo. */}
+            <Text style={styles.perfilAvisoSolicitud}>
+              Si no se han cruzado en un evento, tu mensaje le llega como solicitud: la otra
+              persona lee ese primer mensaje y decide si se abre el chat.
+            </Text>
             <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => setFotoAmpliada(null)}
+              style={styles.perfilBoton}
+              disabled={!!startingChatWith}
+              onPress={() => {
+                const otro = perfilVisto.user_id;
+                // Se cierran los DOS modales antes de tocar la navegacion. La
+                // ficha suele abrirse encima del modal de participantes, y en
+                // iOS un router.push mientras un Modal se esta cerrando se
+                // pierde: la conversacion se creaba en la base pero la pantalla
+                // no se abria, y parecia que el boton no hacia nada.
+                setPerfilVisto(null);
+                setShowParticipants(false);
+                setTimeout(() => handleStartDirectChat(otro), 350);
+              }}
+              activeOpacity={0.85}
             >
-              <View style={styles.photoViewerOverlay}>
-                <ExpoImage
-                  source={{ uri: fotoAmpliada }}
-                  style={styles.perfilFotoGrande}
-                  contentFit="contain"
-                  transition={120}
-                />
-              </View>
+              {startingChatWith === perfilVisto.user_id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.perfilBotonText}>Escribir por privado</Text>
+              )}
             </TouchableOpacity>
-          )}
-        </TouchableOpacity>
-      </Modal>
+          </>
+        ) : null}
+      />
 
       {/* Menu de un numero de celular tocado en un mensaje. Mismo formato que
           el de video, para que no se sienta una pantalla ajena. */}

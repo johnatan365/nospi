@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { AvatarNospi } from '@/components/AvatarNospi';
 
 // -----------------------------------------------------------------------------
 // Cierre del encuentro (reemplaza las estrellas 1-5):
@@ -56,7 +57,7 @@ const LEVELS = [
   { v: 3, emo: '🤩' },
 ];
 
-interface CatchUpParticipant { user_id: string; name: string; profile_photo_url: string | null; }
+interface CatchUpParticipant { user_id: string; name: string; profile_photo_url: string | null; gender?: string | null; }
 interface Match { user_id: string; name: string; profile_photo_url: string | null; conversation_id: string | null; }
 interface Props { eventId: string; currentUserId: string; eventType?: string | null; }
 
@@ -96,7 +97,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
     const load = async () => {
       try {
         const { data, error } = await withTimeout(
-          supabase.rpc('get_event_participants_for_interaction', { p_event_id: eventId }),
+          supabase.rpc('get_event_participants_for_interaction_v2', { p_event_id: eventId }),
           7000,
           { data: null, error: { message: 'timeout' } } as any
         );
@@ -113,6 +114,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
             user_id: p.user_id,
             name: p.user_name || 'Participante',
             profile_photo_url: p.user_profile_photo_url ?? null,
+            gender: p.user_gender ?? null,
           }));
         setParticipants(list);
 
@@ -355,11 +357,13 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
               const on = liked.has(p.user_id);
               return (
                 <TouchableOpacity key={p.user_id} style={[styles.person, on && styles.personOn]} onPress={() => toggleLike(p.user_id)} activeOpacity={0.85}>
-                  {p.profile_photo_url ? (
-                    <Image source={{ uri: p.profile_photo_url }} style={styles.avatar} />
-                  ) : (
-                    <View style={[styles.avatar, styles.avatarPh]}><Text style={styles.avatarTxt}>{initial(p.name)}</Text></View>
-                  )}
+                  <AvatarNospi
+                    url={p.profile_photo_url}
+                    gender={p.gender}
+                    nombre={p.name}
+                    size={46}
+                    style={styles.avatar}
+                  />
                   <Text style={styles.pName}>{p.name}</Text>
                   <View style={[styles.heart, on && styles.heartOn]}>
                     <Text style={styles.heartTxt}>{on ? '❤️' : '🤍'}</Text>
