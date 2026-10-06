@@ -60,6 +60,7 @@ interface UserProfile {
   city: string;
   phone: string;
   profile_photo_url: string | null;
+  bio?: string | null;
   interests: string[];
   personality_traits: string[];
   compatibility_percentage: number;
@@ -187,6 +188,7 @@ export default function ProfileScreen() {
 
   // Edit form state
   const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editCountry, setEditCountry] = useState('');
   const [editCity, setEditCity] = useState('');
@@ -230,6 +232,7 @@ export default function ProfileScreen() {
 
   const populateEditFields = (profileData: UserProfile) => {
     setEditName(profileData.name || '');
+    setEditBio(profileData.bio || '');
     setEditPhone(profileData.phone || '');
     setEditCountry(profileData.country || 'Colombia');
     // Si no tiene ciudad NO se prellena Medellin: al guardar quedaria
@@ -584,6 +587,7 @@ export default function ProfileScreen() {
         .from('users')
         .update({
           name: editName,
+          bio: editBio.trim() || null,
           phone: combinedPhone,
           country: editCountry,
           city: editCity,
@@ -612,7 +616,7 @@ export default function ProfileScreen() {
         if (!prev) return null;
         const updated = {
           ...prev,
-          name: editName, phone: combinedPhone, country: editCountry, city: editCity,
+          name: editName, bio: editBio.trim() || null, phone: combinedPhone, country: editCountry, city: editCity,
           interested_in: editInterestedIn, age_range_min: editAgeRangeMin,
           ...preferenceFields,
           age_range_max: editAgeRangeMax, interests: editInterests, personality_traits: editPersonality,
@@ -1116,6 +1120,21 @@ export default function ProfileScreen() {
 
               <Text style={styles.inputLabel}>Nombre</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
+
+              {/* Opcional, como la foto. El ejemplo hace casi todo el trabajo:
+                  sin el, la mayoria deja el campo vacio o escribe "hola". */}
+              <Text style={styles.inputLabel}>Sobre mí</Text>
+              <TextInput
+                style={[styles.modalInput, styles.modalInputMulti]}
+                value={editBio}
+                onChangeText={(t) => setEditBio(t.slice(0, 160))}
+                placeholder="Ej: Me río de todo, cocino mejor de lo que bailo y siempre digo que sí a un café."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+                maxLength={160}
+              />
+              <Text style={styles.contadorBio}>{editBio.length}/160 · opcional</Text>
 
               <Text style={styles.inputLabel}>Teléfono</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1688,6 +1707,8 @@ const styles = StyleSheet.create({
   modalScrollContent: { flexGrow: 1 },
   modalContent: { backgroundColor: nospiColors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#880E4F', marginBottom: 8 },
+  modalInputMulti: { minHeight: 76, textAlignVertical: 'top', paddingTop: 12 },
+  contadorBio: { fontSize: 11.5, color: '#9CA3AF', textAlign: 'right', marginTop: -8, marginBottom: 10 },
   modalBarra: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: -8 },
   modalVolver: { padding: 4 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 24 },

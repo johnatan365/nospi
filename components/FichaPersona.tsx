@@ -6,6 +6,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { avatarPorGenero } from '@/components/AvatarNospi';
+import { supabase } from '@/lib/supabase';
 
 // Ficha de una persona: sus fotos, nombre, edad, ciudad, intereses y como es.
 //
@@ -36,7 +37,19 @@ export interface PersonaFicha {
   personality_traits?: string[] | null;
   city?: string | null;
   gender?: string | null;
+  /** La frase que la persona escribio sobre si misma. */
+  bio?: string | null;
   en_linea?: boolean;
+}
+
+/** Quita las claves vacias para que el servidor rellene sin borrar. */
+function limpiar(o: Partial<PersonaFicha> | null): Partial<PersonaFicha> {
+  if (!o) return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (v !== null && v !== undefined) out[k] = v;
+  }
+  return out as Partial<PersonaFicha>;
 }
 
 /** Acepta tanto un arreglo como el jsonb crudo que a veces llega como texto. */
@@ -71,15 +84,42 @@ export function FichaPersona({
   // quedaba en la foto 3 de la anterior y se veia un hueco.
   useEffect(() => { setIndice(0); }, [persona?.user_id]);
 
+  // El perfil completo se pide al abrir la ficha, no en las listas.
+  //
+  // Las listas de participantes traen lo justo para pintar avatares. Si cada
+  // campo nuevo del perfil tuviera que viajar en todas ellas, agregar uno
+  // obligaria a crear otra version de cada funcion del servidor. Pidiendolo
+  // aqui, una sola consulta y solo de la persona que se abrio, cualquier campo
+  // que se agregue aparece en TODAS las pantallas sin tocar ninguna.
+  const [extra, setExtra] = useState<Partial<PersonaFicha> | null>(null);
+  useEffect(() => {
+    const uid = persona?.user_id;
+    setExtra(null);
+    if (!uid) return;
+    let vivo = true;
+    supabase
+      .rpc('get_perfil_publico', { p_user_id: uid })
+      .then(({ data }) => {
+        const f = Array.isArray(data) ? data[0] : null;
+        if (vivo && f) setExtra(f as Partial<PersonaFicha>);
+      });
+    return () => { vivo = false; };
+  }, [persona?.user_id]);
+
+  // Lo que ya traia la pantalla manda; el servidor rellena lo que falte. Asi la
+  // ficha se pinta de una con lo que haya y se completa sola al llegar.
+  const p: PersonaFicha | null = persona && { ...persona, ...limpiar(extra) };
+
   const fotos = (() => {
-    const lista = aLista(persona?.fotos);
+    const lista = aLista(p?.fotos);
     if (lista.length) return lista;
-    return persona?.profile_photo_url ? [persona.profile_photo_url] : [];
+    return p?.profile_photo_url ? [p.profile_photo_url] : [];
   })();
 
-  const intereses = aLista(persona?.interests);
-  const rasgos = aLista(persona?.personality_traits);
-  const porDefecto = avatarPorGenero(persona?.gender);
+  const intereses = aLista(p?.interests);
+  const rasgos = aLista(p?.personality_traits);
+  const porDefecto = avatarPorGenero(p?.gender);
+  const frase = (p?.bio || '').trim();
 
   // La foto ocupa el ancho de la pantalla y algo mas de alto que de ancho:
   // los retratos se ven mejor asi y deja sitio al nombre sin taparle la cara.
@@ -87,8 +127,8 @@ export function FichaPersona({
   const hayVarias = fotos.length > 1;
 
   const subtitulo = [
-    typeof persona?.edad === 'number' ? `${persona.edad} años` : null,
-    persona?.city?.trim() || null,
+    typeof p?.edad === 'number' ? `${p.edad} años` : null,
+    p?.city?.trim() || null,
   ].filter(Boolean).join(' · ');
 
   return (
@@ -119,9 +159,9 @@ export function FichaPersona({
               <View style={estilos.sinFoto}>
                 {/* Sin interrogante: si no hay nombre se deja solo el texto,
                     que dice mas y no parece un error de la app. */}
-                {!!(persona?.name || '').trim() && (
+                {!!(p?.name || '').trim() && (
                   <Text style={estilos.sinFotoInicial}>
-                    {persona!.name.trim().charAt(0).toUpperCase()}
+                    {p!.name.trim().charAt(0).toUpperCase()}
                   </Text>
                 )}
                 <Text style={estilos.sinFotoTexto}>Todavía no ha subido fotos</Text>
@@ -141,8 +181,11 @@ export function FichaPersona({
               </View>
             )}
 
-            {/* Media pantalla a cada lado para pasar fotos. Es como funcionan
-                las historias, asi que nadie tiene que aprenderlo. */}
+            {/* Media pantalla a cada lado para pasar fotos, MAS flechas y un
+                contador que se vean.
+                Solo con las zonas invisibles, quien no conoce el gesto cree que
+                hay una sola foto y nunca descubre las demas. Las flechas dicen
+                "esto se mueve" y el "1/4" dice cuantas faltan. */}
             {hayVarias && (
               <>
                 <Pressable
@@ -150,13 +193,27 @@ export function FichaPersona({
                   accessibilityRole="button"
                   accessibilityLabel="Foto anterior"
                   onPress={() => setIndice((i) => (i - 1 + fotos.length) % fotos.length)}
-                />
+                >
+                  <View style={[estilos.flecha, { marginLeft: 10 }]}>
+                    <Text style={estilos.flechaTexto}>‹</Text>
+                  </View>
+                </Pressable>
                 <Pressable
-                  style={[estilos.zonaToque, { right: 0 }]}
+                  style={[estilos.zonaToque, estilos.zonaDerecha, { right: 0 }]}
                   accessibilityRole="button"
                   accessibilityLabel="Foto siguiente"
                   onPress={() => setIndice((i) => (i + 1) % fotos.length)}
-                />
+                >
+                  <View style={[estilos.flecha, { marginRight: 10 }]}>
+                    <Text style={estilos.flechaTexto}>›</Text>
+                  </View>
+                </Pressable>
+
+                <View style={estilos.contador} pointerEvents="none">
+                  <Text style={estilos.contadorTexto}>
+                    {Math.min(indice, fotos.length - 1) + 1}/{fotos.length}
+                  </Text>
+                </View>
               </>
             )}
 
@@ -170,7 +227,7 @@ export function FichaPersona({
             <View style={estilos.sobreFoto} pointerEvents="none">
               <View style={estilos.filaNombre}>
                 <Text style={estilos.nombre} numberOfLines={1}>
-                  {persona?.name || 'Alguien'}
+                  {p?.name || 'Alguien'}
                 </Text>
               </View>
               {!!subtitulo && <Text style={estilos.subtitulo}>{subtitulo}</Text>}
@@ -178,12 +235,14 @@ export function FichaPersona({
 
             {/* Puntico verde de "en linea": arriba a la derecha de la foto,
                 como en WhatsApp. Antes iba junto al nombre, abajo. */}
-            {persona?.en_linea && (
+            {p?.en_linea && (
               <View style={estilos.puntoEnLinea} pointerEvents="none" />
             )}
           </View>
 
           <View style={estilos.cuerpo}>
+            {!!frase && <Text style={estilos.frase}>{frase}</Text>}
+
             {!!intereses.length && (
               <>
                 <Text style={estilos.seccion}>Le gusta</Text>
@@ -212,7 +271,7 @@ export function FichaPersona({
               </>
             )}
 
-            {!intereses.length && !rasgos.length && (
+            {!intereses.length && !rasgos.length && !frase && (
               <Text style={estilos.vacio}>
                 Todavía no ha contado sus intereses. Pregúntale en el evento 😉
               </Text>
@@ -249,11 +308,30 @@ const estilos = StyleSheet.create({
     flexDirection: 'row', gap: 4,
   },
   barrita: {
-    flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.4)',
+    flex: 1, height: 3.5, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.45)',
+    // Sombra para que las barras se vean tambien sobre una foto clara: sin
+    // esto, en una foto de playa o de cielo desaparecian del todo.
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
   },
   barritaActiva: { backgroundColor: '#FFFFFF' },
 
-  zonaToque: { position: 'absolute', top: 0, bottom: 0, width: '45%' },
+  zonaToque: {
+    position: 'absolute', top: 0, bottom: 0, width: '45%',
+    justifyContent: 'center', alignItems: 'flex-start',
+  },
+  zonaDerecha: { alignItems: 'flex-end' },
+  flecha: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  flechaTexto: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', lineHeight: 24 },
+  contador: {
+    position: 'absolute', top: 20, right: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 11,
+    paddingHorizontal: 9, paddingVertical: 3,
+  },
+  contadorTexto: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' },
 
   degradado: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '52%' },
   sobreFoto: { position: 'absolute', left: 20, right: 20, bottom: 16 },
@@ -273,6 +351,10 @@ const estilos = StyleSheet.create({
   },
 
   cuerpo: { paddingHorizontal: 20, paddingTop: 18 },
+  frase: {
+    fontSize: 15.5, lineHeight: 22, color: '#374151', marginBottom: 16,
+    fontStyle: 'italic',
+  },
   seccion: {
     fontSize: 12, fontWeight: '700', color: '#9CA3AF',
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8,
