@@ -36,6 +36,7 @@ import { compressProfilePhoto } from '@/lib/imageCompress';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import { leerImagenParaSubir, FotoVaciaError } from '@/lib/subirFoto';
 import Constants from 'expo-constants';
 import appJson from '@/app.json';
 import { useFocusEffect } from '@react-navigation/native';
@@ -570,17 +571,16 @@ export default function ProfileScreen() {
       const fileName = `${user?.id}-${timestamp}.${fileExt}`;
       const filePath = `${user?.id}/${fileName}`;
 
+      // Se lee ANTES de borrar nada: si la imagen no se puede leer, la foto que
+      // ya tenia la persona sigue intacta. Antes se borraba primero y se subia
+      // despues, asi que quien intentaba cambiar su foto y fallaba la lectura
+      // se quedaba sin ninguna.
       let uploadData: ArrayBuffer;
-      if (Platform.OS === 'android') {
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        const binaryStr = atob(base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-        uploadData = bytes.buffer;
-      } else {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        uploadData = await new Response(blob).arrayBuffer();
+      try {
+        uploadData = await leerImagenParaSubir(uri);
+      } catch (e) {
+        Alert.alert('No pudimos leer la foto', e instanceof FotoVaciaError ? e.message : 'Intenta con otra foto de tu galería.');
+        return;
       }
 
       const { data: existingFiles } = await supabase.storage

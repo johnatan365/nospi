@@ -27,6 +27,7 @@ import { leerAtribucion } from '@/utils/atribucion';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
+import { leerImagenParaSubir, FotoVaciaError } from '@/lib/subirFoto';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { compressProfilePhoto } from '@/lib/imageCompress';
@@ -562,16 +563,15 @@ export default function ProfileScreen() {
       const fileName = `${user?.id}-${timestamp}.${FILE_EXT}`;
       const filePath = `${user?.id}/${fileName}`;
 
-      let uploadPayload: ArrayBuffer | Blob;
-      if (base64Data) {
-        const binaryStr = atob(base64Data);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-        uploadPayload = bytes.buffer;
-      } else {
-        const fetchResponse = await fetch(uri);
-        if (!fetchResponse.ok) throw new Error(`Failed to read image file: ${fetchResponse.status}`);
-        uploadPayload = await fetchResponse.blob();
+      // Se lee ANTES de borrar nada. El camino sin base64 usaba
+      // fetch(uri).blob(), que en iOS devuelve un Blob vacio y subia 0 bytes
+      // sin que nadie se enterara. Ver lib/subirFoto.ts.
+      let uploadPayload: ArrayBuffer;
+      try {
+        uploadPayload = await leerImagenParaSubir(uri, base64Data);
+      } catch (e) {
+        Alert.alert('No pudimos leer la foto', e instanceof FotoVaciaError ? e.message : 'Intenta con otra foto de tu galería.');
+        return;
       }
 
       const { data: existingFiles } = await supabase.storage

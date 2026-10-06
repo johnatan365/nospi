@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { leerImagenParaSubir } from '@/lib/subirFoto';
 import { PREFERENCIAS_POR_DEFECTO } from '@/constants/Notificaciones';
 import { leerAtribucion } from '@/utils/atribucion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -441,9 +442,11 @@ export default function RegisterScreen() {
           const fileName = `${userId}-${timestamp}.${fileExt}`;
           const filePath = `${userId}/${fileName}`;
 
-          const response = await fetch(photo);
-          const blob = await response.blob();
-          const uploadData = await new Response(blob).arrayBuffer();
+          // leerImagenParaSubir lanza si la imagen quedo vacia. Antes aqui habia
+          // un fetch(file://).blob() que en React Native devuelve 0 bytes sin
+          // avisar: la subida pasaba, se guardaba la URL, y la foto no se veia
+          // nunca. Ver lib/subirFoto.ts.
+          const uploadData = await leerImagenParaSubir(photo);
 
           const { error: uploadError } = await supabase.storage
             .from('profile-photos')
@@ -454,7 +457,9 @@ export default function RegisterScreen() {
             profilePhotoUrl = urlData.publicUrl;
           }
         } catch (e) {
-          // Photo upload failed silently — profile will be created without photo
+          // La cuenta se crea igual, sin foto: preferimos eso a dejarla con una
+          // foto rota. Queda sin URL, asi que la puede subir luego desde su perfil.
+          console.error('[Register] no se pudo subir la foto:', e);
         }
       }
 
