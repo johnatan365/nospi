@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform,
+  Modal, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -32,11 +34,14 @@ export function MisFotos({
   userId,
   gender,
   onCambio,
+  conEncabezado = true,
 }: {
   userId: string;
   gender?: string | null;
-  /** Avisa a la pantalla de perfil para que refresque la foto de arriba. */
-  onCambio?: (urlPrincipal: string | null) => void;
+  /** Avisa a la pantalla de perfil para refrescar la foto de arriba y el contador. */
+  onCambio?: (urlPrincipal: string | null, cuantas: number) => void;
+  /** Se apaga cuando la rejilla va dentro de la hoja, que ya trae su propio titulo. */
+  conEncabezado?: boolean;
 }) {
   const [fotos, setFotos] = useState<FotoPerfil[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -46,7 +51,7 @@ export function MisFotos({
     try {
       const lista = await cargarMisFotos(userId);
       setFotos(lista);
-      onCambio?.(lista[0]?.url ?? null);
+      onCambio?.(lista[0]?.url ?? null, lista.length);
     } catch {
       // Si no se pueden cargar, la rejilla queda vacia y se puede reintentar
       // subiendo: no tiene sentido asustar con una alerta al abrir el perfil.
@@ -82,7 +87,7 @@ export function MisFotos({
       const nueva = await agregarFoto(userId, elegida.assets[0].uri, fotos.length);
       const lista = [...fotos, nueva];
       setFotos(lista);
-      onCambio?.(lista[0]?.url ?? null);
+      onCambio?.(lista[0]?.url ?? null, lista.length);
     } catch (e) {
       if (e instanceof FotoVaciaError || e instanceof LimiteFotosError) {
         avisar('No pudimos subir la foto', e.message);
@@ -101,7 +106,7 @@ export function MisFotos({
         await quitarFoto(foto);
         const lista = fotos.filter((f) => f.id !== foto.id);
         setFotos(lista);
-        onCambio?.(lista[0]?.url ?? null);
+        onCambio?.(lista[0]?.url ?? null, lista.length);
       } catch {
         avisar('No pudimos quitarla', 'Intenta de nuevo en un momento.');
       } finally {
@@ -127,13 +132,13 @@ export function MisFotos({
     const nuevoOrden = moverAlFrente(fotos, foto.id);
     const previo = fotos;
     setFotos(nuevoOrden.map((f, i) => ({ ...f, orden: i })));
-    onCambio?.(nuevoOrden[0]?.url ?? null);
+    onCambio?.(nuevoOrden[0]?.url ?? null, nuevoOrden.length);
     setOcupado(true);
     try {
       await guardarOrden(nuevoOrden);
     } catch {
       setFotos(previo);
-      onCambio?.(previo[0]?.url ?? null);
+      onCambio?.(previo[0]?.url ?? null, previo.length);
       avisar('No pudimos cambiarla', 'Intenta de nuevo en un momento.');
     } finally {
       setOcupado(false);
@@ -145,14 +150,18 @@ export function MisFotos({
 
   return (
     <View style={e.caja}>
-      <View style={e.encabezado}>
-        <Text style={e.titulo}>Mis fotos</Text>
-        <Text style={e.contador}>{fotos.length}/{MAX_FOTOS}</Text>
-      </View>
-      <Text style={e.ayuda}>
-        La primera es tu foto de perfil. Las personas de tu grupo ven tu perfil
-        antes del evento.
-      </Text>
+      {conEncabezado && (
+        <>
+          <View style={e.encabezado}>
+            <Text style={e.titulo}>Mis fotos</Text>
+            <Text style={e.contador}>{fotos.length}/{MAX_FOTOS}</Text>
+          </View>
+          <Text style={e.ayuda}>
+            La primera es tu foto de perfil. Las personas de tu grupo ven tu perfil
+            antes del evento.
+          </Text>
+        </>
+      )}
 
       {cargando ? (
         <ActivityIndicator color="#880E4F" style={{ marginVertical: 24 }} />
@@ -269,4 +278,74 @@ const e = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center',
   },
   quitarTexto: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 17 },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La hoja que se abre al tocar la foto de perfil.
+//
+// POR QUE EN UNA HOJA Y NO COMO UNA SECCION MAS DEL PERFIL
+// Puesta como seccion suelta mas abajo, hay que acordarse de bajar a buscarla.
+// La gente que quiere cambiar su foto hace lo obvio: tocar su foto. Entonces
+// eso es lo que la abre. El lapiz que habia antes no decia que se pudiera
+// tener mas de una; el contador "2 de 6" si lo dice sin explicar nada.
+export function MisFotosHoja({
+  visible,
+  onClose,
+  userId,
+  gender,
+  onCambio,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  userId: string;
+  gender?: string | null;
+  onCambio?: (urlPrincipal: string | null, cuantas: number) => void;
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={h.fondo} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={[h.hoja, { paddingBottom: insets.bottom + 18 }]}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
+          <View style={h.agarradera} />
+          <Text style={h.titulo}>Mis fotos</Text>
+          <Text style={h.ayuda}>
+            Puedes subir hasta {MAX_FOTOS}. La primera es tu foto de perfil, y las demás
+            las ven las personas de tu grupo antes del evento.
+          </Text>
+
+          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            <MisFotos userId={userId} gender={gender} onCambio={onCambio} conEncabezado={false} />
+          </ScrollView>
+
+          <TouchableOpacity style={h.listo} onPress={onClose} activeOpacity={0.85}>
+            <Text style={h.listoTexto}>Listo</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const h = StyleSheet.create({
+  fondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  hoja: {
+    backgroundColor: '#FFFFFF', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    paddingTop: 10, paddingHorizontal: 20,
+  },
+  agarradera: {
+    width: 38, height: 4, borderRadius: 2, backgroundColor: '#E5E0E3',
+    alignSelf: 'center', marginBottom: 14,
+  },
+  titulo: { fontSize: 20, fontWeight: '800', color: '#1F2937' },
+  ayuda: { fontSize: 13.5, color: '#6B7280', lineHeight: 19, marginTop: 4, marginBottom: 6 },
+  listo: {
+    marginTop: 18, backgroundColor: '#880E4F', borderRadius: 24,
+    paddingVertical: 13, alignItems: 'center',
+  },
+  listoTexto: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

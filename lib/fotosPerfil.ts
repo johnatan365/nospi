@@ -30,6 +30,20 @@ export class LimiteFotosError extends Error {
   }
 }
 
+/**
+ * Cuantas fotos tiene, sin traerlas.
+ * La pantalla de perfil lo necesita para escribir "2 de 6" debajo del nombre
+ * sin tener que abrir la hoja primero.
+ */
+export async function contarMisFotos(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('user_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export async function cargarMisFotos(userId: string): Promise<FotoPerfil[]> {
   const { data, error } = await supabase
     .from('user_photos')

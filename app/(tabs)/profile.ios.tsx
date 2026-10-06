@@ -27,7 +27,8 @@ import { leerAtribucion } from '@/utils/atribucion';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
-import { MisFotos } from '@/components/MisFotos';
+import { MisFotosHoja } from '@/components/MisFotos';
+import { contarMisFotos } from '@/lib/fotosPerfil';
 import { AvatarNospi } from '@/components/AvatarNospi';
 import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
@@ -163,11 +164,19 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  // Tocar el avatar de arriba lleva a la rejilla de fotos, que es donde se
-  // suben ahora. Antes el avatar abria el selector el mismo y solo dejaba
-  // tener una foto.
-  const scrollRef = useRef<ScrollView>(null);
-  const yMisFotos = useRef(0);
+  // Tocar el avatar abre la hoja de "Mis fotos". El contador se guarda aparte
+  // para poder escribir "2 de 6" debajo del nombre: es lo que le dice a la
+  // gente que puede tener mas de una foto, sin tener que explicarlo.
+  const [fotosAbiertas, setFotosAbiertas] = useState(false);
+  const [cuantasFotos, setCuantasFotos] = useState(0);
+
+  useEffect(() => {
+    const id = profile?.id;
+    if (!id) return;
+    let vivo = true;
+    contarMisFotos(id).then((n) => { if (vivo) setCuantasFotos(n); });
+    return () => { vivo = false; };
+  }, [profile?.id]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
 
@@ -534,9 +543,7 @@ export default function ProfileScreen() {
   // esta en components/MisFotos.tsx, el mismo codigo que usa la pantalla de
   // Android y web. Tener una copia por pantalla fue justo lo que dejo 53 fotos
   // en 0 bytes sin que nadie se enterara.
-  const handlePhotoPress = () => {
-    scrollRef.current?.scrollTo({ y: Math.max(0, yMisFotos.current - 12), animated: true });
-  };
+  const handlePhotoPress = () => setFotosAbiertas(true);
 
   const handleSaveProfile = async () => {
     const preferenceChanged = editAgeRangeMin !== profile?.age_range_min || editAgeRangeMax !== profile?.age_range_max
@@ -812,7 +819,7 @@ export default function ProfileScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
-      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={handlePhotoPress}
@@ -832,13 +839,43 @@ export default function ProfileScreen() {
                 style={styles.profilePhotoBorde}
                 transition={0}
               />
+              {/* Camara y no lapiz: el lapiz se leia como "editar algo" y nadie
+                  adivinaba que ahi se suben fotos. */}
               <View style={styles.editPhotoIcon}>
-                <Text style={styles.editPhotoIconText}>✏️</Text>
+                <Ionicons name="camera" size={19} color="#880E4F" />
               </View>
             </View>
           </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.age}>{profile.age} años</Text>
+
+          {/* Dice en palabras lo que el icono solo no alcanza a decir. El
+              "de 6" es la parte que importa: ahi se entiende que son varias. */}
+          <TouchableOpacity
+            style={styles.pastillaFotos}
+            onPress={() => setFotosAbiertas(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={cuantasFotos > 0
+              ? `Mis fotos, ${cuantasFotos} de 6`
+              : 'Agregar mis fotos'}
+          >
+            <Ionicons name="images-outline" size={15} color="#FFFFFF" />
+            <Text style={styles.pastillaFotosTexto}>
+              {cuantasFotos > 0 ? `Mis fotos · ${cuantasFotos} de 6` : 'Agrega tus fotos'}
+            </Text>
+          </TouchableOpacity>
+          <MisFotosHoja
+            visible={fotosAbiertas}
+            onClose={() => setFotosAbiertas(false)}
+            userId={profile.id}
+            gender={profile.gender}
+            onCambio={(url, n) => {
+              setCuantasFotos(n);
+              setProfile((prev) => (prev ? { ...prev, profile_photo_url: url } : prev));
+            }}
+          />
+
           <TouchableOpacity style={styles.editButton} onPress={handleEditPress} activeOpacity={0.8}>
             <Text style={styles.editButtonText}>Editar Perfil</Text>
           </TouchableOpacity>
@@ -853,17 +890,6 @@ export default function ProfileScreen() {
             <Text style={styles.heroStatNum}>{profile.personality_traits.length}</Text>
             <Text style={styles.heroStatLabel}>RASGOS</Text>
           </View>
-        </View>
-
-        <View
-          style={styles.section}
-          onLayout={(ev) => { yMisFotos.current = ev.nativeEvent.layout.y; }}
-        >
-          <MisFotos
-            userId={profile.id}
-            gender={profile.gender}
-            onCambio={(url) => setProfile((prev) => (prev ? { ...prev, profile_photo_url: url } : prev))}
-          />
         </View>
 
         <View style={styles.section}>
@@ -1505,6 +1531,10 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
   profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoBorde: { marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white, backgroundColor: 'rgba(173, 20, 87, 0.20)' },
+  pastillaFotos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
+    borderRadius: 20, paddingVertical: 7, paddingHorizontal: 14 },
+  pastillaFotosTexto: { color: '#FFFFFF', fontSize: 13.5, fontWeight: '700' },
   profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60 },
