@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FichaPersona, PersonaFicha } from '@/components/FichaPersona';
+import { AvatarNospi } from '@/components/AvatarNospi';
 import { usePresenciaEvento } from '@/lib/useListaEnVivo';
 import { normalizarPrivacidad } from '@/constants/Privacidad';
 import { textoEnLinea } from '@/lib/presencia';
@@ -1659,13 +1660,14 @@ export default function DinamicaScreen() {
                   })}
                 >
                   <View style={{ position: 'relative' }}>
-                    {photoUrl ? (
-                      <ExpoImage source={{ uri: photoUrl }} style={styles.participantListPhoto} cachePolicy="memory-disk" transition={0} />
-                    ) : (
-                      <View style={styles.participantListPhotoPlaceholder}>
-                        <Text style={styles.participantListPhotoText}>{displayName.charAt(0).toUpperCase()}</Text>
-                      </View>
-                    )}
+                    <AvatarNospi
+                      url={photoUrl}
+                      gender={participant.profiles?.gender}
+                      nombre={displayName}
+                      size={34}
+                      style={styles.participantListPhoto}
+                      transition={0}
+                    />
                     {estaEnLinea(participant.user_id) && <View style={styles.puntoEnLineaDin} />}
                   </View>
                   <Text style={styles.participantListName}>{displayName}</Text>
