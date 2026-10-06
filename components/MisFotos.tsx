@@ -30,6 +30,9 @@ function avisar(titulo: string, mensaje: string) {
   else Alert.alert(titulo, mensaje);
 }
 
+/** Separacion entre casillas, en pixeles. Se usa en el calculo y en el estilo. */
+const SEPARACION = 8;
+
 export function MisFotos({
   userId,
   gender,
@@ -46,6 +49,7 @@ export function MisFotos({
   const [fotos, setFotos] = useState<FotoPerfil[]>([]);
   const [cargando, setCargando] = useState(true);
   const [ocupado, setOcupado] = useState(false);
+  const [anchoRejilla, setAnchoRejilla] = useState(0);
 
   const recargar = useCallback(async () => {
     try {
@@ -148,6 +152,15 @@ export function MisFotos({
   const porDefecto = avatarPorGenero(gender);
   const huecos = Math.max(0, MAX_FOTOS - fotos.length);
 
+  // Las casillas se miden en pixeles y no en porcentaje.
+  //
+  // Con width:'31.5%' + flexWrap, la fila de arriba quedaba mas alta que la de
+  // abajo: en una fila que envuelve, los hijos se estiran al alto de la fila,
+  // y el aspectRatio no alcanza a mandar. Midiendo el ancho real y fijando
+  // ancho y alto exactos, las seis quedan identicas siempre.
+  const ladoCasilla = anchoRejilla > 0 ? (anchoRejilla - SEPARACION * 2) / 3 : 0;
+  const dimCasilla = { width: ladoCasilla, height: Math.round(ladoCasilla / 0.82) };
+
   return (
     <View style={e.caja}>
       {conEncabezado && (
@@ -166,9 +179,12 @@ export function MisFotos({
       {cargando ? (
         <ActivityIndicator color="#880E4F" style={{ marginVertical: 24 }} />
       ) : (
-        <View style={e.rejilla}>
-          {fotos.map((foto, i) => (
-            <View key={foto.id} style={e.casilla}>
+        <View
+          style={e.rejilla}
+          onLayout={(ev) => setAnchoRejilla(ev.nativeEvent.layout.width)}
+        >
+          {ladoCasilla === 0 ? null : fotos.map((foto, i) => (
+            <View key={foto.id} style={[e.casilla, dimCasilla]}>
               <ExpoImage
                 source={{ uri: foto.url }}
                 style={e.fotoCasilla}
@@ -205,10 +221,10 @@ export function MisFotos({
             </View>
           ))}
 
-          {Array.from({ length: huecos }).map((_, i) => (
+          {(ladoCasilla === 0 ? [] : Array.from({ length: huecos })).map((_, i) => (
             <TouchableOpacity
               key={`hueco-${i}`}
-              style={[e.casilla, e.casillaVacia]}
+              style={[e.casilla, e.casillaVacia, dimCasilla]}
               onPress={elegirYSubir}
               disabled={ocupado}
               activeOpacity={0.7}
@@ -246,9 +262,9 @@ const e = StyleSheet.create({
   contador: { fontSize: 13, color: '#9CA3AF', fontWeight: '600' },
   ayuda: { fontSize: 13, color: '#6B7280', marginTop: 4, marginBottom: 12, lineHeight: 18 },
 
-  rejilla: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rejilla: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: SEPARACION, minHeight: 10 },
   casilla: {
-    width: '31.5%', aspectRatio: 0.82, borderRadius: 14, overflow: 'hidden',
+    borderRadius: 14, overflow: 'hidden',
     backgroundColor: '#FCE4EC', position: 'relative',
   },
   casillaVacia: {
