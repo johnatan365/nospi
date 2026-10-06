@@ -2543,7 +2543,7 @@ const styles = StyleSheet.create({
   // que en el chat y en la lista: separa el punto de la foto sin meter el
   // color de la marca, que sobre fondo claro quedaba como un aro sucio.
   puntoEnLineaDin: {
-    position: 'absolute', right: -2, bottom: -2,
+    position: 'absolute', right: -2, top: -2,
     width: 13, height: 13, borderRadius: 6.5,
     backgroundColor: '#2BD97C', borderWidth: 2, borderColor: '#FFFFFF',
   },

@@ -5175,7 +5175,7 @@ const styles = StyleSheet.create({
   // blanco no es "un color mas": separa de cualquier foto sin pelearse con la
   // marca, y es lo que hacen WhatsApp, Instagram y Messenger.
   puntoEnLinea: {
-    position: 'absolute', bottom: 0, backgroundColor: '#2BD97C',
+    position: 'absolute', top: 0, backgroundColor: '#2BD97C',
     borderWidth: 2, borderColor: '#FFFFFF',
   },
   headerAvatar: { width: 30, height: 30, borderRadius: 15, marginRight: 8 },

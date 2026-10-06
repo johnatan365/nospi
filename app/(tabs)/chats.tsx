@@ -873,7 +873,7 @@ const styles = StyleSheet.create({
   // El punto verde en la esquina de la foto. El borde es del color del fondo
   // de la fila para que se lea como encima de la foto y no como un pegote.
   puntoEnLinea: {
-    position: 'absolute', right: -2, bottom: -2,
+    position: 'absolute', right: -2, top: -2,
     width: 14, height: 14, borderRadius: 7,
     backgroundColor: '#2BD97C', borderWidth: 2.5, borderColor: '#FFFFFF',
   },
