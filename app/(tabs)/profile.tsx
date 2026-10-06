@@ -868,20 +868,24 @@ export default function ProfileScreen() {
 
           {/* Dice en palabras lo que el icono solo no alcanza a decir. El
               "de 6" es la parte que importa: ahi se entiende que son varias. */}
-          <TouchableOpacity
-            style={styles.pastillaFotos}
-            onPress={() => setFotosAbiertas(true)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={cuantasFotos > 0
-              ? `Mis fotos, ${cuantasFotos} de 6`
-              : 'Agregar mis fotos'}
-          >
-            <Ionicons name="images-outline" size={15} color="#FFFFFF" />
-            <Text style={styles.pastillaFotosTexto}>
-              {cuantasFotos > 0 ? `Mis fotos · ${cuantasFotos} de 6` : 'Agrega tus fotos'}
-            </Text>
-          </TouchableOpacity>
+          {/* Los dos botones comparten contenedor para que queden del mismo
+              ancho y a la misma distancia. Sueltos, cada uno se ajustaba a su
+              texto y se veian desalineados. */}
+          <View style={styles.accionesPerfil}>
+            <TouchableOpacity
+              style={[styles.accionPerfil, styles.accionFotos]}
+              onPress={() => setFotosAbiertas(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={cuantasFotos > 0
+                ? `Mis fotos, ${cuantasFotos} de 6`
+                : 'Agregar mis fotos'}
+            >
+              <Ionicons name="images-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.accionFotosTexto}>
+                {cuantasFotos > 0 ? `Mis fotos · ${cuantasFotos} de 6` : 'Agrega tus fotos'}
+              </Text>
+            </TouchableOpacity>
 
           <MisFotosHoja
             visible={fotosAbiertas}
@@ -894,9 +898,17 @@ export default function ProfileScreen() {
             }}
           />
 
-          <TouchableOpacity style={styles.editButton} onPress={handleEditPress} activeOpacity={0.8}>
-            <Text style={styles.editButtonText}>Editar Perfil</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.accionPerfil, styles.accionEditar]}
+              onPress={handleEditPress}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Editar perfil"
+            >
+              <Ionicons name="create-outline" size={16} color="#880E4F" />
+              <Text style={styles.accionEditarTexto}>Editar perfil</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.heroStats}>
@@ -1624,17 +1636,24 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginTop: 48, marginBottom: 32 },
   profilePhoto: { width: 120, height: 120, borderRadius: 60, marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoBorde: { marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white, backgroundColor: 'rgba(173, 20, 87, 0.20)' },
-  pastillaFotos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
-    borderRadius: 20, paddingVertical: 7, paddingHorizontal: 14 },
-  pastillaFotosTexto: { color: '#FFFFFF', fontSize: 13.5, fontWeight: '700' },
+  // Mismo ancho, mismo alto y mismo radio para los dos: lo unico que cambia
+  // es el color, que es lo que dice cual es el principal.
+  accionesPerfil: { alignSelf: 'stretch', paddingHorizontal: 44, gap: 10, marginTop: 18 },
+  accionPerfil: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingVertical: 12, borderRadius: 24, borderWidth: 1.5,
+  },
+  accionFotos: { backgroundColor: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.5)' },
+  accionFotosTexto: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' },
+  accionEditar: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
+  accionEditarTexto: { color: '#880E4F', fontSize: 14.5, fontWeight: '700' },
   profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60 },
   editPhotoIcon: { position: 'absolute', bottom: 16, right: 0, backgroundColor: nospiColors.white, width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#880E4F' },
   editPhotoIconText: { fontSize: 16 },
   name: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 4 },
-  age: { fontSize: 18, color: '#FFFFFF', opacity: 0.8, marginBottom: 16 },
+  age: { fontSize: 18, color: '#FFFFFF', opacity: 0.8 },
   editButton: { backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 2, borderColor: '#880E4F' },
   editButtonText: { color: '#880E4F', fontSize: 14, fontWeight: '600' },
   section: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 16, padding: 20, marginBottom: 16 },
