@@ -26,6 +26,7 @@ import Reanimated, {
   useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withDelay,
 } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
+import { avatarPorGenero } from '@/components/AvatarNospi';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -222,10 +223,16 @@ interface Participant {
   // preferencia privada.
   edad?: number | null;
   interests?: string[] | null;
+  gender?: string | null;
+  personality_traits?: string[] | null;
+  city?: string | null;
+  fotos?: string[] | null;
 }
 
 interface ConversationMeta {
   conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
+  /** Genero de la otra persona en un privado, para el avatar por defecto. */
+  other_user_gender?: string | null;
   // Solo en directos: 'pendiente' mientras la solicitud no se responda.
   estado?: 'pendiente' | 'aceptada' | 'ignorada' | null;
   solicitada_por?: string | null;
@@ -307,20 +314,29 @@ function initialsOf(name?: string | null): string {
 // relleno arriba y el nombre mide unos 13, asi que su centro cae a ~16,5 -- y el
 // de una foto de 26 cae a 13.
 function ChatAvatar({
-  uri, name, size, marginRight = 0, onPress, alignTop = false, enLinea = false,
+  uri, name, size, marginRight = 0, onPress, alignTop = false, enLinea = false, gender,
 }: {
   uri: string | null; name: string; size: number; marginRight?: number;
   onPress?: () => void; alignTop?: boolean;
   /** Punto verde en la esquina: la persona tiene la app abierta ahora. */
   enLinea?: boolean;
+  /** Para pintar el personaje de Nospi cuando no hay foto. */
+  gender?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
   const box = { width: size, height: size, borderRadius: size / 2, marginRight } as const;
   const fuera = alignTop ? { alignSelf: 'flex-start' as const, marginTop: 3 } : null;
+  // Quien no subio foto sale con el personaje de Nospi segun su genero, no con
+  // la inicial: el 89% de las personas no tiene foto y una lista de chat
+  // entera de iniciales se lee como una app a medio hacer. Si no hay genero
+  // (o es "no binario"), AvatarNospi vuelve solo a la inicial.
+  const porDefecto = !uri || failed ? avatarPorGenero(gender) : null;
   const inner = uri && !failed ? (
     // cache 'force-cache': una vez descargada, la foto se reusa desde el cache
     // (no se vuelve a bajar al salir y volver al chat) -> queda estática.
     <ExpoImage source={{ uri }} style={box} cachePolicy="memory-disk" transition={0} onError={() => setFailed(true)} />
+  ) : porDefecto ? (
+    <ExpoImage source={porDefecto} style={box} cachePolicy="memory-disk" transition={0} contentFit="cover" />
   ) : (
     <View style={[box, styles.avatarInitials]}>
       <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.42 }}>{initialsOf(name)}</Text>
@@ -376,7 +392,7 @@ const CARAS_MAX = 3;
 function FilaEscribiendo({
   quienes, onTocarCara,
 }: {
-  quienes: { user_id: string; nombre: string; foto: string | null }[];
+  quienes: { user_id: string; nombre: string; foto: string | null; gender?: string | null }[];
   // Tocar la cara abre la ficha de esa persona, igual que en las burbujas y en
   // la cabecera. Devuelve undefined si no se tiene cargada: entonces no se
   // puede abrir nada y la foto no responde al toque.
@@ -398,7 +414,7 @@ function FilaEscribiendo({
       <View style={styles.pilaCaras}>
         {caras.map((q, i) => (
           <View key={`${q.user_id}-${i}`} style={[styles.caraPila, i > 0 && styles.caraPilaEncimada]}>
-            <ChatAvatar uri={q.foto} name={q.nombre} size={26} onPress={onTocarCara(q.user_id)} />
+            <ChatAvatar uri={q.foto} name={q.nombre} gender={q.gender} size={26} onPress={onTocarCara(q.user_id)} />
           </View>
         ))}
         {sobran > 0 && (
@@ -933,7 +949,7 @@ export default function ChatThreadScreen() {
   // cerrar y volver a entrar.
   const recargarParticipantes = useCallback(async () => {
     if (!conversationId) return;
-    const { data, error } = await supabase.rpc('get_conversation_participants', {
+    const { data, error } = await supabase.rpc('get_conversation_participants_v2', {
       p_conversation_id: conversationId,
     });
     if (error) { console.error('ChatThread: error recargando participantes', error); return; }
@@ -1736,8 +1752,8 @@ export default function ChatThreadScreen() {
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: false })
           .limit(PAGINA + 1),
-        supabase.rpc('get_conversation_participants', { p_conversation_id: conversationId }),
-        supabase.rpc('get_my_conversations'),
+        supabase.rpc('get_conversation_participants_v2', { p_conversation_id: conversationId }),
+        supabase.rpc('get_my_conversations_v2'),
         // Mi propia marca de lectura: es la que decide donde va la linea de
         // "no leidos" y si el chat abre atras o abajo. La politica de la tabla
         // ya deja leer la fila propia (user_id = auth.uid()).
@@ -3238,6 +3254,7 @@ export default function ChatThreadScreen() {
               <ChatAvatar
                 uri={otherUserPhoto}
                 name={headerTitle}
+                gender={otherParticipant?.gender ?? meta?.other_user_gender}
                 size={30}
                 marginRight={8}
                 enLinea={!!otherParticipantId && miPrivacidad.enLinea && enLinea.includes(otherParticipantId)}
@@ -3435,7 +3452,13 @@ export default function ChatThreadScreen() {
             // apagarse solo o se queda pegado.
             const activos = Object.entries(escribiendo)
               .filter(([, e]) => ahora - e.ts < 4000)
-              .map(([uid, e]) => ({ user_id: uid, nombre: e.nombre, foto: e.foto }));
+              // El genero se busca aqui y no se guarda en el estado de
+              // "escribiendo": ese estado viene de un evento de presencia y
+              // solo trae nombre y foto. La lista de participantes ya lo tiene.
+              .map(([uid, e]) => ({
+                user_id: uid, nombre: e.nombre, foto: e.foto,
+                gender: participantsById[uid]?.gender ?? null,
+              }));
             if (activos.length === 0) return null;
             return (
               <FilaEscribiendo
@@ -3501,6 +3524,7 @@ export default function ChatThreadScreen() {
                   <ChatAvatar
                     uri={senderPhoto}
                     name={senderName}
+                    gender={sender?.gender}
                     size={26}
                     marginRight={6}
                     alignTop
@@ -3795,7 +3819,7 @@ export default function ChatThreadScreen() {
                   onPress={() => applyMention(p.name)}
                   activeOpacity={0.7}
                 >
-                  <ChatAvatar uri={p.profile_photo_url} name={p.name} size={28} marginRight={9} />
+                  <ChatAvatar uri={p.profile_photo_url} name={p.name} gender={p.gender} size={28} marginRight={9} />
                   <Text style={styles.mentionName}>{p.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -4597,6 +4621,7 @@ export default function ChatThreadScreen() {
                     <ChatAvatar
                       uri={participantsById[r.user_id]?.profile_photo_url || null}
                       name={quien}
+                      gender={participantsById[r.user_id]?.gender}
                       size={34}
                       marginRight={10}
                     />
@@ -4869,7 +4894,7 @@ export default function ChatThreadScreen() {
                     onPress={() => { if (p) { setVerEnLinea(false); setPerfilVisto(p); } }}
                     accessibilityLabel={p ? `Ver el perfil de ${nombre}` : nombre}
                   >
-                    <ChatAvatar uri={p?.profile_photo_url ?? null} name={nombre} size={34} marginRight={11} enLinea />
+                    <ChatAvatar uri={p?.profile_photo_url ?? null} name={nombre} gender={p?.gender} size={34} marginRight={11} enLinea />
                     <Text style={styles.enLineaNombre} numberOfLines={1}>{nombre}</Text>
                   </TouchableOpacity>
                 );
