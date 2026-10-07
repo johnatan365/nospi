@@ -45,6 +45,11 @@ interface Event {
   event_status: 'draft' | 'published' | 'closed';
   is_full: boolean;
   price: number | null;
+  // Division en mesas. `dividido_at` marca al original ya archivado y
+  // `dividido_de` marca a cada grupo que salio de el. Con cualquiera de los dos
+  // puesto, el evento ya no se puede volver a dividir.
+  dividido_at?: string | null;
+  dividido_de?: string | null;
 }
 
 // --- Ubicación: extraer coordenadas de un link largo de Google Maps ---
@@ -9009,12 +9014,24 @@ setBulkWhatsAppPending(pending);
                 </View>
               )}
 
-              <TouchableOpacity
-                style={styles.configButton}
-                onPress={() => handleOpenConfigModal(event)}
-              >
-                <Text style={styles.configButtonText}>⚙️ Configurar</Text>
-              </TouchableOpacity>
+              <View style={styles.accionesEvento}>
+                <TouchableOpacity
+                  style={[styles.configButton, { flex: 1, marginTop: 0 }]}
+                  onPress={() => handleOpenConfigModal(event)}
+                >
+                  <Text style={styles.configButtonText}>⚙️ Configurar</Text>
+                </TouchableOpacity>
+                {/* Dividir solo tiene sentido con gente inscrita y en un evento
+                    que no sea ya una mesa ni un original archivado. */}
+                {eventAppointmentsCount >= 2 && !event.dividido_at && !event.dividido_de && (
+                  <TouchableOpacity
+                    style={styles.dividirButton}
+                    onPress={() => router.push(`/admin/dividir/${event.id}` as any)}
+                  >
+                    <Text style={styles.configButtonText}>✂️ Dividir en grupos</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           );
         })}
@@ -13380,6 +13397,18 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  accionesEvento: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  dividirButton: {
+    backgroundColor: '#B1185B',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    flex: 1,
   },
   configModalContent: {
     backgroundColor: 'white',
