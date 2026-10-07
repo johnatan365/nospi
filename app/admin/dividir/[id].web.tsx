@@ -99,13 +99,48 @@ function puntaje(p: Persona, grupo: Persona[], criterios: Criterio[]): number {
 }
 
 /**
+ * Cuanta gente de cada genero le toca a cada grupo.
+ *
+ * Esto es un CUPO, no una preferencia: 6 hombres en 2 grupos son 3 y 3, punto.
+ * Antes el genero era un criterio mas y empujaba por proporcion, que no es lo
+ * mismo: con grupos de 8 y 7, la proporcion mas pareja de 6 hombres daba 2 y 4.
+ *
+ * El sobrante de cada genero se reparte alternando el sentido --el primero de
+ * izquierda a derecha, el segundo de derecha a izquierda-- para que los tamanos
+ * totales no se descuadren. Con 6 hombres y 9 mujeres en 2 grupos: hombres
+ * [3,3] y mujeres [4,5], o sea grupos de 7 y 8.
+ */
+export function cuposPorGenero(gente: Persona[], k: number): Record<string, number[]> {
+  const generos = Array.from(new Set(gente.map((p) => p.genero))).sort();
+  const cupos: Record<string, number[]> = {};
+  generos.forEach((g, i) => {
+    const cuantos = gente.filter((p) => p.genero === g).length;
+    const reparto = tamanosDeGrupo(cuantos, k);
+    cupos[g] = i % 2 === 0 ? reparto : reparto.slice().reverse();
+  });
+  return cupos;
+}
+
+/** True si el genero esta activo y en modo repartir, que es cuando manda el cupo. */
+export function hayCupoDeGenero(criterios: Criterio[]): boolean {
+  return criterios.some((c) => c.key === 'genero' && c.activo && c.modo === 'repartir');
+}
+
+/**
  * Arma los grupos. `fijados` son las personas que el admin movio a mano: esas
- * mandan sobre el algoritmo y se sientan primero.
+ * mandan sobre todo, incluso sobre el cupo de genero, porque moverlas es una
+ * decision explicita suya y la vista previa le muestra como quedo.
  */
 export function armarGrupos(
   gente: Persona[], k: number, criterios: Criterio[], fijados: Record<string, number>,
 ): Persona[][] {
-  const caps = tamanosDeGrupo(gente.length, k);
+  const conCupo = hayCupoDeGenero(criterios);
+  const cupos = conCupo ? cuposPorGenero(gente, k) : null;
+  // Con cupo, el tamano del grupo sale de sumar los cupos de cada genero.
+  const caps = cupos
+    ? Array.from({ length: k }, (_, i) =>
+        Object.keys(cupos).reduce((a, g) => a + cupos[g][i], 0))
+    : tamanosDeGrupo(gente.length, k);
   const grupos: Persona[][] = Array.from({ length: k }, () => []);
 
   // Las ciudades numerosas primero, para que el bloque grande no quede picado.
@@ -125,16 +160,27 @@ export function armarGrupos(
     }
   });
 
+  // Con cupo, el genero deja de puntuar: ya decide quien PUEDE entrar, y las
+  // otras prioridades deciden cual de los que pueden.
+  const paraPuntuar = cupos ? criterios.filter((c) => c.key !== 'genero') : criterios;
+
   orden.forEach((p) => {
     if (sentados.has(p.user_id)) return;
     let mejor = -1; let mejorS = -Infinity;
     for (let i = 0; i < k; i++) {
       if (grupos[i].length >= caps[i]) continue;
-      const s = puntaje(p, grupos[i], criterios);
+      if (cupos) {
+        const suyos = grupos[i].filter((x) => x.genero === p.genero).length;
+        if (suyos >= (cupos[p.genero]?.[i] ?? 0)) continue;
+      }
+      const s = puntaje(p, grupos[i], paraPuntuar);
       if (s > mejorS) { mejorS = s; mejor = i; }
     }
+    // Si un movimiento a mano dejo el cupo sin salida, no se pierde a nadie:
+    // entra donde quepa y la vista previa muestra el desbalance.
     if (mejor < 0) { for (let j = 0; j < k; j++) if (grupos[j].length < caps[j]) { mejor = j; break; } }
-    if (mejor >= 0) grupos[mejor].push(p);
+    if (mejor < 0) { let menor = 0; for (let j = 1; j < k; j++) if (grupos[j].length < grupos[menor].length) menor = j; mejor = menor; }
+    grupos[mejor].push(p);
   });
 
   grupos.forEach((g) => g.sort((a, b) => (a.edad ?? 999) - (b.edad ?? 999)));
@@ -157,10 +203,13 @@ export default function DividirEventoScreen() {
   const [patron, setPatron] = useState('mesa');
   const [fijados, setFijados] = useState<Record<string, number>>({});
   const [elegido, setElegido] = useState<string | null>(null);
+  // Genero de primero a proposito: con ciudad arriba, un evento como la
+  // videollamada del 6 de octubre deja un grupo con los 8 de Medellin (6
+  // hombres) y el otro sin un solo hombre.
   const [criterios, setCriterios] = useState<Criterio[]>([
+    { key: 'genero', etiqueta: 'Género', modo: 'repartir', activo: true },
     { key: 'ciudad', etiqueta: 'Ciudad', modo: 'juntar',   activo: true },
     { key: 'edad',   etiqueta: 'Edad',   modo: 'juntar',   activo: true },
-    { key: 'genero', etiqueta: 'Género', modo: 'repartir', activo: true },
   ]);
 
   const [aplicando, setAplicando] = useState(false);
@@ -231,6 +280,24 @@ export default function DividirEventoScreen() {
       out.push({
         tono: 'alerta',
         texto: `${solos.length} ${solos.length === 1 ? 'persona es la única' : 'personas son las únicas'} de su ciudad (${solos.map((p) => `${p.nombre} · ${p.ciudad}`).join(', ')}). La prioridad de ciudad no ${solos.length === 1 ? 'la' : 'las'} puede juntar con nadie.`,
+      });
+    }
+
+    // Con cupo, decir el reparto logrado en voz alta: es lo que se vino a pedir.
+    if (hayCupoDeGenero(criterios)) {
+      const cupos = cuposPorGenero(gente, k);
+      const nombres: Record<string, string> = { hombre: 'Hombres', mujer: 'Mujeres' };
+      Object.keys(cupos).forEach((gen) => {
+        const real = grupos.map((g) => g.filter((p) => p.genero === gen).length);
+        const esperado = cupos[gen];
+        const cuadra = real.every((n, i) => n === esperado[i]);
+        const titulo = nombres[gen] || (gen ? `Género «${gen}»` : 'Sin género en el perfil');
+        out.push({
+          tono: cuadra ? 'bien' : 'malo',
+          texto: cuadra
+            ? `${titulo} repartidos ${real.join(' y ')}.`
+            : `${titulo}: quedaron ${real.join(' y ')} y el cupo pedía ${esperado.join(' y ')}. Lo desarmó un movimiento a mano.`,
+        });
       });
     }
 
@@ -414,7 +481,11 @@ export default function DividirEventoScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={st.pista}>Quedan grupos de {tamanosDeGrupo(gente.length, k).join(', ')} personas.</Text>
+                {/* El tamano real sale de los grupos ya armados: con el cupo de
+                    genero puesto, no es el reparto parejo de cabezas. */}
+                <Text style={st.pista}>
+                  Quedan grupos de {(grupos.length ? grupos.map((g) => g.length) : tamanosDeGrupo(gente.length, k)).join(', ')} personas.
+                </Text>
               </View>
 
               <View style={st.caja}>
@@ -428,7 +499,9 @@ export default function DividirEventoScreen() {
                       onPress={() => cambiarModo(i)}
                     >
                       <Text style={[st.miniTxt, { color: cr.modo === 'juntar' ? '#17633F' : nospiColors.purpleDark }]}>
-                        {cr.modo === 'juntar' ? 'Juntar' : 'Repartir'}
+                        {cr.modo === 'juntar'
+                          ? 'Juntar'
+                          : cr.key === 'genero' ? 'Cupo exacto' : 'Repartir'}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => subir(i)} disabled={i === 0} style={st.flecha}>
@@ -442,7 +515,12 @@ export default function DividirEventoScreen() {
                     </TouchableOpacity>
                   </View>
                 ))}
-                <Text style={st.pista}>«Juntar» pone parecidos juntos. «Repartir» los mezcla parejo. La de arriba manda.</Text>
+                <Text style={st.pista}>
+                  «Juntar» pone parecidos juntos. La de arriba manda.
+                  {hayCupoDeGenero(criterios)
+                    ? ' «Cupo exacto» en Género no es una preferencia sino un tope: reparte a cada género lo más parejo posible y las demás prioridades deciden quién va a cuál.'
+                    : ' Con el Género en «Juntar» puede quedarte un grupo de un solo género.'}
+                </Text>
               </View>
 
               <View style={st.caja}>
