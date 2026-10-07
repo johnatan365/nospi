@@ -1478,16 +1478,44 @@ export default function ChatThreadScreen() {
     if (!conversationId) return;
     const { data, error } = await supabase
       .from('chat_conversations')
-      .select('estado, solicitada_por')
+      .select('type, estado, solicitada_por')
       .eq('id', conversationId)
       .maybeSingle();
     if (error || !data) return;
-    setMeta((m) => (m ? {
-      ...m,
-      estado: (data as any).estado ?? m.estado,
-      solicitada_por: (data as any).solicitada_por ?? m.solicitada_por,
-    } : m));
-  }, [conversationId]);
+    const fila = data as any;
+    if (fila.type !== 'direct') return;
+
+    setMeta((m) => {
+      if (m) {
+        return {
+          ...m,
+          estado: fila.estado ?? m.estado,
+          solicitada_por: fila.solicitada_por ?? m.solicitada_por,
+        };
+      }
+      // meta venia en NULL, y este es el caso que importa.
+      //
+      // get_my_conversations_v2 no devuelve los privados que todavia no tienen
+      // ningun mensaje (pide lm.created_at is not null), asi que al abrir un
+      // chat nuevo con alguien loadEverything no encuentra la fila y meta se
+      // queda sin llenar. Justo el chat donde se envia la primera solicitud.
+      //
+      // Se arma aqui con lo minimo que necesita el aviso. El nombre sale de
+      // los participantes, que si llegan en un chat sin mensajes.
+      const otro = participants.find((pp) => pp.user_id !== user?.id) ?? null;
+      return {
+        conv_type: 'direct',
+        estado: fila.estado ?? null,
+        solicitada_por: fila.solicitada_por ?? null,
+        event_name: null,
+        event_type: null,
+        event_date: null,
+        other_user_id: otro?.user_id ?? null,
+        other_user_name: otro?.name ?? null,
+        other_user_photo: otro?.profile_photo_url ?? null,
+      } as ConversationMeta;
+    });
+  }, [conversationId, participants, user?.id]);
 
   // Persona cuya ficha se esta viendo. Se abre al tocar su foto en un mensaje o
   // en la lista de participantes.
@@ -2384,9 +2412,16 @@ export default function ChatThreadScreen() {
     } else if (data) {
       setMessages((prev) => fusionarMensajeReal(prev, data as Message, tempId));
       if (conversationId) AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
-      // Un privado que todavia no esta aceptado pudo acabar de convertirse en
-      // solicitud con este mismo mensaje. Se pregunta, no se asume.
-      if (meta?.conv_type === 'direct' && meta?.estado !== 'aceptada') {
+      // Este mensaje pudo acabar de convertir el chat en una solicitud.
+      //
+      // La condicion NO puede exigir meta.conv_type === 'direct': en un chat
+      // recien creado meta es null (ver refrescarEstadoDirecto), que es
+      // precisamente cuando hace falta preguntar. Por eso basta con que meta
+      // falte, o que sea un privado sin aceptar todavia; el type lo confirma
+      // la consulta. Un grupo nunca entra, porque ahi meta si viene llena.
+      const puedeHaberseVueltoSolicitud =
+        !meta || (meta.conv_type === 'direct' && meta.estado !== 'aceptada');
+      if (puedeHaberseVueltoSolicitud) {
         refrescarEstadoDirecto();
       }
     }
