@@ -164,6 +164,12 @@ function mediaBoxSize(width?: number | null, height?: number | null) {
 
 // Extension y tipo MIME del archivo tal como lo entrega el selector. No se
 // recomprime ni se redimensiona nada: lo que se sube es el original.
+interface StickerDeNospi {
+  id: string;
+  url: string;
+  etiqueta: string | null;
+}
+
 // OJO SI ALGUIEN QUIERE DISTINGUIR LOS STICKERS: `kind` es lo que termina en
 // chat_messages.media_kind, y get_expired_chat_media (la limpieza mensual) solo
 // recoge 'image' y 'video'. Marcar un sticker como 'sticker' lo sacaria de esa
@@ -1690,6 +1696,13 @@ export default function ChatThreadScreen() {
   // ── Selector de GIFs ──────────────────────────────────────────────────
   // Los GIFs vienen de GIPHY. Antes venian de Tenor, que era el catalogo de
   // WhatsApp, pero Google cerro esa API en junio de 2026. Ver lib/giphy.ts.
+  // Stickers propios de Nospi. El catalogo vive en la base y se lee una vez
+  // por sesion de chat: son pocas filas y no cambian mientras alguien escribe.
+  const [showStickers, setShowStickers] = useState(false);
+  const [stickers, setStickers] = useState<StickerDeNospi[]>([]);
+  const [stickersCargando, setStickersCargando] = useState(false);
+  const [stickerEnviando, setStickerEnviando] = useState<string | null>(null);
+
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifQuery, setGifQuery] = useState('');
   const [gifResults, setGifResults] = useState<Gif[]>([]);
@@ -2794,6 +2807,64 @@ export default function ChatThreadScreen() {
       await AsyncStorage.setItem(GIF_RECIENTES_KEY, JSON.stringify(sinRepetir));
     } catch {
       // Que no se pueda guardar el historial no es motivo para tumbar el envio.
+    }
+  };
+
+  // ── Stickers de Nospi ──────────────────────────────────────────────────
+  const abrirStickers = async () => {
+    setShowAttachMenu(false);
+    setShowStickers(true);
+    if (stickers.length > 0) return;      // ya estan, no se vuelve a pedir
+    setStickersCargando(true);
+    try {
+      const { data, error } = await supabase
+        .from('stickers')
+        .select('id, url, etiqueta, orden, pack_id, sticker_packs!inner(orden, activo)')
+        .eq('activo', true)
+        .eq('sticker_packs.activo', true)
+        .order('orden', { ascending: true });
+      if (error) throw error;
+      setStickers(((data as any[]) || []).map((s) => ({ id: s.id, url: s.url, etiqueta: s.etiqueta })));
+    } catch (e: any) {
+      console.error('stickers:', e?.message || e);
+    } finally {
+      setStickersCargando(false);
+    }
+  };
+
+  // Se manda igual que un GIF: lo que viaja es la URL publica, no una copia.
+  // El archivo del sticker es compartido por todo el mundo, asi que copiarlo a
+  // chat-media por cada envio lo duplicaria mil veces y la limpieza mensual lo
+  // borraria a los 30 dias, rompiendo de golpe todos los mensajes que lo usan.
+  const enviarSticker = async (s: StickerDeNospi) => {
+    if (!user?.id || !conversationId || stickerEnviando || uploading) return;
+    const caption = draft.trim();
+    const replyId = replyingTo?.id ?? null;
+    setStickerEnviando(s.id);
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: caption,
+          reply_to: replyId,
+          media_path: s.url,
+          media_kind: 'image',
+          media_mime: s.url.endsWith('.webp') ? 'image/webp' : 'image/png',
+        })
+        .select(MESSAGE_COLUMNS)
+        .single();
+      if (error) throw error;
+      if (data) setMessages((prev) => [...prev, data as Message]);
+      setShowStickers(false);
+      setReplyingTo(null);
+      if (caption) updateDraft('');
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (e: any) {
+      avisar('No se pudo enviar el sticker. ' + (e?.message || ''));
+    } finally {
+      setStickerEnviando(null);
     }
   };
 
@@ -4481,6 +4552,13 @@ export default function ChatThreadScreen() {
                 <Text style={styles.attachTileText}>Fotos y videos</Text>
               </TouchableOpacity>
 
+              <TouchableOpacity style={styles.attachTile} onPress={abrirStickers} activeOpacity={0.7}>
+                <View style={[styles.attachTileBox, { backgroundColor: '#F3E8FB' }]}>
+                  <IconSymbol ios_icon_name="face.smiling" android_material_icon_name="mood" size={28} color="#7C3AED" />
+                </View>
+                <Text style={styles.attachTileText}>Stickers</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.attachTile} onPress={abrirGifs} activeOpacity={0.7}>
                 <View style={[styles.attachTileBox, { backgroundColor: '#DFF7F9' }]}>
                   <Text style={styles.attachTileGif}>GIF</Text>
@@ -4510,6 +4588,66 @@ export default function ChatThreadScreen() {
             <Text style={styles.attachSheetHint}>
               Las fotos y videos van en su calidad original, sin reducir la resolución. Máximo 25 MB por archivo, y se eliminan a los {MEDIA_RETENTION_DAYS} días.
             </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Selector de stickers. Mas bajo que el de GIFs a proposito: son pocos y
+          conocidos, no hay que buscar nada, asi que no tiene por que tapar la
+          conversacion. */}
+      <Modal visible={showStickers} animationType="slide" transparent onRequestClose={() => setShowStickers(false)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowStickers(false)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={[styles.attachSheet, { paddingBottom: insets.bottom + 10, maxHeight: '58%' }]}
+          >
+            <View style={styles.sheetGrabber} />
+            <View style={styles.gifHeader}>
+              <Text style={styles.attachSheetTitle}>Stickers</Text>
+              <TouchableOpacity onPress={() => setShowStickers(false)} hitSlop={10}>
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={22} color={nospiColors.gray400} />
+              </TouchableOpacity>
+            </View>
+
+            {stickersCargando ? (
+              <View style={styles.stickerVacio}>
+                <ActivityIndicator color={nospiColors.purpleDark} />
+              </View>
+            ) : stickers.length === 0 ? (
+              <View style={styles.stickerVacio}>
+                <Text style={styles.stickerVacioTxt}>
+                  Todavía no hay stickers. Se suben desde el panel de administración.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.stickerGrid}>
+                  {stickers.map((s) => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={styles.stickerCelda}
+                      onPress={() => enviarSticker(s)}
+                      disabled={!!stickerEnviando}
+                      activeOpacity={0.6}
+                    >
+                      <ExpoImage
+                        source={{ uri: s.url }}
+                        style={styles.stickerImg}
+                        contentFit="contain"
+                        transition={120}
+                        accessibilityLabel={s.etiqueta || 'sticker'}
+                      />
+                      {stickerEnviando === s.id && (
+                        <View style={styles.stickerEnviando}>
+                          <ActivityIndicator size="small" color={nospiColors.purpleDark} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -5537,6 +5675,23 @@ const styles = StyleSheet.create({
   expiredMediaText: { fontSize: 12.5, color: '#6b5560', lineHeight: 17 },
   expiredMediaTextMine: { color: 'rgba(255,255,255,0.85)' },
   expiredMediaHint: { fontSize: 11, opacity: 0.75 },
+
+  // ── Stickers ───────────────────────────────────────────────────────────
+  stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 6, paddingBottom: 10 },
+  // Tres por fila, como WhatsApp: mas chicos no se distinguen y mas grandes
+  // obligan a desplazar para ver seis.
+  stickerCelda: {
+    width: '33.33%', aspectRatio: 1, padding: 7,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stickerImg: { width: '100%', height: '100%' },
+  stickerEnviando: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  stickerVacio: { paddingVertical: 34, paddingHorizontal: 26, alignItems: 'center' },
+  stickerVacioTxt: { fontSize: 13, color: nospiColors.gray500, textAlign: 'center', lineHeight: 19 },
 
   // ── Notas de voz ───────────────────────────────────────────────────────
   // Columna: arriba el boton con la barra (centrados entre si), debajo el

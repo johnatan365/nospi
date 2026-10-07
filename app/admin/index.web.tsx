@@ -63,6 +63,16 @@ interface SalaMeet {
   ultima_vez?: string | null;
 }
 
+// Un sticker del catalogo. `url` es publica y es lo que se guarda en el mensaje
+// al mandarlo; `storage_path` sirve para borrar el archivo al quitarlo.
+interface StickerAdmin {
+  id: string;
+  url: string;
+  storage_path: string | null;
+  etiqueta: string | null;
+  orden: number;
+}
+
 // --- Ubicación: extraer coordenadas de un link largo de Google Maps ---
 // Saca lat/lng del texto pegado (patrones @lat,lng, !3d!4d, q=/ll=) y, si viene,
 // el nombre del lugar (segmento /place/Nombre/). No hace peticiones de red.
@@ -896,6 +906,12 @@ export default function AdminPanelScreen() {
   const [salasMsg, setSalasMsg] = useState('');
   // Las libres para el dia que tenga puesto el formulario de evento.
   const [salasLibresForm, setSalasLibresForm] = useState<SalaMeet[]>([]);
+
+  // Stickers de Nospi: el catalogo que la gente manda en el chat.
+  const [stickersAdmin, setStickersAdmin] = useState<StickerAdmin[]>([]);
+  const [packId, setPackId] = useState<string | null>(null);
+  const [stickerSubiendo, setStickerSubiendo] = useState(false);
+  const [stickerMsg, setStickerMsg] = useState('');
   // Mostrar u ocultar los originales que ya se dividieron en mesas.
   const [verDivididos, setVerDivididos] = useState(false);
 
@@ -2358,6 +2374,79 @@ export default function AdminPanelScreen() {
     })();
     return () => { vivo = false; };
   }, [eventForm.type, eventForm.date, selectedEventForConfig?.id]);
+
+  // ── Stickers ─────────────────────────────────────────────────────────────
+
+  const cargarStickers = useCallback(async () => {
+    const { data: packs } = await supabase
+      .from('sticker_packs').select('id').eq('activo', true).order('orden').limit(1);
+    const pid = (packs as any[])?.[0]?.id || null;
+    setPackId(pid);
+    if (!pid) { setStickersAdmin([]); return; }
+    const { data, error } = await supabase
+      .from('stickers')
+      .select('id, url, storage_path, etiqueta, orden')
+      .eq('pack_id', pid).eq('activo', true).order('orden');
+    if (error) { console.error('stickers:', error.message); return; }
+    setStickersAdmin((data as StickerAdmin[]) || []);
+  }, []);
+
+  const subirStickers = async (archivos: FileList | null) => {
+    if (!archivos || archivos.length === 0 || !packId) return;
+    setStickerSubiendo(true); setStickerMsg('');
+    let subidos = 0; const problemas: string[] = [];
+    try {
+      let orden = stickersAdmin.length;
+      for (const f of Array.from(archivos)) {
+        // El fondo transparente es lo que distingue un sticker de una foto
+        // pegada encima del chat, y solo PNG y WebP lo guardan. El tope lo pone
+        // el bucket; se valida aqui para explicarlo con palabras.
+        if (!/^image\/(png|webp)$/.test(f.type)) { problemas.push(`${f.name}: tiene que ser PNG o WebP`); continue; }
+        if (f.size > 524288) { problemas.push(`${f.name}: pesa ${Math.round(f.size / 1024)} KB y el tope son 512`); continue; }
+        const ext = f.type === 'image/webp' ? 'webp' : 'png';
+        const ruta = `${packId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: eUp } = await supabase.storage
+          .from('stickers').upload(ruta, f, { contentType: f.type, cacheControl: '31536000', upsert: false });
+        if (eUp) { problemas.push(`${f.name}: ${eUp.message}`); continue; }
+        const { data: pub } = supabase.storage.from('stickers').getPublicUrl(ruta);
+        const { error: eIns } = await supabase.from('stickers').insert({
+          pack_id: packId, url: pub.publicUrl, storage_path: ruta,
+          etiqueta: f.name.replace(/\.[^.]+$/, ''), orden: orden++,
+        });
+        if (eIns) { problemas.push(`${f.name}: ${eIns.message}`); continue; }
+        subidos++;
+      }
+      setStickerMsg(
+        (subidos ? `Subidos ${subidos}. ` : '') + (problemas.length ? problemas.join(' · ') : '')
+        || 'No se subió ninguno.'
+      );
+      await cargarStickers();
+    } catch (e: any) {
+      setStickerMsg(e?.message || 'No se pudieron subir');
+    } finally {
+      setStickerSubiendo(false);
+    }
+  };
+
+  const quitarSticker = async (s: StickerAdmin) => {
+    if (!(typeof window !== 'undefined' && window.confirm('¿Quitar este sticker del catálogo?'))) return;
+    // Primero la fila y despues el archivo: si falla el borrado del archivo
+    // queda un huerfano en el bucket, que es molesto pero inofensivo. Al reves,
+    // el catalogo apuntaria a una imagen que ya no existe.
+    const { error } = await supabase.from('stickers').delete().eq('id', s.id);
+    if (error) { setStickerMsg(error.message); return; }
+    if (s.storage_path) await supabase.storage.from('stickers').remove([s.storage_path]);
+    await cargarStickers();
+  };
+
+  const moverSticker = async (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= stickersAdmin.length) return;
+    const a = stickersAdmin[i], b = stickersAdmin[j];
+    setStickersAdmin((prev) => { const n = prev.slice(); n[i] = b; n[j] = a; return n; });
+    await supabase.from('stickers').update({ orden: b.orden }).eq('id', a.id);
+    await supabase.from('stickers').update({ orden: a.orden }).eq('id', b.id);
+  };
 
   const guardarSalas = async () => {
     setSalasGuardando(true); setSalasMsg('');
@@ -8518,6 +8607,74 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </div>
         </div>
 
+        {/* Stickers del chat — tabla y bucket propios, se guarda al instante */}
+        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, marginBottom: 28,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #7C3AED' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase',
+                        letterSpacing: '0.05em', marginBottom: 6 }}>
+            🙂 Stickers del chat
+          </div>
+          <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
+            Aparecen en el chat apenas los subes: no hace falta build ni que nadie actualice la app.
+            Tienen que ser <strong>PNG o WebP con fondo transparente</strong>, cuadrados, máximo 512 KB.
+            Sin transparencia se ven como una foto con marco encima de la conversación.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 12 }}>
+            {stickersAdmin.map((s, i) => (
+              <div key={s.id} style={{ position: 'relative' }}>
+                <div style={{ aspectRatio: '1', background: '#F3F4F6', borderRadius: 12, padding: 8,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={s.url} alt={s.etiqueta || 'sticker'}
+                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <button
+                  onClick={() => quitarSticker(s)}
+                  title="Quitar"
+                  style={{ position: 'absolute', top: -7, right: -7, width: 22, height: 22, borderRadius: 11,
+                           background: '#DC2626', color: '#fff', border: 'none', fontSize: 12,
+                           cursor: 'pointer', lineHeight: 1 }}
+                >✕</button>
+                <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 5 }}>
+                  <button onClick={() => moverSticker(i, -1)} disabled={i === 0}
+                          style={{ border: 'none', background: '#F3F4F6', borderRadius: 6, padding: '2px 7px',
+                                   cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1 }}>←</button>
+                  <button onClick={() => moverSticker(i, 1)} disabled={i === stickersAdmin.length - 1}
+                          style={{ border: 'none', background: '#F3F4F6', borderRadius: 6, padding: '2px 7px',
+                                   cursor: i === stickersAdmin.length - 1 ? 'default' : 'pointer',
+                                   opacity: i === stickersAdmin.length - 1 ? 0.3 : 1 }}>→</button>
+                </div>
+              </div>
+            ))}
+
+            <label style={{ aspectRatio: '1', border: '2px dashed #D1D5DB', borderRadius: 12,
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            justifyContent: 'center', gap: 2, cursor: 'pointer', color: '#9CA3AF' }}>
+              <span style={{ fontSize: 22 }}>＋</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600 }}>{stickerSubiendo ? 'Subiendo…' : 'Subir'}</span>
+              <input
+                type="file" accept="image/png,image/webp" multiple hidden
+                disabled={stickerSubiendo}
+                onChange={(e) => { subirStickers(e.target.files); e.currentTarget.value = ''; }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: '#6B7280' }}>
+              {stickersAdmin.length === 0
+                ? 'Todavía no hay ninguno. La pestaña del chat sale vacía hasta que subas el primero.'
+                : `${stickersAdmin.length} ${stickersAdmin.length === 1 ? 'sticker' : 'stickers'} · las flechas cambian el orden en que los ve la gente`}
+            </span>
+            {!!stickerMsg && (
+              <span style={{ fontSize: 12.5, fontWeight: 700,
+                             color: stickerMsg.startsWith('Subidos') ? '#059669' : '#B91C1C' }}>
+                {stickerMsg}
+              </span>
+            )}
+          </div>
+        </div>
+
         <button
           onClick={handleSaveConfig}
           disabled={savingConfig}
@@ -11029,7 +11186,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
-                if (item.key === 'config') cargarSalas();
+                if (item.key === 'config') { cargarSalas(); cargarStickers(); }
                 if (item.key === 'moderation') { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);
