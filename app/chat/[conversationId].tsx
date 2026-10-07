@@ -1161,6 +1161,26 @@ export default function ChatThreadScreen() {
     // Sin pendientes al abrir: basta con lo mas nuevo que se vio.
     if (!corta) return maxVistoRef.current;
 
+    // LLEGAR AL FINAL CUENTA COMO HABER LEIDO.
+    //
+    // La regla contigua de abajo tiene un hueco que se veia en la Comunidad: con
+    // 77 pendientes, bajar al final --o tocar la flecha, que existe justo para
+    // eso-- salta unos 70 mensajes que nunca se renderizaron, el recorrido se
+    // corta en el primero de ellos y la marca se queda donde estaba. El
+    // contador bajaba a cero en pantalla, pero al servidor le llegaba una fecha
+    // vieja: al volver a entrar reaparecian los 77. En un privado no se notaba
+    // porque con dos o tres pendientes se ven todos de una.
+    //
+    // Si se vio el ULTIMO mensaje no queda nada por volver a buscar, asi que la
+    // contiguidad deja de importar. Es lo que hace WhatsApp. Si, marca como
+    // leido lo que se salto -- y eso es mejor que un globo que no se apaga
+    // nunca, porque ese enseña a no mirar el globo.
+    const ultimo = messages[messages.length - 1];
+    if (ultimo && (vistos.has(ultimo.id)
+        || (maxVistoRef.current && maxVistoRef.current >= ultimo.created_at))) {
+      return ultimo.created_at;
+    }
+
     let marca: string | null = corta;
     for (const m of messages) {
       if (m.created_at <= corta) continue;        // ya estaba leido
