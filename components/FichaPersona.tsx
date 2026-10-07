@@ -416,7 +416,10 @@ const estilos = StyleSheet.create({
   // Circulo oscuro translucido: la X cae sobre la foto, que puede ser clara u
   // oscura, y sin fondo propio desaparece en las claras.
   equis: {
-    position: 'absolute', top: 12, right: 12, width: 34, height: 34,
+    // top 24 y no 12: las barritas de las fotos van en top 10 con 3.5 de alto,
+    // asi que terminan en 13.5 y la X les quedaba encima. Bajarla las deja
+    // pasar de ancho completo, que es como se entiende cuantas fotos hay.
+    position: 'absolute', top: 24, right: 12, width: 34, height: 34,
     borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },

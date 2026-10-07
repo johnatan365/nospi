@@ -1069,6 +1069,10 @@ export default function ChatThreadScreen() {
   // De que conversacion es el set de arriba. Sirve para no borrarlo en una
   // recarga de la MISMA conversacion (ver loadEverything).
   const convDelSetRef = useRef<string | null>(null);
+  // Alto de la ventana de la lista y alto de su contenido. Si el contenido cabe
+  // sin desplazar, todo lo cargado esta literalmente en pantalla.
+  const altoVistaRef = useRef(0);
+  const altoContenidoRef = useRef(0);
   const alVerItemsRef = useRef<any>(null);
   alVerItemsRef.current = ({ viewableItems }: any) => {
     for (const v of viewableItems || []) {
@@ -1087,6 +1091,35 @@ export default function ChatThreadScreen() {
     setPendientesVivos((prev) => (prev === quedan ? prev : quedan));
   };
   const alVerItems = useCallback((info: any) => { alVerItemsRef.current?.(info); }, []);
+
+  // Red de seguridad para onViewableItemsChanged, que no es de fiar.
+  //
+  // En la web, con pocos mensajes y nada que desplazar, la lista no siempre
+  // reporta los items como visibles: no hay evento de desplazamiento que lo
+  // dispare y la primera medida llega con el alto en cero. Eso deja el set de
+  // vistos vacio, hastaDondeLei no encuentra ahi el mensaje, no mueve la marca
+  // y el chat se queda sin leer PARA SIEMPRE por mas veces que se abra. Es
+  // exactamente lo que pasaba en un chat de un solo mensaje: se veia en la
+  // base que mark_conversation_read si corria (last_delivered_at avanzaba),
+  // pero siempre con la misma marca vieja.
+  //
+  // Cuando el contenido cabe sin desplazar no hay nada que interpretar: todos
+  // los mensajes cargados estan en pantalla. Darlos por vistos es la verdad,
+  // no una concesion. Si hay que desplazar, esto no se aplica y sigue
+  // decidiendo la lectura contigua de siempre.
+  const marcarVistoSiTodoCabe = useCallback(() => {
+    const vista = altoVistaRef.current;
+    const contenido = altoContenidoRef.current;
+    if (vista <= 0 || contenido <= 0) return;
+    if (contenido > vista + 4) return;
+    if (messages.length === 0) return;
+    for (const m of messages) vistosRef.current.add(m.id);
+    const ultimo = messages[messages.length - 1]?.created_at;
+    if (ultimo && (!maxVistoRef.current || ultimo > maxVistoRef.current)) {
+      maxVistoRef.current = ultimo;
+    }
+    setPendientesVivos((prev) => (prev === 0 ? prev : 0));
+  }, [messages]);
 
   // Hasta donde se puede decir honestamente que se leyo.
   //
@@ -3449,7 +3482,17 @@ export default function ChatThreadScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesContainer}
           onViewableItemsChanged={alVerItems}
-          onContentSizeChange={() => {
+          onLayout={(e) => {
+            altoVistaRef.current = e.nativeEvent.layout.height;
+            marcarVistoSiTodoCabe();
+          }}
+          onContentSizeChange={(_w, h) => {
+            // Se mide y se evalua ANTES de los cortes de abajo: esos sirven
+            // para decidir el desplazamiento, y si se salen por ahi la medida
+            // nunca llegaria.
+            altoContenidoRef.current = h;
+            marcarVistoSiTodoCabe();
+
             if (pegandoArribaRef.current) { pegandoArribaRef.current = false; return; }
 
             // La primera vez decide DONDE abrir: SIEMPRE donde la persona se
