@@ -5559,7 +5559,7 @@ const styles = StyleSheet.create({
   // arranca justo bajo el inicio de la barra, no bajo el boton.
   voiceFooter: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: 5, marginLeft: 43,
+    marginTop: 1, marginLeft: 43,
   },
   voiceTime: { fontSize: 11, color: '#6b5560' },
   voiceRate: {
