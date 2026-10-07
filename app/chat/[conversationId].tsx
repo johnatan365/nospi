@@ -164,6 +164,11 @@ function mediaBoxSize(width?: number | null, height?: number | null) {
 
 // Extension y tipo MIME del archivo tal como lo entrega el selector. No se
 // recomprime ni se redimensiona nada: lo que se sube es el original.
+// OJO SI ALGUIEN QUIERE DISTINGUIR LOS STICKERS: `kind` es lo que termina en
+// chat_messages.media_kind, y get_expired_chat_media (la limpieza mensual) solo
+// recoge 'image' y 'video'. Marcar un sticker como 'sticker' lo sacaria de esa
+// consulta y el archivo se quedaria en el bucket para siempre, sin que nadie se
+// entere. Si hace falta distinguirlos, que sea con otra columna, no con esta.
 function mediaFileInfo(asset: ImagePicker.ImagePickerAsset) {
   const kind: 'image' | 'video' = asset.type === 'video' ? 'video' : 'image';
   const fromName = (asset.fileName || '').split('.').pop() || '';
@@ -3041,6 +3046,17 @@ export default function ChatThreadScreen() {
     try {
       // PNG y no JPEG: un sticker casi siempre tiene fondo transparente, y
       // pasarlo a JPEG lo dejaria con un cuadro blanco detras.
+      //
+      // LIMITACION CONOCIDA, Y NO TIENE ARREGLO DESDE AQUI: muchos stickers
+      // --los de WhatsApp sobre todo-- son webp ANIMADOS. expo-clipboard solo
+      // sabe devolver 'png' o 'jpeg' (ver GetImageOptions) y no expone los
+      // bytes originales por ninguna via, asi que en el celular la animacion se
+      // pierde y llega el primer fotograma quieto. En la web no pasa: ahi el
+      // navegador entrega el archivo tal cual, webp animado incluido.
+      //
+      // Arreglarlo exigiria codigo nativo que lea el portapapeles sin convertir.
+      // Si algun dia expo-clipboard acepta 'webp' en format, con cambiarlo aqui
+      // basta.
       const img = await Clipboard.getImageAsync({ format: 'png' });
       if (!img?.data) {
         Alert.alert('No hay imagen', 'El portapapeles no tiene ninguna imagen copiada.');
