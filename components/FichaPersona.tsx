@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, useWindowDimensions,
+  View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, useWindowDimensions, ScrollView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -77,7 +77,7 @@ export function FichaPersona({
   pie?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [indice, setIndice] = useState(0);
 
   // Al abrir la ficha de otra persona se vuelve a la primera foto: si no, se
@@ -121,9 +121,16 @@ export function FichaPersona({
   const porDefecto = avatarPorGenero(p?.gender);
   const frase = (p?.bio || '').trim();
 
-  // La foto ocupa el ancho de la pantalla y algo mas de alto que de ancho:
-  // los retratos se ven mejor asi y deja sitio al nombre sin taparle la cara.
-  const altoFoto = Math.min(Math.round(width * 1.05), 420);
+  // La ficha no pasa de 430 px de ancho ni en un monitor.
+  //
+  // Antes ocupaba el ancho de la ventana: en el navegador de un computador la
+  // foto quedaba de 1600 px de ancho por 420 de alto, una franja enorme donde
+  // de la cara solo se veia una banda. Topandola, en el telefono se ve igual
+  // que antes y en el computador se ve como una tarjeta.
+  const anchoHoja = Math.min(width, 430);
+  // Un poco mas alta que ancha: los retratos se ven mejor asi y queda sitio
+  // para el nombre sin taparle la cara.
+  const altoFoto = Math.round(anchoHoja * 1.1);
   const hayVarias = fotos.length > 1;
 
   const subtitulo = [
@@ -137,10 +144,18 @@ export function FichaPersona({
         {/* El paddingBottom incluye insets.bottom: sin eso, en Android el boton
             queda pegado a la barra de navegacion y casi no hay donde tocarlo. */}
         <TouchableOpacity
-          style={[estilos.hoja, { paddingBottom: insets.bottom + 20 }]}
+          style={[estilos.hoja, { width: anchoHoja, maxHeight: height * 0.92 }]}
           activeOpacity={1}
           onPress={() => {}}
         >
+          {/* Con scroll: en una ventana baja (o en un telefono pequeno con
+              muchos intereses) el boton de Cerrar quedaba por fuera y no habia
+              como salir sino tocando el fondo. */}
+          <ScrollView
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          >
           <View style={[estilos.marcoFoto, { height: altoFoto }]}>
             {fotos.length > 0 ? (
               <ExpoImage
@@ -283,6 +298,7 @@ export function FichaPersona({
               <Text style={estilos.cerrarTexto}>Cerrar</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -290,7 +306,7 @@ export function FichaPersona({
 }
 
 const estilos = StyleSheet.create({
-  fondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  fondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', alignItems: 'center' },
   hoja: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 22, borderTopRightRadius: 22,
     overflow: 'hidden',
