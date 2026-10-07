@@ -67,6 +67,7 @@ import {
 import { WebVoiceRecorder } from '@/lib/voiceRecorder';
 import * as FileSystem from 'expo-file-system';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import * as Notifications from 'expo-notifications';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
@@ -1252,6 +1253,29 @@ export default function ChatThreadScreen() {
   // version vieja de la funcion, sin los mensajes que se leyeron despues.
   const marcarLeidoRef = useRef<(hasta?: string | null) => void>(() => {});
   useEffect(() => () => { marcarLeidoRef.current(); tocarUltimaVez(); }, []);
+
+  // Al entrar, se quitan de la bandeja las notificaciones de ESTE chat.
+  //
+  // En Android el numero del icono lo arma el sistema contando lo que sigue en
+  // la bandeja. Leer dentro de la app no las borraba, asi que el numero se
+  // quedaba pegado aunque ya no hubiera nada sin leer.
+  //
+  // Solo las de esta conversacion: borrarlas todas apagaria tambien avisos de
+  // otro chat que la persona no ha visto.
+  useEffect(() => {
+    if (!conversationId || Platform.OS === 'web') return;
+    (async () => {
+      try {
+        const puestas = await Notifications.getPresentedNotificationsAsync();
+        for (const n of puestas) {
+          const datos: any = n.request?.content?.data || {};
+          if (datos.conversation_id === conversationId) {
+            await Notifications.dismissNotificationAsync(n.request.identifier);
+          }
+        }
+      } catch { /* si el sistema no deja, no pasa nada: el numero se corrige en la lista */ }
+    })();
+  }, [conversationId]);
 
   // Y tambien al mandar la app al fondo: ahi no se desmonta nada, asi que sin
   // esto quien lee y bloquea el telefono pierde la lectura.
