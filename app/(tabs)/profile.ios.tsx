@@ -804,6 +804,7 @@ export default function ProfileScreen() {
     );
   }
 
+  const tieneFrase = !!(profile.bio || '').trim();
   const genderText = profile.gender === 'hombre' ? 'Hombre' : profile.gender === 'mujer' ? 'Mujer' : 'No binario';
   const interestedInText = profile.interested_in === 'hombres' ? 'Hombres' : profile.interested_in === 'mujeres' ? 'Mujeres' : 'Ambos';
   const ageRangeText = `${profile.age_range_min}–${profile.age_range_max} años`;
@@ -851,6 +852,33 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.age}>{profile.age} años</Text>
+
+          {/* La frase va aqui, pegada a la foto, y no escondida dentro de
+              "Editar perfil".
+              Quien entra a su perfil y ve un recuadro vacio que le habla
+              escribe algo; quien tiene que entrar a un formulario a buscarlo,
+              no. Con frase escrita se lee de una, y tocarla la edita. */}
+          <TouchableOpacity
+            style={[styles.fraseCaja, !tieneFrase && styles.fraseVacia]}
+            onPress={handleEditPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={tieneFrase ? 'Editar tu frase' : 'Escribir algo sobre ti'}
+          >
+            {tieneFrase ? (
+              <>
+                <Text style={styles.fraseTexto} numberOfLines={3}>{profile.bio}</Text>
+                <Text style={styles.fraseEditar}>Tocar para editar</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.fraseInvita}>✏️  Cuenta algo sobre ti</Text>
+                <Text style={styles.fraseAyuda}>
+                  Una frase corta es lo primero que lee la gente de tu grupo
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           {/* Dice en palabras lo que el icono solo no alcanza a decir. El
               "de 6" es la parte que importa: ahi se entiende que son varias. */}
@@ -1587,6 +1615,24 @@ const styles = StyleSheet.create({
   accionFotosTexto: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' },
   accionEditar: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   accionEditarTexto: { color: '#880E4F', fontSize: 14.5, fontWeight: '700' },
+  fraseCaja: {
+    alignSelf: 'stretch', marginHorizontal: 44, marginTop: 14,
+    paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center',
+  },
+  fraseVacia: {
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)', borderStyle: 'dashed',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  fraseTexto: {
+    color: '#FFFFFF', fontSize: 14.5, lineHeight: 20, fontStyle: 'italic', textAlign: 'center',
+  },
+  fraseEditar: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600', marginTop: 6 },
+  fraseInvita: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' },
+  fraseAyuda: {
+    color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 3,
+    textAlign: 'center', lineHeight: 16,
+  },
   profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(173, 20, 87, 0.20)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: nospiColors.white },
   profilePhotoPlaceholderText: { fontSize: 48, fontWeight: 'bold', color: '#FFFFFF' },
   photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 60 },
