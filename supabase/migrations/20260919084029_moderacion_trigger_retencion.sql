@@ -13,6 +13,7 @@ declare
   motivo text;
   es_admin boolean;
 begin
+  -- En UPDATE solo interesa cuando cambia el texto.
   if tg_op = 'UPDATE' and new.content is not distinct from old.content then
     return new;
   end if;
@@ -36,6 +37,7 @@ begin
   end if;
 
   if tg_op = 'UPDATE' then
+    -- Guardar como quedo escrito la primera vez, y marcar la edicion.
     if new.contenido_original is null then
       new.contenido_original := old.content;
     end if;
@@ -53,6 +55,7 @@ begin
     new.aprobado_at := null;
     new.aprobado_por := null;
   elsif tg_op = 'UPDATE' then
+    -- Lo editaron y ahora si pasa el filtro: se libera.
     new.retenido_at := null;
     new.retenido_motivo := null;
   end if;

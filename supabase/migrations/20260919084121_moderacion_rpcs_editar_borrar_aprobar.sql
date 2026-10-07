@@ -2,7 +2,9 @@
 -- 15 minutos, como en WhatsApp. Pasado ese rato queda fijo.
 create or replace function public.editar_mi_mensaje(p_id uuid, p_contenido text)
 returns table(id uuid, content text, edited_at timestamptz, retenido boolean)
-language plpgsql security definer set search_path to 'public'
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
 declare m record;
 begin
@@ -21,17 +23,21 @@ begin
     raise exception 'el mensaje no puede quedar vacio' using errcode='22023';
   end if;
 
-  -- El trigger trg_retener_mensaje_moderacion revisa el texto nuevo y, si
-  -- toca, lo devuelve a revision.
+  -- El trigger trg_retener_mensaje_moderacion se encarga de revisar el texto
+  -- nuevo y, si toca, devolverlo a revision.
   return query
-  update public.chat_messages cm set content = p_contenido where cm.id = p_id
+  update public.chat_messages cm
+     set content = p_contenido
+   where cm.id = p_id
   returning cm.id, cm.content, cm.edited_at, cm.retenido_at is not null;
 end;
 $$;
 
 create or replace function public.borrar_mi_mensaje(p_id uuid)
 returns table(id uuid, deleted_at timestamptz)
-language plpgsql security definer set search_path to 'public'
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
 declare m record;
 begin
@@ -55,7 +61,9 @@ $$;
 -- El admin puede borrar cualquier mensaje, propio o ajeno, sin limite de tiempo.
 create or replace function public.admin_delete_message(p_id uuid)
 returns table(id uuid, deleted_at timestamptz)
-language plpgsql security definer set search_path to 'public'
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
 begin
   if not exists (select 1 from public.admins where user_id = auth.uid()) then
@@ -73,12 +81,15 @@ $$;
 -- Rechazar lo deja retenido: su autor lo sigue viendo y nadie mas.
 create or replace function public.admin_aprobar_mensaje(p_id uuid, p_aprobar boolean)
 returns table(id uuid, retenido boolean, aprobado_at timestamptz)
-language plpgsql security definer set search_path to 'public'
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
 begin
   if not exists (select 1 from public.admins where user_id = auth.uid()) then
     raise exception 'not authorized' using errcode='42501';
   end if;
+
   return query
   update public.chat_messages cm
      set retenido_at  = case when p_aprobar then null else cm.retenido_at end,
@@ -97,12 +108,15 @@ returns table(
   created_at timestamptz, retenido_at timestamptz, edited_at timestamptz,
   contenido_original text
 )
-language plpgsql security definer set search_path to 'public'
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
 begin
   if not exists (select 1 from public.admins where user_id = auth.uid()) then
     raise exception 'not authorized' using errcode='42501';
   end if;
+
   return query
   select cm.id, cm.conversation_id,
          coalesce(c.title, e.name, 'Chat'), c.type,

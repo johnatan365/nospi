@@ -1,6 +1,9 @@
 -- El push NO se manda si el mensaje quedo retenido. Sin esto la retencion no
 -- serviria de nada: el texto se leeria igual en la pantalla de bloqueo del
--- celular de todo el grupo. Los mensajes normales siguen mandando push.
+-- celular de todo el grupo.
+--
+-- Los mensajes normales siguen mandando push igual que siempre: la
+-- participacion del grupo no se toca.
 CREATE OR REPLACE FUNCTION public.trg_notify_chat_message()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -36,6 +39,8 @@ begin
   if NEW.retenido_at is null then
     return NEW;
   end if;
+  -- En UPDATE solo avisar cuando pasa de libre a retenido, para no mandar
+  -- un correo repetido cada vez que se toca la fila.
   if tg_op = 'UPDATE' and OLD.retenido_at is not null then
     return NEW;
   end if;
