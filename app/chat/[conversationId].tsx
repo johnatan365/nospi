@@ -162,6 +162,16 @@ function mediaBoxSize(width?: number | null, height?: number | null) {
   return { width: Math.round((MEDIA_MAX_HEIGHT * width) / height), height: MEDIA_MAX_HEIGHT };
 }
 
+// Un sticker se manda como una imagen mas --media_kind 'image' con la URL
+// publica-- porque asi reusa todo el camino que ya existe. Pero NO se tiene que
+// ver como una foto: en WhatsApp va chico y sin globo de color, flotando sobre
+// el fondo. Reconocerlo por la URL evita agregarle una columna a cada mensaje.
+const CARPETA_STICKERS = '/storage/v1/object/public/stickers/';
+const STICKER_EN_CHAT = 128;   // WhatsApp ronda este tamaño; una foto va al doble
+function esSticker(path?: string | null): boolean {
+  return !!path && path.includes(CARPETA_STICKERS);
+}
+
 // Extension y tipo MIME del archivo tal como lo entrega el selector. No se
 // recomprime ni se redimensiona nada: lo que se sube es el original.
 interface StickerDeNospi {
@@ -3953,6 +3963,10 @@ export default function ChatThreadScreen() {
                   style={[
                     styles.bubble,
                     isMine ? styles.bubbleMine : styles.bubbleTheirs,
+                    // Un sticker suelto no lleva globo: flota sobre el fondo del
+                    // chat, como en WhatsApp. Con pie de foto si lo lleva,
+                    // porque entonces hay texto que leer.
+                    esSticker(item.media_path) && !item.content?.trim() && styles.bubbleSticker,
                     resaltado === item.id && styles.bubbleResaltada,
                   ]}
                 >
@@ -4019,7 +4033,9 @@ export default function ChatThreadScreen() {
                     const url = esEnlaceDirecto(item.media_path)
                       ? (item.media_path as string)
                       : signedUrls[item.media_path as string];
-                    const box = mediaBoxSize(item.media_width, item.media_height);
+                    const box = esSticker(item.media_path)
+                      ? { width: STICKER_EN_CHAT, height: STICKER_EN_CHAT }
+                      : mediaBoxSize(item.media_width, item.media_height);
                     if (!url) {
                       return (
                         <View style={[styles.mediaPlaceholder, box]}>
@@ -5883,6 +5899,12 @@ const styles = StyleSheet.create({
   },
   channelLockedText: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
   bubbleMine: { backgroundColor: '#880E4F', borderBottomRightRadius: 4 },
+  // Sticker suelto: sin fondo, sin relleno y sin sombra. Lo unico que se ve es
+  // el dibujo con su transparencia.
+  bubbleSticker: {
+    backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 0,
+    shadowOpacity: 0, elevation: 0,
+  },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
   // Marca el mensaje al que se acaba de saltar desde una cita. Es un borde y no
   // un cambio de fondo porque el fondo distingue quien escribio -propio vs
