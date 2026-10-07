@@ -66,6 +66,7 @@ import {
 } from 'expo-audio';
 import { WebVoiceRecorder } from '@/lib/voiceRecorder';
 import * as FileSystem from 'expo-file-system';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
@@ -169,23 +170,41 @@ interface StickerDeNospi {
   etiqueta: string | null;
 }
 
-// expo-clipboard se carga PEREZOSO y entre try, y no con un import normal
-// arriba. No es manía: su archivo hace `requireNativeModule('ExpoClipboard')`
-// en el momento de importarse, y eso REVIENTA en un binario que no traiga el
-// modulo nativo -- es decir, en toda app instalada antes de que saliera el
-// build con stickers. Con un import normal, publicar una actualizacion por
-// OTA tumbaria la pantalla del chat ENTERA en esos telefonos, no solo el boton
-// de pegar.
+// ── Pegar imagenes: apagado hasta que salga el build que lo soporta ────────
 //
-// Asi, en una app vieja esto devuelve null, el boton no aparece y todo lo demas
-// del chat sigue funcionando. Es lo que permite mandar los arreglos por OTA sin
-// esperar a que las tiendas aprueben la version nueva.
+// QUE PASO, PARA QUE NO SE REPITA
+// El 7 de octubre se publico un OTA con esto encendido y la app se cerraba al
+// tocar el "+". El archivo de expo-clipboard hace requireNativeModule al
+// IMPORTARSE, y en un binario que no trae el modulo nativo eso no es una
+// excepcion de JavaScript que se pueda atrapar: se cae por debajo. El
+// try/catch que habia alrededor del require NO alcanzo. Se revirtio con
+// `eas update:roll-back-to-embedded`.
+//
+// Ahora hay dos candados, y el de afuera es el que importa:
+//
+//   1. El interruptor. Mientras este en false, NINGUN camino llega a
+//      expo-clipboard, asi que un OTA no puede romper nada por aqui. Se
+//      enciende en el mismo cambio que suba la version del build -- o sea,
+//      cuando el binario ya traiga el modulo.
+//   2. requireOptionalNativeModule, que es la API que Expo hizo justo para
+//      esto: pregunta por el modulo nativo y devuelve null en vez de reventar,
+//      sin cargar el paquete. Es lo que se debio usar desde el principio.
+//
+// El candado 2 deberia bastar. El 1 esta porque no hay forma de probar un
+// binario viejo desde aqui, y ya nos costo una caida en produccion.
+const PEGAR_IMAGEN_DISPONIBLE = false;
+
 let _clipboard: any | null = null;
 let _clipboardProbado = false;
 function portapapeles(): any | null {
   if (_clipboardProbado) return _clipboard;
   _clipboardProbado = true;
-  try { _clipboard = require('expo-clipboard'); } catch { _clipboard = null; }
+  if (!PEGAR_IMAGEN_DISPONIBLE) { _clipboard = null; return _clipboard; }
+  try {
+    // Se le pregunta al runtime SIN importar expo-clipboard.
+    if (!requireOptionalNativeModule('ExpoClipboard')) { _clipboard = null; return _clipboard; }
+    _clipboard = require('expo-clipboard');
+  } catch { _clipboard = null; }
   return _clipboard;
 }
 
