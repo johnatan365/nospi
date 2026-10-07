@@ -7,6 +7,12 @@
 // chat_open_push_sent_at, event_start_push_sent_at) para no interferir con el
 // tracking de email/whatsapp que ya existe.
 //
+// v8 (oct 2026): el recordatorio de 'faltan 3 dias' le pide la foto de perfil
+// a quien no la tiene, en lugar del "Abre la app para mas detalles" que no
+// decia nada. Quien ya tiene foto sigue viendo el texto de siempre. El correo
+// de 3 dias NO se toca: ya pide instalar la app y leer la politica, y una
+// tercera peticion en el mismo correo no la lee nadie.
+//
 // v4: el aviso de inicio (bloque e) ya no dispara a la hora exacta sino a la
 // hora del evento + EVENT_START_DELAY_MS (5 min), el mismo instante en que la
 // app libera el boton "Continuar" (START_WINDOW_MINUTES en dinamica.tsx).
@@ -184,13 +190,36 @@ serve(async (req) => {
     if (error3d) {
       results.push({ block: '3d', error: error3d.message });
     } else {
+      // Quien no tiene foto de perfil recibe, en lugar del relleno de "abre la
+      // app", la unica peticion que de verdad sirve a 3 dias del evento. Se
+      // consulta en bloque para no pegarle a users una vez por cita.
+      const ids3d = Array.from(new Set((appointments3d || []).map((a: any) => a.user_id)));
+      const sinFoto = new Set<string>();
+      if (ids3d.length > 0) {
+        const { data: users3d, error: errUsers3d } = await supabase
+          .from('users')
+          .select('id, profile_photo_url')
+          .in('id', ids3d);
+        if (errUsers3d) {
+          results.push({ block: '3d', warning: 'no se pudo leer profile_photo_url', detail: errUsers3d.message });
+        } else {
+          for (const u of users3d || []) {
+            const url = (u as any).profile_photo_url;
+            if (!url || String(url).trim() === '') sinFoto.add((u as any).id);
+          }
+        }
+      }
+
       for (const apt of appointments3d || []) {
         const event = (apt as any).events;
         const title = `Faltan 3 días para ${event.name || 'tu evento'}`;
-        const body = event.time ? `Tu evento es a las ${formatTimeAmPm(event.time)}. Abre la app para más detalles.` : 'Abre la app para más detalles.';
+        const hora = event.time ? `Es a las ${formatTimeAmPm(event.time)}. ` : '';
+        const body = sinFoto.has(apt.user_id)
+          ? `${hora}Ponle foto a tu perfil para que te reconozcan.`
+          : (event.time ? `Tu evento es a las ${formatTimeAmPm(event.time)}. Abre la app para más detalles.` : 'Abre la app para más detalles.');
         const { ok } = await sendPush(apt.user_id, title, body, { type: 'event_reminder_3d', event_id: apt.event_id });
         if (ok) await supabase.from('appointments').update({ reminder_3d_push_sent_at: new Date().toISOString() }).eq('id', apt.id);
-        results.push({ block: '3d', appointmentId: apt.id, ok });
+        results.push({ block: '3d', appointmentId: apt.id, ok, pidioFoto: sinFoto.has(apt.user_id) });
       }
     }
 
