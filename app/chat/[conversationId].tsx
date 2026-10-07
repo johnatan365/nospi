@@ -778,23 +778,36 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
 
   return (
     <View style={styles.voiceRow}>
-      <TouchableOpacity onPress={toggle} disabled={!uri} style={styles.voiceButton} activeOpacity={0.7}>
-        {!uri ? (
-          <ActivityIndicator size="small" color={mine ? '#FFFFFF' : nospiColors.purpleDark} />
-        ) : (
-          <IconSymbol
-            ios_icon_name={playing ? 'pause.fill' : 'play.fill'}
-            android_material_icon_name={playing ? 'pause' : 'play-arrow'}
-            size={19}
-            color={mine ? '#FFFFFF' : nospiColors.purpleDark}
-          />
-        )}
-      </TouchableOpacity>
-      <View style={styles.voiceBody}>
-        <View style={[styles.voiceTrack, mine && styles.voiceTrackMine]}>
-          <View style={[styles.voiceFill, mine && styles.voiceFillMine, { width: `${pct}%` }]} />
+      {/* El boton y la barra van en la MISMA fila para que sus centros
+          coincidan. Antes el boton se centraba contra todo el bloque --barra
+          mas tiempo mas velocidad--, y como el tiempo cuelga debajo, la barra
+          terminaba unos 11 px por encima del centro del boton. */}
+      <View style={styles.voiceTop}>
+        <TouchableOpacity onPress={toggle} disabled={!uri} style={styles.voiceButton} activeOpacity={0.7}>
+          {!uri ? (
+            <ActivityIndicator size="small" color={mine ? '#FFFFFF' : nospiColors.purpleDark} />
+          ) : (
+            <View style={!playing ? styles.voicePlayNudge : null}>
+              {/* El triangulo de play tiene el peso visual a la izquierda y
+                  dentro de un circulo se ve corrido. Un pixel a la derecha lo
+                  deja donde el ojo lo espera. El de pausa es simetrico y no lo
+                  necesita. */}
+              <IconSymbol
+                ios_icon_name={playing ? 'pause.fill' : 'play.fill'}
+                android_material_icon_name={playing ? 'pause' : 'play-arrow'}
+                size={19}
+                color={mine ? '#FFFFFF' : nospiColors.purpleDark}
+              />
+            </View>
+          )}
+        </TouchableOpacity>
+        <View style={styles.voiceBody}>
+          <View style={[styles.voiceTrack, mine && styles.voiceTrackMine]}>
+            <View style={[styles.voiceFill, mine && styles.voiceFillMine, { width: `${pct}%` }]} />
+          </View>
         </View>
-        <View style={styles.voiceFooter}>
+      </View>
+      <View style={styles.voiceFooter}>
           <Text style={[styles.voiceTime, mine && styles.voiceTimeMine]}>
             {formatDuration(playing || current > 0 ? current : total)}
           </Text>
@@ -812,7 +825,6 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
               {rate === 1 ? '1x' : `${rate}x`}
             </Text>
           </TouchableOpacity>
-        </View>
       </View>
     </View>
   );
@@ -5527,18 +5539,28 @@ const styles = StyleSheet.create({
   expiredMediaHint: { fontSize: 11, opacity: 0.75 },
 
   // ── Notas de voz ───────────────────────────────────────────────────────
-  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 9, minWidth: 172, paddingVertical: 2 },
+  // Columna: arriba el boton con la barra (centrados entre si), debajo el
+  // tiempo y la velocidad. Antes era una sola fila y la barra quedaba alta.
+  voiceRow: { minWidth: 172, paddingVertical: 2 },
+  voiceTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   voiceButton: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.08)',
     alignItems: 'center', justifyContent: 'center',
   },
+  // Correccion optica del triangulo de play dentro del circulo.
+  voicePlayNudge: { marginLeft: 2 },
   voiceBody: { flex: 1, minWidth: 96 },
   voiceTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.15)', overflow: 'hidden' },
   voiceTrackMine: { backgroundColor: 'rgba(255,255,255,0.3)' },
   voiceFill: { height: 4, backgroundColor: nospiColors.purpleDark },
   voiceFillMine: { backgroundColor: '#FFFFFF' },
-  voiceFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  // marginLeft = ancho del boton (34) + el gap de la fila (9): asi el tiempo
+  // arranca justo bajo el inicio de la barra, no bajo el boton.
+  voiceFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 5, marginLeft: 43,
+  },
   voiceTime: { fontSize: 11, color: '#6b5560' },
   voiceRate: {
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9,
