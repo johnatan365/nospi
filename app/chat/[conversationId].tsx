@@ -4365,7 +4365,13 @@ export default function ChatThreadScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {/* flexShrink por lo mismo: con varias opciones el formulario se
+                sale de la hoja y el boton de crear queda fuera de alcance. */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={{ flexGrow: 0, flexShrink: 1 }}
+            >
               <Text style={styles.pollLabel}>Pregunta</Text>
               <TextInput
                 style={styles.pollInput}
@@ -4593,7 +4599,10 @@ export default function ChatThreadScreen() {
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.attachSheet, { paddingBottom: insets.bottom + 18, maxHeight: '70%' }]}>
             <View style={styles.sheetGrabber} />
             <Text style={styles.attachSheetTitle}>Reacciones</Text>
-            <ScrollView>
+            {/* flexShrink: sin esto el scroll crece con la lista, se sale de la
+                hoja --que tiene maxHeight-- y no hay forma de ver a los
+                ultimos que reaccionaron. Mismo caso que la ficha de persona. */}
+            <ScrollView style={{ flexGrow: 0, flexShrink: 1 }}>
               {(reactions[reaccionesDe || ''] || []).map((r) => {
                 const esMia = r.user_id === user?.id;
                 const quien = esMia
