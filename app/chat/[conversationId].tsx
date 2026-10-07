@@ -5555,11 +5555,19 @@ const styles = StyleSheet.create({
   voiceTrackMine: { backgroundColor: 'rgba(255,255,255,0.3)' },
   voiceFill: { height: 4, backgroundColor: nospiColors.purpleDark },
   voiceFillMine: { backgroundColor: '#FFFFFF' },
-  // marginLeft = ancho del boton (34) + el gap de la fila (9): asi el tiempo
+  // marginLeft = ancho del boton (34) + el gap de la fila (9): el tiempo
   // arranca justo bajo el inicio de la barra, no bajo el boton.
+  //
+  // El marginTop NEGATIVO es el que hace que esto se vea como WhatsApp. La fila
+  // de arriba mide 34 --lo que mide el boton-- y la barra va en su centro, a
+  // los 17. Sin esto el tiempo empezaria en el 35, dejando 15 px muertos debajo
+  // de la barra: la burbuja se estira y el 0:07 queda flotando lejos. Con -13
+  // el tiempo sube hasta el 21, a dos pixeles de la barra, y se acomoda al lado
+  // de la mitad baja del boton. No hay riesgo de que se solapen: el boton
+  // termina en el 34 horizontal y este bloque empieza en el 43.
   voiceFooter: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: 1, marginLeft: 43,
+    marginTop: -13, marginLeft: 43,
   },
   voiceTime: { fontSize: 11, color: '#6b5560' },
   voiceRate: {
