@@ -419,6 +419,26 @@ export default function ChatsScreen() {
   // fila.
   const directUnread =
     directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+
+  // El numero del icono de la app, igualado a lo que de verdad hay sin leer.
+  //
+  // En Android ese numero no lo pone nadie desde aqui: lo arma el sistema
+  // contando las notificaciones que SIGUEN en la bandeja. Como leer dentro de
+  // la app no las borra, quedaba un "5" en el icono sin un solo mensaje sin
+  // leer. Ponerlo a mano con el total real lo deja diciendo la verdad, y
+  // cuando llega a cero se apaga.
+  //
+  // Es seguro llamarlo: expo-notifications ya viene en el binario --esta
+  // pantalla lo importa arriba para los push-- asi que no es como lo que paso
+  // con el portapapeles, que era un modulo nativo que las apps instaladas no
+  // traian.
+  const totalSinLeer = channelUnread + groupUnread + directUnread;
+  useEffect(() => {
+    Notifications.setBadgeCountAsync(totalSinLeer).catch(() => {});
+    // Si ya no queda nada sin leer, tampoco tienen por que quedar
+    // notificaciones viejas en la bandeja sosteniendo el numero.
+    if (totalSinLeer === 0) Notifications.dismissAllNotificationsAsync().catch(() => {});
+  }, [totalSinLeer]);
   // Todo lo privado en un solo orden: lo mas reciente arriba.
   //
   // Antes las solicitudes sin responder iban clavadas encima de todo. La idea
