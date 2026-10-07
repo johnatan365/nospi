@@ -66,7 +66,6 @@ import {
 } from 'expo-audio';
 import { WebVoiceRecorder } from '@/lib/voiceRecorder';
 import * as FileSystem from 'expo-file-system';
-import * as Clipboard from 'expo-clipboard';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
@@ -168,6 +167,26 @@ interface StickerDeNospi {
   id: string;
   url: string;
   etiqueta: string | null;
+}
+
+// expo-clipboard se carga PEREZOSO y entre try, y no con un import normal
+// arriba. No es manía: su archivo hace `requireNativeModule('ExpoClipboard')`
+// en el momento de importarse, y eso REVIENTA en un binario que no traiga el
+// modulo nativo -- es decir, en toda app instalada antes de que saliera el
+// build con stickers. Con un import normal, publicar una actualizacion por
+// OTA tumbaria la pantalla del chat ENTERA en esos telefonos, no solo el boton
+// de pegar.
+//
+// Asi, en una app vieja esto devuelve null, el boton no aparece y todo lo demas
+// del chat sigue funcionando. Es lo que permite mandar los arreglos por OTA sin
+// esperar a que las tiendas aprueben la version nueva.
+let _clipboard: any | null = null;
+let _clipboardProbado = false;
+function portapapeles(): any | null {
+  if (_clipboardProbado) return _clipboard;
+  _clipboardProbado = true;
+  try { _clipboard = require('expo-clipboard'); } catch { _clipboard = null; }
+  return _clipboard;
 }
 
 // OJO SI ALGUIEN QUIERE DISTINGUIR LOS STICKERS: `kind` es lo que termina en
@@ -3139,8 +3158,10 @@ export default function ChatThreadScreen() {
   };
 
   const revisarPortapapeles = useCallback(async () => {
-    if (Platform.OS === 'web') { setHayImagenPegable(false); return; }
-    try { setHayImagenPegable(await Clipboard.hasImageAsync()); }
+    const C = portapapeles();
+    // Sin modulo nativo (app vieja recibiendo un OTA) no hay boton que mostrar.
+    if (Platform.OS === 'web' || !C) { setHayImagenPegable(false); return; }
+    try { setHayImagenPegable(await C.hasImageAsync()); }
     catch { setHayImagenPegable(false); }
   }, []);
 
@@ -3160,7 +3181,9 @@ export default function ChatThreadScreen() {
       // Arreglarlo exigiria codigo nativo que lea el portapapeles sin convertir.
       // Si algun dia expo-clipboard acepta 'webp' en format, con cambiarlo aqui
       // basta.
-      const img = await Clipboard.getImageAsync({ format: 'png' });
+      const C = portapapeles();
+      if (!C) { Alert.alert('No disponible', 'Esta versión de la app todavía no puede pegar imágenes. Se activa con la próxima actualización.'); return; }
+      const img = await C.getImageAsync({ format: 'png' });
       if (!img?.data) {
         Alert.alert('No hay imagen', 'El portapapeles no tiene ninguna imagen copiada.');
         return;
