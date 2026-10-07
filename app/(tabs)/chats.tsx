@@ -400,10 +400,25 @@ export default function ChatsScreen() {
   const hayCanales = channelConversations.length > 0;
   const channelUnread = channelConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const groupUnread = groupConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-  // Cada solicitud sin responder cuenta como pendiente en la pestana, aunque
-  // su mensaje ya se haya visto: es algo que exige una decision, no una lectura.
+  // El numero de la pestana cuenta SOLO mensajes sin leer, igual que en Grupos
+  // y Canales.
+  //
+  // Antes sumaba ademas cada solicitud sin responder, con la idea de que exige
+  // una decision y no habria que dejarla pasar. En la practica quedaba un "5"
+  // en la pestana sin un solo globo en la lista: el numero apuntaba a algo que
+  // no se veia por ninguna parte, y lo primero que uno piensa es que la app
+  // esta contando mal. Un numero rojo sobre una pestana significa "hay algo
+  // nuevo aqui"; usarlo para "hay algo sin decidir" ensena a desconfiar de el,
+  // y despues se ignora tambien cuando si hay un mensaje nuevo.
+  //
+  // Las solicitudes no se pierden por esto: una recien llegada trae su mensaje
+  // sin leer, asi que suma al numero y ademas aparece de primera en la lista
+  // por ser la mas reciente. Lo unico que deja de insistir es una que ya se
+  // abrio y se leyo sin responder, que es justo el caso en el que el numero
+  // molestaba. Y cada una sigue marcada con su etiqueta de Solicitud en la
+  // fila.
   const directUnread =
-    directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0) + solicitudes.length;
+    directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   // Todo lo privado en un solo orden: lo mas reciente arriba.
   //
   // Antes las solicitudes sin responder iban clavadas encima de todo. La idea
