@@ -368,7 +368,14 @@ const estilos = StyleSheet.create({
   },
   flechaTexto: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', lineHeight: 24 },
   contador: {
-    position: 'absolute', top: 20, right: 12,
+    // A la IZQUIERDA. La esquina derecha ya tenia dos cosas --el punto de "en
+    // linea" y ahora la X-- y las tres no caben. Esta es la unica de las tres
+    // que no es un control: no se toca, solo se lee, asi que es la que se
+    // mueve.
+    //
+    // El top esta calculado para que su centro quede a la misma altura que el
+    // de la X (y = 35), y los dos extremos se lean como una sola fila.
+    position: 'absolute', top: 25, left: 12,
     backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 11,
     paddingHorizontal: 9, paddingVertical: 3,
   },
@@ -382,7 +389,10 @@ const estilos = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
   puntoEnLinea: {
-    position: 'absolute', top: 16, right: 16,
+    // Pegado a la izquierda de la X y centrado con ella. Antes estaba en
+    // top 16 / right 16, que ya se montaba sobre el contador "1/2" cuando la
+    // persona estaba en linea y tenia varias fotos.
+    position: 'absolute', top: 26, right: 54,
     width: 18, height: 18, borderRadius: 9, backgroundColor: '#4ADE80',
     borderWidth: 3, borderColor: '#FFFFFF',
   },
@@ -416,10 +426,11 @@ const estilos = StyleSheet.create({
   // Circulo oscuro translucido: la X cae sobre la foto, que puede ser clara u
   // oscura, y sin fondo propio desaparece en las claras.
   equis: {
-    // top 24 y no 12: las barritas de las fotos van en top 10 con 3.5 de alto,
-    // asi que terminan en 13.5 y la X les quedaba encima. Bajarla las deja
-    // pasar de ancho completo, que es como se entiende cuantas fotos hay.
-    position: 'absolute', top: 24, right: 12, width: 34, height: 34,
+    // Las barritas de las fotos van en top 10 con 3.5 de alto, o sea que
+    // terminan en 13.5. En top 18 la X pasa por debajo de ellas sin tocarlas y
+    // las barras siguen de ancho completo, que es como se entiende cuantas
+    // fotos tiene la persona.
+    position: 'absolute', top: 18, right: 12, width: 34, height: 34,
     borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
