@@ -315,7 +315,7 @@ const estilos = StyleSheet.create({
   marcoFoto: { width: '100%', backgroundColor: '#FCE4EC', position: 'relative' },
   foto: { width: '100%', height: '100%' },
   sinFoto: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  sinFotoAvatar: { width: '58%', height: '58%' },
+  sinFotoAvatar: { width: '74%', height: '74%' },
   sinFotoInicial: { fontSize: 76, fontWeight: '800', color: '#AD1457' },
   sinFotoTexto: { fontSize: 13, color: '#AD1457', fontWeight: '600' },
 

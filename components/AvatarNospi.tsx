@@ -66,12 +66,16 @@ export function AvatarNospi({
   const porDefecto = avatarPorGenero(gender);
   if (porDefecto) {
     return (
+      // contentFit "contain" y no "cover": el avatar es un dibujo, no una foto.
+      // Con "cover" el recorte circular le comia los bracitos y la base del
+      // cuerpo. Asi cabe entero y lo que toca el borde del circulo es el fondo
+      // rosado, que es del mismo color del dibujo y no se nota.
       <ExpoImage
         source={porDefecto}
-        style={[base, style]}
+        style={[base, estilos.fondoAvatar, style]}
         cachePolicy="memory-disk"
         transition={0}
-        contentFit="cover"
+        contentFit="contain"
       />
     );
   }
@@ -96,6 +100,8 @@ export function AvatarNospi({
 }
 
 const estilos = StyleSheet.create({
+  // El mismo rosa palido que trae el fondo de los dos dibujos.
+  fondoAvatar: { backgroundColor: '#FCE4EC' },
   inicialCaja: { backgroundColor: '#F8BBD9', alignItems: 'center', justifyContent: 'center' },
   inicialTexto: { color: '#880E4F', fontWeight: '700' },
 });
