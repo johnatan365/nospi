@@ -2340,6 +2340,23 @@ export default function AdminPanelScreen() {
     setSalas((data as SalaMeet[]) || []);
   }, []);
 
+  // Salas libres para el dia del formulario. Se excluye el evento que se esta
+  // editando: su propia sala no se le puede presentar como ocupada.
+  useEffect(() => {
+    if (eventForm.type !== 'virtual' || !eventForm.date) { setSalasLibresForm([]); return; }
+    let vivo = true;
+    (async () => {
+      const { data, error } = await supabase.rpc('admin_salas_libres', {
+        p_fecha: eventForm.date,
+        p_excluir_event_id: selectedEventForConfig?.id || null,
+      });
+      if (!vivo) return;
+      if (error) { console.error('salas libres:', error.message); setSalasLibresForm([]); return; }
+      setSalasLibresForm((data as SalaMeet[]) || []);
+    })();
+    return () => { vivo = false; };
+  }, [eventForm.type, eventForm.date, selectedEventForConfig?.id]);
+
   const guardarSalas = async () => {
     setSalasGuardando(true); setSalasMsg('');
     try {
