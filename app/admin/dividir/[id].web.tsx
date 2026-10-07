@@ -330,9 +330,19 @@ export default function DividirEventoScreen() {
       out.push({ tono: 'alerta', texto: `${sinEdad} ${sinEdad === 1 ? 'persona no tiene' : 'personas no tienen'} edad en su perfil: para ellas la prioridad de edad no aplica.` });
     }
 
+    // Faltan salas: mejor decirlo aqui que dejar un grupo mudo el dia del evento.
+    if (evento?.type === 'virtual' && salasLibres.length < k) {
+      out.push({
+        tono: 'malo',
+        texto: salasLibres.length === 0
+          ? `No hay salas de Meet libres para ese día. Guarda salas en Config → Salas de videollamada, o pégale el link a cada grupo después.`
+          : `Tienes ${salasLibres.length} ${salasLibres.length === 1 ? 'sala libre' : 'salas libres'} ese día y pediste ${k} grupos. ${k - salasLibres.length} ${k - salasLibres.length === 1 ? 'grupo quedará' : 'grupos quedarán'} sin sala — nunca se repite una.`,
+      });
+    }
+
     if (!out.length) out.push({ tono: 'bien', texto: `Los ${k} grupos quedaron repartidos y sin advertencias.` });
     return out;
-  }, [grupos, gente, criterios, k]);
+  }, [grupos, gente, criterios, k, evento, salasLibres]);
 
   // ── acciones ──────────────────────────────────────────────────────────────
 
@@ -409,7 +419,11 @@ export default function DividirEventoScreen() {
 
     setAplicando(true); setError('');
     try {
-      const payload = grupos.map((g, i) => ({ nombre: nombreDe(i), user_ids: g.map((p) => p.user_id) }));
+      const payload = grupos.map((g, i) => ({
+        nombre: nombreDe(i),
+        user_ids: g.map((p) => p.user_id),
+        meet_link: esVirtual ? (salaDe(i) || null) : null,
+      }));
       const { data, error: e } = await supabase.rpc('admin_dividir_evento', {
         p_event_id: id, p_grupos: payload,
       });
@@ -489,8 +503,9 @@ export default function DividirEventoScreen() {
               <View key={g.id} style={st.tarjeta}>
                 <Text style={st.gNombre}>{g.nombre}</Text>
                 <Text style={st.gMeta}>{g.personas} personas · preguntas copiadas</Text>
-                {esVirtual && (
-                  <Text style={st.faltaLink}>⚠ Falta pegarle el link de Meet, desde Eventos → Configurar</Text>
+                {esVirtual && (g.meet_link
+                  ? <Text style={st.salaOk}>📹 {etiquetaDe(g.meet_link)}</Text>
+                  : <Text style={st.faltaLink}>⚠ Sin sala — pégale el link desde Eventos → Configurar</Text>
                 )}
               </View>
             ))}
@@ -718,6 +733,7 @@ const st = StyleSheet.create({
   pDato: { fontSize: 11, color: '#6B5A61' },
 
   faltaLink: { fontSize: 11, color: '#8C3122', fontWeight: '700', marginTop: 7 },
+  salaOk: { fontSize: 11, color: '#17633F', fontWeight: '700' },
 
   aviso: { borderRadius: 9, padding: 11, borderLeftWidth: 3 },
   avisoAlerta: { backgroundColor: '#FBEEDA', borderLeftColor: '#8A5200' },

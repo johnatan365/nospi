@@ -894,6 +894,8 @@ export default function AdminPanelScreen() {
   const [salas, setSalas] = useState<SalaMeet[]>([]);
   const [salasGuardando, setSalasGuardando] = useState(false);
   const [salasMsg, setSalasMsg] = useState('');
+  // Las libres para el dia que tenga puesto el formulario de evento.
+  const [salasLibresForm, setSalasLibresForm] = useState<SalaMeet[]>([]);
 
   // Dashboard stats
   const [totalEvents, setTotalEvents] = useState(0);
@@ -12305,6 +12307,33 @@ setBulkWhatsAppPending(pending);
                   value={eventForm.meet_link}
                   onChangeText={(text) => setEventForm({ ...eventForm, meet_link: text })}
                 />
+                {/* Las salas guardadas, para no ir a buscar el link a Meet.
+                    Solo salen las que ese dia no tenga ya otro evento. */}
+                {eventForm.date ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: -8, marginBottom: 12 }}>
+                    {salasLibresForm.length === 0 ? (
+                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                        No hay salas guardadas libres ese día. Las administras en Config → Salas de videollamada.
+                      </span>
+                    ) : salasLibresForm.map((s) => {
+                      const puesta = (eventForm.meet_link || '').trim() === s.url;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setEventForm({ ...eventForm, meet_link: puesta ? '' : s.url })}
+                          style={{
+                            background: puesta ? '#B1185B' : '#F3F4F6',
+                            color: puesta ? 'white' : '#111827',
+                            border: 'none', borderRadius: 8, padding: '6px 11px',
+                            fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                          }}
+                        >
+                          📹 {s.etiqueta || s.url.replace('https://meet.google.com/', '')}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {(() => {
                   const v = (eventForm.meet_link || '').trim();
                   if (!v) return null;
