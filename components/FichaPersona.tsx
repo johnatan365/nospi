@@ -154,6 +154,12 @@ export function FichaPersona({
           <ScrollView
             bounces={false}
             showsVerticalScrollIndicator={false}
+            // flexShrink deja que el scroll se encoja hasta el maxHeight de la
+            // hoja. Sin esto crece con el contenido, se sale de la hoja y lo
+            // recorta su overflow:hidden: el boton de Cerrar queda por fuera y
+            // no hay forma de bajar hasta el. Pasa con fichas largas --varias
+            // fotos y muchos intereses-- y en ventanas bajas.
+            style={{ flexGrow: 0, flexShrink: 1 }}
             contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
           >
           <View style={[estilos.marcoFoto, { height: altoFoto }]}>
