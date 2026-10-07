@@ -896,6 +896,8 @@ export default function AdminPanelScreen() {
   const [salasMsg, setSalasMsg] = useState('');
   // Las libres para el dia que tenga puesto el formulario de evento.
   const [salasLibresForm, setSalasLibresForm] = useState<SalaMeet[]>([]);
+  // Mostrar u ocultar los originales que ya se dividieron en mesas.
+  const [verDivididos, setVerDivididos] = useState(false);
 
   // Dashboard stats
   const [totalEvents, setTotalEvents] = useState(0);
@@ -8852,7 +8854,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       return ciudadesDeEvento(event).some((c) => ciudades.some((sel) => mismaCiudad(c, sel)));
     };
 
+    // Los originales ya divididos se esconden de todas las pestañas. Siguen en
+    // la base --no se pueden borrar: tienen pagos colgando-- pero ya no son un
+    // evento de verdad: no tienen a nadie y nadie los ve en la app.
+    const divididos = events.filter(e => !!e.dividido_at).length;
     const filteredEvents = events
+      .filter(event => verDivididos || !event.dividido_at)
       .filter(event => eventoEnCiudades(event, eventCityFilter))
       .filter(event => eventStatusFilter === 'all' || event.event_status === eventStatusFilter)
       .filter(event => eventTypeFilter === 'all' || event.type === eventTypeFilter)
@@ -9054,6 +9061,22 @@ setBulkWhatsAppPending(pending);
               </Text>
             </TouchableOpacity>
           ))}
+          {/* Los divididos están escondidos; esto es la puerta de atrás por si
+              alguna vez hay que entrar a uno. */}
+          {divididos > 0 && (
+            <TouchableOpacity
+              onPress={() => setVerDivididos(v => !v)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                backgroundColor: verDivididos ? '#B1185B' : 'transparent',
+                borderWidth: 1, borderColor: verDivididos ? '#B1185B' : '#D1D5DB',
+              }}
+            >
+              <Text style={{ fontSize: 12.5, fontWeight: '600', color: verDivididos ? 'white' : '#9CA3AF' }}>
+                {verDivididos ? `Ocultar divididos (${divididos})` : `Ver divididos (${divididos})`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 18 }}>
