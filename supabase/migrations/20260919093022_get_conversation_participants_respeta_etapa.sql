@@ -2,6 +2,10 @@
 -- via por la que se seguia viendo quien va al evento aunque la tabla estuviera
 -- cerrada. Y no devuelve solo nombres: devuelve foto, EDAD e intereses, que es
 -- justo con lo que alguien decide si va o no.
+--
+-- Ahora respeta las tres etapas: antes de los 30 minutos y durante esos 30
+-- minutos devuelve vacio; una vez arranca el evento, solo para quien confirmo
+-- asistencia, y solo con los que tambien confirmaron.
 CREATE OR REPLACE FUNCTION public.get_conversation_participants(p_conversation_id uuid)
  RETURNS TABLE(user_id uuid, name text, profile_photo_url text, edad integer, interests jsonb)
  LANGUAGE plpgsql

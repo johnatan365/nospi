@@ -29,6 +29,7 @@ begin
   select date into v_fecha from public.events where id = v_event_id;
   if v_fecha is null then return 'sin_restriccion'; end if;
 
+  -- Los eventos anteriores al 19 de septiembre de 2026 siguen como estaban.
   if v_fecha < timestamptz '2026-09-19 00:00:00-05' then return 'sin_restriccion'; end if;
   if public.is_admin() then return 'sin_restriccion'; end if;
 
