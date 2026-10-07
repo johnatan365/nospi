@@ -28,6 +28,7 @@ import Reanimated, {
 import { Image as ExpoImage } from 'expo-image';
 import { AvatarNospi, avatarPorGenero } from '@/components/AvatarNospi';
 import { FichaPersona } from '@/components/FichaPersona';
+import { anotarLeidoHasta } from '@/utils/leidoReciente';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1065,6 +1066,9 @@ export default function ChatThreadScreen() {
   // una referencia ESTABLE o React Native avisa en consola, asi que la funcion
   // va en un ref y el handler nunca cambia.
   const vistosRef = useRef<Set<string>>(new Set());
+  // De que conversacion es el set de arriba. Sirve para no borrarlo en una
+  // recarga de la MISMA conversacion (ver loadEverything).
+  const convDelSetRef = useRef<string | null>(null);
   const alVerItemsRef = useRef<any>(null);
   alVerItemsRef.current = ({ viewableItems }: any) => {
     for (const v of viewableItems || []) {
@@ -1142,6 +1146,10 @@ export default function ChatThreadScreen() {
     // Nada que marcar: no se vio ni un mensaje (y la funcion trataria el null
     // como "hasta ahora", que es lo que se quiere evitar).
     if (!p_hasta) return;
+    // Se anota ANTES de que responda el servidor: la pestana de Chats recarga
+    // su lista al mismo tiempo que se escribe esto, y sin la anotacion gana la
+    // lectura vieja y el globo reaparece (ver utils/leidoReciente).
+    anotarLeidoHasta(conversationId, p_hasta);
     supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId, p_hasta })
       .then(() => {}, (err: unknown) => console.error('ChatThread: error marcando leido', err));
   }, [conversationId, hastaDondeLei]);
@@ -1423,6 +1431,30 @@ export default function ChatThreadScreen() {
       setRespondiendoSolicitud(false);
     }
   }, [conversationId, respondiendoSolicitud, router]);
+
+  // Tras enviar en un chat privado hay que volver a preguntarle el estado a la
+  // base. El primer mensaje es el que convierte la conversacion en solicitud,
+  // y quien decide si lo es no es la app sino la base: depende de si las dos
+  // personas ya se cruzaron en un evento. Por eso no se puede adivinar aqui --
+  // si ya se conocen no hay solicitud, y anunciar "Solicitud enviada" seria
+  // mentira.
+  //
+  // Sin esto el aviso no aparecia hasta salir y volver a entrar al chat, que
+  // era justo cuando la persona ya habia pensado que el mensaje no salio.
+  const refrescarEstadoDirecto = useCallback(async () => {
+    if (!conversationId) return;
+    const { data, error } = await supabase
+      .from('chat_conversations')
+      .select('estado, solicitada_por')
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (error || !data) return;
+    setMeta((m) => (m ? {
+      ...m,
+      estado: (data as any).estado ?? m.estado,
+      solicitada_por: (data as any).solicitada_por ?? m.solicitada_por,
+    } : m));
+  }, [conversationId]);
 
   // Persona cuya ficha se esta viendo. Se abre al tocar su foto en un mensaje o
   // en la lista de participantes.
@@ -1830,8 +1862,24 @@ export default function ChatThreadScreen() {
     setPendientesAlAbrir(Math.max(sinLeerReal, sinLeerCargados));
     setPendientesVivos(Math.max(sinLeerReal, sinLeerCargados));
     yaColoqueInicialRef.current = false;
-    maxVistoRef.current = corta;
-    vistosRef.current = new Set();
+    // El registro de "esto ya paso por pantalla" NO se borra si seguimos en la
+    // misma conversacion.
+    //
+    // loadEverything no corre solo al abrir un chat: sus dependencias incluyen
+    // el usuario, y el proveedor de sesion lo reemite cada vez que renueva el
+    // token. Antes cada una de esas recargas invisibles vaciaba el set, y al
+    // salir hastaDondeLei ya no encontraba ahi los mensajes que se habian
+    // leido: cortaba la marca donde estaba y escribia la de siempre, que es un
+    // no-op. Resultado, el globo de sin leer se quedaba pegado y no habia
+    // forma de bajarlo por mas que se abriera el chat.
+    if (convDelSetRef.current !== conversationId) {
+      convDelSetRef.current = conversationId;
+      vistosRef.current = new Set();
+      maxVistoRef.current = corta;
+    } else if (corta && (!maxVistoRef.current || corta > maxVistoRef.current)) {
+      // Misma conversacion: la marca solo puede avanzar, nunca retroceder.
+      maxVistoRef.current = corta;
+    }
     reintentoParticipantesRef.current = null;
 
     setMessages(listaFinal);
@@ -2303,6 +2351,11 @@ export default function ChatThreadScreen() {
     } else if (data) {
       setMessages((prev) => fusionarMensajeReal(prev, data as Message, tempId));
       if (conversationId) AsyncStorage.removeItem(DRAFT_KEY(conversationId)).catch(() => {});
+      // Un privado que todavia no esta aceptado pudo acabar de convertirse en
+      // solicitud con este mismo mensaje. Se pregunta, no se asume.
+      if (meta?.conv_type === 'direct' && meta?.estado !== 'aceptada') {
+        refrescarEstadoDirecto();
+      }
     }
     setSending(false);
   };

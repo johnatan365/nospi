@@ -305,6 +305,25 @@ export function FichaPersona({
             </TouchableOpacity>
           </View>
           </ScrollView>
+
+          {/* Una X arriba a la derecha, SIEMPRE visible. Va FUERA del
+              ScrollView a proposito: adentro se iria con el contenido y en una
+              ficha larga desapareceria justo cuando mas se necesita.
+
+              Ya se podia cerrar de dos formas, pero las dos hay que
+              descubrirlas: el boton de abajo solo aparece despues de bajar
+              toda la ficha, y tocar el fondo no se le ocurre a quien no lo ha
+              visto antes. La X es lo primero que busca cualquiera. */}
+          <TouchableOpacity
+            style={estilos.equis}
+            onPress={onClose}
+            activeOpacity={0.85}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar"
+          >
+            <Text style={estilos.equisTexto}>✕</Text>
+          </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -393,4 +412,13 @@ const estilos = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 40, alignSelf: 'stretch', alignItems: 'center',
   },
   cerrarTexto: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  // Circulo oscuro translucido: la X cae sobre la foto, que puede ser clara u
+  // oscura, y sin fondo propio desaparece en las claras.
+  equis: {
+    position: 'absolute', top: 12, right: 12, width: 34, height: 34,
+    borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center', zIndex: 10,
+  },
+  equisTexto: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', lineHeight: 19 },
 });

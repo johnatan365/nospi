@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
@@ -10,6 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useListaEnVivo, textoEscribiendoEnLista } from '@/lib/useListaEnVivo';
 import { normalizarPrivacidad } from '@/constants/Privacidad';
 import { useRouter } from 'expo-router';
+import { yaLeidoLocalmente } from '@/utils/leidoReciente';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { Platform } from 'react-native';
@@ -115,7 +116,20 @@ type ChatFilter = 'grupos' | 'directos' | 'canales';
 export default function ChatsScreen() {
   const { user } = useSupabase();
   const router = useRouter();
-  const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const [conversationsRaw, setConversations] = useState<ConversationRow[]>([]);
+  // La fila del servidor puede venir atrasada unos segundos respecto a lo que
+  // esta misma app ya marco como leido: al salir de un chat, la escritura de la
+  // marca y la recarga de esta lista salen a la vez, y suele llegar primero la
+  // lista con el last_read_at viejo. Eso era lo que hacia reaparecer el globo
+  // de sin leer despues de leer y salir. Ver utils/leidoReciente.
+  const conversations = useMemo(
+    () => conversationsRaw.map((c) =>
+      (c.unread_count || 0) > 0 && yaLeidoLocalmente(c.conversation_id, c.last_message_at)
+        ? { ...c, unread_count: 0 }
+        : c,
+    ),
+    [conversationsRaw],
+  );
   // Mis interruptores de privacidad: si tengo "en linea" apagado no me anuncio
   // y tampoco veo el punto verde de los demas.
   const [miPrivacidadLista, setMiPrivacidadLista] = useState(normalizarPrivacidad(null));
@@ -390,12 +404,27 @@ export default function ChatsScreen() {
   // su mensaje ya se haya visto: es algo que exige una decision, no una lectura.
   const directUnread =
     directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0) + solicitudes.length;
-  // Las solicitudes van de primeras entre los directos: es lo que hay que
-  // responder, y enterrarlas seria como no tenerlas.
+  // Todo lo privado en un solo orden: lo mas reciente arriba.
+  //
+  // Antes las solicitudes sin responder iban clavadas encima de todo. La idea
+  // era no enterrar lo que exige una decision, pero con varias solicitudes
+  // viejas acumuladas el efecto terminaba siendo el contrario: una
+  // conversacion activa, con el mensaje mas nuevo de toda la lista, aparecia
+  // debajo de siete solicitudes de dias atras. Lo que uno busca al abrir la
+  // pestana es quien le escribio hace un rato.
+  //
+  // No se pierden de vista: una solicitud que acaba de llegar es, por
+  // definicion, de las mas recientes, y el contador de la pestana las sigue
+  // sumando aparte aunque su mensaje ya se haya visto.
+  const porRecencia = (a: ConversationRow, b: ConversationRow) => {
+    const ta = a.last_message_at ? Date.parse(a.last_message_at) : 0;
+    const tb = b.last_message_at ? Date.parse(b.last_message_at) : 0;
+    return tb - ta;
+  };
   const visibleConversations =
     filter === 'grupos' ? groupConversations
     : filter === 'canales' ? channelConversations
-    : [...solicitudes, ...directConversations];
+    : [...solicitudes, ...directConversations].sort(porRecencia);
 
   // Quien esta en linea y quien escribe, SOLO de las conversaciones que se
   // estan viendo. Las de las otras pestañas no se escuchan: no se ven, y cada
