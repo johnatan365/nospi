@@ -66,6 +66,7 @@ import {
 } from 'expo-audio';
 import { WebVoiceRecorder } from '@/lib/voiceRecorder';
 import * as FileSystem from 'expo-file-system';
+import * as Clipboard from 'expo-clipboard';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
@@ -1659,6 +1660,9 @@ export default function ChatThreadScreen() {
   // Enlaces firmados de las fotos/videos, por ruta del archivo en el bucket.
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  // Si el portapapeles trae una imagen AHORA. Se consulta al abrir la hoja de
+  // adjuntar: asi el boton de pegar no aparece muerto cuando no hay nada.
+  const [hayImagenPegable, setHayImagenPegable] = useState(false);
   // Archivo sobre el que se abrio el menu de Descargar / Compartir.
   const [mediaActions, setMediaActions] = useState<{ url: string; kind: 'image' | 'video'; filename: string } | null>(null);
   const [busyAction, setBusyAction] = useState<null | 'download' | 'share'>(null);
@@ -3000,6 +3004,102 @@ export default function ChatThreadScreen() {
     }
   };
 
+  // ── Pegar una imagen del portapapeles ──────────────────────────────────
+  //
+  // Es lo que de verdad resuelve lo que pidio Esteban ("me estoy privando de
+  // enviar algunos"): los stickers de los teclados de terceros no salen de un
+  // catalogo, se pasan por el portapapeles.
+  //
+  // En la WEB se captura solo, con el evento `paste` (ver el efecto de abajo).
+  // En el CELULAR no se puede: React Native no tiene ese evento, y cuando
+  // alguien pega dentro del TextInput el sistema solo entrega texto -- la
+  // imagen nunca llega a la app. Por eso aqui hace falta algo visible que
+  // tocar. Es mas feo que el pegado invisible, pero la alternativa era
+  // reemplazar el TextInput del chat por uno nativo de terceros, y eso es
+  // cambiar una pieza central por una libreria que apenas esta poniendose al
+  // dia con las versiones recientes de RN.
+  //
+  // Nada se envia aqui: la imagen entra a la bandeja de adjuntos como una foto
+  // mas, para que se pueda ver antes de mandarla y ponerle pie de foto.
+  const meterEnLaBandeja = (asset: any) => {
+    if ((asset.fileSize ?? 0) > MAX_UPLOAD_BYTES) {
+      const msg = `Esa imagen pesa ${formatMB(asset.fileSize)} y el máximo son 25 MB.`;
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Imagen muy pesada', msg);
+      return;
+    }
+    setPendingAssets((prev) => (prev.length >= 10 ? prev : [...prev, asset]));
+  };
+
+  const revisarPortapapeles = useCallback(async () => {
+    if (Platform.OS === 'web') { setHayImagenPegable(false); return; }
+    try { setHayImagenPegable(await Clipboard.hasImageAsync()); }
+    catch { setHayImagenPegable(false); }
+  }, []);
+
+  const pegarImagen = async () => {
+    setShowAttachMenu(false);
+    try {
+      // PNG y no JPEG: un sticker casi siempre tiene fondo transparente, y
+      // pasarlo a JPEG lo dejaria con un cuadro blanco detras.
+      const img = await Clipboard.getImageAsync({ format: 'png' });
+      if (!img?.data) {
+        Alert.alert('No hay imagen', 'El portapapeles no tiene ninguna imagen copiada.');
+        return;
+      }
+      const base64 = img.data.replace(/^data:image\/[a-z]+;base64,/, '');
+      // FileSystem.uploadAsync necesita un archivo de verdad, no una cadena.
+      const uri = `${FileSystem.cacheDirectory}pegado-${Date.now()}.png`;
+      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      meterEnLaBandeja({
+        uri,
+        type: 'image',
+        fileName: 'pegado.png',
+        mimeType: 'image/png',
+        width: img.size?.width ?? null,
+        height: img.size?.height ?? null,
+        fileSize: (info as any)?.size ?? null,
+      });
+    } catch (e: any) {
+      Alert.alert('No se pudo pegar', e?.message || 'Inténtalo de nuevo.');
+    }
+  };
+
+  // Web: Cmd/Ctrl+V con una imagen en el portapapeles. El navegador si entrega
+  // el archivo, asi que aqui no hace falta ningun boton.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const alPegar = async (ev: any) => {
+      const archivos: File[] = Array.from(ev.clipboardData?.files || []);
+      const imagenes = archivos.filter((f) => (f.type || '').startsWith('image/'));
+      if (imagenes.length === 0) return;   // pegado de texto normal: no se toca
+      ev.preventDefault();
+      for (const f of imagenes.slice(0, 10)) {
+        const uri = URL.createObjectURL(f);
+        // El alto y ancho sirven para que la burbuja reserve el espacio justo y
+        // la lista no pegue un salto cuando la imagen termina de cargar.
+        const medidas = await new Promise<{ w: number | null; h: number | null }>((listo) => {
+          const im = new (window as any).Image();
+          im.onload = () => listo({ w: im.naturalWidth || null, h: im.naturalHeight || null });
+          im.onerror = () => listo({ w: null, h: null });
+          im.src = uri;
+        });
+        meterEnLaBandeja({
+          uri,
+          type: 'image',
+          fileName: f.name || 'pegado.png',
+          mimeType: f.type || 'image/png',
+          width: medidas.w,
+          height: medidas.h,
+          fileSize: f.size ?? null,
+        });
+      }
+    };
+    document.addEventListener('paste', alPegar);
+    return () => document.removeEventListener('paste', alPegar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const takePhoto = async () => {
     setShowAttachMenu(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -4137,7 +4237,7 @@ export default function ChatThreadScreen() {
         <Reanimated.View style={[styles.inputBar, padInput]}>
           <TouchableOpacity
             style={styles.attachButton}
-            onPress={() => setShowAttachMenu(true)}
+            onPress={() => { revisarPortapapeles(); setShowAttachMenu(true); }}
             disabled={!!uploading}
             accessibilityLabel="Adjuntar"
           >
@@ -4366,6 +4466,17 @@ export default function ChatThreadScreen() {
                 </View>
                 <Text style={styles.attachTileText}>Crear encuesta</Text>
               </TouchableOpacity>
+
+              {/* Solo cuando de verdad hay una imagen copiada: un boton que casi
+                  siempre dice "no hay nada" es peor que no tenerlo. */}
+              {hayImagenPegable && (
+                <TouchableOpacity style={styles.attachTile} onPress={pegarImagen} activeOpacity={0.7}>
+                  <View style={[styles.attachTileBox, { backgroundColor: '#EDE7FB' }]}>
+                    <IconSymbol ios_icon_name="doc.on.clipboard.fill" android_material_icon_name="content-paste" size={28} color="#7C3AED" />
+                  </View>
+                  <Text style={styles.attachTileText}>Pegar imagen</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.attachSheetHint}>
