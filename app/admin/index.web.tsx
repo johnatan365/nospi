@@ -52,6 +52,17 @@ interface Event {
   dividido_de?: string | null;
 }
 
+// Una sala de Meet guardada. `veces_usada` no es un adorno: una sala muy usada
+// es una sala que mucha gente ya se guardo, y con el link viejo se entra a una
+// videollamada sin haber pagado. El contador es lo que deja saber cuando rotarla.
+interface SalaMeet {
+  id?: string;
+  url: string;
+  etiqueta?: string | null;
+  veces_usada?: number;
+  ultima_vez?: string | null;
+}
+
 // --- Ubicación: extraer coordenadas de un link largo de Google Maps ---
 // Saca lat/lng del texto pegado (patrones @lat,lng, !3d!4d, q=/ll=) y, si viene,
 // el nombre del lugar (segmento /place/Nombre/). No hace peticiones de red.
@@ -877,6 +888,12 @@ export default function AdminPanelScreen() {
   const [configMinAppVersion, setConfigMinAppVersion] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
+
+  // Salas de videollamada guardadas. Se editan aparte de los demas valores de
+  // Config porque van a su propia tabla, no a app_config.
+  const [salas, setSalas] = useState<SalaMeet[]>([]);
+  const [salasGuardando, setSalasGuardando] = useState(false);
+  const [salasMsg, setSalasMsg] = useState('');
 
   // Dashboard stats
   const [totalEvents, setTotalEvents] = useState(0);
@@ -2312,6 +2329,32 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
+    }
+  };
+
+  const cargarSalas = useCallback(async () => {
+    const { data, error } = await supabase.rpc('admin_salas_con_uso');
+    if (error) { console.error('salas:', error.message); return; }
+    setSalas((data as SalaMeet[]) || []);
+  }, []);
+
+  const guardarSalas = async () => {
+    setSalasGuardando(true); setSalasMsg('');
+    try {
+      const urls = salas.map((s) => (s.url || '').trim()).filter(Boolean);
+      if (new Set(urls).size !== urls.length) {
+        setSalasMsg('Hay un link repetido. Cada sala tiene que ser distinta.');
+        return;
+      }
+      const { error } = await supabase.rpc('admin_guardar_salas', { p_urls: urls });
+      if (error) throw error;
+      setSalasMsg(`Guardado. Quedaron ${urls.length} salas.`);
+      await cargarSalas();
+      setTimeout(() => setSalasMsg(''), 4000);
+    } catch (e: any) {
+      setSalasMsg(e?.message || 'No se pudieron guardar las salas');
+    } finally {
+      setSalasGuardando(false);
     }
   };
 
@@ -8382,6 +8425,78 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           </div>
         </div>
 
+        {/* Salas de videollamada — tabla propia, se guarda aparte del resto */}
+        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, marginBottom: 28,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #B1185B' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#B1185B', textTransform: 'uppercase',
+                        letterSpacing: '0.05em', marginBottom: 6 }}>
+            📹 Salas de videollamada
+          </div>
+          <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
+            Al dividir una videollamada, cada grupo toma una de estas salas, sin repetir.
+            Si una se usó mucho, cámbiala: con el link viejo se entra sin pagar.
+          </div>
+
+          {salas.map((s, i) => {
+            const usada = s.veces_usada || 0;
+            const gastada = usada >= 6;
+            return (
+              <div key={s.id || `nueva-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'center',
+                                                       marginBottom: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#6B7280', minWidth: 58 }}>
+                  Sala {i + 1}
+                </div>
+                <input
+                  value={s.url}
+                  onChange={(e) => setSalas((p) => p.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                  style={{
+                    flex: 1, minWidth: 240, boxSizing: 'border-box', padding: '10px 12px',
+                    fontSize: 14, borderRadius: 10, border: '2px solid #E5E7EB',
+                    outline: 'none', fontWeight: 600, color: '#111827',
+                  }}
+                />
+                <div style={{ fontSize: 12, fontWeight: 700, minWidth: 150,
+                              color: gastada ? '#B45309' : '#9CA3AF' }}>
+                  {usada === 0 ? 'sin usar aún' : `usada ${usada} ${usada === 1 ? 'vez' : 'veces'}`}
+                  {gastada ? ' · cámbiala' : ''}
+                </div>
+                <button
+                  onClick={() => setSalas((p) => p.filter((_, j) => j !== i))}
+                  style={{ background: '#FEE2E2', color: '#991B1B', border: 'none', borderRadius: 8,
+                           padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Quitar
+                </button>
+              </div>
+            );
+          })}
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setSalas((p) => [...p, { url: '' }])}
+              style={{ background: '#F3F4F6', color: '#111827', border: 'none', borderRadius: 10,
+                       padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              + Agregar sala
+            </button>
+            <button
+              onClick={guardarSalas}
+              disabled={salasGuardando}
+              style={{ background: salasGuardando ? '#9CA3AF' : '#B1185B', color: 'white', border: 'none',
+                       borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700,
+                       cursor: salasGuardando ? 'not-allowed' : 'pointer' }}
+            >
+              {salasGuardando ? 'Guardando…' : 'Guardar salas'}
+            </button>
+            {!!salasMsg && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: salasMsg.startsWith('Guardado') ? '#059669' : '#B91C1C' }}>
+                {salasMsg}
+              </span>
+            )}
+          </div>
+        </div>
+
         <button
           onClick={handleSaveConfig}
           disabled={savingConfig}
@@ -10872,6 +10987,7 @@ setBulkWhatsAppPending(pending);
               className={`nospi-nav-btn${currentView === item.key ? ' active' : ''}`}
               onClick={() => {
                 if (item.key === 'questions') loadQuestions();
+                if (item.key === 'config') cargarSalas();
                 if (item.key === 'moderation') { loadGroupChats(); loadChannels(); loadAllDirectConversations(); loadAllMatches(); loadFeedback(); }
                 if (item.key === 'subscriptions') loadSubscriptions(); if (item.key === 'promo-codes') { router.push('/admin/promo-codes'); setSidebarOpen(false); return; } if (item.key === 'stats') { router.push('/admin/stats'); setSidebarOpen(false); return; } if (item.key === 'no-shows') { router.push('/admin/no-shows'); setSidebarOpen(false); return; } if (item.key === 'origen') { router.push('/admin/origen'); setSidebarOpen(false); return; }
                 setCurrentView(item.key);

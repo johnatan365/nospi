@@ -51,7 +51,8 @@ interface EventoRow {
 }
 type Modo = 'juntar' | 'repartir';
 interface Criterio { key: 'ciudad' | 'edad' | 'genero'; etiqueta: string; modo: Modo; activo: boolean; }
-interface GrupoCreado { id: string; nombre: string; personas: number; }
+interface GrupoCreado { id: string; nombre: string; personas: number; meet_link?: string | null; }
+interface Sala { id: string; url: string; etiqueta: string | null; }
 
 const PESOS = [100, 10, 1];
 
@@ -216,6 +217,10 @@ export default function DividirEventoScreen() {
   const [creados, setCreados] = useState<GrupoCreado[] | null>(null);
   const [deshaciendo, setDeshaciendo] = useState(false);
 
+  // Salas de Meet libres ese dia, y la que el admin le asigno a mano a un grupo.
+  const [salasLibres, setSalasLibres] = useState<Sala[]>([]);
+  const [salaDeGrupo, setSalaDeGrupo] = useState<Record<number, string>>({});
+
   const cargar = useCallback(async () => {
     if (!id) return;
     setCargando(true); setError('');
@@ -243,6 +248,17 @@ export default function DividirEventoScreen() {
       }));
       setGente(personas);
       setK((prev) => (personas.length >= 4 ? prev : 2));
+
+      // Solo las videollamadas necesitan sala. Se excluye este mismo evento:
+      // la sala que ya tiene puesta la pueden heredar sus grupos.
+      if ((ev as EventoRow).type === 'virtual' && (ev as EventoRow).date) {
+        const dia = new Date((ev as EventoRow).date as string)
+          .toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const { data: libres } = await supabase.rpc('admin_salas_libres', {
+          p_fecha: dia, p_excluir_event_id: id,
+        });
+        setSalasLibres((libres as Sala[]) || []);
+      }
     } catch (e: any) {
       setError(e?.message || 'No se pudo cargar el evento');
     } finally {
@@ -319,6 +335,32 @@ export default function DividirEventoScreen() {
   }, [grupos, gente, criterios, k]);
 
   // ── acciones ──────────────────────────────────────────────────────────────
+
+  /**
+   * Que sala le toca a cada grupo. Por defecto la i-esima libre; si el admin
+   * eligio otra, esa manda. Nunca se repite: si una sala ya quedo en otro
+   * grupo, este se queda sin sala antes que compartirla.
+   */
+  const salaDe = useCallback((i: number): string => {
+    if (salaDeGrupo[i] !== undefined) return salaDeGrupo[i];
+    const tomadas = Object.values(salaDeGrupo).filter(Boolean);
+    const disponibles = salasLibres.map((s) => s.url).filter((u) => !tomadas.includes(u));
+    let n = 0;
+    for (let j = 0; j < i; j++) if (salaDeGrupo[j] === undefined) n++;
+    return disponibles[n] || '';
+  }, [salaDeGrupo, salasLibres]);
+
+  /** Pasa a la siguiente sala libre, y despues a "sin sala". */
+  const rotarSala = (i: number) => {
+    const actual = salaDe(i);
+    const usadasPorOtros = Array.from({ length: k }, (_, j) => (j === i ? '' : salaDe(j))).filter(Boolean);
+    const opciones = [...salasLibres.map((s) => s.url).filter((u) => !usadasPorOtros.includes(u)), ''];
+    const pos = opciones.indexOf(actual);
+    setSalaDeGrupo((p) => ({ ...p, [i]: opciones[(pos + 1) % opciones.length] }));
+  };
+
+  const etiquetaDe = (url: string) =>
+    salasLibres.find((s) => s.url === url)?.etiqueta || url.replace('https://meet.google.com/', '');
 
   const mover = (userId: string, destino: number) => {
     setFijados((f) => ({ ...f, [userId]: destino }));
@@ -597,7 +639,13 @@ export default function DividirEventoScreen() {
                           </TouchableOpacity>
                         ))}
                       </View>
-                      {esVirtual && <Text style={st.faltaLink}>⚠ Falta el link de Meet</Text>}
+                      {esVirtual && (
+                        <TouchableOpacity onPress={() => rotarSala(gi)} style={{ marginTop: 7 }}>
+                          {salaDe(gi)
+                            ? <Text style={st.salaOk}>📹 {etiquetaDe(salaDe(gi))}  ·  tocar para cambiar</Text>
+                            : <Text style={st.faltaLink}>⚠ Sin sala — tocar para elegir</Text>}
+                        </TouchableOpacity>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
