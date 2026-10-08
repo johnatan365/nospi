@@ -65,6 +65,55 @@ interface SalaMeet {
 
 // Un sticker del catalogo. `url` es publica y es lo que se guarda en el mensaje
 // al mandarlo; `storage_path` sirve para borrar el archivo al quitarlo.
+/**
+ * Una seccion de Config que se abre y se cierra.
+ *
+ * Config era UNA columna larguisima: en el telefono son mas de mil pixeles de
+ * tarjetas apiladas, y para cambiar una sola cosa habia que recorrerla entera.
+ * Cerradas, las secciones son una lista de titulos y se abre la que haga falta.
+ *
+ * El resumen es lo que hace que cerrarlas no estorbe: dice el valor que tiene
+ * ahora mismo, asi que para MIRAR la configuracion no hay que abrir nada.
+ */
+function Plegable({ titulo, color, borde, resumen, abierta, onToggle, children }: {
+  titulo: string;
+  color: string;
+  /** El valor completo de borderLeft: dos secciones lo tienen condicional. */
+  borde: string;
+  resumen?: string;
+  abierta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    // alignSelf 'start' porque ocho de estas viven en una rejilla: sin el, al
+    // abrir una, las cerradas de su misma fila se estirarian a su altura y
+    // quedarian como cajas vacias.
+    <div style={{ backgroundColor: 'white', borderRadius: 16, padding: abierta ? 24 : '15px 20px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: borde, alignSelf: 'start' }}>
+      <div
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700, color, textTransform: 'uppercase',
+                       letterSpacing: '0.05em' }}>
+          {titulo}
+        </span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {!abierta && !!resumen && (
+            <span style={{ fontSize: 12.5, color: '#6B7280', fontWeight: 600 }}>{resumen}</span>
+          )}
+          <span style={{ fontSize: 12, color: '#9CA3AF', fontWeight: 700 }}>{abierta ? '▾' : '▸'}</span>
+        </span>
+      </div>
+      {abierta && <div style={{ marginTop: 12 }}>{children}</div>}
+    </div>
+  );
+}
+
 interface PackAdmin {
   id: string;
   nombre: string;
@@ -925,7 +974,10 @@ export default function AdminPanelScreen() {
   // recorrer entero para llegar a "Guardar Configuracion", que esta justo
   // debajo. Cerrada tampoco pinta los <img>, asi que entrar en Config deja de
   // descargar 70 imagenes que casi nunca se van a mirar.
-  const [stickersAbierto, setStickersAbierto] = useState(false);
+  // Que secciones de Config estan abiertas. Todas cerradas al entrar.
+  const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({});
+  const alternarSeccion = (k: string) =>
+    setSeccionesAbiertas((prev) => ({ ...prev, [k]: !prev[k] }));
   const [stickersTotal, setStickersTotal] = useState(0);
   const [stickerSubiendo, setStickerSubiendo] = useState(false);
   const [stickerMsg, setStickerMsg] = useState('');
@@ -8352,10 +8404,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
           {/* Precio */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #6B21A8' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              💰 Precio del Evento
-            </div>
+          <Plegable
+            titulo="💰 Precio del Evento"
+            color={'#6B21A8'}
+            borde={'4px solid #6B21A8'}
+            resumen={configEventPrice ? `$${Number(configEventPrice).toLocaleString('es-CO')}` : undefined}
+            abierta={!!seccionesAbiertas.precio}
+            onToggle={() => alternarSeccion("precio")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
               Valor en pesos colombianos (COP), sin puntos ni comas
             </div>
@@ -8373,13 +8429,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
               Actualmente: <strong>$ {Number(configEventPrice || 0).toLocaleString('es-CO')} COP</strong>
             </div>
-          </div>
+          </Plegable>
 
           {/* Suscripción */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #059669' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              👑 Precio de Suscripción Mensual
-            </div>
+          <Plegable
+            titulo="👑 Precio de Suscripción Mensual"
+            color={'#059669'}
+            borde={'4px solid #059669'}
+            resumen={configSubscriptionPrice ? `$${Number(configSubscriptionPrice).toLocaleString('es-CO')}` : undefined}
+            abierta={!!seccionesAbiertas.suscripcion}
+            onToggle={() => alternarSeccion("suscripcion")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
               Valor mensual en COP para acceso ilimitado a todos los eventos
             </div>
@@ -8397,13 +8457,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
               Actualmente: <strong>$ {Number(configSubscriptionPrice || 0).toLocaleString('es-CO')} COP/mes</strong>
             </div>
-          </div>
+          </Plegable>
 
           {/* Email */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #3B82F6' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              ✉️ Email de Soporte
-            </div>
+          <Plegable
+            titulo="✉️ Email de Soporte"
+            color={'#1D4ED8'}
+            borde={'4px solid #3B82F6'}
+            resumen={configSupportEmail || undefined}
+            abierta={!!seccionesAbiertas.email}
+            onToggle={() => alternarSeccion("email")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
               Dirección de correo que verán los usuarios en la pestaña Perfil
             </div>
@@ -8418,13 +8482,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 color: '#1D4ED8', outline: 'none', boxSizing: 'border-box',
               }}
             />
-          </div>
+          </Plegable>
 
           {/* WhatsApp */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #10B981' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              💬 WhatsApp de Soporte
-            </div>
+          <Plegable
+            titulo="💬 WhatsApp de Soporte"
+            color={'#065F46'}
+            borde={'4px solid #10B981'}
+            resumen={configSupportWhatsapp || undefined}
+            abierta={!!seccionesAbiertas.whatsapp}
+            onToggle={() => alternarSeccion("whatsapp")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
               Número con código de país, sin + ni espacios. Ej: 573001234567
             </div>
@@ -8442,12 +8510,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
               Link generado: <strong>wa.me/{configSupportWhatsapp}</strong>
             </div>
-          </div>
+          </Plegable>
           {/* Toggle Pago de Prueba */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${configTestPaymentEnabled ? '#F59E0B' : '#9CA3AF'}` }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: configTestPaymentEnabled ? '#92400E' : '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              🧪 Botón Pago de Prueba
-            </div>
+          <Plegable
+            titulo="🧪 Botón Pago de Prueba"
+            color={configTestPaymentEnabled ? '#92400E' : '#6B7280'}
+            borde={`4px solid ${configTestPaymentEnabled ? '#F59E0B' : '#9CA3AF'}`}
+            resumen={configTestPaymentEnabled ? 'Activado' : 'Desactivado'}
+            abierta={!!seccionesAbiertas.pagoprueba}
+            onToggle={() => alternarSeccion("pagoprueba")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
               Muestra u oculta el botón "Pago de Prueba (TEST)" en la pantalla de pago de la app
             </div>
@@ -8482,13 +8554,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 </div>
               </div>
             </div>
-          </div>
+          </Plegable>
 
           {/* ── PLANES DE 3 Y 6 MESES ── */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #10B981' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              💚 Planes de 3 y 6 meses
-            </div>
+          <Plegable
+            titulo="💚 Planes de 3 y 6 meses"
+            color={'#065F46'}
+            borde={'4px solid #10B981'}
+            resumen={[configSubPrice3m, configSubPrice6m].filter(Boolean).map((v) => `$${Number(v).toLocaleString('es-CO')}`).join(' · ') || undefined}
+            abierta={!!seccionesAbiertas.planes}
+            onToggle={() => alternarSeccion("planes")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
               Precio TOTAL del plan, no el mensual. Sin puntos ni comas.
             </div>
@@ -8513,13 +8589,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
               Cambiar esto NO afecta a quien ya se suscribió: cada suscripción guarda el precio que aceptó y se renueva con ese.
             </div>
-          </div>
+          </Plegable>
 
           {/* ── PRUEBA: SOLO SUSCRIPCIÓN (PUERTA 2) ── */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${configPuerta2 ? '#7C3AED' : '#9CA3AF'}` }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: configPuerta2 ? '#5B21B6' : '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              🚪 Prueba: solo suscripción
-            </div>
+          <Plegable
+            titulo="🚪 Prueba: solo suscripción"
+            color={configPuerta2 ? '#5B21B6' : '#6B7280'}
+            borde={`4px solid ${configPuerta2 ? '#7C3AED' : '#9CA3AF'}`}
+            resumen={configPuerta2 ? 'Activado' : 'Desactivado'}
+            abierta={!!seccionesAbiertas.puerta2}
+            onToggle={() => alternarSeccion("puerta2")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
               A quien llegue por el link de la campaña de prueba se le oculta el pago por evento y solo ve los planes. A todos los demás no les cambia nada.
             </div>
@@ -8556,13 +8636,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
               Este es el botón de emergencia: apagarlo devuelve todo a la normalidad al instante, sin publicar código. Ojo que la marca se pone al REGISTRARSE — una cuenta que ya existía no cambia aunque abra el link.
             </div>
-          </div>
+          </Plegable>
 
           {/* ── ACTUALIZACIÓN OBLIGATORIA ── */}
-          <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #880E4F' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#880E4F', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              📲 Actualización Obligatoria
-            </div>
+          <Plegable
+            titulo="📲 Actualización Obligatoria"
+            color={'#880E4F'}
+            borde={'4px solid #880E4F'}
+            resumen={configMinAppVersion || undefined}
+            abierta={!!seccionesAbiertas.version}
+            onToggle={() => alternarSeccion("version")}
+          >
             <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
               Versión mínima que deben tener los usuarios. Si su app es más vieja, se les bloquea con una pantalla que los obliga a actualizar desde la tienda.
             </div>
@@ -8580,16 +8664,18 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10, lineHeight: 1.5 }}>
               Deja <strong>0.0.0</strong> para NO obligar a nadie. Para forzar: primero publica la build nueva en las tiendas y, cuando ya esté disponible, pon aquí ESA versión (ej. <strong>1.0.16</strong>). Nunca pongas una versión mayor a la que ya está publicada o dejarías a todos bloqueados. Solo aplica a quien ya tenga una build que traiga este control.
             </div>
-          </div>
+          </Plegable>
         </div>
 
         {/* Salas de videollamada — tabla propia, se guarda aparte del resto */}
-        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, marginBottom: 28,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #B1185B' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#B1185B', textTransform: 'uppercase',
-                        letterSpacing: '0.05em', marginBottom: 6 }}>
-            📹 Salas de videollamada
-          </div>
+        <Plegable
+          titulo="📹 Salas de videollamada"
+          color={'#B1185B'}
+          borde={'4px solid #B1185B'}
+          resumen={`${salas.length} ${salas.length === 1 ? 'sala' : 'salas'}`}
+          abierta={!!seccionesAbiertas.salas}
+          onToggle={() => alternarSeccion("salas")}
+        >
           <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
             Al dividir una videollamada, cada grupo toma una de estas salas, sin repetir.
             Si una se usó mucho, cámbiala: con el link viejo se entra sin pagar.
@@ -8653,34 +8739,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               </span>
             )}
           </div>
-        </div>
+        </Plegable>
 
         {/* Stickers del chat — tabla y bucket propios, se guarda al instante */}
-        <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, marginBottom: 28,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #7C3AED' }}>
-          <div
-            onClick={() => setStickersAbierto((v) => !v)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setStickersAbierto((v) => !v); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                     marginBottom: stickersAbierto ? 6 : 0, userSelect: 'none' }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase',
-                           letterSpacing: '0.05em' }}>
-              🙂 Stickers del chat
-            </span>
-            {!stickersAbierto && stickersTotal > 0 && (
-              <span style={{ fontSize: 12.5, color: '#9CA3AF', fontWeight: 600 }}>
-                {stickersTotal} en {packs.length} {packs.length === 1 ? 'paquete' : 'paquetes'}
-              </span>
-            )}
-            <span style={{ marginLeft: 'auto', fontSize: 13, color: '#9CA3AF', fontWeight: 700 }}>
-              {stickersAbierto ? '▾ Ocultar' : '▸ Ver y editar'}
-            </span>
-          </div>
-
-          {stickersAbierto && (<>
+        <Plegable
+          titulo="🙂 Stickers del chat"
+          color={'#7C3AED'}
+          borde={'4px solid #7C3AED'}
+          resumen={stickersTotal ? `${stickersTotal} en ${packs.length} ${packs.length === 1 ? 'paquete' : 'paquetes'}` : undefined}
+          abierta={!!seccionesAbiertas.stickers}
+          onToggle={() => alternarSeccion("stickers")}
+        >
           <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
             Aparecen en el chat apenas los subes: no hace falta build ni que nadie actualice la app.
             Tienen que ser <strong>PNG o WebP con fondo transparente</strong>, cuadrados, máximo 512 KB.
@@ -8782,8 +8851,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               </span>
             )}
           </div>
-          </>)}
-        </div>
+        </Plegable>
 
         <button
           onClick={handleSaveConfig}
