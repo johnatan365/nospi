@@ -4305,9 +4305,25 @@ export default function ChatThreadScreen() {
                     const box = esSticker(item.media_path)
                       ? { width: STICKER_EN_CHAT, height: STICKER_EN_CHAT }
                       : mediaBoxSize(item.media_width, item.media_height);
+                    // De que lado queda el medio dentro de la burbuja.
+                    //
+                    // Si el mensaje responde a otro, la cita de arriba es MAS
+                    // ANCHA que un sticker (128 px) o que una foto (210 px como
+                    // mucho), asi que la burbuja se estira hasta el ancho de la
+                    // cita y el medio se quedaba pegado a la izquierda de esa
+                    // caja: un sticker propio aparecia colgado en la mitad de la
+                    // pantalla en vez de al lado de quien lo mando.
+                    //
+                    // Solo cuando NO hay pie de foto. Con texto debajo, el
+                    // bloque manda es el texto y la foto se lee como encabezado
+                    // suyo: ahi moverla a la derecha se veria torcido.
+                    const sinPie = !(item.content || '').trim();
+                    const ladoDelMedio = sinPie
+                      ? { alignSelf: (isMine ? 'flex-end' : 'flex-start') as 'flex-end' | 'flex-start' }
+                      : null;
                     if (!url) {
                       return (
-                        <View style={[styles.mediaPlaceholder, box]}>
+                        <View style={[styles.mediaPlaceholder, box, ladoDelMedio]}>
                           <ActivityIndicator size="small" color={isMine ? '#FFFFFF' : nospiColors.purpleDark} />
                         </View>
                       );
@@ -4315,7 +4331,7 @@ export default function ChatThreadScreen() {
                     if (item.media_kind === 'video') {
                       if (Platform.OS === 'web') {
                         return (
-                          <View style={{ marginBottom: 6 }}>
+                          <View style={[{ marginBottom: 6 }, ladoDelMedio]}>
                             {React.createElement('video', {
                               src: url,
                               controls: true,
@@ -4347,7 +4363,7 @@ export default function ChatThreadScreen() {
                         <TouchableOpacity
                           activeOpacity={0.85}
                           onPress={() => setMediaActions({ url, kind: 'video', filename: mediaFileName(item.media_path, 'video') })}
-                          style={[styles.mediaVideoBox, box]}
+                          style={[styles.mediaVideoBox, box, ladoDelMedio]}
                         >
                           <View style={styles.mediaPlayCircle}>
                             <IconSymbol ios_icon_name="play.fill" android_material_icon_name="play-arrow" size={28} color="#FFFFFF" />
@@ -4362,6 +4378,10 @@ export default function ChatThreadScreen() {
                       <TouchableOpacity
                         activeOpacity={0.9}
                         onPress={() => openPhoto(url, mediaFileName(item.media_path, 'image'))}
+                        // El alineado va en el tocable y no en la imagen: si
+                        // fuera dentro, el tocable seguiria ocupando todo el
+                        // ancho y se abriria la foto al tocar el vacio de al lado.
+                        style={ladoDelMedio}
                       >
                         <ExpoImage
                           source={{ uri: url }}
