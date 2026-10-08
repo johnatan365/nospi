@@ -10,7 +10,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import Toast from 'react-native-toast-message';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 // Dispara el evento Purchase — píxel en web, API de Conversiones en mobile.
 // Usa las constantes SUPABASE_URL / SUPABASE_ANON_KEY ya declaradas más abajo en este archivo.
@@ -193,6 +194,7 @@ const WEB_REDIRECT_URL = 'https://app.nospi.co/payment-callback';
 const NATIVE_REDIRECT_URL = 'nospi://payment-callback';
 
 export default function SubscriptionPlansScreen() {
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const { user } = useSupabase();
   const { appConfig } = useAppConfig();
@@ -325,9 +327,19 @@ export default function SubscriptionPlansScreen() {
 
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
   // Sin código aplicado, es igual a priceCOP — no cambia ningún comportamiento existente.
+  // Lo que se MUESTRA segun el idioma de la app. Wompi cobra siempre en pesos:
+  // esto no convierte nada, es el precio que ve quien tiene la app en ingles.
+  const priceUSD = precioDesdeConfig(appConfig.event_price_usd, 19);
+  const subscriptionPriceUSD = precioDesdeConfig(appConfig.subscription_price_usd, 29);
+  const precioMensualMasBajoUSD = Math.round(precioDesdeConfig(appConfig.subscription_price_6m_usd, 109) / 6);
+
   const effectivePriceCOP = promoApplied
     ? Math.max(0, Math.round(priceCOP * (1 - promoApplied.discountPercent / 100)))
     : priceCOP;
+  const effectivePriceUSD = promoApplied
+    ? Math.max(0, Math.round(priceUSD * (1 - promoApplied.discountPercent / 100)))
+    : priceUSD;
+  const montoEfectivo = textoPrecio(idioma, effectivePriceCOP, effectivePriceUSD);
 
   const fetchVirtualBalance = useCallback(async () => {
     try {
@@ -1796,10 +1808,10 @@ export default function SubscriptionPlansScreen() {
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
-              <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
+              <Text style={styles.formAmount}>{montoEfectivo}</Text>
               <Text style={styles.inputLabel}>Nombre del titular</Text>
               <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
-              <Text style={styles.inputLabel}>Número de tarjeta</Text>
+              <Text style={styles.inputLabel}>{t('pag.numeroTarjeta')}</Text>
               <View style={styles.cardNumberRow}>
                 <TextInput style={[styles.input, { flex: 1, borderWidth: 0, padding: 0 }]} placeholder="0000 0000 0000 0000" value={cardNumber}
                   onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 16); setCardNumber(c.replace(/(.{4})/g, '$1 ').trim()); }}
@@ -1838,7 +1850,7 @@ export default function SubscriptionPlansScreen() {
                 disabled={isProcessing('card')}
                 activeOpacity={0.7}
               >
-                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{`Pagar $${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>}
+                {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{t('pag.pagarMonto', { monto: montoEfectivo })}</Text>}
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
             </View>
@@ -1861,9 +1873,9 @@ export default function SubscriptionPlansScreen() {
             {nequiStatus === 'idle' ? (
               <>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
-                <Text style={styles.nequiDescription}>Ingresa tu número de celular registrado en Nequi. Recibirás una notificación push para aprobar el pago.</Text>
-                <Text style={styles.inputLabel}>Número de celular Nequi</Text>
+                <Text style={styles.formAmount}>{montoEfectivo}</Text>
+                <Text style={styles.nequiDescription}>{t('pag.nequiDesc')}</Text>
+                <Text style={styles.inputLabel}>{t('pag.celularNequi')}</Text>
                 <TextInput style={styles.input} placeholder="3001234567" value={nequiPhone}
                   onChangeText={(t) => setNequiPhone(t.replace(/\D/g, '').slice(0, 10))}
                   keyboardType="phone-pad" maxLength={10} />
@@ -1881,9 +1893,9 @@ export default function SubscriptionPlansScreen() {
               <View style={styles.waitingContainer}>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
                 <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
-                <Text style={styles.waitingDesc}>Aprueba el pago de <Text style={{ fontWeight: 'bold' }}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text> desde tu app Nequi.</Text>
+                <Text style={styles.waitingDesc}>{t('pag.apruebaNequi')} <Text style={{ fontWeight: 'bold' }}>{montoEfectivo}</Text> {t('pag.apruebaNequiFin')}</Text>
                 <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
-                <Text style={styles.waitingHint}>Esperando confirmación...</Text>
+                <Text style={styles.waitingHint}>{t('pag.esperando')}</Text>
               </View>
             )}
           </View>
@@ -1904,7 +1916,7 @@ export default function SubscriptionPlansScreen() {
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
               <Image source={require('@/assets/images/logo_380.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-              <Text style={styles.formAmount}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
+              <Text style={styles.formAmount}>{montoEfectivo}</Text>
 
               <Text style={styles.inputLabel}>Banco</Text>
               <TouchableOpacity
@@ -1961,7 +1973,7 @@ export default function SubscriptionPlansScreen() {
                 ))}
               </View>
 
-              <Text style={styles.inputLabel}>Número de documento</Text>
+              <Text style={styles.inputLabel}>{t('pag.numeroDocumento')}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="123456789"
@@ -1991,7 +2003,7 @@ export default function SubscriptionPlansScreen() {
               >
                 {isProcessing('pse')
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.payBtnText}>{`Pagar $${effectivePriceCOP.toLocaleString('es-CO')} COP`}</Text>
+                  : <Text style={styles.payBtnText}>{t('pag.pagarMonto', { monto: montoEfectivo })}</Text>
                 }
               </TouchableOpacity>
               <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
@@ -2006,7 +2018,7 @@ export default function SubscriptionPlansScreen() {
     <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
       <Stack.Screen options={{
         headerShown: true,
-        title: showEventMethods ? 'Pagar este evento' : 'Confirma tu asistencia',
+        title: t('pag.confirmaAsistencia'),
         headerBackTitle: 'Atrás',
         headerLeft: () => (
           <TouchableOpacity
@@ -2030,7 +2042,7 @@ export default function SubscriptionPlansScreen() {
         {!showEventMethods ? (
           <>
             <Text style={styles.title}>{ocultarPagoPorEvento ? 'Asegura tu cupo' : '¿Cómo quieres ir?'}</Text>
-            <Text style={styles.subtitle}>Confirma tu asistencia</Text>
+            <Text style={styles.subtitle}>{t('pag.confirmaAsistencia')}</Text>
 
             {!ocultarPagoPorEvento && (
             <TouchableOpacity
@@ -2040,12 +2052,12 @@ export default function SubscriptionPlansScreen() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Ionicons name="ticket-outline" size={18} color="#1a1a1a" />
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a' }}>Por evento</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1a1a1a' }}>{t('pag.porEvento')}</Text>
               </View>
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
-                {`$${priceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / evento</Text>
+                {textoPrecio(idioma, priceCOP, priceUSD)} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>{t('pag.porEventoUnidad')}</Text>
               </Text>
-              <Text style={{ fontSize: 13, color: '#6B7280' }}>Pagas cada vez que vengas a un evento.</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>{t('pag.porEventoSub')}</Text>
             </TouchableOpacity>
             )}
 
@@ -2055,23 +2067,23 @@ export default function SubscriptionPlansScreen() {
               activeOpacity={0.85}
             >
               <View style={{ position: 'absolute', top: -11, left: 16, backgroundColor: nospiColors.purplePale, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>Recomendado</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: nospiColors.purpleDark }}>{t('sus.recomendado')}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 4 }}>
                 <Ionicons name="ribbon-outline" size={18} color={nospiColors.purpleDark} />
-                <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>Suscripción mensual Nospi</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: nospiColors.purpleDark }}>{t('sus.titulo')}</Text>
               </View>
               <Text style={{ fontSize: 26, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 }}>
-                {`$${subscriptionPriceCOP.toLocaleString('es-CO')}`} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>COP / mes</Text>
+                {textoPrecio(idioma, subscriptionPriceCOP, subscriptionPriceUSD)} <Text style={{ fontSize: 13, fontWeight: '400', color: '#9CA3AF' }}>{t('pag.porMes')}</Text>
               </Text>
-              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>Eventos ilimitados, todos los que hagamos este mes.</Text>
+              <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>{t('pag.susSub')}</Text>
               <Text style={{ fontSize: 13, color: nospiColors.purpleMid, fontWeight: '700', marginBottom: 12 }}>
-                {`o desde $${precioMensualMasBajo.toLocaleString('es-CO')} al mes con los planes de 3 y 6 meses`}
+                {t('pag.desdeAlMes', { precio: textoPrecio(idioma, precioMensualMasBajo, precioMensualMasBajoUSD) })}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
-                <Text style={{ fontSize: 13, color: '#374151' }}>Acceso sin límite a todos los eventos del mes</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>{t('sus.feature1')}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
@@ -2093,17 +2105,17 @@ export default function SubscriptionPlansScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 }}
                 activeOpacity={0.7}
               >
-                <Text style={{ fontSize: 14, fontWeight: '500', color: '#fff', textDecorationLine: 'underline' }}>¿Tienes un código promocional?</Text>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#fff', textDecorationLine: 'underline' }}>{t('pag.tienesCodigo')}</Text>
               </TouchableOpacity>
             )}
 
             {showPromoInput && !promoApplied && (
               <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: '#666', fontWeight: '500', marginBottom: 8 }}>Código promocional</Text>
+                <Text style={{ fontSize: 12, color: '#666', fontWeight: '500', marginBottom: 8 }}>{t('pag.codigoLabel')}</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     style={{ flex: 1, height: 42, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', paddingHorizontal: 12, fontSize: 14, textTransform: 'uppercase' }}
-                    placeholder="Ingresa tu código"
+                    placeholder={t('pag.codigoPlaceholder')}
                     value={promoCode}
                     onChangeText={(t) => { setPromoCode(t); setPromoError(null); }}
                     autoCapitalize="characters"
@@ -2130,8 +2142,8 @@ export default function SubscriptionPlansScreen() {
             {promoApplied && promoApplied.discountPercent >= 100 && (
               <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4, alignItems: 'center' }}>
                 <Text style={{ fontSize: 22, color: nospiColors.purpleMid }}>✓</Text>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark, marginTop: 4 }}>Código aplicado</Text>
-                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>Tu inscripción a este evento queda gratis.</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark, marginTop: 4 }}>{t('pag.codigoAplicado')}</Text>
+                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>{t('pag.codigoGratis')}</Text>
               </View>
             )}
 
@@ -2139,7 +2151,7 @@ export default function SubscriptionPlansScreen() {
               <View style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, marginTop: 4, alignItems: 'center' }}>
                 <Text style={{ fontSize: 22, color: nospiColors.purpleMid }}>✓</Text>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: nospiColors.purpleDark, marginTop: 4 }}>{`Código aplicado — ${promoApplied.discountPercent}% de descuento`}</Text>
-                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>Se descontará del total al elegir tu método de pago.</Text>
+                <Text style={{ fontSize: 12.5, color: '#666', marginTop: 2, textAlign: 'center' }}>{t('pag.codigoDescuento')}</Text>
               </View>
             )}
           </>
@@ -2151,7 +2163,7 @@ export default function SubscriptionPlansScreen() {
         <Text style={styles.title}>Pagar este evento</Text>
         <Text style={styles.subtitle}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
-        <Text style={styles.sectionTitle}>¿Cómo quieres pagar?</Text>
+        <Text style={styles.sectionTitle}>{t('pag.comoPagar')}</Text>
 
         {!loadingBalance && virtualBalance >= effectivePriceCOP && (
           <TouchableOpacity style={styles.paymentBtn} onPress={handlePayWithVirtualBalance} disabled={processing} activeOpacity={0.85}>
@@ -2170,7 +2182,7 @@ export default function SubscriptionPlansScreen() {
           <View style={styles.btnInner}>
             <Text style={styles.btnIcon}>💳</Text>
             <View style={styles.btnTextWrap}>
-              <Text style={styles.btnTitle}>Tarjeta de Crédito</Text>
+              <Text style={styles.btnTitle}>{t('pag.tarjetaCredito')}</Text>
               <Text style={styles.btnSub}>Visa • Mastercard • Amex</Text>
             </View>
             <Text style={styles.btnArrow}>›</Text>
@@ -2220,7 +2232,7 @@ export default function SubscriptionPlansScreen() {
         {/* ========== END TEST BUTTON ========== */}
 
 				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
-				<Text style={styles.cancelPolicyFooter}>Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación y te devolvemos tu saldo para que lo uses en otro evento. Si lo haces con menos de 24 horas o no asistes, no alcanzamos a devolverte el saldo y tu cuenta podría quedar suspendida para reservar por un tiempo.</Text>
+				<Text style={styles.cancelPolicyFooter}>{t('pag.politicaLarga')}</Text>
           </>
         )}
 
@@ -2230,11 +2242,11 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>✅</Text>
-            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
+            <Text style={styles.successTitle}>{t('pag.pagoExitoso')}</Text>
             <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
-            <Text style={styles.policyNote}>ℹ️ Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación y te devolvemos tu saldo para que lo uses en otro evento. Si lo haces con menos de 24 horas o no asistes, no alcanzamos a devolverte el saldo y tu cuenta podría quedar suspendida para reservar por un tiempo.</Text>
+            <Text style={styles.policyNote}>ℹ️ {t('pag.politicaLarga')}</Text>
             <TouchableOpacity onPress={() => { setShowSuccessModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
-              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+              <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
@@ -2247,15 +2259,15 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>🎟️</Text>
-            <Text style={styles.successTitle}>¡Cupo confirmado!</Text>
+            <Text style={styles.successTitle}>{t('pag.cupoConfirmado')}</Text>
             <Text style={styles.successMessage}>
               {hasActiveSubscription
                 ? 'Tu suscripción cubre este evento — ya tienes tu lugar asegurado'
                 : 'Este evento es gratis — ya tienes tu lugar asegurado'}
             </Text>
-            <Text style={styles.policyNote}>ℹ️ Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación, sin problema. Si lo haces con menos de 24 horas o no asistes, tu cuenta podría quedar suspendida para reservar por un tiempo.</Text>
+            <Text style={styles.policyNote}>ℹ️ {t('pag.politicaCorta')}</Text>
             <TouchableOpacity onPress={() => { setShowSubscriptionConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
-              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+              <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
@@ -2268,11 +2280,11 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>🎟️</Text>
-            <Text style={styles.successTitle}>¡Cupo confirmado gratis!</Text>
-            <Text style={styles.successMessage}>Tu código promocional cubrió este evento — ya tienes tu lugar asegurado</Text>
-            <Text style={styles.policyNote}>ℹ️ Si no vas a poder asistir, puedes cancelar desde la app con más de 24 horas de anticipación, sin problema. Si lo haces con menos de 24 horas o no asistes, tu cuenta podría quedar suspendida para reservar por un tiempo.</Text>
+            <Text style={styles.successTitle}>{t('pag.cupoGratis')}</Text>
+            <Text style={styles.successMessage}>{t('pag.cupoGratisSub')}</Text>
+            <Text style={styles.policyNote}>ℹ️ {t('pag.politicaCorta')}</Text>
             <TouchableOpacity onPress={() => { setShowPromoConfirmModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
-              <Text style={styles.policyLink}>Ver política de asistencia</Text>
+              <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
               <Text style={styles.successButtonText}>Ver mis citas</Text>
@@ -2285,7 +2297,7 @@ export default function SubscriptionPlansScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>🎟️</Text>
-            <Text style={styles.successTitle}>¡Código aplicado!</Text>
+            <Text style={styles.successTitle}>{t('pag.codigoAplicadoTitulo')}</Text>
             <Text style={styles.successMessage}>{`Tienes ${promoApplied?.discountPercent ?? 0}% de descuento en este evento`}</Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoPartialModal(false); setShowEventMethods(true); }}>
               <Text style={styles.successButtonText}>Ir a pagar</Text>

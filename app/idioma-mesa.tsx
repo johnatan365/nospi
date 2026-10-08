@@ -31,8 +31,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nospiColors } from '@/constants/Colors';
 import { useIdioma } from '@/contexts/IdiomaContext';
-import { useAppConfig } from '@/contexts/AppConfigContext';
-import { precioDesdeConfig, FALLBACK_EVENT_PRICE_COP } from '@/constants/Pricing';
 import { toqueFuerte, aviso } from '@/lib/haptics';
 
 export const CLAVE_IDIOMAS_PENDIENTES = 'pending_idiomas_mesa';
@@ -44,7 +42,6 @@ const LARGO_MAX_ZONA_OTRA = 40;
 export default function IdiomaMesaScreen() {
   const router = useRouter();
   const { t, idioma } = useIdioma();
-  const { appConfig } = useAppConfig();
   const { tipo } = useLocalSearchParams<{ tipo?: string }>();
 
   // En una videollamada la zona no aplica: la persona se conecta desde su casa.
@@ -103,12 +100,9 @@ export default function IdiomaMesaScreen() {
     }
   };
 
-  // El precio mostrado depende del idioma de la APP, no de la mesa que escoja:
-  // si dependiera de la mesa, quien quiere practicar ingles pagaria el precio
-  // alto y no entraria ningun local.
-  const precioCop = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
-  const precioUsd = precioDesdeConfig(appConfig.event_price_usd, 19);
-  const precioTexto = idioma === 'en' ? `USD ${precioUsd}` : `$${precioCop.toLocaleString('es-CO')}`;
+  // Aqui NO va el precio. Esta pantalla solo recoge preferencias; todavia no se
+  // esta pagando nada. El precio aparece en la pantalla siguiente, que es donde
+  // la persona escoge como paga.
 
   const opcionesIdioma = [
     { valor: 'es' as const, etiqueta: t('mesaIdioma.espanol') },
@@ -152,8 +146,8 @@ export default function IdiomaMesaScreen() {
     >
       <ScrollView contentContainerStyle={estilos.scroll} keyboardShouldPersistTaps="handled">
         <View style={estilos.contenido}>
-          <Text style={estilos.titulo}>{t('mesaIdioma.pregunta')}</Text>
-          <Text style={estilos.pista}>{t('mesaIdioma.explicacion')}</Text>
+          <Text style={estilos.titulo}>{t(esPresencial ? 'mesaIdioma.pregunta' : 'mesaIdioma.preguntaSala')}</Text>
+          <Text style={estilos.pista}>{t(esPresencial ? 'mesaIdioma.explicacion' : 'mesaIdioma.explicacionSala')}</Text>
 
           {opcionesIdioma.map((op) => (
             <Opcion
@@ -196,11 +190,6 @@ export default function IdiomaMesaScreen() {
               <Text style={estilos.avisoZona}>{t('zona.aviso')}</Text>
             </>
           )}
-
-          <View style={estilos.precioCaja}>
-            <Text style={estilos.precioEtiqueta}>{t('mesaIdioma.tuCupo')}</Text>
-            <Text style={estilos.precioValor}>{precioTexto}</Text>
-          </View>
 
           <TouchableOpacity
             style={[estilos.boton, idiomas.length === 0 && estilos.botonApagado]}
@@ -296,21 +285,6 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 14,
     marginTop: 4,
   },
-  precioCaja: {
-    marginTop: 26,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  precioEtiqueta: { color: 'rgba(255,255,255,0.82)', fontSize: 14, fontWeight: '600' },
-  precioValor: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   boton: {
     marginTop: 24,
     backgroundColor: '#FFFFFF',
