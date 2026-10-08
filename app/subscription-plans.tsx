@@ -2161,7 +2161,7 @@ export default function SubscriptionPlansScreen() {
           <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{t('pago.volverFlecha')}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('pago.pagarEsteEvento')}</Text>
-        <Text style={styles.subtitle}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
+        <Text style={styles.subtitle}>{t('pago.eligeMetodo', { precio: `$${effectivePriceCOP.toLocaleString('es-CO')} COP` })}</Text>
 
         <Text style={styles.sectionTitle}>{t('pag.comoPagar')}</Text>
 
@@ -2171,7 +2171,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.btnIcon}>💰</Text>
               <View style={styles.btnTextWrap}>
                 <Text style={styles.btnTitle}>Saldo Virtual</Text>
-                <Text style={styles.btnSub}>{`Disponible: $${virtualBalance.toLocaleString('es-CO')} COP`}</Text>
+                <Text style={styles.btnSub}>{t('pago.disponible', { monto: `$${virtualBalance.toLocaleString('es-CO')} COP` })}</Text>
               </View>
               {isProcessing('virtual') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
             </View>

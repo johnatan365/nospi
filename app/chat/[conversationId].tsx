@@ -79,6 +79,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
 import { useIdioma } from '@/contexts/IdiomaContext';
 import { nombreEventoIdioma } from '@/utils/nombreEvento';
 
+import { localeDe } from '@/lib/i18n';
 // Prefijo para guardar el borrador (lo que se está escribiendo pero aún no se
 // envía) por conversación, para que no se pierda al salir y volver al chat.
 const DRAFT_KEY = (id?: string) => `chat_draft_${id}`;
@@ -5470,7 +5471,7 @@ export default function ChatThreadScreen() {
                     <View style={styles.buscarFilaTop}>
                       <Text style={styles.buscarQuien} numberOfLines={1}>{quien}</Text>
                       <Text style={styles.buscarFecha}>
-                        {new Date(r.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                        {new Date(r.created_at).toLocaleDateString(localeDe(idioma), { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                         {' · '}
                         {formatBogotaTime(new Date(r.created_at))}
                       </Text>
