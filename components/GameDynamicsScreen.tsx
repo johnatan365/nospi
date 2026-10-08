@@ -73,6 +73,21 @@ const DEFAULT_QUESTIONS = {
 
 let QUESTIONS = { ...DEFAULT_QUESTIONS };
 
+// Pregunta en espanol -> pregunta en ingles.
+//
+// La que se GUARDA y se sincroniza entre los telefonos (events.current_question,
+// question_votes, question_stats) sigue siendo la de espanol: es la identidad de
+// la pregunta y lo que agrupa los reportes del admin. Esto es solo para pintarla
+// en pantalla a quien tiene la app en ingles. Si una pregunta todavia no tiene
+// traduccion se muestra en espanol, que es mejor que mostrar un hueco.
+let QUESTIONS_EN: Record<string, string> = {};
+
+function enIngles(pregunta: string | null, idioma: 'es' | 'en'): string {
+  if (!pregunta) return '';
+  if (idioma !== 'en') return pregunta;
+  return QUESTIONS_EN[pregunta.trim()] || pregunta;
+}
+
 const TIMER_DURATION = 10;
 
 // ─── Per-level theme system ───────────────────────────────────────────────────
@@ -175,7 +190,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 // Free phase uses the brand dark gradient
 
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
 
   // Estado inicial HIDRATADO desde la cita (que dinamica mantiene al dia por
@@ -284,6 +299,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             if (questionsByLevel[q.level]) {
               questionsByLevel[q.level].push(q.question_text);
             }
+            if (q.question_text && q.question_text_en) {
+              QUESTIONS_EN[String(q.question_text).trim()] = q.question_text_en;
+            }
           });
 
           if (
@@ -318,6 +336,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           defaultQuestions.forEach((q: any) => {
             if (questionsByLevel[q.level]) {
               questionsByLevel[q.level].push(q.question_text);
+            }
+            if (q.question_text && q.question_text_en) {
+              QUESTIONS_EN[String(q.question_text).trim()] = q.question_text_en;
             }
           });
 
@@ -921,7 +942,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 textShadowRadius: 4,
               },
             ]}>
-              {currentQuestion}
+              {enIngles(currentQuestion, idioma)}
             </Text>
 
             {/* Countdown timer badge */}

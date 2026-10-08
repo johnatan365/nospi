@@ -1134,6 +1134,10 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'pago.eligeMetodo': '{{precio}} · elige tu método',
     'pago.disponible': 'Disponible: {{monto}}',
 
+
+    // ---------- Login: bienvenido de nuevo ----------
+    'login.bienvenidoDeNuevo': 'Bienvenido de nuevo',
+
   },
 
   en: {
@@ -2259,6 +2263,10 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'citas.reembolsoNo': '⚠️ You’re cancelling with less than 24 hours to go, so there’s no refund.',
     'pago.eligeMetodo': '{{precio}} · choose how to pay',
     'pago.disponible': 'Available: {{monto}}',
+
+
+    // ---------- Login: bienvenido de nuevo ----------
+    'login.bienvenidoDeNuevo': 'Welcome back',
 
   },
 };

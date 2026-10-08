@@ -213,7 +213,7 @@ export default function LoginScreen() {
 
   const isLoading = loading || submitting;
   const eyeIcon = showPassword ? 'eye-off-outline' : 'eye-outline';
-  const titleText = isSignUp ? t('login.botonCrear') : 'Bienvenido de nuevo';
+  const titleText = isSignUp ? t('login.botonCrear') : t('login.bienvenidoDeNuevo');
   const subtitleText = isSignUp ? t('login.subtituloCrear') : t('login.subtituloEntrar');
   const submitText = isSignUp ? t('login.botonCrear') : t('login.botonEntrar');
   const toggleText = isSignUp ? t('login.cambiarAEntrar') : t('login.cambiarACrear');
