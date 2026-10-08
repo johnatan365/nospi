@@ -1,27 +1,8 @@
--- Traducir al ingles la frase que cada persona escribe sobre si misma.
---
--- Es la ultima pieza de contenido que quedaba sin traducir y que SI la ve
--- alguien mas: el nombre y la descripcion de los eventos, las preguntas de la
--- dinamica y los mensajes de canales y comunidad ya pasan por
--- traducir-contenido. La bio se veia siempre en español, aunque la app
--- estuviera en ingles.
---
--- Lo que NO se traduce: la bio en la pantalla de perfil de uno mismo. Ahi se
--- muestra lo que la persona escribio, tal cual, porque es el texto que esta
--- editando. Traducirselo seria cambiarle lo que acaba de escribir.
-
 alter table public.users
   add column if not exists bio_en text;
 
 comment on column public.users.bio_en is
   'La bio traducida al ingles por traducir-contenido. Se muestra en la ficha que ven los demas cuando tienen la app en ingles; el perfil propio siempre muestra bio.';
-
--- ── el disparador ───────────────────────────────────────────────────────────
---
--- Mismo patron que pedir_traduccion_evento y pedir_traduccion_encuesta: se pide
--- al guardar y la funcion decide si el interruptor esta prendido. Solo cuando
--- la bio CAMBIO, para no gastar una llamada cada vez que alguien toca cualquier
--- otro campo del perfil.
 
 create or replace function public.pedir_traduccion_bio()
 returns trigger
@@ -33,8 +14,6 @@ begin
   if TG_OP = 'UPDATE' and NEW.bio is not distinct from OLD.bio then
     return NEW;
   end if;
-  -- Si la borro, se borra tambien la traduccion: dejarla seria mostrarle a
-  -- quien tenga la app en ingles una frase que su autor ya quito.
   if coalesce(btrim(NEW.bio), '') = '' then
     NEW.bio_en := null;
     return NEW;
@@ -52,18 +31,10 @@ begin
 end;
 $function$;
 
--- BEFORE y no AFTER porque el caso de la bio vacia modifica NEW (pone bio_en en
--- null) y asi se resuelve sin un segundo UPDATE que volveria a entrar aqui.
 drop trigger if exists trg_traducir_bio on public.users;
 create trigger trg_traducir_bio
   before insert or update of bio on public.users
   for each row execute function public.pedir_traduccion_bio();
-
--- ── la ficha publica devuelve la traduccion ────────────────────────────────
---
--- Hay que DROP antes de crear: añadir una columna cambia el tipo de retorno y
--- create or replace no lo permite. Va dentro de la transaccion de la migracion,
--- asi que no hay un momento en que la funcion no exista.
 
 drop function if exists public.get_perfil_publico(uuid);
 
@@ -113,12 +84,6 @@ begin
   where u.id = p_user_id;
 end;
 $function$;
-
--- ── el interruptor ─────────────────────────────────────────────────────────
---
--- Arranca PRENDIDO, al reves que la comunidad: hoy son 5 bios y 590 caracteres
--- en total, asi que no hay un saldo que cuidar. Se apaga desde el admin si
--- algun dia crece.
 
 insert into public.app_config (key, value)
 values ('traducir_bios', 'true')
