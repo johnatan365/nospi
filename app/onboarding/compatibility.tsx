@@ -113,12 +113,12 @@ export default function CompatibilityScreen() {
   // Community matches are not registrations for a particular event.
   const sinDato = compatibles === null;
   const cero = compatibles === 0;
-  const titular = sinDato ? 'Tu comunidad Nospi' : cero ? t('ob.coincidenciasTitulo') : t('ob.hayPersonas');
+  const titular = sinDato ? t('ob.tuComunidadNospi') : cero ? t('ob.coincidenciasTitulo') : t('ob.hayPersonas');
   const mensaje = sinDato
-    ? 'No pudimos consultar las coincidencias por edad en este momento. Puedes continuar con tu registro.'
+    ? t('ob.noConsultoCoincidencias')
     : cero
-      ? 'Por ahora no encontramos coincidencias por edad en la comunidad con el rango que elegiste.'
-      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? t('ob.personaCoincide') : t('ob.personasCoinciden')} según el rango de edad que elegiste.`;
+      ? t('ob.sinCoincidencias')
+      : t('ob.enLaComunidadHay', { n: compatibles, gente: compatibles === 1 ? t('ob.personaCoincide') : t('ob.personasCoinciden') });
 
   return (
     <LinearGradient

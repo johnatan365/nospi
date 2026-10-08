@@ -1138,6 +1138,21 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     // ---------- Login: bienvenido de nuevo ----------
     'login.bienvenidoDeNuevo': 'Bienvenido de nuevo',
 
+
+    // ---------- Onboarding: contadores, rango, ciudad y celular ----------
+    'ob.seleccionados': '{{n}} seleccionados',
+    'ob.rangoAnios': '{{min}} - {{max}} años',
+    'ob.tienesAniosYElegiste': 'Tienes {{edad}} años y elegiste de {{min}} a {{max}}, que te deja a ti por fuera. Puedes mantenerlo si es lo que buscas.',
+    'ob.noGuardoRango': 'No pudimos guardar tu rango. Intenta de nuevo.',
+    'ob.eligeTuCiudad': 'Elige tu ciudad',
+    'ob.ciudadMasCercana': 'Elige la ciudad más cercana a ti. Si tu municipio no aparece, escríbelo igual: te mostramos la ciudad a la que pertenece. La puedes cambiar después en tu perfil.',
+    'ob.revisaComoEscribiste': 'Revisa cómo la escribiste, o escoge la ciudad grande más cercana a ti.',
+    'ob.tuComunidadNospi': 'Tu comunidad Nospi',
+    'ob.noConsultoCoincidencias': 'No pudimos consultar las coincidencias por edad en este momento. Puedes continuar con tu registro.',
+    'ob.sinCoincidencias': 'Por ahora no encontramos coincidencias por edad en la comunidad con el rango que elegiste.',
+    'ob.enLaComunidadHay': 'En la comunidad Nospi hay {{n}} {{gente}} según el rango de edad que elegiste.',
+    'ob.digitosRequeridos': '{{n}} dígitos requeridos · {{puestos}}/{{n}}',
+
   },
 
   en: {
@@ -2267,6 +2282,21 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
 
     // ---------- Login: bienvenido de nuevo ----------
     'login.bienvenidoDeNuevo': 'Welcome back',
+
+
+    // ---------- Onboarding: contadores, rango, ciudad y celular ----------
+    'ob.seleccionados': '{{n}} selected',
+    'ob.rangoAnios': '{{min}} - {{max}} years old',
+    'ob.tienesAniosYElegiste': 'You’re {{edad}} and you picked {{min}} to {{max}}, which leaves you out. You can keep it if that’s what you want.',
+    'ob.noGuardoRango': 'We couldn’t save your range. Please try again.',
+    'ob.eligeTuCiudad': 'Pick your city',
+    'ob.ciudadMasCercana': 'Pick the city closest to you. If your town isn’t listed, type it anyway — we’ll show you the city it belongs to. You can change it later in your profile.',
+    'ob.revisaComoEscribiste': 'Check the spelling, or pick the big city closest to you.',
+    'ob.tuComunidadNospi': 'Your Nospi community',
+    'ob.noConsultoCoincidencias': 'We couldn’t check age matches right now. You can carry on with your sign-up.',
+    'ob.sinCoincidencias': 'For now we didn’t find age matches in the community with the range you picked.',
+    'ob.enLaComunidadHay': 'There are {{n}} {{gente}} in the Nospi community for the age range you picked.',
+    'ob.digitosRequeridos': '{{n}} digits required · {{puestos}}/{{n}}',
 
   },
 };

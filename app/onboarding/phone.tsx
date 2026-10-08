@@ -72,7 +72,7 @@ export default function PhoneScreen() {
   // Button enabled only when exact digit count is reached
   const canContinue = cleanNumber.length === selectedCountry.digits && !checking;
 
-  const hintText = `${selectedCountry.digits} dígitos requeridos · ${cleanNumber.length}/${selectedCountry.digits}`;
+  const hintText = t('ob.digitosRequeridos', { n: selectedCountry.digits, puestos: cleanNumber.length });
 
   const checkPhoneExists = async (full: string): Promise<boolean> => {
     try {

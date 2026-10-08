@@ -126,12 +126,11 @@ export default function LocationScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.selectedValueText, !city && styles.placeholderText]}>
-                {city || 'Elige tu ciudad'}
+                {city || t('ob.eligeTuCiudad')}
               </Text>
             </TouchableOpacity>
             <Text style={styles.hint}>
-              Elige la ciudad más cercana a ti. Si tu municipio no aparece, escríbelo igual:
-              te mostramos la ciudad a la que pertenece. La puedes cambiar después en tu perfil.
+              {t('ob.ciudadMasCercana')}
             </Text>
           </View>
 
@@ -243,7 +242,7 @@ export default function LocationScreen() {
                 <View style={styles.emptyWrapper}>
                   <Text style={styles.emptyTitle}>{t('ob.noEncontramosCiudad')}</Text>
                   <Text style={styles.emptyText}>
-                    Revisa cómo la escribiste, o escoge la ciudad grande más cercana a ti.
+                    {t('ob.revisaComoEscribiste')}
                   </Text>
                 </View>
               )}

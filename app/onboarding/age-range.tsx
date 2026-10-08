@@ -54,7 +54,7 @@ export default function AgeRangeScreen() {
     const aGuardar = leImporta ? { min: ageRange.min, max: ageRange.max } : RANGO_ABIERTO;
     await AsyncStorage.setItem('onboarding_age_range', JSON.stringify(aGuardar));
     router.push('/onboarding/location');
-    } catch { setError('No pudimos guardar tu rango. Intenta de nuevo.'); }
+    } catch { setError(t('ob.noGuardoRango')); }
     finally { setSaving(false); }
   };
 
@@ -63,7 +63,7 @@ export default function AgeRangeScreen() {
 
   const minAgeText = ageRange.min.toString();
   const maxAgeText = ageRange.max.toString();
-  const rangeText = `${minAgeText} - ${maxAgeText} años`;
+  const rangeText = t('ob.rangoAnios', { min: minAgeText, max: maxAgeText });
 
   return (
     <LinearGradient
@@ -172,8 +172,7 @@ export default function AgeRangeScreen() {
 
               {age !== null && (age < ageRange.min || age > ageRange.max) && (
                 <Text accessibilityLiveRegion="polite" style={styles.warning}>
-                  Tienes {age} años y elegiste de {ageRange.min} a {ageRange.max}, que te deja
-                  a ti por fuera. Puedes mantenerlo si es lo que buscas.
+                  {t('ob.tienesAniosYElegiste', { edad: age, min: ageRange.min, max: ageRange.max })}
                 </Text>
               )}
             </>

@@ -87,7 +87,7 @@ export default function InterestsScreen() {
           <Text style={styles.mainTitle}>{t('ob.cuentanosDeTi')}</Text>
           <Text style={styles.title}>{t('ob.cualesGustos')}</Text>
           <Text style={styles.subtitle}>{t('ob.selecciona3')}</Text>
-          <Text style={styles.counter}>{interestsCount} seleccionados</Text>
+          <Text style={styles.counter}>{t('ob.seleccionados', { n: interestsCount })}</Text>
           
           <View style={styles.chipsContainer}>
             {INTERESTS.map((interest, index) => {
@@ -111,7 +111,7 @@ export default function InterestsScreen() {
         <View style={styles.section}>
           <Text style={styles.title}>{t('ob.comoDescribirias')}</Text>
           <Text style={styles.subtitle}>{t('ob.selecciona3')}</Text>
-          <Text style={styles.counter}>{traitsCount} seleccionados</Text>
+          <Text style={styles.counter}>{t('ob.seleccionados', { n: traitsCount })}</Text>
           
           <View style={styles.chipsContainer}>
             {PERSONALITY_TRAITS.map((trait, index) => {
