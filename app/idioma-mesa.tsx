@@ -29,6 +29,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platfo
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { IconSymbol } from '@/components/IconSymbol';
 import { nospiColors } from '@/constants/Colors';
 import { useIdioma } from '@/contexts/IdiomaContext';
 import { toqueFuerte, aviso } from '@/lib/haptics';
@@ -41,6 +43,7 @@ const LARGO_MAX_ZONA_OTRA = 40;
 
 export default function IdiomaMesaScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { t, idioma } = useIdioma();
   const { tipo } = useLocalSearchParams<{ tipo?: string }>();
 
@@ -153,6 +156,21 @@ export default function IdiomaMesaScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
+      {/* Flecha para volver.
+          El gesto de deslizar desde el borde ya cerraba la pantalla, pero no
+          todo el mundo lo conoce ni funciona igual en Android; sin algo visible
+          la gente se siente atrapada. Mismo icono y mismo gesto que el resto de
+          la app (router.back). */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={[estilos.botonAtras, { top: insets.top + 8 }]}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel={t('comun.atras')}
+      >
+        <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={26} color="#FFFFFF" />
+      </TouchableOpacity>
+
       {/* El campo de "Otra" quedaba debajo del teclado: se escribia a ciegas.
           behavior="padding" en LAS DOS plataformas, igual que en el chat y en
           la hoja de asistentes del admin. Dejarlo en undefined para Android es
@@ -230,6 +248,14 @@ export default function IdiomaMesaScreen() {
 
 const estilos = StyleSheet.create({
   degradado: { flex: 1 },
+  // Flota sobre el contenido: el scroll ya esta centrado y meter la flecha en
+  // el flujo correria todo hacia abajo.
+  botonAtras: {
+    position: 'absolute', left: 12, zIndex: 10,
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingVertical: 40 },
   contenido: { width: '100%', maxWidth: 400, alignSelf: 'center' },
   titulo: {
