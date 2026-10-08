@@ -24,7 +24,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from './supabase';
-import { canalDeConversacion, canalDeEvento, idsPresentes } from './presencia';
+import {
+  anuncioDePresencia, canalDeConversacion, canalDeEvento, idsPresentes,
+  type AnuncioDePresencia,
+} from './presencia';
 
 /** Cuanto vale un aviso de "escribiendo" sin refrescarse. Igual que en el chat. */
 const ESCRIBIENDO_VIVE_MS = 4000;
@@ -37,7 +40,8 @@ export interface QuienEscribe {
 export function useListaEnVivo(
   conversationIds: string[],
   miId: string | null | undefined,
-  mostrarEnLinea: boolean,
+  /** `null` mientras no se sepa: ver useMiPrivacidad. */
+  mostrarEnLinea: boolean | null,
 ) {
   const [enLinea, setEnLinea] = useState<Record<string, string[]>>({});
   const [escribiendo, setEscribiendo] = useState<Record<string, Record<string, QuienEscribe>>>({});
@@ -52,8 +56,13 @@ export function useListaEnVivo(
   const mostrarRef = useRef(mostrarEnLinea);
   mostrarRef.current = mostrarEnLinea;
 
+  // Un anuncio por canal, para poder ponerlos al dia cuando llegue el ajuste.
+  const anunciosRef = useRef<AnuncioDePresencia[]>([]);
+
   const suscribir = useCallback(() => {
     if (!miId || conversationIds.length === 0) return () => {};
+
+    const anuncios: AnuncioDePresencia[] = [];
 
     const canales = conversationIds.map((id) => {
       const nombre = canalDeConversacion(id);
@@ -75,20 +84,37 @@ export function useListaEnVivo(
             ...p,
             [id]: { ...(p[id] || {}), [q.user_id!]: { nombre: q.nombre || 'Alguien', ts: Date.now() } },
           }));
-        })
-        .subscribe((estado) => {
-          // Anunciarse solo si el interruptor esta encendido. Es la mitad de la
-          // reciprocidad que se puede garantizar: sin track() no se aparece.
-          if (estado !== 'SUBSCRIBED' || !mostrarRef.current) return;
-          canal.track({ user_id: miId, desde: Date.now() });
         });
+
+      // Antes del subscribe, para que no haya un hueco en el que 'SUBSCRIBED'
+      // llegue sin nadie escuchando.
+      const anuncio = anuncioDePresencia(canal, miId);
+      anuncio.alSaberElAjuste(mostrarRef.current);
+      anuncios.push(anuncio);
+
+      // El anuncio decide si toca anunciarse: puede que el ajuste todavia no
+      // haya llegado, y en ese caso espera a saberlo.
+      canal.subscribe((estado) => {
+        if (estado === 'SUBSCRIBED') anuncio.alSuscribirse();
+      });
 
       return canal;
     });
 
-    return () => { for (const c of canales) supabase.removeChannel(c); };
+    anunciosRef.current = anuncios;
+
+    return () => {
+      anunciosRef.current = [];
+      for (const c of canales) supabase.removeChannel(c);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clave, miId]);
+
+  // Cuando llega el ajuste --o cuando se cambia con la app abierta-- hay que
+  // ponerse al dia: el canal pudo suscribirse antes de saberlo.
+  useEffect(() => {
+    for (const a of anunciosRef.current) a.alSaberElAjuste(mostrarEnLinea);
+  }, [mostrarEnLinea]);
 
   // Solo mientras la pestaña esta a la vista.
   useFocusEffect(
@@ -141,11 +167,13 @@ export function textoEscribiendoEnLista(quienes: QuienEscribe[], esGrupal: boole
 export function usePresenciaEvento(
   eventId: string | null | undefined,
   miId: string | null | undefined,
-  mostrarEnLinea: boolean,
+  /** `null` mientras no se sepa: ver useMiPrivacidad. */
+  mostrarEnLinea: boolean | null,
 ) {
   const [ids, setIds] = useState<string[]>([]);
   const mostrarRef = useRef(mostrarEnLinea);
   mostrarRef.current = mostrarEnLinea;
+  const anuncioRef = useRef<AnuncioDePresencia | null>(null);
 
   useEffect(() => {
     if (!eventId || !miId) { setIds([]); return; }
@@ -158,14 +186,26 @@ export function usePresenciaEvento(
       .on('presence', { event: 'sync' }, () => {
         if (!mostrarRef.current) { setIds([]); return; }
         setIds(idsPresentes(canal.presenceState() as any, miId));
-      })
-      .subscribe((estado) => {
-        if (estado !== 'SUBSCRIBED' || !mostrarRef.current) return;
-        canal.track({ user_id: miId, desde: Date.now() });
       });
 
-    return () => { supabase.removeChannel(canal); };
+    const anuncio = anuncioDePresencia(canal, miId);
+    anuncio.alSaberElAjuste(mostrarRef.current);
+    anuncioRef.current = anuncio;
+
+    canal.subscribe((estado) => {
+      if (estado === 'SUBSCRIBED') anuncio.alSuscribirse();
+    });
+
+    return () => {
+      anuncioRef.current = null;
+      supabase.removeChannel(canal);
+    };
   }, [eventId, miId]);
+
+  // Igual que en la lista: el ajuste puede llegar despues del subscribe.
+  useEffect(() => {
+    anuncioRef.current?.alSaberElAjuste(mostrarEnLinea);
+  }, [mostrarEnLinea]);
 
   return ids;
 }

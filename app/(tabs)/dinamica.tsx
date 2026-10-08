@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FichaPersona, PersonaFicha } from '@/components/FichaPersona';
 import { AvatarNospi } from '@/components/AvatarNospi';
 import { usePresenciaEvento } from '@/lib/useListaEnVivo';
-import { normalizarPrivacidad } from '@/constants/Privacidad';
+import { useMiPrivacidad } from '@/lib/useMiPrivacidad';
 import { textoEnLinea } from '@/lib/presencia';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
@@ -198,18 +198,7 @@ export default function DinamicaScreen() {
   // Quien tiene la app abierta AHORA. Es distinto de activeParticipants, que
   // dice quien CONFIRMO su asistencia: se puede confirmar y luego irse a hacer
   // otra cosa, y eso es justo lo que quiere saber el que esta esperando solo.
-  const [miPrivacidadDin, setMiPrivacidadDin] = useState(normalizarPrivacidad(null));
-  useEffect(() => {
-    if (!user?.id) return;
-    let vivo = true;
-    supabase
-      .from('users')
-      .select('mostrar_en_linea, mostrar_ultima_vez')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => { if (vivo && data) setMiPrivacidadDin(normalizarPrivacidad(data)); });
-    return () => { vivo = false; };
-  }, [user?.id]);
+  const { enLineaParaAnunciar } = useMiPrivacidad(user?.id);
   const [gamePhase, setGamePhase] = useState<string>('intro');
 
   // Cuantas preguntas tiene cargadas ESTE evento por nivel (para mostrarlo en
@@ -1037,7 +1026,7 @@ export default function DinamicaScreen() {
   const appointmentEventId = appointment?.event_id ?? null;
 
   // Los que estan conectados en este evento.
-  const enLineaEvento = usePresenciaEvento(appointmentEventId, user?.id, miPrivacidadDin.enLinea);
+  const enLineaEvento = usePresenciaEvento(appointmentEventId, user?.id, enLineaParaAnunciar);
   const estaEnLinea = (uid?: string | null) => !!uid && enLineaEvento.includes(uid);
 
   useEffect(() => {

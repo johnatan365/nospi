@@ -8,7 +8,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useListaEnVivo, textoEscribiendoEnLista } from '@/lib/useListaEnVivo';
-import { normalizarPrivacidad } from '@/constants/Privacidad';
+import { useMiPrivacidad } from '@/lib/useMiPrivacidad';
 import { useRouter } from 'expo-router';
 import { yaLeidoLocalmente } from '@/utils/leidoReciente';
 import { SkeletonBox } from '@/components/SkeletonBox';
@@ -132,18 +132,7 @@ export default function ChatsScreen() {
   );
   // Mis interruptores de privacidad: si tengo "en linea" apagado no me anuncio
   // y tampoco veo el punto verde de los demas.
-  const [miPrivacidadLista, setMiPrivacidadLista] = useState(normalizarPrivacidad(null));
-  useEffect(() => {
-    if (!user?.id) return;
-    let vivo = true;
-    supabase
-      .from('users')
-      .select('mostrar_en_linea, mostrar_ultima_vez')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => { if (vivo && data) setMiPrivacidadLista(normalizarPrivacidad(data)); });
-    return () => { vivo = false; };
-  }, [user?.id]);
+  const { enLineaParaAnunciar } = useMiPrivacidad(user?.id);
 
   // El candado de cada chat se calcula al dibujar la lista. Si la pantalla ya
   // estaba abierta cuando llega la hora de apertura, nadie la vuelve a dibujar
@@ -471,7 +460,7 @@ export default function ChatsScreen() {
     .filter((c) => !getChatLockInfo(c).locked)
     .map((c) => c.conversation_id);
   const { escribiendoEn, enLineaEn } = useListaEnVivo(
-    idsEnVivo, user?.id, miPrivacidadLista.enLinea,
+    idsEnVivo, user?.id, enLineaParaAnunciar,
   );
 
   return (
