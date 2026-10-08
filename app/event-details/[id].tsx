@@ -346,10 +346,15 @@ export default function EventDetailsScreen() {
       setConfirming(false);
       // En web, router.push puede pasar por index.tsx causando pantalla en blanco.
       // router.replace navega directamente sin re-evaluar la ruta raíz.
+      // Antes de pagar pasa por el paso de idioma de la mesa. Esa pantalla
+      // guarda la eleccion y de ahi sigue sola a /subscription-plans.
+      // El tipo viaja como parametro porque esa pantalla solo pregunta la zona
+      // en presenciales: en una videollamada la persona se conecta desde su casa.
+      const rutaPrefs = `/idioma-mesa?tipo=${encodeURIComponent(event?.type ?? '')}`;
       if (Platform.OS === 'web') {
-        router.replace('/subscription-plans');
+        router.replace(rutaPrefs);
       } else {
-        router.push('/subscription-plans');
+        router.push(rutaPrefs);
       }
     } catch (error) {
       console.error('Failed to process confirmation:', error);

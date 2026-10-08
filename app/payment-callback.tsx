@@ -111,6 +111,33 @@ async function confirmAppointmentInSupabase(
     ? { waiver_accepted_at: new Date().toISOString() }
     : {};
 
+  // Idiomas que la persona acepta hablar en la mesa, escogidos en /idioma-mesa.
+  // Viaja por AsyncStorage por la misma razon que la exoneracion: entre medio
+  // hay un redirect externo a Wompi y el estado en memoria se pierde.
+  let idiomasFields: Record<string, any> = {};
+  try {
+    const crudo = await AsyncStorage.getItem('pending_idiomas_mesa');
+    const lista = crudo ? JSON.parse(crudo) : null;
+    if (Array.isArray(lista) && lista.length > 0) idiomasFields = { idiomas_mesa: lista };
+  } catch {
+    // Un JSON corrupto no puede impedir que se confirme una cita ya pagada.
+  }
+
+  // Zonas preferidas (solo presenciales). Es un dato de demanda, no define
+  // donde fue el evento.
+  let zonasFields: Record<string, any> = {};
+  try {
+    const crudoZ = await AsyncStorage.getItem('pending_zonas_preferidas');
+    const listaZ = crudoZ ? JSON.parse(crudoZ) : null;
+    if (Array.isArray(listaZ) && listaZ.length > 0) {
+      zonasFields.zonas_preferidas = listaZ;
+      const otra = await AsyncStorage.getItem('pending_zona_otra');
+      if (otra && otra.trim()) zonasFields.zona_otra = otra.trim().slice(0, 60);
+    }
+  } catch {
+    // Igual que arriba.
+  }
+
   // Intentar upsert con todos los campos extendidos
   const { error: upsertError } = await supabase
     .from('appointments')
@@ -124,6 +151,8 @@ async function confirmAppointmentInSupabase(
         payment_method: paymentMethod,
         confirmed_at: new Date().toISOString(),
         ...waiverFields,
+        ...idiomasFields,
+        ...zonasFields,
       },
       { onConflict: 'user_id,event_id', ignoreDuplicates: false },
     );
@@ -211,6 +240,9 @@ async function cleanupAsyncStorage(): Promise<void> {
     'nospi_refresh_token',
     'pending_event_confirmation',
     'pending_waiver_accepted',
+    'pending_idiomas_mesa',
+    'pending_zonas_preferidas',
+    'pending_zona_otra',
   ]);
 }
 

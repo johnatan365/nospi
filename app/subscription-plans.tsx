@@ -371,6 +371,31 @@ export default function SubscriptionPlansScreen() {
       // este flujo de confirmación puede pasar por pantallas intermedias/redirects).
       const waiverPending = await AsyncStorage.getItem('pending_waiver_accepted');
 
+      // Idiomas de la mesa, escogidos en /idioma-mesa justo antes de esta pantalla.
+      let idiomasMesa: string[] | null = null;
+      try {
+        const crudo = await AsyncStorage.getItem('pending_idiomas_mesa');
+        const lista = crudo ? JSON.parse(crudo) : null;
+        if (Array.isArray(lista) && lista.length > 0) idiomasMesa = lista;
+      } catch {
+        // Igual que arriba: nunca bloquear la confirmacion de un pago por esto.
+      }
+
+      // Zonas preferidas (solo presenciales): dato de demanda, no define el lugar.
+      let zonasPreferidas: string[] | null = null;
+      let zonaOtra: string | null = null;
+      try {
+        const crudoZ = await AsyncStorage.getItem('pending_zonas_preferidas');
+        const listaZ = crudoZ ? JSON.parse(crudoZ) : null;
+        if (Array.isArray(listaZ) && listaZ.length > 0) {
+          zonasPreferidas = listaZ;
+          const otra = await AsyncStorage.getItem('pending_zona_otra');
+          if (otra && otra.trim()) zonaOtra = otra.trim().slice(0, 60);
+        }
+      } catch {
+        // Igual que arriba.
+      }
+
       const appointmentData: Record<string, any> = {
         user_id: userId,
         event_id: pendingEventId,
@@ -382,6 +407,13 @@ export default function SubscriptionPlansScreen() {
       };
       if (waiverPending === 'true') {
         appointmentData.waiver_accepted_at = new Date().toISOString();
+      }
+      if (idiomasMesa) {
+        appointmentData.idiomas_mesa = idiomasMesa;
+      }
+      if (zonasPreferidas) {
+        appointmentData.zonas_preferidas = zonasPreferidas;
+        if (zonaOtra) appointmentData.zona_otra = zonaOtra;
       }
 
       // Verificar si ya existe una cita para este usuario y evento
@@ -425,6 +457,9 @@ export default function SubscriptionPlansScreen() {
 
       await AsyncStorage.removeItem('pending_event_confirmation');
       await AsyncStorage.removeItem('pending_waiver_accepted');
+      await AsyncStorage.removeItem('pending_idiomas_mesa');
+      await AsyncStorage.removeItem('pending_zonas_preferidas');
+      await AsyncStorage.removeItem('pending_zona_otra');
       await AsyncStorage.setItem('should_check_notification_prompt', 'true');
 
       // Disparar evento Purchase — cubre card, nequi, PSE y bancolombia

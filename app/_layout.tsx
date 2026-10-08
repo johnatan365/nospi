@@ -14,6 +14,7 @@ import {
 import { SupabaseProvider } from "@/contexts/SupabaseContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
+import { IdiomaProvider, useIdioma } from "@/contexts/IdiomaContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useDeviceActivity } from "@/hooks/useDeviceActivity";
@@ -137,6 +138,7 @@ const styles = StyleSheet.create({
 });
 
 function RootLayoutInner() {
+  const { t } = useIdioma();
   const colorScheme = useColorScheme();
   const { isConnected } = useNetworkState();
   const { user, loading: authLoading } = useAuth();
@@ -174,20 +176,21 @@ function RootLayoutInner() {
             <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
             <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
             <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: 'Tus Gustos', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: 'Tu Nombre', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: 'Fecha de Nacimiento', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: 'Tu Género', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: 'Intereses', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: 'Edades', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: 'Ubicación', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: 'Compatibilidad', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: 'Teléfono', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: 'Foto de Perfil', headerBackTitle: 'Atrás' }} />
-            <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: 'Registro', headerBackTitle: 'Atrás' }} />
+            <Stack.Screen name="onboarding/interests" options={{ headerShown: true, title: t('onboarding.gustos'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/name" options={{ headerShown: true, title: t('onboarding.nombre'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/birthdate" options={{ headerShown: true, title: t('onboarding.fechaNacimiento'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/gender" options={{ headerShown: true, title: t('onboarding.genero'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/interested-in" options={{ headerShown: true, title: t('onboarding.intereses'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/age-range" options={{ headerShown: true, title: t('onboarding.edades'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/location" options={{ headerShown: true, title: t('onboarding.ubicacion'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/compatibility" options={{ headerShown: true, title: t('onboarding.compatibilidad'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/phone" options={{ headerShown: true, title: t('onboarding.telefono'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/photo" options={{ headerShown: true, title: t('onboarding.foto'), headerBackTitle: t('comun.atras') }} />
+            <Stack.Screen name="onboarding/register" options={{ headerShown: true, title: t('onboarding.registro'), headerBackTitle: t('comun.atras') }} />
             <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[conversationId]" options={{ headerShown: false }} />
             <Stack.Screen name="catch-up-rating/[eventId]" options={{ headerShown: false }} />
+            <Stack.Screen name="idioma-mesa" options={{ headerShown: false }} />
             <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
             <Stack.Screen name="politica-asistencia" options={{ headerShown: false }} />
             <Stack.Screen name="admin" options={{ headerShown: false }} />
@@ -219,7 +222,9 @@ export default function RootLayout() {
         <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
           <SupabaseProvider>
             <AuthProvider>
-              <RootLayoutInner />
+              <IdiomaProvider>
+                <RootLayoutInner />
+              </IdiomaProvider>
             </AuthProvider>
           </SupabaseProvider>
         </KeyboardProvider>
