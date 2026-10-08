@@ -43,6 +43,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { AVAILABLE_INTERESTS, AVAILABLE_PERSONALITY, etiquetaGusto } from '@/constants/Gustos';
 
 const CACHE_KEY = 'cache_profile';
 
@@ -132,20 +133,8 @@ const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
   'Venezuela': ['Caracas', 'Maracaibo', 'Valencia', 'Barquisimeto', 'Maracay'],
 };
 
-const AVAILABLE_INTERESTS = [
-  '🎵 Música', '🎬 Cine', '📚 Lectura', '✈️ Viajar', '🍳 Cocinar',
-  '🏃 Deportes', '🎨 Arte', '📸 Fotografía', '🎮 Videojuegos', '🧘 Yoga',
-  '🏋️ Gym', '🎭 Teatro', '🍷 Vino', '☕ Café', '🌱 Naturaleza',
-  '🐕 Mascotas', '🎤 Karaoke', '💃 Bailar', '🏖️ Playa', '⛰️ Montaña',
-  '🍕 Comida', '🎪 Festivales', '🚴 Ciclismo', '🏊 Natación', '🎸 Música en vivo',
-];
-
-const AVAILABLE_PERSONALITY = [
-  '😊 Optimista', '🤗 Empático', '🎉 Divertido', '🧠 Intelectual', '💪 Aventurero',
-  '🎯 Ambicioso', '😌 Tranquilo', '🤝 Sociable', '💭 Creativo', '📖 Curioso',
-  '❤️ Romántico', '😂 Gracioso', '🎭 Espontáneo', '🧘 Zen', '🔥 Apasionado',
-  '🤓 Geek', '🌟 Carismático', '💼 Profesional', '🎨 Artístico', '🏆 Competitivo',
-];
+// Las listas y sus etiquetas en ingles viven en constants/Gustos.ts.
+// Ahi se explica por que el valor guardado NO se traduce.
 
 function isInAppBrowser(): boolean {
   if (Platform.OS !== 'web') return false;
@@ -803,12 +792,12 @@ export default function ProfileScreen() {
         <View style={styles.loadingContainer}>
           {!user?.id ? (
             <>
-              <Text style={styles.errorText}>Tu sesión se cerró. Inicia sesión de nuevo para ver tu perfil y confirmar tu asistencia.</Text>
+              <Text style={styles.errorText}>{t('perfil.sesionCerrada')}</Text>
               {isInAppBrowser() && (
-                <Text style={styles.errorHint}>Estás viendo Nospi dentro de otra app (por ejemplo WhatsApp). Ábrelo en Safari, Chrome o en la app de Nospi para poder iniciar sesión.</Text>
+                <Text style={styles.errorHint}>{t('perfil.sesionCerradaHint')}</Text>
               )}
               <TouchableOpacity style={styles.retryButton} onPress={() => router.replace('/login')}>
-                <Text style={styles.retryButtonText}>Iniciar sesión</Text>
+                <Text style={styles.retryButtonText}>{t('login.botonEntrar')}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -912,12 +901,12 @@ export default function ProfileScreen() {
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={cuantasFotos > 0
-                ? `Mis fotos, ${cuantasFotos} de 6`
+                ? t('perfil.misFotosA11y', { n: cuantasFotos })
                 : 'Agregar mis fotos'}
             >
               <Ionicons name="images-outline" size={16} color="#FFFFFF" />
               <Text style={styles.accionFotosTexto}>
-                {cuantasFotos > 0 ? `Mis fotos · ${cuantasFotos} de 6` : 'Agrega tus fotos'}
+                {cuantasFotos > 0 ? t('perfil.misFotos', { n: cuantasFotos }) : t('perfil.misFotosVacio')}
               </Text>
             </TouchableOpacity>
 
@@ -937,10 +926,10 @@ export default function ProfileScreen() {
               onPress={handleEditPress}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Editar perfil"
+              accessibilityLabel={t('perfil.editarPerfil')}
             >
               <Ionicons name="create-outline" size={16} color="#880E4F" />
-              <Text style={styles.accionEditarTexto}>Editar perfil</Text>
+              <Text style={styles.accionEditarTexto}>{t('perfil.editarPerfil')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -965,12 +954,12 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="call-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Teléfono</Text>
+            <Text style={styles.infoLabel}>{t('perfil.telefono')}</Text>
             <Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="person-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Género</Text>
+            <Text style={styles.infoLabel}>{t('perfil.genero')}</Text>
             <Text style={styles.infoValue}>{genderText}</Text>
           </View>
           {MOSTRAR_INTERESADO_EN && (
@@ -982,12 +971,12 @@ export default function ProfileScreen() {
           )}
           <View style={styles.infoRow}>
             <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={[styles.infoLabel, { flex: 1 }]}>Rango de edad preferido</Text>
+            <Text style={[styles.infoLabel, { flex: 1 }]}>{t('perfil.rangoEdad')}</Text>
             <Text numberOfLines={1} style={styles.ageRangeValue}>{ageRangeText}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={18} color="#880E4F" style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Ubicación</Text>
+            <Text style={styles.infoLabel}>{t('perfil.ubicacion')}</Text>
             <Text style={styles.infoValue}>{locationText}</Text>
           </View>
         </View>
@@ -998,11 +987,11 @@ export default function ProfileScreen() {
             {profile.interests.length > 0 ? (
               profile.interests.map((interest, index) => (
                 <View key={index} style={styles.chip}>
-                  <Text style={styles.chipText}>{interest}</Text>
+                  <Text style={styles.chipText}>{etiquetaGusto(interest, idioma)}</Text>
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>No has agregado intereses aún</Text>
+              <Text style={styles.emptyText}>{t('perfil.sinIntereses')}</Text>
             )}
           </View>
         </View>
@@ -1013,11 +1002,11 @@ export default function ProfileScreen() {
             {profile.personality_traits.length > 0 ? (
               profile.personality_traits.map((trait, index) => (
                 <View key={index} style={styles.chip}>
-                  <Text style={styles.chipText}>{trait}</Text>
+                  <Text style={styles.chipText}>{etiquetaGusto(trait, idioma)}</Text>
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>No has agregado rasgos de personalidad aún</Text>
+              <Text style={styles.emptyText}>{t('perfil.sinRasgos')}</Text>
             )}
           </View>
         </View>
@@ -1131,14 +1120,14 @@ export default function ProfileScreen() {
                 <Ionicons name="mail-outline" size={22} color="#880E4F" />
               </View>
               <Text style={styles.supportCardTitle}>Correo</Text>
-              <Text style={styles.supportCardSub}>Envíanos un mensaje</Text>
+              <Text style={styles.supportCardSub}>{t('perfil.correoSub')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.supportCard} onPress={handleSupportWhatsApp} activeOpacity={0.8}>
               <View style={styles.supportIconCircle}>
                 <Ionicons name="chatbubble-ellipses-outline" size={22} color="#880E4F" />
               </View>
               <Text style={styles.supportCardTitle}>WhatsApp</Text>
-              <Text style={styles.supportCardSub}>Chatea con nosotros</Text>
+              <Text style={styles.supportCardSub}>{t('perfil.whatsappSub')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1148,11 +1137,11 @@ export default function ProfileScreen() {
           onPress={() => setShowDeleteAccountModal(true)}
           activeOpacity={0.85}
         >
-          <Text style={styles.deleteAccountButtonText}>Eliminar Cuenta</Text>
+          <Text style={styles.deleteAccountButtonText}>{t('perfil.eliminarCuenta')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.85}>
-          <Text style={styles.signOutButtonText}>Cerrar Sesión</Text>
+          <Text style={styles.signOutButtonText}>{t('perfil.cerrarSesion')}</Text>
         </TouchableOpacity>
         <Text style={styles.versionText}>v{appJson.expo.version}{Platform.OS !== 'web' ? ` (${appJson.expo.android?.versionCode || '—'})` : ''}</Text>
       </ScrollView>
@@ -1177,7 +1166,7 @@ export default function ProfileScreen() {
                 >
                   <Ionicons name="chevron-back" size={24} color="#880E4F" />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>Editar Perfil</Text>
+                <Text style={styles.modalTitle}>{t('perfil.editarPerfilTitulo')}</Text>
               </View>
 
               <Text style={styles.inputLabel}>Nombre</Text>
@@ -1185,12 +1174,12 @@ export default function ProfileScreen() {
 
               {/* Opcional, como la foto. El ejemplo hace casi todo el trabajo:
                   sin el, la mayoria deja el campo vacio o escribe "hola". */}
-              <Text style={styles.inputLabel}>Sobre mí</Text>
+              <Text style={styles.inputLabel}>{t('perfil.sobreMi')}</Text>
               <TextInput
                 style={[styles.modalInput, styles.modalInputMulti]}
                 value={editBio}
                 onChangeText={(t) => setEditBio(t.slice(0, 160))}
-                placeholder="Ej: Me río de todo, cocino mejor de lo que bailo y siempre digo que sí a un café."
+                placeholder={t('perfil.sobreMiEjemplo')}
                 placeholderTextColor="#999"
                 multiline
                 numberOfLines={3}
@@ -1198,7 +1187,7 @@ export default function ProfileScreen() {
               />
               <Text style={styles.contadorBio}>{editBio.length}/160 · opcional</Text>
 
-              <Text style={styles.inputLabel}>Teléfono</Text>
+              <Text style={styles.inputLabel}>{t('perfil.telefono')}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
                   style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, minWidth: 90, flex: 0 }]}
@@ -1216,7 +1205,7 @@ export default function ProfileScreen() {
                     
                     setEditPhoneNumber(cleaned);
                   }}
-                  placeholder="Tu teléfono"
+                  placeholder={t('perfil.tuTelefono')}
                   placeholderTextColor="#999"
                   keyboardType="phone-pad"
                   maxLength={10}
@@ -1226,7 +1215,7 @@ export default function ProfileScreen() {
               </View>
 
 
-              <Text style={styles.inputLabel}>País</Text>
+              <Text style={styles.inputLabel}>{t('perfil.pais')}</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCountryPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCountry}</Text>
               </TouchableOpacity>
@@ -1259,31 +1248,31 @@ export default function ProfileScreen() {
               <Text style={styles.inputHelp}>{AYUDA_RANGO_EDAD}</Text>
               <View style={styles.ageSliderSection}>
                 <View style={styles.ageSliderRow}>
-                  <Text style={styles.ageSliderLabel}>Mínimo</Text>
+                  <Text style={styles.ageSliderLabel}>{t('perfil.minimo')}</Text>
                   <Text style={styles.ageSliderValue}>{editMinAgeText}</Text>
                 </View>
                 <Slider style={styles.ageSlider} minimumValue={18} maximumValue={59} step={1} value={editAgeRangeMin} onValueChange={handleMinAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
                 <View style={styles.ageSliderRow}>
-                  <Text style={styles.ageSliderLabel}>Máximo</Text>
+                  <Text style={styles.ageSliderLabel}>{t('perfil.maximo')}</Text>
                   <Text style={styles.ageSliderValue}>{editMaxAgeText}</Text>
                 </View>
                 <Slider style={styles.ageSlider} minimumValue={19} maximumValue={60} step={1} value={editAgeRangeMax} onValueChange={handleMaxAgeChange} minimumTrackTintColor="#880E4F" maximumTrackTintColor="#E0E0E0" thumbTintColor="#880E4F" />
               </View>
 
-              <Text style={styles.inputLabel}>Intereses</Text>
+              <Text style={styles.inputLabel}>{t('perfil.intereses')}</Text>
               <View style={styles.tagsEditContainer}>
                 {AVAILABLE_INTERESTS.map((interest, index) => (
                   <TouchableOpacity key={index} style={[styles.tagEdit, editInterests.includes(interest) && styles.tagEditActive]} onPress={() => toggleInterest(interest)}>
-                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>{interest}</Text>
+                    <Text style={[styles.tagEditText, editInterests.includes(interest) && styles.tagEditTextActive]}>{etiquetaGusto(interest, idioma)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.inputLabel}>Personalidad</Text>
+              <Text style={styles.inputLabel}>{t('perfil.personalidad')}</Text>
               <View style={styles.tagsEditContainer}>
                 {AVAILABLE_PERSONALITY.map((trait, index) => (
                   <TouchableOpacity key={index} style={[styles.tagEdit, editPersonality.includes(trait) && styles.tagEditActive]} onPress={() => togglePersonality(trait)}>
-                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>{trait}</Text>
+                    <Text style={[styles.tagEditText, editPersonality.includes(trait) && styles.tagEditTextActive]}>{etiquetaGusto(trait, idioma)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1295,10 +1284,10 @@ export default function ProfileScreen() {
               ) : null}
 
               <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} activeOpacity={0.8}>
-                <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+                <Text style={styles.saveButtonText}>{t('perfil.guardarCambios')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setPhoneStatus('idle'); setPhoneInlineError(''); setEditModalVisible(false); }} activeOpacity={0.8}>
-                <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+                <Text style={styles.modalCloseButtonText}>{t('comun.cancelar')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1314,7 +1303,7 @@ export default function ProfileScreen() {
       >
         <SafeAreaView style={styles.phoneModalSafe}>
           <View style={styles.phoneModalHeader}>
-            <Text style={styles.phoneModalTitle}>Selecciona tu país</Text>
+            <Text style={styles.phoneModalTitle}>{t('perfil.seleccionaPais')}</Text>
             <TouchableOpacity onPress={() => { setShowPhoneCountryModal(false); setPhoneCountrySearch(''); }}>
               <Text style={styles.phoneModalClose}>✕</Text>
             </TouchableOpacity>
@@ -1323,7 +1312,7 @@ export default function ProfileScreen() {
             style={styles.phoneSearchInput}
             value={phoneCountrySearch}
             onChangeText={setPhoneCountrySearch}
-            placeholder="Buscar país o código..."
+            placeholder={t('perfil.buscarPais')}
             placeholderTextColor="#999"
             autoCorrect={false}
           />
@@ -1360,7 +1349,7 @@ export default function ProfileScreen() {
         <View style={styles.pickerModalOverlay}>
           <View style={styles.pickerModalContent}>
             <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Selecciona tu país</Text>
+              <Text style={styles.pickerModalTitle}>{t('perfil.seleccionaPais')}</Text>
               <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
                 <Text style={styles.pickerModalClose}>Listo</Text>
               </TouchableOpacity>
@@ -1425,28 +1414,28 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cambiar Contraseña</Text>
-            <Text style={styles.modalSubtitle}>Ingresa tu contraseña actual y la nueva</Text>
+            <Text style={styles.modalTitle}>{t('perfil.contrasena')}</Text>
+            <Text style={styles.modalSubtitle}>{t('perfil.contrasenaSubtitulo')}</Text>
 
-            <Text style={styles.inputLabel}>Contraseña Actual *</Text>
+            <Text style={styles.inputLabel}>{t('perfil.contrasenaActual')}</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput style={styles.passwordModalInput} placeholder="Contraseña actual" placeholderTextColor="#999" secureTextEntry={!showCurrentPassword} value={currentPassword} onChangeText={(text) => { setCurrentPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TextInput style={styles.passwordModalInput} placeholder={t('perfil.contrasenaActualPh')} placeholderTextColor="#999" secureTextEntry={!showCurrentPassword} value={currentPassword} onChangeText={(text) => { setCurrentPassword(text); setPasswordError(''); }} autoCapitalize="none" />
               <TouchableOpacity onPress={() => {  setShowCurrentPassword(!showCurrentPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Nueva Contraseña *</Text>
+            <Text style={styles.inputLabel}>{t('perfil.contrasenaNueva')}</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput style={styles.passwordModalInput} placeholder="Nueva contraseña (mínimo 6 caracteres)" placeholderTextColor="#999" secureTextEntry={!showNewPassword} value={newPassword} onChangeText={(text) => { setNewPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TextInput style={styles.passwordModalInput} placeholder={t('perfil.contrasenaNuevaPh')} placeholderTextColor="#999" secureTextEntry={!showNewPassword} value={newPassword} onChangeText={(text) => { setNewPassword(text); setPasswordError(''); }} autoCapitalize="none" />
               <TouchableOpacity onPress={() => {  setShowNewPassword(!showNewPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Confirmar Nueva Contraseña *</Text>
+            <Text style={styles.inputLabel}>{t('perfil.contrasenaConfirmar')}</Text>
             <View style={styles.passwordInputWrapper}>
-              <TextInput style={styles.passwordModalInput} placeholder="Confirma la nueva contraseña" placeholderTextColor="#999" secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={(text) => { setConfirmPassword(text); setPasswordError(''); }} autoCapitalize="none" />
+              <TextInput style={styles.passwordModalInput} placeholder={t('perfil.contrasenaConfirmarPh')} placeholderTextColor="#999" secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={(text) => { setConfirmPassword(text); setPasswordError(''); }} autoCapitalize="none" />
               <TouchableOpacity onPress={() => {  setShowConfirmPassword(!showConfirmPassword); }} style={styles.passwordEyeButton}>
                 <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
               </TouchableOpacity>
@@ -1455,10 +1444,10 @@ export default function ProfileScreen() {
             {passwordError ? <Text style={styles.passwordError}>{passwordError}</Text> : null}
 
             <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} activeOpacity={0.8}>
-              <Text style={styles.saveButtonText}>Cambiar Contraseña</Text>
+              <Text style={styles.saveButtonText}>{t('perfil.contrasena')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setShowPasswordModal(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError(''); }} activeOpacity={0.8}>
-              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              <Text style={styles.modalCloseButtonText}>{t('comun.cancelar')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1477,7 +1466,7 @@ export default function ProfileScreen() {
                 <View style={styles.supportSuccessIconCircle}>
                   <Text style={styles.supportSuccessIcon}>✓</Text>
                 </View>
-                <Text style={styles.supportSuccessTitle}>¡Mensaje enviado!</Text>
+                <Text style={styles.supportSuccessTitle}>{t('perfil.mensajeEnviado')}</Text>
                 <Text style={styles.supportSuccessSubtext}>
                   Te responderemos pronto a
                 </Text>
@@ -1501,7 +1490,7 @@ export default function ProfileScreen() {
                   autoCorrect={false}
                 />
 
-                <Text style={styles.inputLabel}>Tu correo electrónico</Text>
+                <Text style={styles.inputLabel}>{t('perfil.tuCorreo')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={supportUserEmail}
@@ -1529,7 +1518,7 @@ export default function ProfileScreen() {
                   <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCloseButton} onPress={closeSupportModal} activeOpacity={0.8}>
-                  <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+                  <Text style={styles.modalCloseButtonText}>{t('comun.cancelar')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1544,7 +1533,7 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
-            <Text style={styles.modalSubtitle}>Elige qué quieres que te llegue</Text>
+            <Text style={styles.modalSubtitle}>{t('perfil.notifSubtitulo')}</Text>
 
             {(() => {
               const prefs = normalizarPreferencias(profile.notification_preferences);
@@ -1672,7 +1661,7 @@ export default function ProfileScreen() {
       <Modal visible={showDeleteAccountModal} transparent animationType="fade" onRequestClose={() => setShowDeleteAccountModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderRadius: 24, marginHorizontal: 24 }]}>
-            <Text style={[styles.modalTitle, { color: '#DC2626' }]}>⚠️ Eliminar Cuenta</Text>
+            <Text style={[styles.modalTitle, { color: '#DC2626' }]}>⚠️ {t('perfil.eliminarCuenta')}</Text>
             <Text style={[styles.modalSubtitle, { marginBottom: 16 }]}>
               Esta acción es permanente e irreversible. Se eliminarán todos tus datos, fotos y citas registradas.
             </Text>
@@ -1694,7 +1683,7 @@ export default function ProfileScreen() {
               onPress={() => setShowDeleteAccountModal(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+              <Text style={styles.modalCloseButtonText}>{t('comun.cancelar')}</Text>
             </TouchableOpacity>
           </View>
         </View>

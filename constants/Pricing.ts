@@ -20,3 +20,16 @@ export function precioDesdeConfig(valor: string | undefined | null, respaldo: nu
   const n = parseInt(valor ?? '', 10);
   return Number.isFinite(n) && n > 0 ? n : respaldo;
 }
+
+// Como se MUESTRA un precio segun el idioma de la app.
+//
+// Ojo: Wompi cobra siempre en pesos. Esto no convierte nada ni cambia lo que se
+// cobra — es el precio que se le muestra a quien ve la app en ingles, y vive
+// aparte en app_config (event_price_usd, subscription_price_usd, etc.).
+//
+// Va atado al IDIOMA DE LA APP a proposito, no a la mesa ni al pais: si
+// dependiera de la mesa, un colombiano que quiere practicar ingles tendria que
+// pagar el precio alto y no entraria ninguno.
+export function textoPrecio(idioma: 'es' | 'en', cop: number, usd: number): string {
+  return idioma === 'en' ? `USD ${usd}` : `$${cop.toLocaleString('es-CO')}`;
+}

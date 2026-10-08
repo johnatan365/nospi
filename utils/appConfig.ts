@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase';
 export interface AppConfig {
   event_price: string;
   event_price_usd: string;        // precio del cupo en USD para quien ve la app en ingles
+  subscription_price_usd: string;     // suscripcion 1 mes en USD
+  subscription_price_3m_usd: string;  // suscripcion 3 meses en USD
+  subscription_price_6m_usd: string;  // suscripcion 6 meses en USD
   subscription_price: string;        // plan de 1 mes
   subscription_price_3m: string;     // plan de 3 meses
   subscription_price_6m: string;     // plan de 6 meses
@@ -19,6 +22,9 @@ export interface AppConfig {
 const DEFAULTS: AppConfig = {
   event_price: '15000',
   event_price_usd: '19',
+  subscription_price_usd: '29',
+  subscription_price_3m_usd: '69',
+  subscription_price_6m_usd: '109',
   subscription_price: '29900',
   subscription_price_3m: '74900',
   subscription_price_6m: '125900',
@@ -57,6 +63,9 @@ export async function getAppConfig(): Promise<AppConfig> {
     for (const row of data) {
       if (row.key === 'event_price') config.event_price = row.value;
       if (row.key === 'event_price_usd') config.event_price_usd = row.value;
+      if (row.key === 'subscription_price_usd') config.subscription_price_usd = row.value;
+      if (row.key === 'subscription_price_3m_usd') config.subscription_price_3m_usd = row.value;
+      if (row.key === 'subscription_price_6m_usd') config.subscription_price_6m_usd = row.value;
       if (row.key === 'subscription_price') config.subscription_price = row.value;
       if (row.key === 'subscription_price_3m') config.subscription_price_3m = row.value;
       if (row.key === 'subscription_price_6m') config.subscription_price_6m = row.value;

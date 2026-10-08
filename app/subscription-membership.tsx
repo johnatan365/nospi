@@ -10,13 +10,14 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ijl06L';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
@@ -131,6 +132,7 @@ export default function SubscriptionMembershipScreen() {
   const router = useRouter();
   const { user, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
+  const { t, idioma } = useIdioma();
   const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
   const subscriptionPrice = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
   const eventPrice = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
@@ -138,10 +140,17 @@ export default function SubscriptionMembershipScreen() {
   // Planes de 1, 3 y 6 meses. El precio de cada uno sale de app_config; los
   // respaldos son los mismos que usan las edge functions de cobro, para que la
   // pantalla nunca muestre un precio distinto al que se va a cobrar.
+  // Cada plan lleva su precio en pesos (lo que Wompi cobra de verdad) y su
+  // precio en dolares (solo lo que se MUESTRA a quien ve la app en ingles).
+  // Los dos salen de app_config, asi que se mueven sin build nuevo.
+  const subscriptionPriceUsd = precioDesdeConfig(appConfig.subscription_price_usd, 29);
   const PLANES = [
-    { clave: '1_month' as const,  meses: 1, etiqueta: '1 mes',   precio: subscriptionPrice },
-    { clave: '3_months' as const, meses: 3, etiqueta: '3 meses', precio: precioDesdeConfig(appConfig.subscription_price_3m, 74900) },
-    { clave: '6_months' as const, meses: 6, etiqueta: '6 meses', precio: precioDesdeConfig(appConfig.subscription_price_6m, 125900) },
+    { clave: '1_month' as const,  meses: 1, etiqueta: t('sus.plan1'), precio: subscriptionPrice,
+      precioUsd: subscriptionPriceUsd },
+    { clave: '3_months' as const, meses: 3, etiqueta: t('sus.plan3'), precio: precioDesdeConfig(appConfig.subscription_price_3m, 74900),
+      precioUsd: precioDesdeConfig(appConfig.subscription_price_3m_usd, 69) },
+    { clave: '6_months' as const, meses: 6, etiqueta: t('sus.plan6'), precio: precioDesdeConfig(appConfig.subscription_price_6m, 125900),
+      precioUsd: precioDesdeConfig(appConfig.subscription_price_6m_usd, 109) },
   ];
   const PLAN_RECOMENDADO = '3_months';
   const [planSeleccionado, setPlanSeleccionado] = useState<string>(PLAN_RECOMENDADO);
@@ -616,7 +625,7 @@ export default function SubscriptionMembershipScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Suscripción mensual Nospi</Text>
+        <Text style={styles.headerTitle}>{t('sus.titulo')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -624,17 +633,17 @@ export default function SubscriptionMembershipScreen() {
         {isActive && subscription ? (
           <View style={styles.activeCard}>
             <Ionicons name="ribbon" size={40} color={nospiColors.purpleMid} style={{ marginBottom: 10 }} />
-            <Text style={styles.activeTitle}>Tu suscripción está activa</Text>
+            <Text style={styles.activeTitle}>{t('sus.activa')}</Text>
             <Text style={styles.activeSubtitle}>
               Acceso ilimitado hasta el {new Date(subscription.end_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}
             </Text>
             <Text style={styles.activeSubtitle}>
-              {subscription.auto_renew ? 'Se renueva automáticamente cada mes' : 'No se renovará — termina en la fecha indicada'}
+              {subscription.auto_renew ? t('sus.seRenueva') : t('sus.noSeRenueva')}
             </Text>
 
             {!showChangeCardForm ? (
               <View style={styles.payBox}>
-                <Text style={styles.payBoxTitle}>Método de pago</Text>
+                <Text style={styles.payBoxTitle}>{t('sus.metodoPago')}</Text>
                 <View style={styles.payCardRow}>
                   {(() => {
                     const b = (currentCard?.brand || '').toLowerCase();
@@ -668,7 +677,7 @@ export default function SubscriptionMembershipScreen() {
                   Tu suscripción sigue igual. No se hace ningún cobro ahora: el próximo cobro se hará a la tarjeta nueva.
                 </Text>
                 <KeyboardAvoidingView behavior="padding">
-                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
+                  <TextInput style={styles.input} placeholder={t('sus.nombreTitular')} placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <View style={styles.cardNumberRow}>
                     <TextInput
                       style={[styles.input, styles.cardNumberInput]}
@@ -719,7 +728,7 @@ export default function SubscriptionMembershipScreen() {
 
             {subscription.auto_renew ? (
               <TouchableOpacity style={styles.cancelLink} onPress={handleCancel} disabled={cancelling}>
-                {cancelling ? <ActivityIndicator color={nospiColors.error} /> : <Text style={styles.cancelLinkText}>Cancelar renovación automática</Text>}
+                {cancelling ? <ActivityIndicator color={nospiColors.error} /> : <Text style={styles.cancelLinkText}>{t('sus.cancelarRenovacion')}</Text>}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -730,7 +739,7 @@ export default function SubscriptionMembershipScreen() {
               >
                 {reactivating
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.subscribeButtonText}>Reactivar renovación automática</Text>}
+                  : <Text style={styles.subscribeButtonText}>{t('sus.reactivarRenovacion')}</Text>}
               </TouchableOpacity>
             )}
           </View>
@@ -746,16 +755,17 @@ export default function SubscriptionMembershipScreen() {
             <View style={styles.planCardFeatured}>
               {startCardForm !== '1' && (
                 <>
-                  <View style={styles.badge}><Text style={styles.badgeText}>Recomendado</Text></View>
+                  <View style={styles.badge}><Text style={styles.badgeText}>{t('sus.recomendado')}</Text></View>
                   <View style={styles.planHeaderRow}>
                     <Ionicons name="ribbon-outline" size={20} color={nospiColors.purpleMid} />
-                    <Text style={styles.planName}>Suscripción mensual Nospi</Text>
+                    <Text style={styles.planName}>{t('sus.titulo')}</Text>
                   </View>
-                  <Text style={styles.planDesc}>Eventos ilimitados, todos los que hagamos. Escoge por cuánto tiempo.</Text>
+                  <Text style={styles.planDesc}>{t('sus.descripcion')}</Text>
 
                   {PLANES.map((p) => {
                     const activo = p.clave === planSeleccionado;
                     const ahorro = ahorroDelPlan(p);
+                    const ahorroUsd = p.meses * subscriptionPriceUsd - p.precioUsd;
                     const porMes = Math.round(p.precio / p.meses);
                     return (
                       <TouchableOpacity
@@ -765,50 +775,50 @@ export default function SubscriptionMembershipScreen() {
                         activeOpacity={0.8}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: activo }}
-                        accessibilityLabel={`Plan de ${p.etiqueta}, $${p.precio.toLocaleString('es-CO')} pesos`}
+                        accessibilityLabel={`${p.etiqueta} — ${textoPrecio(idioma, p.precio, p.precioUsd)}`}
                       >
                         {p.clave === PLAN_RECOMENDADO && (
-                          <View style={styles.planOpcionBadge}><Text style={styles.planOpcionBadgeText}>MÁS ELEGIDO</Text></View>
+                          <View style={styles.planOpcionBadge}><Text style={styles.planOpcionBadgeText}>{t('sus.masElegido')}</Text></View>
                         )}
                         <View style={styles.planOpcionIzq}>
                           <Text style={[styles.planOpcionNombre, activo && styles.planOpcionNombreActivo]}>{p.etiqueta}</Text>
                           <Text style={[styles.planOpcionPorMes, activo && styles.planOpcionPorMesActivo]}>
-                            ${porMes.toLocaleString('es-CO')} al mes
+                            {t('sus.alMes', { precio: textoPrecio(idioma, porMes, Math.round(p.precioUsd / p.meses)) })}
                           </Text>
                         </View>
                         <View style={styles.planOpcionDer}>
                           <Text style={[styles.planOpcionPrecio, activo && styles.planOpcionPrecioActivo]}>
-                            ${p.precio.toLocaleString('es-CO')}
+                            {textoPrecio(idioma, p.precio, p.precioUsd)}
                           </Text>
                           {ahorro > 0 && (
-                            <Text style={styles.planOpcionAhorro}>Ahorras ${ahorro.toLocaleString('es-CO')}</Text>
+                            <Text style={styles.planOpcionAhorro}>{t('sus.ahorras', { monto: textoPrecio(idioma, ahorro, ahorroUsd) })}</Text>
                           )}
                         </View>
                       </TouchableOpacity>
                     );
                   })}
 
-                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Acceso sin límite a todos los eventos del mes</Text></View>
-                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Sin pagar cada evento por separado</Text></View>
-                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>Cancela cuando quieras</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>{t('sus.feature1')}</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>{t('sus.feature2')}</Text></View>
+                  <View style={styles.featureRow}><Ionicons name="checkmark" size={16} color={nospiColors.purpleMid} /><Text style={styles.featureText}>{t('sus.feature3')}</Text></View>
 
-                  <Text style={styles.breakEvenText}>Te conviene si vas a {breakEvenEvents}+ eventos al mes</Text>
+                  <Text style={styles.breakEvenText}>{t('sus.breakEven', { n: breakEvenEvents })}</Text>
                 </>
               )}
 
               {startCardForm === '1' && (
                 <Text style={[styles.planPrice, { marginBottom: 14 }]}>
-                  ${planActual.precio.toLocaleString('es-CO')} <Text style={styles.planPriceUnit}>COP · {planActual.etiqueta}</Text>
+                  {textoPrecio(idioma, planActual.precio, planActual.precioUsd)} <Text style={styles.planPriceUnit}>· {planActual.etiqueta}</Text>
                 </Text>
               )}
 
               {!showCardForm ? (
                 <TouchableOpacity style={styles.subscribeButton} onPress={() => setShowCardForm(true)} activeOpacity={0.85}>
-                  <Text style={styles.subscribeButtonText}>Suscribirme</Text>
+                  <Text style={styles.subscribeButtonText}>{t('sus.suscribirme')}</Text>
                 </TouchableOpacity>
               ) : (
                 <KeyboardAvoidingView behavior="padding">
-                  <TextInput style={styles.input} placeholder="Nombre del titular" placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
+                  <TextInput style={styles.input} placeholder={t('sus.nombreTitular')} placeholderTextColor={nospiColors.gray400} value={cardHolder} onChangeText={setCardHolder} autoComplete="cc-name" importantForAutofill="yes" />
                   <View style={styles.cardNumberRow}>
                     <TextInput
                       style={[styles.input, styles.cardNumberInput]}
@@ -866,7 +876,7 @@ export default function SubscriptionMembershipScreen() {
       <Modal visible={showCancelReasonModal} transparent animationType="fade" onRequestClose={() => setShowCancelReasonModal(false)}>
         <View style={styles.cancelModalOverlay}>
           <View style={styles.cancelModalContent}>
-            <Text style={styles.cancelModalTitle}>¿Por qué cancelas?</Text>
+            <Text style={styles.cancelModalTitle}>{t('sus.porQueCancelas')}</Text>
             <Text style={styles.cancelModalSubtitle}>Nos ayuda a mejorar Nospi.</Text>
 
             {CANCEL_REASONS.map((reason) => (
@@ -906,7 +916,7 @@ export default function SubscriptionMembershipScreen() {
               >
                 {cancelling
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.cancelModalButtonPrimaryText}>Cancelar suscripción</Text>}
+                  : <Text style={styles.cancelModalButtonPrimaryText}>{t('sus.cancelarSuscripcion')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -917,7 +927,7 @@ export default function SubscriptionMembershipScreen() {
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
             <Text style={styles.successModalEmoji}>👑</Text>
-            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>¡Suscripción activada!</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>{t('sus.activada')}</Text>
             <Text style={styles.successModalSubtitle}>Ya puedes ir a todos los eventos del mes sin pagar cada uno por separado.</Text>
             <TouchableOpacity
               style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
@@ -934,8 +944,8 @@ export default function SubscriptionMembershipScreen() {
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
             <Text style={styles.successModalEmoji}>👋</Text>
-            <Text style={[styles.successModalTitle, { color: nospiColors.gray700 }]}>Suscripción cancelada</Text>
-            <Text style={styles.successModalSubtitle}>Dejarás de renovar automáticamente. Conservas el acceso hasta el final del período ya pagado.</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.gray700 }]}>{t('sus.cancelada')}</Text>
+            <Text style={styles.successModalSubtitle}>{t('sus.canceladaSub')}</Text>
             <TouchableOpacity
               style={[styles.successModalButton, { backgroundColor: nospiColors.gray700 }]}
               onPress={() => setShowCancelSuccessModal(false)}
@@ -970,8 +980,8 @@ export default function SubscriptionMembershipScreen() {
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
             <Text style={styles.successModalEmoji}>🎉</Text>
-            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>¡Renovación reactivada!</Text>
-            <Text style={styles.successModalSubtitle}>Tu suscripción volverá a renovarse automáticamente cada mes con la tarjeta que ya tenías registrada.</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>{t('sus.reactivada')}</Text>
+            <Text style={styles.successModalSubtitle}>{t('sus.reactivadaSub')}</Text>
             <TouchableOpacity
               style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
               onPress={() => setShowReactivateSuccessModal(false)}

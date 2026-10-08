@@ -13,6 +13,9 @@ interface AppConfigContextValue {
 const DEFAULT_CONFIG: AppConfig = {
   event_price: '15000',
   event_price_usd: '19',
+  subscription_price_usd: '29',
+  subscription_price_3m_usd: '69',
+  subscription_price_6m_usd: '109',
   subscription_price: '29900',
   subscription_price_3m: '74900',
   subscription_price_6m: '125900',
