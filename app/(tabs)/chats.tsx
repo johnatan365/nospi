@@ -413,8 +413,16 @@ export default function ChatsScreen() {
   // abrio y se leyo sin responder, que es justo el caso en el que el numero
   // molestaba. Y cada una sigue marcada con su etiqueta de Solicitud en la
   // fila.
+  //
+  // OJO con de donde sale la suma: tiene que ser sobre lo que la pestaña
+  // MUESTRA, que son las solicitudes mas los directos (ver listaDirectos). Antes
+  // sumaba solo directConversations, y ese filtro deja fuera precisamente las
+  // solicitudes que me mandaron a mi -- asi que el parrafo de arriba describia
+  // algo que no pasaba: a Vanessa le llego una solicitud con su mensaje sin
+  // leer, la fila aparecia en Directos, y la pestaña seguia sin numero.
   const directUnread =
-    directConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+    [...solicitudes, ...directConversations]
+      .reduce((acc, c) => acc + (c.unread_count || 0), 0);
 
   // El numero del icono de la app, igualado a lo que de verdad hay sin leer.
   //
