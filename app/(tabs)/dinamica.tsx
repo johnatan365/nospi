@@ -1702,7 +1702,7 @@ export default function DinamicaScreen() {
               <Text style={styles.preEventTipIcon}>🎤</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.preEventTipTitle}>{t('din.unoModerador')}</Text>
-                <Text style={styles.preEventTipText}>Lee las preguntas en voz alta y da la palabra. Se ofrece al empezar y la app le dice todo lo que tiene que hacer. <Text style={styles.preEventTipStrong}>{t('din.sinModerador')}</Text>, así que anímate 😉</Text>
+                <Text style={styles.preEventTipText}>{t('din.unoModeradorTexto')}<Text style={styles.preEventTipStrong}>{t('din.sinModerador')}</Text>{t('din.animate')}</Text>
               </View>
             </View>
             <View style={styles.preEventTipCard}>
@@ -2192,7 +2192,7 @@ export default function DinamicaScreen() {
     );
   }
 
-  const eventTypeText = appointment.event.type === 'bar' ? 'Bar' : appointment.event.type === 'caminata' ? 'Caminata' : appointment.event.type === 'cafe' ? 'Café' : appointment.event.type === 'bolos' ? 'Bolos' : appointment.event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+  const eventTypeText = t(['bar', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
   const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;

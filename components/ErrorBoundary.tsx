@@ -2,6 +2,7 @@ import React, { Component, ReactNode } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
+import { tSuelto } from '@/contexts/IdiomaContext';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
@@ -94,14 +95,14 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <View style={styles.container}>
             <Text style={styles.icon}>😕</Text>
-            <Text style={styles.title}>Algo salió mal</Text>
+            <Text style={styles.title}>{tSuelto('err.algoSalioMal')}</Text>
             <Text style={styles.message}>
               Ocurrió un error inesperado. Por favor intenta de nuevo.
             </Text>
 
             {__DEV__ && this.state.error && (
               <ScrollView style={styles.errorDetails}>
-                <Text style={styles.errorTitle}>Error (solo en desarrollo):</Text>
+                <Text style={styles.errorTitle}>{tSuelto('err.soloDesarrollo')}</Text>
                 <Text style={styles.errorText}>
                   {this.state.error.toString()}
                 </Text>
@@ -114,7 +115,7 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-              <Text style={styles.buttonText}>Intentar de nuevo</Text>
+              <Text style={styles.buttonText}>{tSuelto('err.intentarDeNuevo')}</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>

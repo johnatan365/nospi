@@ -674,9 +674,9 @@ export default function ChatsScreen() {
                     if (esComunidadBloqueada) {
                       // Tocar algo y que no pase nada se siente roto. Se explica
                       // por que esta cerrado y como se abre.
-                      const msg = 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente cuando el evento termine.';
+                      const msg = t('chats.comunidadBloqueada');
                       if (Platform.OS === 'web') window.alert(msg);
-                      else Alert.alert(item.channel_title || 'Comunidad Nospi', msg);
+                      else Alert.alert(item.channel_title || t('chats.comunidadNospi'), msg);
                       return;
                     }
                     if (!locked) openConversation(item);

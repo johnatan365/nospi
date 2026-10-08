@@ -260,7 +260,7 @@ export default function LoginScreen() {
                 activeOpacity={0.85}
               >
                 <Image source={appleIconSource} style={styles.appleIcon} resizeMode="contain" />
-                <Text style={styles.appleButtonText}>Continuar con Apple</Text>
+                <Text style={styles.appleButtonText}>{t('login.conApple')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -270,12 +270,12 @@ export default function LoginScreen() {
                 activeOpacity={0.85}
               >
                 <Image source={googleIconSource} style={styles.googleIcon} resizeMode="contain" />
-                <Text style={styles.googleButtonText}>Continuar con Google</Text>
+                <Text style={styles.googleButtonText}>{t('login.conGoogle')}</Text>
               </TouchableOpacity>
 
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>o con email</Text>
+                <Text style={styles.dividerText}>{t('login.oConEmail')}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -285,7 +285,7 @@ export default function LoginScreen() {
                     <MaterialIcons name="person" size={20} color="#999" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Nombre"
+                      placeholder={t('login.nombre')}
                       placeholderTextColor="#999"
                       value={name}
                       onChangeText={setName}
@@ -373,7 +373,7 @@ export default function LoginScreen() {
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
-                <Text style={styles.backText}>Volver</Text>
+                <Text style={styles.backText}>{t('login.volver')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

@@ -83,7 +83,7 @@ export default function ResetPasswordScreen() {
         } else if (m.includes('at least') || m.includes('should be') || m.includes('length') || m.includes('short') || m.includes('should contain') || m.includes('weak') || m.includes('character of each')) {
           friendly = t('pw.noCumple');
         } else if (m.includes('expired') || m.includes('invalid') || m.includes('token') || m.includes('session') || m.includes('missing') || m.includes('otp')) {
-          friendly = 'Este enlace ya venció o se usó. Vuelve a "¿Olvidaste tu contraseña?" y solicita uno nuevo.';
+          friendly = t('pw.enlaceVencio');
         }
         setError(friendly);
         return;
@@ -134,7 +134,7 @@ export default function ResetPasswordScreen() {
                     <Ionicons name="alert-circle-outline" size={40} color={nospiColors.white} />
                   </View>
                   <Text style={styles.title}>{t('pw.linkNoValido')}</Text>
-                  <Text style={styles.subtitle}>Puede haber expirado o ya haberse usado. Solicita uno nuevo desde la pantalla de inicio de sesión.</Text>
+                  <Text style={styles.subtitle}>{t('pw.puedeExpirado')}</Text>
                   <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => router.replace('/forgot-password')}

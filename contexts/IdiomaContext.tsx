@@ -38,6 +38,19 @@ const IdiomaContext = createContext<IdiomaContextValue>({
   t: (clave) => clave,
 });
 
+// Idioma activo fuera de React.
+//
+// Existe para los sitios donde NO hay hooks: una clase (ErrorBoundary) o una
+// funcion suelta. El provider lo mantiene al dia; si nadie lo actualizo todavia
+// vale el idioma del dispositivo, que es la misma respuesta que daria el hook
+// en el primer render.
+let idiomaActivo: Idioma = detectarIdioma();
+
+/** Traduce sin hooks. Usar solo donde no se puede llamar useIdioma(). */
+export function tSuelto(clave: string, vars?: Record<string, string | number>): string {
+  return traducir(TEXTOS, idiomaActivo, clave, vars);
+}
+
 export function IdiomaProvider({ children }: { children: React.ReactNode }) {
   // Arrancamos ya con el idioma del dispositivo para que la primera pantalla
   // salga bien pintada; si hay una eleccion guardada, se corrige enseguida.
@@ -73,6 +86,9 @@ export function IdiomaProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem(CLAVE_IDIOMA_GUARDADO, nuevo);
     } catch {}
   }, []);
+
+  // Espeja el idioma para tSuelto (ErrorBoundary y cualquier funcion sin hooks).
+  idiomaActivo = idioma;
 
   const t = useCallback(
     (clave: string, vars?: Record<string, string | number>) =>

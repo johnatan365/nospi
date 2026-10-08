@@ -461,7 +461,7 @@ export default function AppointmentsScreen() {
               if (!appointment.event) return null;
 
               const eventType = appointment.event.type || 'restaurant';
-              const eventTypeText = eventType === 'bar' ? 'Bar' : eventType === 'caminata' ? 'Caminata' : eventType === 'cafe' ? 'Café' : eventType === 'bolos' ? 'Bolos' : eventType === 'virtual' ? 'Videollamada' : 'Restaurante';
+              const eventTypeText = t(['bar', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
               const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : '🍽️';
               const eventName = appointment.event.name || eventTypeText;
               const eventCity = appointment.event.city || '';

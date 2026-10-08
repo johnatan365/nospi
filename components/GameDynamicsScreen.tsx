@@ -818,7 +818,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // la ventanita de Meet tapa la parte de arriba de la pantalla.
   const botonVolverMeet = esVirtual ? (
     <TouchableOpacity style={styles.volverMeetBtn} onPress={handleVolverMeet} activeOpacity={0.8}>
-      <Text style={styles.volverMeetBtnText}>🎥 Volver a la videollamada</Text>
+      <Text style={styles.volverMeetBtnText}>{t('juego.volverVideollamada')}</Text>
     </TouchableOpacity>
   ) : null;
 
@@ -845,8 +845,8 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         onPress={() => setShowChangeModerator(false)}
       >
         <TouchableOpacity style={styles.changeSheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.changeSheetTitle}>Cambiar moderador</Text>
-          <Text style={styles.changeSheetText}>¿Quieren cambiar de moderador por algún motivo?</Text>
+          <Text style={styles.changeSheetTitle}>{t('juego.cambiarModeradorTitulo')}</Text>
+          <Text style={styles.changeSheetText}>{t('juego.cambiarModeradorPregunta')}</Text>
 
           <TouchableOpacity
             style={[styles.changeSheetPrimary, loading && styles.buttonDisabled]}
@@ -854,15 +854,15 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={styles.changeSheetPrimaryText}>🙋 Ser yo el moderador</Text>
+            <Text style={styles.changeSheetPrimaryText}>{t('juego.serYoModerador')}</Text>
           </TouchableOpacity>
 
           <View style={styles.changeSheetFirstTag}>
-            <Text style={styles.changeSheetFirstTagText}>El primero que se postule queda</Text>
+            <Text style={styles.changeSheetFirstTagText}>{t('juego.primeroQueda')}</Text>
           </View>
 
           <TouchableOpacity onPress={() => setShowChangeModerator(false)} activeOpacity={0.7}>
-            <Text style={styles.changeSheetCancel}>Cancelar</Text>
+            <Text style={styles.changeSheetCancel}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -992,7 +992,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 activeOpacity={0.85}
               >
                 <Text style={styles.continueButtonCText}>
-                  {loading ? 'Cargando...' : (isLastQuestion ? 'Terminar' : 'Siguiente')}
+                  {loading ? t('juego.cargando') : (isLastQuestion ? t('juego.terminar') : t('juego.siguiente'))}
                 </Text>
                 <View style={[styles.continueButtonCCircle, { borderColor: theme.accentColor, backgroundColor: theme.accentColor + '25' }]}>
                   <Text style={[styles.continueButtonCArrow, { color: theme.accentColor }]}>›</Text>
@@ -1047,7 +1047,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 end={{ x: 1, y: 1 }}
               >
                 <Text style={styles.transitionEmoji}>{transitionLevelEmoji}</Text>
-                <Text style={styles.transitionTitle}>Siguiente Nivel</Text>
+                <Text style={styles.transitionTitle}>{t('juego.siguienteNivel')}</Text>
                 <Text style={styles.transitionLevel}>{transitionLevelName}</Text>
               </LinearGradient>
             </View>
@@ -1071,9 +1071,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, styles.closingIntroContainer]}>
           <Text style={styles.closingIntroEmoji}>🎬</Text>
-          <Text style={styles.closingIntroTitle}>¡Terminaron las preguntas!</Text>
+          <Text style={styles.closingIntroTitle}>{t('juego.terminaronPreguntas')}</Text>
           {!isModerator && (
-            <Text style={styles.closingIntroSubtitle}>Ya viene la parte final</Text>
+            <Text style={styles.closingIntroSubtitle}>{t('juego.yaVieneFinal')}</Text>
           )}
 
           {isModerator ? (
@@ -1150,7 +1150,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           // completa un frame y la transicion se sentia como varios brincos).
           <>
             <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.syncText}>💘 Preparando el cierre…</Text>
+            <Text style={styles.syncText}>{t('juego.preparandoCierre')}</Text>
           </>
         ) : gamePhase === 'finished' ? (
           // La navegacion al cierre ya se disparo una vez (closingTriggeredRef).
@@ -1159,20 +1159,20 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           // boton para volver al cierre cuando quiera.
           <>
             <Text style={styles.syncEmoji}>🎉</Text>
-            <Text style={styles.syncTitle}>La dinámica terminó</Text>
-            <Text style={styles.syncText}>Ahora viene lo mejor: elegir con quién sentiste conexión.</Text>
+            <Text style={styles.syncTitle}>{t('juego.dinamicaTermino')}</Text>
+            <Text style={styles.syncText}>{t('juego.ahoraLoMejor')}</Text>
             <TouchableOpacity
               style={styles.syncButton}
               onPress={() => router.push(`/catch-up-rating/${appointment?.event_id}` as any)}
               activeOpacity={0.85}
             >
-              <Text style={styles.syncButtonText}>💘 Ir al cierre</Text>
+              <Text style={styles.syncButtonText}>{t('juego.irAlCierre')}</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.syncText}>Sincronizando la dinámica…</Text>
+            <Text style={styles.syncText}>{t('juego.sincronizando')}</Text>
           </>
         )}
       </View>

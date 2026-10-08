@@ -7,7 +7,9 @@ import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function SubscriptionCancelConfirmScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { user } = useSupabase();
   const [cancelling, setCancelling] = useState(false);
@@ -56,13 +58,13 @@ export default function SubscriptionCancelConfirmScreen() {
     router.replace('/(tabs)/profile');
   };
 
-  const titleText = '¿Estás seguro de cancelar tu plan?';
-  const subtitleText = 'Al cancelar tu suscripción, perderás acceso a estos beneficios:';
-  const keepButtonText = 'Mantener mi Plan';
-  const cancelButtonText = 'Sí, Cancelar Plan';
-  const successTitleText = 'Plan Cancelado';
-  const successMessageText = 'Tu suscripción ha sido cancelada. Puedes volver a suscribirte en cualquier momento.';
-  const successButtonText = 'Entendido';
+  const titleText = t('cancel.titulo');
+  const subtitleText = t('cancel.subtitulo');
+  const keepButtonText = t('cancel.mantener');
+  const cancelButtonText = t('cancel.siCancelar');
+  const successTitleText = t('cancel.planCancelado');
+  const successMessageText = t('cancel.canceladaMsg');
+  const successButtonText = t('cancel.entendido');
 
   return (
     <LinearGradient
@@ -71,7 +73,7 @@ export default function SubscriptionCancelConfirmScreen() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <Stack.Screen options={{ headerShown: true, title: 'Cancelar Plan', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{ headerShown: true, title: t('cancel.cancelarPlan'), headerBackTitle: t('comun.atras') }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <View style={styles.iconContainer}>
           <Text style={styles.warningIcon}>⚠️</Text>

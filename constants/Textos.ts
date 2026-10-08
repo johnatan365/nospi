@@ -1036,6 +1036,32 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'cal.mo.sintioIncomoda': 'Se sintió incómoda',
     'cal.mo.muyCorta': 'Muy corta',
 
+
+    // ---------- Login, comunidad, cancelacion y cierre ----------
+    'login.conApple': 'Continuar con Apple',
+    'login.conGoogle': 'Continuar con Google',
+    'login.oConEmail': 'o con email',
+    'login.nombre': 'Nombre',
+    'login.volver': 'Volver',
+    'chats.comunidadBloqueada': 'Este grupo es para quienes ya vinieron a un evento de Nospi. Ven a uno y entras automáticamente cuando el evento termine.',
+    'chats.comunidadNospi': 'Comunidad Nospi',
+    'cancel.titulo': '¿Estás seguro de cancelar tu plan?',
+    'cancel.subtitulo': 'Al cancelar tu suscripción, perderás acceso a estos beneficios:',
+    'cancel.mantener': 'Mantener mi Plan',
+    'cancel.siCancelar': 'Sí, Cancelar Plan',
+    'cancel.planCancelado': 'Plan Cancelado',
+    'cancel.canceladaMsg': 'Tu suscripción ha sido cancelada. Puedes volver a suscribirte en cualquier momento.',
+    'cancel.entendido': 'Entendido',
+    'cancel.cancelarPlan': 'Cancelar Plan',
+    'pw.enlaceVencio': 'Este enlace ya venció o se usó. Vuelve a "¿Olvidaste tu contraseña?" y solicita uno nuevo.',
+    'pw.puedeExpirado': 'Puede haber expirado o ya haberse usado. Solicita uno nuevo desde la pantalla de inicio de sesión.',
+    'juego.siguiente': 'Siguiente',
+    'juego.siguienteNivel': 'Siguiente Nivel',
+
+
+    // ---------- Juego: boton terminar ----------
+    'juego.terminar': 'Terminar',
+
   },
 
   en: {
@@ -2063,6 +2089,32 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'cal.mo.camaraApagada': 'People with cameras off',
     'cal.mo.sintioIncomoda': 'It felt awkward',
     'cal.mo.muyCorta': 'Too short',
+
+
+    // ---------- Login, comunidad, cancelacion y cierre ----------
+    'login.conApple': 'Continue with Apple',
+    'login.conGoogle': 'Continue with Google',
+    'login.oConEmail': 'or with email',
+    'login.nombre': 'Name',
+    'login.volver': 'Back',
+    'chats.comunidadBloqueada': 'This group is for people who’ve already been to a Nospi event. Come to one and you’re in automatically when it ends.',
+    'chats.comunidadNospi': 'Nospi community',
+    'cancel.titulo': 'Are you sure you want to cancel your plan?',
+    'cancel.subtitulo': 'If you cancel your subscription, you’ll lose these benefits:',
+    'cancel.mantener': 'Keep my plan',
+    'cancel.siCancelar': 'Yes, cancel my plan',
+    'cancel.planCancelado': 'Plan cancelled',
+    'cancel.canceladaMsg': 'Your subscription has been cancelled. You can subscribe again any time.',
+    'cancel.entendido': 'Got it',
+    'cancel.cancelarPlan': 'Cancel plan',
+    'pw.enlaceVencio': 'This link has expired or was already used. Go back to "Forgot your password?" and request a new one.',
+    'pw.puedeExpirado': 'It may have expired or already been used. Request a new one from the sign-in screen.',
+    'juego.siguiente': 'Next',
+    'juego.siguienteNivel': 'Next level',
+
+
+    // ---------- Juego: boton terminar ----------
+    'juego.terminar': 'Finish',
 
   },
 };
