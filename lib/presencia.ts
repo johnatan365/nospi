@@ -101,3 +101,67 @@ export async function pedirUltimaVez(userIds: string[]): Promise<Record<string, 
 // Alguien puede confirmar y luego irse a hacer otra cosa, y eso es justo lo que
 // quiere saber el que esta esperando solo.
 export const canalDeEvento = (eventId: string) => `presencia_evento_${eventId}`;
+
+// ── Anunciarse sin filtrarse ────────────────────────────────────────────────
+//
+// POR QUE ESTO EXISTE
+// La promesa de arriba --"si tengo el interruptor apagado no llamo a track()"--
+// estaba escrita pero no se cumplia, y la fuga era real: alguien con "en linea"
+// apagado aparecia igual en la Comunidad.
+//
+// Eran dos agujeros, los dos por mirar el ajuste UNA sola vez:
+//
+//   1. La carrera del arranque. El ajuste se lee de la base (una consulta) y el
+//      canal se suscribe por websocket. Son dos esperas en paralelo. Si gana el
+//      websocket, track() se ejecuta con el valor por defecto --ENCENDIDO, que
+//      es el de las columnas-- porque el de verdad todavia no ha llegado. Quien
+//      lo tenia apagado se anunciaba, y al llegar el valor real ya era tarde:
+//      nadie deshacia el anuncio.
+//   2. Apagarlo con la app abierta no lo quitaba. El ajuste no era dependencia
+//      del efecto, asi que el canal seguia vivo con el anuncio puesto hasta
+//      cerrar la app.
+//
+// COMO LO EVITA
+// Guardando las dos condiciones por separado y anunciando solo cuando se
+// cumplen las dos. El orden en que lleguen deja de importar: el que llegue
+// ultimo dispara el track(). Y un `null` --"todavia no se sabe"-- no es lo
+// mismo que `false`: mientras no se sepa, se calla. Ante la duda, no aparecer.
+
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+export interface AnuncioDePresencia {
+  /** Desde el callback de subscribe(), cuando llegue 'SUBSCRIBED'. */
+  alSuscribirse(): void;
+  /** Cuando cambie el ajuste --o cuando por fin se sepa--. `null` = aun no se sabe. */
+  alSaberElAjuste(mostrar: boolean | null): void;
+}
+
+export function anuncioDePresencia(canal: RealtimeChannel, miId: string): AnuncioDePresencia {
+  let suscrito = false;
+  let mostrar: boolean | null = null;
+  // Para no repetir el track() ni llamar a untrack() sin haber anunciado nada.
+  let anunciado = false;
+
+  const poner = () => {
+    if (!suscrito || mostrar !== true || anunciado) return;
+    anunciado = true;
+    canal.track({ user_id: miId, desde: Date.now() } satisfies MarcaPresencia);
+  };
+
+  const quitar = () => {
+    if (!anunciado) return;
+    anunciado = false;
+    canal.untrack();
+  };
+
+  return {
+    alSuscribirse() { suscrito = true; poner(); },
+    alSaberElAjuste(v) {
+      mostrar = v;
+      if (v === true) poner();
+      else if (v === false) quitar();
+      // Con null no se toca nada: si ya estaba anunciado es porque se sabia que
+      // estaba encendido, y "dejar de saberlo" no deberia pasar nunca.
+    },
+  };
+}

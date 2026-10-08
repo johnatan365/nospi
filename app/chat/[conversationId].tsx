@@ -44,8 +44,12 @@ import { IconSymbol } from '@/components/IconSymbol';
 // fuente, asi que se ve igual en iPhone, Android y web.
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CATEGORIAS_EMOJI, REACCIONES_RAPIDAS } from '@/constants/Emojis';
-import { normalizarPrivacidad, textoUltimaVez } from '@/constants/Privacidad';
-import { idsPresentes, textoEnLinea, tocarUltimaVez, pedirUltimaVez } from '@/lib/presencia';
+import { textoUltimaVez } from '@/constants/Privacidad';
+import {
+  anuncioDePresencia, idsPresentes, textoEnLinea, tocarUltimaVez, pedirUltimaVez,
+  type AnuncioDePresencia,
+} from '@/lib/presencia';
+import { useMiPrivacidad } from '@/lib/useMiPrivacidad';
 import * as ImagePicker from 'expo-image-picker';
 import {
   gifsBuscar,
@@ -1106,12 +1110,13 @@ export default function ChatThreadScreen() {
   const [enLinea, setEnLinea] = useState<string[]>([]);
   // Mis dos interruptores. Si "en linea" esta apagado no me anuncio Y tampoco
   // leo el de los demas (reciprocidad).
-  const [miPrivacidad, setMiPrivacidad] = useState(normalizarPrivacidad(null));
+  const { privacidad: miPrivacidad, enLineaParaAnunciar } = useMiPrivacidad(user?.id);
   // En un ref ademas del state: el canal se arma una vez y no debe rehacerse
   // cada vez que llegan los interruptores, pero sus manejadores si necesitan
   // el valor al dia.
-  const miPrivacidadRef = useRef(miPrivacidad);
-  miPrivacidadRef.current = miPrivacidad;
+  const mostrarRef = useRef(enLineaParaAnunciar);
+  mostrarRef.current = enLineaParaAnunciar;
+  const anuncioRef = useRef<AnuncioDePresencia | null>(null);
   // La ultima vez de la otra persona, solo en un chat privado.
   const [ultimaVezOtro, setUltimaVezOtro] = useState<string | null>(null);
 
@@ -1911,20 +1916,6 @@ export default function ChatThreadScreen() {
     recargarParticipantes();
   }, [loading, conversationId, user?.id, messages, participantsById, recargarParticipantes]);
 
-  // Mis interruptores de privacidad. Deciden si me anuncio en el canal y si
-  // leo lo de los demas.
-  useEffect(() => {
-    if (!user?.id) return;
-    let vivo = true;
-    supabase
-      .from('users')
-      .select('mostrar_en_linea, mostrar_ultima_vez')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => { if (vivo && data) setMiPrivacidad(normalizarPrivacidad(data)); });
-    return () => { vivo = false; };
-  }, [user?.id]);
-
   // Con quien es el chat, cuando es privado. Se prefiere el de meta porque
   // llega antes que la lista de participantes.
   const otherParticipantId = meta?.conv_type === 'direct'
@@ -2437,8 +2428,10 @@ export default function ChatThreadScreen() {
       // Quien esta conectado. Va en ESTE canal y no en uno aparte para no
       // abrir dos por conversacion.
       .on('presence', { event: 'sync' }, () => {
-        // Si yo tengo el interruptor apagado, tampoco leo el de los demas.
-        if (!miPrivacidadRef.current.enLinea) { setEnLinea([]); return; }
+        // Si yo tengo el interruptor apagado, tampoco leo el de los demas. Y
+        // mientras no se sepa tampoco: en cuanto se sepa que esta encendido se
+        // anuncia, y ese anuncio dispara otro sync que ya pinta la lista.
+        if (mostrarRef.current !== true) { setEnLinea([]); return; }
         setEnLinea(idsPresentes(channel.presenceState() as any, user?.id));
       })
       .on('broadcast', { event: 'escribiendo' }, ({ payload }) => {
@@ -2454,23 +2447,43 @@ export default function ChatThreadScreen() {
             ts: Date.now(),
           },
         }));
-      })
-      .subscribe((estado) => {
-        // Anunciarse SOLO si el interruptor esta encendido: esa es la mitad de
-        // la reciprocidad que de verdad se puede garantizar, porque sin track()
-        // no se aparece en el estado del canal y nadie puede verlo.
-        if (estado !== 'SUBSCRIBED' || !user?.id) return;
-        if (!miPrivacidadRef.current.enLinea) return;
-        channel.track({ user_id: user.id, desde: Date.now() });
       });
 
     canalRef.current = channel;
 
+    // El anuncio se arma ANTES de suscribirse, no despues: si se armara
+    // despues y 'SUBSCRIBED' llegara primero, no habria nadie escuchando y no
+    // se anunciaria nunca. Hoy el callback siempre tarda --va por websocket--
+    // pero depender de eso es exactamente el tipo de suposicion que no se ve
+    // venir cuando se rompe.
+    if (user?.id) {
+      const anuncio = anuncioDePresencia(channel, user.id);
+      anuncio.alSaberElAjuste(mostrarRef.current);
+      anuncioRef.current = anuncio;
+    }
+
+    // Anunciarse SOLO si el interruptor esta encendido: esa es la mitad de la
+    // reciprocidad que de verdad se puede garantizar, porque sin track() no se
+    // aparece en el estado del canal y nadie puede verlo. Quien decide es el
+    // anuncio, que espera a saber el ajuste si hace falta.
+    channel.subscribe((estado) => {
+      if (estado === 'SUBSCRIBED') anuncioRef.current?.alSuscribirse();
+    });
+
     return () => {
       canalRef.current = null;
+      anuncioRef.current = null;
       supabase.removeChannel(channel);
     };
   }, [conversationId, loadReactions, user?.id]);
+
+  // El ajuste llega por una consulta y el canal se suscribe por websocket: son
+  // dos esperas en paralelo, asi que cualquiera de las dos puede ganar. Esto
+  // cubre el caso de que gane el canal, y ademas el de apagar el interruptor
+  // con el chat abierto --que antes dejaba el anuncio puesto--.
+  useEffect(() => {
+    anuncioRef.current?.alSaberElAjuste(enLineaParaAnunciar);
+  }, [enLineaParaAnunciar]);
 
   // Carga inicial de las reacciones al abrir el chat.
   useEffect(() => { loadReactions(); }, [loadReactions]);
