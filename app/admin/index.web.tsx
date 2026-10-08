@@ -32,6 +32,8 @@ interface Event {
   // Esconde la ciudad en la app. Solo cosmetico: no cambia a quien le aparece.
   ocultar_ciudad?: boolean;
   description: string;
+  aviso_consumo: string;
+  aviso_consumo_en: string;
   type: string;
   date: string;
   time: string;
@@ -1176,6 +1178,8 @@ export default function AdminPanelScreen() {
     nacional: false,
     ocultar_ciudad: false,
     description: '',
+    aviso_consumo: '',
+    aviso_consumo_en: '',
     type: 'bar',
     date: '',
     time: '',
@@ -3881,6 +3885,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       nacional: false,
       ocultar_ciudad: false,
       description: '',
+      aviso_consumo: '',
+      aviso_consumo_en: '',
       type: 'bar',
       date: '',
       time: '',
@@ -3957,6 +3963,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       nacional: !!event.nacional || event.city === ETIQUETA_NACIONAL,
       ocultar_ciudad: !!event.ocultar_ciudad,
       description: event.description || '',
+      aviso_consumo: (event as any).aviso_consumo || '',
+      aviso_consumo_en: (event as any).aviso_consumo_en || '',
       // FIX: la BD guarda 'restaurante' (español) pero el <select> usa
       // 'restaurant' (inglés) como value — sin este mapeo, el dropdown no
       // encontraba coincidencia y mostraba "Bar" aunque el evento fuera restaurante.
@@ -4327,6 +4335,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         nacional: eventForm.nacional,
         ocultar_ciudad: eventForm.ocultar_ciudad,
         description: eventForm.description,
+        aviso_consumo: eventForm.aviso_consumo.trim() || null,
+        aviso_consumo_en: eventForm.aviso_consumo_en.trim() || null,
         type: eventForm.type === 'restaurant' ? 'restaurante' : eventForm.type,
         date: isoDate,
         time: dateToBeDefined ? 'Por definir' : eventForm.time,
@@ -4408,6 +4418,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         nacional: false,
         ocultar_ciudad: false,
         description: '',
+        aviso_consumo: '',
+        aviso_consumo_en: '',
         type: 'bar',
         date: '',
         time: '',
@@ -12820,6 +12832,43 @@ setBulkWhatsAppPending(pending);
                 onChangeText={(text) => setEventForm({ ...eventForm, description: text })}
                 multiline
                 numberOfLines={4}
+              />
+
+              {/* Condicion del lugar que hay que aceptar ANTES de reservar.
+                  Si tiene texto, en la pantalla del evento sale una casilla que
+                  bloquea el boton hasta marcarla, y la aceptacion queda
+                  registrada en la cita (waiver_accepted_at) igual que la de una
+                  caminata. Vacio = no sale nada.
+                  Va por EVENTO y no por tipo justamente para no ponersela a
+                  todos los bares cuando el del consumo minimo es solo uno. */}
+              <Text style={styles.inputLabel}>
+                Aviso que hay que aceptar{' '}
+                <Text style={{ fontWeight: '600', fontSize: 12, color: eventForm.aviso_consumo.trim() ? '#B45309' : '#9CA3AF' }}>
+                  {eventForm.aviso_consumo.trim() ? '· sale una casilla obligatoria' : '· opcional, solo si el sitio pone una condición'}
+                </Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Ej: Entiendo que este lugar tiene un consumo mínimo de $150.000 por persona, aparte de mi cupo en Nospi."
+                value={eventForm.aviso_consumo}
+                onChangeText={(text) => setEventForm({ ...eventForm, aviso_consumo: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.inputLabel}>
+                Ese aviso en inglés{' '}
+                <Text style={{ fontWeight: '600', fontSize: 12, color: '#9CA3AF' }}>
+                  · se escribe a mano; si falta se muestra el de español
+                </Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Same warning in English"
+                value={eventForm.aviso_consumo_en}
+                onChangeText={(text) => setEventForm({ ...eventForm, aviso_consumo_en: text })}
+                multiline
+                numberOfLines={3}
               />
 
 

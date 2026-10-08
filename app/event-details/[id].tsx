@@ -365,7 +365,12 @@ export default function EventDetailsScreen() {
       // Se guarda junto al evento pendiente; el punto de confirmación final
       // (subscription-plans.tsx / payment-callback.tsx) lo lee para setear
       // appointments.waiver_accepted_at al crear/actualizar la cita.
-      if (requiresWaiver(event?.type)) {
+      // exigeConfirmacion y no requiresWaiver: si el evento pide su propio
+      // aviso --un consumo minimo, por ejemplo-- la aceptacion tiene que quedar
+      // registrada igual que la de una caminata. Si no, la casilla bloquearia
+      // el boton pero no dejaria rastro de que la persona la marco, que es la
+      // mitad del sentido de pedirla.
+      if (exigeConfirmacion) {
         await AsyncStorage.setItem('pending_waiver_accepted', 'true');
       } else {
         await AsyncStorage.removeItem('pending_waiver_accepted');
