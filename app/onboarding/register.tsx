@@ -59,7 +59,7 @@ function friendlyAuthError(msg: string | undefined, t: (clave: string) => string
 }
 
 export default function RegisterScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
@@ -252,7 +252,9 @@ export default function RegisterScreen() {
           provider: 'google',
           options: {
             redirectTo: redirectUrl,
-            queryParams: { access_type: 'offline', prompt: 'consent' },
+            // hl le dice a Google en que idioma pintar SU pantalla de permisos.
+            // Sin esto, la app queda en ingles y Google sale en espanol.
+            queryParams: { access_type: 'offline', prompt: 'consent', hl: idioma },
           },
         });
         if (error) {
@@ -267,7 +269,9 @@ export default function RegisterScreen() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: true,
-          queryParams: { access_type: 'offline', prompt: 'consent' },
+          // hl le dice a Google en que idioma pintar SU pantalla de permisos.
+            // Sin esto, la app queda en ingles y Google sale en espanol.
+            queryParams: { access_type: 'offline', prompt: 'consent', hl: idioma },
         },
       });
 
