@@ -938,7 +938,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Información Personal</Text>
+          <Text style={styles.sectionTitle}>{t('perfil.infoPersonal')}</Text>
           <View style={styles.infoRow}><Ionicons name="mail-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Email</Text><Text style={styles.infoValue}>{profile.email}</Text></View>
           <View style={styles.infoRow}><Ionicons name="call-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Teléfono</Text><Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text></View>
           <View style={styles.infoRow}><Ionicons name="person-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Género</Text><Text style={styles.infoValue}>{genderText}</Text></View>
@@ -954,7 +954,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Gustos</Text>
+          <Text style={styles.sectionTitle}>{t('perfil.gustos')}</Text>
           <View style={styles.chipsContainer}>
             {profile.interests.length > 0 ? profile.interests.map((interest, index) => (
               <View key={index} style={styles.chip}><Text style={styles.chipText}>{interest}</Text></View>
@@ -963,11 +963,43 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personalidad</Text>
+          <Text style={styles.sectionTitle}>{t('perfil.personalidad')}</Text>
           <View style={styles.chipsContainer}>
             {profile.personality_traits.length > 0 ? profile.personality_traits.map((trait, index) => (
               <View key={index} style={styles.chip}><Text style={styles.chipText}>{trait}</Text></View>
             )) : <Text style={styles.emptyText}>No has agregado rasgos de personalidad aún</Text>}
+          </View>
+        </View>
+
+        {/* Idioma de la app. Va de PRIMERO a proposito: un extranjero al que la
+            deteccion automatica le fallo tiene que encontrarlo sin buscar, y si
+            queda al final no llega nunca. Misma tarjeta que las demas; en vez
+            del chevron lleva el interruptor, porque solo hay dos idiomas y no
+            vale la pena un modal para eso. */}
+        <View style={styles.menuRow}>
+          <View style={styles.menuIconCircle}>
+            <Ionicons name="language-outline" size={20} color="#880E4F" />
+          </View>
+          <View style={styles.menuTextWrap}>
+            <Text style={styles.menuTitle}>{t('idioma.titulo')}</Text>
+            <Text style={styles.menuSub}>{idioma === 'es' ? t('idioma.espanol') : t('idioma.ingles')}</Text>
+          </View>
+          <View style={styles.idiomaFila}>
+            {(['es', 'en'] as const).map((cual) => (
+              <TouchableOpacity
+                key={cual}
+                style={[styles.idiomaChip, idioma === cual && styles.idiomaChipActivo]}
+                onPress={() => cambiarIdioma(cual)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: idioma === cual }}
+                accessibilityLabel={cual === 'es' ? 'Español' : 'English'}
+              >
+                <Text style={[styles.idiomaChipTexto, idioma === cual && styles.idiomaChipTextoActivo]}>
+                  {cual === 'es' ? 'ES' : 'EN'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -976,8 +1008,8 @@ export default function ProfileScreen() {
             <Ionicons name="notifications-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>Preferencias de Notificaciones</Text>
-            <Text style={styles.menuSub}>Toca para configurar</Text>
+            <Text style={styles.menuTitle}>{t('perfil.notificaciones')}</Text>
+            <Text style={styles.menuSub}>{t('perfil.notificacionesSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
@@ -998,8 +1030,8 @@ export default function ProfileScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>Cambiar Contraseña</Text>
-            <Text style={styles.menuSub}>Actualiza tu contraseña</Text>
+            <Text style={styles.menuTitle}>{t('perfil.contrasena')}</Text>
+            <Text style={styles.menuSub}>{t('perfil.contrasenaSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
@@ -1022,8 +1054,8 @@ export default function ProfileScreen() {
             <Ionicons name="diamond-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>Suscripción mensual Nospi</Text>
-            <Text style={styles.menuSub}>Acceso ilimitado a todos los eventos del mes</Text>
+            <Text style={styles.menuTitle}>{t('perfil.suscripcion')}</Text>
+            <Text style={styles.menuSub}>{t('perfil.suscripcionSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
@@ -1033,37 +1065,15 @@ export default function ProfileScreen() {
             <Ionicons name="document-text-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>Política de asistencia</Text>
-            <Text style={styles.menuSub}>Cancelación, saldo y suspensiones</Text>
+            <Text style={styles.menuTitle}>{t('perfil.politica')}</Text>
+            <Text style={styles.menuSub}>{t('perfil.politicaSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
-        {/* Idioma de la app. La deteccion automatica cubre a casi todo el mundo;
-            esto es la salida para quien quedo en el idioma equivocado. */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('idioma.titulo')}</Text>
-          <View style={styles.idiomaFila}>
-            {(['es', 'en'] as const).map((cual) => (
-              <TouchableOpacity
-                key={cual}
-                style={[styles.idiomaOpcion, idioma === cual && styles.idiomaOpcionActiva]}
-                onPress={() => cambiarIdioma(cual)}
-                activeOpacity={0.8}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: idioma === cual }}
-              >
-                <Text style={[styles.idiomaTexto, idioma === cual && styles.idiomaTextoActivo]}>
-                  {cual === 'es' ? t('idioma.espanol') : t('idioma.ingles')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Soporte</Text>
-          <Text style={styles.sectionSubtitle}>¿Necesitas ayuda? Contáctanos</Text>
+          <Text style={styles.sectionTitle}>{t('perfil.soporte')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('perfil.soporteSub')}</Text>
           <View style={styles.supportButtonsRow}>
             <TouchableOpacity style={styles.supportCard} onPress={handleSupportEmail} activeOpacity={0.8}>
               <View style={styles.supportIconCircle}>
@@ -1615,18 +1625,11 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  idiomaFila: { flexDirection: 'row', gap: 10 },
-  idiomaOpcion: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  idiomaOpcionActiva: { borderColor: '#F06292', backgroundColor: '#FCE4EC' },
-  idiomaTexto: { fontSize: 16, fontWeight: '700', color: '#6B7280' },
-  idiomaTextoActivo: { color: '#880E4F' },
+  idiomaFila: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 999, padding: 3, gap: 2 },
+  idiomaChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 },
+  idiomaChipActivo: { backgroundColor: '#880E4F' },
+  idiomaChipTexto: { fontSize: 12.5, fontWeight: '800', color: '#6B7280' },
+  idiomaChipTextoActivo: { color: '#FFFFFF' },
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },

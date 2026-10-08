@@ -10,6 +10,7 @@ import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 const CACHE_KEY = 'cache_events';
 
@@ -48,6 +49,17 @@ interface Event {
 const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const WEEK_SECTION_ORDER = ['Esta semana', 'La próxima semana', 'En 2 semanas', 'Más adelante', 'Fecha sin definir'];
+
+// Las frases de WEEK_SECTION_ORDER son la llave con la que se agrupan los
+// eventos: si se tradujeran, el agrupado se rompe. Por eso la llave se queda
+// en español y solo se traduce aqui, al momento de pintar el encabezado.
+const CLAVE_SECCION: Record<string, string> = {
+  'Esta semana': 'eventos.estaSemana',
+  'La próxima semana': 'eventos.proximaSemana',
+  'En 2 semanas': 'eventos.enDosSemanas',
+  'Más adelante': 'eventos.masAdelante',
+  'Fecha sin definir': 'eventos.sinFecha',
+};
 
 // event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota =
 // sabado 00:00 UTC). Si calculamos dia/fecha con los metodos locales de Date
@@ -111,6 +123,7 @@ const CAJA_ICONO = {
 };
 
 export default function EventsScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { user, loading: authLoading } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
@@ -260,7 +273,7 @@ export default function EventsScreen() {
         renderSkeleton()
       ) : (
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <Text style={styles.title}>Eventos Disponibles</Text>
+          <Text style={styles.title}>{t('eventos.titulo')}</Text>
           <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
 
           {/* La ciudad se muestra siempre, aunque no haya nada que mostrar: si
@@ -268,7 +281,7 @@ export default function EventsScreen() {
               que no ve planes, en vez de creer que la app esta vacia. */}
           <View style={styles.cityBanner}>
             <Text style={styles.cityBannerText} numberOfLines={1}>
-              📍 {ciudadPerfil ? `Eventos en ${ciudadPerfil}` : 'Eventos de todas las ciudades'}
+              📍 {ciudadPerfil ? t('eventos.enCiudad', { ciudad: ciudadPerfil }) : t('eventos.todasLasCiudades')}
             </Text>
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/profile')}
@@ -276,7 +289,7 @@ export default function EventsScreen() {
               accessibilityLabel="Cambiar mi ciudad en el perfil"
             >
               <Text style={styles.cityBannerLink}>
-                {ciudadPerfil ? '¿No es tu ciudad? Cámbiala en tu perfil' : 'Elige tu ciudad en tu perfil'}
+                {ciudadPerfil ? t('eventos.cambiarCiudad') : t('eventos.elegirCiudad')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -287,7 +300,7 @@ export default function EventsScreen() {
 
             return (
               <View key={section} style={styles.sectionWrapper}>
-                <Text style={styles.sectionHeader}>{section}</Text>
+                <Text style={styles.sectionHeader}>{t(CLAVE_SECCION[section] ?? 'eventos.sinFecha')}</Text>
 
                 {sectionEvents.map((event) => {
                   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
@@ -365,20 +378,20 @@ export default function EventsScreen() {
                           </Text>
                           {event.price === 0 && (
                             <View style={styles.freeBadge}>
-                              <Text style={styles.freeBadgeText}>GRATIS</Text>
+                              <Text style={styles.freeBadgeText}>{t('eventos.gratis')}</Text>
                             </View>
                           )}
                         </View>
                         {esVirtual ? (
                           <Text style={styles.locationPlaceholderCompact} numberOfLines={1}>
-                            Con cámara prendida · {event.is_location_revealed ? 'enlace ya disponible' : 'enlace el mismo día'}
+                            {event.is_location_revealed ? t('eventos.camaraPrendidaEnlaceYa') : t('eventos.camaraPrendidaEnlaceDespues')}
                           </Text>
                         ) : hasRevealedLocation ? (
                           <Text style={styles.locationRevealedCompact} numberOfLines={1}>
                             {event.location_name || ''}{event.location_name && event.location_address ? ' — ' : ''}{event.location_address || ''}
                           </Text>
                         ) : (
-                          <Text style={styles.locationPlaceholderCompact}>Ubicación se revelará un día antes</Text>
+                          <Text style={styles.locationPlaceholderCompact}>{t('eventos.ubicacionUnDiaAntes')}</Text>
                         )}
                       </View>
                       <Text style={styles.chevron}>›</Text>

@@ -49,6 +49,8 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'login.cuentaYaExiste': 'Esta cuenta ya está registrada. Inicia sesión directamente.',
     'login.contrasenaInvalida': 'Esa contraseña no es válida. Usa al menos 8 caracteres.',
     'login.contrasenaCorta': 'Tu contraseña es muy corta. Usa al menos 8 caracteres.',
+    'login.cuentaEsDeGoogle': 'Esta cuenta la creaste con Google. Toca "Continuar con Google" (arriba) para entrar — no necesitas contraseña.',
+    'login.cuentaEsDeApple': 'Esta cuenta la creaste con Apple. Toca "Continuar con Apple" (arriba) para entrar — no necesitas contraseña.',
     'login.canceladoApple': 'Inicio de sesión cancelado',
     'login.errorApple': 'Error al iniciar sesión con Apple',
     'login.errorGoogle': 'Error al iniciar sesión con Google',
@@ -82,6 +84,11 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'detalle.verPoliticaCompleta': 'Ver política completa',
     'detalle.aceptoBolos': 'Leí que la pista y los zapatos se pagan aparte, directamente en la bolera.',
     'detalle.aceptoGeneral': 'Leí la información anterior y acepto participar bajo mi propia responsabilidad.',
+
+    'detalle.confirmarAsistencia': 'Confirmar Asistencia',
+    'detalle.gratis': 'Gratis',
+    'detalle.marcaCasillaBolos': 'Para reservar primero marca la casilla de arriba confirmando que leíste que la pista y los zapatos se pagan aparte en la bolera.',
+    'detalle.marcaCasillaGeneral': 'Para reservar primero marca la casilla de arriba aceptando participar bajo tu propia responsabilidad.',
 
     // ---------- Mis citas ----------
     'citas.elegirConQuienConecte': '💘 Elegir con quién conecté',
@@ -134,12 +141,36 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'zona.otraSub': 'Dinos cuál',
     'zona.otraPlaceholder': '¿Cuál? Escríbela',
 
+    'eventos.titulo': 'Eventos Disponibles',
+    'eventos.enCiudad': 'Eventos en {{ciudad}}',
+    'eventos.todasLasCiudades': 'Eventos de todas las ciudades',
+    'eventos.gratis': 'GRATIS',
+    'eventos.camaraPrendidaEnlaceYa': 'Con cámara prendida · enlace ya disponible',
+    'eventos.camaraPrendidaEnlaceDespues': 'Con cámara prendida · enlace el mismo día',
+    'eventos.diasCortos': 'Dom,Lun,Mar,Mié,Jue,Vie,Sáb',
+    'eventos.mesesCortos': 'ene,feb,mar,abr,may,jun,jul,ago,sep,oct,nov,dic',
+
     // ---------- Bienvenida ----------
     'bienvenida.tagline1': 'Tu dosis semanal',
     'bienvenida.tagline2': 'de conexión',
     'bienvenida.subtitulo': 'Conoce personas reales en encuentros grupales cada semana',
     'bienvenida.empezar': 'Empezar',
     'bienvenida.yaTengoCuenta': 'Ya tengo una cuenta',
+
+    // ---------- Perfil ----------
+    'perfil.infoPersonal': 'Información Personal',
+    'perfil.gustos': 'Gustos',
+    'perfil.personalidad': 'Personalidad',
+    'perfil.notificaciones': 'Preferencias de Notificaciones',
+    'perfil.notificacionesSub': 'Toca para configurar',
+    'perfil.contrasena': 'Cambiar Contraseña',
+    'perfil.contrasenaSub': 'Actualiza tu contraseña',
+    'perfil.suscripcion': 'Suscripción mensual Nospi',
+    'perfil.suscripcionSub': 'Acceso ilimitado a todos los eventos del mes',
+    'perfil.politica': 'Política de asistencia',
+    'perfil.politicaSub': 'Cancelación, saldo y suspensiones',
+    'perfil.soporte': 'Soporte',
+    'perfil.soporteSub': '¿Necesitas ayuda? Contáctanos',
 
     // ---------- Selector de idioma ----------
     'idioma.titulo': 'Idioma',
@@ -186,6 +217,8 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'login.cuentaYaExiste': 'This account already exists. Just sign in.',
     'login.contrasenaInvalida': "That password won't work. Use at least 8 characters.",
     'login.contrasenaCorta': 'Your password is too short. Use at least 8 characters.',
+    'login.cuentaEsDeGoogle': 'You created this account with Google. Tap "Continue with Google" above — you don\'t need a password.',
+    'login.cuentaEsDeApple': 'You created this account with Apple. Tap "Continue with Apple" above — you don\'t need a password.',
     'login.canceladoApple': 'Sign-in cancelled',
     'login.errorApple': 'Could not sign in with Apple',
     'login.errorGoogle': 'Could not sign in with Google',
@@ -219,6 +252,11 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'detalle.verPoliticaCompleta': 'Read the full policy',
     'detalle.aceptoBolos': 'I read that the lane and the shoes are paid separately, directly at the bowling alley.',
     'detalle.aceptoGeneral': 'I read the information above and I take part at my own responsibility.',
+
+    'detalle.confirmarAsistencia': 'Confirm attendance',
+    'detalle.gratis': 'Free',
+    'detalle.marcaCasillaBolos': 'To book, first tick the box above confirming you read that the lane and the shoes are paid separately at the bowling alley.',
+    'detalle.marcaCasillaGeneral': 'To book, first tick the box above accepting that you take part at your own responsibility.',
 
     // ---------- Mis citas ----------
     'citas.elegirConQuienConecte': '💘 Pick who you clicked with',
@@ -271,12 +309,36 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'zona.otraSub': 'Tell us where',
     'zona.otraPlaceholder': 'Which one? Type it',
 
+    'eventos.titulo': 'Events',
+    'eventos.enCiudad': 'Events in {{ciudad}}',
+    'eventos.todasLasCiudades': 'Events in all cities',
+    'eventos.gratis': 'FREE',
+    'eventos.camaraPrendidaEnlaceYa': 'Camera on · link already available',
+    'eventos.camaraPrendidaEnlaceDespues': 'Camera on · link on the day',
+    'eventos.diasCortos': 'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
+    'eventos.mesesCortos': 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec',
+
     // ---------- Bienvenida ----------
     'bienvenida.tagline1': 'Your weekly dose',
     'bienvenida.tagline2': 'of connection',
     'bienvenida.subtitulo': 'Meet real people at group events, every week',
     'bienvenida.empezar': 'Get started',
     'bienvenida.yaTengoCuenta': 'I already have an account',
+
+    // ---------- Perfil ----------
+    'perfil.infoPersonal': 'Personal information',
+    'perfil.gustos': 'Interests',
+    'perfil.personalidad': 'Personality',
+    'perfil.notificaciones': 'Notification settings',
+    'perfil.notificacionesSub': 'Tap to set up',
+    'perfil.contrasena': 'Change password',
+    'perfil.contrasenaSub': 'Update your password',
+    'perfil.suscripcion': 'Nospi monthly subscription',
+    'perfil.suscripcionSub': 'Unlimited access to every event this month',
+    'perfil.politica': 'Attendance policy',
+    'perfil.politicaSub': 'Cancelling, balance and suspensions',
+    'perfil.soporte': 'Support',
+    'perfil.soporteSub': 'Need a hand? Write to us',
 
     // ---------- Selector de idioma ----------
     'idioma.titulo': 'Language',

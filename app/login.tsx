@@ -21,11 +21,13 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 const googleIconSource = require('@/assets/images/38dba063-6bcb-40a2-805f-8a862d8694ef.png');
 const appleIconSource = require('@/assets/images/icon_apple.png');
 
 export default function LoginScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { loading, signInWithApple, signInWithGoogle } = useAuth();
 
@@ -41,15 +43,15 @@ export default function LoginScreen() {
   const { error: routeError } = useLocalSearchParams<{ error: string }>();
   React.useEffect(() => {
     if (routeError === 'no_profile') {
-      setError('No encontramos una cuenta registrada con este método. Por favor regístrate primero.');
+      setError(t('login.cuentaNoExiste'));
     } else if (routeError === 'account_exists') {
-      setError('Esta cuenta ya está registrada. Inicia sesión directamente.');
+      setError(t('login.cuentaYaExiste'));
     }
   }, [routeError]);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      setError('Por favor ingresa tu email y contraseña');
+      setError(t('login.faltaEmailOContrasena'));
       return;
     }
     if (isSignUp && !name.trim()) {
@@ -76,11 +78,11 @@ export default function LoginScreen() {
           if (m.includes('already')) {
             setError('Ya existe una cuenta con este email');
           } else if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('weak')) {
-            setError('Esa contraseña no es válida. Usa al menos 8 caracteres.');
+            setError(t('login.contrasenaInvalida'));
           } else if (m.includes('at least') && m.includes('character')) {
-            setError('Tu contraseña es muy corta. Usa al menos 8 caracteres.');
+            setError(t('login.contrasenaCorta'));
           } else {
-            setError('Error al crear cuenta. Intenta de nuevo.');
+            setError(t('login.errorCrearReintenta'));
           }
           return;
         }
@@ -105,22 +107,22 @@ export default function LoginScreen() {
               p_email: email.trim(),
             });
             if (method === 'google') {
-              setError('Esta cuenta la creaste con Google. Toca "Continuar con Google" (arriba) para entrar — no necesitas contraseña.');
+              setError(t('login.cuentaEsDeGoogle'));
               return;
             }
             if (method === 'apple') {
-              setError('Esta cuenta la creaste con Apple. Toca "Continuar con Apple" (arriba) para entrar — no necesitas contraseña.');
+              setError(t('login.cuentaEsDeApple'));
               return;
             }
           } catch (_e) {
             // Si la verificación falla, seguimos con el mensaje normal.
           }
-          setError('Email o contraseña incorrectos');
+          setError(t('login.credencialesMalas'));
           return;
         }
 
         if (!data.user) {
-          setError('Error al iniciar sesión');
+          setError(t('login.errorEntrar'));
           return;
         }
 
@@ -146,7 +148,7 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       
-      setError(isSignUp ? 'Error al crear cuenta. Intenta de nuevo.' : 'Error al iniciar sesión. Intenta de nuevo.');
+      setError(isSignUp ? t('login.errorCrearReintenta') : t('login.errorEntrarReintenta'));
     } finally {
       setSubmitting(false);
     }
@@ -163,9 +165,9 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       if (err?.message?.includes('cancel') || err?.code === 'ERR_CANCELED') {
-        setError('Inicio de sesión cancelado');
+        setError(t('login.canceladoApple'));
       } else {
-        setError('Error al iniciar sesión con Apple');
+        setError(t('login.errorApple'));
       }
       setSubmitting(false);
     }
@@ -182,9 +184,9 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       if (err?.message?.includes('cancel')) {
-        setError('Inicio de sesión cancelado');
+        setError(t('login.canceladoApple'));
       } else {
-        setError('Error al iniciar sesión con Google');
+        setError(t('login.errorGoogle'));
       }
       setSubmitting(false);
     }
@@ -211,10 +213,10 @@ export default function LoginScreen() {
 
   const isLoading = loading || submitting;
   const eyeIcon = showPassword ? 'eye-off-outline' : 'eye-outline';
-  const titleText = isSignUp ? 'Crear cuenta' : 'Bienvenido de nuevo';
-  const subtitleText = isSignUp ? 'Únete a Nospi' : 'Inicia sesión para continuar';
-  const submitText = isSignUp ? 'Crear cuenta' : 'Iniciar sesión';
-  const toggleText = isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate';
+  const titleText = isSignUp ? t('login.botonCrear') : 'Bienvenido de nuevo';
+  const subtitleText = isSignUp ? t('login.subtituloCrear') : t('login.subtituloEntrar');
+  const submitText = isSignUp ? t('login.botonCrear') : t('login.botonEntrar');
+  const toggleText = isSignUp ? t('login.cambiarAEntrar') : t('login.cambiarACrear');
 
   return (
     <>
@@ -313,7 +315,7 @@ export default function LoginScreen() {
                   <MaterialIcons name="lock" size={20} color="#999" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Contraseña"
+                    placeholder={t('login.contrasena')}
                     placeholderTextColor="#999"
                     value={password}
                     onChangeText={setPassword}
@@ -338,7 +340,7 @@ export default function LoginScreen() {
                     disabled={isLoading}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+                    <Text style={styles.forgotPasswordText}>{t('login.olvidasteContrasena')}</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>

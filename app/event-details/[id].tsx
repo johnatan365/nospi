@@ -11,6 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { abrirMeet } from '@/lib/abrirMeet';
 import { toqueFuerte, aviso } from '@/lib/haptics';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 // Videollamada: la asistencia se confirma en la pestaña Dinámica desde 15
 // minutos antes (VIRTUAL_CONFIRM_MINUTES de dinamica.tsx, y el push y el correo
@@ -65,6 +66,7 @@ const CAJA_ICONO = {
 };
 
 export default function EventDetailsScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useSupabase();
@@ -275,9 +277,9 @@ export default function EventDetailsScreen() {
     if (requiresWaiver(event?.type) && !waiverAccepted) {
       aviso();
       const msg = event?.type === 'bolos'
-        ? 'Para reservar primero marca la casilla de arriba confirmando que leíste que la pista y los zapatos se pagan aparte en la bolera.'
-        : 'Para reservar primero marca la casilla de arriba aceptando participar bajo tu propia responsabilidad.';
-      if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Falta un paso', msg); }
+        ? t('detalle.marcaCasillaBolos')
+        : t('detalle.marcaCasillaGeneral');
+      if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert(t('comun.faltaUnPaso'), msg); }
       return;
     }
 
@@ -370,7 +372,7 @@ export default function EventDetailsScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
+        <Stack.Screen options={{ headerShown: true, title: t('detalle.titulo'), headerBackTitle: t('comun.atras') }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={nospiColors.purpleDark} />
         </View>
@@ -386,7 +388,7 @@ export default function EventDetailsScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <Stack.Screen options={{ headerShown: true, title: 'Detalles del Evento', headerBackTitle: 'Atrás' }} />
+        <Stack.Screen options={{ headerShown: true, title: t('detalle.titulo'), headerBackTitle: t('comun.atras') }} />
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Evento no encontrado</Text>
         </View>
@@ -415,7 +417,7 @@ export default function EventDetailsScreen() {
     >
       <Stack.Screen options={{
         headerShown: true,
-        title: 'Detalles del Evento',
+        title: t('detalle.titulo'),
         headerLeft: () => (
           <TouchableOpacity onPress={handleCancel} style={{ paddingHorizontal: 8 }}>
             <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '500' }}>Cancelar</Text>
@@ -556,7 +558,7 @@ export default function EventDetailsScreen() {
                       </Text>
                       <View style={[styles.mapsButton, styles.mapsButtonDisabled]}>
                         <Text style={styles.mapsButtonText}>
-                          {abreMs !== null ? `Disponible a las ${horaBogota(new Date(abreMs))}` : 'Disponible el día del evento'}
+                          {abreMs !== null ? t('detalle.disponibleALas', { hora: horaBogota(new Date(abreMs)) }) : t('detalle.disponibleElDia')}
                         </Text>
                       </View>
                     </>
@@ -576,7 +578,7 @@ export default function EventDetailsScreen() {
                       onPress={() => router.push('/(tabs)/dinamica' as any)}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.mapsButtonText}>Ir a la Dinámica</Text>
+                      <Text style={styles.mapsButtonText}>{t('detalle.irALaDinamica')}</Text>
                     </TouchableOpacity>
                   </>
                 );
@@ -607,10 +609,10 @@ export default function EventDetailsScreen() {
             <View style={styles.actionSection}>
               {event.price === 0 && (
                 <View style={styles.freeBadge}>
-                  <Text style={styles.freeBadgeText}>Gratis</Text>
+                  <Text style={styles.freeBadgeText}>{t('detalle.gratis')}</Text>
                 </View>
               )}
-              <Text style={styles.question}>¿Deseas asistir?</Text>
+              <Text style={styles.question}>{t('detalle.deseasAsistir')}</Text>
 
               {requiresWaiver(event.type) && (
                 <TouchableOpacity
@@ -623,8 +625,8 @@ export default function EventDetailsScreen() {
                   </View>
                   <Text style={styles.waiverText}>
                     {event.type === 'bolos'
-                      ? 'Leí que la pista y los zapatos se pagan aparte, directamente en la bolera.'
-                      : 'Leí la información anterior y acepto participar bajo mi propia responsabilidad.'}
+                      ? t('detalle.aceptoBolos')
+                      : t('detalle.aceptoGeneral')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -645,7 +647,7 @@ export default function EventDetailsScreen() {
                 {confirming ? (
                   <ActivityIndicator color={nospiColors.white} />
                 ) : (
-                  <Text style={styles.confirmButtonText}>Confirmar Asistencia</Text>
+                  <Text style={styles.confirmButtonText}>{t('detalle.confirmarAsistencia')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -653,7 +655,7 @@ export default function EventDetailsScreen() {
 
           {isEnrolled && (
             <View style={styles.enrolledBadge}>
-              <Text style={styles.enrolledText}>✓ Ya estás inscrito</Text>
+              <Text style={styles.enrolledText}>{t('detalle.yaEstasInscrito')}</Text>
             </View>
           )}
         </View>
@@ -662,7 +664,7 @@ export default function EventDetailsScreen() {
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.ticketWrap}>
-            <Text style={styles.ticketCheer}>✦ ¡RESERVADO! ✦</Text>
+            <Text style={styles.ticketCheer}>{t('detalle.reservado')}</Text>
 
             <View style={styles.ticket}>
               <LinearGradient
@@ -689,7 +691,7 @@ export default function EventDetailsScreen() {
                   <Text style={styles.ticketIconEmoji}>{eventIcon}</Text>
                 )}
                 <Text style={styles.ticketTitle}>Pase confirmado</Text>
-                <Text style={styles.ticketSubtitle}>Tu cupo está asegurado 🎉</Text>
+                <Text style={styles.ticketSubtitle}>{t('detalle.cupoAsegurado')}</Text>
               </LinearGradient>
 
               <View style={styles.ticketPerf}>
@@ -709,7 +711,7 @@ export default function EventDetailsScreen() {
                 <View style={styles.ticketRow}>
                   <Text style={styles.ticketRowIcon}>📍</Text>
                   <Text style={styles.ticketRowText}>
-                    {showLocation ? event?.location_name : 'Te enviaremos la ubicación un día antes'}
+                    {showLocation ? event?.location_name : t('detalle.ubicacionLaEnviamos')}
                   </Text>
                 </View>
               </View>
@@ -730,7 +732,7 @@ export default function EventDetailsScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.ticketPolicyLinkText}>Ver política completa</Text>
+                <Text style={styles.ticketPolicyLinkText}>{t('detalle.verPoliticaCompleta')}</Text>
               </TouchableOpacity>
             </View>
 
