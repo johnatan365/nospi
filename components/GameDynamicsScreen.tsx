@@ -779,7 +779,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   }, [gamePhase, appointment?.event_id, currentUserId, goToClosing]);
 
   const levelEmoji = currentLevel === 'divertido' ? '😄' : currentLevel === 'sensual' ? '💕' : '🔥';
-  const levelName = currentLevel === 'divertido' ? 'Divertido' : currentLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
+  const levelName = currentLevel === 'divertido' ? t('juego.divertido') : currentLevel === 'sensual' ? t('juego.coqueto') : t('juego.atrevido');
   const levelPosition = LEVEL_ORDER.indexOf(currentLevel) + 1;
 
   // Progreso dentro del nivel, para que la mesa sepa cuántas van y cuántas
@@ -798,7 +798,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   const theme = LEVEL_THEMES[currentLevel];
   
   const transitionLevelEmoji = transitionLevel === 'divertido' ? '😄' : transitionLevel === 'sensual' ? '💕' : '🔥';
-  const transitionLevelName = transitionLevel === 'divertido' ? 'Divertido' : transitionLevel === 'sensual' ? 'Coqueto' : 'Atrevido';
+  const transitionLevelName = transitionLevel === 'divertido' ? t('juego.divertido') : transitionLevel === 'sensual' ? t('juego.coqueto') : t('juego.atrevido');
   const transitionTheme = transitionLevel ? LEVEL_THEMES[transitionLevel] : theme;
 
   // Timer color thresholds
@@ -883,7 +883,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               el detalle "Nivel X de 3 · Pregunta Y de N". */}
           <View style={[styles.levelBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
             <Text style={styles.levelName}>{levelEmoji} {levelName}</Text>
-            <Text style={styles.levelDetail}>Nivel {levelPosition} de 3 · Pregunta {questionNumber} de {questionsInLevel}</Text>
+            <Text style={styles.levelDetail}>{t('juego.nivelDetalle', { nivel: levelPosition, p: questionNumber, total: questionsInLevel })}</Text>
           </View>
 
           {/* Aviso de última pregunta: solo el moderador, y solo cuando ya no
@@ -893,7 +893,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             <View style={styles.lastQuestionNotice}>
               <Text style={styles.lastQuestionNoticeEmoji}>🗣️</Text>
               <Text style={styles.lastQuestionNoticeText}>
-                <Text style={styles.lastQuestionNoticeStrong}>Esta es la última pregunta.</Text> Cuando terminen, presiona Terminar y pasarán a la pantalla de cierre.
+                <Text style={styles.lastQuestionNoticeStrong}>{t('juego.ultimaPregunta')}</Text>{t('juego.ultimaPreguntaResto')}
               </Text>
             </View>
           )}
@@ -908,7 +908,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           ]}>
             <View style={[styles.everyoneBadge, { backgroundColor: theme.timerBadgeBg, borderColor: theme.accentColor + '55' }]}>
               <Text style={[styles.everyoneBadgeText, { color: '#FFFFFF' }]}>
-                {esVirtual ? '🎤 Arranca quien quiera y le pasa la palabra a otro' : '🙌 Responde quien tenga algo que contar'}
+                {esVirtual ? t('juego.arrancaQuienQuiera') : t('juego.respondeQuienTenga')}
               </Text>
             </View>
 
@@ -941,15 +941,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                   mano en mano (sin obligar a nadie) y se pide cámara al hablar. */}
               {esVirtual
                 ? (isModerator
-                    ? `🗣️ Lee la pregunta en voz alta. Si en unos segundos nadie arranca, cuenta tú primero o invita a alguien por su nombre. Si alguien habla con la cámara apagada, pídele con buena onda que la prenda.${isLastQuestion ? '' : ' '}`
-                    : '📹 Cuando hables, prende la cámara. Al terminar, pásale la palabra a alguien: "¿Y tú, Laura?". Si no quieres responder esta, di "paso" y listo.')
+                    ? t('juego.instrModVirtual')
+                    : t('juego.instrInviVirtual'))
                 : (isModerator
-                    ? (isLastQuestion
-                        ? '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar.'
-                        : '🗣️ Lee la pregunta en voz alta. No todos tienen que responder: habla quien tenga algo que aportar. ')
-                    : 'No todos tienen que responder: habla quien tenga una historia o algo que aportar.')}
+                    ? t('juego.instrModPresencial')
+                    : t('juego.instrInviPresencial'))}
               {isModerator && !isLastQuestion && (
-                <Text style={styles.instructionTextStrong}>No pases a la siguiente hasta que terminen de responder esta.</Text>
+                <Text style={styles.instructionTextStrong}>{t('juego.noPasesSiguiente')}</Text>
               )}
             </Text>
           </View>
@@ -958,7 +956,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               a los 5 s de mostrarse la pregunta. */}
           {voteVisible && (
             <View style={styles.voteCard}>
-              <Text style={styles.voteTitle}>¿Esta pregunta se queda para próximos eventos?</Text>
+              <Text style={styles.voteTitle}>{t('juego.votoTitulo')}</Text>
               <View style={styles.voteBtnRow}>
                 <TouchableOpacity
                   style={[styles.voteBtn, myVote === 'up' && styles.voteBtnUp]}
@@ -976,7 +974,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 </TouchableOpacity>
               </View>
               {myVote && (
-                <Text style={styles.voteThanks}>✓ ¡Gracias! Puedes cambiarlo mientras la pregunta esté en pantalla.</Text>
+                <Text style={styles.voteThanks}>{t('juego.votoGracias')}</Text>
               )}
             </View>
           )}
@@ -1003,14 +1001,14 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             ) : (
               <View style={styles.continueButtonWaitingC}>
                 <Text style={styles.continueButtonTextWaiting}>
-                  Espera el tiempo...
+                  {t('juego.esperaTiempo')}
                 </Text>
               </View>
             )
           ) : (
             <View style={styles.continueButtonWaitingC}>
               <Text style={styles.continueButtonTextWaiting}>
-                ⏳ Espera a que {moderatorName} {isLastQuestion ? 'termine la dinámica' : 'pase a la siguiente'}
+                {t('juego.esperaAQue', { nombre: moderatorName || t('juego.elModerador'), accion: isLastQuestion ? t('juego.termineDinamica') : t('juego.paseSiguiente') })}
               </Text>
             </View>
           )}
@@ -1024,13 +1022,13 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             onPress={() => setShowChangeModerator(true)}
             activeOpacity={0.8}
           >
-            <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
+            <Text style={styles.changeModeratorText}>{t('juego.cambiarModerador')}</Text>
           </TouchableOpacity>
           )}
 
           {moderatorId && (
             <Text style={styles.moderatorTag}>
-              {isModerator ? 'Eres el moderador · solo tú avanzas' : `${moderatorName} es el moderador`}
+              {isModerator ? t('juego.eresModerador') : t('juego.esElModerador', { nombre: moderatorName || t('juego.elModerador') })}
             </Text>
           )}
           {botonVolverMeet}
@@ -1081,16 +1079,16 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
           {isModerator ? (
             <>
               <View style={styles.closingIntroVoiceTag}>
-                <Text style={styles.closingIntroVoiceTagText}>🗣️ Lee en voz alta lo que sigue</Text>
+                <Text style={styles.closingIntroVoiceTagText}>{t('juego.leeEnVozAlta')}</Text>
               </View>
               <View style={styles.closingIntroReadCard}>
                 <Text style={styles.closingIntroReadText}>
-                  “Hasta aquí llega la dinámica de preguntas 🎉. Ahora <Text style={styles.closingIntroStrong}>{esVirtual ? 'todos vayan a la app de Nospi' : 'todos saquen su celular'}</Text>: viene la parte final, donde cada uno elige <Text style={styles.closingIntroStrong}>en privado</Text> con quién sintió conexión.”
+                  {t('juego.cierre1')}<Text style={styles.closingIntroStrong}>{esVirtual ? t('juego.todosAppNospi') : t('juego.todosCelular')}</Text>{t('juego.cierre2')}<Text style={styles.closingIntroStrong}>{t('juego.enPrivado')}</Text>{t('juego.conQuienSintio')}
                 </Text>
               </View>
               <View style={styles.closingIntroThanksCard}>
                 <Text style={styles.closingIntroThanksText}>
-                  👏 <Text style={styles.closingIntroStrong}>¡Gracias por moderar la dinámica!</Text> Lo hiciste increíble.
+                  👏 <Text style={styles.closingIntroStrong}>{t('juego.graciasModerar')}</Text>{t('juego.loHicisteIncreible')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1099,30 +1097,30 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                 disabled={loading}
                 activeOpacity={0.85}
               >
-                <Text style={styles.closingIntroContinueText}>{loading ? 'Cargando...' : '🚀 Continuar'}</Text>
+                <Text style={styles.closingIntroContinueText}>{loading ? t('juego.cargando') : t('juego.continuarCohete')}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
               <View style={styles.closingIntroReadCard}>
                 <Text style={styles.closingIntroReadText}>
-                  📱 <Text style={styles.closingIntroStrong}>{esVirtual ? 'Ve a la app de Nospi' : 'Saca tu celular'}</Text>: ahora vas a elegir <Text style={styles.closingIntroStrong}>en privado</Text> con quién sentiste conexión.
+                  📱 <Text style={styles.closingIntroStrong}>{esVirtual ? t('juego.veAppNospi') : t('juego.sacaCelular')}</Text>{t('juego.ahoraVasAElegir')}<Text style={styles.closingIntroStrong}>{t('juego.enPrivado')}</Text>{t('juego.conQuienSentiste')}
                 </Text>
               </View>
               <View style={styles.closingIntroThanksCard}>
                 <Text style={styles.closingIntroThanksText}>
-                  👏 Denle un aplauso a <Text style={styles.closingIntroStrong}>{moderatorName}</Text>, que moderó la dinámica.
+                  {t('juego.denleAplauso')}<Text style={styles.closingIntroStrong}>{moderatorName}</Text>{t('juego.queModero')}
                 </Text>
               </View>
               <View style={styles.closingIntroWaitCard}>
-                <Text style={styles.closingIntroWaitText}>⏳ Espera a que {moderatorName} presione Continuar</Text>
+                <Text style={styles.closingIntroWaitText}>{t('juego.esperaPresione', { nombre: moderatorName || t('juego.elModerador') })}</Text>
               </View>
               <TouchableOpacity
                 style={styles.changeModeratorBtn}
                 onPress={() => setShowChangeModerator(true)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.changeModeratorText}>🔄 Cambiar moderador</Text>
+                <Text style={styles.changeModeratorText}>{t('juego.cambiarModerador')}</Text>
               </TouchableOpacity>
             </>
           )}
