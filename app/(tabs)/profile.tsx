@@ -42,6 +42,7 @@ import appJson from '@/app.json';
 import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 const CACHE_KEY = 'cache_profile';
 
@@ -153,6 +154,7 @@ function isInAppBrowser(): boolean {
 }
 
 export default function ProfileScreen() {
+  const { t, idioma, cambiarIdioma } = useIdioma();
   const { user, signOut, loading: authLoading } = useSupabase();
   const { appConfig } = useAppConfig();
   const router = useRouter();
@@ -1088,6 +1090,28 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
 
+        {/* Idioma de la app. La deteccion automatica cubre a casi todo el mundo;
+            esto es la salida para quien quedo en el idioma equivocado. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('idioma.titulo')}</Text>
+          <View style={styles.idiomaFila}>
+            {(['es', 'en'] as const).map((cual) => (
+              <TouchableOpacity
+                key={cual}
+                style={[styles.idiomaOpcion, idioma === cual && styles.idiomaOpcionActiva]}
+                onPress={() => cambiarIdioma(cual)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: idioma === cual }}
+              >
+                <Text style={[styles.idiomaTexto, idioma === cual && styles.idiomaTextoActivo]}>
+                  {cual === 'es' ? t('idioma.espanol') : t('idioma.ingles')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Soporte</Text>
           <Text style={styles.sectionSubtitle}>¿Necesitas ayuda? Contáctanos</Text>
@@ -1671,6 +1695,18 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  idiomaFila: { flexDirection: 'row', gap: 10 },
+  idiomaOpcion: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  idiomaOpcionActiva: { borderColor: '#F06292', backgroundColor: '#FCE4EC' },
+  idiomaTexto: { fontSize: 16, fontWeight: '700', color: '#6B7280' },
+  idiomaTextoActivo: { color: '#880E4F' },
   gradient: { flex: 1 },
   container: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },

@@ -134,6 +134,13 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'zona.otraSub': 'Dinos cuál',
     'zona.otraPlaceholder': '¿Cuál? Escríbela',
 
+    // ---------- Bienvenida ----------
+    'bienvenida.tagline1': 'Tu dosis semanal',
+    'bienvenida.tagline2': 'de conexión',
+    'bienvenida.subtitulo': 'Conoce personas reales en encuentros grupales cada semana',
+    'bienvenida.empezar': 'Empezar',
+    'bienvenida.yaTengoCuenta': 'Ya tengo una cuenta',
+
     // ---------- Selector de idioma ----------
     'idioma.titulo': 'Idioma',
     'idioma.espanol': 'Español',
@@ -263,6 +270,13 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'zona.otra': 'Somewhere else',
     'zona.otraSub': 'Tell us where',
     'zona.otraPlaceholder': 'Which one? Type it',
+
+    // ---------- Bienvenida ----------
+    'bienvenida.tagline1': 'Your weekly dose',
+    'bienvenida.tagline2': 'of connection',
+    'bienvenida.subtitulo': 'Meet real people at group events, every week',
+    'bienvenida.empezar': 'Get started',
+    'bienvenida.yaTengoCuenta': 'I already have an account',
 
     // ---------- Selector de idioma ----------
     'idioma.titulo': 'Language',

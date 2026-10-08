@@ -6,6 +6,7 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { nospiColors } from '@/constants/Colors';
 import { Asset } from 'expo-asset';
 import appJson from '@/app.json';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -18,6 +19,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 const logoSource = require('../assets/images/fa137ca3-b552-4ac8-9f1e-8268723ace00.png');
 
 export default function WelcomeScreen() {
+  const { t, idioma, cambiarIdioma } = useIdioma();
   const router = useRouter();
   const [logoLoaded, setLogoLoaded] = useState(false);
 
@@ -62,11 +64,11 @@ export default function WelcomeScreen() {
           </View>
           
           <View style={styles.taglineContainer}>
-            <Text style={styles.tagline}>Tu dosis semanal</Text>
-            <Text style={styles.tagline}>de conexión</Text>
+            <Text style={styles.tagline}>{t('bienvenida.tagline1')}</Text>
+            <Text style={styles.tagline}>{t('bienvenida.tagline2')}</Text>
           </View>
           
-          <Text style={styles.subtitle}>Conoce personas reales en encuentros grupales cada semana</Text>
+          <Text style={styles.subtitle}>{t('bienvenida.subtitulo')}</Text>
           
           <View style={styles.buttonContainer}>
             {/* Botón principal: blanco sólido, premium */}
@@ -75,7 +77,7 @@ export default function WelcomeScreen() {
               onPress={handleStart}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryButtonText}>Empezar</Text>
+              <Text style={styles.primaryButtonText}>{t('bienvenida.empezar')}</Text>
             </TouchableOpacity>
             
             {/* Botón secundario: glass frosted, igualmente prominente */}
@@ -84,8 +86,30 @@ export default function WelcomeScreen() {
               onPress={handleLogin}
               activeOpacity={0.85}
             >
-              <Text style={styles.secondaryButtonText}>Ya tengo una cuenta</Text>
+              <Text style={styles.secondaryButtonText}>{t('bienvenida.yaTengoCuenta')}</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Interruptor de idioma. La app ya detecta sola el idioma del celular;
+              esto es para cuando esa deteccion falla — el extranjero que vive
+              aqui con el celular en español, o al reves. Va al pie y chiquito
+              para no competirle a los dos botones. */}
+          <View style={styles.idiomaFila}>
+            {(['es', 'en'] as const).map((cual) => (
+              <TouchableOpacity
+                key={cual}
+                style={[styles.idiomaChip, idioma === cual && styles.idiomaChipActivo]}
+                onPress={() => cambiarIdioma(cual)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: idioma === cual }}
+                accessibilityLabel={cual === 'es' ? 'Español' : 'English'}
+              >
+                <Text style={[styles.idiomaChipTexto, idioma === cual && styles.idiomaChipTextoActivo]}>
+                  {cual === 'es' ? 'ES' : 'EN'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           <Text style={styles.versionText}>v{appJson.expo.version}{Platform.OS !== 'web' ? ` (${appJson.expo.android?.versionCode || '—'})` : ''}</Text>
@@ -96,6 +120,21 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  idiomaFila: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginTop: 22,
+    padding: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    gap: 2,
+  },
+  idiomaChip: { paddingVertical: 6, paddingHorizontal: 15, borderRadius: 999 },
+  idiomaChipActivo: { backgroundColor: '#FFFFFF' },
+  idiomaChipTexto: { color: 'rgba(255,255,255,0.82)', fontSize: 12.5, fontWeight: '800' },
+  idiomaChipTextoActivo: { color: '#880E4F' },
   gradient: {
     flex: 1,
   },

@@ -37,6 +37,12 @@ interface AppointmentRow {
   event: EventRef | null;
 }
 
+interface ZonaRow {
+  created_at: string;
+  zonas_preferidas: string[] | null;
+  zona_otra: string | null;
+}
+
 interface SubscriptionRow {
   id: string;
   created_at: string;
@@ -137,6 +143,7 @@ export default function StatsScreen() {
   const isMobile = width < 768;
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
+  const [zonaRows, setZonaRows] = useState<ZonaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(todayBogota());
@@ -149,6 +156,21 @@ export default function StatsScreen() {
       const json = await callAdminStats({ action: 'report' });
       setAppointments(json.appointments || []);
       setSubscriptions(json.subscriptions || []);
+
+      // Zonas preferidas: consulta directa, aparte del reporte. Se deja asi a
+      // proposito para no tener que redesplegar la edge function admin-stats.
+      // Si falla, el resto de estadisticas sigue funcionando igual.
+      try {
+        const { data: zd } = await supabase
+          .from('appointments')
+          .select('created_at, zonas_preferidas, zona_otra')
+          .not('zonas_preferidas', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(5000);
+        setZonaRows((zd as ZonaRow[]) || []);
+      } catch {
+        setZonaRows([]);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -171,6 +193,41 @@ export default function StatsScreen() {
       return day >= dateFrom && day <= dateTo;
     });
   }, [subscriptions, dateFrom, dateTo]);
+
+  // Conteo de zonas marcadas y de lo que la gente escribio en "Otra".
+  // OJO: es una PREFERENCIA, no el lugar donde fue el evento.
+  const zonasResumen = useMemo(() => {
+    const ETIQUETAS: Record<string, string> = {
+      poblado: 'El Poblado',
+      laureles: 'Laureles',
+      envigado: 'Envigado',
+      otra: 'Otra',
+    };
+    const conteo: Record<string, number> = {};
+    const libres: Record<string, number> = {};
+    let personas = 0;
+    for (const r of zonaRows) {
+      const day = dayKey(r.created_at);
+      if (day < dateFrom || day > dateTo) continue;
+      if (!Array.isArray(r.zonas_preferidas) || r.zonas_preferidas.length === 0) continue;
+      personas += 1;
+      for (const z of r.zonas_preferidas) conteo[z] = (conteo[z] || 0) + 1;
+      const otra = (r.zona_otra || '').trim();
+      if (otra) {
+        const clave = otra.toLocaleLowerCase('es-CO');
+        libres[clave] = (libres[clave] || 0) + 1;
+      }
+    }
+    const filas = Object.entries(conteo)
+      .map(([k, n]) => ({ zona: ETIQUETAS[k] || k, n }))
+      .sort((a, b) => b.n - a.n);
+    const maximo = filas.length ? filas[0].n : 0;
+    const escritas = Object.entries(libres)
+      .map(([texto, n]) => ({ texto: texto.charAt(0).toLocaleUpperCase('es-CO') + texto.slice(1), n }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 25);
+    return { filas, maximo, escritas, personas };
+  }, [zonaRows, dateFrom, dateTo]);
 
   const apptsByDay = useMemo(() => {
     const map: Record<string, { day: string; count: number; revenue: number; unknown: number; wompiCount: number; manualCount: number }> = {};
@@ -402,6 +459,55 @@ export default function StatsScreen() {
               ))}
             </View>
           )}
+
+          {/* Zonas que pide la gente. Es DEMANDA, no donde fue el evento: sirve
+              para decidir a que zonas vale la pena abrir. Mismo criterio que el
+              panel de ciudades buscadas. */}
+          <Text style={styles.sectionTitle}>Zonas que pide la gente</Text>
+          {zonasResumen.filas.length === 0 ? (
+            <Text style={styles.emptyText}>
+              Nadie ha respondido la pregunta de zona en el rango seleccionado. Aparece al inscribirse a un evento presencial.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.zonaNota}>
+                {zonasResumen.personas} {zonasResumen.personas === 1 ? 'persona respondio' : 'personas respondieron'}. Es lo que les gustaria, no donde fue el evento.
+              </Text>
+              <View style={styles.table}>
+                {zonasResumen.filas.map((f) => (
+                  <View key={f.zona} style={styles.tableRow}>
+                    <Text style={[styles.td, { flex: 1, fontWeight: '600' }]}>{f.zona}</Text>
+                    <View style={{ flex: 1.4, justifyContent: 'center' }}>
+                      <View
+                        style={[
+                          styles.zonaBarra,
+                          { width: `${zonasResumen.maximo ? Math.round((f.n / zonasResumen.maximo) * 100) : 0}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.td, { flex: 0.4, textAlign: 'right', fontWeight: '700' }]}>{f.n}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {zonasResumen.escritas.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Lo que escribieron en "Otra"</Text>
+                  <Text style={styles.zonaNota}>
+                    Este es el dato que no se tenia de ninguna otra forma: zonas donde Nospi todavia no hace nada.
+                  </Text>
+                  <View style={styles.table}>
+                    {zonasResumen.escritas.map((e) => (
+                      <View key={e.texto} style={styles.tableRow}>
+                        <Text style={[styles.td, { flex: 1, fontStyle: 'italic' }]}>{e.texto}</Text>
+                        <Text style={[styles.td, { flex: 0.3, textAlign: 'right', fontWeight: '700' }]}>{e.n}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
+          )}
         </>
       )}
     </ScrollView>
@@ -409,6 +515,8 @@ export default function StatsScreen() {
 }
 
 const styles = StyleSheet.create({
+  zonaNota: { fontSize: 12, color: '#6B7280', marginTop: -6, marginBottom: 10, lineHeight: 17 },
+  zonaBarra: { height: 8, borderRadius: 99, backgroundColor: nospiColors.purpleMid, minWidth: 4 },
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 24, paddingBottom: 60, maxWidth: 960, width: '100%', alignSelf: 'center' },
   contentMobile: { padding: 14, paddingBottom: 60 },
