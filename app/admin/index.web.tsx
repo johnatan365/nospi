@@ -1002,33 +1002,14 @@ export default function AdminPanelScreen() {
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [cityPickerSearch, setCityPickerSearch] = useState('');
 
-  // Ciudades que la gente busco al registrarse y NO existen en la lista.
-  // Es el dato para decidir donde abrir: si varias personas escriben el mismo
-  // municipio, ahi hay gente esperando.
-  const [ciudadesBuscadas, setCiudadesBuscadas] = useState<{ texto: string; veces: number }[]>([]);
-
-  useEffect(() => {
-    let cancelado = false;
-    (async () => {
-      const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
-        .from('city_search_misses')
-        .select('texto, texto_normalizado')
-        .gte('created_at', desde)
-        .limit(2000);
-      if (error || !data || cancelado) return;
-      const cuenta = new Map<string, { texto: string; veces: number }>();
-      for (const fila of data as { texto: string; texto_normalizado: string }[]) {
-        const previo = cuenta.get(fila.texto_normalizado);
-        if (previo) { previo.veces += 1; }
-        else { cuenta.set(fila.texto_normalizado, { texto: fila.texto, veces: 1 }); }
-      }
-      setCiudadesBuscadas(
-        Array.from(cuenta.values()).sort((a, b) => b.veces - a.veces).slice(0, 12)
-      );
-    })();
-    return () => { cancelado = true; };
-  }, []);
+  // Las ciudades que la gente busca y no existen YA NO SE MUESTRAN aqui.
+  //
+  // Se siguen guardando igual: lo apunta utils/ciudadNoEncontrada.ts en la
+  // tabla city_search_misses cada vez que alguien escribe una que no esta. Lo
+  // que se quito es el recuadro que las listaba al abrir Gestion de eventos
+  // --y con el, una consulta de hasta 2000 filas en cada carga del panel--,
+  // porque ocupaba la parte de arriba de la pestaña todos los dias para un dato
+  // que se consulta de vez en cuando. Se pide cuando haga falta.
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
@@ -9241,24 +9222,6 @@ setBulkWhatsAppPending(pending);
             </TouchableOpacity>
           </View>
         </View>
-
-        {ciudadesBuscadas.length > 0 && (
-          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#9A3412', letterSpacing: 0.4, marginBottom: 6 }}>
-              CIUDADES QUE BUSCAN Y NO EXISTEN (últimos 90 días)
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-              {ciudadesBuscadas.map((c) => (
-                <span key={c.texto} style={{ background: '#FFF', border: '1px solid #FED7AA', borderRadius: 999, padding: '5px 12px', fontSize: 13, color: '#9A3412' }}>
-                  {c.texto} <strong>×{c.veces}</strong>
-                </span>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: '#9A3412', marginTop: 7, opacity: 0.85 }}>
-              Ahí hay gente esperando. Si una se repite mucho, vale la pena abrirla o agregarla como municipio de la capital más cercana.
-            </div>
-          </div>
-        )}
 
         {/* CIUDAD primero: es el filtro principal. Los botones de arriba
             (WhatsApp y Crear Evento) son generales y no dependen de este
