@@ -921,6 +921,12 @@ export default function AdminPanelScreen() {
   // rehacerse cada vez que cambia el paquete.
   const packElegidoRef = useRef<string | null>(null);
   const [packNuevo, setPackNuevo] = useState('');
+  // La tarjeta arranca CERRADA. Con 70 miniaturas era un muro que habia que
+  // recorrer entero para llegar a "Guardar Configuracion", que esta justo
+  // debajo. Cerrada tampoco pinta los <img>, asi que entrar en Config deja de
+  // descargar 70 imagenes que casi nunca se van a mirar.
+  const [stickersAbierto, setStickersAbierto] = useState(false);
+  const [stickersTotal, setStickersTotal] = useState(0);
   const [stickerSubiendo, setStickerSubiendo] = useState(false);
   const [stickerMsg, setStickerMsg] = useState('');
   // Mostrar u ocultar los originales que ya se dividieron en mesas.
@@ -2398,6 +2404,11 @@ export default function AdminPanelScreen() {
     if (ePs) { console.error('paquetes:', ePs.message); return; }
     const lista = (ps as PackAdmin[]) || [];
     setPacks(lista);
+
+    // Solo el numero, para el encabezado: head + count no trae ninguna fila.
+    const { count } = await supabase
+      .from('stickers').select('id', { count: 'exact', head: true }).eq('activo', true);
+    setStickersTotal(count ?? 0);
 
     // Se respeta el paquete en el que estaba, salvo que ya no exista.
     const pedido = quedarseEn ?? packElegidoRef.current;
@@ -8647,10 +8658,29 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         {/* Stickers del chat — tabla y bucket propios, se guarda al instante */}
         <div style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, marginBottom: 28,
                       boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #7C3AED' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase',
-                        letterSpacing: '0.05em', marginBottom: 6 }}>
-            🙂 Stickers del chat
+          <div
+            onClick={() => setStickersAbierto((v) => !v)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setStickersAbierto((v) => !v); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                     marginBottom: stickersAbierto ? 6 : 0, userSelect: 'none' }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase',
+                           letterSpacing: '0.05em' }}>
+              🙂 Stickers del chat
+            </span>
+            {!stickersAbierto && stickersTotal > 0 && (
+              <span style={{ fontSize: 12.5, color: '#9CA3AF', fontWeight: 600 }}>
+                {stickersTotal} en {packs.length} {packs.length === 1 ? 'paquete' : 'paquetes'}
+              </span>
+            )}
+            <span style={{ marginLeft: 'auto', fontSize: 13, color: '#9CA3AF', fontWeight: 700 }}>
+              {stickersAbierto ? '▾ Ocultar' : '▸ Ver y editar'}
+            </span>
           </div>
+
+          {stickersAbierto && (<>
           <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.5 }}>
             Aparecen en el chat apenas los subes: no hace falta build ni que nadie actualice la app.
             Tienen que ser <strong>PNG o WebP con fondo transparente</strong>, cuadrados, máximo 512 KB.
@@ -8696,7 +8726,10 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 12 }}>
+          {/* Tope de alto con scroll propio: abierta, la rejilla tampoco debe
+              empujar el boton de guardar fuera de la pantalla. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
+                        gap: 12, maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
             {stickersAdmin.map((s, i) => (
               <div key={s.id} style={{ position: 'relative' }}>
                 <div style={{ aspectRatio: '1', background: '#F3F4F6', borderRadius: 12, padding: 8,
@@ -8749,6 +8782,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               </span>
             )}
           </div>
+          </>)}
         </div>
 
         <button
