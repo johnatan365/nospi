@@ -4264,30 +4264,40 @@ export default function ChatThreadScreen() {
                       <Text style={styles.senderName}>{senderName}</Text>
                     )
                   )}
-                  {repliedMsg && (
+                  {repliedMsg && (() => {
                     /* Tocar la cita lleva al mensaje original, como en WhatsApp.
                        Va como tocable anidado y no con un onPress en el <View>:
                        la burbuja entera ya es un TouchableOpacity -el del menu
                        al mantener presionado- y un hijo tocable es lo unico que
                        le gana el gesto. Mismo motivo por el que el nombre del
                        remitente esta envuelto aparte. */
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Ir al mensaje de ${repliedName}`}
-                      activeOpacity={0.7}
-                      onPress={() => irAlMensaje(repliedMsg.id)}
-                      style={[
-                        styles.quoteBox,
-                        isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs,
-                        stickerSinGlobo && !isMine && styles.quoteSolaTheirs,
-                      ]}
-                    >
-                      <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
-                      <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
-                        {messagePreviewText(repliedMsg)}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                    const cita = (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ir al mensaje de ${repliedName}`}
+                        activeOpacity={0.7}
+                        onPress={() => irAlMensaje(repliedMsg.id)}
+                        style={[
+                          styles.quoteBox,
+                          isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs,
+                          stickerSinGlobo && styles.quoteSinMargen,
+                        ]}
+                      >
+                        <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
+                        <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
+                          {messagePreviewText(repliedMsg)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                    // Un sticker va sin globo, asi que la cita se queda sin el
+                    // marco dentro del cual esta pensada. Se le pone el suyo.
+                    if (!stickerSinGlobo) return cita;
+                    return (
+                      <View style={[styles.marcoDeCita, isMine ? styles.marcoDeCitaMine : styles.marcoDeCitaTheirs]}>
+                        {cita}
+                      </View>
+                    );
+                  })()}
                   {item.media_expired && (
                     <View style={styles.expiredMedia}>
                       <Text style={styles.expiredMediaIcon}>
@@ -5963,21 +5973,24 @@ const styles = StyleSheet.create({
   quoteBox: { borderLeftWidth: 3, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6 },
   quoteBoxMine: { backgroundColor: 'rgba(255,255,255,0.18)', borderLeftColor: 'rgba(255,255,255,0.7)' },
   quoteBoxTheirs: { backgroundColor: 'rgba(136,14,79,0.08)', borderLeftColor: '#AD1457' },
-  // La cita de un sticker AJENO, que se queda sin globo detras.
+  // El marco de la cita cuando el mensaje es un sticker.
   //
-  // Los dos fondos de arriba son TRANSLUCIDOS: estan pensados para ir encima
-  // del globo. El del ajeno es rosa al 8% con texto #6a6a70, pensado sobre el
-  // blanco del globo; sin globo cae sobre el degradado del chat --oscuro-- y
-  // la cita se volvia un gris casi invisible. Con el globo blanco vuelve a ser
-  // el contraste para el que se eligieron esos colores de texto, y queda como
-  // un globito flotando sobre el sticker (lo mismo que hace WhatsApp).
+  // Un sticker va SIN globo, y la cita esta pensada para vivir dentro de uno:
+  // sus dos fondos son translucidos --rosa al 8% sobre el blanco del globo
+  // ajeno, blanco al 18% sobre el morado del propio-- y sin nada detras caen
+  // sobre el degradado del chat. El ajeno quedaba texto gris sobre morado
+  // oscuro: ilegible.
   //
-  // El PROPIO no lleva nada de esto a proposito. Su fondo translucido es
-  // blanco, asi que siempre aclara lo que tenga detras y se ve en cualquier
-  // punto del degradado. Y darle el color de su globo seria peor: #880E4F es
-  // justo uno de los tres colores del degradado del chat, asi que a media
-  // pantalla la cita se fundiria con el fondo.
-  quoteSolaTheirs: { backgroundColor: '#FFFFFF' },
+  // El primer intento fue pintar la cita de blanco. Se leia, pero se perdia el
+  // dibujo de dos capas que tiene una respuesta normal --recuadro rosado DENTRO
+  // del globo blanco-- y pasaba por un mensaje cualquiera del otro. Asi que lo
+  // que se le devuelve es el marco, no el color: el globo que le habria tocado,
+  // con la cita rosada dentro, exactamente igual que en una respuesta normal.
+  marcoDeCita: { borderRadius: 14, padding: 5, marginBottom: 6, alignSelf: 'flex-start' },
+  marcoDeCitaTheirs: { backgroundColor: '#FFFFFF' },
+  marcoDeCitaMine: { backgroundColor: '#880E4F' },
+  // Dentro del marco el margen de abajo lo pone el marco.
+  quoteSinMargen: { marginBottom: 0 },
   quoteName: { fontSize: 11.5, fontWeight: '800', color: '#AD1457', marginBottom: 1 },
   quoteNameMine: { color: 'rgba(255,255,255,0.95)' },
   quoteText: { fontSize: 12.5, color: '#6a6a70' },
