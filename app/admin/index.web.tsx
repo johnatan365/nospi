@@ -995,6 +995,7 @@ export default function AdminPanelScreen() {
   const [configTraducirCanales, setConfigTraducirCanales] = useState(true);
   const [configTraducirEventos, setConfigTraducirEventos] = useState(true);
   const [configTraducirPreguntas, setConfigTraducirPreguntas] = useState(true);
+  const [configTraducirBios, setConfigTraducirBios] = useState(true);
   const [usoTraduccion, setUsoTraduccion] = useState<{ usados: number; tope: number } | null>(null);
   const [usoTraduccionError, setUsoTraduccionError] = useState<string | null>(null);
   const [cargandoUso, setCargandoUso] = useState(false);
@@ -2458,6 +2459,7 @@ export default function AdminPanelScreen() {
       if (row.key === 'traducir_canales') setConfigTraducirCanales(row.value !== 'false');
       if (row.key === 'traducir_eventos') setConfigTraducirEventos(row.value !== 'false');
       if (row.key === 'traducir_preguntas') setConfigTraducirPreguntas(row.value !== 'false');
+      if (row.key === 'traducir_bios') setConfigTraducirBios(row.value !== 'false');
     }
   };
 
@@ -2659,6 +2661,7 @@ export default function AdminPanelScreen() {
         { key: 'traducir_canales', value: configTraducirCanales ? 'true' : 'false' },
         { key: 'traducir_eventos', value: configTraducirEventos ? 'true' : 'false' },
         { key: 'traducir_preguntas', value: configTraducirPreguntas ? 'true' : 'false' },
+        { key: 'traducir_bios', value: configTraducirBios ? 'true' : 'false' },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -8733,6 +8736,14 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 ayuda: 'Las preguntas nuevas que agregues al banco. Las 315 que ya existían están traducidas.',
                 valor: configTraducirPreguntas,
                 set: setConfigTraducirPreguntas,
+                color: '#0E7490',
+              },
+              {
+                clave: 'bios' as const,
+                titulo: '🙋 Descripción de los perfiles',
+                ayuda: 'La frase que cada persona escribe sobre sí misma. Se traduce al guardarla y se muestra en la ficha que ven los demás; en su propio perfil cada quien sigue viendo lo que escribió. Hoy son 5 bios, unos 600 caracteres.',
+                valor: configTraducirBios,
+                set: setConfigTraducirBios,
                 color: '#0E7490',
               },
             ]).map((o) => (

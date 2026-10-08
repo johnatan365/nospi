@@ -145,6 +145,41 @@ interface SubscriptionRow {
 export default function SubscriptionMembershipScreen() {
   const router = useRouter();
   const { user, loading: authLoading } = useSupabase();
+
+  // Misma cadena que subscription-plans: leer la sesion, renovarla si esta
+  // vencida, y getUser() como ultimo recurso. Antes se hacia solo
+  // `session?.user ?? user`, que se apoyaba en que el contexto conservara un
+  // usuario aunque la sesion estuviera muerta. Desde el arreglo del 5 de
+  // octubre (#93) el contexto cierra sesion de verdad cuando no se puede
+  // renovar, asi que ese respaldo quedo vacio y estas pantallas empezaron a
+  // fallar con un "Sesion no encontrada" tecnico en medio de un cobro.
+  const resolverSesion = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {}
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {}
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) return authUser;
+    } catch {}
+    return user ?? null;
+  };
+
+  const exigirSesion = async () => {
+    const actual = await resolverSesion();
+    if (actual) return actual;
+    showAlert(
+      'Tu sesión se venció',
+      'Vuelve a iniciar sesión para continuar. No se te cobró nada.'
+    );
+    router.push('/login');
+    return null;
+  };
   const { appConfig } = useAppConfig();
   const { t, idioma } = useIdioma();
   const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
@@ -257,9 +292,8 @@ export default function SubscriptionMembershipScreen() {
     }
     setChangingCard(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? user;
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setChangingCard(false); return; }
 
       const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
       const expMonth = (expMonthRaw || '').trim();
@@ -328,9 +362,8 @@ export default function SubscriptionMembershipScreen() {
     }
     setProcessing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? user;
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setProcessing(false); return; }
 
       const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
       const expMonth = (expMonthRaw || '').trim();
@@ -464,9 +497,12 @@ export default function SubscriptionMembershipScreen() {
       await loadSubscription();
 
       try {
+        // La sesion se lee aqui mismo: arriba ya no queda una variable `session`
+        // desde que el chequeo pasa por exigirSesion().
+        const { data: { session: sesionCorreo } } = await supabase.auth.getSession();
         fetch(`${SUPABASE_URL}/functions/v1/notify-subscription-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}` },
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${sesionCorreo?.access_token || SUPABASE_ANON_KEY}` },
           body: JSON.stringify({
             type: 'subscribed',
             userEmail: currentUser.email,
