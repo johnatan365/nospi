@@ -20,6 +20,7 @@ import { Linking } from 'react-native';
 import { registerPushToken } from '@/hooks/usePushNotifications';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { nombreEventoIdioma } from '@/utils/nombreEvento';
 interface ConversationRow {
   conversation_id: string;
   conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
@@ -115,7 +116,7 @@ function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel:
 type ChatFilter = 'grupos' | 'directos' | 'canales';
 
 export default function ChatsScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const { user } = useSupabase();
   const router = useRouter();
   const [conversationsRaw, setConversations] = useState<ConversationRow[]>([]);
@@ -206,11 +207,11 @@ export default function ChatsScreen() {
   const activarNotificacionesNativas = async () => {
     if (nativePushState === 'blocked') {
       Alert.alert(
-        'Activa las notificaciones',
-        'Las tienes bloqueadas para Nospi. Te llevamos a los ajustes del teléfono para prenderlas.',
+        t('chats.activaNotif'),
+        t('chats.activaNotifMsg'),
         [
-          { text: 'Ahora no', style: 'cancel' },
-          { text: 'Ir a ajustes', onPress: () => Linking.openSettings().catch(() => {}) },
+          { text: t('chats.ahoraNo'), style: 'cancel' },
+          { text: t('chats.irAjustes'), onPress: () => Linking.openSettings().catch(() => {}) },
         ]
       );
       return;
@@ -234,11 +235,11 @@ export default function ChatsScreen() {
     if (res.ok) { setWebPushState('granted'); return; }
     if (res.reason === 'denied') {
       setWebPushState('denied');
-      window.alert('Bloqueaste las notificaciones. Para activarlas, toca el candado 🔒 al lado de la dirección y permite las notificaciones de Nospi.');
+      window.alert(t('chats.bloqueasteNotif'));
       return;
     }
     if (res.reason === 'ios-home-screen') { setWebPushState('ios-home-screen'); return; }
-    window.alert('No se pudieron activar las notificaciones en este navegador.');
+    window.alert(t('chats.noActivoNotif'));
   };
   const loadedOnceRef = useRef(false);
   const CHATS_CACHE_KEY = `chats_${user?.id ?? 'anon'}`;
@@ -488,7 +489,7 @@ export default function ChatsScreen() {
               numberOfLines={1}
               style={[styles.filterTabText, filter === 'grupos' && styles.filterTabTextActive]}
             >
-              {hayCanales ? 'Grupos' : t('chats.mensajesGrupo')}
+              {hayCanales ? t('chats.grupos') : t('chats.mensajesGrupo')}
             </Text>
             {groupUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -506,7 +507,7 @@ export default function ChatsScreen() {
               numberOfLines={1}
               style={[styles.filterTabText, filter === 'directos' && styles.filterTabTextActive]}
             >
-              {hayCanales ? 'Directos' : t('chats.mensajes11')}
+              {hayCanales ? t('chats.directos') : t('chats.mensajes11')}
             </Text>
             {directUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -527,7 +528,7 @@ export default function ChatsScreen() {
                 numberOfLines={1}
                 style={[styles.filterTabText, filter === 'canales' && styles.filterTabTextActive]}
               >
-                Canales
+                {t('chats.canales')}
               </Text>
               {channelUnread > 0 && (
                 <View style={styles.filterBadge}>
@@ -543,8 +544,8 @@ export default function ChatsScreen() {
             <Text style={styles.pushBannerEmoji}>🔔</Text>
             <Text style={styles.pushBannerText}>
               {nativePushState === 'ask'
-                ? 'Activa las notificaciones para enterarte de los planes y cuando te escriban'
-                : 'Tienes las notificaciones apagadas: no te llegan los planes ni los mensajes. Toca para prenderlas.'}
+                ? t('chats.bannerPlanes')
+                : t('chats.bannerApagadas')}
             </Text>
           </TouchableOpacity>
         )}
@@ -558,8 +559,8 @@ export default function ChatsScreen() {
             <Text style={styles.pushBannerEmoji}>🔔</Text>
             <Text style={styles.pushBannerText}>
               {webPushState === 'default'
-                ? 'Activa las notificaciones para enterarte cuando te escriban'
-                : 'Para recibir notificaciones aquí, agrega Nospi a tu pantalla de inicio: toca Compartir y luego "Agregar a inicio".'}
+                ? t('chats.bannerEscriban')
+                : t('chats.bannerPantallaInicio')}
             </Text>
           </TouchableOpacity>
         )}
@@ -642,11 +643,21 @@ export default function ChatsScreen() {
               const solicitudEnviada = item.conv_type === 'direct'
                 && item.estado === 'pendiente'
                 && item.solicitada_por === user?.id;
+              // El titulo guardado en la base ("Avisos · Cena (28 de octubre)") esta en
+              // espanol y lo usa el equipo en el admin. Para mostrarlo se rearma con el
+              // tipo y la fecha del evento, que el RPC ya devuelve, en vez de traducir
+              // el texto guardado.
+              const nombreDelEvento = nombreEventoIdioma(
+                { type: item.event_type, date: item.event_date, name: item.event_name },
+                idioma, t,
+              );
               const title = isComunidad
-                ? (item.channel_title || 'Comunidad Nospi')
+                ? (idioma === 'en' ? t('chats.comunidadNospi') : (item.channel_title || t('chats.comunidadNospi')))
                 : isChannel
-                ? (item.channel_title || 'Canal Nospi')
-                : isGroup ? (item.event_name || 'Chat del evento') : (item.other_user_name || 'Usuario');
+                ? (item.conv_type === 'channel_event' && nombreDelEvento
+                    ? t('chats.avisosDe', { evento: nombreDelEvento })
+                    : (idioma === 'en' ? t('chats.canalNospi') : (item.channel_title || t('chats.canalNospi'))))
+                : isGroup ? (nombreDelEvento || t('chats.chatDelEvento')) : (item.other_user_name || t('chats.usuario'));
               const photoUrl = (isGroup || isChannel || isComunidad) ? null : item.other_user_photo;
               const hasUnread = item.unread_count > 0;
               const { locked, unlockLabel } = getChatLockInfo(item);

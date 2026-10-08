@@ -1062,6 +1062,45 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     // ---------- Juego: boton terminar ----------
     'juego.terminar': 'Terminar',
 
+
+    // ---------- Chats: pestanas y avisos de notificaciones; Citas: filtros ----------
+    'chats.grupos': 'Grupos',
+    'chats.directos': 'Directos',
+    'chats.canales': 'Canales',
+    'chats.activaNotif': 'Activa las notificaciones',
+    'chats.activaNotifMsg': 'Las tienes bloqueadas para Nospi. Te llevamos a los ajustes del teléfono para prenderlas.',
+    'chats.ahoraNo': 'Ahora no',
+    'chats.irAjustes': 'Ir a ajustes',
+    'chats.bloqueasteNotif': 'Bloqueaste las notificaciones. Para activarlas, toca el candado 🔒 al lado de la dirección y permite las notificaciones de Nospi.',
+    'chats.noActivoNotif': 'No se pudieron activar las notificaciones en este navegador.',
+    'chats.bannerPlanes': 'Activa las notificaciones para enterarte de los planes y cuando te escriban',
+    'chats.bannerApagadas': 'Tienes las notificaciones apagadas: no te llegan los planes ni los mensajes. Toca para prenderlas.',
+    'chats.bannerEscriban': 'Activa las notificaciones para enterarte cuando te escriban',
+    'chats.bannerPantallaInicio': 'Para recibir notificaciones aquí, agrega Nospi a tu pantalla de inicio: toca Compartir y luego "Agregar a inicio".',
+    'citas.confirmadas': 'Confirmadas',
+    'citas.canceladas': 'Canceladas',
+    'citas.anteriores': 'Anteriores',
+    'citas.sinConfirmadas': 'No tienes citas confirmadas',
+    'citas.sinCanceladas': 'No tienes citas canceladas',
+    'citas.sinAnteriores': 'No tienes citas anteriores',
+    'din.sesionComo': 'Sesión iniciada como: {{correo}}',
+
+
+    // ---------- Descripcion por defecto segun el tipo de evento ----------
+    'evento.desc.restaurante': 'Comparte una cena con personas nuevas y participa en el juego de preguntas diseñado para romper el hielo y facilitar la conversación.',
+    'evento.desc.bar': 'Comparte un plan con personas nuevas y participa en el juego de preguntas diseñado para romper el hielo y facilitar la conversación.',
+    'evento.desc.cafe': 'Comparte un café con personas nuevas y participa en el juego de preguntas diseñado para romper el hielo y facilitar la conversación.',
+    'evento.desc.bolos': '🎳 Comparte una hora de bolos con personas nuevas y participa en un juego de preguntas diseñado para romper el hielo, conocerse y facilitar la conversación. 🗣️✨',
+    'evento.desc.caminata': 'Comparte una caminata con personas nuevas y participa en el juego de preguntas diseñado para romper el hielo y facilitar la conversación.',
+    'evento.desc.virtual': 'Conéctate sin saber quién más estará. 👀 Para conocer gente nueva y tener conversaciones diferentes, estés donde estés.',
+
+
+    // ---------- Chats: titulos de canales y grupos ----------
+    'chats.canalNospi': 'Canal Nospi',
+    'chats.avisosDe': 'Avisos · {{evento}}',
+    'chats.chatDelEvento': 'Chat del evento',
+    'chats.usuario': 'Usuario',
+
   },
 
   en: {
@@ -2115,6 +2154,45 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
 
     // ---------- Juego: boton terminar ----------
     'juego.terminar': 'Finish',
+
+
+    // ---------- Chats: pestanas y avisos de notificaciones; Citas: filtros ----------
+    'chats.grupos': 'Groups',
+    'chats.directos': 'Direct',
+    'chats.canales': 'Channels',
+    'chats.activaNotif': 'Turn on notifications',
+    'chats.activaNotifMsg': 'They’re blocked for Nospi. We’ll take you to your phone settings to turn them on.',
+    'chats.ahoraNo': 'Not now',
+    'chats.irAjustes': 'Open settings',
+    'chats.bloqueasteNotif': 'You’ve blocked notifications. To turn them on, tap the padlock 🔒 next to the address bar and allow notifications for Nospi.',
+    'chats.noActivoNotif': 'We couldn’t turn on notifications in this browser.',
+    'chats.bannerPlanes': 'Turn on notifications to hear about plans and when someone messages you',
+    'chats.bannerApagadas': 'Your notifications are off, so you miss the plans and the messages. Tap to turn them on.',
+    'chats.bannerEscriban': 'Turn on notifications to know when someone messages you',
+    'chats.bannerPantallaInicio': 'To get notifications here, add Nospi to your home screen: tap Share, then "Add to Home Screen".',
+    'citas.confirmadas': 'Confirmed',
+    'citas.canceladas': 'Cancelled',
+    'citas.anteriores': 'Past',
+    'citas.sinConfirmadas': 'You have no confirmed bookings',
+    'citas.sinCanceladas': 'You have no cancelled bookings',
+    'citas.sinAnteriores': 'You have no past bookings',
+    'din.sesionComo': 'Signed in as: {{correo}}',
+
+
+    // ---------- Descripcion por defecto segun el tipo de evento ----------
+    'evento.desc.restaurante': 'Share dinner with people you haven’t met and play the question game built to break the ice and get the conversation going.',
+    'evento.desc.bar': 'Share a night out with people you haven’t met and play the question game built to break the ice and get the conversation going.',
+    'evento.desc.cafe': 'Share a coffee with people you haven’t met and play the question game built to break the ice and get the conversation going.',
+    'evento.desc.bolos': '🎳 Share a round of bowling with people you haven’t met and play a question game built to break the ice and get everyone talking. 🗣️✨',
+    'evento.desc.caminata': 'Share a hike with people you haven’t met and play the question game built to break the ice and get the conversation going.',
+    'evento.desc.virtual': 'Join without knowing who else will be there. 👀 Meet new people and have a different kind of conversation, from wherever you are.',
+
+
+    // ---------- Chats: titulos de canales y grupos ----------
+    'chats.canalNospi': 'Nospi channel',
+    'chats.avisosDe': 'Updates · {{evento}}',
+    'chats.chatDelEvento': 'Event chat',
+    'chats.usuario': 'User',
 
   },
 };

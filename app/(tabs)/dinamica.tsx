@@ -1571,7 +1571,7 @@ export default function DinamicaScreen() {
             )}
             {!loadError && user?.email && (
               <View style={styles.sessionInfoContainer}>
-                <Text style={styles.sessionInfoText}>Sesión iniciada como: {user.email}</Text>
+                <Text style={styles.sessionInfoText}>{t('din.sesionComo', { correo: user.email })}</Text>
                 <TouchableOpacity
                   onPress={async () => {
                     try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}

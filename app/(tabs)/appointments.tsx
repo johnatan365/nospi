@@ -14,6 +14,7 @@ import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { nombreEventoIdioma } from '@/utils/nombreEvento';
 const CACHE_KEY_PREFIX = 'cache_appointments';
 
 interface Appointment {
@@ -55,7 +56,7 @@ const CAJA_ICONO = {
 };
 
 export default function AppointmentsScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
     const params = useLocalSearchParams<{ openFilter?: string }>();
   const { user, loading: authLoading } = useSupabase();
@@ -97,6 +98,8 @@ export default function AppointmentsScreen() {
         events!inner (
           id,
           name,
+          subtitulo,
+          name_en,
           city,
           type,
           date,
@@ -398,10 +401,10 @@ export default function AppointmentsScreen() {
   );
 
   const emptyText = filter === 'confirmadas'
-    ? 'No tienes citas confirmadas'
+    ? t('citas.sinConfirmadas')
     : filter === 'canceladas'
-    ? 'No tienes citas canceladas'
-    : 'No tienes citas anteriores';
+    ? t('citas.sinCanceladas')
+    : t('citas.sinAnteriores');
 
   return (
     <LinearGradient
@@ -424,7 +427,7 @@ export default function AppointmentsScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              Confirmadas
+              {t('citas.confirmadas')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -436,7 +439,7 @@ export default function AppointmentsScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              Canceladas
+              {t('citas.canceladas')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -448,7 +451,7 @@ export default function AppointmentsScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              Anteriores
+              {t('citas.anteriores')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -463,7 +466,7 @@ export default function AppointmentsScreen() {
               const eventType = appointment.event.type || 'restaurant';
               const eventTypeText = t(['bar', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
               const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : '🍽️';
-              const eventName = appointment.event.name || eventTypeText;
+              const eventName = nombreEventoIdioma(appointment.event, idioma, t) || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
               const eventTime = appointment.event.date ? formatTimeAmPm(appointment.event.time) || '' : 'Hora por definir';

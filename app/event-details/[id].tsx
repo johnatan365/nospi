@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { nombreLargoEvento } from '@/utils/nombreEvento';
+import { nombreEventoIdioma, descripcionEventoIdioma } from '@/utils/nombreEvento';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -38,6 +38,8 @@ interface Event {
   // una ciudad confunde). Es solo visual: no cambia a quién le aparece.
   ocultar_ciudad?: boolean;
   description: string;
+  description_en?: string | null;
+  name_en?: string | null;
   type: string;
   date: string | null;
   time: string;
@@ -66,7 +68,7 @@ const CAJA_ICONO = {
 };
 
 export default function EventDetailsScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { user } = useSupabase();
@@ -461,7 +463,7 @@ export default function EventDetailsScreen() {
             )}
             {/* El nombre puede venir partido en dos renglones desde el admin.
                 Aca se muestra completo, con el mismo estilo en las dos lineas. */}
-            <Text style={styles.eventName}>{nombreLargoEvento(event)}</Text>
+            <Text style={styles.eventName}>{nombreEventoIdioma(event, idioma, t)}</Text>
             <Text style={styles.eventType}>{eventTypeText}</Text>
           </View>
           
@@ -490,9 +492,9 @@ export default function EventDetailsScreen() {
             </View>
           </View>
 
-          {event.description && (
+          {!!descripcionEventoIdioma(event, idioma, t) && (
             <View style={styles.descriptionSection}>
-              <Text style={styles.descriptionText}>{event.description}</Text>
+              <Text style={styles.descriptionText}>{descripcionEventoIdioma(event, idioma, t)}</Text>
             </View>
           )}
 

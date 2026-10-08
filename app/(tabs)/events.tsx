@@ -11,6 +11,7 @@ import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { nombreEventoIdioma } from '@/utils/nombreEvento';
 
 const CACHE_KEY = 'cache_events';
 
@@ -29,7 +30,9 @@ interface Event {
   // Segundo renglon del nombre, opcional. Lo escribe el admin para decidir
   // donde parte un nombre largo, en vez de dejar que se corte solo.
   subtitulo: string | null;
+  name_en: string | null;
   description: string;
+  description_en: string | null;
   type: string;
   date: string | null;
   time: string;
@@ -123,7 +126,7 @@ const CAJA_ICONO = {
 };
 
 export default function EventsScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const { user, loading: authLoading } = useSupabase();
   const [events, setEvents] = useState<Event[]>([]);
@@ -147,7 +150,7 @@ export default function EventsScreen() {
         .in('status', ['confirmada', 'anterior', 'cancelada']),
       supabase
         .from('events')
-        .select('id, name, subtitulo, city, cities, nacional, ocultar_ciudad, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
+        .select('id, name, subtitulo, name_en, description_en, city, cities, nacional, ocultar_ciudad, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
         .eq('event_status', 'published')
         .order('date', { ascending: true }),
       supabase
@@ -307,7 +310,10 @@ export default function EventsScreen() {
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
                   const esVirtual = event.type === 'virtual';
-                  const tieneSegundoRenglon = !!(event.subtitulo && event.subtitulo.trim());
+                  // En ingles el nombre se arma solo con el tipo y la fecha, y ese nombre
+                  // cabe en un renglon: el segundo renglon es cosa del nombre en espanol.
+                  const nombreMostrado = nombreEventoIdioma(event, idioma, t);
+                  const tieneSegundoRenglon = idioma === 'es' && !!(event.subtitulo && event.subtitulo.trim());
 
                   return (
                     <TouchableOpacity
@@ -359,7 +365,7 @@ export default function EventsScreen() {
                             renglon, el nombre puede usar los dos. */}
                         <View style={styles.eventNameBlock}>
                           <Text style={styles.eventNameCompact} numberOfLines={tieneSegundoRenglon ? 1 : 2}>
-                            {event.name}
+                            {nombreMostrado}
                           </Text>
                           {tieneSegundoRenglon && (
                             <Text style={styles.eventNameCompact} numberOfLines={1}>
