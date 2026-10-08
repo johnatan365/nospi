@@ -112,7 +112,7 @@ const SIGNED_URL_CACHE_KEY = 'nospi_chat_signed_urls_v1';
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
 const MESSAGE_COLUMNS =
-  'id, conversation_id, sender_id, content, content_en, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by, media_expired';
+  'id, conversation_id, sender_id, content, content_en, created_at, escrito_originalmente_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by, media_expired';
 
 // Tope por archivo, igual al que tiene el bucket. Se comprueba tambien aqui
 // para poder explicarlo con palabras en vez de soltar el error crudo de Storage.
@@ -276,6 +276,8 @@ interface Message {
   // lo que escribe el equipo de Nospi para todos. Los chats entre personas no
   // se traducen nunca.
   content_en?: string | null;
+  /** Hora real en que se escribio, si fue retenido y luego aprobado. */
+  escrito_originalmente_at?: string | null;
   created_at: string;
   reply_to?: string | null;
   media_path?: string | null;
@@ -636,6 +638,32 @@ function idsQueHayQueNombrar(
     for (const r of lista || []) anadir(r.user_id);
   }
   return Array.from(vistos);
+}
+
+// Cuando se VE un mensaje, que no siempre es cuando quedo guardado.
+//
+// Un mensaje retenido por moderacion y luego aprobado cambia su created_at a la
+// hora de aprobacion, a proposito: para los demas no existia hasta ese momento,
+// asi que tiene que salir al final del chat igual que uno recien llegado.
+//
+// Pero para SU AUTOR eso delata la moderacion. El autor sí lo veia desde que lo
+// escribio, en su sitio; si al aprobarlo le salta al final con otra hora, se da
+// cuenta de que alguien lo reviso. A el se le muestra donde y cuando lo
+// escribio, que es justo lo que la base guardo en escrito_originalmente_at.
+//
+// Se usa para TRES cosas, y las tres tienen que ir juntas o el truco se nota:
+// el orden en la lista, la hora de la burbuja y los checks.
+function cuandoSeVe(m: Message, miId?: string | null): string {
+  if (m.sender_id === miId && m.escrito_originalmente_at) return m.escrito_originalmente_at;
+  return m.created_at;
+}
+
+/** Ordena como se ve, no como se guardo. Sin mensajes aprobados no cambia nada. */
+function ordenarComoSeVen(lista: Message[], miId?: string | null): Message[] {
+  return lista.slice().sort((a, b) => {
+    const ca = cuandoSeVe(a, miId), cb = cuandoSeVe(b, miId);
+    return ca < cb ? -1 : ca > cb ? 1 : 0;
+  });
 }
 
 // Mete el mensaje REAL en la lista quitando el provisional que lo representaba.
@@ -1486,11 +1514,13 @@ export default function ChatThreadScreen() {
 
   const checksDe = useCallback((m: any): 'enviando' | 'enviado' | 'entregado' | 'leido' => {
     if (m?.pending) return 'enviando';
-    const t = new Date(m.created_at).getTime();
+    // La misma hora que se pinta: si no, un mensaje aprobado le volveria a su
+    // autor a un solo check, que es otra forma de delatar la moderacion.
+    const t = new Date(cuandoSeVe(m, user?.id)).getTime();
     if (estadoResumen && estadoResumen.leidoHasta >= t) return 'leido';
     if (estadoResumen && estadoResumen.entregadoHasta >= t) return 'entregado';
     return 'enviado';
-  }, [estadoResumen]);
+  }, [estadoResumen, user?.id]);
 
   const abrirInfoMensaje = useCallback(async (m: any) => {
     if (!conversationId || !m) return;
@@ -2182,7 +2212,8 @@ export default function ChatThreadScreen() {
           // gte y no gt: el mensaje de la marca es el ultimo que SI leyo, y
           // tenerlo arriba del divisor ayuda a ubicarse.
           .gte('created_at', corta)
-          .lt('created_at', visibles[0].created_at)
+          .lt('created_at', visibles.reduce(
+            (min, m) => (m.created_at < min ? m.created_at : min), visibles[0].created_at))
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: false })
           .limit(faltan + 1);
@@ -2232,7 +2263,7 @@ export default function ChatThreadScreen() {
     }
     reintentoParticipantesRef.current = null;
 
-    setMessages(listaFinal);
+    setMessages(ordenarComoSeVen(listaFinal, user.id));
     setHayAnteriores(quedanAnteriores);
     setEnTramoViejo(false);
     setFijados((fijadosData as Message[]) || []);
@@ -2354,15 +2385,22 @@ export default function ChatThreadScreen() {
 
   const cargarAnteriores = useCallback(async () => {
     if (!conversationId || cargandoAnteriores) return;
-    const masViejo = messages.find((m) => !m.pending);
-    if (!masViejo) return;
+    // El tope de la paginacion es el created_at MAS VIEJO de lo cargado, no el
+    // del primero de la lista: desde que la lista se ordena como se ve, el
+    // primero puede ser un mensaje aprobado cuyo created_at es el de la
+    // aprobacion --mucho mas reciente--, y pedir "anteriores a eso" devolveria
+    // mensajes que ya estan en pantalla.
+    const guardados = messages.filter((m) => !m.pending);
+    if (guardados.length === 0) return;
+    const topeCreatedAt = guardados.reduce(
+      (min, m) => (m.created_at < min ? m.created_at : min), guardados[0].created_at);
     setCargandoAnteriores(true);
     try {
       const { data, error } = await supabase
         .from('chat_messages')
         .select(MESSAGE_COLUMNS)
         .eq('conversation_id', conversationId)
-        .lt('created_at', masViejo.created_at)
+        .lt('created_at', topeCreatedAt)
         .order('created_at', { ascending: false })
         .limit(PAGINA + 1);
       if (error) return;
@@ -2372,7 +2410,8 @@ export default function ChatThreadScreen() {
       pegandoArribaRef.current = true;
       setMessages((prev) => {
         const yaEstan = new Set(prev.map((m) => m.id));
-        return [...nuevos.filter((m) => !yaEstan.has(m.id)), ...prev];
+        return ordenarComoSeVen(
+          [...nuevos.filter((m) => !yaEstan.has(m.id)), ...prev], user?.id);
       });
       setHayAnteriores(hay);
     } finally {
@@ -4513,7 +4552,7 @@ export default function ChatThreadScreen() {
                       {/* Mientras el servidor no confirma se muestra un reloj en
                           lugar de la hora, como en WhatsApp: asi se entiende que
                           ya salio y que aun va en camino. */}
-                      {item.pending ? '🕐' : formatBogotaTime(new Date(item.created_at))}
+                      {item.pending ? '🕐' : formatBogotaTime(new Date(cuandoSeVe(item, user?.id)))}
                     </Text>
                     {/* Los checks solo en lo propio: en el mensaje de otro no
                         significan nada para quien lo lee. */}
