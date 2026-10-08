@@ -1233,6 +1233,10 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'din.participantesConfirmados': 'Participantes confirmados',
     'din.hayParticipantesTexto': '✨ Hay {{n}} participantes confirmados',
 
+
+    // ---------- Popup de match ----------
+    'match.escribirle': 'Escribirle',
+
   },
 
   en: {
@@ -2457,6 +2461,10 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'din.yaEstasEnElLugar': 'Already there? You can confirm from 15 minutes before',
     'din.participantesConfirmados': 'Confirmed participants',
     'din.hayParticipantesTexto': '✨ {{n}} confirmed participants',
+
+
+    // ---------- Popup de match ----------
+    'match.escribirle': 'Message them',
 
   },
 };

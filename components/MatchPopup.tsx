@@ -96,7 +96,7 @@ export default function MatchPopup({ userId }: Props) {
           <Text style={styles.name}>{match.name}</Text>
           <Text style={styles.sub}>{t('match.escribele')}</Text>
           <TouchableOpacity style={styles.btn} onPress={openChat} activeOpacity={0.85}>
-            <Text style={styles.btnTxt}>Escribirle</Text>
+            <Text style={styles.btnTxt}>{t('match.escribirle')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.later} onPress={() => setMatch(null)} activeOpacity={0.7}>
             <Text style={styles.laterTxt}>{t('match.ahoraNo')}</Text>

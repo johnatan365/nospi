@@ -848,7 +848,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // todos como antes, para no dejar la mesa trabada.
   const isModerator = !moderatorId || (!!currentUserId && currentUserId === moderatorId);
   const moderatorName = moderatorId
-    ? (activeParticipants.find(p => p.user_id === moderatorId)?.name || 'el moderador')
+    ? (activeParticipants.find(p => p.user_id === moderatorId)?.name || t('juego.elModerador'))
     : null;
 
   // Bottom sheet "Cambiar moderador", compartido por la pantalla de preguntas y
