@@ -50,6 +50,7 @@ import {
   type AnuncioDePresencia,
 } from '@/lib/presencia';
 import { useMiPrivacidad } from '@/lib/useMiPrivacidad';
+import { getCached, setCached } from '@/utils/cache';
 import * as ImagePicker from 'expo-image-picker';
 import {
   gifsBuscar,
@@ -148,6 +149,9 @@ const MEDIA_MAX_WIDTH = 210;
 // el chat cargando miles de mensajes. Si se pasa de aqui se abre en lo mas
 // viejo que se trajo, con "Ver mensajes anteriores" arriba para seguir.
 const MAX_MENSAJES_AL_ABRIR = 250;
+
+// Donde se guarda la copia de la lista de participantes. Ver loadEverything.
+const CLAVE_PARTICIPANTES = (id: string) => `chat_participantes_${id}`;
 
 const INPUT_ALTURA_MIN = 42;
 const INPUT_ALTURA_MAX = 142;
@@ -1903,8 +1907,14 @@ export default function ChatThreadScreen() {
   // conversacion, para no quedar en bucle si de verdad no hay lista (antes de
   // que el chat abra, la base no devuelve a nadie a proposito).
   const reintentoParticipantesRef = useRef<string | null>(null);
+  // La lista fresca viene en camino: no tiene sentido pedirla otra vez.
+  const participantesEnVueloRef = useRef(false);
+  // En que conversacion ya llego la lista FRESCA, para que una copia guardada
+  // que tarde en leerse no la pise.
+  const participantesFrescosRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || !conversationId || !user?.id) return;
+    if (participantesEnVueloRef.current) return;   // ya viene en camino
     if (reintentoParticipantesRef.current === conversationId) return;
     const faltaAlguno = messages.some(
       (m) => m.sender_id !== user.id
@@ -1947,7 +1957,32 @@ export default function ChatThreadScreen() {
   const loadEverything = useCallback(async () => {
     if (!conversationId || !user?.id) return;
 
-    const [{ data: msgs, error: msgsError }, { data: parts, error: partsError }, { data: convs }, { data: miFila }, { data: fijadosData }] =
+    // LA LISTA DE PARTICIPANTES NO VA AQUI, Y ES A PROPOSITO.
+    //
+    // Es, de lejos, lo mas gordo que se pide al abrir: en la Comunidad son 257
+    // personas y 133 kB; en el Canal Nospi, 3.574 y 1,5 MB. Estaba dentro de
+    // este Promise.all, que es el que decide cuando se pinta el chat, asi que
+    // NADA aparecia hasta que bajara entera. La base la resuelve en 2 ms: todo
+    // el tiempo era transporte.
+    //
+    // Ahora se pide igual, pero sin esperarla: el chat se pinta con la copia
+    // guardada --que trae nombres y fotos, asi que no hay parpadeo de burbujas
+    // sin nombre-- y la lista fresca la reemplaza cuando llega.
+    participantesFrescosRef.current = null;
+    participantesEnVueloRef.current = true;
+    const participantesPromesa = supabase
+      .rpc('get_conversation_participants_v2', { p_conversation_id: conversationId });
+
+    getCached<Participant[]>(CLAVE_PARTICIPANTES(conversationId))
+      .then((guardados) => {
+        if (!guardados || guardados.length === 0) return;
+        // Si la fresca ya llego, manda ella: la copia es solo para el hueco.
+        if (participantesFrescosRef.current === conversationId) return;
+        setParticipants(guardados);
+      })
+      .catch(() => {});
+
+    const [{ data: msgs, error: msgsError }, { data: convs }, { data: miFila }, { data: fijadosData }] =
       await Promise.all([
         // Solo la ultima pagina, no la conversacion entera.
         //
@@ -1962,7 +1997,6 @@ export default function ChatThreadScreen() {
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: false })
           .limit(PAGINA + 1),
-        supabase.rpc('get_conversation_participants_v2', { p_conversation_id: conversationId }),
         supabase.rpc('get_my_conversations_v2'),
         // Mi propia marca de lectura: es la que decide donde va la linea de
         // "no leidos" y si el chat abre atras o abajo. La politica de la tabla
@@ -1986,7 +2020,6 @@ export default function ChatThreadScreen() {
       ]);
 
     if (msgsError) console.error('ChatThread: error loading messages', msgsError);
-    if (partsError) console.error('ChatThread: error loading participants', partsError);
 
     const lote = ((msgs as Message[]) || []);
     const hay = lote.length > PAGINA;
@@ -2064,7 +2097,6 @@ export default function ChatThreadScreen() {
     setHayAnteriores(quedanAnteriores);
     setEnTramoViejo(false);
     setFijados((fijadosData as Message[]) || []);
-    setParticipants((parts as Participant[]) || []);
 
     if (thisConv) {
       setMeta({
@@ -2083,6 +2115,35 @@ export default function ChatThreadScreen() {
     }
 
     setLoading(false);
+
+    // La lista, cuando llegue. Ya no retrasa nada.
+    participantesPromesa.then(({ data, error }) => {
+      participantesEnVueloRef.current = false;
+      if (error) {
+        console.error('ChatThread: error loading participants', error);
+        return;
+      }
+      const lista = (data as Participant[]) || [];
+      participantesFrescosRef.current = conversationId;
+      setParticipants(lista);
+
+      // Solo se guarda copia de la Comunidad y de los canales, que no filtran
+      // por evento. En un grupo de evento la base esconde A PROPOSITO a quien
+      // no asistio --"quien no fue no aparece para nadie"-- y una copia vieja
+      // lo volveria a mostrar. Ademas ahi son seis personas: nada que ganar.
+      const sinRestriccionPorEvento = !!thisConv
+        && !thisConv.event_id
+        && (thisConv.conv_type === 'community' || thisConv.conv_type === 'channel_global');
+      if (sinRestriccionPorEvento) {
+        setCached(CLAVE_PARTICIPANTES(conversationId), lista).catch(() => {});
+      }
+    }, (e: unknown) => {
+      // El constructor de supabase devuelve un thenable, no una Promise: el
+      // fallo se recoge en el segundo argumento, no con .catch().
+      participantesEnVueloRef.current = false;
+      console.error('ChatThread: error loading participants', e);
+    });
+
     // OJO: aqui NO se marca leido. Antes se hacia, y era justo el problema: se
     // abria el chat, bajaba al ultimo mensaje y todo lo que no se vio quedaba
     // leido. Ahora lo marca onViewableItemsChanged, con lo que de verdad
@@ -2810,24 +2871,61 @@ export default function ChatThreadScreen() {
 
       if (seconds < 0.7) return; // toque accidental: no se manda nada
 
-      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-      if (payload instanceof Blob) {
-        // Red de seguridad: antes se subieron notas de 5 bytes que aparecian en
-        // el chat pero no sonaban. Mejor avisar que mandar algo mudo.
-        if (payload.size < 1024) {
-          avisar('La grabación no se guardó bien. Vuelve a intentarlo.');
-          return;
-        }
-        const { error: upError } = await supabase.storage
-          .from(MEDIA_BUCKET)
-          .upload(path, payload, { contentType: mime, cacheControl: '3600', upsert: false });
-        if (upError) throw new Error(upError.message);
-      } else {
-        await uploadToBucket(payload as ImagePicker.ImagePickerAsset, path, mime);
+      // Red de seguridad: antes se subieron notas de 5 bytes que aparecian en
+      // el chat pero no sonaban. Mejor avisar que mandar algo mudo. Va ANTES de
+      // pintar la burbuja, para no tener que quitarla despues.
+      if (payload instanceof Blob && payload.size < 1024) {
+        avisar('La grabación no se guardó bien. Vuelve a intentarlo.');
+        return;
       }
 
+      const path = `${conversationId}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const replyId = replyingTo?.id ?? null;
+
+      // La burbuja se pinta YA, igual que las fotos, y la subida va por detras.
+      //
+      // Antes no aparecia nada hasta que terminaran las cuatro cosas que pasan
+      // al soltar el boton --cerrar el archivo, revisar la sesion, subir y
+      // crear el mensaje--, una detras de otra. Toda esa espera se veia como si
+      // la app se hubiera trabado, que es justo lo que se reporto en iPhone. El
+      // archivo ya esta en el telefono, asi que la nota se puede oir de
+      // inmediato: esEnlaceDirecto acepta file: y blob:, de modo que suena del
+      // disco sin pedirle nada al servidor.
+      const uriLocal = payload instanceof Blob
+        ? URL.createObjectURL(payload)
+        : (payload as { uri: string }).uri;
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const provisional: Message = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: '',
+        created_at: new Date().toISOString(),
+        reply_to: replyId,
+        media_path: uriLocal,
+        media_kind: 'audio',
+        media_mime: mime,
+        media_duration: seconds,
+        pending: true,
+      } as Message;
+      setMessages((prev) => [...prev, provisional]);
+      setReplyingTo(null);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+
+      try {
+        if (payload instanceof Blob) {
+          const { error: upError } = await supabase.storage
+            .from(MEDIA_BUCKET)
+            .upload(path, payload, { contentType: mime, cacheControl: '3600', upsert: false });
+          if (upError) throw new Error(upError.message);
+        } else {
+          await uploadToBucket(payload as ImagePicker.ImagePickerAsset, path, mime);
+        }
+      } catch (e) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        throw e;
+      }
+
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
@@ -2843,10 +2941,12 @@ export default function ChatThreadScreen() {
         .select(MESSAGE_COLUMNS)
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        throw new Error(error.message);
+      }
       if (data) {
-        setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
-        setReplyingTo(null);
+        setMessages((prev) => fusionarMensajeReal(prev, data as Message, tempId));
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
       }
     } catch (e: any) {
