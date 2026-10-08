@@ -691,7 +691,7 @@ export default function RegisterScreen() {
               {loading ? (
                 <ActivityIndicator color={nospiColors.white} />
               ) : (
-                <Text style={styles.registerButtonText}>Registrarse</Text>
+                <Text style={styles.registerButtonText}>{t('reg.registrarse')}</Text>
               )}
             </TouchableOpacity>
 

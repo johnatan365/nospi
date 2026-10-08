@@ -580,20 +580,18 @@ export default function ChatsScreen() {
               <View style={styles.comoCuerpo}>
                 <Text style={styles.comoLinea}>
                   <Text style={styles.comoBullet}>💞  </Text>
-                  Hicieron match al final de un evento.
+                  {t('chats.comoMatch')}
                 </Text>
                 <Text style={styles.comoLinea}>
                   <Text style={styles.comoBullet}>🍽️  </Text>
-                  Estuvieron en el mismo evento: ahí se pueden escribir directo.
+                  {t('chats.comoMismoEvento')}
                 </Text>
                 <Text style={styles.comoLinea}>
                   <Text style={styles.comoBullet}>✉️  </Text>
-                  Le enviaste una solicitud y te aceptó.
+                  {t('chats.comoSolicitud')}
                 </Text>
                 <Text style={styles.comoCierre}>
-                  Si no se han cruzado, tu primer mensaje le llega como solicitud: esa persona lo
-                  lee y decide si se abre el chat. Puedes tener hasta 10 solicitudes sin responder
-                  al mismo tiempo.
+                  {t('chats.comoCierre')}
                 </Text>
               </View>
             )}
@@ -606,16 +604,16 @@ export default function ChatsScreen() {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>💬</Text>
             <Text style={styles.emptyTitle}>
-              {filter === 'grupos' ? 'Aún no tienes chats de grupo'
-                : filter === 'canales' ? 'Aún no hay avisos de Nospi'
-                : 'Aún no tienes chats 1-1'}
+              {filter === 'grupos' ? t('chats.sinGrupos')
+                : filter === 'canales' ? t('chats.sinCanales')
+                : t('chats.sinDirectos')}
             </Text>
             <Text style={styles.emptySubtitle}>
               {filter === 'grupos'
-                ? 'Cuando confirmes tu cita a un evento, se abrirá automáticamente el chat grupal con los demás asistentes.'
+                ? t('chats.sinGruposSub')
                 : filter === 'canales'
-                ? 'Cuando el equipo de Nospi publique algo, lo verás aquí.'
-                : 'Aquí van tus chats con una sola persona: los matches, la gente de tus eventos y las solicitudes que te acepten.'}
+                ? t('chats.sinCanalesSub')
+                : t('chats.sinDirectosSub')}
             </Text>
           </View>
         ) : (
@@ -774,10 +772,10 @@ export default function ChatsScreen() {
                     {locked ? (
                       <Text style={styles.rowLockedText} numberOfLines={2}>
                         {unlockLabel
-                          ? `Se habilita a las ${unlockLabel}`
+                          ? t('chats.seHabilitaALas', { hora: unlockLabel })
                           // Dice ASISTIR, no comprar: comprar y no aparecer no
                           // abre la puerta, y es justo lo que no hay que premiar.
-                          : 'Entras cuando vengas a tu primer evento'}
+                          : t('chats.primerEvento')}
                       </Text>
                     ) : (
                       <View style={styles.rowFooter}>

@@ -16,6 +16,13 @@ interface Event {
   // Segundo renglon del nombre, opcional: sirve para decidir a mano donde
   // parte un nombre largo en la tarjeta de la app.
   subtitulo?: string | null;
+  // Nombre y descripcion en ingles. Normalmente los llena sola la edge
+  // function traducir-contenido; las banderas *_manual marcan los que
+  // escribio una persona, que el traductor ya no toca.
+  name_en?: string | null;
+  description_en?: string | null;
+  name_en_manual?: boolean | null;
+  description_en_manual?: boolean | null;
   // `city` es la columna vieja (una sola ciudad): se sigue llenando para que
   // las apps ya publicadas en las tiendas no se queden sin nada que mostrar.
   // `cities` es la lista real y `nacional` marca los eventos de todo el pais.
@@ -1151,6 +1158,8 @@ export default function AdminPanelScreen() {
   const [eventForm, setEventForm] = useState({
     name: '',
     subtitulo: '',
+    name_en: '',
+    description_en: '',
     city: '',
     cities: [] as string[],
     nacional: false,
@@ -3811,6 +3820,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setEventForm({
       name: '',
       subtitulo: '',
+      name_en: '',
+      description_en: '',
       city: '',
       cities: [],
       nacional: false,
@@ -3873,6 +3884,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
     setEventForm({
       name: event.name || '',
       subtitulo: event.subtitulo || '',
+      name_en: event.name_en || '',
+      description_en: event.description_en || '',
       city: event.city || '',
       // Un evento guardado antes del cambio no tiene `cities`: se arma la
       // lista con su unica ciudad para que al editarlo salga marcada.
@@ -4240,6 +4253,17 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       const eventData = {
         name: eventForm.name,
         subtitulo: eventForm.subtitulo.trim() || null,
+        // El ingles escrito a mano manda sobre el traductor automatico.
+        //
+        // Las banderas *_manual son las que frenan al trigger: sin ellas,
+        // editar el nombre en espanol volvia a traducir y se llevaba por
+        // delante un nombre bueno ("Heartbreak Bar" -> "Heartbreak Room
+        // (October 22)"). Si el campo se deja vacio se apaga la bandera y el
+        // evento vuelve a llenarse solo, que es lo que uno espera al borrar.
+        name_en: eventForm.name_en.trim() || null,
+        name_en_manual: !!eventForm.name_en.trim(),
+        description_en: eventForm.description_en.trim() || null,
+        description_en_manual: !!eventForm.description_en.trim(),
         // `city` (columna vieja, un solo texto) se sigue llenando con la
         // primera ciudad para que las apps ya publicadas sigan mostrando algo.
         // Quien decide de verdad a quien le aparece el evento es `cities` /
@@ -4323,6 +4347,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       setEventForm({
         name: '',
         subtitulo: '',
+        name_en: '',
+        description_en: '',
         city: '',
         cities: [],
         nacional: false,
@@ -12439,6 +12465,29 @@ setBulkWhatsAppPending(pending);
                 })()}
               </Text>
 
+              {/* El ingles lo llena solo el traductor (edge function
+                  traducir-contenido). Estos campos son para los eventos con
+                  nombre propio, donde la gracia esta en el nombre: "Sala de
+                  Despecho" traducido deja de ser un nombre. Lo que se escriba
+                  aqui queda marcado y el traductor no lo vuelve a tocar. */}
+              <Text style={styles.inputLabel}>
+                Nombre en inglés{' '}
+                <Text style={{ fontWeight: '600', fontSize: 12, color: eventForm.name_en.trim() ? '#0f8a5f' : '#9CA3AF' }}>
+                  {eventForm.name_en.trim() ? '· escrito a mano' : '· lo pone el traductor'}
+                </Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Se llena solo. Escríbelo si quieres otro."
+                value={eventForm.name_en}
+                onChangeText={(text) => setEventForm({ ...eventForm, name_en: text })}
+              />
+              <Text style={{ fontSize: 12.5, lineHeight: 18, color: '#6B7280', marginTop: -10, marginBottom: 16 }}>
+                {eventForm.name_en.trim()
+                  ? 'El traductor no va a tocar esto aunque cambies el nombre en español. Bórralo para que vuelva a llenarse solo.'
+                  : 'Vacío: se traduce solo cada vez que cambies el nombre en español.'}
+              </Text>
+
               <Text style={styles.inputLabel}>¿A quién le aparece? *</Text>
               {/* Antes esto era un campo de texto libre con placeholder "Ej:
                   Bogotá", y por eso entraron "Medellin" sin tilde y "Medellín"
@@ -12594,6 +12643,27 @@ setBulkWhatsAppPending(pending);
                 multiline
                 numberOfLines={4}
               />
+
+
+              <Text style={styles.inputLabel}>
+                Descripción en inglés{' '}
+                <Text style={{ fontWeight: '600', fontSize: 12, color: eventForm.description_en.trim() ? '#0f8a5f' : '#9CA3AF' }}>
+                  {eventForm.description_en.trim() ? '· escrita a mano' : '· la pone el traductor'}
+                </Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Se llena sola. Escríbela si quieres otra."
+                value={eventForm.description_en}
+                onChangeText={(text) => setEventForm({ ...eventForm, description_en: text })}
+                multiline
+                numberOfLines={4}
+              />
+              <Text style={{ fontSize: 12.5, lineHeight: 18, color: '#6B7280', marginTop: -10, marginBottom: 16 }}>
+                {eventForm.description_en.trim()
+                  ? 'El traductor no va a tocar esto aunque cambies la descripción en español. Bórrala para que vuelva a llenarse sola.'
+                  : 'Vacía: se traduce sola cada vez que cambies la descripción en español.'}
+              </Text>
 
               {/* Un evento de videollamada no tiene lugar que llenar ni GPS
                   que verificar: toda esa sección se reemplaza por el link. */}

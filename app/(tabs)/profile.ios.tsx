@@ -865,7 +865,7 @@ export default function ProfileScreen() {
               <>
                 <Text style={styles.fraseInvita}>{t('perfil.cuentaAlgo')}</Text>
                 <Text style={styles.fraseAyuda}>
-                  Una frase corta es lo primero que lee la gente de tu grupo
+                  {t('perfil.fraseCorta')}
                 </Text>
               </>
             )}
@@ -1584,7 +1584,7 @@ export default function ProfileScreen() {
           <View style={[styles.modalContent, { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderRadius: 24, marginHorizontal: 24 }]}>
             <Text style={[styles.modalTitle, { color: '#DC2626' }]}>⚠️ {t('perfil.eliminarCuenta')}</Text>
             <Text style={[styles.modalSubtitle, { marginBottom: 16 }]}>
-              Esta acción es permanente e irreversible. Se eliminarán todos tus datos, fotos y citas registradas.
+              {t('perfil.eliminarAdvertencia')}
             </Text>
             <Text style={{ fontSize: 15, color: '#333', marginBottom: 24, textAlign: 'center' }}>
               {t('perfil.eliminarPregunta')}

@@ -1195,6 +1195,24 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     // ---------- Registro: Google no disponible ----------
     'reg.googleNoDisponible': 'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase',
 
+
+    // ---------- Chats vacios, como se abren, perfil y registro ----------
+    'reg.registrarse': 'Registrarse',
+    'perfil.fraseCorta': 'Una frase corta es lo primero que lee la gente de tu grupo',
+    'perfil.eliminarAdvertencia': 'Esta acción es permanente e irreversible. Se eliminarán todos tus datos, fotos y citas registradas.',
+    'chats.primerEvento': 'Entras cuando vengas a tu primer evento',
+    'chats.seHabilitaALas': 'Se habilita a las {{hora}}',
+    'chats.comoMatch': 'Hicieron match al final de un evento.',
+    'chats.comoMismoEvento': 'Estuvieron en el mismo evento: ahí se pueden escribir directo.',
+    'chats.comoSolicitud': 'Le enviaste una solicitud y te aceptó.',
+    'chats.comoCierre': 'Si no se han cruzado, tu primer mensaje le llega como solicitud: esa persona lo lee y decide si se abre el chat. Puedes tener hasta 10 solicitudes sin responder al mismo tiempo.',
+    'chats.sinGrupos': 'Aún no tienes chats de grupo',
+    'chats.sinCanales': 'Aún no hay avisos de Nospi',
+    'chats.sinDirectos': 'Aún no tienes chats 1-1',
+    'chats.sinGruposSub': 'Cuando confirmes tu cita a un evento, se abrirá automáticamente el chat grupal con los demás asistentes.',
+    'chats.sinCanalesSub': 'Cuando el equipo de Nospi publique algo, lo verás aquí.',
+    'chats.sinDirectosSub': 'Aquí van tus chats con una sola persona: los matches, la gente de tus eventos y las solicitudes que te acepten.',
+
   },
 
   en: {
@@ -2381,6 +2399,24 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
 
     // ---------- Registro: Google no disponible ----------
     'reg.googleNoDisponible': 'Signing in with Google isn’t available right now because of a configuration issue.\n\nPlease:\n1. Sign up with email, or\n2. Contact the administrator to set up Google OAuth in Supabase',
+
+
+    // ---------- Chats vacios, como se abren, perfil y registro ----------
+    'reg.registrarse': 'Sign up',
+    'perfil.fraseCorta': 'A short line is the first thing your group reads about you',
+    'perfil.eliminarAdvertencia': 'This is permanent and can’t be undone. All your data, photos and bookings will be deleted.',
+    'chats.primerEvento': 'You’re in once you come to your first event',
+    'chats.seHabilitaALas': 'Opens at {{hora}}',
+    'chats.comoMatch': 'You matched at the end of an event.',
+    'chats.comoMismoEvento': 'You were at the same event — you can message each other directly.',
+    'chats.comoSolicitud': 'You sent a request and they accepted.',
+    'chats.comoCierre': 'If you haven’t crossed paths, your first message arrives as a request: they read it and decide whether the chat opens. You can have up to 10 pending requests at a time.',
+    'chats.sinGrupos': 'No group chats yet',
+    'chats.sinCanales': 'No Nospi updates yet',
+    'chats.sinDirectos': 'No direct chats yet',
+    'chats.sinGruposSub': 'When you confirm your seat at an event, the group chat with everyone else opens automatically.',
+    'chats.sinCanalesSub': 'When the Nospi team posts something, you’ll see it here.',
+    'chats.sinDirectosSub': 'This is where your one-to-one chats go: matches, people from your events, and the requests that get accepted.',
 
   },
 };
