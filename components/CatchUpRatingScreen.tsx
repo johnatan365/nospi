@@ -24,6 +24,42 @@ const VINO = '#880E4F';
 // OTRA_KEY: si el usuario elige esta opcion, se abre un campo de texto libre.
 const OTRA_KEY = 'Otra';
 
+// Lo que se GUARDA en la base sigue siendo el texto en espanol: son las
+// respuestas historicas de todos los encuentros y cambiarlas partiria el
+// reporte. Aqui solo se traduce lo que se ve en pantalla.
+const CLAVE_CAL: Record<string, string> = {
+  'El grupo (las personas)': 'cal.it.grupo',
+  'La dinámica (el juego)': 'cal.it.dinamica',
+  'El lugar / ambiente': 'cal.it.lugar',
+  'La comida y bebida': 'cal.it.comida',
+  'La videollamada': 'cal.it.videollamada',
+  'Poca conexión': 'cal.mo.pocaConexion',
+  'Ambiente apagado': 'cal.mo.ambienteApagado',
+  'Muy poca gente': 'cal.mo.pocaGente',
+  'Otra': 'cal.mo.otra',
+  'Muy larga': 'cal.mo.muyLarga',
+  'Preguntas aburridas': 'cal.mo.preguntasAburridas',
+  'No todos participaron': 'cal.mo.noParticiparon',
+  'Incómoda': 'cal.mo.incomoda',
+  'Muy ruidoso': 'cal.mo.ruidoso',
+  'Incómodo': 'cal.mo.incomodo',
+  'Mal servicio': 'cal.mo.malServicio',
+  'Difícil de ubicar': 'cal.mo.dificilUbicar',
+  'Muy costoso': 'cal.mo.muyCostoso',
+  'Muy lejos': 'cal.mo.muyLejos',
+  'Poca cantidad': 'cal.mo.pocaCantidad',
+  'Calidad regular': 'cal.mo.calidadRegular',
+  'Demoró': 'cal.mo.demoro',
+  'Pocas opciones': 'cal.mo.pocasOpciones',
+  'Muy cara': 'cal.mo.muyCara',
+  'Se cayó la señal': 'cal.mo.cayoSenal',
+  'No se escuchaba bien': 'cal.mo.noSeEscuchaba',
+  'Gente con la cámara apagada': 'cal.mo.camaraApagada',
+  'Se sintió incómoda': 'cal.mo.sintioIncomoda',
+  'Muy corta': 'cal.mo.muyCorta',
+};
+
+
 type RatingItem = { key: string; emo: string; label: string; reasons: string[] };
 
 // Estos dos no dependen del tipo: el grupo y el juego existen en todos.
@@ -345,16 +381,16 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
         {/* PASO 1 · AFINIDAD */}
         {step === 'afinidad' && (
           <>
-            {/* Sin rótulo "La dinámica terminó": la pantalla intermedia de la
+            {/* Sin rótulo "{t('cal.dinamicaTermino')}": la pantalla intermedia de la
                 dinámica ya anuncia el final, aquí quedaba redundante. El estilo
                 kicker sigue en uso en el paso 2. */}
-            <Text style={styles.h1}>¿Con quién te gustaría volver a coincidir?</Text>
-            <Text style={styles.sub}>Elige a las personas con las que sentiste buena conexión. Es totalmente opcional: si no quieres elegir a nadie, también está bien.</Text>
+            <Text style={styles.h1}>{t('cal.conQuienVolver')}</Text>
+            <Text style={styles.sub}>{t('cal.eligePersonas')}</Text>
             <View style={styles.privacy}>
-              <Text style={styles.privacyTxt}>🔒 Es privado. La otra persona solo se entera si el gusto es mutuo — ahí hacen match.</Text>
+              <Text style={styles.privacyTxt}>{t('cal.esPrivado')}</Text>
             </View>
             {participants.length === 0 ? (
-              <Text style={styles.empty}>No encontramos a otros participantes en este encuentro.</Text>
+              <Text style={styles.empty}>{t('cal.sinParticipantes')}</Text>
             ) : participants.map((p) => {
               const on = liked.has(p.user_id);
               return (
@@ -373,10 +409,10 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
                 </TouchableOpacity>
               );
             })}
-            <Text style={styles.hint}>Sin compromiso: puedes elegir a varias, a una… o a nadie. Nadie sabrá a quién elegiste, salvo que sea mutuo.</Text>
+            <Text style={styles.hint}>{t('cal.sinCompromiso')}</Text>
             <TouchableOpacity style={[styles.btn, saving && styles.btnDis]} onPress={goToFeedback} disabled={saving} activeOpacity={0.85}>
               {saving ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.btnTxt}>{liked.size === 0 ? 'No elegir a nadie y continuar' : 'Continuar'}</Text>
+                <Text style={styles.btnTxt}>{liked.size === 0 ? t('cal.noElegirNadie') : t('cal.continuar')}</Text>
               )}
             </TouchableOpacity>
           </>
@@ -385,16 +421,16 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
         {/* PASO 2 · FEEDBACK */}
         {step === 'feedback' && (
           <>
-            <Text style={styles.kicker}>¿Qué tal estuvo?</Text>
-            <Text style={styles.h1}>Califica el encuentro</Text>
-            <Text style={styles.help}>Tu opinión nos ayuda a mejorar para los próximos eventos 🙌</Text>
-            <Text style={styles.legend}>🙁 mejorable   ·   🙂 bien   ·   🤩 excelente</Text>
+            <Text style={styles.kicker}>{t('cal.queTalEstuvo')}</Text>
+            <Text style={styles.h1}>{t('cal.calificaEncuentro')}</Text>
+            <Text style={styles.help}>{t('cal.tuOpinion')}</Text>
+            <Text style={styles.legend}>{t('cal.leyenda')}</Text>
             {items.map((it) => {
               const sc = scores[it.key];
               return (
                 <View key={it.key} style={styles.item}>
                   <View style={styles.itemTop}>
-                    <Text style={styles.itemLabel}>{it.emo}  {it.label}</Text>
+                    <Text style={styles.itemLabel}>{it.emo}  {t(CLAVE_CAL[it.label] || it.label)}</Text>
                     <View style={styles.chips}>
                       {LEVELS.map(l => (
                         <TouchableOpacity key={l.v} style={[styles.chip, sc === l.v && styles.chipOn]} onPress={() => setScore(it.key, l.v)} activeOpacity={0.8}>
@@ -405,13 +441,13 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
                   </View>
                   {sc === 1 && (
                     <View style={styles.why}>
-                      <Text style={styles.whyQ}>¿Qué mejorarías?</Text>
+                      <Text style={styles.whyQ}>{t('cal.queMejorarias')}</Text>
                       <View style={styles.rChips}>
                         {it.reasons.map(r => {
                           const on = (reasons[it.key] || new Set()).has(r);
                           return (
                             <TouchableOpacity key={r} style={[styles.rChip, on && styles.rChipOn]} onPress={() => toggleReason(it.key, r)} activeOpacity={0.8}>
-                              <Text style={[styles.rChipTxt, on && styles.rChipTxtOn]}>{r}</Text>
+                              <Text style={[styles.rChipTxt, on && styles.rChipTxtOn]}>{t(CLAVE_CAL[r] || r)}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -419,7 +455,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
                       {(reasons[it.key] || new Set()).has(OTRA_KEY) && (
                         <TextInput
                           style={styles.otraInput}
-                          placeholder="Cuéntanos qué pasó…"
+                          placeholder={t('cal.cuentanosQuePaso')}
                           placeholderTextColor="#b9a7b0"
                           value={otraText[it.key] || ''}
                           onChangeText={(t) => setOtraText(prev => ({ ...prev, [it.key]: t }))}
@@ -434,29 +470,29 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
 
             {/* ¿Volverías a usar Nospi? */}
             <View style={styles.item}>
-              <Text style={styles.volveriaQ}>¿Volverías a usar Nospi?</Text>
+              <Text style={styles.volveriaQ}>{t('cal.volverias')}</Text>
               <View style={styles.yesno}>
                 <TouchableOpacity
                   style={[styles.ynBtn, volveria === 'si' && styles.ynBtnYes]}
                   onPress={() => { setVolveria('si'); setVolveriaWhy(''); }}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.ynTxt, volveria === 'si' && styles.ynTxtOn]}>👍  Sí</Text>
+                  <Text style={[styles.ynTxt, volveria === 'si' && styles.ynTxtOn]}>{t('cal.si')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.ynBtn, volveria === 'no' && styles.ynBtnNo]}
                   onPress={() => setVolveria('no')}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.ynTxt, volveria === 'no' && styles.ynTxtOn]}>👎  No</Text>
+                  <Text style={[styles.ynTxt, volveria === 'no' && styles.ynTxtOn]}>{t('cal.no')}</Text>
                 </TouchableOpacity>
               </View>
               {volveria === 'no' && (
                 <View style={styles.why}>
-                  <Text style={styles.whyQ}>¿Por qué no? Cuéntanos para mejorar</Text>
+                  <Text style={styles.whyQ}>{t('cal.porQueNo')}</Text>
                   <TextInput
                     style={styles.otraInput}
-                    placeholder="Escribe tu razón…"
+                    placeholder={t('cal.escribeRazon')}
                     placeholderTextColor="#b9a7b0"
                     value={volveriaWhy}
                     onChangeText={setVolveriaWhy}
@@ -468,12 +504,12 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
 
             <TextInput
               style={styles.comment}
-              placeholder="¿Algo más que quieras contarnos? (opcional)"
+              placeholder={t('cal.algoMas')}
               placeholderTextColor="#b9a7b0"
               value={comment} onChangeText={setComment} multiline
             />
             <TouchableOpacity style={[styles.btn, saving && styles.btnDis]} onPress={submitAll} disabled={saving} activeOpacity={0.85}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnTxt}>Enviar</Text>}
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnTxt}>{t('cal.enviar')}</Text>}
             </TouchableOpacity>
           </>
         )}
@@ -484,8 +520,8 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
             {matches.length > 0 ? (
               <>
                 <Text style={styles.boom}>💘</Text>
-                <Text style={styles.matchTitle}>{matches.length === 1 ? '¡Hiciste match!' : `¡Hiciste ${matches.length} matches!`}</Text>
-                <Text style={styles.matchSub}>A estas personas también les gustaría volver a coincidir contigo. Ya pueden escribirse 💬</Text>
+                <Text style={styles.matchTitle}>{matches.length === 1 ? t('cal.hicisteMatch') : t('cal.hicisteMatches', { n: matches.length })}</Text>
+                <Text style={styles.matchSub}>{t('cal.matchSub')}</Text>
                 {matches.map((m) => (
                   <View key={m.user_id} style={styles.matchCard}>
                     {m.profile_photo_url ? (
@@ -495,7 +531,7 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
                     )}
                     <Text style={[styles.pName, { color: '#241019' }]}>{m.name}</Text>
                     <TouchableOpacity style={styles.chatBtn} onPress={() => openChat(m)} activeOpacity={0.85}>
-                      <Text style={styles.chatBtnTxt}>💬 Chat</Text>
+                      <Text style={styles.chatBtnTxt}>{t('cal.chat')}</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -503,26 +539,26 @@ export default function CatchUpRatingScreen({ eventId, currentUserId, eventType 
             ) : (
               <>
                 <Text style={styles.boom}>💫</Text>
-                <Text style={styles.matchTitle}>¡Listo!</Text>
+                <Text style={styles.matchTitle}>{t('cal.listo')}</Text>
                 <Text style={styles.matchSub}>
                   {liked.size > 0
-                    ? 'Si alguna de esas personas también te eligió, te avisamos y podrán hablar por el chat.'
-                    : 'Gracias por participar 🙌'}
+                    ? t('cal.siAlguienTeEligio')
+                    : t('cal.graciasParticipar')}
                 </Text>
               </>
             )}
             <View style={styles.iceBreak}>
               <Text style={styles.iceBreakIcon}>✨</Text>
-              <Text style={styles.iceBreakTitle}>¡Ya rompieron el hielo!</Text>
+              <Text style={styles.iceBreakTitle}>{t('cal.rompieronHielo')}</Text>
               <Text style={styles.iceBreakSub}>
                 {eventType === 'virtual'
-                  ? 'Si quieren, sigan conversando un rato en la llamada ✨'
-                  : 'Ahora disfruten el resto de la noche y déjense sorprender ✨'}
+                  ? t('cal.siganConversando')
+                  : t('cal.disfrutenNoche')}
               </Text>
             </View>
-            <Text style={styles.thanks}>Gracias por calificar el encuentro 🙌</Text>
+            <Text style={styles.thanks}>{t('cal.graciasCalificar')}</Text>
             <TouchableOpacity style={styles.btnGhost} onPress={() => router.replace('/(tabs)/events' as any)} activeOpacity={0.85}>
-              <Text style={styles.btnGhostTxt}>Volver al inicio</Text>
+              <Text style={styles.btnGhostTxt}>{t('cal.volverInicio')}</Text>
             </TouchableOpacity>
           </View>
         )}
