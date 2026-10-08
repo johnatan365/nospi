@@ -988,6 +988,14 @@ export default function AdminPanelScreen() {
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
   const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
+  // Interruptores de la traduccion automatica al ingles, por tipo de
+  // contenido. La comunidad va aparte de los canales porque es la que se come
+  // el saldo: ~62.000 caracteres al mes contra ~10.000 de los avisos.
+  const [configTraducirComunidad, setConfigTraducirComunidad] = useState(false);
+  const [configTraducirCanales, setConfigTraducirCanales] = useState(true);
+  const [configTraducirEventos, setConfigTraducirEventos] = useState(true);
+  const [configTraducirPreguntas, setConfigTraducirPreguntas] = useState(true);
+  const [usoTraduccion, setUsoTraduccion] = useState<{ usados: number; tope: number } | null>(null);
   const [configSubPrice3m, setConfigSubPrice3m] = useState('');
   const [configSubPrice6m, setConfigSubPrice6m] = useState('');
   // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
@@ -2444,6 +2452,10 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
+      if (row.key === 'traducir_comunidad') setConfigTraducirComunidad(row.value === 'true');
+      if (row.key === 'traducir_canales') setConfigTraducirCanales(row.value !== 'false');
+      if (row.key === 'traducir_eventos') setConfigTraducirEventos(row.value !== 'false');
+      if (row.key === 'traducir_preguntas') setConfigTraducirPreguntas(row.value !== 'false');
     }
   };
 
@@ -2594,6 +2606,21 @@ export default function AdminPanelScreen() {
     }
   };
 
+  // Cuanto saldo de DeepL queda. No se pide al cargar el admin: solo cuando
+  // se abre la seccion, para no gastar una llamada en cada visita.
+  const cargarUsoTraduccion = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('traducir-contenido', {
+        body: { tipo: 'uso' },
+        headers: { 'x-webhook-token': '7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d' },
+      });
+      if (error || !data?.disponible) return;
+      setUsoTraduccion({ usados: Number(data.usados) || 0, tope: Number(data.tope) || 0 });
+    } catch {
+      // Sin saldo visible la seccion igual sirve: los interruptores no dependen de esto.
+    }
+  };
+
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     setConfigSaved(null);
@@ -2608,6 +2635,10 @@ export default function AdminPanelScreen() {
         { key: 'subscription_price_6m', value: configSubPrice6m },
         { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
         { key: 'min_app_version', value: configMinAppVersion.trim() },
+        { key: 'traducir_comunidad', value: configTraducirComunidad ? 'true' : 'false' },
+        { key: 'traducir_canales', value: configTraducirCanales ? 'true' : 'false' },
+        { key: 'traducir_eventos', value: configTraducirEventos ? 'true' : 'false' },
+        { key: 'traducir_preguntas', value: configTraducirPreguntas ? 'true' : 'false' },
       ];
       const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' });
       if (error) {
@@ -8602,6 +8633,115 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                 Este es el botón de emergencia: apagarlo devuelve todo a la normalidad al instante, sin publicar código. Ojo que la marca se pone al REGISTRARSE — una cuenta que ya existía no cambia aunque abra el link.
               </div>
             </Ajuste>
+          </RejillaDeAjustes>
+        </Categoria>
+
+        <Categoria
+          titulo="🌐 Traducción automática al inglés"
+          descripcion="Qué contenido se traduce solo al guardarlo. Apagar algo no borra lo ya traducido."
+          resumen={`comunidad ${configTraducirComunidad ? 'prendida' : 'apagada'} · canales ${configTraducirCanales ? 'prendidos' : 'apagados'}${usoTraduccion ? ` · ${Math.round((usoTraduccion.usados / Math.max(usoTraduccion.tope, 1)) * 100)}% del saldo usado` : ''}`}
+          abierta={!!seccionesAbiertas.traduccion}
+          onToggle={() => { alternarSeccion("traduccion"); if (!usoTraduccion) cargarUsoTraduccion(); }}
+        >
+          <RejillaDeAjustes>
+            <Ajuste titulo="💳 Saldo de DeepL" color="#1F2937" borde="4px solid #6B7280">
+              <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
+                El plan Developer regala 1 millón de caracteres una sola vez. Después cobra por consumo.
+              </div>
+              {usoTraduccion ? (
+                <>
+                  <div style={{ height: 10, borderRadius: 6, backgroundColor: '#F3F4F6', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(100, Math.round((usoTraduccion.usados / Math.max(usoTraduccion.tope, 1)) * 100))}%`,
+                      backgroundColor: usoTraduccion.usados / Math.max(usoTraduccion.tope, 1) > 0.8 ? '#DC2626' : '#7C3AED',
+                      transition: 'width 0.3s',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1F2937', marginTop: 10 }}>
+                    {usoTraduccion.usados.toLocaleString('es-CO')} de {usoTraduccion.tope.toLocaleString('es-CO')} caracteres
+                  </div>
+                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                    Quedan {(usoTraduccion.tope - usoTraduccion.usados).toLocaleString('es-CO')}.
+                  </div>
+                </>
+              ) : (
+                <div
+                  onClick={cargarUsoTraduccion}
+                  style={{ fontSize: 14, color: '#7C3AED', cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                >
+                  Ver cuánto se ha usado →
+                </div>
+              )}
+            </Ajuste>
+
+            {([
+              {
+                clave: 'comunidad' as const,
+                titulo: '💬 Comunidad Nospi',
+                ayuda: 'Los mensajes que escribe la gente en el chat de la comunidad. Es lo que más gasta: unos 62.000 caracteres al mes. Préndelo cuando ya tengas usuarios con la app en inglés.',
+                valor: configTraducirComunidad,
+                set: setConfigTraducirComunidad,
+                color: '#0E7490',
+              },
+              {
+                clave: 'canales' as const,
+                titulo: '📣 Canales de avisos',
+                ayuda: 'Lo que el equipo de Nospi manda por los canales, incluidas las encuestas. Unos 10.000 caracteres al mes.',
+                valor: configTraducirCanales,
+                set: setConfigTraducirCanales,
+                color: '#0E7490',
+              },
+              {
+                clave: 'eventos' as const,
+                titulo: '📅 Eventos',
+                ayuda: 'Nombre y descripción de cada evento. Unos 2.000 caracteres al mes. Si apagas esto, el nombre en inglés igual se arma solo con el tipo y la fecha ("Dinner · Wed, Oct 28").',
+                valor: configTraducirEventos,
+                set: setConfigTraducirEventos,
+                color: '#0E7490',
+              },
+              {
+                clave: 'preguntas' as const,
+                titulo: '🎲 Preguntas de la dinámica',
+                ayuda: 'Las preguntas nuevas que agregues al banco. Las 315 que ya existían están traducidas.',
+                valor: configTraducirPreguntas,
+                set: setConfigTraducirPreguntas,
+                color: '#0E7490',
+              },
+            ]).map((o) => (
+              <Ajuste
+                key={o.clave}
+                titulo={o.titulo}
+                color={o.valor ? o.color : '#6B7280'}
+                borde={`4px solid ${o.valor ? o.color : '#9CA3AF'}`}
+              >
+                <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>{o.ayuda}</div>
+                <div
+                  onClick={() => o.set(!o.valor)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
+                    backgroundColor: o.valor ? '#ECFEFF' : '#F3F4F6',
+                    borderRadius: 12, padding: '14px 18px',
+                    border: `2px solid ${o.valor ? '#06B6D4' : '#E5E7EB'}`,
+                    transition: 'all 0.2s', userSelect: 'none',
+                  }}
+                >
+                  <div style={{
+                    width: 52, height: 28, borderRadius: 14, position: 'relative', flexShrink: 0,
+                    backgroundColor: o.valor ? '#06B6D4' : '#D1D5DB', transition: 'background 0.2s',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 3, left: o.valor ? 27 : 3,
+                      width: 22, height: 22, borderRadius: '50%', backgroundColor: 'white',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: o.valor ? o.color : '#6B7280' }}>
+                    {o.valor ? 'Se traduce solo' : 'No se traduce'}
+                  </div>
+                </div>
+              </Ajuste>
+            ))}
           </RejillaDeAjustes>
         </Categoria>
 
