@@ -652,7 +652,7 @@ export default function SubscriptionPlansScreen() {
                 setShowSuccessModal(true);
               }
             } else {
-              showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+              showAlert(t('pago.errorConfirmarCita'), t('pago.errorConfirmarCitaMsg'));
               router.replace('/(tabs)/appointments');
             }
           } else if (status === 'DECLINED' || status === 'VOIDED' || status === 'ERROR') {
@@ -663,7 +663,7 @@ export default function SubscriptionPlansScreen() {
               'nospi_access_token',
               'nospi_refresh_token',
             ]);
-            showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
+            showAlert(t('pago.rechazado'), t('pago.rechazadoMsg'));
           } else if (status === 'PENDING' && storedMethod === 'card') {
             // The app was backgrounded during 3DS — the polling interval may have been killed.
             // Restart a short-interval poll (3s, max 10 attempts) to catch the APPROVED status.
@@ -704,7 +704,7 @@ export default function SubscriptionPlansScreen() {
                       setShowSuccessModal(true);
                     }
                   } else {
-                    showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+                    showAlert(t('pago.errorConfirmarCita'), t('pago.errorConfirmarCitaMsg'));
                     router.replace('/(tabs)/appointments');
                   }
                 } else if (pollStatus === 'DECLINED' || pollStatus === 'VOIDED' || pollStatus === 'ERROR') {
@@ -717,7 +717,7 @@ export default function SubscriptionPlansScreen() {
                     'nospi_access_token',
                     'nospi_refresh_token',
                   ]);
-                  showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
+                  showAlert(t('pago.rechazado'), t('pago.tarjetaRechazada'));
                 } else if (resumeAttempts >= maxResumeAttempts) {
                   clearInterval(threeDsPollRef.current!);
                   threeDsPollRef.current = null;
@@ -875,17 +875,17 @@ export default function SubscriptionPlansScreen() {
 
         setShowSuccessModal(true);
       }
-    } catch { showAlert('Error', 'No se pudo procesar el pago con saldo virtual.'); }
+    } catch { showAlert(t('comun.error'), t('pago.noSaldoVirtual')); }
     finally { setProcessingMethod(null); }
   };
 
   const handleCardPayment = async () => {
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      showAlert(t('comun.error'), t('sus.tarjetaIncompleta'));
       return;
     }
     if (cardHolder.trim().length < 5) {
-      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      showAlert(t('comun.error'), t('sus.titularCorto'));
       return;
     }
     // Limpiar cualquier transacción anterior antes de iniciar un nuevo intento.
@@ -1041,7 +1041,7 @@ export default function SubscriptionPlansScreen() {
                     setShowSuccessModal(true);
                   }
                 } else {
-                  showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+                  showAlert(t('pago.errorConfirmarCita'), t('pago.errorConfirmarCitaMsg'));
                   router.replace('/(tabs)/appointments');
                 }
               } else if (bgStatus === 'DECLINED' || bgStatus === 'VOIDED' || bgStatus === 'ERROR') {
@@ -1054,12 +1054,12 @@ export default function SubscriptionPlansScreen() {
                   'nospi_access_token',
                   'nospi_refresh_token',
                 ]);
-                showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
+                showAlert(t('pago.rechazado'), t('pago.tarjetaRechazada'));
               } else if (bgAttempts >= bgMaxAttempts) {
                 clearInterval(threeDsPollRef.current!);
                 threeDsPollRef.current = null;
 
-                showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
+                showAlert(t('pago.enProceso'), t('pago.enProcesoMsg'));
                 router.replace('/(tabs)/appointments');
               }
             } catch (e) {
@@ -1075,7 +1075,7 @@ export default function SubscriptionPlansScreen() {
           return;
         }
 
-        showAlert('Procesando pago', 'Tu pago con tarjeta está siendo verificado. Por favor espera...');
+        showAlert(t('pago.procesando'), t('pago.procesandoMsg'));
 
         let cardAttempts = 0;
         // En mobile sin 3DS url: aumentar el intervalo y los intentos para dar más tiempo.
@@ -1137,11 +1137,11 @@ export default function SubscriptionPlansScreen() {
               await AsyncStorage.removeItem('nospi_payment_opened_time');
               await AsyncStorage.removeItem('nospi_access_token');
               await AsyncStorage.removeItem('nospi_refresh_token');
-              showAlert('Pago rechazado', 'Tu tarjeta fue rechazada. Por favor verifica los datos e intenta de nuevo.');
+              showAlert(t('pago.rechazado'), t('pago.tarjetaRechazada'));
             } else if (cardAttempts >= maxAttempts) {
               clearInterval(cardPoll);
               setProcessingMethod(null);
-              showAlert('Pago en proceso', 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.');
+              showAlert(t('pago.enProceso'), t('pago.enProcesoMsg'));
               router.replace('/(tabs)/appointments');
             }
           } catch (e) {
@@ -1164,7 +1164,7 @@ export default function SubscriptionPlansScreen() {
 
   const handleNequiPayment = async () => {
     const cleanPhone = nequiPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
+    if (cleanPhone.length !== 10) { showAlert(t('comun.error'), t('pago.celularInvalido')); return; }
     setProcessingMethod('nequi');
     try {
       const currentUser = await getSession();
@@ -1212,10 +1212,10 @@ export default function SubscriptionPlansScreen() {
             setProcessingMethod(null);
             setNequiStatus('idle');
             showAlert(
-              attempts >= maxNequiAttempts ? 'Tiempo agotado' : 'Pago rechazado',
+              attempts >= maxNequiAttempts ? t('pago.tiempoAgotado') : t('pago.rechazado'),
               attempts >= maxNequiAttempts
-                ? 'No recibimos confirmación de Nequi. Abre la app de Nequi y aprueba la notificación, luego vuelve aquí e intenta de nuevo.'
-                : 'El pago fue rechazado por Nequi.'
+                ? t('pago.nequiSinConfirmar')
+                : t('pago.nequiRechazado')
             );
           }
         } catch (e) { if (attempts >= maxNequiAttempts) { clearInterval(poll); setProcessingMethod(null); setNequiStatus('idle'); } }
@@ -1376,24 +1376,24 @@ export default function SubscriptionPlansScreen() {
               setShowSuccessModal(true);
             }
           } else {
-            showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+            showAlert(t('pago.errorConfirmarCita'), t('pago.errorConfirmarCitaMsg'));
             router.replace('/(tabs)/appointments');
           }
         } else if (status === 'DECLINED' || status === 'VOIDED') {
           clearInterval(interval);
           setProcessingMethod(null);
-          showAlert('Pago rechazado', 'Tu pago fue rechazado. Por favor intenta de nuevo.');
+          showAlert(t('pago.rechazado'), t('pago.rechazadoMsg'));
         } else if (status === 'ERROR') {
           clearInterval(interval);
           setProcessingMethod(null);
-          showAlert('Error en el pago', 'Ocurrió un error procesando tu pago. Contacta soporte si el dinero fue debitado.');
+          showAlert(t('pago.errorEnPago'), t('pago.errorEnPagoMsg'));
         } else if (attempts >= maxAttempts) {
           clearInterval(interval);
           setProcessingMethod(null);
           Toast.show({
             type: 'info',
             text1: 'Verificando pago',
-            text2: 'Tu pago sigue siendo procesado. Te confirmaremos cuando se complete.',
+            text2: t('pago.enProcesoMsg'),
             visibilityTime: 6000,
             position: 'top',
             topOffset: 60,
@@ -1439,7 +1439,7 @@ export default function SubscriptionPlansScreen() {
           if (success) {
             setShowSuccessModal(true);
           } else {
-            showAlert('Error al confirmar cita', 'Tu pago fue procesado pero hubo un error al confirmar tu cita. Por favor contacta soporte.');
+            showAlert(t('pago.errorConfirmarCita'), t('pago.errorConfirmarCitaMsg'));
             router.replace('/(tabs)/appointments');
           }
         } else if (status === 'PENDING') {
@@ -1455,7 +1455,7 @@ export default function SubscriptionPlansScreen() {
             await AsyncStorage.removeItem('nospi_payment_opened_time');
             Toast.show({
               type: 'info',
-              text1: 'Pago en proceso',
+              text1: t('pago.enProceso'),
               text2: 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.',
               visibilityTime: 5000,
               position: 'top',
@@ -1474,15 +1474,15 @@ export default function SubscriptionPlansScreen() {
           await AsyncStorage.removeItem('nospi_payment_opened_time');
 
           if (status === 'VOIDED') {
-            showAlert('Pago cancelado', 'Cancelaste el proceso de pago. Si deseas confirmar tu asistencia al evento, por favor intenta realizar el pago nuevamente.');
+            showAlert(t('pago.cancelado'), t('pago.canceladoMsg'));
           } else if (status === 'DECLINED') {
-            showAlert('Pago rechazado', 'El banco rechazó tu pago. Por favor, inténtalo de nuevo.');
+            showAlert(t('pago.rechazado'), t('pago.bancoRechazo'));
           } else {
-            showAlert('Error en el pago', 'Ocurrió un error al procesar tu pago. Por favor, inténtalo de nuevo.');
+            showAlert(t('pago.errorEnPago'), t('pago.errorProcesando'));
           }
         } else if (attempts >= maxAttempts) {
           clearInterval(interval);
-          showAlert('Tiempo agotado', 'No se pudo confirmar el pago. Si realizaste el pago, contacta soporte.');
+          showAlert(t('pago.tiempoAgotado'), t('pago.noConfirmoPago'));
         }
       } catch (e) {
 
@@ -1564,10 +1564,10 @@ export default function SubscriptionPlansScreen() {
 	const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
     const cleanLegalId = pseLegalId.replace(/\D/g, '');
-    if (!pseEmail || !pseEmail.includes('@')) { showAlert('Error', 'Ingresa tu correo registrado en PSE.'); return; }
-    if (cleanPhone.length !== 10) { showAlert('Error', 'Ingresa un número de celular válido de 10 dígitos.'); return; }
-    if (cleanLegalId.length < 5) { showAlert('Error', 'Ingresa un número de documento válido.'); return; }
-    if (!pseBankCode) { showAlert('Error', 'Selecciona tu banco.'); return; }
+    if (!pseEmail || !pseEmail.includes('@')) { showAlert(t('comun.error'), t('pago.correoPse')); return; }
+    if (cleanPhone.length !== 10) { showAlert(t('comun.error'), t('pago.celularInvalido')); return; }
+    if (cleanLegalId.length < 5) { showAlert(t('comun.error'), t('pago.documentoInvalido')); return; }
+    if (!pseBankCode) { showAlert(t('comun.error'), t('pago.seleccionaBanco')); return; }
 
     setProcessingMethod('pse');
     try {
@@ -1692,7 +1692,7 @@ export default function SubscriptionPlansScreen() {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color="#fff" />
-        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15 }}>Verificando tu cuenta…</Text>
+        <Text style={{ color: '#fff', marginTop: 16, fontSize: 15 }}>{t('pago.verificandoCuenta')}</Text>
       </LinearGradient>
     );
   }
@@ -1757,7 +1757,7 @@ export default function SubscriptionPlansScreen() {
           >
             {retryingAutoConfirm
               ? <ActivityIndicator color="#880E4F" />
-              : <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>Reintentar</Text>}
+              : <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>{t('comun.reintentar')}</Text>}
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -1765,11 +1765,11 @@ export default function SubscriptionPlansScreen() {
           onPress={() => router.replace('/(tabs)/appointments')}
           activeOpacity={0.8}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Ver mis citas</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('pago.verMisCitas')}</Text>
         </TouchableOpacity>
         {autoConfirmError && soporte && (
           <TouchableOpacity style={{ marginTop: 16 }} onPress={() => Linking.openURL(soporte)} activeOpacity={0.7}>
-            <Text style={{ color: '#F3E8FF', fontSize: 14, textDecorationLine: 'underline' }}>Escribirnos por WhatsApp</Text>
+            <Text style={{ color: '#F3E8FF', fontSize: 14, textDecorationLine: 'underline' }}>{t('pago.escribirWhatsapp')}</Text>
           </TouchableOpacity>
         )}
       </LinearGradient>
@@ -1781,7 +1781,7 @@ export default function SubscriptionPlansScreen() {
     return (
       <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={[styles.gradient, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }]}>
         <Text style={{ fontSize: 44, marginBottom: 12 }}>🎟️</Text>
-        <Text style={{ color: '#fff', fontSize: 19, fontWeight: '800', textAlign: 'center', marginBottom: 10 }}>Este evento es gratis</Text>
+        <Text style={{ color: '#fff', fontSize: 19, fontWeight: '800', textAlign: 'center', marginBottom: 10 }}>{t('pago.eventoGratis')}</Text>
         <Text style={{ color: '#F3E8FF', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
           No alcanzamos a confirmar tu cupo en este momento, pero no hay nada que pagar.
         </Text>
@@ -1790,7 +1790,7 @@ export default function SubscriptionPlansScreen() {
           onPress={() => router.replace('/(tabs)/appointments')}
           activeOpacity={0.8}
         >
-          <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>Ver mis citas</Text>
+          <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '800' }}>{t('pago.verMisCitas')}</Text>
         </TouchableOpacity>
       </LinearGradient>
     );
@@ -1799,18 +1799,18 @@ export default function SubscriptionPlansScreen() {
   if (showCardForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Tarjeta', headerLeft: () => (
+        <Stack.Screen options={{ headerShown: true, title: t('pago.conTarjeta'), headerLeft: () => (
           <TouchableOpacity onPress={() => setShowCardForm(false)} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         )}} />
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formCard}>
-              <Text style={styles.formTitle}>💳 Datos de la tarjeta</Text>
+              <Text style={styles.formTitle}>{t('pago.datosTarjeta')}</Text>
               <Text style={styles.formAmount}>{montoEfectivo}</Text>
-              <Text style={styles.inputLabel}>Nombre del titular</Text>
-              <TextInput style={styles.input} placeholder="Como aparece en la tarjeta" value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
+              <Text style={styles.inputLabel}>{t('pago.nombreTitular')}</Text>
+              <TextInput style={styles.input} placeholder={t('pago.comoApareceTarjeta')} value={cardHolder} onChangeText={setCardHolder} autoCapitalize="characters" returnKeyType="next" />
               <Text style={styles.inputLabel}>{t('pag.numeroTarjeta')}</Text>
               <View style={styles.cardNumberRow}>
                 <TextInput style={[styles.input, { flex: 1, borderWidth: 0, padding: 0 }]} placeholder="0000 0000 0000 0000" value={cardNumber}
@@ -1825,7 +1825,7 @@ export default function SubscriptionPlansScreen() {
               <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.inputLabel}>Vencimiento</Text>
-                  <TextInput style={styles.input} placeholder="MM/AA" value={cardExpiry}
+                  <TextInput style={styles.input} placeholder={t('sus.mmaa')} value={cardExpiry}
                     onChangeText={(t) => { const c = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(c.length >= 2 ? c.slice(0, 2) + '/' + c.slice(2) : c); }}
                     keyboardType="numeric" maxLength={5} returnKeyType="next" />
                 </View>
@@ -1852,7 +1852,7 @@ export default function SubscriptionPlansScreen() {
               >
                 {isProcessing('card') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{t('pag.pagarMonto', { monto: montoEfectivo })}</Text>}
               </TouchableOpacity>
-              <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+              <Text style={styles.secureNote}>{t('pago.seguroWompi')}</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1863,9 +1863,9 @@ export default function SubscriptionPlansScreen() {
   if (showNequiForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con Nequi', headerLeft: () => (
+        <Stack.Screen options={{ headerShown: true, title: t('pago.conNequi'), headerLeft: () => (
           <TouchableOpacity onPress={() => { setShowNequiForm(false); setNequiStatus('idle'); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         )}} />
         <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
@@ -1885,14 +1885,14 @@ export default function SubscriptionPlansScreen() {
                   disabled={isProcessing('nequi')}
                   activeOpacity={0.7}
                 >
-                  {isProcessing('nequi') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>Enviar solicitud de pago</Text>}
+                  {isProcessing('nequi') ? <ActivityIndicator color="#fff" /> : <Text style={styles.payBtnText}>{t('pago.enviarSolicitud')}</Text>}
                 </TouchableOpacity>
-                <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+                <Text style={styles.secureNote}>{t('pago.seguroWompi')}</Text>
               </>
             ) : (
               <View style={styles.waitingContainer}>
                 <Image source={require('@/assets/images/logo-nequi.png')} style={styles.methodLogoLarge} resizeMode="contain" />
-                <Text style={styles.waitingTitle}>Revisa tu app de Nequi</Text>
+                <Text style={styles.waitingTitle}>{t('pago.revisaNequi')}</Text>
                 <Text style={styles.waitingDesc}>{t('pag.apruebaNequi')} <Text style={{ fontWeight: 'bold' }}>{montoEfectivo}</Text> {t('pag.apruebaNequiFin')}</Text>
                 <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: 24 }} />
                 <Text style={styles.waitingHint}>{t('pag.esperando')}</Text>
@@ -1907,9 +1907,9 @@ export default function SubscriptionPlansScreen() {
   if (showPSEForm) {
     return (
       <SafeAreaView style={styles.formContainer}>
-        <Stack.Screen options={{ headerShown: true, title: 'Pagar con PSE', headerLeft: () => (
+        <Stack.Screen options={{ headerShown: true, title: t('pago.conPse'), headerLeft: () => (
           <TouchableOpacity onPress={() => { setShowPSEForm(false); setProcessingMethod(null); }} style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>Cancelar</Text>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16 }}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         )}} />
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
@@ -1949,7 +1949,7 @@ export default function SubscriptionPlansScreen() {
                 </View>
               )}
 
-              <Text style={styles.inputLabel}>Correo registrado en PSE</Text>
+              <Text style={styles.inputLabel}>{t('pago.correoPseLabel')}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="tucorreo@gmail.com"
@@ -1960,7 +1960,7 @@ export default function SubscriptionPlansScreen() {
                 returnKeyType="next"
               />
 
-              <Text style={styles.inputLabel}>Tipo de documento</Text>
+              <Text style={styles.inputLabel}>{t('pago.tipoDocumento')}</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
                 {['CC', 'CE', 'NIT', 'PP'].map((tipo) => (
                   <TouchableOpacity
@@ -1984,7 +1984,7 @@ export default function SubscriptionPlansScreen() {
                 returnKeyType="next"
               />
 
-              <Text style={styles.inputLabel}>Celular</Text>
+              <Text style={styles.inputLabel}>{t('pago.celular')}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="3001234567"
@@ -2006,7 +2006,7 @@ export default function SubscriptionPlansScreen() {
                   : <Text style={styles.payBtnText}>{t('pag.pagarMonto', { monto: montoEfectivo })}</Text>
                 }
               </TouchableOpacity>
-              <Text style={styles.secureNote}>🔒 Pago seguro procesado por Wompi</Text>
+              <Text style={styles.secureNote}>{t('pago.seguroWompi')}</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -2031,7 +2031,7 @@ export default function SubscriptionPlansScreen() {
             }}
             style={{ paddingHorizontal: 8 }}
           >
-            <Text style={{ color: nospiColors.purpleDark, fontSize: 16, fontWeight: '500' }}>Cancelar</Text>
+            <Text style={{ color: nospiColors.purpleDark, fontSize: 16, fontWeight: '500' }}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         ),
       }} />
@@ -2041,7 +2041,7 @@ export default function SubscriptionPlansScreen() {
 
         {!showEventMethods ? (
           <>
-            <Text style={styles.title}>{ocultarPagoPorEvento ? 'Asegura tu cupo' : '¿Cómo quieres ir?'}</Text>
+            <Text style={styles.title}>{ocultarPagoPorEvento ? t('pago.aseguraCupo') : t('pago.comoQuieresIr')}</Text>
             <Text style={styles.subtitle}>{t('pag.confirmaAsistencia')}</Text>
 
             {!ocultarPagoPorEvento && (
@@ -2087,11 +2087,11 @@ export default function SubscriptionPlansScreen() {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
-                <Text style={{ fontSize: 13, color: '#374151' }}>Sin pagar cada evento por separado</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>{t('pago.sinPagarCadaEvento')}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{ color: nospiColors.purpleMid, fontSize: 14, marginRight: 8 }}>✓</Text>
-                <Text style={{ fontSize: 13, color: '#374151' }}>Cancela cuando quieras</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>{t('pago.cancelaCuandoQuieras')}</Text>
               </View>
 
               <Text style={{ fontSize: 12, color: nospiColors.purpleMid, fontWeight: '700', marginBottom: 4 }}>
@@ -2130,7 +2130,7 @@ export default function SubscriptionPlansScreen() {
                     style={{ width: 78, height: 42, borderRadius: 10, backgroundColor: nospiColors.purpleDark, alignItems: 'center', justifyContent: 'center', opacity: applyingPromo || !promoCode.trim() ? 0.6 : 1 }}
                     activeOpacity={0.8}
                   >
-                    {applyingPromo ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Aplicar</Text>}
+                    {applyingPromo ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{t('pago.aplicar')}</Text>}
                   </TouchableOpacity>
                 </View>
                 {!!promoError && (
@@ -2158,9 +2158,9 @@ export default function SubscriptionPlansScreen() {
         ) : (
           <>
         <TouchableOpacity onPress={() => setShowEventMethods(false)} style={{ marginBottom: 12 }}>
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>‹ Volver</Text>
+          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{t('pago.volverFlecha')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Pagar este evento</Text>
+        <Text style={styles.title}>{t('pago.pagarEsteEvento')}</Text>
         <Text style={styles.subtitle}>{`$${effectivePriceCOP.toLocaleString('es-CO')} COP · elige tu método`}</Text>
 
         <Text style={styles.sectionTitle}>{t('pag.comoPagar')}</Text>
@@ -2231,7 +2231,7 @@ export default function SubscriptionPlansScreen() {
         )}
         {/* ========== END TEST BUTTON ========== */}
 
-				<Text style={styles.secureFooter}>🔒 Pagos seguros procesados por Wompi</Text>
+				<Text style={styles.secureFooter}>{t('pago.segurosWompi')}</Text>
 				<Text style={styles.cancelPolicyFooter}>{t('pag.politicaLarga')}</Text>
           </>
         )}
@@ -2243,13 +2243,13 @@ export default function SubscriptionPlansScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.successTitle}>{t('pag.pagoExitoso')}</Text>
-            <Text style={styles.successMessage}>Tu asistencia al evento ha sido confirmada</Text>
+            <Text style={styles.successMessage}>{t('pago.asistenciaConfirmada')}</Text>
             <Text style={styles.policyNote}>ℹ️ {t('pag.politicaLarga')}</Text>
             <TouchableOpacity onPress={() => { setShowSuccessModal(false); router.push('/politica-asistencia'); }} activeOpacity={0.7}>
               <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSuccessModal(false); router.replace('/(tabs)/appointments'); }}>
-              <Text style={styles.successButtonText}>Ver mis citas</Text>
+              <Text style={styles.successButtonText}>{t('pago.verMisCitas')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2270,7 +2270,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowSubscriptionConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
-              <Text style={styles.successButtonText}>Ver mis citas</Text>
+              <Text style={styles.successButtonText}>{t('pago.verMisCitas')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2287,7 +2287,7 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.policyLink}>{t('pag.verPolitica')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoConfirmModal(false); router.replace('/(tabs)/appointments'); }}>
-              <Text style={styles.successButtonText}>Ver mis citas</Text>
+              <Text style={styles.successButtonText}>{t('pago.verMisCitas')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2300,7 +2300,7 @@ export default function SubscriptionPlansScreen() {
             <Text style={styles.successTitle}>{t('pag.codigoAplicadoTitulo')}</Text>
             <Text style={styles.successMessage}>{`Tienes ${promoApplied?.discountPercent ?? 0}% de descuento en este evento`}</Text>
             <TouchableOpacity style={styles.successButton} onPress={() => { setShowPromoPartialModal(false); setShowEventMethods(true); }}>
-              <Text style={styles.successButtonText}>Ir a pagar</Text>
+              <Text style={styles.successButtonText}>{t('pago.irAPagar')}</Text>
             </TouchableOpacity>
           </View>
         </View>

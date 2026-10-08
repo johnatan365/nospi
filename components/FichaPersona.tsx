@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { avatarPorGenero } from '@/components/AvatarNospi';
 import { supabase } from '@/lib/supabase';
+import { useIdioma } from '@/contexts/IdiomaContext';
+import { etiquetaGusto } from '@/constants/Gustos';
 
 // Ficha de una persona: sus fotos, nombre, edad, ciudad, intereses y como es.
 //
@@ -77,6 +79,7 @@ export function FichaPersona({
   pie?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const { idioma, t } = useIdioma();
   const { width, height } = useWindowDimensions();
   const [indice, setIndice] = useState(0);
 
@@ -174,7 +177,7 @@ export function FichaPersona({
             ) : porDefecto ? (
               <View style={estilos.sinFoto}>
                 <ExpoImage source={porDefecto} style={estilos.sinFotoAvatar} contentFit="contain" />
-                <Text style={estilos.sinFotoTexto}>Todavía no ha subido fotos</Text>
+                <Text style={estilos.sinFotoTexto}>{t('ficha.sinFotos')}</Text>
               </View>
             ) : (
               <View style={estilos.sinFoto}>
@@ -185,7 +188,7 @@ export function FichaPersona({
                     {p!.name.trim().charAt(0).toUpperCase()}
                   </Text>
                 )}
-                <Text style={estilos.sinFotoTexto}>Todavía no ha subido fotos</Text>
+                <Text style={estilos.sinFotoTexto}>{t('ficha.sinFotos')}</Text>
               </View>
             )}
 
@@ -212,7 +215,7 @@ export function FichaPersona({
                 <Pressable
                   style={[estilos.zonaToque, { left: 0 }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Foto anterior"
+                  accessibilityLabel={t('ficha.fotoAnterior')}
                   onPress={() => setIndice((i) => (i - 1 + fotos.length) % fotos.length)}
                 >
                   <View style={[estilos.flecha, { marginLeft: 10 }]}>
@@ -222,7 +225,7 @@ export function FichaPersona({
                 <Pressable
                   style={[estilos.zonaToque, estilos.zonaDerecha, { right: 0 }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Foto siguiente"
+                  accessibilityLabel={t('ficha.fotoSiguiente')}
                   onPress={() => setIndice((i) => (i + 1) % fotos.length)}
                 >
                   <View style={[estilos.flecha, { marginRight: 10 }]}>
@@ -248,7 +251,7 @@ export function FichaPersona({
             <View style={estilos.sobreFoto} pointerEvents="none">
               <View style={estilos.filaNombre}>
                 <Text style={estilos.nombre} numberOfLines={1}>
-                  {p?.name || 'Alguien'}
+                  {p?.name || t('ficha.alguien')}
                 </Text>
               </View>
               {!!subtitulo && <Text style={estilos.subtitulo}>{subtitulo}</Text>}
@@ -266,11 +269,11 @@ export function FichaPersona({
 
             {!!intereses.length && (
               <>
-                <Text style={estilos.seccion}>Le gusta</Text>
+                <Text style={estilos.seccion}>{t('ficha.leGusta')}</Text>
                 <View style={estilos.chips}>
                   {intereses.map((it) => (
                     <View key={`i-${it}`} style={estilos.chip}>
-                      <Text style={estilos.chipTexto}>{it}</Text>
+                      <Text style={estilos.chipTexto}>{etiquetaGusto(it, idioma)}</Text>
                     </View>
                   ))}
                 </View>
@@ -280,12 +283,12 @@ export function FichaPersona({
             {!!rasgos.length && (
               <>
                 <Text style={[estilos.seccion, intereses.length ? { marginTop: 16 } : null]}>
-                  Cómo es
+                  {t('ficha.comoEs')}
                 </Text>
                 <View style={estilos.chips}>
                   {rasgos.map((it) => (
                     <View key={`p-${it}`} style={[estilos.chip, estilos.chipRasgo]}>
-                      <Text style={[estilos.chipTexto, estilos.chipRasgoTexto]}>{it}</Text>
+                      <Text style={[estilos.chipTexto, estilos.chipRasgoTexto]}>{etiquetaGusto(it, idioma)}</Text>
                     </View>
                   ))}
                 </View>
@@ -294,14 +297,14 @@ export function FichaPersona({
 
             {!intereses.length && !rasgos.length && !frase && (
               <Text style={estilos.vacio}>
-                Todavía no ha contado sus intereses. Pregúntale en el evento 😉
+                {t('ficha.sinIntereses')}
               </Text>
             )}
 
             {pie}
 
             <TouchableOpacity style={estilos.cerrar} onPress={onClose} activeOpacity={0.85}>
-              <Text style={estilos.cerrarTexto}>Cerrar</Text>
+              <Text style={estilos.cerrarTexto}>{t('comun.cerrar')}</Text>
             </TouchableOpacity>
           </View>
           </ScrollView>
@@ -320,7 +323,7 @@ export function FichaPersona({
             activeOpacity={0.85}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
-            accessibilityLabel="Cerrar"
+            accessibilityLabel={t('comun.cerrar')}
           >
             <Text style={estilos.equisTexto}>✕</Text>
           </TouchableOpacity>

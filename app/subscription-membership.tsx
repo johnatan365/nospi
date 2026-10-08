@@ -109,6 +109,19 @@ function renderCardBrandMark(brand: 'visa' | 'mastercard' | 'amex' | 'diners' | 
   );
 }
 
+
+// El valor que se guarda en la base sigue siendo el texto en espanol: es la
+// respuesta historica de cientos de cancelaciones y cambiarlo partiria el
+// reporte. Aqui solo se traduce lo que se ve en pantalla.
+const CLAVE_MOTIVO: Record<string, string> = {
+  'Es muy costoso': 'motivo.costoso',
+  'No lo uso lo suficiente': 'motivo.pocoUso',
+  'Encontré otra alternativa': 'motivo.alternativa',
+  'Problemas técnicos con la app': 'motivo.tecnicos',
+  'No cumplió mis expectativas': 'motivo.expectativas',
+  'Otro': 'motivo.otro',
+};
+
 const CANCEL_REASONS = [
   'Es muy costoso',
   'No lo uso lo suficiente',
@@ -234,11 +247,11 @@ export default function SubscriptionMembershipScreen() {
 
   const handleChangeCard = async () => {
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      showAlert(t('comun.error'), t('sus.tarjetaIncompleta'));
       return;
     }
     if (cardHolder.trim().length < 5) {
-      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      showAlert(t('comun.error'), t('sus.titularCorto'));
       return;
     }
     setChangingCard(true);
@@ -305,11 +318,11 @@ export default function SubscriptionMembershipScreen() {
 
   const handleSubscribe = async () => {
     if (!cardNumber || !cardExpiry || !cardCvc || !cardHolder) {
-      showAlert('Error', 'Por favor completa todos los datos de la tarjeta.');
+      showAlert(t('comun.error'), t('sus.tarjetaIncompleta'));
       return;
     }
     if (cardHolder.trim().length < 5) {
-      showAlert('Error', 'El nombre del titular debe tener al menos 5 caracteres.');
+      showAlert(t('comun.error'), t('sus.titularCorto'));
       return;
     }
     setProcessing(true);
@@ -401,7 +414,7 @@ export default function SubscriptionMembershipScreen() {
               await AsyncStorage.setItem('nospi_refresh_token', currentSession.refresh_token || '');
             }
           } catch {}
-          showAlert('Verificación requerida', 'Tu banco pidió una verificación adicional. Te vamos a redirigir para completarla.');
+          showAlert(t('sus.verifRequerida'), t('sus.verifRequeridaMsg'));
           window.location.href = result.threeDsUrl;
           return;
         }
@@ -439,7 +452,7 @@ export default function SubscriptionMembershipScreen() {
           throw new Error('El banco rechazó el pago. Intenta con otra tarjeta.');
         }
         if (finalStatus === 'PENDING') {
-          showAlert('Pago en verificación', 'Tu pago sigue siendo verificado por el banco. Se activará automáticamente apenas se confirme; revisa en unos minutos.');
+          showAlert(t('sus.pagoEnVerif'), t('sus.pagoEnVerifMsg'));
           return;
         }
         // finalStatus === 'APPROVED': continúa al flujo de éxito normal.
@@ -500,7 +513,7 @@ export default function SubscriptionMembershipScreen() {
     // Con "Otro" el texto es OBLIGATORIO: antes se podia enviar vacio y en el
     // admin quedaba "Otro" a secas, sin saber el motivo real.
     if (selectedCancelReason === 'Otro' && !otherCancelReason.trim()) {
-      showAlert('Cuéntanos el motivo', 'Escribe brevemente por qué cancelas para poder mejorar.');
+      showAlert(t('sus.cuentanosMotivo'), t('sus.cuentanosMotivoMsg'));
       return;
     }
     const reason = selectedCancelReason === 'Otro'
@@ -508,7 +521,7 @@ export default function SubscriptionMembershipScreen() {
       : selectedCancelReason;
 
     if (!reason) {
-      showAlert('Selecciona un motivo', 'Cuéntanos por qué cancelas para poder seguir mejorando.');
+      showAlert(t('sus.seleccionaMotivo'), t('sus.seleccionaMotivoMsg'));
       return;
     }
 
@@ -527,7 +540,7 @@ export default function SubscriptionMembershipScreen() {
     setCancelling(false);
 
     if (error) {
-      showAlert('Error', 'No se pudo cancelar. Intenta de nuevo.');
+      showAlert(t('comun.error'), t('sus.noCancelo'));
       return;
     }
 
@@ -576,7 +589,7 @@ export default function SubscriptionMembershipScreen() {
     setReactivating(false);
 
     if (error) {
-      showAlert('Error', 'No se pudo reactivar la renovación. Intenta de nuevo.');
+      showAlert(t('comun.error'), t('sus.noReactivo'));
       return;
     }
 
@@ -681,7 +694,7 @@ export default function SubscriptionMembershipScreen() {
                   <View style={styles.cardNumberRow}>
                     <TextInput
                       style={[styles.input, styles.cardNumberInput]}
-                      placeholder="Número de tarjeta"
+                      placeholder={t('sus.numeroTarjeta')}
                       placeholderTextColor={nospiColors.gray400}
                       keyboardType="number-pad"
                       value={cardNumber}
@@ -700,7 +713,7 @@ export default function SubscriptionMembershipScreen() {
                   <View style={{ flexDirection: 'row' }}>
                     <TextInput
                       style={[styles.input, { flex: 1, minWidth: 0, marginRight: 10 }]}
-                      placeholder="MM/AA"
+                      placeholder={t('sus.mmaa')}
                       placeholderTextColor={nospiColors.gray400}
                       value={cardExpiry}
                       onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(digits.length >= 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits); }}
@@ -717,10 +730,10 @@ export default function SubscriptionMembershipScreen() {
                     disabled={changingCard}
                     activeOpacity={0.85}
                   >
-                    {changingCard ? <ActivityIndicator color="#fff" /> : <Text style={styles.subscribeButtonText}>Guardar tarjeta nueva</Text>}
+                    {changingCard ? <ActivityIndicator color="#fff" /> : <Text style={styles.subscribeButtonText}>{t('sus.guardarTarjeta')}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => { if (!changingCard) { setShowChangeCardForm(false); setCardNumber(''); setCardExpiry(''); setCardCvc(''); setCardHolder(''); } }} activeOpacity={0.7}>
-                    <Text style={styles.changeFormBackLink}>← Volver sin cambiar</Text>
+                    <Text style={styles.changeFormBackLink}>{t('sus.volverSinCambiar')}</Text>
                   </TouchableOpacity>
                 </KeyboardAvoidingView>
               </View>
@@ -748,7 +761,7 @@ export default function SubscriptionMembershipScreen() {
             {startCardForm !== '1' && (
               <>
                 <Text style={styles.introTitle}>Acceso ilimitado</Text>
-                <Text style={styles.introSubtitle}>Ve a todos los eventos del mes sin volver a pagar por separado</Text>
+                <Text style={styles.introSubtitle}>{t('sus.introSubtitulo')}</Text>
               </>
             )}
 
@@ -822,7 +835,7 @@ export default function SubscriptionMembershipScreen() {
                   <View style={styles.cardNumberRow}>
                     <TextInput
                       style={[styles.input, styles.cardNumberInput]}
-                      placeholder="Número de tarjeta"
+                      placeholder={t('sus.numeroTarjeta')}
                       placeholderTextColor={nospiColors.gray400}
                       keyboardType="number-pad"
                       value={cardNumber}
@@ -841,7 +854,7 @@ export default function SubscriptionMembershipScreen() {
                   <View style={{ flexDirection: 'row' }}>
                     <TextInput
                       style={[styles.input, { flex: 1, minWidth: 0, marginRight: 10 }]}
-                      placeholder="MM/AA"
+                      placeholder={t('sus.mmaa')}
                       placeholderTextColor={nospiColors.gray400}
                       value={cardExpiry}
                       onChangeText={(t) => { const digits = t.replace(/\D/g, '').slice(0, 4); setCardExpiry(digits.length >= 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits); }}
@@ -860,14 +873,14 @@ export default function SubscriptionMembershipScreen() {
                   >
                     {processing
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={styles.subscribeButtonText}>Pagar ${planActual.precio.toLocaleString('es-CO')} y activar</Text>}
+                      : <Text style={styles.subscribeButtonText}>{t('sus.pagarYActivar', { precio: textoPrecio(idioma, planActual.precio, planActual.precioUsd) })}</Text>}
                   </TouchableOpacity>
                 </KeyboardAvoidingView>
               )}
             </View>
 
             <Text style={styles.footnote}>
-              Se renueva cada {planActual.meses === 1 ? 'mes' : `${planActual.meses} meses`} automáticamente. Puedes cancelar la renovación cuando quieras desde tu perfil. Los planes pagados no son reembolsables.
+              {planActual.meses === 1 ? t('sus.renuevaMes') : t('sus.renuevaMeses', { n: planActual.meses })}
             </Text>
           </>
         )}
@@ -877,7 +890,7 @@ export default function SubscriptionMembershipScreen() {
         <View style={styles.cancelModalOverlay}>
           <View style={styles.cancelModalContent}>
             <Text style={styles.cancelModalTitle}>{t('sus.porQueCancelas')}</Text>
-            <Text style={styles.cancelModalSubtitle}>Nos ayuda a mejorar Nospi.</Text>
+            <Text style={styles.cancelModalSubtitle}>{t('sus.nosAyuda')}</Text>
 
             {CANCEL_REASONS.map((reason) => (
               <TouchableOpacity
@@ -887,14 +900,14 @@ export default function SubscriptionMembershipScreen() {
                 activeOpacity={0.7}
               >
                 <View style={[styles.cancelReasonDot, selectedCancelReason === reason && styles.cancelReasonDotSelected]} />
-                <Text style={styles.cancelReasonText}>{reason}</Text>
+                <Text style={styles.cancelReasonText}>{t(CLAVE_MOTIVO[reason] || reason)}</Text>
               </TouchableOpacity>
             ))}
 
             {selectedCancelReason === 'Otro' && (
               <TextInput
                 style={[styles.input, { marginTop: 8 }]}
-                placeholder="Cuéntanos cuál es el motivo"
+                placeholder={t('sus.otroMotivoPh')}
                 placeholderTextColor={nospiColors.gray400}
                 value={otherCancelReason}
                 onChangeText={setOtherCancelReason}
@@ -907,7 +920,7 @@ export default function SubscriptionMembershipScreen() {
                 onPress={() => setShowCancelReasonModal(false)}
                 disabled={cancelling}
               >
-                <Text style={styles.cancelModalButtonSecondaryText}>Volver</Text>
+                <Text style={styles.cancelModalButtonSecondaryText}>{t('sus.volver')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cancelModalButtonPrimary}
@@ -928,7 +941,7 @@ export default function SubscriptionMembershipScreen() {
           <View style={styles.successModalContent}>
             <Text style={styles.successModalEmoji}>👑</Text>
             <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>{t('sus.activada')}</Text>
-            <Text style={styles.successModalSubtitle}>Ya puedes ir a todos los eventos del mes sin pagar cada uno por separado.</Text>
+            <Text style={styles.successModalSubtitle}>{t('sus.yaPuedesIr')}</Text>
             <TouchableOpacity
               style={[styles.successModalButton, { backgroundColor: nospiColors.purpleDark }]}
               onPress={() => setShowSubscribeSuccessModal(false)}

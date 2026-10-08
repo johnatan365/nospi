@@ -375,7 +375,7 @@ export default function ProfileScreen() {
 
     if (!supportUserEmail.trim() || !supportMessage.trim()) {
       
-      Alert.alert('Campos requeridos', 'Por favor completa tu correo y el mensaje');
+      Alert.alert(t('comun.camposRequeridos'), t('perfil.completaCorreoMensaje'));
       return;
     }
 
@@ -410,7 +410,7 @@ export default function ProfileScreen() {
       if (!response.ok) {
         const errText = await response.text();
         
-        Alert.alert('Error al enviar', `Código ${response.status}: ${errText || 'Error desconocido'}`);
+        Alert.alert(t('perfil.errorAlEnviar'), `Código ${response.status}: ${errText || 'Error desconocido'}`);
         return;
       }
 
@@ -424,7 +424,7 @@ export default function ProfileScreen() {
       setSupportEmailSent(true);
     } catch (err) {
       
-      Alert.alert('Error de conexión', 'No se pudo enviar el mensaje. Verifica tu conexión e intenta de nuevo.');
+      Alert.alert(t('comun.errorConexion'), t('perfil.noSeEnvioMensaje'));
     } finally {
       setSendingSupportEmail(false);
       
@@ -435,7 +435,7 @@ export default function ProfileScreen() {
     
     const url = `https://wa.me/${appConfig.support_whatsapp}`;
     Linking.openURL(url).catch(() =>
-      Alert.alert('Error', 'No se pudo abrir WhatsApp')
+      Alert.alert(t('comun.error'), t('perfil.noAbrioWhatsapp'))
     );
   };
 
@@ -467,7 +467,7 @@ export default function ProfileScreen() {
       await AsyncStorage.clear();
       router.replace('/welcome');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'No se pudo eliminar la cuenta. Intenta de nuevo.');
+      Alert.alert(t('comun.error'), err.message || t('perfil.noEliminoCuenta'));
     } finally {
       setDeletingAccount(false);
       setShowDeleteAccountModal(false);
@@ -518,7 +518,7 @@ export default function ProfileScreen() {
     });
     if (error) {
       aplicar(antes);
-      Alert.alert('No se pudo guardar', 'Revisa tu conexión e intenta de nuevo.');
+      Alert.alert(t('comun.noSePudoGuardar'), t('comun.revisaConexion'));
     }
   };
 
@@ -543,7 +543,7 @@ export default function ProfileScreen() {
     const preferenceChanged = editAgeRangeMin !== profile?.age_range_min || editAgeRangeMax !== profile?.age_range_max
 ;
     if (preferenceChanged && !validAgeRange({ min: editAgeRangeMin, max: editAgeRangeMax })) {
-      Alert.alert('Revisa tus preferencias', 'El mínimo no puede ser mayor que el máximo.');
+      Alert.alert(t('perfil.revisaPreferencias'), t('perfil.minMayorMax'));
       return;
     }
     // Ya no se guarda age_range_fallback: esa pregunta se quito porque prometia
@@ -551,7 +551,7 @@ export default function ProfileScreen() {
     const preferenceFields = {};
 
     if (!editName.trim() || !editPhoneNumber.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      Alert.alert(t('comun.error'), t('perfil.completaRequeridos'));
       return;
     }
 
@@ -583,7 +583,7 @@ export default function ProfileScreen() {
         if (error.code === '23505' && error.message?.includes('users_phone_key')) {
           setPhoneInlineError(t('perfil.celularRepetido'));
         } else {
-          Alert.alert('Error', 'No se pudo actualizar el perfil');
+          Alert.alert(t('comun.error'), t('perfil.noActualizoPerfil'));
         }
         return;
       }
@@ -603,10 +603,10 @@ export default function ProfileScreen() {
         return updated;
       });
       setEditModalVisible(false);
-      Alert.alert('Éxito', 'Perfil actualizado correctamente');
+      Alert.alert(t('comun.exito'), t('perfil.perfilActualizado'));
     } catch (err) {
       
-      Alert.alert('Error', 'No se pudo actualizar el perfil');
+      Alert.alert(t('comun.error'), t('perfil.noActualizoPerfil'));
     }
   };
 
@@ -633,7 +633,7 @@ export default function ProfileScreen() {
       cacheRef.current = { data: revertido, timestamp: Date.now() };
       setCached(CACHE_KEY, revertido);
       setProfile(revertido);
-      Alert.alert('No se pudo guardar', 'Revisa tu conexión e intenta de nuevo.');
+      Alert.alert(t('comun.noSePudoGuardar'), t('comun.revisaConexion'));
     }
   };
 
@@ -701,7 +701,7 @@ export default function ProfileScreen() {
       }
 
       
-      Alert.alert('Éxito', 'Contraseña actualizada correctamente');
+      Alert.alert(t('comun.exito'), t('perfil.contrasenaActualizada'));
       setShowPasswordModal(false);
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
     } catch (err) {
@@ -796,8 +796,8 @@ export default function ProfileScreen() {
   }
 
   const tieneFrase = !!(profile.bio || '').trim();
-  const genderText = profile.gender === 'hombre' ? 'Hombre' : profile.gender === 'mujer' ? 'Mujer' : 'No binario';
-  const interestedInText = profile.interested_in === 'hombres' ? 'Hombres' : profile.interested_in === 'mujeres' ? 'Mujeres' : 'Ambos';
+  const genderText = profile.gender === 'hombre' ? t('perfil.hombre') : profile.gender === 'mujer' ? t('perfil.mujer') : t('perfil.noBinario');
+  const interestedInText = profile.interested_in === 'hombres' ? t('perfil.hombres') : profile.interested_in === 'mujeres' ? t('perfil.mujeres') : t('perfil.ambos');
   const ageRangeText = t('perfil.rangoAnios', { min: profile.age_range_min, max: profile.age_range_max });
   const locationText = `${profile.city}, ${profile.country}`;
   const availableCities = CITIES_BY_COUNTRY[editCountry] || [];
@@ -820,7 +820,7 @@ export default function ProfileScreen() {
             onPress={handlePhotoPress}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Ver y cambiar mis fotos"
+            accessibilityLabel={t('perfil.verCambiarFotos')}
           >
             <View>
               {/* Quien no ha subido foto ve el personaje de Nospi, no una
@@ -854,7 +854,7 @@ export default function ProfileScreen() {
             onPress={handleEditPress}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={tieneFrase ? 'Editar tu frase' : 'Escribir algo sobre ti'}
+            accessibilityLabel={tieneFrase ? t('perfil.editarFrase') : t('perfil.escribirAlgo')}
           >
             {tieneFrase ? (
               <>
@@ -863,7 +863,7 @@ export default function ProfileScreen() {
               </>
             ) : (
               <>
-                <Text style={styles.fraseInvita}>✏️  Cuenta algo sobre ti</Text>
+                <Text style={styles.fraseInvita}>{t('perfil.cuentaAlgo')}</Text>
                 <Text style={styles.fraseAyuda}>
                   Una frase corta es lo primero que lee la gente de tu grupo
                 </Text>
@@ -918,11 +918,11 @@ export default function ProfileScreen() {
         <View style={styles.heroStats}>
           <View style={styles.heroStat}>
             <Text style={styles.heroStatNum}>{profile.interests.length}</Text>
-            <Text style={styles.heroStatLabel}>GUSTOS</Text>
+            <Text style={styles.heroStatLabel}>{t('perfil.gustosMayus')}</Text>
           </View>
           <View style={[styles.heroStat, styles.heroStatBorder]}>
             <Text style={styles.heroStatNum}>{profile.personality_traits.length}</Text>
-            <Text style={styles.heroStatLabel}>RASGOS</Text>
+            <Text style={styles.heroStatLabel}>{t('perfil.rasgosMayus')}</Text>
           </View>
         </View>
 
@@ -932,7 +932,7 @@ export default function ProfileScreen() {
           <View style={styles.infoRow}><Ionicons name="call-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>{t('perfil.telefono')}</Text><Text style={styles.infoValue}>{profile.phone || 'No especificado'}</Text></View>
           <View style={styles.infoRow}><Ionicons name="person-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>{t('perfil.genero')}</Text><Text style={styles.infoValue}>{genderText}</Text></View>
           {MOSTRAR_INTERESADO_EN && (
-            <View style={styles.infoRow}><Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>Interesado en</Text><Text style={styles.infoValue}>{interestedInText}</Text></View>
+            <View style={styles.infoRow}><Ionicons name="heart-outline" size={18} color="#880E4F" style={styles.infoIcon} /><Text style={styles.infoLabel}>{t('perfil.interesadoEn')}</Text><Text style={styles.infoValue}>{interestedInText}</Text></View>
           )}
           <View style={styles.infoRow}>
             <Ionicons name="restaurant-outline" size={18} color="#880E4F" style={styles.infoIcon} />
@@ -1031,8 +1031,8 @@ export default function ProfileScreen() {
               <Ionicons name="eye-outline" size={20} color="#880E4F" />
             </View>
             <View style={styles.menuTextWrap}>
-              <Text style={styles.menuTitle}>Supervisión en vivo</Text>
-              <Text style={styles.menuSub}>Dinámica y chats de las mesas de hoy</Text>
+              <Text style={styles.menuTitle}>{t('perfil.supervisionVivo')}</Text>
+              <Text style={styles.menuSub}>{t('perfil.supervisionSub')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
           </TouchableOpacity>
@@ -1068,7 +1068,7 @@ export default function ProfileScreen() {
               <View style={styles.supportIconCircle}>
                 <Ionicons name="mail-outline" size={22} color="#880E4F" />
               </View>
-              <Text style={styles.supportCardTitle}>Correo</Text>
+              <Text style={styles.supportCardTitle}>{t('perfil.correo')}</Text>
               <Text style={styles.supportCardSub}>{t('perfil.correoSub')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.supportCard} onPress={handleSupportWhatsApp} activeOpacity={0.8}>
@@ -1111,14 +1111,14 @@ export default function ProfileScreen() {
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Volver sin guardar"
+                  accessibilityLabel={t('perfil.volverSinGuardar')}
                 >
                   <Ionicons name="chevron-back" size={24} color="#880E4F" />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>{t('perfil.editarPerfilTitulo')}</Text>
               </View>
               <Text style={styles.inputLabel}>{t('perfil.nombre')}</Text>
-              <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
+              <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder={t('perfil.tuNombre')} placeholderTextColor="#999" />
 
               {/* Opcional, como la foto. El ejemplo hace casi todo el trabajo:
                   sin el, la mayoria deja el campo vacio o escribe "hola". */}
@@ -1281,7 +1281,7 @@ export default function ProfileScreen() {
               )}
               {MOSTRAR_INTERESADO_EN && (
                 <>
-                  <Text style={styles.inputLabel}>Interesado en</Text>
+                  <Text style={styles.inputLabel}>{t('perfil.interesadoEn')}</Text>
                   <View style={styles.optionsRow}>
                     {(['hombres', 'mujeres', 'ambos'] as const).map(opt => (
                       <TouchableOpacity key={opt} style={[styles.optionButton, editInterestedIn === opt && styles.optionButtonActive]} onPress={() => setEditInterestedIn(opt)}>
@@ -1350,20 +1350,20 @@ export default function ProfileScreen() {
                 </Text>
                 <Text style={styles.supportSuccessEmail}>{profile?.email || ''}</Text>
                 <TouchableOpacity style={styles.saveButton} onPress={closeSupportModal} activeOpacity={0.8}>
-                  <Text style={styles.saveButtonText}>Cerrar</Text>
+                  <Text style={styles.saveButtonText}>{t('comun.cerrar')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <>
-                <Text style={styles.modalTitle}>Contactar Soporte</Text>
-                <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
+                <Text style={styles.modalTitle}>{t('perfil.contactarSoporte')}</Text>
+                <Text style={styles.modalSubtitle}>{t('perfil.responderemosPronto')}</Text>
 
                 <Text style={styles.inputLabel}>{t('perfil.nombre')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={supportSenderName}
                   onChangeText={setSupportSenderName}
-                  placeholder="Tu nombre"
+                  placeholder={t('perfil.tuNombre')}
                   placeholderTextColor="#999"
                   autoCorrect={false}
                 />
@@ -1373,19 +1373,19 @@ export default function ProfileScreen() {
                   style={styles.modalInput}
                   value={supportUserEmail}
                   onChangeText={setSupportUserEmail}
-                  placeholder="tu@correo.com"
+                  placeholder={t('perfil.correoPh')}
                   placeholderTextColor="#999"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
 
-                <Text style={styles.inputLabel}>Mensaje</Text>
+                <Text style={styles.inputLabel}>{t('perfil.mensaje')}</Text>
                 <TextInput
                   style={[styles.modalInput, styles.supportMessageInput]}
                   value={supportMessage}
                   onChangeText={setSupportMessage}
-                  placeholder="Describe tu consulta o problema..."
+                  placeholder={t('perfil.describeConsulta')}
                   placeholderTextColor="#999"
                   multiline
                   numberOfLines={5}
@@ -1393,7 +1393,7 @@ export default function ProfileScreen() {
                 />
 
                 <TouchableOpacity style={[styles.saveButton, sendingSupportEmail && { opacity: 0.6 }]} onPress={handleSendSupportEmail} activeOpacity={0.8} disabled={sendingSupportEmail}>
-                  <Text style={styles.saveButtonText}>{sendingSupportEmail ? 'Enviando...' : 'Enviar mensaje'}</Text>
+                  <Text style={styles.saveButtonText}>{sendingSupportEmail ? t('perfil.enviando') : t('perfil.enviarMensaje')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCloseButton} onPress={closeSupportModal} activeOpacity={0.8}>
                   <Text style={styles.modalCloseButtonText}>{t('comun.cancelar')}</Text>
@@ -1452,7 +1452,7 @@ export default function ProfileScreen() {
       <Modal visible={notificationModalVisible} transparent animationType="slide" onRequestClose={() => setNotificationModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Preferencias de Notificaciones</Text>
+            <Text style={styles.modalTitle}>{t('perfil.prefNotificaciones')}</Text>
             <Text style={styles.modalSubtitle}>{t('perfil.notifSubtitulo')}</Text>
 
             {(() => {
@@ -1521,7 +1521,7 @@ export default function ProfileScreen() {
             })()}
 
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setNotificationModalVisible(false)} activeOpacity={0.8}>
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+              <Text style={styles.modalCloseButtonText}>{t('comun.cerrar')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1572,7 +1572,7 @@ export default function ProfileScreen() {
             })()}
 
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPrivacidadModalVisible(false)} activeOpacity={0.8}>
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+              <Text style={styles.modalCloseButtonText}>{t('comun.cerrar')}</Text>
             </TouchableOpacity>
           </View>
         </View>

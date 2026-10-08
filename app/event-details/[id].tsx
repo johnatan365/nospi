@@ -202,7 +202,7 @@ export default function EventDetailsScreen() {
   }, [paymentSuccess, checkEnrollment]);
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Fecha sin definir';
+    if (!dateString) return t('detalle.fechaSinDefinir');
     const date = new Date(dateString);
     // event.date es el instante UTC exacto del evento (ej. viernes 7pm Bogota
     // = sabado 00:00 UTC). Sin timeZone explicito, toLocaleDateString usa la
@@ -256,7 +256,7 @@ export default function EventDetailsScreen() {
       await abrirMeet(event.meet_link);
     } catch (e) {
       console.error('No se pudo abrir la videollamada:', e);
-      Alert.alert('No se pudo abrir', 'Intenta de nuevo en unos segundos.');
+      Alert.alert(t('detalle.noSePudoAbrir'), t('detalle.intentaUnosSegundos'));
     } finally {
       setEntrando(false);
     }
@@ -390,13 +390,13 @@ export default function EventDetailsScreen() {
       >
         <Stack.Screen options={{ headerShown: true, title: t('detalle.titulo'), headerBackTitle: t('comun.atras') }} />
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>Evento no encontrado</Text>
+          <Text style={styles.errorText}>{t('detalle.eventoNoEncontrado')}</Text>
         </View>
       </LinearGradient>
     );
   }
 
-  const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+  const eventTypeText = t(['bar', 'caminata', 'cafe', 'bolos', 'virtual'].includes(event.type) ? `evento.tipo.${event.type}` : 'evento.tipo.restaurante');
   const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
   const esVirtual = event.type === 'virtual';
   const dateText = formatDate(event.date);
@@ -405,7 +405,7 @@ export default function EventDetailsScreen() {
   // — se cierra un lado cuando ya hay suficientes del otro — y NO define un
   // evento de un solo genero. Por eso NO se usa aqui: el grupo sigue siendo
   // mixto aunque se cierre temporalmente un lado. Ademas no revelamos cantidad.
-  const participantsText = 'Hombres y mujeres';
+  const participantsText = t('detalle.hombresYMujeres');
   const showLocation = isEnrolled && event.is_location_revealed;
 
   return (
@@ -420,7 +420,7 @@ export default function EventDetailsScreen() {
         title: t('detalle.titulo'),
         headerLeft: () => (
           <TouchableOpacity onPress={handleCancel} style={{ paddingHorizontal: 8 }}>
-            <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '500' }}>Cancelar</Text>
+            <Text style={{ color: '#880E4F', fontSize: 16, fontWeight: '500' }}>{t('comun.cancelar')}</Text>
           </TouchableOpacity>
         ),
       }} />
@@ -468,24 +468,24 @@ export default function EventDetailsScreen() {
           {/* Info Grid - Compact 2-column layout */}
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>📅 Fecha</Text>
+              <Text style={styles.infoLabel}>{t('detalle.fecha')}</Text>
               <Text style={styles.infoValue}>{dateText}</Text>
             </View>
 
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>🕐 Hora</Text>
+              <Text style={styles.infoLabel}>{t('detalle.hora')}</Text>
               <Text style={styles.infoValue}>{event.date ? formatTimeAmPm(event.time) : 'Por definir'}</Text>
             </View>
 
             {!event.ocultar_ciudad && (
               <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>🌆 Ciudad</Text>
+                <Text style={styles.infoLabel}>{t('detalle.ciudad')}</Text>
                 <Text style={styles.infoValue}>{event.city}</Text>
               </View>
             )}
 
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>👥 Grupo</Text>
+              <Text style={styles.infoLabel}>{t('detalle.grupo')}</Text>
               <Text style={styles.infoValue}>{participantsText}</Text>
             </View>
           </View>
@@ -502,7 +502,7 @@ export default function EventDetailsScreen() {
               asistencia. Si se mostrara la URL, se copiaria y se entraria sin
               pasar por la app, que es justo lo que medimos. */}
           <View style={styles.locationSection}>
-            <Text style={styles.locationTitle}>{esVirtual ? '🎥 Videollamada' : '📍 Ubicación'}</Text>
+            <Text style={styles.locationTitle}>{esVirtual ? t('detalle.videollamadaTitulo') : t('detalle.ubicacionTitulo')}</Text>
             {/* Se repite a proposito en cada punto del camino (compra, recordatorios,
                 reglas): quien entra con la camara apagada rompe la experiencia. */}
             {esVirtual && !checkedInAt && (
@@ -528,7 +528,7 @@ export default function EventDetailsScreen() {
                         Ya quedó registrado que entraste. Si te saliste, puedes volver desde aquí.
                       </Text>
                       <TouchableOpacity style={styles.mapsButton} onPress={handleEntrarVideollamada} activeOpacity={0.8}>
-                        <Text style={styles.mapsButtonText}>Volver a la videollamada</Text>
+                        <Text style={styles.mapsButtonText}>{t('detalle.volverVideollamada')}</Text>
                       </TouchableOpacity>
                     </>
                   );
@@ -717,11 +717,7 @@ export default function EventDetailsScreen() {
               </View>
 
               <Text style={styles.ticketPolicy}>
-                ℹ️ Si no vas a poder asistir, puedes <Text style={styles.ticketPolicyBold}>cancelar desde la app con más de 24 horas</Text> de
-                anticipación y te devolvemos tu <Text style={styles.ticketPolicyBold}>saldo</Text> para que lo uses en otro evento.
-                Si lo haces con <Text style={styles.ticketPolicyBold}>menos de 24 horas</Text> o{' '}
-                <Text style={styles.ticketPolicyBold}>no asistes</Text>, no alcanzamos a devolverte el saldo y tu cuenta
-                <Text> </Text>podría <Text style={styles.ticketPolicyBold}>quedar suspendida</Text> para reservar por un tiempo.
+                {t('detalle.pol1')}<Text style={styles.ticketPolicyBold}>{t('detalle.polMas24')}</Text>{t('detalle.pol2')}<Text style={styles.ticketPolicyBold}>{t('detalle.polSaldo')}</Text>{t('detalle.pol3')}<Text style={styles.ticketPolicyBold}>{t('detalle.polMenos24')}</Text>{t('detalle.pol4')}<Text style={styles.ticketPolicyBold}>{t('detalle.polNoAsistes')}</Text>{t('detalle.pol5')}<Text style={styles.ticketPolicyBold}>{t('detalle.polSuspendida')}</Text>{t('detalle.pol6')}
               </Text>
 
               <TouchableOpacity
@@ -745,7 +741,7 @@ export default function EventDetailsScreen() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={styles.ticketCtaText}>Ver mi cupo</Text>
+              <Text style={styles.ticketCtaText}>{t('detalle.verMiCupo')}</Text>
             </TouchableOpacity>
           </View>
         </View>

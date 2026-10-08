@@ -362,13 +362,13 @@ function formatBogotaTime(date: Date): string {
 
 // Texto corto que representa un mensaje cuando se cita o se responde. Un
 // mensaje solo de foto/video no tiene texto, asi que se muestra la etiqueta.
-function messagePreviewText(m: Message): string {
+function messagePreviewText(m: Message, t: (k: string, v?: any) => string): string {
   if (m.media_expired) {
-    return m.media_kind === 'video' ? '🎥 Video no disponible' : '📷 Foto no disponible';
+    return m.media_kind === 'video' ? t('chat.videoNoDisponible') : t('chat.fotoNoDisponible');
   }
-  const label = m.media_kind === 'video' ? '🎥 Video'
-    : m.media_kind === 'image' ? '📷 Foto'
-    : m.media_kind === 'audio' ? '🎤 Nota de voz'
+  const label = m.media_kind === 'video' ? t('chat.videoEtiqueta')
+    : m.media_kind === 'image' ? t('chat.fotoEtiqueta')
+    : m.media_kind === 'audio' ? t('chat.audioEtiqueta')
     : '';
   const text = (m.content || '').trim();
   if (label && text) return `${label} ${text}`;
@@ -953,6 +953,7 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
 // encuesta siga abierta. Antes de votar solo se ve la pregunta; los resultados
 // aparecen despues de responder (o si ya esta cerrada), para no sesgar el voto.
 function PollCard({ pollId }: { pollId: string }) {
+  const { t } = useIdioma();
   const [data, setData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -974,8 +975,8 @@ function PollCard({ pollId }: { pollId: string }) {
         p_rating: rating,
       });
       if (error) {
-        const msg = 'No se pudo registrar tu respuesta. ' + (error.message || '');
-        if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Encuesta', msg);
+        const msg = t('chat.noRegistroRespuesta') + (error.message || '');
+        if (Platform.OS === 'web') window.alert(msg); else Alert.alert(t('chat.encuesta'), msg);
         return;
       }
       if (r) setData(r);
@@ -985,7 +986,7 @@ function PollCard({ pollId }: { pollId: string }) {
   };
 
   if (!data) {
-    return <Text style={styles.pollLoading}>Cargando encuesta…</Text>;
+    return <Text style={styles.pollLoading}>{t('chat.cargandoEncuesta')}</Text>;
   }
 
   const isRating = data.kind === 'rating';
@@ -1043,11 +1044,11 @@ function PollCard({ pollId }: { pollId: string }) {
 
       <Text style={styles.pollFooter}>
         {isRating && showResults && data.average != null
-          ? `Promedio ${Number(data.average).toFixed(1)} · `
+          ? `${t('chat.promedio')} ${Number(data.average).toFixed(1)} · `
           : ''}
-        {total} {total === 1 ? 'respuesta' : 'respuestas'}
-        {data.anonymous ? ' · anónima' : ''}
-        {data.closed ? ' · cerrada' : answered ? ' · puedes cambiar tu respuesta' : ''}
+        {total} {total === 1 ? t('chat.respuesta') : t('chat.respuestas')}
+        {data.anonymous ? ` · ${t('chat.anonima')}` : ''}
+        {data.closed ? ` · ${t('chat.cerrada')}` : answered ? ` · ${t('chat.puedesCambiar')}` : ''}
       </Text>
     </View>
   );
@@ -1553,9 +1554,9 @@ export default function ChatThreadScreen() {
     });
     if (error) {
       const msg = error.message?.includes('equipo de Nospi')
-        ? 'Este mensaje lo fijó el equipo de Nospi, así que solo ellos pueden quitarlo.'
-        : 'No se pudo ' + (willPin ? 'fijar' : 'quitar de fijados') + ' el mensaje.';
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Mensajes fijados', msg);
+        ? t('chat.fijadoPorNospi')
+        : (willPin ? t('chat.noFijar') : t('chat.noQuitarFijado'));
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert(t('chat.mensajesFijados'), msg);
       return;
     }
     const actualizado = { ...m, pinned_at: willPin ? new Date().toISOString() : null, pinned_by: willPin ? (user?.id ?? null) : null };
@@ -1621,7 +1622,7 @@ export default function ChatThreadScreen() {
     if (Platform.OS === 'web') {
       if (window.confirm('¿Eliminar este mensaje? Desaparece para todos.')) await hacerlo();
     } else {
-      Alert.alert('Eliminar mensaje', 'Desaparece para todos. No se puede deshacer.', [
+      Alert.alert(t('chat.eliminarMensaje'), t('chat.desapareceParaTodos'), [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Eliminar', style: 'destructive', onPress: hacerlo },
       ]);
@@ -1669,7 +1670,7 @@ export default function ChatThreadScreen() {
       }
     } catch (e: any) {
       const msg = e?.message || 'Inténtalo de nuevo.';
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('No se pudo', msg);
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert(t('chat.noSePudo'), msg);
     } finally {
       setRespondiendoSolicitud(false);
     }
@@ -1808,7 +1809,7 @@ export default function ChatThreadScreen() {
         // Sin hoja de compartir no hay como entregar el .vcf: al menos que el
         // numero quede copiado y la persona lo pegue en Contactos.
         copyPlainText(numero);
-        Alert.alert('Número copiado', 'Este dispositivo no permite abrir la tarjeta de contacto, así que copiamos el número.');
+        Alert.alert(t('chat.numeroCopiado'), t('chat.numeroCopiadoMsg'));
         return;
       }
       await Sharing.shareAsync(target, {
@@ -1819,7 +1820,7 @@ export default function ChatThreadScreen() {
     } catch (e: any) {
       const msg = String(e?.message || '');
       if (!/abort|cancel/i.test(msg)) {
-        Alert.alert('No se pudo guardar', msg || 'Inténtalo de nuevo.');
+        Alert.alert(t('chat.noSePudoGuardar'), msg || t('chat.intentaloDeNuevo'));
       }
     }
   }, [copyPlainText]);
@@ -2947,7 +2948,7 @@ export default function ChatThreadScreen() {
 
   const avisar = (msg: string) => {
     if (Platform.OS === 'web') window.alert(msg);
-    else Alert.alert('Nota de voz', msg);
+    else Alert.alert(t('chat.notaDeVoz'), msg);
   };
 
   const startRecording = async () => {
@@ -3142,8 +3143,8 @@ export default function ChatThreadScreen() {
       } catch (e: any) {
         console.error('ChatThread: error subiendo media', e);
         Alert.alert(
-          kind === 'video' ? 'No se pudo enviar el video' : 'No se pudo enviar la foto',
-          e?.message || 'Revisa tu conexión e inténtalo de nuevo.'
+          kind === 'video' ? t('chat.noEnvioVideo') : t('chat.noEnvioFoto'),
+          e?.message || t('chat.revisaConexionIntenta')
         );
       }
     }
@@ -3435,7 +3436,7 @@ export default function ChatThreadScreen() {
     if (Platform.OS !== 'web') {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos y videos.');
+        Alert.alert(t('chat.permisoRequerido'), t('chat.permisoFotos'));
         return;
       }
     }
@@ -3466,7 +3467,7 @@ export default function ChatThreadScreen() {
           ? `Ese archivo pesa ${formatMB(pesados[0].fileSize)} y el máximo son 25 MB. Si es un video, graba uno más corto o recórtalo antes de enviarlo.`
           : `${pesados.length} archivos pasan de 25 MB y no se pueden enviar. Si son videos, recórtalos antes.`;
         if (Platform.OS === 'web') window.alert(msg);
-        else Alert.alert('Archivo muy pesado', msg);
+        else Alert.alert(t('chat.archivoPesado'), msg);
       }
 
       if (validos.length > 0) {
@@ -3499,7 +3500,7 @@ export default function ChatThreadScreen() {
   const meterEnLaBandeja = (asset: any) => {
     if ((asset.fileSize ?? 0) > MAX_UPLOAD_BYTES) {
       const msg = `Esa imagen pesa ${formatMB(asset.fileSize)} y el máximo son 25 MB.`;
-      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Imagen muy pesada', msg);
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert(t('chat.imagenPesada'), msg);
       return;
     }
     setPendingAssets((prev) => (prev.length >= 10 ? prev : [...prev, asset]));
@@ -3530,10 +3531,10 @@ export default function ChatThreadScreen() {
       // Si algun dia expo-clipboard acepta 'webp' en format, con cambiarlo aqui
       // basta.
       const C = portapapeles();
-      if (!C) { Alert.alert('No disponible', 'Esta versión de la app todavía no puede pegar imágenes. Se activa con la próxima actualización.'); return; }
+      if (!C) { Alert.alert(t('chat.noDisponible'), t('chat.noPegaImagenes')); return; }
       const img = await C.getImageAsync({ format: 'png' });
       if (!img?.data) {
-        Alert.alert('No hay imagen', 'El portapapeles no tiene ninguna imagen copiada.');
+        Alert.alert(t('chat.noHayImagen'), t('chat.portapapelesVacio'));
         return;
       }
       const base64 = img.data.replace(/^data:image\/[a-z]+;base64,/, '');
@@ -3551,7 +3552,7 @@ export default function ChatThreadScreen() {
         fileSize: (info as any)?.size ?? null,
       });
     } catch (e: any) {
-      Alert.alert('No se pudo pegar', e?.message || 'Inténtalo de nuevo.');
+      Alert.alert(t('chat.noSePudoPegar'), e?.message || t('chat.intentaloDeNuevo'));
     }
   };
 
@@ -3594,7 +3595,7 @@ export default function ChatThreadScreen() {
     setShowAttachMenu(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para usar la cámara.');
+      Alert.alert(t('chat.permisoRequerido'), t('chat.permisoCamara'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -3649,12 +3650,12 @@ export default function ChatThreadScreen() {
       const target = `${FileSystem.cacheDirectory}${filename}`;
       const { uri } = await FileSystem.downloadAsync(url, target);
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert('No disponible', 'Este dispositivo no permite guardar ni compartir archivos.');
+        Alert.alert(t('chat.noDisponible'), t('chat.noGuardaArchivos'));
         return;
       }
       await Sharing.shareAsync(uri, {
         dialogTitle: action === 'download'
-          ? (kind === 'video' ? 'Guardar video' : 'Guardar foto')
+          ? (kind === 'video' ? t('chat.guardarVideo') : t('chat.guardarFoto'))
           : 'Compartir',
         mimeType: kind === 'video' ? 'video/mp4' : 'image/jpeg',
         UTI: kind === 'video' ? 'public.movie' : 'public.image',
@@ -3664,7 +3665,7 @@ export default function ChatThreadScreen() {
       const msg = String(e?.message || '');
       if (!/abort|cancel/i.test(msg)) {
         Alert.alert(
-          action === 'download' ? 'No se pudo guardar' : 'No se pudo compartir',
+          action === 'download' ? t('chat.noSePudoGuardar') : t('chat.noSePudoCompartir'),
           msg || 'Inténtalo de nuevo.'
         );
       }
@@ -3733,10 +3734,10 @@ export default function ChatThreadScreen() {
       const msg = String(error.message || '');
       const limiteDeSolicitudes =
         (error as any).code === '42501' || msg.includes('solicitudes sin responder');
-      const titulo = limiteDeSolicitudes ? 'Llegaste al límite del día' : 'No se pudo abrir el chat';
+      const titulo = limiteDeSolicitudes ? t('chat.limiteDelDia') : t('chat.noAbrioChat');
       const detalle = limiteDeSolicitudes
         ? 'Puedes tener hasta 10 solicitudes sin responder. En unas horas se liberan solas, y también se libera cada vez que alguien te acepta. Es para que nadie reciba mensajes en masa.'
-        : 'Intenta de nuevo en unos segundos.';
+        : t('chat.intentaUnosSegundos');
       // Alert.alert de React Native NO muestra nada en web: alli hay que usar
       // window.alert, si no el usuario ve que "no pasa nada" y parece un error
       // de la app (mismo patron que ya se usa en el resto de este archivo).
@@ -3756,11 +3757,11 @@ export default function ChatThreadScreen() {
     // Ni error ni conversacion: no puede quedarse callado. "No pasa nada" es la
     // peor respuesta posible — el usuario vuelve a tocar y vuelve a no pasar
     // nada, sin ninguna pista de por que.
-    const aviso = 'No pudimos abrir el chat. Vuelve a intentarlo.';
+    const aviso = t('chat.noPudimosAbrir');
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined') window.alert(aviso);
     } else {
-      Alert.alert('Chat privado', aviso);
+      Alert.alert(t('chat.chatPrivado'), aviso);
     }
   };
 
@@ -3915,7 +3916,7 @@ export default function ChatThreadScreen() {
         </View>
         <View style={styles.lockedContainer}>
           <Text style={styles.lockedEmoji}>🔒</Text>
-          <Text style={styles.lockedTitle}>Este chat aún no se habilita</Text>
+          <Text style={styles.lockedTitle}>{t('chat.aunNoSeHabilita')}</Text>
           <Text style={styles.lockedSubtitle}>
             Se abre {unlockAt ? `a las ${formatBogotaTime(unlockAt)}` : 'pronto'}, 30 minutos antes del evento, y queda
             disponible durante todo el evento.
@@ -4016,7 +4017,7 @@ export default function ChatThreadScreen() {
 
                 if (otherParticipantId) {
                   if (enLinea.includes(otherParticipantId)) {
-                    return <Text style={styles.headerEnLinea} numberOfLines={1}>en línea</Text>;
+                    return <Text style={styles.headerEnLinea} numberOfLines={1}>{t('chat.enLinea')}</Text>;
                   }
                   // new Date() y no el reloj `ahora`: ese solo avanza mientras alguien
                   // escribe, asi que podria decir "hace 2 minutos" llevando 20.
@@ -4084,7 +4085,7 @@ export default function ChatThreadScreen() {
                 {pinnedMessages.length > 1 ? ` ${(pinnedIndex % pinnedMessages.length) + 1} de ${pinnedMessages.length}` : ''}
               </Text>
               <Text style={styles.pinnedPreview} numberOfLines={1}>
-                {messagePreviewText(activePinned) || 'Mensaje'}
+                {messagePreviewText(activePinned, t) || t('chat.mensaje')}
               </Text>
             </View>
             <TouchableOpacity
@@ -4207,7 +4208,7 @@ export default function ChatThreadScreen() {
               style={styles.verAnteriores}
             >
               <Text style={styles.verAnterioresTexto}>
-                {cargandoAnteriores ? 'Cargando…' : '↑ Ver mensajes anteriores'}
+                {cargandoAnteriores ? t('chat.cargando') : t('chat.verAnteriores')}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -4344,7 +4345,7 @@ export default function ChatThreadScreen() {
                       >
                         <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
                         <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
-                          {messagePreviewText(repliedMsg)}
+                          {messagePreviewText(repliedMsg, t)}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4363,9 +4364,9 @@ export default function ChatThreadScreen() {
                         {item.media_kind === 'video' ? '🎥' : '📷'}
                       </Text>
                       <Text style={[styles.expiredMediaText, isMine && styles.expiredMediaTextMine]}>
-                        {item.media_kind === 'video' ? 'Video' : 'Foto'} no disponible{'\n'}
+                        {item.media_kind === 'video' ? t('chat.videoNoDisponible') : t('chat.fotoNoDisponible')}{'\n'}
                         <Text style={styles.expiredMediaHint}>
-                          Se eliminó a los {MEDIA_RETENTION_DAYS} días
+                          {t('chat.seElimino', { n: MEDIA_RETENTION_DAYS })}
                         </Text>
                       </Text>
                     </View>
@@ -4571,7 +4572,7 @@ export default function ChatThreadScreen() {
               listRef.current?.scrollToEnd({ animated: true });
             }}
             activeOpacity={0.85}
-            accessibilityLabel="Ir al último mensaje"
+            accessibilityLabel={t('chat.irUltimoMensaje')}
           >
             <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="keyboard-arrow-down" size={22} color="#FFFFFF" />
             {pendientesVivos > 0 && (
@@ -4606,7 +4607,7 @@ export default function ChatThreadScreen() {
               {isGroup && (
                 <TouchableOpacity style={styles.mentionRow} onPress={() => applyMention('todos')} activeOpacity={0.7}>
                   <View style={styles.mentionAllIcon}><Text style={{ fontSize: 14 }}>📣</Text></View>
-                  <Text style={styles.mentionName}>todos <Text style={styles.mentionHint}>· avisar a todo el grupo</Text></Text>
+                  <Text style={styles.mentionName}>{t('chat.todos')} <Text style={styles.mentionHint}>{t('chat.avisarGrupo')}</Text></Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -4624,7 +4625,7 @@ export default function ChatThreadScreen() {
                   ? 'Equipo Nospi'
                   : participantsById[replyingTo.sender_id]?.name || 'Alguien'}
               </Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>{messagePreviewText(replyingTo)}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>{messagePreviewText(replyingTo, t)}</Text>
             </View>
             <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyPreviewClose}>
               <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={18} color="#FFFFFF" />
@@ -4678,7 +4679,7 @@ export default function ChatThreadScreen() {
             una rama de un ternario, que no admite un bloque suelto. */}
         {enTramoViejo && (
           <TouchableOpacity style={styles.volverAlFinal} onPress={() => { toque(); loadEverything(); }} activeOpacity={0.85}>
-            <Text style={styles.volverAlFinalTexto}>↓ Ir a los mensajes recientes</Text>
+            <Text style={styles.volverAlFinalTexto}>{t('chat.irRecientes')}</Text>
           </TouchableOpacity>
         )}
 
@@ -4713,7 +4714,7 @@ export default function ChatThreadScreen() {
               >
                 {respondiendoSolicitud
                   ? <ActivityIndicator size="small" color="#FFFFFF" />
-                  : <Text style={styles.solicitudAceptarText}>Aceptar</Text>}
+                  : <Text style={styles.solicitudAceptarText}>{t('chat.aceptar')}</Text>}
               </TouchableOpacity>
             </View>
           </Reanimated.View>
@@ -4749,7 +4750,7 @@ export default function ChatThreadScreen() {
               <Text style={styles.recordingTime}>
                 {formatDuration(recordingMs / 1000)}
               </Text>
-              <Text style={styles.recordingHint}>Grabando… toca ➤ para enviar</Text>
+              <Text style={styles.recordingHint}>{t('chat.grabando')}</Text>
             </View>
             <TouchableOpacity style={styles.sendButton} onPress={sendRecording}>
               <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#FFFFFF" />
@@ -4799,7 +4800,7 @@ export default function ChatThreadScreen() {
             style={styles.gifShortcut}
             onPress={abrirGifs}
             disabled={!!uploading}
-            accessibilityLabel="Buscar un GIF"
+            accessibilityLabel={t('chat.buscarGif')}
           >
             <Text style={styles.gifShortcutText}>GIF</Text>
           </TouchableOpacity>
@@ -4813,7 +4814,7 @@ export default function ChatThreadScreen() {
           <TextInput
             ref={inputRef}
             style={[styles.textInput, Platform.OS === 'web' ? { height: alturaInputWeb } : null]}
-            placeholder="Escribe un mensaje..."
+            placeholder={t('chat.escribeMensaje')}
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={draft}
             // Enter hace un salto de linea, no envia.
@@ -4883,7 +4884,7 @@ export default function ChatThreadScreen() {
             />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <TouchableOpacity onPress={() => setEditando(null)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
-                <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#6b7280' }}>Cancelar</Text>
+                <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#6b7280' }}>{t('comun.cancelar')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={guardarEdicion}
@@ -4988,14 +4989,14 @@ export default function ChatThreadScreen() {
                 <View style={[styles.attachTileBox, { backgroundColor: '#FFE9EE' }]}>
                   <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="photo-camera" size={28} color="#F0325B" />
                 </View>
-                <Text style={styles.attachTileText}>Cámara</Text>
+                <Text style={styles.attachTileText}>{t('chat.camara')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={pickFromLibrary} activeOpacity={0.7}>
                 <View style={[styles.attachTileBox, { backgroundColor: '#E5EEFF' }]}>
                   <IconSymbol ios_icon_name="photo.on.rectangle" android_material_icon_name="photo-library" size={28} color="#2563EB" />
                 </View>
-                <Text style={styles.attachTileText}>Fotos y videos</Text>
+                <Text style={styles.attachTileText}>{t('chat.fotosYVideos')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.attachTile} onPress={abrirStickers} activeOpacity={0.7}>
@@ -5132,7 +5133,7 @@ export default function ChatThreadScreen() {
         <View style={styles.gifOverlay}>
           <View style={[styles.gifSheet, { paddingBottom: insets.bottom + 8 }]}>
             <View style={styles.gifHeader}>
-              <Text style={styles.attachSheetTitle}>Enviar un GIF</Text>
+              <Text style={styles.attachSheetTitle}>{t('chat.enviarGif')}</Text>
               <TouchableOpacity onPress={() => setShowGifPicker(false)} hitSlop={10}>
                 <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={22} color={nospiColors.gray400} />
               </TouchableOpacity>
@@ -5142,7 +5143,7 @@ export default function ChatThreadScreen() {
               <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={18} color={nospiColors.gray400} />
               <TextInput
                 style={styles.gifSearchInput}
-                placeholder="Buscar GIFs: jajaja, abrazo, gracias…"
+                placeholder={t('chat.buscarGifsPh')}
                 placeholderTextColor={nospiColors.gray400}
                 value={gifQuery}
                 onChangeText={setGifQuery}
@@ -5164,7 +5165,7 @@ export default function ChatThreadScreen() {
                 otra cosa, asi que se esconden al escribir. */}
             {gifRecientes.length > 0 && gifQuery.trim().length === 0 && (
               <View style={styles.gifRecentBlock}>
-                <Text style={styles.gifSectionTitle}>Los que más usas</Text>
+                <Text style={styles.gifSectionTitle}>{t('chat.losQueMasUsas')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifRecentRow}>
                   {gifRecientes.map((g) => (
                     <TouchableOpacity
@@ -5254,10 +5255,10 @@ export default function ChatThreadScreen() {
               showsVerticalScrollIndicator={false}
               style={{ flexGrow: 0, flexShrink: 1 }}
             >
-              <Text style={styles.pollLabel}>Pregunta</Text>
+              <Text style={styles.pollLabel}>{t('chat.pregunta')}</Text>
               <TextInput
                 style={styles.pollInput}
-                placeholder="¿A qué hora nos vemos?"
+                placeholder={t('chat.preguntaPh')}
                 placeholderTextColor={nospiColors.gray400}
                 value={pollPregunta}
                 onChangeText={setPollPregunta}
@@ -5289,7 +5290,7 @@ export default function ChatThreadScreen() {
               {pollOpciones.length < 5 && (
                 <TouchableOpacity onPress={agregarOpcion} style={styles.pollAdd} activeOpacity={0.7}>
                   <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color={nospiColors.purpleDark} />
-                  <Text style={styles.pollAddText}>Agregar opción</Text>
+                  <Text style={styles.pollAddText}>{t('chat.agregarOpcion')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -5338,13 +5339,13 @@ export default function ChatThreadScreen() {
                 <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={nospiColors.purpleDark} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>Toca a alguien para chatear en privado</Text>
+            <Text style={styles.modalSubtitle}>{t('chat.tocaParaPrivado')}</Text>
 
             <View style={styles.buscaAsistenteBarra}>
               <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={18} color={nospiColors.gray400} />
               <TextInput
                 style={styles.buscaAsistenteInput}
-                placeholder="Buscar por nombre"
+                placeholder={t('chat.buscarPorNombre')}
                 placeholderTextColor={nospiColors.gray400}
                 value={buscaAsistente}
                 onChangeText={setBuscaAsistente}
@@ -5423,7 +5424,7 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
             <TextInput
               style={styles.buscarInput}
-              placeholder="Buscar en esta conversación"
+              placeholder={t('chat.buscarEnConversacion')}
               placeholderTextColor={nospiColors.gray400}
               value={consulta}
               autoFocus
@@ -5438,7 +5439,7 @@ export default function ChatThreadScreen() {
           </View>
 
           {consulta.trim().length < 2 ? (
-            <Text style={styles.buscarAyuda}>Escribe al menos dos letras.</Text>
+            <Text style={styles.buscarAyuda}>{t('chat.alMenosDosLetras')}</Text>
           ) : buscandoAhora ? (
             <ActivityIndicator color={nospiColors.purpleDark} style={{ marginTop: 28 }} />
           ) : (resultados || []).length === 0 ? (
@@ -5523,7 +5524,7 @@ export default function ChatThreadScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.reaccionNombre}>{quien}</Text>
                       <Text style={styles.reaccionQuitar}>
-                        {esMia ? 'Toca para quitar tu reacción' : 'Toca para ver su perfil'}
+                        {esMia ? t('chat.quitarReaccion') : t('chat.verSuPerfil')}
                       </Text>
                     </View>
                     <Text style={styles.reaccionEmoji}>{r.emoji}</Text>
@@ -5594,7 +5595,7 @@ export default function ChatThreadScreen() {
                 setActionAnchor(null);
                 if (m) { setCategoriaEmoji(CATEGORIAS_EMOJI[0].clave); setEmojisParaMensaje(m); }
               }}
-              accessibilityLabel="Ver todos los emojis"
+              accessibilityLabel={t('chat.verTodosEmojis')}
             >
               <MaterialIcons name="add" size={22} color={nospiColors.purpleDark} />
             </TouchableOpacity>
@@ -5626,7 +5627,7 @@ export default function ChatThreadScreen() {
                 onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); abrirInfoMensaje(m); }}
               >
                 <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>👁</Text>
-                <Text style={styles.attachOptionText}>Info del mensaje</Text>
+                <Text style={styles.attachOptionText}>{t('chat.infoMensaje')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -5635,7 +5636,7 @@ export default function ChatThreadScreen() {
             >
               <Text style={{ fontSize: 19, width: 22, textAlign: 'center' }}>📌</Text>
               <Text style={styles.attachOptionText}>
-                {actionMsg?.pinned_at ? 'Quitar de fijados' : 'Fijar mensaje'}
+                {actionMsg?.pinned_at ? t('chat.quitarDeFijados') : t('chat.fijarMensaje')}
               </Text>
             </TouchableOpacity>
             {sePuedeEditar(actionMsg) && !!(actionMsg?.content || '').trim() && (
@@ -5648,7 +5649,7 @@ export default function ChatThreadScreen() {
                 }}
               >
                 <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>✏️</Text>
-                <Text style={styles.attachOptionText}>Editar</Text>
+                <Text style={styles.attachOptionText}>{t('chat.editar')}</Text>
               </TouchableOpacity>
             )}
             {sePuedeEditar(actionMsg) && (
@@ -5657,7 +5658,7 @@ export default function ChatThreadScreen() {
                 onPress={() => { const m = actionMsg; setActionMsg(null); setActionAnchor(null); eliminarMiMensaje(m); }}
               >
                 <Text style={{ fontSize: 18, width: 22, textAlign: 'center' }}>🗑</Text>
-                <Text style={[styles.attachOptionText, { color: '#B91C1C' }]}>Eliminar</Text>
+                <Text style={[styles.attachOptionText, { color: '#B91C1C' }]}>{t('chat.eliminar')}</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -5673,7 +5674,7 @@ export default function ChatThreadScreen() {
         <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setInfoMensaje(null)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.attachSheet, { paddingBottom: insets.bottom + 18, maxHeight: '75%' }]}>
             <View style={styles.sheetGrabber} />
-            <Text style={styles.attachSheetTitle}>Info del mensaje</Text>
+            <Text style={styles.attachSheetTitle}>{t('chat.infoMensaje')}</Text>
 
             {infoCargando ? (
               <ActivityIndicator size="small" color={nospiColors.purpleDark} style={{ marginVertical: 24 }} />
@@ -5701,7 +5702,7 @@ export default function ChatThreadScreen() {
               );
 
               if (filas.length === 0) {
-                return <Text style={styles.infoVacio}>Todavía no hay nadie más en esta conversación.</Text>;
+                return <Text style={styles.infoVacio}>{t('chat.nadieMas')}</Text>;
               }
 
               return (
@@ -5747,7 +5748,7 @@ export default function ChatThreadScreen() {
               <Text style={styles.attachOptionText}>Compartir</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.attachCancel} onPress={() => setMediaActions(null)}>
-              <Text style={styles.attachCancelText}>Cancelar</Text>
+              <Text style={styles.attachCancelText}>{t('comun.cancelar')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -5797,7 +5798,7 @@ export default function ChatThreadScreen() {
             </ScrollView>
 
             <TouchableOpacity style={styles.perfilBoton} onPress={() => setVerEnLinea(false)} activeOpacity={0.85}>
-              <Text style={styles.perfilBotonText}>Cerrar</Text>
+              <Text style={styles.perfilBotonText}>{t('comun.cerrar')}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -5846,7 +5847,7 @@ export default function ChatThreadScreen() {
               {startingChatWith === perfilVisto.user_id ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.perfilBotonText}>Escribir por privado</Text>
+                <Text style={styles.perfilBotonText}>{t('chat.escribirPrivado')}</Text>
               )}
             </TouchableOpacity>
           </>
@@ -5882,7 +5883,7 @@ export default function ChatThreadScreen() {
               }}
             >
               <IconSymbol ios_icon_name="message.fill" android_material_icon_name="chat" size={22} color={nospiColors.purpleDark} />
-              <Text style={styles.attachOptionText}>Escribir por WhatsApp</Text>
+              <Text style={styles.attachOptionText}>{t('chat.escribirWhatsapp')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.attachOption}
@@ -5902,10 +5903,10 @@ export default function ChatThreadScreen() {
               }}
             >
               <IconSymbol ios_icon_name="doc.on.doc" android_material_icon_name="content-copy" size={22} color={nospiColors.purpleDark} />
-              <Text style={styles.attachOptionText}>Copiar número</Text>
+              <Text style={styles.attachOptionText}>{t('chat.copiarNumero')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.attachCancel} onPress={() => setPhoneMenu(null)}>
-              <Text style={styles.attachCancelText}>Cancelar</Text>
+              <Text style={styles.attachCancelText}>{t('comun.cancelar')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
