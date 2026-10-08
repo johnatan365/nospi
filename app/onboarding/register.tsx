@@ -13,6 +13,7 @@ import { completeOnboardingSession } from '@/utils/onboardingTracker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 WebBrowser.maybeCompleteAuthSession();
 
 // Guarda todos los datos del onboarding en localStorage para que sobrevivan
@@ -34,29 +35,31 @@ async function saveOnboardingToLocalStorage() {
   localStorage.setItem('onboarding_data', JSON.stringify(data));
 }
 
-// Traduce los errores crudos (en ingles) de Supabase Auth a mensajes claros
-// en espanol para que cualquier usuario los entienda.
-function friendlyAuthError(msg?: string): string {
+// Traduce los errores crudos de Supabase Auth a mensajes claros en el idioma
+// de la persona. Recibe t porque es una funcion suelta, fuera del componente,
+// y ahi no se puede llamar al hook.
+function friendlyAuthError(msg: string | undefined, t: (clave: string) => string): string {
   const m = (msg || '').toLowerCase();
   if (m.includes('at least one character of each') || m.includes('should contain') || m.includes('too weak') || m.includes('weak password')) {
-    return 'Tu contraseña debe tener al menos 8 caracteres.';
+    return t('reg.contrasena8');
   }
   if (m.includes('at least') && m.includes('character')) {
-    return 'Tu contraseña es muy corta. Usa al menos 8 caracteres.';
+    return t('reg.contrasenaCorta');
   }
   if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already exists')) {
-    return 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.';
+    return t('reg.yaExisteCuenta');
   }
   if (m.includes('unable to validate email') || m.includes('invalid email') || m.includes('valid email')) {
-    return 'El correo no parece válido. Revísalo e intenta de nuevo.';
+    return t('reg.correoInvalido');
   }
   if (m.includes('rate limit') || m.includes('too many')) {
-    return 'Demasiados intentos. Espera un momento e intenta de nuevo.';
+    return t('reg.demasiadosIntentos');
   }
-  return 'No pudimos crear tu cuenta. Revisa los datos e intenta de nuevo.';
+  return t('reg.noCreoCuenta');
 }
 
 export default function RegisterScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
@@ -169,7 +172,7 @@ export default function RegisterScreen() {
           options: { redirectTo: redirectUrl },
         });
         if (error) {
-          setError('Error al conectar con Apple. Por favor intenta de nuevo.');
+          setError(t('reg.errorApple'));
           setLoading(false);
         }
         return;
@@ -186,11 +189,11 @@ export default function RegisterScreen() {
       if (error || !data?.url) {
         if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
-            'Configuración Pendiente',
-            'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
+            t('reg.configPendienteSimple'),
+            t('reg.appleNoDisponible')
           );
         } else {
-          setError('Error al conectar con Apple. Por favor intenta de nuevo.');
+          setError(t('reg.errorApple'));
         }
         setLoading(false);
         return;
@@ -208,7 +211,7 @@ export default function RegisterScreen() {
       // FIX ANDROID: procesar el code PKCE INMEDIATAMENTE antes de cualquier navegación
       const success = await processNativeOAuthCallback(result.url);
       if (!success) {
-        setError('Error al completar el registro. Por favor intenta de nuevo.');
+        setError(t('reg.errorCompletar'));
         setLoading(false);
         return;
       }
@@ -220,11 +223,11 @@ export default function RegisterScreen() {
       console.error('Apple sign-up failed:', err);
       if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
         showErrorAlert(
-          'Configuración Pendiente',
-          'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.'
+          t('reg.configPendienteSimple'),
+          t('reg.appleNoDisponible')
         );
       } else {
-        setError('Error al registrarse con Apple');
+        setError(t('reg.errorRegistrarApple'));
       }
       setLoading(false);
     }
@@ -253,7 +256,7 @@ export default function RegisterScreen() {
           },
         });
         if (error) {
-          setError('Error al conectar con Google. Por favor intenta de nuevo.');
+          setError(t('reg.errorGoogle'));
           setLoading(false);
         }
         return;
@@ -271,11 +274,11 @@ export default function RegisterScreen() {
       if (error || !data?.url) {
         if (error && (error.message.includes('missing OAuth secret') || error.message.includes('Unsupported provider'))) {
           showErrorAlert(
-            'Configuración Pendiente',
-            'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
+            t('reg.configPendienteSimple'),
+            t('reg.googleNoDisponible'),
           );
         } else {
-          setError('Error al conectar con Google. Por favor intenta de nuevo.');
+          setError(t('reg.errorGoogle'));
         }
         setLoading(false);
         return;
@@ -293,7 +296,7 @@ export default function RegisterScreen() {
       // FIX ANDROID: procesar el code PKCE INMEDIATAMENTE antes de cualquier navegación
       const success = await processNativeOAuthCallback(result.url);
       if (!success) {
-        setError('Error al completar el registro. Por favor intenta de nuevo.');
+        setError(t('reg.errorCompletar'));
         setLoading(false);
         return;
       }
@@ -305,11 +308,11 @@ export default function RegisterScreen() {
       console.error('Google sign-up failed:', err);
       if (err.message && (err.message.includes('missing OAuth secret') || err.message.includes('Unsupported provider'))) {
         showErrorAlert(
-          'Configuración Pendiente',
+          t('reg.configPendienteSimple'),
           'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase\n\nPasos necesarios:\n- Configurar Client ID y Client Secret de Google en Supabase\n- Agregar la URL de redirección en Google Cloud Console'
         );
       } else {
-        setError('Error al registrarse con Google');
+        setError(t('reg.errorRegistrarGoogle'));
       }
       setLoading(false);
     }
@@ -321,17 +324,17 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!email || !password || !confirmPassword) {
-      setError('Por favor completa todos los campos');
+      setError(t('reg.completaCampos'));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
+      setError(t('reg.noCoinciden'));
       return;
     }
 
     if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres');
+      setError(t('reg.minimo8'));
       return;
     }
 
@@ -401,7 +404,7 @@ export default function RegisterScreen() {
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
         if (signInError || !signInData?.user) {
-          setError('Ya existe una cuenta con ese correo. Inicia sesión con tu contraseña; si no la recuerdas, puedes recuperarla.');
+          setError(t('reg.yaExisteRecupera'));
           setShowGoToLogin(true);
           return;
         }
@@ -413,7 +416,7 @@ export default function RegisterScreen() {
           .maybeSingle();
 
         if (perfilExistente) {
-          setError('Ya tienes una cuenta con ese correo y está lista para usarse. Inicia sesión.');
+          setError(t('reg.yaTienesCuentaLista'));
           setShowGoToLogin(true);
           return;
         }
@@ -421,10 +424,10 @@ export default function RegisterScreen() {
         // Registro a medias: se sigue con esta misma cuenta.
         userId = signInData.user.id;
       } else if (authError) {
-        setError(friendlyAuthError(authError.message));
+        setError(friendlyAuthError(authError.message, t));
         return;
       } else if (!authData.user) {
-        setError('Error al crear la cuenta');
+        setError(t('reg.errorCrearCuenta'));
         return;
       } else {
         userId = authData.user.id;
@@ -497,13 +500,13 @@ export default function RegisterScreen() {
           // asi que si la persona vuelve atras, corrige el celular y toca
           // Registrarse otra vez, el flujo de arriba la reconoce y termina de
           // crearle el perfil con el numero nuevo.
-          setError('Ese número de celular ya está registrado con otra cuenta. Vuelve atrás, cámbialo y toca Registrarse de nuevo. Si la cuenta es tuya, inicia sesión.');
+          setError(t('reg.celularYaRegistrado'));
           setShowGoToLogin(true);
         } else if (profileError.message.includes('users_email_key') || profileError.message.includes('email')) {
-          setError('Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.');
+          setError(t('reg.correoYaRegistrado'));
           setShowGoToLogin(true);
         } else {
-          setError('Error al crear el perfil. Por favor intenta de nuevo.');
+          setError(t('reg.errorCrearPerfil'));
         }
         return;
       }
@@ -518,7 +521,7 @@ export default function RegisterScreen() {
       await completeOnboardingSession();
       router.replace('/(tabs)/events');
     } catch (error) {
-      setError('Error al registrarse. Intenta de nuevo.');
+      setError(t('reg.errorRegistrarse'));
     } finally {
       setLoading(false);
     }
@@ -535,8 +538,8 @@ export default function RegisterScreen() {
     >
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>¡Ya casi estás listo!</Text>
-          <Text style={styles.subtitle}>Elige cómo quieres registrarte</Text>
+          <Text style={styles.title}>{t('reg.yaCasiListo')}</Text>
+          <Text style={styles.subtitle}>{t('reg.eligeComo')}</Text>
           
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           
@@ -550,7 +553,7 @@ export default function RegisterScreen() {
               <View style={styles.appleIconContainer}>
                 <RNImage source={require('@/assets/images/icon_apple.png')} style={styles.appleIconImage} resizeMode="contain" />
               </View>
-              <Text style={styles.buttonTextDark}>Regístrate con Apple</Text>
+              <Text style={styles.buttonTextDark}>{t('reg.conApple')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -562,7 +565,7 @@ export default function RegisterScreen() {
               <View style={styles.googleIconContainer}>
                 <RNImage source={googleIconSource} style={styles.googleIconImage} resizeMode="contain" />
               </View>
-              <Text style={styles.buttonTextDark}>Regístrate con Google</Text>
+              <Text style={styles.buttonTextDark}>{t('reg.conGoogle')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -572,7 +575,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               <Ionicons name="mail-outline" size={22} color={nospiColors.white} style={styles.emailIcon} />
-              <Text style={styles.buttonTextLight}>Inscribirse con el correo electrónico</Text>
+              <Text style={styles.buttonTextLight}>{t('reg.conEmail')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -584,7 +587,7 @@ export default function RegisterScreen() {
           ) : null}
 
           <Text style={styles.termsText}>
-            Al registrarte, aceptas nuestros Términos de Servicio y Política de Privacidad
+            {t('reg.terminos')}
           </Text>
         </View>
       </ScrollView>
@@ -598,7 +601,7 @@ export default function RegisterScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Registro con Email</Text>
+            <Text style={styles.modalTitle}>{t('reg.registroEmail')}</Text>
 
             {error ? <Text style={styles.errorTextModal}>{error}</Text> : null}
 
@@ -608,7 +611,7 @@ export default function RegisterScreen() {
                 onPress={() => router.replace('/login')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.goToLoginButtonText}>Iniciar sesión con mi cuenta</Text>
+                <Text style={styles.goToLoginButtonText}>{t('reg.iniciarConMiCuenta')}</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -630,7 +633,7 @@ export default function RegisterScreen() {
             <View style={[styles.passwordWrapper, passwordFocused && styles.passwordWrapperFocused]}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Contraseña"
+                placeholder={t('reg.contrasena')}
                 placeholderTextColor="#999"
                 value={password}
                 onChangeText={setPassword}
@@ -650,12 +653,12 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.passwordHint}>Usa al menos 8 caracteres.</Text>
+            <Text style={styles.passwordHint}>{t('reg.alMenos8')}</Text>
 
             <View style={[styles.passwordWrapper, confirmPasswordFocused && styles.passwordWrapperFocused]}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Confirmar Contraseña"
+                placeholder={t('reg.confirmarContrasena')}
                 placeholderTextColor="#999"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -693,7 +696,7 @@ export default function RegisterScreen() {
               onPress={() => setShowEmailForm(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
+              <Text style={styles.cancelButtonText}>{t('comun.cancelar')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -708,7 +711,7 @@ export default function RegisterScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.errorModalContent}>
-            <Text style={styles.errorModalTitle}>⚠️ Configuración Pendiente</Text>
+            <Text style={styles.errorModalTitle}>{t('reg.configPendiente')}</Text>
             <Text style={styles.errorModalText}>{errorModalMessage}</Text>
             <TouchableOpacity
               style={styles.errorModalButton}

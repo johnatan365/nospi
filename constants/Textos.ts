@@ -1153,6 +1153,48 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'ob.enLaComunidadHay': 'En la comunidad Nospi hay {{n}} {{gente}} según el rango de edad que elegiste.',
     'ob.digitosRequeridos': '{{n}} dígitos requeridos · {{puestos}}/{{n}}',
 
+
+    // ---------- Registro (register.tsx) ----------
+    'reg.yaCasiListo': '¡Ya casi estás listo!',
+    'reg.eligeComo': 'Elige cómo quieres registrarte',
+    'reg.conApple': 'Regístrate con Apple',
+    'reg.conGoogle': 'Regístrate con Google',
+    'reg.conEmail': 'Inscribirse con el correo electrónico',
+    'reg.terminos': 'Al registrarte, aceptas nuestros Términos de Servicio y Política de Privacidad',
+    'reg.registroEmail': 'Registro con Email',
+    'reg.iniciarConMiCuenta': 'Iniciar sesión con mi cuenta',
+    'reg.contrasena': 'Contraseña',
+    'reg.confirmarContrasena': 'Confirmar Contraseña',
+    'reg.alMenos8': 'Usa al menos 8 caracteres.',
+    'reg.configPendiente': '⚠️ Configuración Pendiente',
+    'reg.configPendienteSimple': 'Configuración Pendiente',
+    'reg.contrasena8': 'Tu contraseña debe tener al menos 8 caracteres.',
+    'reg.contrasenaCorta': 'Tu contraseña es muy corta. Usa al menos 8 caracteres.',
+    'reg.yaExisteCuenta': 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.',
+    'reg.correoInvalido': 'El correo no parece válido. Revísalo e intenta de nuevo.',
+    'reg.demasiadosIntentos': 'Demasiados intentos. Espera un momento e intenta de nuevo.',
+    'reg.noCreoCuenta': 'No pudimos crear tu cuenta. Revisa los datos e intenta de nuevo.',
+    'reg.errorApple': 'Error al conectar con Apple. Por favor intenta de nuevo.',
+    'reg.appleNoDisponible': 'El inicio de sesión con Apple no está disponible en este momento. Por favor, usa el registro con email o contacta al administrador.',
+    'reg.errorCompletar': 'Error al completar el registro. Por favor intenta de nuevo.',
+    'reg.errorRegistrarApple': 'Error al registrarse con Apple',
+    'reg.errorGoogle': 'Error al conectar con Google. Por favor intenta de nuevo.',
+    'reg.errorRegistrarGoogle': 'Error al registrarse con Google',
+    'reg.completaCampos': 'Por favor completa todos los campos',
+    'reg.noCoinciden': 'Las contraseñas no coinciden',
+    'reg.minimo8': 'La contraseña debe tener al menos 8 caracteres',
+    'reg.yaExisteRecupera': 'Ya existe una cuenta con ese correo. Inicia sesión con tu contraseña; si no la recuerdas, puedes recuperarla.',
+    'reg.yaTienesCuentaLista': 'Ya tienes una cuenta con ese correo y está lista para usarse. Inicia sesión.',
+    'reg.errorCrearCuenta': 'Error al crear la cuenta',
+    'reg.celularYaRegistrado': 'Ese número de celular ya está registrado con otra cuenta. Vuelve atrás, cámbialo y toca Registrarse de nuevo. Si la cuenta es tuya, inicia sesión.',
+    'reg.correoYaRegistrado': 'Este correo ya está registrado. Por favor inicia sesión con tu cuenta existente.',
+    'reg.errorCrearPerfil': 'Error al crear el perfil. Por favor intenta de nuevo.',
+    'reg.errorRegistrarse': 'Error al registrarse. Intenta de nuevo.',
+
+
+    // ---------- Registro: Google no disponible ----------
+    'reg.googleNoDisponible': 'El inicio de sesión con Google no está disponible en este momento debido a un problema de configuración.\n\nPor favor:\n1. Usa el registro con email, o\n2. Contacta al administrador para configurar Google OAuth en Supabase',
+
   },
 
   en: {
@@ -2297,6 +2339,48 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'ob.sinCoincidencias': 'For now we didn’t find age matches in the community with the range you picked.',
     'ob.enLaComunidadHay': 'There are {{n}} {{gente}} in the Nospi community for the age range you picked.',
     'ob.digitosRequeridos': '{{n}} digits required · {{puestos}}/{{n}}',
+
+
+    // ---------- Registro (register.tsx) ----------
+    'reg.yaCasiListo': 'You’re almost there!',
+    'reg.eligeComo': 'Choose how you want to sign up',
+    'reg.conApple': 'Sign up with Apple',
+    'reg.conGoogle': 'Sign up with Google',
+    'reg.conEmail': 'Sign up with email',
+    'reg.terminos': 'By signing up, you agree to our Terms of Service and Privacy Policy',
+    'reg.registroEmail': 'Sign up with email',
+    'reg.iniciarConMiCuenta': 'Sign in with my account',
+    'reg.contrasena': 'Password',
+    'reg.confirmarContrasena': 'Confirm password',
+    'reg.alMenos8': 'Use at least 8 characters.',
+    'reg.configPendiente': '⚠️ Setup pending',
+    'reg.configPendienteSimple': 'Setup pending',
+    'reg.contrasena8': 'Your password must be at least 8 characters.',
+    'reg.contrasenaCorta': 'Your password is too short. Use at least 8 characters.',
+    'reg.yaExisteCuenta': 'There’s already an account with that email. Try signing in.',
+    'reg.correoInvalido': 'That email doesn’t look valid. Check it and try again.',
+    'reg.demasiadosIntentos': 'Too many attempts. Wait a moment and try again.',
+    'reg.noCreoCuenta': 'We couldn’t create your account. Check the details and try again.',
+    'reg.errorApple': 'Couldn’t connect to Apple. Please try again.',
+    'reg.appleNoDisponible': 'Signing in with Apple isn’t available right now. Please sign up with email or contact the administrator.',
+    'reg.errorCompletar': 'Couldn’t finish signing you up. Please try again.',
+    'reg.errorRegistrarApple': 'Couldn’t sign up with Apple',
+    'reg.errorGoogle': 'Couldn’t connect to Google. Please try again.',
+    'reg.errorRegistrarGoogle': 'Couldn’t sign up with Google',
+    'reg.completaCampos': 'Please fill in all the fields',
+    'reg.noCoinciden': 'The passwords don’t match',
+    'reg.minimo8': 'The password must be at least 8 characters',
+    'reg.yaExisteRecupera': 'There’s already an account with that email. Sign in with your password — and if you don’t remember it, you can reset it.',
+    'reg.yaTienesCuentaLista': 'You already have an account with that email and it’s ready to use. Sign in.',
+    'reg.errorCrearCuenta': 'Couldn’t create the account',
+    'reg.celularYaRegistrado': 'That mobile number is already registered to another account. Go back, change it and tap Sign up again. If the account is yours, sign in instead.',
+    'reg.correoYaRegistrado': 'This email is already registered. Please sign in with your existing account.',
+    'reg.errorCrearPerfil': 'Couldn’t create your profile. Please try again.',
+    'reg.errorRegistrarse': 'Couldn’t sign you up. Please try again.',
+
+
+    // ---------- Registro: Google no disponible ----------
+    'reg.googleNoDisponible': 'Signing in with Google isn’t available right now because of a configuration issue.\n\nPlease:\n1. Sign up with email, or\n2. Contact the administrator to set up Google OAuth in Supabase',
 
   },
 };
