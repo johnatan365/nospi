@@ -217,7 +217,9 @@ export default function EventDetailsScreen() {
       day: 'numeric',
       timeZone: 'America/Bogota',
     };
-    return date.toLocaleDateString('es-ES', options);
+    // El locale va por el idioma de la app: un gringo no deberia leer
+    // "jueves 8 de octubre" en la pantalla que decide si reserva o no.
+    return date.toLocaleDateString(idioma === 'en' ? 'en-US' : 'es-ES', options);
   };
 
   const handleOpenMaps = () => {
@@ -299,7 +301,7 @@ export default function EventDetailsScreen() {
         .maybeSingle();
       const until = me?.reservas_suspendidas_hasta ? new Date(me.reservas_suspendidas_hasta) : null;
       if (until && until.getTime() > Date.now()) {
-        const untilText = until.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+        const untilText = until.toLocaleDateString(idioma === 'en' ? 'en-US' : 'es-CO', { day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
         const msg = `Tu cuenta está suspendida para reservar nuevos eventos hasta el ${untilText} porque no se confirmó tu asistencia a eventos anteriores. Puedes seguir usando la app con normalidad. Si crees que es un error, escríbenos a soporte para revisar tu caso.`;
         aviso();
         if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Reservas suspendidas', msg); }
@@ -509,7 +511,7 @@ export default function EventDetailsScreen() {
                 reglas): quien entra con la camara apagada rompe la experiencia. */}
             {esVirtual && !checkedInAt && (
               <Text style={styles.locationAddress}>
-                📹 Es con la cámara prendida: la idea es conocernos las caras.
+                {t('detalle.camaraPrendida')}
               </Text>
             )}
 
@@ -524,10 +526,10 @@ export default function EventDetailsScreen() {
                   return (
                     <>
                       <Text style={styles.locationName}>
-                        ✅ Asistencia confirmada · {horaBogota(new Date(checkedInAt))}
+                        {t('detalle.asistenciaConfirmadaHora', { hora: horaBogota(new Date(checkedInAt)) })}
                       </Text>
                       <Text style={styles.locationAddress}>
-                        Ya quedó registrado que entraste. Si te saliste, puedes volver desde aquí.
+                        {t('detalle.yaQuedoRegistrado')}
                       </Text>
                       <TouchableOpacity style={styles.mapsButton} onPress={handleEntrarVideollamada} activeOpacity={0.8}>
                         <Text style={styles.mapsButtonText}>{t('detalle.volverVideollamada')}</Text>
@@ -539,7 +541,7 @@ export default function EventDetailsScreen() {
                 if (!isEnrolled) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
+                      {t('detalle.entrasDesdeDinamica15')}
                     </Text>
                   );
                 }
@@ -547,7 +549,7 @@ export default function EventDetailsScreen() {
                 if (!accesoListo) {
                   return (
                     <Text style={styles.locationPlaceholder}>
-                      Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.
+                      {t('detalle.entrasDesdeDinamica15')}
                     </Text>
                   );
                 }
@@ -556,7 +558,7 @@ export default function EventDetailsScreen() {
                   return (
                     <>
                       <Text style={styles.locationAddress}>
-                        Entras desde la pestaña Dinámica: ahí confirmas tu asistencia y escogen al moderador.
+                        {t('detalle.entrasDesdeDinamica')}
                       </Text>
                       <View style={[styles.mapsButton, styles.mapsButtonDisabled]}>
                         <Text style={styles.mapsButtonText}>
@@ -570,10 +572,10 @@ export default function EventDetailsScreen() {
                 return (
                   <>
                     <Text style={styles.locationAddress}>
-                      Ve a la pestaña Dinámica: confirmas tu asistencia, escogen al moderador y de ahí entran todos a la llamada.
+                      {t('detalle.veALaDinamica')}
                     </Text>
                     <Text style={styles.locationAddress}>
-                      📹 Entra con la cámara prendida. Todos llegan igual de nerviosos: verse las caras es lo que rompe el hielo.
+                      {t('detalle.entraConCamara')}
                     </Text>
                     <TouchableOpacity
                       style={styles.mapsButton}
@@ -595,13 +597,13 @@ export default function EventDetailsScreen() {
                     onPress={handleOpenMaps}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.mapsButtonText}>🗺️ Abrir Maps</Text>
+                    <Text style={styles.mapsButtonText}>{t('detalle.abrirMaps')}</Text>
                   </TouchableOpacity>
                 )}
               </>
             ) : (
               <Text style={styles.locationPlaceholder}>
-                Ubicación se revelará un día antes del evento
+                {t('detalle.ubicacionUnDiaAntes')}
               </Text>
             )}
           </View>

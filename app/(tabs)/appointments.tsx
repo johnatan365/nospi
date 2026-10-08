@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, precioDesdeConfig } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
@@ -15,6 +15,7 @@ import { formatTimeAmPm } from '@/utils/formatTime';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
 import { nombreEventoIdioma } from '@/utils/nombreEvento';
+import { localeDe } from '@/lib/i18n';
 const CACHE_KEY_PREFIX = 'cache_appointments';
 
 interface Appointment {
@@ -259,7 +260,7 @@ export default function AppointmentsScreen() {
       month: 'long',
       day: 'numeric',
     };
-    return date.toLocaleDateString('es-ES', options);
+    return date.toLocaleDateString(localeDe(idioma), options);
   };
 
   const handleFilterChange = (newFilter: FilterType) => {
@@ -712,8 +713,8 @@ export default function AppointmentsScreen() {
 
                 const eventPriceNum = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
                 const refundMessage = isWithinRefundWindow
-                  ? `✅ Como cancelas con más de 24 horas de anticipación, recibirás $${eventPriceNum.toLocaleString('es-CO')} pesos como saldo virtual que podrás usar en tu próximo evento.`
-                  : '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.';
+                  ? t('citas.reembolsoSi', { monto: textoPrecio(idioma, eventPriceNum, precioDesdeConfig(appConfig.event_price_usd, 19)) })
+                  : t('citas.reembolsoNo');
 
                 return (
                   <Text style={styles.modalSubtitle}>{refundMessage}</Text>

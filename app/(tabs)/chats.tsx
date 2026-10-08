@@ -21,6 +21,7 @@ import { registerPushToken } from '@/hooks/usePushNotifications';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
 import { nombreEventoIdioma } from '@/utils/nombreEvento';
+import { localeDe, type Idioma } from '@/lib/i18n';
 interface ConversationRow {
   conversation_id: string;
   conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
@@ -45,7 +46,7 @@ interface ConversationRow {
   solicitada_por?: string | null;
 }
 
-function timeAgo(iso: string | null): string {
+function timeAgo(iso: string | null, idioma: Idioma): string {
   if (!iso) return '';
   const date = new Date(iso);
   const diffMs = Date.now() - date.getTime();
@@ -56,7 +57,7 @@ function timeAgo(iso: string | null): string {
   if (diffHrs < 24) return `${diffHrs} h`;
   const diffDays = Math.floor(diffHrs / 24);
   if (diffDays < 7) return `${diffDays} d`;
-  return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString(localeDe(idioma), { day: 'numeric', month: 'short' });
 }
 
 function eventEmoji(eventType: string | null): string {
@@ -768,7 +769,7 @@ export default function ChatsScreen() {
                           <Text style={styles.solicitudEnviadaChipText}>Enviada</Text>
                         </View>
                       )}
-                      {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at)}</Text>}
+                      {!locked && <Text style={styles.rowTime}>{timeAgo(item.last_message_at, idioma)}</Text>}
                     </View>
                     {locked ? (
                       <Text style={styles.rowLockedText} numberOfLines={2}>

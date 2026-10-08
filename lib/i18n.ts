@@ -68,3 +68,12 @@ export function traducir(
   if (__DEV__) console.warn('[i18n] Clave inexistente:', clave);
   return clave;
 }
+
+// El locale que hay que pasarle a toLocaleDateString / toLocaleTimeString.
+//
+// Existe porque las fechas no pasan por el diccionario: las formatea el
+// runtime. Si se deja 'es-CO' fijo, un gringo ve toda la pantalla en ingles y
+// "jueves 8 de octubre de 2026" en la linea que decide si reserva o no.
+export function localeDe(idioma: Idioma): string {
+  return idioma === 'en' ? 'en-US' : 'es-CO';
+}

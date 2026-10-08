@@ -19,6 +19,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIdioma } from '@/contexts/IdiomaContext';
 
+import { localeDe } from '@/lib/i18n';
 const WOMPI_PUBLIC_KEY = 'pub_prod_Vvbl4VKr7Gmjd4vIIJQsBWusp4Ijl06L';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -648,7 +649,7 @@ export default function SubscriptionMembershipScreen() {
             <Ionicons name="ribbon" size={40} color={nospiColors.purpleMid} style={{ marginBottom: 10 }} />
             <Text style={styles.activeTitle}>{t('sus.activa')}</Text>
             <Text style={styles.activeSubtitle}>
-              Acceso ilimitado hasta el {new Date(subscription.end_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}
+              {t('sus.accesoHasta', { fecha: new Date(subscription.end_date).toLocaleDateString(localeDe(idioma), { day: 'numeric', month: 'long' }) })}
             </Text>
             <Text style={styles.activeSubtitle}>
               {subscription.auto_renew ? t('sus.seRenueva') : t('sus.noSeRenueva')}
@@ -676,7 +677,7 @@ export default function SubscriptionMembershipScreen() {
                 </View>
                 {subscription.auto_renew && subscription.next_charge_date ? (
                   <Text style={styles.payNextCharge}>
-                    Próximo cobro: <Text style={styles.payNextChargeStrong}>{new Date(subscription.next_charge_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</Text> · <Text style={styles.payNextChargeStrong}>${Number(subscription.price).toLocaleString('es-CO')} COP</Text>
+                    {t('sus.proximoCobro')} <Text style={styles.payNextChargeStrong}>{new Date(subscription.next_charge_date).toLocaleDateString(localeDe(idioma), { day: 'numeric', month: 'long' })}</Text> · <Text style={styles.payNextChargeStrong}>${Number(subscription.price).toLocaleString('es-CO')} COP</Text>
                   </Text>
                 ) : null}
                 <TouchableOpacity style={styles.changeCardBtn} onPress={() => setShowChangeCardForm(true)} activeOpacity={0.85}>
@@ -974,7 +975,7 @@ export default function SubscriptionMembershipScreen() {
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
             <Text style={styles.successModalEmoji}>💳</Text>
-            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>Tarjeta actualizada</Text>
+            <Text style={[styles.successModalTitle, { color: nospiColors.purpleDark }]}>{t('sus.tarjetaActualizada')}</Text>
             <Text style={styles.successModalSubtitle}>
               {`Tu próximo cobro${subscription?.next_charge_date ? ` del ${new Date(subscription.next_charge_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}` : ''} se hará a la tarjeta ${currentCard?.lastFour ? `terminada en ${currentCard.lastFour}` : 'nueva'}. No se realizó ningún cobro.`}
             </Text>

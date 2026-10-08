@@ -1112,6 +1112,28 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chat.chat': 'Chat',
     'evento.soloFecha': '{{fecha}}',
 
+
+    // ---------- Detalle del evento: videollamada y ubicacion ----------
+    'detalle.camaraPrendida': '📹 Es con la cámara prendida: la idea es conocernos las caras.',
+    'detalle.asistenciaConfirmadaHora': '✅ Asistencia confirmada · {{hora}}',
+    'detalle.yaQuedoRegistrado': 'Ya quedó registrado que entraste. Si te saliste, puedes volver desde aquí.',
+    'detalle.entrasDesdeDinamica15': 'Entras desde la pestaña Dinámica: 15 minutos antes confirmas tu asistencia, escogen al moderador y de ahí pasan a la llamada.',
+    'detalle.entrasDesdeDinamica': 'Entras desde la pestaña Dinámica: ahí confirmas tu asistencia y escogen al moderador.',
+    'detalle.veALaDinamica': 'Ve a la pestaña Dinámica: confirmas tu asistencia, escogen al moderador y de ahí entran todos a la llamada.',
+    'detalle.entraConCamara': '📹 Entra con la cámara prendida. Todos llegan igual de nerviosos: verse las caras es lo que rompe el hielo.',
+    'detalle.abrirMaps': '🗺️ Abrir Maps',
+    'detalle.ubicacionUnDiaAntes': 'Ubicación se revelará un día antes del evento',
+
+
+    // ---------- Fechas y montos en el idioma activo ----------
+    'sus.accesoHasta': 'Acceso ilimitado hasta el {{fecha}}',
+    'sus.proximoCobro': 'Próximo cobro:',
+    'sus.tarjetaActualizada': 'Tarjeta actualizada',
+    'citas.reembolsoSi': '✅ Como cancelas con más de 24 horas de anticipación, recibirás {{monto}} como saldo virtual que podrás usar en tu próximo evento.',
+    'citas.reembolsoNo': '⚠️ La cancelación es con menos de 24 horas de anticipación, por lo que no se realizará reembolso.',
+    'pago.eligeMetodo': '{{precio}} · elige tu método',
+    'pago.disponible': 'Disponible: {{monto}}',
+
   },
 
   en: {
@@ -2215,6 +2237,28 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chat.chatDelEvento': 'Event chat',
     'chat.chat': 'Chat',
     'evento.soloFecha': '{{fecha}}',
+
+
+    // ---------- Detalle del evento: videollamada y ubicacion ----------
+    'detalle.camaraPrendida': '📹 Cameras on: the whole point is seeing each other’s faces.',
+    'detalle.asistenciaConfirmadaHora': '✅ Attendance confirmed · {{hora}}',
+    'detalle.yaQuedoRegistrado': 'We’ve recorded that you joined. If you left, you can come back from here.',
+    'detalle.entrasDesdeDinamica15': 'You join from the Game tab: 15 minutes before, you confirm you’re coming, you pick the host and from there everyone goes into the call.',
+    'detalle.entrasDesdeDinamica': 'You join from the Game tab: that’s where you confirm you’re coming and pick the host.',
+    'detalle.veALaDinamica': 'Go to the Game tab: you confirm you’re coming, you pick the host and from there everyone joins the call.',
+    'detalle.entraConCamara': '📹 Join with your camera on. Everyone shows up just as nervous — seeing each other’s faces is what breaks the ice.',
+    'detalle.abrirMaps': '🗺️ Open Maps',
+    'detalle.ubicacionUnDiaAntes': 'The location is revealed one day before the event',
+
+
+    // ---------- Fechas y montos en el idioma activo ----------
+    'sus.accesoHasta': 'Unlimited access until {{fecha}}',
+    'sus.proximoCobro': 'Next charge:',
+    'sus.tarjetaActualizada': 'Card updated',
+    'citas.reembolsoSi': '✅ Since you’re cancelling more than 24 hours ahead, you’ll get {{monto}} back as credit to use at your next event.',
+    'citas.reembolsoNo': '⚠️ You’re cancelling with less than 24 hours to go, so there’s no refund.',
+    'pago.eligeMetodo': '{{precio}} · choose how to pay',
+    'pago.disponible': 'Available: {{monto}}',
 
   },
 };

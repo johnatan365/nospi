@@ -9,8 +9,9 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { localeDe } from '@/lib/i18n';
 export default function BirthdateScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const [date, setDate] = useState(new Date(2000, 0, 1));
   const [showPicker, setShowPicker] = useState(false);
@@ -54,7 +55,7 @@ export default function BirthdateScreen() {
 
   const canContinue = age >= 18;
   const ageText = age.toString();
-  const formattedDate = date.toLocaleDateString('es-ES', { 
+  const formattedDate = date.toLocaleDateString(localeDe(idioma), { 
     day: '2-digit', 
     month: 'long', 
     year: 'numeric' 

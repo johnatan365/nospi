@@ -22,6 +22,7 @@ import { abrirMeet, obtenerMeetLink } from '@/lib/abrirMeet';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { localeDe } from '@/lib/i18n';
 // Clave legacy (global, compartida entre cuentas). Se conserva solo para
 // limpiarla una vez y que no quede "pegado" el evento de otra cuenta.
 const CACHE_KEY_LEGACY = 'cache_dinamica';
@@ -159,7 +160,7 @@ const CAJA_ICONO = {
 };
 
 export default function DinamicaScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   // Esta pantalla no tiene cabecera: el degradado llega hasta arriba del todo.
   // Sin reservar el alto de la barra de estado, el titulo quedaba pegado al
   // reloj y a la muesca del telefono. Pasa en las OCHO pantallas del archivo,
@@ -1595,8 +1596,8 @@ export default function DinamicaScreen() {
     const faltaMs = inicioMs - Date.now();
     const ventanaConfirmar = faltaMs <= VIRTUAL_CONFIRM_MINUTES * 60 * 1000;
     const horaSorteo = new Date(inicioMs + VIRTUAL_AUTO_MOD_MINUTES * 60 * 1000)
-      .toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-    const fechaTexto = new Date(inicioMs).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+      .toLocaleTimeString(localeDe(idioma), { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+    const fechaTexto = new Date(inicioMs).toLocaleDateString(localeDe(idioma), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
     const confirmado = checkInPhase === 'confirmed' && appointment.location_confirmed;
     const modTexto = moderatorName || t('din.elModerador');
 
@@ -1871,7 +1872,7 @@ export default function DinamicaScreen() {
 
   if (!isEventDay) {
     const eventDate = new Date(appointment.event.start_time!);
-    const eventDateText = eventDate.toLocaleDateString('es-ES', {
+    const eventDateText = eventDate.toLocaleDateString(localeDe(idioma), {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
