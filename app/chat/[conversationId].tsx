@@ -112,7 +112,7 @@ const SIGNED_URL_CACHE_KEY = 'nospi_chat_signed_urls_v1';
 // Columnas que necesita la pantalla. Se centraliza para que la carga inicial y
 // el insert al enviar devuelvan exactamente lo mismo.
 const MESSAGE_COLUMNS =
-  'id, conversation_id, sender_id, content, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by, media_expired';
+  'id, conversation_id, sender_id, content, content_en, created_at, reply_to, media_path, media_kind, media_mime, media_width, media_height, media_size, media_duration, poll_id, pinned_at, pinned_by, media_expired';
 
 // Tope por archivo, igual al que tiene el bucket. Se comprueba tambien aqui
 // para poder explicarlo con palabras en vez de soltar el error crudo de Storage.
@@ -272,6 +272,10 @@ interface Message {
   conversation_id: string;
   sender_id: string;
   content: string;
+  // Version en ingles del mensaje. Solo la tienen los canales y la comunidad:
+  // lo que escribe el equipo de Nospi para todos. Los chats entre personas no
+  // se traducen nunca.
+  content_en?: string | null;
   created_at: string;
   reply_to?: string | null;
   media_path?: string | null;
@@ -954,8 +958,16 @@ function VoiceNote({ uri, duration, mine }: { uri: string | null; duration?: num
 // en solo lectura: la unica condicion es pertenecer a la conversacion y que la
 // encuesta siga abierta. Antes de votar solo se ve la pregunta; los resultados
 // aparecen despues de responder (o si ya esta cerrada), para no sesgar el voto.
+// La encuesta se guarda en espanol (es lo que agrupa los votos y los reportes)
+// y se traduce solo para pintarla. Si todavia no tiene traduccion se muestra
+// en espanol, que es mejor que dejar un hueco.
+function textoEncuesta(es: string, en: string | null | undefined, idioma: 'es' | 'en'): string {
+  if (idioma !== 'en') return es;
+  return (en || '').trim() || es;
+}
+
 function PollCard({ pollId }: { pollId: string }) {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const [data, setData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -999,7 +1011,7 @@ function PollCard({ pollId }: { pollId: string }) {
 
   return (
     <View style={styles.pollCard}>
-      <Text style={styles.pollQuestion}>{isRating ? '⭐' : '📊'} {data.question}</Text>
+      <Text style={styles.pollQuestion}>{isRating ? '⭐' : '📊'} {textoEncuesta(data.question, data.question_en, idioma)}</Text>
 
       {isRating ? (
         <View style={styles.pollStarsRow}>
@@ -1035,7 +1047,7 @@ function PollCard({ pollId }: { pollId: string }) {
               >
                 {showResults && <View style={[styles.pollOptionFill, { width: `${pct}%` }]} />}
                 <Text style={[styles.pollOptionText, mine && styles.pollOptionTextMine]} numberOfLines={3}>
-                  {mine ? '● ' : '○ '}{opt}
+                  {mine ? '● ' : '○ '}{textoEncuesta(opt, data.options_en?.[i], idioma)}
                 </Text>
                 {showResults && <Text style={styles.pollOptionPct}>{pct}%</Text>}
               </TouchableOpacity>
@@ -4491,7 +4503,7 @@ export default function ChatThreadScreen() {
                     <PollCard pollId={item.poll_id} />
                   ) : !!(item.content || '').trim() && (
                     <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
-                      {renderMessageContent(item.content, isMine, mentionRe, (raw) =>
+                      {renderMessageContent((idioma === 'en' && item.content_en) ? item.content_en : item.content, isMine, mentionRe, (raw) =>
                         setPhoneMenu({ raw, from: isMine ? '' : senderName })
                       )}
                     </Text>
