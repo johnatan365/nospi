@@ -25,7 +25,7 @@
 // pago vuelve. No se inventa un camino nuevo.
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -117,7 +117,11 @@ export default function IdiomaMesaScreen() {
   const opcionesZona = [
     { valor: 'poblado', etiqueta: t('zona.poblado'), sub: t('zona.pobladoSub') },
     { valor: 'laureles', etiqueta: t('zona.laureles'), sub: t('zona.laurelesSub') },
-    { valor: 'envigado', etiqueta: t('zona.envigado') },
+    // Envigado salio de la lista: quedan solo las dos zonas donde de verdad hay
+    // eventos. Quien quiera otra la escribe en "Otra", que es el dato que sirve
+    // para decidir donde abrir. El texto 'zona.envigado' se deja en Textos.ts a
+    // proposito: hay gente que ya la tenia guardada y el panel la sigue
+    // mostrando al leer esos registros.
     { valor: 'otra', etiqueta: t('zona.otra'), sub: t('zona.otraSub') },
   ];
 
@@ -149,6 +153,12 @@ export default function IdiomaMesaScreen() {
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
     >
+      {/* El campo de "Otra" quedaba debajo del teclado: se escribia a ciegas.
+          behavior="padding" en LAS DOS plataformas, igual que en el chat y en
+          la hoja de asistentes del admin. Dejarlo en undefined para Android es
+          el error que ya se corrigio alla: con edge-to-edge la ventana no se
+          encoge sola y el teclado sigue tapando. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScrollView contentContainerStyle={estilos.scroll} keyboardShouldPersistTaps="handled">
         <View style={estilos.contenido}>
           <Text style={estilos.titulo}>{t(esPresencial ? 'mesaIdioma.pregunta' : 'mesaIdioma.preguntaSala')}</Text>
@@ -213,6 +223,7 @@ export default function IdiomaMesaScreen() {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
