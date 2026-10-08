@@ -38,6 +38,9 @@ interface ConversationRow {
   /** Para pintar el personaje de Nospi cuando la otra persona no tiene foto. */
   other_user_gender?: string | null;
   last_message: string | null;
+  // Version en ingles del ultimo mensaje. Solo la traen los canales y la
+  // comunidad; en un chat privado viene null y se muestra el original.
+  last_message_en?: string | null;
   last_message_at: string | null;
   unread_count: number;
   // Solo para type='direct'. 'pendiente' = solicitud sin responder.
@@ -287,7 +290,7 @@ export default function ChatsScreen() {
       /* seguimos; el resguardo de abajo evita vaciar la lista por un parpadeo */
     }
 
-    const { data, error } = await supabase.rpc('get_my_conversations_v2');
+    const { data, error } = await supabase.rpc('get_my_conversations_v3');
 
     if (error) {
       console.error('ChatsScreen: error loading conversations', error);
@@ -796,15 +799,18 @@ export default function ChatsScreen() {
                             // Se reemplaza el ultimo mensaje —que es el suyo—
                             // por el estado, que es lo que de verdad quiere
                             // saber: si ya le respondieron o no.
-                            ? 'Esperando que acepte tu solicitud'
+                            ? t('chats.esperandoAcepte')
                             : item.last_message
-                            ? item.last_message
+                            // En canales y comunidad viene tambien la version
+                            // en ingles; en un chat privado no, y se muestra
+                            // tal como lo escribieron.
+                            ? ((idioma === 'en' && item.last_message_en) || item.last_message)
                             // Mientras la comunidad este callada, la fila dice
                             // que es en vez de "Sin mensajes todavia", que no
                             // explica nada de un grupo que la persona no pidio.
                             : isComunidad
-                            ? 'Quienes ya vinieron a un evento de Nospi'
-                            : 'Sin mensajes todavía'}
+                            ? t('chats.quienesYaVinieron')
+                            : t('chats.sinMensajes')}
                         </Text>
                         )}
                         {hasUnread && (

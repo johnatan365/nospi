@@ -1213,6 +1213,12 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.sinCanalesSub': 'Cuando el equipo de Nospi publique algo, lo verás aquí.',
     'chats.sinDirectosSub': 'Aquí van tus chats con una sola persona: los matches, la gente de tus eventos y las solicitudes que te acepten.',
 
+
+    // ---------- Chats: vista previa de la lista ----------
+    'chats.esperandoAcepte': 'Esperando que acepte tu solicitud',
+    'chats.quienesYaVinieron': 'Quienes ya vinieron a un evento de Nospi',
+    'chats.sinMensajes': 'Sin mensajes todavía',
+
   },
 
   en: {
@@ -2417,6 +2423,12 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.sinGruposSub': 'When you confirm your seat at an event, the group chat with everyone else opens automatically.',
     'chats.sinCanalesSub': 'When the Nospi team posts something, you’ll see it here.',
     'chats.sinDirectosSub': 'This is where your one-to-one chats go: matches, people from your events, and the requests that get accepted.',
+
+
+    // ---------- Chats: vista previa de la lista ----------
+    'chats.esperandoAcepte': 'Waiting for them to accept your request',
+    'chats.quienesYaVinieron': 'People who’ve already been to a Nospi event',
+    'chats.sinMensajes': 'No messages yet',
 
   },
 };
