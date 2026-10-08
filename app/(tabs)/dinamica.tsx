@@ -114,7 +114,7 @@ const START_WINDOW_MINUTES = 5;
 
 // ── Videollamada (type = 'virtual') ─────────────────────────────────────────
 // Flujo propio: desde la compra se ve la explicación; VIRTUAL_CONFIRM_MINUTES
-// antes aparece "Confirmar asistencia" (no abre el Meet); al confirmar se ve la
+// antes aparece confirmarAsistencia (no abre el Meet); al confirmar se ve la
 // sala con los confirmados y nadie entra hasta que haya moderador. Si a la hora
 // + VIRTUAL_AUTO_MOD_MINUTES nadie se ofreció, la app sortea uno entre los
 // confirmados. Con moderador, cada uno toca "Ir a Meet": ESE toque es la
@@ -257,7 +257,7 @@ export default function DinamicaScreen() {
 
     setCountdown(diffToStartWindow);
 
-    // "Confirmar asistencia" se abre desde CONFIRM_EARLY_MINUTES antes de la
+    // confirmarAsistencia se abre desde CONFIRM_EARLY_MINUTES antes de la
     // hora, para quien llega temprano al lugar (el GPS sigue exigiendo estar ahí).
     if (diffToEventTime <= CONFIRM_EARLY_MINUTES * 60 * 1000 && !appointment?.location_confirmed && checkInPhase === 'waiting') {
       setCheckInPhase('code_entry');
@@ -266,7 +266,7 @@ export default function DinamicaScreen() {
     // El conteo grande apunta a la HORA PACTADA del evento (no a la hora + la
     // espera): la gente creía que ese tiempo era el plazo para confirmar.
     if (diffToEventTime <= 0) {
-      setCountdownDisplay('¡Es la hora!');
+      setCountdownDisplay(t('din.esLaHora'));
       return;
     }
 
@@ -290,8 +290,8 @@ export default function DinamicaScreen() {
         if (sixHoursBefore > now) {
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: 'Tu experiencia Nospi está cerca',
-              body: 'Faltan 6 horas para tu evento. ¡Prepárate!',
+              title: t('din.notifCerca'),
+              body: t('din.notifCercaBody'),
               sound: true,
             },
             trigger: { type: 'date', date: sixHoursBefore },
@@ -302,8 +302,8 @@ export default function DinamicaScreen() {
         if (oneHourBefore > now) {
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: 'Tu experiencia Nospi comienza pronto',
-              body: 'Falta 1 hora.',
+              title: t('din.notifPronto'),
+              body: t('din.notifProntoBody'),
               sound: true,
             },
             trigger: { type: 'date', date: oneHourBefore },
@@ -402,7 +402,7 @@ export default function DinamicaScreen() {
   const loadAppointment = useCallback(async () => {
     // Si la sesión todavía se está resolviendo (p. ej. justo después de un
     // refresh con mala señal), NO concluir todavía "no hay usuario" — eso
-    // mostraba "No tienes ningún evento confirmado" de forma falsa aunque el
+    // mostraba sinEventoConfirmado de forma falsa aunque el
     // usuario sí tuviera una cita, solo porque el contexto de auth aún no
     // había terminado de leer la sesión guardada. Nos quedamos en loading y
     // este efecto se vuelve a disparar solo cuando authLoading pase a false.
@@ -672,7 +672,7 @@ export default function DinamicaScreen() {
   const getCurrentGpsPosition = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
     if (Platform.OS === 'web') {
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        setGpsError('Tu navegador no soporta ubicación GPS.');
+        setGpsError(t('din.sinGpsNavegador'));
         return null;
       }
       return new Promise((resolve) => {
@@ -682,7 +682,7 @@ export default function DinamicaScreen() {
             if (err.code === 1) {
               setGpsError('Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala tocando el candado 🔒 junto a la dirección del navegador → Ubicación → Permitir, y vuelve a intentarlo.');
             } else {
-              setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
+              setGpsError(t('din.noObtuvoUbicacion'));
             }
             resolve(null);
           },
@@ -708,7 +708,7 @@ export default function DinamicaScreen() {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     } catch (error) {
-      setGpsError('No se pudo obtener tu ubicación. Intenta de nuevo.');
+      setGpsError(t('din.noObtuvoUbicacion'));
       return null;
     }
   }, []);
@@ -780,7 +780,7 @@ export default function DinamicaScreen() {
       const eventLng = appointment.event.longitude;
 
       if (eventLat === null || eventLat === undefined || eventLng === null || eventLng === undefined) {
-        setGpsError('La ubicación del evento aún no está configurada. Contacta a soporte por WhatsApp.');
+        setGpsError(t('din.ubicacionNoConfigurada'));
         return;
       }
 
@@ -839,7 +839,7 @@ export default function DinamicaScreen() {
       if (updateError) {
 
         setCheckInPhase('code_entry');
-        setGpsError('No se pudo registrar tu llegada.');
+        setGpsError(t('din.noRegistroLlegada'));
         return;
       }
 
@@ -859,7 +859,7 @@ export default function DinamicaScreen() {
     } catch (error) {
 
       setCheckInPhase('code_entry');
-      setGpsError('Ocurrió un error.');
+      setGpsError(t('din.ocurrioError'));
     }
   }, [appointment, user, checkingGps, getCurrentGpsPosition, loadActiveParticipants]);
 
@@ -868,7 +868,7 @@ export default function DinamicaScreen() {
   }, [confirmArrival]);
 
   // ── Videollamada ──────────────────────────────────────────────────────────
-  // "Confirmar asistencia": entra a la sala (lista de confirmados + elegir
+  // confirmarAsistencia: entra a la sala (lista de confirmados + elegir
   // moderador). NO es la asistencia: esa la marca "Ir a Meet" (checked_in_at).
   const [abriendoMeet, setAbriendoMeet] = useState(false);
   const [confirmandoVirtual, setConfirmandoVirtual] = useState(false);
@@ -888,7 +888,7 @@ export default function DinamicaScreen() {
           presented_at: ahora,
         }, { onConflict: 'event_id,user_id' });
       if (error) {
-        setGpsError('No se pudo confirmar tu asistencia. Intenta de nuevo.');
+        setGpsError(t('din.noConfirmoAsistencia'));
         return;
       }
       await supabase.from('appointments').update({ location_confirmed: true }).eq('id', appointment.id);
@@ -1246,7 +1246,7 @@ export default function DinamicaScreen() {
   // ── Moderador (derivados para el render) ────────────────────────────────────
   const isModerator = !!user?.id && !!moderatorId && user.id === moderatorId;
   const moderatorName = moderatorId
-    ? (activeParticipants.find(p => p.user_id === moderatorId)?.profiles?.name || 'el moderador')
+    ? (activeParticipants.find(p => p.user_id === moderatorId)?.profiles?.name || t('din.elModerador'))
     : null;
   // Fases en las que la dinámica ya arrancó (todos entran a la pantalla de juego).
   // OJO: debe incluir TODAS las fases que escribe GameDynamicsScreen — si falta
@@ -1268,7 +1268,7 @@ export default function DinamicaScreen() {
     AsyncStorage.setItem(`nospi_wentModerator_${appointment.event_id}`, 'true');
   }, [appointment?.event_id]);
 
-  // "← Volver a la lista" desde la pantalla de elegir moderador: regresa a la
+  // volverALista desde la pantalla de elegir moderador: regresa a la
   // lista de confirmados (para seguir viendo quién llega). Es local a este
   // teléfono; cuando el moderador pase a las reglas, la fase compartida lo trae
   // de vuelta al flujo sin que se pierda nada.
@@ -1330,7 +1330,7 @@ export default function DinamicaScreen() {
     }
   }, [appointment?.event_id, gamePhase]);
 
-  // "Ir a Meet" / "Volver a la videollamada". La primera vez registra la
+  // "Ir a Meet" / volverVideollamadaSimple. La primera vez registra la
   // asistencia (antes de abrir el enlace: si se abriera primero, el navegador
   // se lleva el foco y la escritura puede no alcanzar a salir). Si es el
   // moderador, además pasa al grupo a las reglas, para que al volver a Nospi
@@ -1343,7 +1343,7 @@ export default function DinamicaScreen() {
       // La caché puede traer el evento sin meet_link: en ese caso se lee de la base.
       const link = await obtenerMeetLink(appointment.event_id, appointment.event?.meet_link);
       if (!link) {
-        setGpsError('El enlace de la videollamada todavía no está listo. Escríbenos a soporte si ya es la hora.');
+        setGpsError(t('din.enlaceNoListo'));
         return;
       }
       if (!appointment.checked_in_at && user?.id) {
@@ -1366,7 +1366,7 @@ export default function DinamicaScreen() {
       await abrirMeet(link);
     } catch (e) {
       console.error('No se pudo abrir la videollamada:', e);
-      setGpsError('No se pudo abrir la videollamada. Intenta de nuevo.');
+      setGpsError(t('din.noAbrioVideollamada'));
     } finally {
       setAbriendoMeet(false);
     }
@@ -1519,21 +1519,21 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.title}>Dinámica</Text>
-          <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
+          <Text style={styles.title}>{t('din.titulo')}</Text>
+          <Text style={styles.subtitle}>{t('din.subtitulo')}</Text>
 
           <View style={styles.placeholderContainer}>
             <Text style={styles.placeholderIcon}>🔐</Text>
-            <Text style={styles.placeholderText}>Inicia sesión para ver tu evento</Text>
+            <Text style={styles.placeholderText}>{t('din.iniciaSesionVerEvento')}</Text>
             <Text style={styles.sesionAyudaText}>
-              Si ya reservaste tu cupo, entra con la misma cuenta con la que lo reservaste.
+              {t('din.mismaCuenta')}
             </Text>
             <TouchableOpacity
               style={[styles.confirmCodeButton, { marginTop: 20, alignSelf: 'stretch' }]}
               onPress={() => router.replace('/login')}
               activeOpacity={0.8}
             >
-              <Text style={styles.confirmCodeButtonText}>Iniciar sesión</Text>
+              <Text style={styles.confirmCodeButtonText}>{t('din.iniciarSesion')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1550,15 +1550,15 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.title}>Dinámica</Text>
-          <Text style={styles.subtitle}>Centro de experiencia del evento</Text>
+          <Text style={styles.title}>{t('din.titulo')}</Text>
+          <Text style={styles.subtitle}>{t('din.subtitulo')}</Text>
 
           <View style={styles.placeholderContainer}>
             <Text style={styles.placeholderIcon}>{loadError ? '⚠️' : '📅'}</Text>
             <Text style={styles.placeholderText}>
               {loadError
-                ? 'No pudimos cargar tu evento. Revisa tu conexión e intenta de nuevo.'
-                : 'No tienes ningún evento confirmado'}
+                ? t('din.noCargoEvento')
+                : t('din.sinEventoConfirmado')}
             </Text>
             {loadError && (
               <TouchableOpacity
@@ -1566,7 +1566,7 @@ export default function DinamicaScreen() {
                 onPress={() => { setLoading(true); loadAppointment(); }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.confirmCodeButtonText}>Reintentar</Text>
+                <Text style={styles.confirmCodeButtonText}>{t('din.reintentar')}</Text>
               </TouchableOpacity>
             )}
             {!loadError && user?.email && (
@@ -1579,7 +1579,7 @@ export default function DinamicaScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.sessionSignOutText}>¿No es tu cuenta? Cerrar sesión</Text>
+                  <Text style={styles.sessionSignOutText}>{t('din.noEsTuCuenta')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1598,11 +1598,11 @@ export default function DinamicaScreen() {
       .toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
     const fechaTexto = new Date(inicioMs).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
     const confirmado = checkInPhase === 'confirmed' && appointment.location_confirmed;
-    const modTexto = moderatorName || 'el moderador';
+    const modTexto = moderatorName || t('din.elModerador');
 
     const botonVolverMeet = (
       <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
-        <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+        <Text style={styles.volverMeetBtnText}>{abriendoMeet ? t('din.abriendo') : t('din.volverVideollamada')}</Text>
       </TouchableOpacity>
     );
 
@@ -1612,7 +1612,7 @@ export default function DinamicaScreen() {
             repetir la ficha en todas invita a que alguna se quede sin ella. */}
         <FichaPersona persona={personaVista} onClose={() => setPersonaVista(null)} />
         <View style={styles.participantsListHeader}>
-          <Text style={styles.participantsListTitle}>✅ Confirmados en la sala</Text>
+          <Text style={styles.participantsListTitle}>{t('din.confirmadosSala')}</Text>
           <View style={styles.participantCountBadge}>
             <Text style={styles.participantCountText}>{activeParticipants.length}</Text>
           </View>
@@ -1676,54 +1676,54 @@ export default function DinamicaScreen() {
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
           <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             <View style={styles.countdownCard}>
-              <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
+              <Text style={styles.countdownLabel}>{t('din.tiempoParaIniciar')}</Text>
               <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
             </View>
             {/* Mismo icono de videollamada (computador) que la pestaña Eventos. */}
             <Image source={require('@/assets/images/icon-videollamada.png')} style={styles.virtualIcono} resizeMode="contain" />
-            <Text style={[styles.title, { textAlign: 'center', marginTop: 4 }]}>Así va a ser tu videollamada</Text>
+            <Text style={[styles.title, { textAlign: 'center', marginTop: 4 }]}>{t('din.asiVaASer')}</Text>
             <Text style={[styles.subtitle, { textAlign: 'center' }]}>{fechaTexto} · {formatTimeAmPm(appointment.event.time)} · 1 hora</Text>
 
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>📹</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.preEventTipTitle}>Con cámara prendida</Text>
-                <Text style={styles.preEventTipText}>La idea es conocernos. Conéctate con la cámara prendida, sobre todo cuando hables, desde un lugar tranquilo con buena señal.</Text>
+                <Text style={styles.preEventTipTitle}>{t('din.conCamara')}</Text>
+                <Text style={styles.preEventTipText}>{t('din.conCamaraTexto')}</Text>
               </View>
             </View>
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>🗣️</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.preEventTipTitle}>Todos participan</Text>
-                <Text style={styles.preEventTipText}>No hay respuestas buenas ni malas. Arranca quien quiera y le pasa la palabra a otro. Si una pregunta no te gusta, dices "paso" y listo.</Text>
+                <Text style={styles.preEventTipTitle}>{t('din.todosParticipan')}</Text>
+                <Text style={styles.preEventTipText}>{t('din.todosParticipanTexto')}</Text>
               </View>
             </View>
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>🎤</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.preEventTipTitle}>Uno de ustedes es el moderador</Text>
-                <Text style={styles.preEventTipText}>Lee las preguntas en voz alta y da la palabra. Se ofrece al empezar y la app le dice todo lo que tiene que hacer. <Text style={styles.preEventTipStrong}>Sin moderador no podemos arrancar</Text>, así que anímate 😉</Text>
+                <Text style={styles.preEventTipTitle}>{t('din.unoModerador')}</Text>
+                <Text style={styles.preEventTipText}>Lee las preguntas en voz alta y da la palabra. Se ofrece al empezar y la app le dice todo lo que tiene que hacer. <Text style={styles.preEventTipStrong}>{t('din.sinModerador')}</Text>, así que anímate 😉</Text>
               </View>
             </View>
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>🎯</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.preEventTipTitle}>Preguntas y juegos</Text>
-                <Text style={styles.preEventTipText}>3 niveles: Divertido, Coqueto y Atrevido, con juegos en medio. Ten a mano papel y lápiz ✏️</Text>
+                <Text style={styles.preEventTipTitle}>{t('din.preguntasJuegos')}</Text>
+                <Text style={styles.preEventTipText}>{t('din.preguntasJuegosTexto')}</Text>
               </View>
             </View>
             <View style={styles.preEventTipCard}>
               <Text style={styles.preEventTipIcon}>💬</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.preEventTipTitle}>Al final</Text>
-                <Text style={styles.preEventTipText}>Eliges en privado con quién hiciste clic. Si es mutuo, se abre un chat entre los dos 🔒</Text>
+                <Text style={styles.preEventTipTitle}>{t('din.alFinal')}</Text>
+                <Text style={styles.preEventTipText}>{t('din.alFinalTexto')}</Text>
               </View>
             </View>
 
             {ventanaConfirmar ? (
               <View style={styles.codeEntryCard}>
-                <Text style={styles.codeEntryTitle}>¡Ya casi empezamos!</Text>
-                <Text style={styles.codeEntrySubtitle}>Confirma tu asistencia: verás quién más está y escogen al moderador. Después entran todos a la videollamada.</Text>
+                <Text style={styles.codeEntryTitle}>{t('din.yaCasiEmpezamos')}</Text>
+                <Text style={styles.codeEntrySubtitle}>{t('din.yaCasiTexto')}</Text>
                 {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
                 <TouchableOpacity
                   style={[styles.confirmCodeButton, confirmandoVirtual && styles.buttonDisabled]}
@@ -1731,7 +1731,7 @@ export default function DinamicaScreen() {
                   disabled={confirmandoVirtual}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.confirmCodeButtonText}>{confirmandoVirtual ? 'Confirmando...' : 'Confirmar asistencia'}</Text>
+                  <Text style={styles.confirmCodeButtonText}>{confirmandoVirtual ? 'Confirmando...' : t('din.confirmarAsistencia')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1739,7 +1739,7 @@ export default function DinamicaScreen() {
             )}
 
             <TouchableOpacity onPress={() => router.push('/politica-asistencia')} style={styles.policyLinkWrap}>
-              <Text style={styles.policyLinkText}>📋 Ver la política de asistencia</Text>
+              <Text style={styles.policyLinkText}>{t('din.verPolitica')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </LinearGradient>
@@ -1752,19 +1752,19 @@ export default function DinamicaScreen() {
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
           <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             <View style={styles.modRoleCard}>
-              <Text style={[styles.rulesTitle, { marginBottom: 8 }]}>🎤 ¿Quién será el moderador?</Text>
+              <Text style={[styles.rulesTitle, { marginBottom: 8 }]}>{t('din.quienModeradorEmoji')}</Text>
               <View style={styles.modRoleRow}>
                 <Text style={styles.modRoleEmoji}>🗣️</Text>
-                <Text style={styles.modRoleText}>Lee las preguntas en voz alta y da la palabra. La app le dice todo lo que tiene que hacer.</Text>
+                <Text style={styles.modRoleText}>{t('din.moderadorLee')}</Text>
               </View>
               <View style={styles.modRoleDivider} />
               <View style={styles.modRoleRow}>
                 <Text style={styles.modRoleEmoji}>⚠️</Text>
-                <Text style={styles.modRoleText}>Hasta que alguien se ofrezca, no podemos entrar a la videollamada.</Text>
+                <Text style={styles.modRoleText}>{t('din.hastaQueAlguien')}</Text>
               </View>
             </View>
             <TouchableOpacity style={[styles.comenzarButton, styles.becomeModBtn]} onPress={handleBecomeModerator} activeOpacity={0.85}>
-              <Text style={styles.becomeModBtnText} numberOfLines={1}>🙋 Quiero ser el moderador</Text>
+              <Text style={styles.becomeModBtnText} numberOfLines={1}>{t('din.quieroSerModerador')}</Text>
             </TouchableOpacity>
             <Text style={styles.virtualNota}>Si a las {horaSorteo} nadie se ha ofrecido, la app escoge a alguien al azar entre los confirmados.</Text>
             {listaConfirmados}
@@ -1780,34 +1780,34 @@ export default function DinamicaScreen() {
           <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
             {isModerator ? (
               <>
-                <Text style={styles.rulesTitle}>🎉 ¡Tú eres el moderador!</Text>
-                <Text style={styles.virtualSeccion}>AL ENTRAR A LA LLAMADA</Text>
+                <Text style={styles.rulesTitle}>{t('din.tuEresModeradorEmoji')}</Text>
+                <Text style={styles.virtualSeccion}>{t('din.alEntrarLlamada')}</Text>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>👋</Text>
-                  <Text style={styles.modVoiceText}>Saluda y pide que todos prendan la cámara.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.saludaPide')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>🔁</Text>
-                  <Text style={styles.modVoiceText}>Regresa a Nospi (la llamada sigue abierta en una ventanita) y lee en voz alta las reglas y las preguntas. Tú pasas a la siguiente.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.regresaNospi')}</Text>
                 </View>
-                <Text style={styles.virtualSeccion}>DURANTE EL JUEGO</Text>
+                <Text style={styles.virtualSeccion}>{t('din.duranteJuego')}</Text>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>✋</Text>
-                  <Text style={styles.modVoiceText}>Si alguien levanta la mano, dale la palabra.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.levantaMano')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>🤫</Text>
-                  <Text style={styles.modVoiceText}>Si nadie arranca, cuenta tú primero o invita a alguien por su nombre.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.siNadieArranca')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>🙌</Text>
-                  <Text style={styles.modVoiceText}>Procura que todos hablen, sin presionar a nadie.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.procuraTodosHablen')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>📹</Text>
-                  <Text style={styles.modVoiceText}>Si alguien habla con la cámara apagada, pídele con buena onda que la prenda.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.camaraApagada')}</Text>
                 </View>
-                <Text style={styles.virtualNota}>💡 Si tienes computador, abre el Meet allá y deja Nospi en el celular.</Text>
+                <Text style={styles.virtualNota}>{t('din.siTienesComputador')}</Text>
               </>
             ) : (
               <>
@@ -1816,19 +1816,19 @@ export default function DinamicaScreen() {
                     <Text style={styles.modChosenAvatarText}>{modTexto.charAt(0).toUpperCase()}</Text>
                   </View>
                   <Text style={styles.modChosenName}>🎤 {modTexto} será el moderador</Text>
-                  <Text style={styles.virtualNotaOscura}>Lee las preguntas y da la palabra. Tú solo conversa.</Text>
+                  <Text style={styles.virtualNotaOscura}>{t('din.leePreguntasConversa')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>📹</Text>
-                  <Text style={styles.modVoiceText}>Cámara prendida, sobre todo cuando hables.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.camaraPrendidaHablas')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>✋</Text>
-                  <Text style={styles.modVoiceText}>Para hablar, levanta la mano en Meet o espera a que te pasen la palabra.</Text>
+                  <Text style={styles.modVoiceText}>{t('din.paraHablarLevanta')}</Text>
                 </View>
                 <View style={styles.modVoice}>
                   <Text style={styles.modVoiceEmoji}>🗣️</Text>
-                  <Text style={styles.modVoiceText}>Participa: no hay respuestas malas, y si una no te gusta, di "paso".</Text>
+                  <Text style={styles.modVoiceText}>{t('din.participaNoHay')}</Text>
                 </View>
               </>
             )}
@@ -1839,7 +1839,7 @@ export default function DinamicaScreen() {
               disabled={abriendoMeet}
               activeOpacity={0.85}
             >
-              <Text style={styles.comenzarButtonText}>{abriendoMeet ? 'Abriendo...' : 'Ir a Meet'}</Text>
+              <Text style={styles.comenzarButtonText}>{abriendoMeet ? t('din.abriendo') : 'Ir a Meet'}</Text>
             </TouchableOpacity>
           </ScrollView>
         </LinearGradient>
@@ -1851,10 +1851,10 @@ export default function DinamicaScreen() {
       return (
         <LinearGradient colors={['#1a0010', '#880E4F', '#AD1457']} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
           <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { justifyContent: 'center', flexGrow: 1 }]}>
-            <Text style={styles.rulesTitle}>🎥 Estás en la videollamada</Text>
+            <Text style={styles.rulesTitle}>{t('din.estasEnLlamada')}</Text>
             {isModerator ? (
               <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
-                <Text style={styles.comenzarButtonText}>Ver las reglas para leer</Text>
+                <Text style={styles.comenzarButtonText}>{t('din.verReglasLeer')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.modWait}>
@@ -1887,11 +1887,11 @@ export default function DinamicaScreen() {
     if (diffDays >= 2) {
       countdownText = `Faltan ${diffDays} días para tu experiencia`;
     } else if (diffDays === 1) {
-      countdownText = 'Falta 1 día para tu experiencia';
+      countdownText = t('din.faltaUnDia');
     } else if (diffHours >= 1) {
       countdownText = `Faltan ${diffHours} horas para tu experiencia`;
     } else {
-      countdownText = '¡Tu experiencia es muy pronto!';
+      countdownText = t('din.experienciaMuyPronto');
     }
 
     return (
@@ -1902,8 +1902,8 @@ export default function DinamicaScreen() {
         end={{ x: 0.5, y: 1 }}
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.title}>Tu Evento Nospi</Text>
-          <Text style={styles.subtitle}>¡Se acerca una gran experiencia!</Text>
+          <Text style={styles.title}>{t('din.tuEventoNospi')}</Text>
+          <Text style={styles.subtitle}>{t('din.seAcercaExperiencia')}</Text>
 
           <View style={[styles.eventInfoCard, { marginBottom: 16 }]}>
             <Text style={{ fontSize: 48, marginBottom: 12 }}>🗓️</Text>
@@ -1915,19 +1915,19 @@ export default function DinamicaScreen() {
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>⏰</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>{esVirtual ? 'Conéctate puntual' : 'Llega puntual'}</Text>
-              <Text style={styles.preEventTipText}>El evento arranca con una dinámica para romper el hielo. No querrás perderte el inicio.</Text>
+              <Text style={styles.preEventTipTitle}>{esVirtual ? t('din.conectatePuntual') : 'Llega puntual'}</Text>
+              <Text style={styles.preEventTipText}>{t('din.conectatePuntualTexto')}</Text>
             </View>
           </View>
 
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>✅</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Confirma tu asistencia</Text>
+              <Text style={styles.preEventTipTitle}>{t('din.confirmaAsistenciaTitulo')}</Text>
               <Text style={styles.preEventTipText}>
                 {esVirtual
-                  ? <>Entra a la videollamada desde el botón de la app: ese botón es el que registra tu asistencia. Si no entras por ahí, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</>
-                  : <>Ya en el lugar, abre esta pestaña y confirma tu asistencia para registrar tu llegada. Si no confirmas, <Text style={styles.preEventTipStrong}>puede figurar como falta</Text> y tu cuenta podría ser suspendida.</>}
+                  ? <>{t('din.entraDesdeBoton')}<Text style={styles.preEventTipStrong}>{t('din.puedeFigurarFalta')}</Text>{t('din.cuentaSuspendida')}</>
+                  : <>{t('din.yaEnElLugar')}<Text style={styles.preEventTipStrong}>{t('din.puedeFigurarFalta')}</Text>{t('din.cuentaSuspendida')}</>}
               </Text>
             </View>
           </View>
@@ -1935,13 +1935,13 @@ export default function DinamicaScreen() {
           <View style={styles.preEventTipCard}>
             <Text style={styles.preEventTipIcon}>💘</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.preEventTipTitle}>Lo mejor es al final</Text>
-              <Text style={styles.preEventTipText}>Al terminar te aparecerán los nombres de todas las personas y, si quieres, eliges con quién sentiste conexión. Nadie sabrá a quién elegiste; solo si es <Text style={styles.preEventTipStrong}>mutuo</Text>, ambos se enteran.</Text>
+              <Text style={styles.preEventTipTitle}>{t('din.loMejorAlFinal')}</Text>
+              <Text style={styles.preEventTipText}>{t('din.loMejorTexto1')}<Text style={styles.preEventTipStrong}>{t('din.mutuo')}</Text>{t('din.ambosSeEnteran')}</Text>
             </View>
           </View>
 
           <TouchableOpacity onPress={() => router.push('/politica-asistencia')} style={styles.policyLinkWrap}>
-            <Text style={styles.policyLinkText}>📋 Ver la política de asistencia</Text>
+            <Text style={styles.policyLinkText}>{t('din.verPolitica')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
@@ -1955,7 +1955,7 @@ export default function DinamicaScreen() {
       user_id: p.user_id,
       name: p.profiles?.name || 'Participante',
       profile_photo_url: p.profiles?.profile_photo_url || null,
-      occupation: p.profiles?.city || 'Ciudad',
+      occupation: p.profiles?.city || t('din.ciudad'),
       confirmed: p.confirmed,
       check_in_time: p.check_in_time,
       presented: p.is_presented,
@@ -1980,30 +1980,30 @@ export default function DinamicaScreen() {
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', flexGrow: 1 }]}>
           {!moderatorId ? (
             <>
-              <Text style={styles.rulesTitle}>¿Quién será el moderador?</Text>
+              <Text style={styles.rulesTitle}>{t('din.quienModerador')}</Text>
               <View style={styles.modRoleCard}>
                 <View style={styles.modRoleRow}>
                   <Text style={styles.modRoleEmoji}>🗣️</Text>
-                  <Text style={styles.modRoleText}>El moderador debe leer las preguntas en voz alta y es quien pasa a la siguiente pregunta.</Text>
+                  <Text style={styles.modRoleText}>{t('din.moderadorDebeLeer')}</Text>
                 </View>
                 <View style={styles.modRoleDivider} />
                 <View style={styles.modRoleRow}>
                   <Text style={styles.modRoleEmoji}>🔄</Text>
-                  <Text style={styles.modRoleText}>El moderador se puede cambiar por otro en cualquier parte de la dinámica.</Text>
+                  <Text style={styles.modRoleText}>{t('din.moderadorSePuedeCambiar')}</Text>
                 </View>
               </View>
               <TouchableOpacity style={[styles.comenzarButton, styles.becomeModBtn]} onPress={handleBecomeModerator} activeOpacity={0.85}>
-                <Text style={styles.becomeModBtnText} numberOfLines={1}>🙋 Quiero ser el moderador</Text>
+                <Text style={styles.becomeModBtnText} numberOfLines={1}>{t('din.quieroSerModerador')}</Text>
               </TouchableOpacity>
               <View style={styles.modFirstTag}>
-                <Text style={styles.modFirstTagText}>El primero que se postule queda</Text>
+                <Text style={styles.modFirstTagText}>{t('din.primeroQuedaa')}</Text>
               </View>
               {/* Volver a la lista: para quien entró por curiosidad y no quiere
                   ser moderador (puede seguir viendo quién va llegando). Es un
                   paso local: no afecta a la mesa, y si el moderador arranca las
                   reglas igual lo trae de vuelta al flujo. */}
               <TouchableOpacity onPress={handleBackToConfirmedList} activeOpacity={0.7}>
-                <Text style={styles.modBackLink}>← Volver a la lista</Text>
+                <Text style={styles.modBackLink}>{t('din.volverALista')}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -2013,19 +2013,19 @@ export default function DinamicaScreen() {
                   <Text style={styles.modChosenAvatarText}>{(moderatorName || '?').charAt(0).toUpperCase()}</Text>
                 </View>
                 <Text style={styles.modChosenName}>{moderatorName}</Text>
-                <View style={styles.modChosenRole}><Text style={styles.modChosenRoleText}>Moderador</Text></View>
+                <View style={styles.modChosenRole}><Text style={styles.modChosenRoleText}>{t('din.moderador')}</Text></View>
               </View>
 
               {isModerator ? (
                 <>
-                  <Text style={styles.rulesTitle}>¡Tú eres el moderador! 🎉</Text>
+                  <Text style={styles.rulesTitle}>{t('din.tuEresModerador')}</Text>
                   <View style={styles.modVoice}>
                     <Text style={styles.modVoiceEmoji}>🗣️</Text>
-                    <Text style={styles.modVoiceText}>De aquí en adelante, lee todo en voz alta para que todos entiendan la dinámica. Tú eres quien pasa a la siguiente pantalla y pregunta.</Text>
+                    <Text style={styles.modVoiceText}>{t('din.deAquiEnAdelante')}</Text>
                   </View>
                   <View style={styles.modVoice}>
                     <Text style={styles.modVoiceEmoji}>💬</Text>
-                    <Text style={styles.modVoiceText}>Anímalos a que no solo respondan sí o no, sino que expliquen su respuesta — así la charla fluye mejor.</Text>
+                    <Text style={styles.modVoiceText}>{t('din.animalos')}</Text>
                   </View>
                   {/* Videollamada: nadie de Nospi está en el Meet, así que el
                       moderador es quien ordena los turnos y evita los silencios. */}
@@ -2033,24 +2033,24 @@ export default function DinamicaScreen() {
                     <>
                       <View style={styles.modVoice}>
                         <Text style={styles.modVoiceEmoji}>✋</Text>
-                        <Text style={styles.modVoiceText}>Si alguien levanta la mano en Meet, dale la palabra en orden: "Sigue Laura".</Text>
+                        <Text style={styles.modVoiceText}>{t('din.sigueLaura')}</Text>
                       </View>
                       <View style={styles.modVoice}>
                         <Text style={styles.modVoiceEmoji}>🤫</Text>
-                        <Text style={styles.modVoiceText}>Que no haya silencios: si nadie responde, responde tú primero o invita a alguien por su nombre.</Text>
+                        <Text style={styles.modVoiceText}>{t('din.queNoHayaSilencios')}</Text>
                       </View>
                     </>
                   )}
                   <TouchableOpacity style={styles.comenzarButton} onPress={handleModeratorContinueToRules} activeOpacity={0.85}>
-                    <Text style={styles.comenzarButtonText}>Continuar</Text>
+                    <Text style={styles.comenzarButtonText}>{t('din.continuar')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <>
-                  <Text style={styles.rulesTitle}>{esVirtual ? 'Moderador del grupo' : 'Moderador de la mesa'}</Text>
+                  <Text style={styles.rulesTitle}>{esVirtual ? t('din.moderadorGrupo') : t('din.moderadorMesa')}</Text>
                   <View style={styles.modVoiceOth}>
                     <Text style={styles.modVoiceOthText}>🗣️ {moderatorName} irá leyendo todo en voz alta. Escuchen para entender la dinámica.</Text>
-                    <Text style={[styles.modVoiceOthText, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed' }]}>💬 Intenten no solo responder sí o no: expliquen su respuesta para que la charla fluya mejor.</Text>
+                    <Text style={[styles.modVoiceOthText, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed' }]}>{t('din.intentenNoSolo')}</Text>
                   </View>
                   <View style={styles.modWait}>
                     <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} continúe</Text>
@@ -2070,7 +2070,7 @@ export default function DinamicaScreen() {
     // cargadas en ESTE evento. Si los 3 niveles tienen la misma cantidad se
     // resume ("con 8 preguntas cada uno"); si difieren, se detalla por nivel;
     // si aun no se conoce, se muestra el texto sin numeros.
-    let nivelesText = 'Pasarán por 3 niveles: Divertido, Coqueto y Atrevido.';
+    let nivelesText = t('din.tresNiveles');
     if (questionsPerLevel) {
       const { divertido: d, sensual: s, atrevido: a } = questionsPerLevel;
       if (d > 0 && d === s && s === a) {
@@ -2088,12 +2088,12 @@ export default function DinamicaScreen() {
       >
         <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { alignItems: 'center', justifyContent: 'center', paddingTop: 60 }]}>
           <Text style={styles.rulesIcon}>🎲</Text>
-          <Text style={styles.rulesTitle}>¿Cómo funciona?</Text>
+          <Text style={styles.rulesTitle}>{t('din.comoFunciona')}</Text>
 
           {isModerator && (
             <View style={styles.modVoice}>
               <Text style={styles.modVoiceEmoji}>🗣️</Text>
-              <Text style={styles.modVoiceText}>Léelo en voz alta para el grupo.</Text>
+              <Text style={styles.modVoiceText}>{t('din.leeloEnVozAlta')}</Text>
             </View>
           )}
           {esVirtual && !isModerator && (
@@ -2111,12 +2111,12 @@ export default function DinamicaScreen() {
               <>
                 <View style={styles.rulesRow}>
                   <Text style={styles.rulesEmoji}>📹</Text>
-                  <Text style={styles.rulesText}>Todos con la cámara prendida, y siempre que hables, con cámara. Venimos a conocernos: sin cámara, eso no pasa.</Text>
+                  <Text style={styles.rulesText}>{t('din.todosCamara')}</Text>
                 </View>
                 <View style={styles.rulesDivider} />
                 <View style={styles.rulesRow}>
                   <Text style={styles.rulesEmoji}>✋</Text>
-                  <Text style={styles.rulesText}>¿Quieres hablar? Levanta la mano en Meet y el moderador te da la palabra, así no se hablan encima.</Text>
+                  <Text style={styles.rulesText}>{t('din.quieresHablar')}</Text>
                 </View>
                 <View style={styles.rulesDivider} />
               </>
@@ -2128,7 +2128,7 @@ export default function DinamicaScreen() {
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>👥</Text>
-              <Text style={styles.rulesText}>En cada pregunta responde quien tenga algo que contar; no es obligatorio para todos.</Text>
+              <Text style={styles.rulesText}>{t('din.enCadaPregunta')}</Text>
             </View>
             {/* Regla de la votación 👍/👎 (U): se anuncia desde el arranque
                 para que la tarjeta de voto no tome a nadie por sorpresa. En
@@ -2139,14 +2139,14 @@ export default function DinamicaScreen() {
                 <View style={styles.rulesDivider} />
                 <View style={styles.rulesRow}>
                   <Text style={styles.rulesEmoji}>👍</Text>
-                  <Text style={styles.rulesText}>En cada pregunta pueden calificar, desde su celular, si la dejamos o la quitamos para los próximos eventos. Es anónimo, opcional y nos ayuda a que cada encuentro sea mejor.</Text>
+                  <Text style={styles.rulesText}>{t('din.puedenCalificar')}</Text>
                 </View>
               </>
             )}
             <View style={styles.rulesDivider} />
             <View style={styles.rulesRow}>
               <Text style={styles.rulesEmoji}>💘</Text>
-              <Text style={styles.rulesText}>Lo mejor es al final: al terminar las preguntas, si quieres, puedes elegir con quién sentiste conexión. Nadie sabrá a quién elegiste y, si es mutuo, se abre un chat privado.</Text>
+              <Text style={styles.rulesText}>{t('din.loMejorAlFinalLargo')}</Text>
             </View>
           </View>
 
@@ -2167,7 +2167,7 @@ export default function DinamicaScreen() {
               ventanita de Meet tapa la parte de arriba de la pantalla. */}
           {esVirtual && (
             <TouchableOpacity style={styles.volverMeetBtn} onPress={handleIrAMeet} disabled={abriendoMeet} activeOpacity={0.8}>
-              <Text style={styles.volverMeetBtnText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+              <Text style={styles.volverMeetBtnText}>{abriendoMeet ? t('din.abriendo') : t('din.volverVideollamada')}</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -2211,8 +2211,8 @@ export default function DinamicaScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.title}>Hoy es tu experiencia Nospi</Text>
-        <Text style={styles.subtitle}>¡Prepárate para conectar!</Text>
+        <Text style={styles.title}>{t('din.hoyEsTuExperiencia')}</Text>
+        <Text style={styles.subtitle}>{t('din.preparate')}</Text>
 
         {/* Conteo a la HORA PACTADA. "Tiempo para confirmar tu llegada" hacía
             creer que ese era el plazo para confirmar. Quien confirma temprano
@@ -2220,7 +2220,7 @@ export default function DinamicaScreen() {
             tarjeta de espera de 7 minutos. */}
         {(checkInPhase !== 'confirmed' || countdown > START_WINDOW_MINUTES * 60 * 1000) && (
           <View style={styles.countdownCard}>
-            <Text style={styles.countdownLabel}>Tiempo para iniciar el evento</Text>
+            <Text style={styles.countdownLabel}>{t('din.tiempoParaIniciar')}</Text>
             <Text style={styles.countdownTime}>{countdownDisplay || '—'}</Text>
           </View>
         )}
@@ -2274,7 +2274,7 @@ export default function DinamicaScreen() {
           ) : (
             <>
               {shouldShowLocationText && (
-                <Text style={styles.eventLocation}>Ubicación se revelará un día antes del evento</Text>
+                <Text style={styles.eventLocation}>{t('din.ubicacionUnDiaAntes')}</Text>
               )}
               {locationRevealed && locationText && (
                 <Text style={styles.eventLocation}>{locationText}</Text>
@@ -2285,13 +2285,13 @@ export default function DinamicaScreen() {
 
         {checkInPhase === 'code_entry' && (
           <View style={styles.codeEntryCard}>
-            <Text style={styles.codeEntryTitle}>{esVirtual ? 'Entra a la videollamada' : 'Confirma tu llegada'}</Text>
+            <Text style={styles.codeEntryTitle}>{esVirtual ? t('din.entraVideollamada') : t('din.confirmaLlegada')}</Text>
             <Text style={styles.codeEntrySubtitle}>
               {esVirtual
                 ? (appointment.event.meet_link && locationRevealed
                     ? 'Al tocar el botón queda registrada tu asistencia y se abre la videollamada. 📹 Entra con la cámara prendida: la idea es conocernos las caras.'
                     : 'El enlace todavía no está activo. Aparece aquí el día del evento.')
-                : countdownDisplay === '¡Es la hora!'
+                : countdownDisplay === t('din.esLaHora')
                   ? 'Presiona el botón cuando estés en el lugar del evento'
                   : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
             </Text>
@@ -2308,7 +2308,7 @@ export default function DinamicaScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.confirmCodeButtonText}>
-                  {abriendoMeet ? 'Abriendo...' : 'Entrar a la videollamada'}
+                  {abriendoMeet ? t('din.abriendo') : t('din.entrarVideollamada')}
                 </Text>
               </TouchableOpacity>
             ) : (
@@ -2319,7 +2319,7 @@ export default function DinamicaScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.confirmCodeButtonText}>
-                  {checkingGps ? 'Verificando ubicación...' : 'Confirmar asistencia'}
+                  {checkingGps ? t('din.verificandoUbicacion') : t('din.confirmarAsistencia')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -2331,7 +2331,7 @@ export default function DinamicaScreen() {
             <View style={styles.confirmedCard}>
               <Text style={styles.confirmedIcon}>✅</Text>
               <Text style={styles.confirmedText}>
-                {esVirtual ? '¡Asistencia confirmada!' : '¡Llegada confirmada!'}
+                {esVirtual ? t('din.asistenciaConfirmada') : t('din.llegadaConfirmada')}
               </Text>
             </View>
             {esVirtual && !!appointment.event.meet_link && (
@@ -2341,7 +2341,7 @@ export default function DinamicaScreen() {
                 disabled={abriendoMeet}
                 activeOpacity={0.8}
               >
-                <Text style={styles.confirmCodeButtonText}>{abriendoMeet ? 'Abriendo...' : '🎥 Volver a la videollamada'}</Text>
+                <Text style={styles.confirmCodeButtonText}>{abriendoMeet ? t('din.abriendo') : t('din.volverVideollamada')}</Text>
               </TouchableOpacity>
             )}
 
@@ -2403,10 +2403,10 @@ export default function DinamicaScreen() {
                 el MAX_SAFE_INTEGER inicial de la carga (numero gigante). */}
             {!canStartExperience && countdown > 0 && countdown <= START_WINDOW_MINUTES * 60 * 1000 && (
               <View style={styles.waitCard}>
-                <Text style={styles.waitCardTitle}>⏳ Arrancamos en</Text>
+                <Text style={styles.waitCardTitle}>{t('din.arrancamosEn')}</Text>
                 <Text style={styles.waitCardCountdown}>{waitCountdownText}</Text>
                 <Text style={styles.waitCardWhy}>
-                  Le damos unos minutos a quien se haya retrasado.
+                  {t('din.unosMinutos')}
                 </Text>
                 {/* La invitación a pedir depende del TIPO de evento: en una
                     cena aplica "la cena", en bar/café/bolos solo algo de tomar,
@@ -2419,7 +2419,7 @@ export default function DinamicaScreen() {
                     <View style={styles.waitCardDrink}>
                       <Text style={styles.waitCardDrinkEmoji}>🍹</Text>
                       <Text style={styles.waitCardDrinkText}>
-                        Mientras tanto <Text style={styles.waitCardDrinkStrong}>{appointment.event.type === 'restaurante' ? 'pide algo de tomar o la cena' : 'pide algo de tomar'}</Text>. La experiencia es mucho mejor con algo en la mesa.
+                        Mientras tanto <Text style={styles.waitCardDrinkStrong}>{appointment.event.type === 'restaurante' ? t('din.pideTomarCena') : t('din.pideTomar')}</Text>. La experiencia es mucho mejor con algo en la mesa.
                       </Text>
                     </View>
                   </>
@@ -2432,7 +2432,7 @@ export default function DinamicaScreen() {
                 <View style={styles.waitCardDrink}>
                   <Text style={styles.waitCardDrinkEmoji}>🤫</Text>
                   <Text style={styles.waitCardDrinkText}>
-                    <Text style={styles.waitCardDrinkStrong}>Aún no se presenten:</Text> la dinámica lo va a hacer por ustedes… de una forma mucho más divertida.
+                    <Text style={styles.waitCardDrinkStrong}>{t('din.aunNoSePresenten')}</Text> la dinámica lo va a hacer por ustedes… de una forma mucho más divertida.
                   </Text>
                 </View>
               </View>
@@ -2455,7 +2455,7 @@ export default function DinamicaScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.continueButtonText}>
-                    🚀 Continuar
+                    {t('din.continuarCohete')}
                   </Text>
                 </TouchableOpacity>
               </>
