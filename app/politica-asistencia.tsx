@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { nospiColors } from '@/constants/Colors';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 // Pantalla "Política de asistencia" (visible para el usuario).
 // Diseño Opción 2 (semáforo): tema Nospi (vino -> magenta), tarjetas blancas,
@@ -19,6 +20,7 @@ import { nospiColors } from '@/constants/Colors';
 // para quien tuvo un fallo tecnico. Se abre desde Perfil, desde la pantalla
 // post-compra y desde los enlaces de correo/WhatsApp.
 export default function PoliticaAsistenciaScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
 
   return (
@@ -41,7 +43,7 @@ export default function PoliticaAsistenciaScreen() {
             >
               <Ionicons name="chevron-back" size={26} color={nospiColors.white} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Política de asistencia</Text>
+            <Text style={styles.headerTitle}>{t('pol.titulo')}</Text>
             <View style={styles.backBtn} />
           </View>
 
@@ -50,38 +52,33 @@ export default function PoliticaAsistenciaScreen() {
             showsVerticalScrollIndicator={false}
           >
             <Text style={styles.lead}>
-              Cuidamos que cada mesa esté completa para que la experiencia sea buena para todas <Text style={{ color: '#880E4F' }}>♥</Text>
-              {' '}Por eso te pedimos avisar a tiempo si no puedes ir.
+              {t('pol.lead')} <Text style={{ color: '#880E4F' }}>♥</Text>
+              {' '}{t('pol.leadB')}
             </Text>
 
             {/* Cancelación */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🗓️  Cancelación</Text>
+              <Text style={styles.cardTitle}>{t('pol.cancelTitulo')}</Text>
               <Text style={styles.cardText}>
-                Si no vas a poder asistir, puedes <Text style={styles.bold}>cancelar desde la app con más de 24 horas</Text> de
-                anticipación y te devolvemos tu <Text style={styles.bold}>saldo</Text> para que lo uses en otro evento,
-                sin ninguna consecuencia.
+                {t('pol.cancel1a')}<Text style={styles.bold}>{t('pol.cancel1b')}</Text>{t('pol.cancel1c')}<Text style={styles.bold}>{t('pol.cancel1d')}</Text>{t('pol.cancel1e')}
               </Text>
               <Text style={[styles.cardText, { marginTop: 10 }]}>
-                Si cancelas con <Text style={styles.bold}>menos de 24 horas</Text> o si{' '}
-                <Text style={styles.bold}>no asistes</Text>, no alcanzamos a devolverte el saldo y queda{' '}
-                <Text style={styles.bold}>una falta</Text> en tu cuenta: a esa hora tu cupo ya está reservado
-                y el grupo armado.
+                {t('pol.cancel2a')}<Text style={styles.bold}>{t('pol.cancel2b')}</Text>{t('pol.cancel2c')}<Text style={styles.bold}>{t('pol.cancel2d')}</Text>{t('pol.cancel2e')}<Text style={styles.bold}>{t('pol.cancel2f')}</Text>{t('pol.cancel2g')}
               </Text>
             </View>
 
             {/* Niveles / suspensiones */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Cómo se cuentan las faltas</Text>
+              <Text style={styles.cardTitle}>{t('pol.faltasTitulo')}</Text>
 
               <View style={[styles.level, styles.level1]}>
                 <View style={[styles.levelNum, styles.levelNum1]}>
                   <Text style={styles.levelNumText}>1</Text>
                 </View>
                 <View style={styles.levelBody}>
-                  <Text style={[styles.levelName, styles.levelName1]}>Aviso</Text>
+                  <Text style={[styles.levelName, styles.levelName1]}>{t('pol.nivel1')}</Text>
                   <Text style={[styles.levelDesc, styles.levelDesc1]}>
-                    Primera falta: solo te avisamos, sin bloqueo.
+                    {t('pol.nivel1Desc')}
                   </Text>
                 </View>
               </View>
@@ -91,9 +88,9 @@ export default function PoliticaAsistenciaScreen() {
                   <Text style={styles.levelNumText}>2</Text>
                 </View>
                 <View style={styles.levelBody}>
-                  <Text style={[styles.levelName, styles.levelName2]}>Suspensión 15 días</Text>
+                  <Text style={[styles.levelName, styles.levelName2]}>{t('pol.nivel2')}</Text>
                   <Text style={[styles.levelDesc, styles.levelDesc2]}>
-                    Segunda falta: no puedes reservar durante 15 días.
+                    {t('pol.nivel2Desc')}
                   </Text>
                 </View>
               </View>
@@ -103,34 +100,31 @@ export default function PoliticaAsistenciaScreen() {
                   <Text style={styles.levelNumText}>3</Text>
                 </View>
                 <View style={styles.levelBody}>
-                  <Text style={[styles.levelName, styles.levelName3]}>Suspensión 60 días</Text>
+                  <Text style={[styles.levelName, styles.levelName3]}>{t('pol.nivel3')}</Text>
                   <Text style={[styles.levelDesc, styles.levelDesc3]}>
-                    Tercera falta: no puedes reservar durante 60 días.
+                    {t('pol.nivel3Desc')}
                   </Text>
                 </View>
               </View>
 
               <Text style={styles.note}>
-                Las faltas se borran a los ~4 meses de buen comportamiento.
+                {t('pol.nota')}
               </Text>
             </View>
 
             {/* Qué es la suspensión */}
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🔓  ¿Qué es la suspensión?</Text>
+              <Text style={styles.cardTitle}>{t('pol.suspTitulo')}</Text>
               <Text style={styles.cardText}>
-                Solo significa que <Text style={styles.bold}>no puedes reservar</Text> nuevos
-                eventos por ese tiempo. Sigues usando la app con normalidad (chat, perfil…).
+                {t('pol.susp1a')}<Text style={styles.bold}>{t('pol.susp1b')}</Text>{t('pol.susp1c')}
               </Text>
             </View>
 
             {/* Soporte (válvula) */}
             <View style={styles.support}>
-              <Text style={styles.supportTitle}>🛟  ¿Tuviste un problema?</Text>
+              <Text style={styles.supportTitle}>{t('pol.soporteTitulo')}</Text>
               <Text style={styles.supportText}>
-                Si algo falló al confirmar tu asistencia o al entrar,{' '}
-                <Text style={styles.supportBold}>escríbenos a soporte</Text> y lo solucionamos.
-                Nunca suspendemos por un fallo técnico ni por avisar a tiempo.
+                {t('pol.soporte1a')}<Text style={styles.supportBold}>{t('pol.soporte1b')}</Text>{t('pol.soporte1c')}
               </Text>
             </View>
 

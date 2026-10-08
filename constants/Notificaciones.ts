@@ -70,6 +70,11 @@ export function normalizarPreferencias(raw: any): PreferenciasNotificacion {
   };
 }
 
+// OJO: `titulo`, `ayuda` y `etiqueta` ya NO son el texto, son la LLAVE del
+// diccionario de constants/Textos.ts. La pantalla pinta t(o.titulo).
+// Se hizo asi para que el texto se traduzca en profile.tsx y profile.ios.tsx
+// a la vez, que es la razon por la que este archivo existe.
+
 /** Los interruptores de si/no, en el orden en que se muestran. */
 export const INTERRUPTORES: {
   clave: 'privados' | 'novedades' | 'promociones';
@@ -78,18 +83,18 @@ export const INTERRUPTORES: {
 }[] = [
   {
     clave: 'privados',
-    titulo: 'Mensajes privados',
-    ayuda: 'Cuando alguien te escribe directo',
+    titulo: 'notif.privadosTitulo',
+    ayuda: 'notif.privadosAyuda',
   },
   {
     clave: 'novedades',
-    titulo: 'Novedades y nuevos eventos',
-    ayuda: 'Eventos nuevos, cupos libres y avisos de Nospi',
+    titulo: 'notif.novedadesTitulo',
+    ayuda: 'notif.novedadesAyuda',
   },
   {
     clave: 'promociones',
-    titulo: 'Promociones y descuentos',
-    ayuda: 'Ofertas y campañas',
+    titulo: 'notif.promocionesTitulo',
+    ayuda: 'notif.promocionesAyuda',
   },
 ];
 
@@ -97,20 +102,20 @@ export const INTERRUPTORES: {
 export const CHATS: { clave: 'mesa' | 'comunidad'; titulo: string; ayuda: string }[] = [
   {
     clave: 'mesa',
-    titulo: 'El chat de mi mesa',
-    ayuda: 'El grupo de las personas de tu evento',
+    titulo: 'notif.mesaTitulo',
+    ayuda: 'notif.mesaAyuda',
   },
   {
     clave: 'comunidad',
-    titulo: 'Comunidad Nospi',
-    ayuda: 'El grupo grande, con todos',
+    titulo: 'notif.comunidadTitulo',
+    ayuda: 'notif.comunidadAyuda',
   },
 ];
 
 export const OPCIONES_CHAT: { valor: ModoChat; etiqueta: string }[] = [
-  { valor: 'todos', etiqueta: 'Todos' },
-  { valor: 'menciones', etiqueta: 'Solo si me mencionan' },
-  { valor: 'ninguno', etiqueta: 'Ninguno' },
+  { valor: 'todos', etiqueta: 'notif.modoTodos' },
+  { valor: 'menciones', etiqueta: 'notif.modoMenciones' },
+  { valor: 'ninguno', etiqueta: 'notif.modoNinguno' },
 ];
 
 /**
@@ -120,5 +125,4 @@ export const OPCIONES_CHAT: { valor: ModoChat; etiqueta: string }[] = [
  * No es una decision de diseno: quien se pierde el aviso de su evento no
  * aparece, y eso deja la mesa coja para los otros cinco.
  */
-export const AVISO_SIEMPRE =
-  'Los avisos de tus reservas —la hora, el lugar, cambios de mesa y lo que se publique en el canal de tu evento— llegan siempre.';
+export const AVISO_SIEMPRE = 'notif.siempreLlegan';

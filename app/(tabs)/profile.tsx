@@ -246,7 +246,7 @@ export default function ProfileScreen() {
     // de forma falsa.
     if (authLoading) return;
     if (!user?.id) {
-      setError('No se encontró información de usuario');
+      setError(t('perfil.sinInfoUsuario'));
       setLoading(false);
       return;
     }
@@ -568,7 +568,7 @@ export default function ProfileScreen() {
     setPhoneInlineError('');
     const phoneTaken = await checkPhoneExists(combinedPhone);
     if (phoneTaken) {
-      setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+      setPhoneInlineError(t('perfil.celularRepetido'));
       return;
     }
 
@@ -595,7 +595,7 @@ export default function ProfileScreen() {
         
         // Detectar duplicado de teléfono (código 23505 = unique constraint violation)
         if (error.code === '23505' && error.message?.includes('users_phone_key')) {
-          setPhoneInlineError('Este número de celular ya está registrado por otro usuario. Por favor usa un número diferente.');
+          setPhoneInlineError(t('perfil.celularRepetido'));
         } else {
           Alert.alert('Error', 'No se pudo actualizar el perfil');
         }
@@ -693,11 +693,11 @@ export default function ProfileScreen() {
       return;
     }
     if (newPassword.length < 6) {
-      setPasswordError('La nueva contraseña debe tener al menos 6 caracteres');
+      setPasswordError(t('perfil.contrasenaCorta6'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Las contraseñas no coinciden');
+      setPasswordError(t('perfil.contrasenasNoCoinciden'));
       return;
     }
 
@@ -706,7 +706,7 @@ export default function ProfileScreen() {
         email: profile?.email || '',
         password: currentPassword,
       });
-      if (signInError) { setPasswordError('La contraseña actual es incorrecta'); return; }
+      if (signInError) { setPasswordError(t('perfil.contrasenaActualMala')); return; }
 
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) {
@@ -1059,8 +1059,8 @@ export default function ProfileScreen() {
             <Ionicons name="eye-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={styles.menuTitle}>{PRIVACIDAD_TITULO}</Text>
-            <Text style={styles.menuSub}>{PRIVACIDAD_SUBTITULO}</Text>
+            <Text style={styles.menuTitle}>{t(PRIVACIDAD_TITULO)}</Text>
+            <Text style={styles.menuSub}>{t(PRIVACIDAD_SUBTITULO)}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
         </TouchableOpacity>
@@ -1169,7 +1169,7 @@ export default function ProfileScreen() {
                 <Text style={styles.modalTitle}>{t('perfil.editarPerfilTitulo')}</Text>
               </View>
 
-              <Text style={styles.inputLabel}>Nombre</Text>
+              <Text style={styles.inputLabel}>{t('perfil.nombre')}</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Tu nombre" placeholderTextColor="#999" />
 
               {/* Opcional, como la foto. El ejemplo hace casi todo el trabajo:
@@ -1220,7 +1220,7 @@ export default function ProfileScreen() {
                 <Text style={styles.pickerButtonText}>{editCountry}</Text>
               </TouchableOpacity>
 
-              <Text style={styles.inputLabel}>Ciudad</Text>
+              <Text style={styles.inputLabel}>{t('perfil.ciudad')}</Text>
               <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCityPicker(true)}>
                 <Text style={styles.pickerButtonText}>{editCity}</Text>
               </TouchableOpacity>
@@ -1244,8 +1244,8 @@ export default function ProfileScreen() {
                 </>
               )}
 
-              <Text style={styles.inputLabel}>{ETIQUETA_RANGO_EDAD}: {editAgeRangeText}</Text>
-              <Text style={styles.inputHelp}>{AYUDA_RANGO_EDAD}</Text>
+              <Text style={styles.inputLabel}>{t(ETIQUETA_RANGO_EDAD)}: {editAgeRangeText}</Text>
+              <Text style={styles.inputHelp}>{t(AYUDA_RANGO_EDAD)}</Text>
               <View style={styles.ageSliderSection}>
                 <View style={styles.ageSliderRow}>
                   <Text style={styles.ageSliderLabel}>{t('perfil.minimo')}</Text>
@@ -1480,7 +1480,7 @@ export default function ProfileScreen() {
                 <Text style={styles.modalTitle}>Contactar Soporte</Text>
                 <Text style={styles.modalSubtitle}>Te responderemos lo antes posible</Text>
 
-                <Text style={styles.inputLabel}>Nombre</Text>
+                <Text style={styles.inputLabel}>{t('perfil.nombre')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={supportSenderName}
@@ -1547,8 +1547,8 @@ export default function ProfileScreen() {
                       activeOpacity={0.8}
                     >
                       <View style={{ flex: 1, paddingRight: 12 }}>
-                        <Text style={styles.notificationOptionText}>{op.titulo}</Text>
-                        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{op.ayuda}</Text>
+                        <Text style={styles.notificationOptionText}>{t(op.titulo)}</Text>
+                        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{t(op.ayuda)}</Text>
                       </View>
                       <View style={[styles.checkbox, prefs[op.clave] && styles.checkboxActive]}>
                         {prefs[op.clave] && <Text style={styles.checkmark}>✓</Text>}
@@ -1561,8 +1561,8 @@ export default function ProfileScreen() {
                       quiero enterarme cuando me escriben a mi. */}
                   {CHATS.map(ch => (
                     <View key={ch.clave} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}>
-                      <Text style={styles.notificationOptionText}>{ch.titulo}</Text>
-                      <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{ch.ayuda}</Text>
+                      <Text style={styles.notificationOptionText}>{t(ch.titulo)}</Text>
+                      <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{t(ch.ayuda)}</Text>
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
                         {OPCIONES_CHAT.map(o => {
                           const activa = prefs[ch.clave] === o.valor;
@@ -1574,13 +1574,14 @@ export default function ProfileScreen() {
                               style={{
                                 flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8,
                                 backgroundColor: activa ? '#880E4F' : '#F5F5F5',
+                                justifyContent: 'center', alignItems: 'center',
                               }}
                             >
                               <Text style={{
                                 fontSize: 11, fontWeight: activa ? '700' : '500', textAlign: 'center',
                                 color: activa ? '#FFFFFF' : '#6B7280',
                               }}>
-                                {o.etiqueta}
+                                {t(o.etiqueta)}
                               </Text>
                             </TouchableOpacity>
                           );
@@ -1592,7 +1593,7 @@ export default function ProfileScreen() {
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12 }}>
                     <Text style={{ fontSize: 14 }}>🔒</Text>
                     <Text style={{ flex: 1, fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
-                      {AVISO_SIEMPRE}
+                      {t(AVISO_SIEMPRE)}
                     </Text>
                   </View>
                 </ScrollView>
@@ -1609,8 +1610,8 @@ export default function ProfileScreen() {
       <Modal visible={privacidadModalVisible} transparent animationType="slide" onRequestClose={() => setPrivacidadModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{PRIVACIDAD_TITULO}</Text>
-            <Text style={styles.modalSubtitle}>{PRIVACIDAD_RECIPROCIDAD}</Text>
+            <Text style={styles.modalTitle}>{t(PRIVACIDAD_TITULO)}</Text>
+            <Text style={styles.modalSubtitle}>{t(PRIVACIDAD_RECIPROCIDAD)}</Text>
 
             {(() => {
               const priv = normalizarPrivacidad(profile);
@@ -1630,8 +1631,8 @@ export default function ProfileScreen() {
                         disabled={bloqueada}
                       >
                         <View style={{ flex: 1, paddingRight: 12 }}>
-                          <Text style={styles.notificationOptionText}>{op.titulo}</Text>
-                          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{op.ayuda}</Text>
+                          <Text style={styles.notificationOptionText}>{t(op.titulo)}</Text>
+                          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{t(op.ayuda)}</Text>
                         </View>
                         <View style={[styles.checkbox, priv[op.clave] && styles.checkboxActive]}>
                           {priv[op.clave] && <Text style={styles.checkmark}>✓</Text>}
@@ -1643,7 +1644,7 @@ export default function ProfileScreen() {
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, backgroundColor: '#FAF5F8', borderRadius: 10, padding: 12 }}>
                     <Text style={{ fontSize: 14 }}>{priv.enLinea ? '👁️' : '🔒'}</Text>
                     <Text style={{ flex: 1, fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
-                      {resumenPrivacidad(priv)}
+                      {t(resumenPrivacidad(priv))}
                     </Text>
                   </View>
                 </View>
@@ -1666,7 +1667,7 @@ export default function ProfileScreen() {
               Esta acción es permanente e irreversible. Se eliminarán todos tus datos, fotos y citas registradas.
             </Text>
             <Text style={{ fontSize: 15, color: '#333', marginBottom: 24, textAlign: 'center' }}>
-              ¿Estás seguro de que deseas eliminar tu cuenta?
+              {t('perfil.eliminarPregunta')}
             </Text>
             <TouchableOpacity
               style={[styles.saveButton, { backgroundColor: '#DC2626', opacity: deletingAccount ? 0.6 : 1 }]}
@@ -1675,7 +1676,7 @@ export default function ProfileScreen() {
               activeOpacity={0.8}
             >
               <Text style={styles.saveButtonText}>
-                {deletingAccount ? 'Eliminando...' : 'Sí, eliminar mi cuenta'}
+                {deletingAccount ? t('perfil.eliminando') : t('perfil.siEliminar')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

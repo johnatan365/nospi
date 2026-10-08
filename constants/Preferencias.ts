@@ -69,6 +69,7 @@ export const ANCHO_MINIMO_RANGO_EDAD = 10;
  * de quién más se inscriba esa semana — y prometerlo convertiría un problema de
  * suerte en una promesa rota, que es peor.
  */
-export const ETIQUETA_RANGO_EDAD = 'Edades con las que te sientes cómodo';
+// Llave del diccionario, no el texto: la pantalla hace t(ETIQUETA_RANGO_EDAD).
+export const ETIQUETA_RANGO_EDAD = 'perfil.rangoEdadEtiqueta';
 export const AYUDA_RANGO_EDAD =
-  'Lo usamos para armar tu mesa: entre más amplio, más probable que quedes con gente afín.';
+  'perfil.rangoEdadAyuda';

@@ -76,6 +76,7 @@ import * as Notifications from 'expo-notifications';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 // Prefijo para guardar el borrador (lo que se está escribiendo pero aún no se
 // envía) por conversación, para que no se pierda al salir y volver al chat.
@@ -1053,6 +1054,7 @@ function PollCard({ pollId }: { pollId: string }) {
 }
 
 export default function ChatThreadScreen() {
+  const { t } = useIdioma();
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const { user } = useSupabase();
   const router = useRouter();
@@ -4018,7 +4020,7 @@ export default function ChatThreadScreen() {
                   }
                   // new Date() y no el reloj `ahora`: ese solo avanza mientras alguien
                   // escribe, asi que podria decir "hace 2 minutos" llevando 20.
-                  const texto = textoUltimaVez(ultimaVezOtro, new Date());
+                  const texto = textoUltimaVez(ultimaVezOtro, new Date(), t);
                   return texto
                     ? <Text style={styles.headerUltimaVez} numberOfLines={1}>{texto}</Text>
                     : null;
