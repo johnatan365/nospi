@@ -281,33 +281,33 @@ function htmlParagraph(txt: string, opts?: { strong?: boolean; muted?: boolean }
 // Comodines: {nombre} {evento} {fecha} {hora} {horaBoton}
 
 const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
-  '\u00a1Hola {nombre}! \ud83d\udc4b', '',
-  '\ud83c\udfa5 *Hoy a las {hora}* es tu videollamada.', '',
+  '¡Hola {nombre}! 👋', '',
+  '🎥 *Hoy a las {hora}* es tu videollamada.', '',
   '*Entras desde la app, en 3 toques:*',
-  '1\ufe0f\u20e3 Abre Nospi \u2192 pesta\u00f1a *Din\u00e1mica* (desde las {horaBoton})',
-  '2\ufe0f\u20e3 *Confirmar asistencia*',
-  '3\ufe0f\u20e3 Ah\u00ed mismo sale el bot\u00f3n *Ir a Meet*: lo tocas y te abre la llamada', '',
-  '\ud83c\udfa4 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*',
-  '\ud83d\udcf9 Te recomendamos entrar con la c\u00e1mara prendida: nos conocemos mejor vi\u00e9ndonos las caras',
-  '\u270f\ufe0f Ten a mano papel y l\u00e1piz', '',
-  'Al final eliges con qui\u00e9n hiciste clic \u2014 si es mutuo, se abre un *chat privado* \ud83d\udd12', '',
-  '\ud83d\udcf2 \u00bfA\u00fan sin las apps?',
-  'Nospi \ud83d\udc49 nospi.co/app',
-  'Google Meet \ud83d\udc49 nospi.co/meet', '',
-  '\u00a1Hoy Nospi! \ud83c\udf89',
+  '1️⃣ Abre Nospi → pestaña *Dinámica* (desde las {horaBoton})',
+  '2️⃣ *Confirmar asistencia*',
+  '3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada', '',
+  '🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*',
+  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras',
+  '✏️ Ten a mano papel y lápiz', '',
+  'Al final eliges con quién hiciste clic — si es mutuo, se abre un *chat privado* 🔒', '',
+  '📲 ¿Aún sin las apps?',
+  'Nospi 👉 nospi.co/app',
+  'Google Meet 👉 nospi.co/meet', '',
+  '¡Hoy Nospi! 🎉',
 ].join('\n');
 
 const PLANTILLA_VIRTUAL_VISPERA_DEFECTO = [
-  '\u00a1Hola {nombre}! \ud83d\udc4b', '',
-  '\ud83c\udfa5 *Ma\u00f1ana a las {hora}* es tu videollamada \u2014 desde donde est\u00e9s.', '',
-  '\ud83d\udcf2 *Inst\u00e1lalas hoy:*',
-  'Nospi \ud83d\udc49 nospi.co/app',
-  'Google Meet \ud83d\udc49 nospi.co/meet',
-  'En Nospi est\u00e1 el enlace, la din\u00e1mica y el chat con tus matches. Y te avisa cuando arranca \ud83d\udd14', '',
-  'Ma\u00f1ana desde las {horaBoton} confirmas en la pesta\u00f1a *Din\u00e1mica*, uno del grupo se anima a moderar y entran a la llamada.', '',
-  '\ud83d\udcf9 Te recomendamos entrar con la c\u00e1mara prendida: nos conocemos mejor vi\u00e9ndonos las caras. Ten a mano papel y l\u00e1piz \ud83d\ude09', '',
-  '\u00bfNo puedes ir? Cancela hoy y conservas tu saldo. Ma\u00f1ana ya no alcanzamos a devolverlo y te queda una falta.', '',
-  '\u00a1Nos pillamos! \ud83d\ude04',
+  '¡Hola {nombre}! 👋', '',
+  '🎥 *Mañana a las {hora}* es tu videollamada — desde donde estés.', '',
+  '📲 *Instálalas hoy:*',
+  'Nospi 👉 nospi.co/app',
+  'Google Meet 👉 nospi.co/meet',
+  'En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔', '',
+  'Mañana desde las {horaBoton} confirmas en la pestaña *Dinámica*, uno del grupo se anima a moderar y entran a la llamada.', '',
+  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉', '',
+  '¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.', '',
+  '¡Nos pillamos! 😄',
   '_Equipo Nospi_',
 ].join('\n');
 
@@ -635,12 +635,12 @@ function buildMesaNoticeText(firstName: string, event: any): { subject: string; 
     htmlParagraph(`Hola ${firstName},`),
     htmlParagraph(mesa ? `Para hoy quedaste en la <strong>Mesa ${mesa}</strong>.` : 'Ya tienes mesa asignada para hoy.'),
     htmlParagraph(`${event.time ? `\u{1F556} <strong>${formatTimeAmPm(event.time)}</strong>` : ''}${locationFull ? `<br />\u{1F4CD} <strong>${locationFull}</strong>` : ''}`),
-    htmlParagraph(`Al llegar di que vienes de <strong>${marca}</strong> y te indican d\u00F3nde sentarte.`),
-    htmlParagraph('Ya en la mesa abres la <strong>Din\u00E1mica</strong> en la app y confirmas tu llegada.', { muted: true }),
+    htmlParagraph(`Al llegar di que vienes de <strong>${marca}</strong> y te indican dónde sentarte.`),
+    htmlParagraph('Ya en la mesa abres la <strong>Dinámica</strong> en la app y confirmas tu llegada.', { muted: true }),
     htmlParagraph('\u{00A1}Nos pillamos! \u{1F604}', { strong: true }),
   ].join('');
 
-  return { subject, text, html: wrapBrandedHtml(bodyHtml, event.maps_link || URL_DINAMICA, event.maps_link ? 'Como llegar' : 'Abrir la Din\u00E1mica') };
+  return { subject, text, html: wrapBrandedHtml(bodyHtml, event.maps_link || URL_DINAMICA, event.maps_link ? 'Como llegar' : 'Abrir la Dinámica') };
 }
 
 function buildCorrectionText(firstName: string, event: any): { subject: string; text: string; html: string } {

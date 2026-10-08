@@ -6,30 +6,12 @@ import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
 // encuestas de los canales y la comunidad, y la frase que cada persona escribe
 // sobre si misma en su perfil.
 //
-// Por que una funcion y no traducir a mano: el texto en espanol es el que ve el
-// equipo en el admin y el que sale en los reportes, asi que no se puede
-// reemplazar; y acordarse de escribir la version en ingles cada vez no iba a
-// pasar. Los triggers trg_traducir_* llaman aqui al guardar.
-//
-// Lo que NO se traduce nunca: los chats privados y los de grupo de cada evento.
-// Esos son de las personas que estan hablando, ya escogieron en que idioma
-// hacerlo, y mandarlos a un traductor seria meter a un tercero donde no lo
-// llamaron. El filtro vive en los triggers, por tipo de conversacion.
-//
 // Los interruptores viven en app_config (traducir_comunidad, traducir_canales,
-// traducir_eventos, traducir_preguntas, traducir_bios) para poder apagar por
-// tipo de contenido desde el admin, sin tocar codigo. La comunidad arranca
-// APAGADA: son ~62.000 caracteres al mes contra ~10.000 de los avisos, asi que
-// tenerla prendida sin usuarios en ingles se come el saldo sin que nadie lo lea.
+// traducir_eventos, traducir_preguntas, traducir_bios).
 
 const WEBHOOK_TOKEN = "7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d";
 const MAX_POR_LLAMADA = 120;
 
-// El admin (app.nospi.co) llama esta funcion desde el navegador para mostrar el
-// saldo de DeepL. Sin estas cabeceras el navegador manda primero un OPTIONS, no
-// recibe permiso y cancela la llamada SIN error visible: el boton parece que no
-// hiciera nada. Los triggers de la base no pasan por aqui, por eso no se noto
-// hasta que se uso desde el admin.
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -52,9 +34,6 @@ function proveedor(): Proveedor {
   return null;
 }
 
-// Lee un interruptor de app_config. Ante la duda, PRENDIDO: si la fila no
-// existe o la consulta falla, es mejor traducir de mas que dejar a alguien
-// mirando una pantalla en un idioma que no entiende.
 async function prendido(supabase: SupabaseClient, clave: string): Promise<boolean> {
   try {
     const { data } = await supabase
@@ -66,8 +45,6 @@ async function prendido(supabase: SupabaseClient, clave: string): Promise<boolea
   }
 }
 
-// DeepL: el endpoint depende del tipo de llave. Las gratuitas terminan en
-// ":fx" y van al host api-free; mandarlas al host de pago responde 403.
 function deeplHost(key: string): string {
   return key.endsWith(":fx") ? "https://api-free.deepl.com" : "https://api.deepl.com";
 }
@@ -148,10 +125,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // ---- cuanto saldo queda ----
-    //
-    // Lo pide el admin para mostrar la barra de consumo. Va antes del chequeo
-    // de llave para poder responder "sin llave" con una respuesta util.
     if (tipo === "uso") {
       if (quien !== "deepl") {
         return json({ success: true, proveedor: quien ?? "ninguno", disponible: false });
@@ -179,7 +152,6 @@ Deno.serve(async (req: Request) => {
 
     const CAMPOS_EVENTO = "id, name, description, name_en, description_en, name_en_manual, description_en_manual";
 
-    // ---- un evento ----
     if (tipo === "evento") {
       if (!(await prendido(supabase, "traducir_eventos"))) {
         return json({ success: true, apagado: "traducir_eventos" });
@@ -191,8 +163,6 @@ Deno.serve(async (req: Request) => {
         .from("events").select(CAMPOS_EVENTO).eq("id", id).single();
       if (error || !ev) return json({ success: false, error: error?.message ?? "evento no encontrado" }, 404);
 
-      // Aqui se retraduce aunque ya haya ingles: el trigger solo dispara cuando
-      // el espanol cambio, y entonces el ingles viejo quedo desactualizado.
       const falta = camposPendientes(ev as Record<string, unknown>, false);
       const piezas: string[] = [];
       if (falta.nombre) piezas.push((ev.name ?? "").trim());
@@ -210,7 +180,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tipo, id, campos: Object.keys(cambios) });
     }
 
-    // ---- una pregunta de la dinamica ----
     if (tipo === "pregunta") {
       if (!(await prendido(supabase, "traducir_preguntas"))) {
         return json({ success: true, apagado: "traducir_preguntas" });
@@ -225,9 +194,6 @@ Deno.serve(async (req: Request) => {
       const texto = (pq.question_text ?? "").trim();
       if (!texto) return json({ success: true, nada: true });
 
-      // La misma pregunta esta repetida en muchos eventos (el banco se copia a
-      // cada evento): se traduce una vez y se escribe en todas las filas con
-      // ese mismo texto.
       const [trad] = await traducir([texto], quien);
       const { error: e2 } = await supabase
         .from("event_questions").update({ question_text_en: trad }).eq("question_text", texto);
@@ -261,7 +227,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tipo, id });
     }
 
-    // ---- un mensaje de canal o de la comunidad ----
     if (tipo === "mensaje") {
       const id = body?.id;
       if (!id) return json({ success: false, error: "falta id" }, 400);
@@ -288,7 +253,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tipo, id });
     }
 
-    // ---- una encuesta ----
     if (tipo === "encuesta") {
       const id = body?.id;
       if (!id) return json({ success: false, error: "falta id" }, 400);
@@ -321,7 +285,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tipo, id, opciones: opciones.length });
     }
 
-    // ---- barrido: preguntas de la dinamica sin ingles ----
     if (tipo === "barrido" || tipo === "preguntas") {
       const { data: filas, error } = await supabase
         .from("event_questions").select("question_text")
@@ -345,7 +308,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ---- barrido de eventos sin ingles ----
     if (tipo === "eventos") {
       const { data: evs, error } = await supabase
         .from("events").select(CAMPOS_EVENTO)
@@ -354,7 +316,6 @@ Deno.serve(async (req: Request) => {
 
       let hechos = 0;
       for (const ev of evs ?? []) {
-        // Aqui SI se piden solo los vacios: es un relleno, no una correccion.
         const falta = camposPendientes(ev as Record<string, unknown>, true);
         const piezas: string[] = [];
         if (falta.nombre) piezas.push((ev.name ?? "").trim());
@@ -395,7 +356,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tipo: "bios", traducidas: escritas });
     }
 
-    // ---- barrido de mensajes de canal sin ingles ----
     if (tipo === "mensajes") {
       const tipos: string[] = [];
       if (await prendido(supabase, "traducir_canales")) tipos.push("channel_global", "channel_event");
@@ -407,8 +367,6 @@ Deno.serve(async (req: Request) => {
       const ids = (convs ?? []).map((c) => c.id);
       if (ids.length === 0) return json({ success: true, listo: true, restantes: 0 });
 
-      // De a 40: con 120 la funcion se quedaba sin tiempo a mitad de las
-      // escrituras y solo alcanzaba a guardar una parte.
       const { data: msgs, error } = await supabase
         .from("chat_messages").select("id, content")
         .in("conversation_id", ids)

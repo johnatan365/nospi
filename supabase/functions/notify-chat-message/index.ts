@@ -101,20 +101,40 @@ Deno.serve(async (req: Request) => {
       .eq("id", message.conversation_id)
       .single();
 
-    const { data: participants, error: participantsError } = await supabase
-      .from("chat_participants")
-      .select("user_id")
-      .eq("conversation_id", message.conversation_id)
-      .neq("user_id", message.sender_id);
+    // Los participantes van POR PAGINAS, no de una.
+    //
+    // PostgREST devuelve como mucho 1000 filas por consulta y no avisa de que
+    // corto: simplemente llegan 1000. El Canal Nospi tiene 3.580 miembros, asi
+    // que cada anuncio se notificaba solo a los 1000 PRIMEROS -- y como la
+    // tabla va por orden de ingreso, esos son los miembros mas antiguos, que
+    // son justo los que menos tienen la app instalada.
+    //
+    // Medido el 8 de octubre de 2026 con un anuncio real: de las 700 personas
+    // del canal con notificaciones activas, solo 83 caian en esas primeras
+    // 1000, y el push llego a 78 aparatos. 617 personas se quedaron sin aviso
+    // sin que nada fallara ni quedara en ningun log.
+    const TAMANO_PAGINA = 1000;
+    const recipientIds: string[] = [];
+    for (let desde = 0; ; desde += TAMANO_PAGINA) {
+      const { data: pagina, error: participantsError } = await supabase
+        .from("chat_participants")
+        .select("user_id")
+        .eq("conversation_id", message.conversation_id)
+        .neq("user_id", message.sender_id)
+        .range(desde, desde + TAMANO_PAGINA - 1);
 
-    if (participantsError) {
-      return new Response(JSON.stringify({ error: errorMessage(participantsError) }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      if (participantsError) {
+        return new Response(JSON.stringify({ error: errorMessage(participantsError) }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const filas = pagina ?? [];
+      for (const p of filas) recipientIds.push((p as any).user_id);
+      // Una pagina incompleta es la ultima. Si viene exacta, puede haber mas.
+      if (filas.length < TAMANO_PAGINA) break;
     }
-
-    const recipientIds: string[] = (participants ?? []).map((p: any) => p.user_id);
     if (recipientIds.length === 0) {
       return new Response(JSON.stringify({ sent: 0, reason: "sin destinatarios" }), {
         status: 200,

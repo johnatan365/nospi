@@ -9,7 +9,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Esta funcion habla directo con la Graph API, asi que se puede operar desde
 // cualquier lado (un chat remoto, el celular) sin depender del navegador.
 //
-// Solo se invoca con la service role key: publica en nombre de la marca, no
+// Solo se invoca con credencial de servidor: publica en nombre de la marca, no
 // puede quedar expuesta al cliente.
 //
 // TikTok NO entra aca: no expone API publica de comentarios/DMs organicos.
