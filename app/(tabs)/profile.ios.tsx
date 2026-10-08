@@ -967,7 +967,9 @@ export default function ProfileScreen() {
             vale la pena un modal para eso. */}
         <View style={styles.menuRow}>
           <View style={styles.menuIconCircle}>
-            <Ionicons name="language-outline" size={20} color="#880E4F" />
+            {/* Globo, no "language-outline": el globo es el icono universal de
+                cambio de idioma y se reconoce sin leer nada. */}
+            <Ionicons name="globe-outline" size={20} color="#880E4F" />
           </View>
           <View style={styles.menuTextWrap}>
             <Text style={styles.menuTitle}>{t('idioma.titulo')}</Text>

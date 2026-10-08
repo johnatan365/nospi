@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, ImageSourcePropType, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { nospiColors } from '@/constants/Colors';
@@ -95,6 +96,14 @@ export default function WelcomeScreen() {
               aqui con el celular en español, o al reves. Va al pie y chiquito
               para no competirle a los dos botones. */}
           <View style={styles.idiomaFila}>
+            {/* El globo es el icono que todo el mundo reconoce como "idioma":
+                sin el, dos letras sueltas (ES/EN) pasan desapercibidas. */}
+            <Ionicons
+              name="globe-outline"
+              size={15}
+              color="rgba(255,255,255,0.9)"
+              style={styles.idiomaGlobo}
+            />
             {(['es', 'en'] as const).map((cual) => (
               <TouchableOpacity
                 key={cual}
@@ -131,6 +140,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
     gap: 2,
   },
+  idiomaGlobo: { alignSelf: 'center', marginLeft: 10, marginRight: 2 },
   idiomaChip: { paddingVertical: 6, paddingHorizontal: 15, borderRadius: 999 },
   idiomaChipActivo: { backgroundColor: '#FFFFFF' },
   idiomaChipTexto: { color: 'rgba(255,255,255,0.82)', fontSize: 12.5, fontWeight: '800' },
