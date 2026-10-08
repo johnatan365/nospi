@@ -701,8 +701,8 @@ export default function DinamicaScreen() {
         // trabada sin poder confirmar su llegada.
         setGpsError(
           Platform.OS === 'ios'
-            ? 'Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala en Ajustes → Nospi → Ubicación, y vuelve a intentarlo.'
-            : 'Debes permitir el acceso a tu ubicación para confirmar tu llegada. Actívala en Ajustes → Aplicaciones → Nospi → Permisos → Ubicación, y vuelve a intentarlo.'
+            ? t('din.permisoUbicacionIos')
+            : t('din.permisoUbicacionAndroid')
         );
         return null;
       }
@@ -2157,11 +2157,11 @@ export default function DinamicaScreen() {
               onPress={showDivertidoModalAnimation}
               activeOpacity={0.85}
             >
-              <Text style={styles.comenzarButtonText}>Comenzar</Text>
+              <Text style={styles.comenzarButtonText}>{t('din.comenzar')}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.modWait}>
-              <Text style={styles.modWaitText}>⏳ Espera a que {moderatorName} comience</Text>
+              <Text style={styles.modWaitText}>{t('din.esperaComience', { nombre: moderatorName || t('din.elModerador') })}</Text>
             </View>
           )}
           {/* Abajo y no arriba: con Meet y Nospi abiertos a la vez, la
@@ -2183,8 +2183,8 @@ export default function DinamicaScreen() {
                 end={{ x: 1, y: 1 }}
               >
                 <Text style={styles.divertidoEmoji}>😄</Text>
-                <Text style={styles.divertidoModalTitle}>Nivel</Text>
-                <Text style={styles.divertidoModalLevel}>Divertido</Text>
+                <Text style={styles.divertidoModalTitle}>{t('din.nivel')}</Text>
+                <Text style={styles.divertidoModalLevel}>{t('juego.divertido')}</Text>
               </LinearGradient>
             </View>
           </View>
@@ -2269,8 +2269,8 @@ export default function DinamicaScreen() {
           {esVirtual ? (
             <Text style={styles.eventLocation}>
               {locationRevealed
-                ? 'El enlace ya está disponible en la app. El botón para entrar aparece 15 minutos antes.'
-                : 'El enlace se revela el mismo día en la app.'}
+                ? t('din.enlaceDisponible')
+                : t('din.enlaceMismoDia')}
             </Text>
           ) : (
             <>
@@ -2290,11 +2290,11 @@ export default function DinamicaScreen() {
             <Text style={styles.codeEntrySubtitle}>
               {esVirtual
                 ? (appointment.event.meet_link && locationRevealed
-                    ? 'Al tocar el botón queda registrada tu asistencia y se abre la videollamada. 📹 Entra con la cámara prendida: la idea es conocernos las caras.'
-                    : 'El enlace todavía no está activo. Aparece aquí el día del evento.')
+                    ? t('din.alTocarBoton')
+                    : t('din.enlaceNoActivo'))
                 : countdownDisplay === t('din.esLaHora')
-                  ? 'Presiona el botón cuando estés en el lugar del evento'
-                  : '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes'}
+                  ? t('din.presionaCuandoEstes')
+                  : t('din.yaEstasEnElLugar')}
             </Text>
 
             {gpsError ? (
@@ -2348,7 +2348,7 @@ export default function DinamicaScreen() {
 
             <View style={styles.participantsListCard}>
               <View style={styles.participantsListHeader}>
-                <Text style={styles.participantsListTitle}>Participantes confirmados</Text>
+                <Text style={styles.participantsListTitle}>{t('din.participantesConfirmados')}</Text>
                 <View style={styles.participantCountBadge}>
                   <Text style={styles.participantCountText}>{participantCountText}</Text>
                 </View>
@@ -2420,7 +2420,7 @@ export default function DinamicaScreen() {
                     <View style={styles.waitCardDrink}>
                       <Text style={styles.waitCardDrinkEmoji}>🍹</Text>
                       <Text style={styles.waitCardDrinkText}>
-                        Mientras tanto <Text style={styles.waitCardDrinkStrong}>{appointment.event.type === 'restaurante' ? t('din.pideTomarCena') : t('din.pideTomar')}</Text>. La experiencia es mucho mejor con algo en la mesa.
+                        {t('din.mientrasTanto')}<Text style={styles.waitCardDrinkStrong}>{appointment.event.type === 'restaurante' ? t('din.pideTomarCena') : t('din.pideTomar')}</Text>{t('din.mejorConAlgo')}
                       </Text>
                     </View>
                   </>
@@ -2433,7 +2433,7 @@ export default function DinamicaScreen() {
                 <View style={styles.waitCardDrink}>
                   <Text style={styles.waitCardDrinkEmoji}>🤫</Text>
                   <Text style={styles.waitCardDrinkText}>
-                    <Text style={styles.waitCardDrinkStrong}>{t('din.aunNoSePresenten')}</Text> la dinámica lo va a hacer por ustedes… de una forma mucho más divertida.
+                    <Text style={styles.waitCardDrinkStrong}>{t('din.aunNoSePresenten')}</Text>{t('din.dinamicaLoHara')}
                   </Text>
                 </View>
               </View>
@@ -2443,10 +2443,10 @@ export default function DinamicaScreen() {
               <>
                 <View style={styles.infoCard}>
                   <Text style={styles.infoText}>
-                    ✨ Hay {activeParticipants.length} participantes confirmados
+                    {t('din.hayParticipantesTexto', { n: activeParticipants.length })}
                   </Text>
                   <Text style={styles.infoTextSecondary}>
-                    Presiona &quot;Continuar&quot; para elegir el moderador
+                    {t('din.presionaContinuar')}
                   </Text>
                 </View>
 

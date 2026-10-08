@@ -1219,6 +1219,20 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.quienesYaVinieron': 'Quienes ya vinieron a un evento de Nospi',
     'chats.sinMensajes': 'Sin mensajes todavía',
 
+
+    // ---------- Dinamica: textos que faltaban del flujo ----------
+    'din.comenzar': 'Comenzar',
+    'din.esperaComience': '⏳ Espera a que {{nombre}} comience',
+    'din.nivel': 'Nivel',
+    'din.enlaceDisponible': 'El enlace ya está disponible en la app. El botón para entrar aparece 15 minutos antes.',
+    'din.enlaceMismoDia': 'El enlace se revela el mismo día en la app.',
+    'din.alTocarBoton': 'Al tocar el botón queda registrada tu asistencia y se abre la videollamada. 📹 Entra con la cámara prendida: la idea es conocernos las caras.',
+    'din.enlaceNoActivo': 'El enlace todavía no está activo. Aparece aquí el día del evento.',
+    'din.presionaCuandoEstes': 'Presiona el botón cuando estés en el lugar del evento',
+    'din.yaEstasEnElLugar': '¿Ya estás en el lugar? Puedes confirmar desde 15 minutos antes',
+    'din.participantesConfirmados': 'Participantes confirmados',
+    'din.hayParticipantesTexto': '✨ Hay {{n}} participantes confirmados',
+
   },
 
   en: {
@@ -2429,6 +2443,20 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.esperandoAcepte': 'Waiting for them to accept your request',
     'chats.quienesYaVinieron': 'People who’ve already been to a Nospi event',
     'chats.sinMensajes': 'No messages yet',
+
+
+    // ---------- Dinamica: textos que faltaban del flujo ----------
+    'din.comenzar': 'Start',
+    'din.esperaComience': '⏳ Wait for {{nombre}} to start',
+    'din.nivel': 'Level',
+    'din.enlaceDisponible': 'The link is already in the app. The button to join shows up 15 minutes before.',
+    'din.enlaceMismoDia': 'The link appears in the app on the day of the event.',
+    'din.alTocarBoton': 'Tapping the button records your attendance and opens the video call. 📹 Join with your camera on — the whole point is seeing each other’s faces.',
+    'din.enlaceNoActivo': 'The link isn’t live yet. It shows up here on the day of the event.',
+    'din.presionaCuandoEstes': 'Tap the button once you’re at the venue',
+    'din.yaEstasEnElLugar': 'Already there? You can confirm from 15 minutes before',
+    'din.participantesConfirmados': 'Confirmed participants',
+    'din.hayParticipantesTexto': '✨ {{n}} confirmed participants',
 
   },
 };
