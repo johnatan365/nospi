@@ -187,6 +187,12 @@ interface StickerDeNospi {
   id: string;
   url: string;
   etiqueta: string | null;
+  packId: string;
+}
+
+interface PaqueteDeStickers {
+  id: string;
+  nombre: string;
 }
 
 // ── Pegar imagenes: apagado hasta que salga el build que lo soporta ────────
@@ -1878,6 +1884,8 @@ export default function ChatThreadScreen() {
   // por sesion de chat: son pocas filas y no cambian mientras alguien escribe.
   const [showStickers, setShowStickers] = useState(false);
   const [stickers, setStickers] = useState<StickerDeNospi[]>([]);
+  const [paquetes, setPaquetes] = useState<PaqueteDeStickers[]>([]);
+  const [paqueteActivo, setPaqueteActivo] = useState<string | null>(null);
   const [stickersCargando, setStickersCargando] = useState(false);
   const [stickerEnviando, setStickerEnviando] = useState<string | null>(null);
 
@@ -3147,12 +3155,30 @@ export default function ChatThreadScreen() {
     try {
       const { data, error } = await supabase
         .from('stickers')
-        .select('id, url, etiqueta, orden, pack_id, sticker_packs!inner(orden, activo)')
+        .select('id, url, etiqueta, orden, pack_id, sticker_packs!inner(nombre, orden, activo)')
         .eq('activo', true)
         .eq('sticker_packs.activo', true)
         .order('orden', { ascending: true });
       if (error) throw error;
-      setStickers(((data as any[]) || []).map((s) => ({ id: s.id, url: s.url, etiqueta: s.etiqueta })));
+      const filas = (data as any[]) || [];
+      setStickers(filas.map((s) => ({
+        id: s.id, url: s.url, etiqueta: s.etiqueta, packId: s.pack_id,
+      })));
+
+      // Los paquetes, en el orden que puso el admin. El nombre viene de la
+      // fila unida, asi que basta con quedarse con el primero de cada uno.
+      const porId = new Map<string, { nombre: string; orden: number }>();
+      for (const f of filas) {
+        const pk = Array.isArray(f.sticker_packs) ? f.sticker_packs[0] : f.sticker_packs;
+        if (pk && !porId.has(f.pack_id)) {
+          porId.set(f.pack_id, { nombre: pk.nombre || 'Stickers', orden: pk.orden ?? 0 });
+        }
+      }
+      const lista = Array.from(porId, ([id, v]) => ({ id, nombre: v.nombre, orden: v.orden }))
+        .sort((a, b) => a.orden - b.orden)
+        .map(({ id, nombre }) => ({ id, nombre }));
+      setPaquetes(lista);
+      setPaqueteActivo((prev) => (prev && lista.some((pk) => pk.id === prev) ? prev : lista[0]?.id ?? null));
     } catch (e: any) {
       console.error('stickers:', e?.message || e);
     } finally {
@@ -5008,9 +5034,36 @@ export default function ChatThreadScreen() {
                 </Text>
               </View>
             ) : (
+              <>
+                {/* Las pestañas solo salen si de verdad hay mas de un paquete:
+                    con uno solo serian una fila que no decide nada. */}
+                {paquetes.length > 1 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.stickerPestanasFila}
+                    contentContainerStyle={styles.stickerPestanas}
+                  >
+                    {paquetes.map((pk) => {
+                      const activo = pk.id === paqueteActivo;
+                      return (
+                        <TouchableOpacity
+                          key={pk.id}
+                          onPress={() => { toque(); setPaqueteActivo(pk.id); }}
+                          style={[styles.stickerPestana, activo && styles.stickerPestanaActiva]}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.stickerPestanaTxt, activo && styles.stickerPestanaTxtActiva]}>
+                            {pk.nombre}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
               <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
                 <View style={styles.stickerGrid}>
-                  {stickers.map((s) => (
+                  {stickers.filter((s) => !paqueteActivo || s.packId === paqueteActivo).map((s) => (
                     <TouchableOpacity
                       key={s.id}
                       style={styles.stickerCelda}
@@ -5034,6 +5087,7 @@ export default function ChatThreadScreen() {
                   ))}
                 </View>
               </ScrollView>
+              </>
             )}
           </TouchableOpacity>
         </TouchableOpacity>
@@ -6232,6 +6286,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 0,
     shadowOpacity: 0, elevation: 0,
   },
+  // Pestañas de los paquetes de stickers.
+  stickerPestanasFila: { flexGrow: 0, flexShrink: 0, marginBottom: 10 },
+  stickerPestanas: { paddingHorizontal: 14, gap: 8, alignItems: 'center' },
+  stickerPestana: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: '#F3F0F4', borderWidth: 1, borderColor: '#E7E1EA',
+  },
+  stickerPestanaActiva: { backgroundColor: nospiColors.purpleDark, borderColor: nospiColors.purpleDark },
+  stickerPestanaTxt: { fontSize: 13, fontWeight: '700', color: '#6a6a70' },
+  stickerPestanaTxtActiva: { color: '#FFFFFF' },
   bubbleTheirs: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4 },
   // Marca el mensaje al que se acaba de saltar desde una cita. Es un borde y no
   // un cambio de fondo porque el fondo distingue quien escribio -propio vs
