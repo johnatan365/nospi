@@ -4177,6 +4177,12 @@ export default function ChatThreadScreen() {
             // personas que en su mayoria no se conocen entre si.
             const showSenderInfo = (esGrupal || isChannel) && !isMine;
 
+            // Un sticker sin pie va SIN globo: flota sobre el fondo del chat.
+            // Importa mas alla de quitarle el fondo, porque todo lo que va
+            // dentro de la burbuja --la cita, sin ir mas lejos-- esta pintado
+            // dando por hecho que detras hay un globo.
+            const stickerSinGlobo = esSticker(item.media_path) && !(item.content || '').trim();
+
             // Si este mensaje responde a otro, buscamos el original para citarlo.
             const repliedMsg = item.reply_to ? messages.find((m) => m.id === item.reply_to) : undefined;
             const repliedName = repliedMsg
@@ -4235,7 +4241,7 @@ export default function ChatThreadScreen() {
                     // Un sticker suelto no lleva globo: flota sobre el fondo del
                     // chat, como en WhatsApp. Con pie de foto si lo lleva,
                     // porque entonces hay texto que leer.
-                    esSticker(item.media_path) && !item.content?.trim() && styles.bubbleSticker,
+                    stickerSinGlobo && styles.bubbleSticker,
                     resaltado === item.id && styles.bubbleResaltada,
                   ]}
                 >
@@ -4270,7 +4276,11 @@ export default function ChatThreadScreen() {
                       accessibilityLabel={`Ir al mensaje de ${repliedName}`}
                       activeOpacity={0.7}
                       onPress={() => irAlMensaje(repliedMsg.id)}
-                      style={[styles.quoteBox, isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs]}
+                      style={[
+                        styles.quoteBox,
+                        isMine ? styles.quoteBoxMine : styles.quoteBoxTheirs,
+                        stickerSinGlobo && !isMine && styles.quoteSolaTheirs,
+                      ]}
                     >
                       <Text style={[styles.quoteName, isMine && styles.quoteNameMine]} numberOfLines={1}>{repliedName}</Text>
                       <Text style={[styles.quoteText, isMine && styles.quoteTextMine]} numberOfLines={1}>
@@ -5953,6 +5963,21 @@ const styles = StyleSheet.create({
   quoteBox: { borderLeftWidth: 3, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6 },
   quoteBoxMine: { backgroundColor: 'rgba(255,255,255,0.18)', borderLeftColor: 'rgba(255,255,255,0.7)' },
   quoteBoxTheirs: { backgroundColor: 'rgba(136,14,79,0.08)', borderLeftColor: '#AD1457' },
+  // La cita de un sticker AJENO, que se queda sin globo detras.
+  //
+  // Los dos fondos de arriba son TRANSLUCIDOS: estan pensados para ir encima
+  // del globo. El del ajeno es rosa al 8% con texto #6a6a70, pensado sobre el
+  // blanco del globo; sin globo cae sobre el degradado del chat --oscuro-- y
+  // la cita se volvia un gris casi invisible. Con el globo blanco vuelve a ser
+  // el contraste para el que se eligieron esos colores de texto, y queda como
+  // un globito flotando sobre el sticker (lo mismo que hace WhatsApp).
+  //
+  // El PROPIO no lleva nada de esto a proposito. Su fondo translucido es
+  // blanco, asi que siempre aclara lo que tenga detras y se ve en cualquier
+  // punto del degradado. Y darle el color de su globo seria peor: #880E4F es
+  // justo uno de los tres colores del degradado del chat, asi que a media
+  // pantalla la cita se fundiria con el fondo.
+  quoteSolaTheirs: { backgroundColor: '#FFFFFF' },
   quoteName: { fontSize: 11.5, fontWeight: '800', color: '#AD1457', marginBottom: 1 },
   quoteNameMine: { color: 'rgba(255,255,255,0.95)' },
   quoteText: { fontSize: 12.5, color: '#6a6a70' },
