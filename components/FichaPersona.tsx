@@ -41,6 +41,8 @@ export interface PersonaFicha {
   gender?: string | null;
   /** La frase que la persona escribio sobre si misma. */
   bio?: string | null;
+  /** La misma frase en ingles, si la tradujo traducir-contenido. */
+  bio_en?: string | null;
   en_linea?: boolean;
 }
 
@@ -122,7 +124,15 @@ export function FichaPersona({
   const intereses = aLista(p?.interests);
   const rasgos = aLista(p?.personality_traits);
   const porDefecto = avatarPorGenero(p?.gender);
-  const frase = (p?.bio || '').trim();
+  // Con la app en ingles se muestra la traduccion, igual que los mensajes de
+  // los canales y la comunidad. Si todavia no la tiene --se escribio hace un
+  // segundo y el traductor no ha respondido-- se muestra el español antes que
+  // dejar el hueco vacio.
+  //
+  // OJO: esto es la ficha que ven LOS DEMAS. En el perfil propio se sigue
+  // mostrando bio tal cual, porque ahi la persona esta editando SU texto y
+  // traducirselo seria cambiarle lo que acaba de escribir.
+  const frase = ((idioma === 'en' ? (p?.bio_en || p?.bio) : p?.bio) || '').trim();
 
   // La ficha no pasa de 430 px de ancho ni en un monitor.
   //
